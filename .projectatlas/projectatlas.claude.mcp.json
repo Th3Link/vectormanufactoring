@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "projectatlas": {
+      "command": "/home/marc/.cargo/bin/projectatlas",
+      "args": [
+        "--require-version",
+        "0.4.5",
+        "--db",
+        "/home/marc/workbench/vecmanf-claude/.projectatlas/projectatlas.db",
+        "--config",
+        "/home/marc/workbench/vecmanf-claude/.projectatlas/config.toml",
+        "mcp"
+      ]
+    }
+  }
+}
