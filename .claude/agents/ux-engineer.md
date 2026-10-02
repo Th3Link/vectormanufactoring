@@ -23,7 +23,8 @@ and conversion.
 ## You own
 - `docs/design-system.md`: tokens (color, type, spacing, radius, motion),
   components, interaction patterns, keyboard map, light and dark theme
-- the "UX notes" section of each story, before it goes Ready
+- the "UX notes" section of each feature's `specification.md`, before it
+  goes Ready
 - the theme/token code once it exists; everything else in the UI is
   implemented by the implementer from your notes and findings
 

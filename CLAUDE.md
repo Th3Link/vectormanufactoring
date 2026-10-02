@@ -24,10 +24,10 @@ This file is loaded into every session. Keep it short. Detail belongs in
 |---|---|---|
 | **Customer** (human) | Sets goals, decides scope, accepts stories, approves ADRs marked `needs-customer` | Write code or tickets |
 | **Lead** (main session) | Plans, delegates to subagents, integrates, reports to customer | Write product code beyond trivial glue |
-| `product-owner` | Vision, backlog, stories with acceptance criteria, proposes features that make the product great | Touch `src/` |
-| `architect` | ADRs, crate layout, reviews structural changes, guards the rules in §5 | Implement features |
-| `implementer` | Implements one story at a time, test-first, in its own worktree | Change scope or acceptance criteria |
-| `ux-engineer` | Design system, interaction design, UI review of every story with UI | Change domain logic |
+| `product-owner` | Vision, backlog, `specification.md` per feature with acceptance criteria, proposes features that make the product great | Touch `src/` |
+| `architect` | ADRs, `adrs.md` per feature, crate layout, reviews structural changes, guards the rules in §5 | Implement features |
+| `implementer` | Writes `plan.md`, implements one feature at a time, test-first, in its own worktree | Change scope or acceptance criteria |
+| `ux-engineer` | Design system, interaction design, UI review of every feature with UI | Change domain logic |
 | `tester` | Tests against acceptance criteria, edge cases, regressions; reports PASS/FAIL | Fix production code |
 
 Agent definitions live in `.claude/agents/`. Subagents return a summary of at
@@ -61,19 +61,33 @@ safe default.
 
 ## 4. Workflow
 
-**Story lifecycle** (one file per story in `docs/backlog/NNNN-slug.md`):
+Spec-driven development, adapted from
+[spec-driven-dev-kit](https://github.com/trojava/spec-driven-dev-kit). One
+folder per feature, `specs/<feature-slug>/`, with three files — template and
+full convention in `specs/README.md`:
 
-1. **Ready** — PO wrote user value, acceptance criteria (testable, numbered),
-   and out-of-scope notes. UX notes attached if the story has UI.
-2. **Build** — implementer works on branch `story/NNNN-slug` in a git
-   worktree. Tests first for core logic.
-3. **Verify** — tester writes acceptance tests from the criteria without
-   reading the implementation first, then runs the full gate (§7).
+- `specification.md` — what and why (PO): user value, numbered testable
+  acceptance criteria, out-of-scope notes.
+- `adrs.md` — which ADRs this feature depends on or extends (architect), one
+  line each on what the ADR decides for this feature. A decision too small
+  for a full ADR gets a short dated note here instead of a new ADR.
+- `plan.md` — implementation roadmap (implementer): affected
+  crates/modules, an ordered task list, validation approach. Each task names
+  the acceptance-criteria numbers it fulfils. Checked off as work proceeds.
+
+**Feature lifecycle:**
+
+1. **Ready** — `specification.md` and `adrs.md` exist. UX notes attached
+   (in `specification.md` or linked from it) if the feature has UI.
+2. **Build** — implementer writes `plan.md` first, then works on branch
+   `story/<feature-slug>` in a git worktree. Tests first for core logic.
+3. **Verify** — tester writes acceptance tests from `specification.md`
+   without reading the implementation first, then runs the full gate (§7).
    `ux-engineer` reviews UI. `architect` reviews if crates, public APIs,
    dependencies or the document model changed.
 4. **Demo** — lead posts to the customer: what changed, how to try it
    (command or screenshot), open issues. One short message.
-5. **Done** — customer accepts; PR is squash-merged; story file gets
+5. **Done** — customer accepts; PR is squash-merged; `specification.md` gets
    `Status: Done` and the PR link.
 
 **Definition of Done:** all acceptance criteria covered by tests, gate green,
@@ -81,7 +95,7 @@ docs updated where behaviour changed, no new `TODO` without an issue link,
 customer accepted.
 
 Parallel work: at most two implementers at once, each in its own worktree,
-on stories that do not touch the same crates.
+on features that do not touch the same crates.
 
 ## 5. Engineering rules
 
@@ -185,8 +199,8 @@ and CI structure. Adaptations for this project:
   embedded toolchain.
 - CI runs the app crates on an OS matrix (ubuntu, windows, macos) and adds
   the wasm32 build of core crates.
-- `docs/backlog/` holds stories; `docs/design-system.md` holds the UI design
-  system.
+- `specs/` holds feature specs (§4); `docs/design-system.md` holds the UI
+  design system.
 
 Use the ProjectAtlas MCP for code navigation before broad grep/read passes.
 
@@ -194,11 +208,12 @@ Use the ProjectAtlas MCP for code navigation before broad grep/read passes.
 
 - Trunk-based. `main` is always releasable. Never push to `main` directly,
   never force-push shared branches.
-- Branches: `story/NNNN-slug`, `fix/slug`, `chore/slug`.
+- Branches: `story/<feature-slug>`, `fix/slug`, `chore/slug`.
 - Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`,
   `chore:`), scope = crate name where it applies.
-- One PR per story. PR description: story link, what changed, ADRs touched,
-  new dependencies with license and reason, how to try it.
+- One PR per feature. PR description: link to `specs/<feature-slug>/`, what
+  changed, ADRs touched, new dependencies with license and reason, how to
+  try it.
 - Squash-merge after green CI and customer acceptance. The customer may grant
   standing merge permission for `chore/` and `fix/` PRs; until then, ask.
 - Renovate updates dependencies; the lead batches them into one weekly PR.
@@ -216,35 +231,5 @@ Do not write product code yet.
 3. Lead: send the customer one message with the MVP proposal and the
    batched ADR questions (§3).
 
-After the customer's answers are in `docs/`, delete §11 from this file.
-
-## 11. Customer brief (source material, remove after §10)
-
-**Background.** The customer uses Inkscape to create and edit vector
-graphics, Ink/Stitch to prepare them for an embroidery machine, exports to a
-cutting plotter for cutting and drawing, and LightBurn for the laser cutter.
-Pain points: Inkscape's UI/UX, especially extensibility; LightBurn is, per
-the customer, no longer developed for Linux, and lacks cross-machine work
-and material management. Material test patterns are needed once per machine
-and material and should be stored and reused.
-
-**Requirements as stated:**
-
-- **Font management.** Work with many fonts without installing them all
-  system-wide. Categorize fonts (e.g. fonts suitable for cutting, where
-  glyphs are connected; initials; symbols and ornaments). Hide irrelevant
-  system fonts while working on a project.
-- **Vectorization and vector optimization** clearly better than Inkscape:
-  combine several trace settings, and smarter path simplification.
-- **Manufacturing as a core part:** laser cutting, laser engraving, cutting
-  plotter, embroidery machine, CNC mill (2.5D, V-carving of text via Voronoi,
-  e.g. OpenVoronoi).
-- **Material management** per machine and material, including stored
-  material test results. Works across the customer's computers.
-- **Asset manager** for templates and finished files that get reused and
-  composed. Additional libraries can be added, including subscription or paid
-  ones with login.
-- **Vector path and node editing.** Start small: Bézier paths, rectangles,
-  circles, outlines, stroke width, stroke styles, colors, gradients, object to
-  path, union, difference, intersection.
-- Feature set comparable to LightBurn over time.
+Customer answers are in `docs/requirements.md` and `docs/adr/`; the original
+brief this section pointed to has been superseded by those documents.

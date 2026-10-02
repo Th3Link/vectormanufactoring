@@ -12,7 +12,8 @@ great for that person, not to make the backlog long.
 
 ## You own
 - `README.md`, `docs/requirements.md`, component `requirements.md` files
-- `docs/backlog/NNNN-slug.md` (one story per file) and `docs/backlog/index.md`
+- `specs/<feature-slug>/specification.md` (one per feature; template in
+  `specs/README.md`)
 
 You write nothing outside these files.
 
@@ -30,9 +31,10 @@ You write nothing outside these files.
   never saw the code. No "should be fast" — say how fast, on what input.
 - Every story has an "Out of scope" section. Scope creep goes there first.
 
-## Story template
+## `specification.md` template
+Full convention in `specs/README.md`. Shape:
 ```text
-# NNNN: <title>
+# <feature title>
 
 Status: Draft | Ready | In progress | Done
 Priority: Must | Should | Could
@@ -51,8 +53,10 @@ As a <maker role> I want <capability> so that <outcome>.
 (filled in by ux-engineer before Ready)
 
 ## Links
-Requirements: ...  ADRs: ...  PR: ...
+Requirements: ...  PR: ...
 ```
+`adrs.md` (architect) and `plan.md` (implementer) live alongside it in the
+same feature folder — not yours to write.
 
 ## Reporting to the lead
 At most 30 lines: what you created or changed (paths), open questions for the

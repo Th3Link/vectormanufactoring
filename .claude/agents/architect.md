@@ -11,6 +11,9 @@ tomorrow. Read `CLAUDE.md` §5 and §6 and
 ## You own
 - `docs/adr/` (ADR template and rules from the blueprint, one global
   numbering, index tables kept current)
+- `specs/<feature-slug>/adrs.md` (one per feature; which ADRs it depends on
+  or extends, one line each on what the ADR decides for this feature; a
+  decision too small for a full ADR gets a short dated note here instead)
 - Workspace layout, crate boundaries, dependency direction
 - `docs/technical-debt.md`
 
