@@ -195,8 +195,12 @@ format and numbering, requirements split, embedding docs into `cargo doc`,
 and CI structure. Adaptations for this project:
 
 - Crate suffixes are `-core` (pure logic), `-app` (UI/binaries) and `-io`
-  (device and OS integration). There is no `-hardware` suffix and no
-  embedded toolchain.
+  (device and OS integration), plus two accepted exceptions named by their
+  owning ADRs: `-wasm` for a browser-facing facade over several core crates
+  (ADR 0001), `-server` for a standalone server binary (ADR 0004). A plugin
+  SDK crate (e.g. `vecmanf-plugin`, ADR 0005) takes no suffix. There is no
+  `-hardware` suffix and no embedded toolchain. Full layout in
+  [ADR 0011](docs/adr/0011-workspace-and-crate-layout.md).
 - CI runs the app crates on an OS matrix (ubuntu, windows, macos) and adds
   the wasm32 build of core crates.
 - `specs/` holds feature specs (§4); `docs/design-system.md` holds the UI

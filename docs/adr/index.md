@@ -8,8 +8,12 @@ which crate a decision is about (see
 
 **Once an ADR is accepted, its decision text is not edited.** Changed
 circumstances get a new ADR that supersedes the old one, and the old one's
-Status line is updated to point at it. All ten ADRs below are accepted, so this
-rule is now live: every further change to any of these decisions is a new ADR.
+Status line is updated to point at it. All eleven ADRs below are accepted, so
+this rule is now live: every further change to any of these decisions is a new
+ADR.
+(0001–0010 were accepted by customer sign-off; 0011 is downstream assembly of
+them and was accepted by the architect — see its own preamble for why
+`CLAUDE.md` §3 does not require a customer round for it.)
 
 A decision too small for a full ADR gets a short dated note in that feature's
 `specs/<feature-slug>/adrs.md` instead.
@@ -26,6 +30,7 @@ A decision too small for a full ADR gets a short dated note in that feature's
 | [0008](0008-end-to-end-encryption-of-sync-and-collaboration.md) | End-to-end encryption of sync and collaboration | workspace | Accepted |
 | [0009](0009-concurrent-editing-semantics.md) | Concurrent editing semantics — undo, ephemeral state and merge granularity | workspace | Accepted |
 | [0010](0010-document-keyring-admins-and-revocation.md) | Document keyring — participants, admins and key revocation | workspace | Accepted |
+| [0011](0011-workspace-and-crate-layout.md) | Workspace and crate layout | workspace | Accepted |
 
 ## Customer sign-off, 2026-10-02
 
@@ -68,20 +73,26 @@ unawareness. Reversing either needs a new ADR, not an edit:
 
 ## Open follow-ups
 
-- **ADR 0011 — workspace and crate layout.** The crates named by ADRs 0001–0010
-  (`vecmanf-document-core`, `vecmanf-geometry-core`, `vecmanf-render-core`,
-  `vecmanf-ui-core`, `vecmanf-library-core`, `vecmanf-crypto-core`,
-  `vecmanf-storage-io`, `vecmanf-editor-wasm`, `vecmanf-sync-server`,
-  `vecmanf-plugin`, `vecmanf-app`) plus the TypeScript frontend need one ADR
-  that fixes the full dependency direction, the wasm32 CI matrix and the
-  frontend's place in the build. It must also record ADR 0008 §5 as the single
-  permitted exception to "the server depends on no core crate", and place
-  ADR 0009 §2's awareness channel — which is I/O, so it cannot live in a
-  `*-core` crate while the merge semantics it serves must. ADR 0010 §14 widens
-  that exception's contents without widening the exception itself: the keyring's
-  replay and merge rules are pure, so the server shares them. 0001–0010 are now
-  accepted, so this is the next ADR to write. `CLAUDE.md` §5 forbids a new crate
-  without an ADR, so no crate is created before then.
+- **The workspace itself is now written but not created.**
+  [ADR 0011](0011-workspace-and-crate-layout.md) fixes the twelve-crate layout,
+  the full dependency direction, the wasm32 checks and the frontend's place in
+  the build; the root `Cargo.toml` and the crate directories it describes are
+  the first commit of product work, not part of the ADR. Three crate slots are
+  deliberately left empty there (a machine/toolpath core crate and a device
+  `-io` crate, awaiting the first machine-family ADR; `vecmanf-model-core`;
+  a plugin-host core crate), each with its trigger named in 0011 §8.
+  One crate name the index's earlier list had missed is in it:
+  `vecmanf-vectorize-core`, named by ADR 0003 §6.
+- ~~`CLAUDE.md` §8's crate-suffix list needs a lead amendment~~ — done: §8 now
+  names `-wasm` (0001 §3), `-server` (0004 §5) and the suffix-less plugin SDK
+  (0005 §1) alongside `-core`/`-app`/`-io`, pointing at ADR 0011.
+- **Dangling cross-references in ADR 0004** (found while writing
+  `specs/project-file-foundation/adrs.md`, 2026-10-02): lines citing "ADR 0002
+  §12" and "§12–§16" should point at ADR 0009, where peer-scoped undo and
+  concurrent-editing semantics actually live — 0002's decision list ends at
+  §11. Accepted decision text isn't edited, so this is a corrected pointer for
+  readers, not a substantive change; fix opportunistically whenever 0004 is
+  next touched for an unrelated reason.
 - **Boolean-crate spike (`spike/booleans`).** ADR 0003 §3 decides flattened
   polygons and a pure-Rust crate; the spike picks between `i_overlay`, `geo`'s
   boolean ops and `clipper2-rust` (added 2026-10-02 on the customer's pointer —
