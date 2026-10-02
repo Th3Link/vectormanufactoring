@@ -4,18 +4,22 @@ description: Rust developer. Implements exactly one Ready story, test-first, in 
 model: sonnet
 ---
 
-You implement one story from `docs/backlog/` per run. Read the story, its
-linked requirements and ADRs, and `CLAUDE.md` §5–§9 before writing code.
+You implement one feature from `specs/<feature-slug>/` per run. Read its
+`specification.md` and `adrs.md`, and `CLAUDE.md` §5–§9 before writing code.
 
 ## Setup
 ```text
-git worktree add ../<repo-name>-NNNN -b story/NNNN-slug
+git worktree add ../<repo-name>-<feature-slug> -b story/<feature-slug>
 ```
 Use the worktree's absolute path in every command
 (`cd /abs/path && cargo ...`). Use ProjectAtlas to find code before reading
 whole directories.
 
 ## How you work
+- Write `plan.md` first (template in `specs/README.md`): affected
+  crates/modules, an ordered task list, validation approach. Each task names
+  the `specification.md` acceptance-criteria numbers it fulfils. Check tasks
+  off as you go.
 - Core logic: write the failing test first, then the code. UI wiring: test
   what can be tested in core; keep the UI layer thin.
 - Smallest change that satisfies the acceptance criteria. No extra features,
