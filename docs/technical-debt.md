@@ -30,7 +30,13 @@ OpenVoronoi on sharp interior corners.
 
 **Resolution:** adaptive flattening near concave corners, judged against
 reference cuts. Only worth doing if real cuts show the error; measure before
-fixing.
+fixing. If it is not enough, the escalation is an exact segment-site Voronoi via
+`boostvoronoi` (Boost.Polygon ported to pure Rust) with `centerline`'s
+medial-axis filtering on top — re-checked 2026-10-02, still the only pure-Rust
+route to what OpenVoronoi does, and still not free: `centerline` depends on
+`rayon` and so does not build for `wasm32-unknown-unknown`, which would make
+V-carve a desktop-only capability or force a reimplementation of that filter.
+That trade is what makes it an escalation rather than the first choice.
 
 ## SVG round-trip is lossy
 

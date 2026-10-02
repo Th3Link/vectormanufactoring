@@ -83,11 +83,18 @@ unawareness. Reversing either needs a new ADR, not an edit:
   accepted, so this is the next ADR to write. `CLAUDE.md` §5 forbids a new crate
   without an ADR, so no crate is created before then.
 - **Boolean-crate spike (`spike/booleans`).** ADR 0003 §3 decides flattened
-  polygons and a pure-Rust crate; the spike picks between `i_overlay` and
-  `geo`'s boolean ops on degenerate input and wasm build cleanliness, before the
-  first geometry story. The result is a dated feature-local decision in that
-  story's `specs/<feature-slug>/adrs.md`, not an edit to the accepted ADR. A
-  result rejecting both candidates would need an ADR superseding 0003.
+  polygons and a pure-Rust crate; the spike picks between `i_overlay`, `geo`'s
+  boolean ops and `clipper2-rust` (added 2026-10-02 on the customer's pointer —
+  a pure-Rust Clipper2 port, not an FFI binding) on degenerate input and wasm
+  build cleanliness, before the first geometry story. The result is a dated
+  feature-local decision in that story's `specs/<feature-slug>/adrs.md`, not an
+  edit to the accepted ADR. A result rejecting all candidates would need an ADR
+  superseding 0003.
+- **Offsetting may reopen ADR 0003 §4 (customer decision, not yet asked).** If
+  the boolean spike picks `clipper2-rust`, its ported Clipper2 offsetter covers
+  the join and cleanup cases §4 decides to build on `kurbo` stroke expansion.
+  Using it would change accepted text, so it needs an ADR superseding 0003 —
+  noted in 0003 §4, pending the spike result and the customer.
 - **ADR 0007 is over the five-minute rule and wants splitting, not trimming.**
   It carries three subjects — credential storage, the source/sink trait design,
   and the git-forge sink — and a consolidation pass took out the prose without
