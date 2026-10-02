@@ -53,16 +53,43 @@ foundation.
    judged on degenerate input (self-intersections, coincident edges, zero-area
    slivers, thousands of subpaths) and on wasm build cleanliness. The decision
    accepted here is "flattened polygons, a pure-Rust crate, chosen by spike";
-   the spike picks between two named candidates and does not reopen it, so its
+   the spike picks between the named candidates and does not reopen it, so its
    result is recorded as a dated feature-local decision in that story's
    `specs/<feature-slug>/adrs.md` rather than by editing this ADR. A result
-   rejecting *both* candidates would need a new ADR superseding this one.
+   rejecting *all* candidates would need a new ADR superseding this one.
+
+   > **Note 2026-10-02 (candidate list only, decision unchanged):** the
+   > customer pointed out `clipper2-rust`, which is a genuine pure-Rust port of
+   > Clipper2 — not an FFI binding — by MatterHackers: `#![forbid(unsafe_code)]`,
+   > one dependency (`num-traits`), BSL-1.0 like upstream, 1.2.0 of 2026-09-18
+   > after six releases since 2026-02, and a wasm demo that establishes the
+   > `wasm32-unknown-unknown` build. It is therefore a **third candidate for the
+   > `spike/booleans` comparison** alongside `i_overlay` and `geo`, and it
+   > carries the quality argument that option A below was rejected despite: the
+   > algorithms are Clipper2's, without the `unsafe`, the C++ toolchain or the
+   > license problem. Its open question is provenance, not safety — the port was
+   > produced with AI assistance and is "maintained in spare time", so the
+   > spike's degenerate-input fixtures are what decides it, not the test count
+   > in its README. Note that it also ships Clipper2's own **offsetter**, which
+   > §4 below builds differently; see the note on §4.
+   >
+   > This changes no accepted text. Option A stays rejected as written — it was
+   > rejected for C++-via-FFI, and a pure-Rust port is option B, not option A.
 4. **Offsetting** is built on the same two pieces: expand each contour and
    union the pieces (`kurbo` stroke expansion for the geometry, the boolean
    crate for the union), with a dedicated module and golden-file tests.
    Offsetting is not a thin wrapper around booleans in practice — mitered,
    rounded and bevelled joins, self-intersection cleanup and inner-offset
    collapse each need explicit tests.
+
+   > **Open question raised 2026-10-02, not settled here:** if the spike picks
+   > `clipper2-rust`, its ported Clipper2 offsetter already implements exactly
+   > the join and cleanup cases this item lists, and building them ourselves on
+   > top of `kurbo` stroke expansion would be redundant work against a worse
+   > implementation. Using it instead would be a change to this accepted item,
+   > not a candidate-list update, so it needs a new ADR superseding this one
+   > rather than a feature-local note — flagged to the lead, customer decision.
+   > Until that happens this item stands as written.
 5. **V-carving uses an approximate medial axis derived from a constrained
    Delaunay triangulation** of the flattened boundary (`spade`, pure Rust,
    robust predicates), not an exact Voronoi diagram of curve segments. Carve
@@ -72,6 +99,16 @@ foundation.
    the medial axis is what the algorithm actually needs, and an exact
    curve-segment Voronoi (OpenVoronoi's reason for existing) buys accuracy we
    can also get by flattening more finely.
+
+   > **Re-checked 2026-10-02 (confirms this item):** there is still no Rust port
+   > of OpenVoronoi, so building V-carve depth ourselves stands. The closest
+   > pure-Rust alternatives are `boostvoronoi` (Boost.Polygon's segment-site
+   > Voronoi ported to Rust, BSL-1.0) and `centerline` on top of it, which does
+   > medial-axis extraction. Neither replaces this item: `centerline` pulls
+   > `rayon`, which does not build for `wasm32-unknown-unknown` without threads;
+   > both are low-traffic; and `boostvoronoi`'s own README says bugs remain.
+   > They are the escalation path if the CDT approximation proves insufficient
+   > on real cuts — recorded in `docs/technical-debt.md`, not adopted here.
 6. **Path simplification** is a first-class module, not a boolean by-product:
    curve refitting to a tolerance (`kurbo`), with the "combine several trace
    settings" requirement handled in `vecmanf-vectorize-core` and not here.
