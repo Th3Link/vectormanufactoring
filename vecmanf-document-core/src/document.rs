@@ -12,12 +12,25 @@ use crate::units::{DocumentSize, Length};
 
 /// The container `format_version` this build writes and the newest it
 /// accepts on read (ADR 0004 §9).
-pub const CURRENT_FORMAT_VERSION: u32 = 1;
+///
+/// Bumped to 2 in `path-node-editing`: a version-1 reader would silently
+/// ignore every path node in a version-2 file, which is exactly the silent
+/// geometry loss ADR 0004 §9 exists to prevent
+/// (`specs/path-node-editing/adrs.md`, "`format_version` goes to 2").
+/// Migration from version 1 is empty by construction — a version-1
+/// document has no path nodes to migrate.
+pub const CURRENT_FORMAT_VERSION: u32 = 2;
 
 const ROOT_MAP: &str = "root";
 const KEY_FORMAT_VERSION: &str = "format_version";
 const KEY_WIDTH_MM: &str = "size_width_mm";
 const KEY_HEIGHT_MM: &str = "size_height_mm";
+
+/// The top-level Loro tree container holding every path object (ADR 0002
+/// §5: sibling order among tree nodes is z-order). `vecmanf-document-core`
+/// is the only module that names this key; everything else goes through
+/// [`Document`]'s methods — see [`crate::paths`].
+pub(crate) const PATHS_TREE: &str = "paths";
 
 /// An open vecmanf document.
 ///
@@ -111,6 +124,12 @@ impl Document {
         DocumentSize::new(Length::from_mm(width), Length::from_mm(height))
     }
 
+    /// This document's underlying Loro replica, for [`crate::paths`]'s
+    /// methods only — never exposed outside this crate (ADR 0004 §3).
+    pub(crate) const fn loro(&self) -> &LoroDoc {
+        &self.loro
+    }
+
     fn read_mm(root: &LoroMap, key: &str) -> Option<f64> {
         match root.get(key)?.get_deep_value() {
             LoroValue::Double(value) => Some(value),
@@ -137,9 +156,15 @@ impl Document {
     /// # Errors
     /// Returns [`SaveError::Encode`] if the view cannot be serialized.
     pub fn export_json(&self) -> Result<Vec<u8>, SaveError> {
+        let paths = self
+            .path_ids()
+            .into_iter()
+            .filter_map(|id| self.path(id))
+            .collect();
         let view = DocumentJsonView {
             format_version: CURRENT_FORMAT_VERSION,
             size: self.size(),
+            paths,
         };
         serde_json::to_vec_pretty(&view).map_err(|_| SaveError::Encode)
     }
@@ -156,6 +181,7 @@ impl Document {
 struct DocumentJsonView {
     format_version: u32,
     size: DocumentSize,
+    paths: Vec<crate::path_model::PathSnapshot>,
 }
 
 #[cfg(test)]

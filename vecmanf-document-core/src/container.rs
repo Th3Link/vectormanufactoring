@@ -249,6 +249,9 @@ mod tests {
     #[test]
     #[ignore = "run deliberately to regenerate tests/fixtures/*.vmf, not on every `cargo test`"]
     fn generate_golden_fixtures() {
+        use crate::path_model::{AnchorId, AnchorKind, NewAnchor};
+        use crate::units::{Point, Vec2};
+
         let fixtures_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
 
         let document = Document::new(1);
@@ -282,5 +285,53 @@ mod tests {
             &future_version,
         )
         .expect("write future_format_version.vmf");
+
+        // `path-node-editing` (`specs/path-node-editing/plan.md`, task 31):
+        // a `format_version = 2` fixture carrying both anchor kinds, open
+        // and closed, and a `format_version = 1` fixture proving the
+        // written migration policy ("empty by construction") actually
+        // holds against a real container.
+        let with_paths = Document::new(1);
+        let open_path = with_paths.create_path(
+            &[
+                NewAnchor::corner(AnchorId::new(1, 1), Point::new(0.0, 0.0)),
+                NewAnchor::corner(AnchorId::new(1, 2), Point::new(50.0, 0.0)),
+            ],
+            false,
+        );
+        let closed_path = with_paths.create_path(
+            &[
+                NewAnchor::corner(AnchorId::new(1, 3), Point::new(0.0, 0.0)),
+                NewAnchor {
+                    id: AnchorId::new(1, 4),
+                    point: Point::new(20.0, 0.0),
+                    handle_in: Vec2::new(-5.0, 0.0),
+                    handle_out: Vec2::new(5.0, 0.0),
+                    kind: AnchorKind::Smooth,
+                },
+                NewAnchor::corner(AnchorId::new(1, 5), Point::new(10.0, 20.0)),
+            ],
+            true,
+        );
+        let _ = (open_path, closed_path);
+        let paths_v2 = pack(&with_paths, "0.1.0").expect("pack");
+        std::fs::write(fixtures_dir.join("paths_v2.vmf"), &paths_v2).expect("write paths_v2.vmf");
+
+        let empty = Document::new(1);
+        let v1_loro = empty.export_loro_snapshot().expect("export");
+        let v1_manifest = Manifest {
+            format_version: 1,
+            loro_snapshot_version: CURRENT_LORO_SNAPSHOT_VERSION,
+            app_version: "0.1.0".to_string(),
+        };
+        let v1_manifest_bytes = serde_json::to_vec(&v1_manifest).expect("serialize");
+        let mut v1_writer = ZipWriter::new(Cursor::new(Vec::new()));
+        write_member(&mut v1_writer, MANIFEST_MEMBER, &v1_manifest_bytes, options)
+            .expect("manifest");
+        write_member(&mut v1_writer, LORO_SNAPSHOT_MEMBER, &v1_loro, options).expect("loro member");
+        write_member(&mut v1_writer, DOCUMENT_JSON_MEMBER, b"{}", options).expect("json member");
+        let v1_bytes = v1_writer.finish().expect("finish").into_inner();
+        std::fs::write(fixtures_dir.join("format_version_1.vmf"), &v1_bytes)
+            .expect("write format_version_1.vmf");
     }
 }
