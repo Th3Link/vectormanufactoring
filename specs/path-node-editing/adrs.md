@@ -346,3 +346,32 @@ spelled out under ADR 0002 and ADR 0009 rather than assumed.
   `OpenError::Damaged` (project-file-foundation AC 7: a named error, not a
   crash). After that check, the read helpers' `// invariant:` comments hold
   for every reachable document.
+- **2026-10-03: a press and release with no pointer movement writes nothing.**
+  This applies to node drags (AC 8, AC 10) and to handle drags (AC 9). If the
+  pointer-up position is identical to the pointer-down position,
+  `pointer_up` returns `NoOp` and does not call the document. Neither AC 8 nor
+  AC 9 says anything about a drag of zero length. They describe a drag "to a
+  new position", so this is an edge case the specification leaves open. It
+  is settled here, not by the test, for three reasons:
+  1. **Under ADR 0009 §3, writing the same value again still changes the
+     document.** `point` and both handles are LWW registers. A rewrite of an
+     unchanged value is a new operation with a newer clock. It can win
+     against a collaborator's concurrent real drag of the same node and undo
+     their move on merge. A click must not be able to do that.
+  2. **ADR 0002 §9 counts interactions that change the document.** Selecting
+     a node is ephemeral state (ADR 0009 §2), and so is clicking an
+     already-selected one. A commit for each such click would put an empty
+     step into slice 5's peer-scoped undo for every selection click. The
+     maker would then press undo and see nothing happen.
+  3. **The handle path makes it visible today.** `Drag::Handle` writes the
+     absolute pointer position. A click within hit tolerance of a handle tip
+     but not exactly on it therefore moves the handle by up to the tolerance.
+     That is a geometry change from a click. The handle drag records where
+     the pointer went down, measures the movement from there in the same way
+     node drags do, and writes nothing when the pointer did not move.
+
+  The check compares the two pointer positions for identity. It is not a
+  geometric `Tolerance` (`CLAUDE.md` §5). The host turns the same pixel into
+  the same `Point`, so "did not move" is exact. A screen-pixel drag threshold
+  against hand jitter is a separate interaction decision for the
+  `ux-engineer`. It is not part of this fix.

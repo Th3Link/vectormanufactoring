@@ -265,11 +265,16 @@ fn ac10_shift_click_toggle_off_then_drag_only_moves_what_remains_selected() {
     assert_eq!(by_id(c), Point::new(25.0, 3.0));
 }
 
-/// AC8: dragging a node by a zero-length delta (press and release at the
-/// same point) is still a valid "move" commit that leaves the node
-/// exactly where it was, not a no-op that skips writing.
+/// AC8 (as narrowed by architect review against ADR 0009 §2/§3): neither
+/// AC8 nor AC9 covers a zero-length drag, and under ADR 0009 §3 `point`
+/// is an LWW register — re-writing the same value is still a *new*
+/// operation with a newer clock, which can beat a collaborator's real
+/// concurrent move of the same node on merge. So a press-and-release at
+/// the same point on a node that is *already selected* (isolating this
+/// from the separate question of whether a bare selecting click should
+/// commit) must commit nothing at all, not a value-preserving move.
 #[test]
-fn ac8_zero_delta_drag_is_a_well_defined_no_move() {
+fn ac8_zero_delta_node_drag_is_a_no_op() {
     let document = Document::new(1);
     let a = AnchorId::new(1, 1);
     let b = AnchorId::new(1, 2);
@@ -281,13 +286,111 @@ fn ac8_zero_delta_drag_is_a_well_defined_no_move() {
         false,
     );
     let mut tool = NodeTool::new();
+
+    // Select node `a` with a real (non-zero) drag first, so the
+    // zero-delta drag under test starts from a node that is already
+    // selected, rather than itself being the selecting click.
     let paths = vec![document.path(path).unwrap()];
     tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
-    let outcome = tool.pointer_up(&document, Point::new(0.0, 0.0));
-    assert_eq!(outcome, vecmanf_ui_core::NodePointerUpOutcome::NodesMoved);
+    tool.pointer_up(&document, Point::new(1.0, 0.0));
+    assert!(tool.selection().contains_node(a), "must be selected now");
+
+    // Sanity check, called out explicitly by the architect: confirm
+    // `export_loro_snapshot` is itself deterministic for unchanged state
+    // before relying on byte-equality as an assertion below.
+    let snap1 = document.export_loro_snapshot().expect("snapshot");
+    let snap2 = document.export_loro_snapshot().expect("snapshot");
     assert_eq!(
-        document.path(path).unwrap().anchors[0].point,
-        Point::new(0.0, 0.0)
+        snap1, snap2,
+        "export_loro_snapshot must be deterministic for the same unchanged state"
+    );
+
+    let point_before = document.path(path).unwrap().anchors[0].point;
+    let before = document.export_loro_snapshot().expect("snapshot");
+
+    // Press and release at the same point on the already-selected node.
+    let paths = vec![document.path(path).unwrap()];
+    tool.pointer_down(&paths, point_before, TOLERANCES, false);
+    let outcome = tool.pointer_up(&document, point_before);
+
+    let after = document.export_loro_snapshot().expect("snapshot");
+
+    assert_eq!(outcome, vecmanf_ui_core::NodePointerUpOutcome::NoOp);
+    assert_eq!(document.path(path).unwrap().anchors[0].point, point_before);
+    assert_eq!(
+        before, after,
+        "a zero-movement drag on an already-selected node must commit nothing \
+         (ADR 0009 §3: re-writing the same LWW value is still a newer op)"
+    );
+}
+
+/// Architect review of AC8/AC9: handle drags wrote the *absolute*
+/// pointer position as the handle's new value, rather than a movement
+/// relative to the handle's own starting value. So pressing within hit
+/// tolerance but off the handle's exact tip, then releasing at that same
+/// spot (zero movement), would silently relocate the handle to wherever
+/// the click landed even though the maker never dragged it anywhere.
+/// That must be a no-op instead.
+#[test]
+fn ac9_zero_delta_handle_drag_off_tip_is_a_no_op() {
+    let document = Document::new(1);
+    let a = AnchorId::new(1, 1);
+    let b = AnchorId::new(1, 2);
+    let path = document.create_path(
+        &[
+            NewAnchor {
+                id: a,
+                point: Point::new(0.0, 0.0),
+                handle_in: Vec2::new(-5.0, 0.0),
+                handle_out: Vec2::new(5.0, 0.0),
+                kind: AnchorKind::Smooth,
+            },
+            NewAnchor::corner(b, Point::new(20.0, 0.0)),
+        ],
+        false,
+    );
+    let mut tool = NodeTool::new();
+
+    // Select node `a` with a real (non-zero) drag so its handles become
+    // hittable at all (hit_test_handle only considers a selected node's
+    // handles) without that selecting click itself being the
+    // zero-delta drag under test.
+    let paths = vec![document.path(path).unwrap()];
+    tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+    tool.pointer_up(&document, Point::new(1.0, 0.0));
+    assert!(tool.selection().contains_node(a), "must be selected now");
+
+    // handle_out is a relative offset, unaffected by the node's own
+    // move, so its tip is now at (1,0) + (5,0) = (6,0). Press 1mm off
+    // that exact tip (within the 2mm point tolerance) and release at
+    // the same spot: zero movement, but not on the tip itself.
+    let anchor_point = document.path(path).unwrap().anchors[0].point;
+    let handle_before = document.path(path).unwrap().anchors[0].handle_out;
+    let tip = anchor_point.translated(handle_before);
+    let press_point = tip.translated(Vec2::new(0.0, 1.0));
+
+    let before = document.export_loro_snapshot().expect("snapshot");
+
+    let paths = vec![document.path(path).unwrap()];
+    let down_outcome = tool.pointer_down(&paths, press_point, TOLERANCES, false);
+    assert_eq!(
+        down_outcome,
+        vecmanf_ui_core::NodePointerDownOutcome::Handle,
+        "the press must land on the handle, not the node or nothing"
+    );
+    let outcome = tool.pointer_up(&document, press_point);
+
+    let after = document.export_loro_snapshot().expect("snapshot");
+
+    assert_eq!(outcome, vecmanf_ui_core::NodePointerUpOutcome::NoOp);
+    assert_eq!(
+        document.path(path).unwrap().anchors[0].handle_out,
+        handle_before,
+        "the handle must stay exactly where it was, not jump to the click position"
+    );
+    assert_eq!(
+        before, after,
+        "a zero-movement drag off a handle's exact tip must commit nothing"
     );
 }
 

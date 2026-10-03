@@ -79,11 +79,19 @@ enum Drag {
         down_at: Point,
         starts: Vec<(vecmanf_document_core::AnchorId, Point)>,
     },
-    /// Dragging one handle (acceptance criterion 9).
+    /// Dragging one handle (acceptance criterion 9). `down_at` and
+    /// `start_value` are recorded at press time so the commit on release
+    /// writes `start_value` moved by the press→release displacement —
+    /// never the absolute pointer position (architect review: a press
+    /// within hit tolerance but off the handle's exact tip would
+    /// otherwise relocate it to wherever the click landed, even with no
+    /// drag at all).
     Handle {
         path: NodeId,
         anchor: vecmanf_document_core::AnchorId,
         slot: HandleSlot,
+        down_at: Point,
+        start_value: Vec2,
     },
 }
 
@@ -159,7 +167,7 @@ impl NodeTool {
             tolerances.segment,
         ) {
             Some(Hit::Handle { path, anchor, slot }) => {
-                self.drag = Drag::Handle { path, anchor, slot };
+                self.begin_handle_drag(paths, path, anchor, slot, point);
                 PointerDownOutcome::Handle
             }
             Some(Hit::Node { path, anchor }) => {
@@ -209,6 +217,38 @@ impl NodeTool {
         };
     }
 
+    /// Records the handle's current value at press time, so the commit
+    /// on release can move it *relative to that starting value* rather
+    /// than writing wherever the pointer happens to end up (see
+    /// [`Drag::Handle`]'s own doc comment for why that distinction
+    /// matters). Falls back to [`Vec2::ZERO`] if `path`/`anchor` cannot
+    /// be resolved in `paths` — the subsequent `set_handle` call on
+    /// release will refuse against the live document anyway.
+    fn begin_handle_drag(
+        &mut self,
+        paths: &[PathSnapshot],
+        path: NodeId,
+        anchor: vecmanf_document_core::AnchorId,
+        slot: HandleSlot,
+        down_at: Point,
+    ) {
+        let start_value = paths
+            .iter()
+            .find(|p| p.id == path)
+            .and_then(|snapshot| snapshot.anchors.iter().find(|a| a.id == anchor))
+            .map_or(Vec2::ZERO, |a| match slot {
+                HandleSlot::In => a.handle_in,
+                HandleSlot::Out => a.handle_out,
+            });
+        self.drag = Drag::Handle {
+            path,
+            anchor,
+            slot,
+            down_at,
+            start_value,
+        };
+    }
+
     /// The maker released the mouse button at `point`, ending whatever
     /// drag [`NodeTool::pointer_down`] began. Commits the drag as exactly
     /// one command.
@@ -220,14 +260,20 @@ impl NodeTool {
                 down_at,
                 starts,
             } => {
-                // A zero-length delta (press and release at the same
-                // point) still commits: AC8's own acceptance test
-                // (`vecmanf-ui-core/tests/acceptance_0002.rs`'s
-                // `ac8_zero_delta_drag_is_a_well_defined_no_move`) pins
-                // this as "still a valid move commit... not a no-op that
-                // skips writing" — see this run's report for the open
-                // conflict against a later review note that asked for the
-                // opposite (skip the commit entirely on zero delta).
+                // A press and release at the exact same point writes
+                // nothing (`specs/path-node-editing/adrs.md`'s dated
+                // architect-review note): under ADR 0009 §3, `point` is
+                // an LWW register, so re-writing the same value is still
+                // a *new* operation with a newer clock — it can beat a
+                // collaborator's real concurrent move of the same node
+                // on merge, and it would put an empty step into slice
+                // 5's undo for every selecting click. Exact equality,
+                // not a geometric `Tolerance` (CLAUDE.md §5): a pixel-
+                // jitter threshold against hand tremor is a separate
+                // ux-engineer decision, not part of this rule.
+                if point == down_at {
+                    return PointerUpOutcome::NoOp;
+                }
                 let delta = down_at.vector_to(point);
                 let moves: Vec<_> = starts
                     .iter()
@@ -236,14 +282,21 @@ impl NodeTool {
                 let _ = document.move_anchors(path, &moves);
                 PointerUpOutcome::NodesMoved
             }
-            Drag::Handle { path, anchor, slot } => {
-                if let Some(a) = document
-                    .path(path)
-                    .and_then(|snapshot| snapshot.anchors.into_iter().find(|a| a.id == anchor))
-                {
-                    let value = a.point.vector_to(point);
-                    let _ = document.set_handle(path, anchor, slot, value);
+            Drag::Handle {
+                path,
+                anchor,
+                slot,
+                down_at,
+                start_value,
+            } => {
+                // Same zero-movement rule as the node-drag branch above,
+                // and for the same reason.
+                if point == down_at {
+                    return PointerUpOutcome::NoOp;
                 }
+                let delta = down_at.vector_to(point);
+                let value = Vec2::new(start_value.x + delta.x, start_value.y + delta.y);
+                let _ = document.set_handle(path, anchor, slot, value);
                 PointerUpOutcome::HandleMoved
             }
         }
