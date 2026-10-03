@@ -49,7 +49,7 @@ name = "vecmanf-app"
 # "Unmaintained" advisories with no safe upgrade available, from
 # dependencies we don't control (`loro`'s and Tauri's own trees). Not
 # security vulnerabilities. Recorded in `docs/technical-debt.md`
-# ("Three transitive dependencies are unmaintained, with no safe upgrade");
+# ("Four transitive dependencies are unmaintained, with no safe upgrade");
 # revisit at each `loro`/`tauri` upgrade.
 ignore = [
     "RUSTSEC-2026-0248", # im, via loro-internal
