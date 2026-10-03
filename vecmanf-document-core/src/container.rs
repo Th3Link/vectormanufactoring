@@ -90,7 +90,13 @@ fn write_member(
     writer.write_all(bytes).map_err(|_| SaveError::Container)
 }
 
-/// Unpacks `.vmf` container bytes into a [`Document`].
+/// Unpacks `.vmf` container bytes into a [`Document`], bound to the given
+/// Loro peer id.
+///
+/// `peer_id` exists for the same reason [`Document::new`]'s does: this
+/// `*-core` crate must not draw one from `getrandom` itself
+/// (`CLAUDE.md` §6). The caller (`vecmanf-app`) mints a fresh id per open
+/// session, the same way it does for a brand-new document.
 ///
 /// `manifest.json` is read and validated before `document.loro` is even
 /// looked at, so a refusal never partially reads the rest of the container
@@ -102,7 +108,7 @@ fn write_member(
 /// [`OpenError::Damaged`] if it is zip-shaped but truncated, corrupt, or
 /// missing a required member, and [`OpenError::FormatTooNew`] if
 /// `manifest.json` declares a newer version than this build supports.
-pub fn unpack(bytes: &[u8]) -> Result<Document, OpenError> {
+pub fn unpack(peer_id: u64, bytes: &[u8]) -> Result<Document, OpenError> {
     if !looks_like_zip(bytes) {
         return Err(OpenError::NotAVmf);
     }
@@ -131,7 +137,7 @@ pub fn unpack(bytes: &[u8]) -> Result<Document, OpenError> {
     }
 
     let loro_bytes = read_member(&mut archive, LORO_SNAPSHOT_MEMBER)?;
-    Document::from_loro_snapshot(&loro_bytes)
+    Document::from_loro_snapshot(peer_id, &loro_bytes)
 }
 
 fn looks_like_zip(bytes: &[u8]) -> bool {
@@ -158,7 +164,7 @@ mod tests {
     fn pack_then_unpack_round_trips_size() {
         let original = Document::new(1);
         let bytes = pack(&original, "0.1.0").expect("pack");
-        let reopened = unpack(&bytes).expect("unpack");
+        let reopened = unpack(2, &bytes).expect("unpack");
         assert_eq!(original.size(), reopened.size());
     }
 
@@ -179,13 +185,13 @@ mod tests {
 
     #[test]
     fn empty_bytes_are_not_a_vmf() {
-        assert!(matches!(unpack(&[]), Err(OpenError::NotAVmf)));
+        assert!(matches!(unpack(2, &[]), Err(OpenError::NotAVmf)));
     }
 
     #[test]
     fn plain_text_is_not_a_vmf() {
         let bytes = b"this is just a renamed text file, not a zip".to_vec();
-        assert!(matches!(unpack(&bytes), Err(OpenError::NotAVmf)));
+        assert!(matches!(unpack(2, &bytes), Err(OpenError::NotAVmf)));
     }
 
     #[test]
@@ -193,7 +199,7 @@ mod tests {
         let document = Document::new(1);
         let bytes = pack(&document, "0.1.0").expect("pack");
         let truncated = &bytes[..bytes.len() / 2];
-        assert!(matches!(unpack(truncated), Err(OpenError::Damaged)));
+        assert!(matches!(unpack(2, truncated), Err(OpenError::Damaged)));
     }
 
     #[test]
@@ -205,7 +211,7 @@ mod tests {
             .expect("start");
         writer.write_all(b"hello").expect("write");
         let bytes = writer.finish().expect("finish").into_inner();
-        assert!(matches!(unpack(&bytes), Err(OpenError::Damaged)));
+        assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
     }
 
     #[test]
@@ -227,7 +233,7 @@ mod tests {
         let expected_found = CURRENT_FORMAT_VERSION + 1;
         let expected_supported = CURRENT_FORMAT_VERSION.max(CURRENT_LORO_SNAPSHOT_VERSION);
         assert!(matches!(
-            unpack(&bytes),
+            unpack(2, &bytes),
             Err(OpenError::FormatTooNew { found, supported })
                 if found == expected_found && supported == expected_supported
         ));

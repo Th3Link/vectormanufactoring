@@ -14,8 +14,11 @@ use vecmanf_document_core::Document;
 /// (`specs/project-file-foundation/adrs.md`, "a fresh Loro peer id per
 /// open session"). `vecmanf-document-core` cannot draw this itself
 /// (`CLAUDE.md` §6: `*-core` crates do no I/O, randomness included), so
-/// the host mints it and passes it in.
-fn mint_peer_id() -> u64 {
+/// the host mints it and passes it in — both for a brand-new document
+/// ([`ProjectState::new_unsaved`]) and for one reopened from a `.vmf`
+/// (`main.rs`'s `open_path`, which calls
+/// [`vecmanf_document_core::unpack`] with a fresh id of its own).
+pub(crate) fn mint_peer_id() -> u64 {
     getrandom::u64().unwrap_or_else(|_| {
         // Falls back to a process-start-derived value if the OS RNG is
         // somehow unavailable. Not a security boundary: within this

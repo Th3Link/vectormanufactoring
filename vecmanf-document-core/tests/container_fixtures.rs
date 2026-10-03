@@ -25,7 +25,7 @@ fn fixture(name: &str) -> Vec<u8> {
 #[test]
 fn valid_vmf_opens_without_error() {
     let bytes = fixture("valid.vmf");
-    let document = unpack(&bytes).expect("a golden valid .vmf must open");
+    let document = unpack(2, &bytes).expect("a golden valid .vmf must open");
     let size = document.size();
     assert!((size.width.as_mm() - 210.0).abs() < f64::EPSILON);
     assert!((size.height.as_mm() - 297.0).abs() < f64::EPSILON);
@@ -34,20 +34,20 @@ fn valid_vmf_opens_without_error() {
 #[test]
 fn not_a_vmf_is_refused_as_such() {
     let bytes = fixture("not_a_vmf.txt");
-    assert!(matches!(unpack(&bytes), Err(OpenError::NotAVmf)));
+    assert!(matches!(unpack(2, &bytes), Err(OpenError::NotAVmf)));
 }
 
 #[test]
 fn truncated_vmf_is_refused_as_damaged() {
     let bytes = fixture("truncated.vmf");
-    assert!(matches!(unpack(&bytes), Err(OpenError::Damaged)));
+    assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
 }
 
 #[test]
 fn future_format_version_vmf_is_refused_as_too_new() {
     let bytes = fixture("future_format_version.vmf");
     assert!(matches!(
-        unpack(&bytes),
+        unpack(2, &bytes),
         Err(OpenError::FormatTooNew { .. })
     ));
 }

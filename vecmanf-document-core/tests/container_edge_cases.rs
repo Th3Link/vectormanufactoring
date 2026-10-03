@@ -61,7 +61,7 @@ fn manifest_bytes(format_version: u32, loro_snapshot_version: u32) -> Vec<u8> {
 /// refused as `NotAVmf`, the same bucket as a renamed text file.
 #[test]
 fn truly_empty_file_is_not_a_vmf() {
-    assert!(matches!(unpack(&[]), Err(OpenError::NotAVmf)));
+    assert!(matches!(unpack(2, &[]), Err(OpenError::NotAVmf)));
 }
 
 /// A *structurally valid* empty zip archive (just an end-of-central-
@@ -79,7 +79,7 @@ fn structurally_valid_but_empty_zip_is_damaged_not_not_a_vmf() {
     // empty bytes.
     assert!(!empty_zip.is_empty());
 
-    let result = unpack(&empty_zip);
+    let result = unpack(2, &empty_zip);
     assert!(
         matches!(result, Err(OpenError::Damaged)),
         "expected Damaged, got {:?}",
@@ -96,7 +96,7 @@ fn zip_with_only_manifest_json_is_damaged() {
     let manifest = manifest_bytes(CURRENT_FORMAT_VERSION, CURRENT_LORO_SNAPSHOT_VERSION);
     let bytes = zip_with_members(&[("manifest.json", &manifest)]);
 
-    let result = unpack(&bytes);
+    let result = unpack(2, &bytes);
     assert!(
         matches!(result, Err(OpenError::Damaged)),
         "expected Damaged, got {:?}",
@@ -117,7 +117,7 @@ fn format_version_exactly_current_opens_successfully() {
     // test pins that "current == accepted" boundary explicitly so a
     // future off-by-one in the `>` comparison (e.g. accidentally becoming
     // `>=`) is caught here rather than only in the "one above" case.
-    let result = unpack(&whole);
+    let result = unpack(2, &whole);
     assert!(
         result.is_ok(),
         "pack()'s own current-version output must open"
@@ -139,7 +139,7 @@ fn loro_snapshot_version_above_current_is_refused_even_when_format_version_is_cu
         ("document.json", b"{}"),
     ]);
 
-    let result = unpack(&bytes);
+    let result = unpack(2, &bytes);
     match result {
         Err(OpenError::FormatTooNew { found, supported }) => {
             assert_eq!(found, CURRENT_LORO_SNAPSHOT_VERSION + 1);
@@ -171,7 +171,7 @@ fn a_different_but_valid_zip_format_is_damaged_not_not_a_vmf() {
         ("word/document.xml", b"<document/>"),
     ]);
 
-    let result = unpack(&bytes);
+    let result = unpack(2, &bytes);
     assert!(
         matches!(result, Err(OpenError::Damaged)),
         "expected Damaged (valid zip, wrong contents), got {:?}",
@@ -194,7 +194,7 @@ fn corrupt_loro_snapshot_behind_a_valid_manifest_is_damaged() {
         ("document.json", b"{}"),
     ]);
 
-    let result = unpack(&bytes);
+    let result = unpack(2, &bytes);
     assert!(
         matches!(result, Err(OpenError::Damaged)),
         "expected Damaged, got {:?}",
@@ -214,7 +214,7 @@ fn unparsable_manifest_json_is_damaged() {
         ("document.json", b"{}"),
     ]);
 
-    let result = unpack(&bytes);
+    let result = unpack(2, &bytes);
     assert!(
         matches!(result, Err(OpenError::Damaged)),
         "expected Damaged, got {:?}",

@@ -73,7 +73,8 @@ fn ac5_ac6_pack_then_unpack_round_trips_the_document_size() {
     let original = Document::new(1);
     let bytes = pack(&original, "0.1.0").expect("pack");
 
-    let reopened = unpack(&bytes).expect("a .vmf written by this build must reopen without error");
+    let reopened =
+        unpack(2, &bytes).expect("a .vmf written by this build must reopen without error");
 
     assert_eq!(original.size(), reopened.size());
 }
@@ -84,7 +85,7 @@ fn ac5_ac6_pack_then_unpack_round_trips_the_document_size() {
 #[test]
 fn ac7_a_renamed_text_file_is_refused_as_not_a_vmf() {
     let bytes = b"Hello, this is not a project file at all.".to_vec();
-    let result = unpack(&bytes);
+    let result = unpack(2, &bytes);
     assert!(matches!(result, Err(OpenError::NotAVmf)));
 }
 
@@ -96,7 +97,7 @@ fn ac7_a_truncated_vmf_is_refused_as_damaged() {
     let whole = pack(&document, "0.1.0").expect("pack");
     let truncated = whole[..whole.len() / 3].to_vec();
 
-    let result = unpack(&truncated);
+    let result = unpack(2, &truncated);
     assert!(matches!(result, Err(OpenError::Damaged)));
 }
 
@@ -117,7 +118,7 @@ fn ac7_a_newer_format_version_is_refused_as_too_new_not_damaged() {
         .join("tests/fixtures/future_format_version.vmf");
     let bytes = std::fs::read(&path).expect("golden fixture must exist");
 
-    let result = unpack(&bytes);
+    let result = unpack(2, &bytes);
     assert!(
         matches!(result, Err(OpenError::FormatTooNew { .. })),
         "expected FormatTooNew, got {:?}",
@@ -131,16 +132,16 @@ fn ac7_a_newer_format_version_is_refused_as_too_new_not_damaged() {
 /// if two cases were accidentally collapsed into the same message.
 #[test]
 fn ac7_the_three_refusal_cases_are_distinct_variants() {
-    let not_a_vmf = unpack(b"plain text").err().expect("must be an error");
+    let not_a_vmf = unpack(2, b"plain text").err().expect("must be an error");
     let document = Document::new(1);
     let whole = pack(&document, "0.1.0").unwrap();
-    let damaged = unpack(&whole[..whole.len() / 3])
+    let damaged = unpack(2, &whole[..whole.len() / 3])
         .err()
         .expect("must be an error");
     let fixture_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/future_format_version.vmf");
     let future_bytes = std::fs::read(&fixture_path).unwrap();
-    let too_new = unpack(&future_bytes).err().expect("must be an error");
+    let too_new = unpack(2, &future_bytes).err().expect("must be an error");
 
     assert!(matches!(not_a_vmf, OpenError::NotAVmf));
     assert!(matches!(damaged, OpenError::Damaged));

@@ -72,11 +72,25 @@ impl Document {
     /// container's `document.loro` member, the sole source of truth on a
     /// normal open (ADR 0004 §1).
     ///
+    /// `peer_id` is a parameter for the same reason [`Document::new`]'s is:
+    /// `LoroDoc::new()` would otherwise draw one from `getrandom` itself,
+    /// which this `*-core` crate must not do (`CLAUDE.md` §6). Reopening a
+    /// file is a fresh session like any other, so it gets a fresh id from
+    /// the caller the same way a brand-new document does.
+    ///
     /// # Errors
     /// Returns [`OpenError::Damaged`] if the bytes are not a valid Loro
     /// snapshot this build can import.
-    pub(crate) fn from_loro_snapshot(bytes: &[u8]) -> Result<Self, OpenError> {
+    ///
+    /// # Panics
+    /// Does not panic in practice: setting the peer id on a freshly
+    /// created doc, before `import` records anything, cannot fail.
+    pub(crate) fn from_loro_snapshot(peer_id: u64, bytes: &[u8]) -> Result<Self, OpenError> {
         let loro = LoroDoc::new();
+        // invariant: setting the peer id on a freshly created doc with no
+        // recorded operations yet cannot fail.
+        #[allow(clippy::unwrap_used)]
+        loro.set_peer_id(peer_id).unwrap();
         loro.import(bytes).map_err(|_| OpenError::Damaged)?;
         Ok(Self { loro })
     }
@@ -166,8 +180,17 @@ mod tests {
     fn loro_snapshot_round_trips_the_size() {
         let original = Document::new(1);
         let snapshot = original.export_loro_snapshot().expect("export");
-        let reopened = Document::from_loro_snapshot(&snapshot).expect("import");
+        let reopened = Document::from_loro_snapshot(2, &snapshot).expect("import");
         assert_eq!(original.size(), reopened.size());
+    }
+
+    #[test]
+    fn from_loro_snapshot_uses_the_given_peer_id() {
+        let original = Document::new(1);
+        let snapshot = original.export_loro_snapshot().expect("export");
+        let reopened =
+            Document::from_loro_snapshot(0x1234_5678_9abc_def0, &snapshot).expect("import");
+        assert_eq!(reopened.loro.peer_id(), 0x1234_5678_9abc_def0);
     }
 
     #[test]

@@ -19,7 +19,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 use open_error::map_open_error;
-use state::{AppState, ProjectState};
+use state::{AppState, ProjectState, mint_peer_id};
 
 /// The main window's label, matching `tauri.conf.json`.
 const MAIN_WINDOW: &str = "main";
@@ -237,7 +237,7 @@ fn open_path(app: &AppHandle, path: &Path) {
         return;
     };
 
-    match vecmanf_document_core::unpack(&bytes) {
+    match vecmanf_document_core::unpack(mint_peer_id(), &bytes) {
         Ok(document) => {
             let state = app.state::<AppState>();
             let mut project = state.lock_project();
