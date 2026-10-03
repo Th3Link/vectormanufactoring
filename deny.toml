@@ -45,6 +45,24 @@ name = "vecmanf-storage-io"
 allow = ["AGPL-3.0-or-later"]
 name = "vecmanf-app"
 
+# path-node-editing's four new crates (specs/path-node-editing/adrs.md:
+# "the four new crate manifests... carry AGPL-3.0-or-later").
+[[licenses.exceptions]]
+allow = ["AGPL-3.0-or-later"]
+name = "vecmanf-geometry-core"
+
+[[licenses.exceptions]]
+allow = ["AGPL-3.0-or-later"]
+name = "vecmanf-ui-core"
+
+[[licenses.exceptions]]
+allow = ["AGPL-3.0-or-later"]
+name = "vecmanf-render-core"
+
+[[licenses.exceptions]]
+allow = ["AGPL-3.0-or-later"]
+name = "vecmanf-editor-wasm"
+
 [advisories]
 # "Unmaintained" advisories with no safe upgrade available, from
 # dependencies we don't control (`loro`'s and Tauri's own trees). Not

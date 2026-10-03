@@ -97,12 +97,39 @@ fn take_pending_open_error(state: State<AppState>) -> Option<OpenErrorPayload> {
         .map(|message| OpenErrorPayload { message })
 }
 
+/// Disables `WebKitGTK`'s DMA-BUF renderer, on Linux only, before any
+/// webview is created.
+///
+/// `specs/path-node-editing/adrs.md`'s canvas-perf spike measured that,
+/// on this stack (`WebKitGTK` 2.52.6 via `wry`/`tao`, NVIDIA proprietary
+/// driver), leaving this at its default acquires a `WebGL2` context that
+/// reports success but renders **zero frames** — for `wgpu` and for
+/// hand-written `WebGL2` alike. The failure mode is a silent blank
+/// canvas, not an error, which is exactly why this is a tested startup
+/// step rather than a hope.
+///
+/// # Safety
+/// `std::env::set_var` is only unsafe against concurrent reads from
+/// other threads; this call happens at the very start of `main`, before
+/// Tauri (or anything else) has spawned any thread or reads this
+/// variable, so no such access can be racing it.
+fn configure_linux_webkit_env() {
+    #[cfg(target_os = "linux")]
+    #[allow(unsafe_code)]
+    // invariant: see "Safety" above.
+    unsafe {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+}
+
 // invariant: `.build()` only returns an `Err` for a host-level setup
 // failure (e.g. the webview engine missing) that leaves the process with
 // nothing useful to do; there is no caller to propagate a `Result` to
 // from `main`.
 #[allow(clippy::expect_used)]
 fn main() {
+    configure_linux_webkit_env();
+
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
@@ -309,4 +336,25 @@ fn save_to(app: &AppHandle, path: &Path) {
     let file_name = project.file_name();
     set_window_title(app, file_name.as_deref());
     emit_project_state(app, &project);
+}
+
+#[cfg(test)]
+mod configure_linux_webkit_env_tests {
+    use super::configure_linux_webkit_env;
+
+    /// `specs/path-node-editing/adrs.md`'s prerequisite note: the failure
+    /// mode of leaving `WEBKIT_DISABLE_DMABUF_RENDERER` unset is a silent
+    /// blank canvas, not an error, so this needs a test rather than a
+    /// hope. Reading an environment variable is safe; nothing else in
+    /// this crate's test suite touches this specific one.
+    #[test]
+    fn sets_the_variable_on_linux() {
+        configure_linux_webkit_env();
+        #[cfg(target_os = "linux")]
+        assert_eq!(
+            std::env::var("WEBKIT_DISABLE_DMABUF_RENDERER").as_deref(),
+            Ok("1"),
+            "WebKitGTK's DMA-BUF renderer must be disabled before any webview is created"
+        );
+    }
 }

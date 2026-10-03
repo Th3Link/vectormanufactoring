@@ -84,8 +84,23 @@
        kept as its own variable rather than a hardcoded hex so the
        eventual light/dark ADR work is a variable swap, not a
        search-and-replace. Only one theme exists yet. */
-    --canvas-bg: oklch(0.99 0 0);
-    --statusbar-bg: oklch(0.94 0 0);
+    --canvas-bg: #E8E8EB;
+    --statusbar-bg: #DCDCE0;
+
+    /* path-node-editing (docs/design-system.md). Named --editor-* rather
+       than the design doc's literal --accent/--accent-hover: this
+       project's shadcn setup already reserves --accent/--accent-foreground
+       for its own component hover states (the @theme inline block above
+       maps them to the bg-accent/text-accent-foreground utilities), so
+       redefining --accent here to design-system.md's blue would silently
+       recolor every future shadcn menu/dropdown hover too. Same values,
+       collision-free name — see docs/design-system.md's own note. */
+    --toolbar-bg: #DCDCE0;
+    --toolbar-icon: #3A3A3F;
+    --toolbar-icon-active-bg: #2F6FEE;
+    --toolbar-icon-active-fg: #FFFFFF;
+    --editor-accent: #2F6FEE;
+    --editor-accent-hover: color-mix(in srgb, #2F6FEE 20%, transparent);
 }
 
 .dark {
@@ -132,4 +147,20 @@
   html {
     @apply font-sans;
     }
+}
+
+/* Canvas cursors (docs/design-system.md's UX notes, "Cursors"). The node
+   tool uses the plain system arrow (its default), so only the pen tool
+   needs a rule. The hotspot (2 2) sits at the nib's drawing tip in
+   public/cursors/pen.svg, matching where a click would land.
+
+   Known simplification, flagged to the lead: this is the pen tool's one
+   cursor for every state (idle/placing/mid-drag). The UX notes also call
+   for a distinct "pen-with-small-circle" close-path variant when
+   hovering the in-progress path's own first node — not implemented; the
+   hover ring on that node (vecmanf-render-core's pen preview) is still
+   drawn, so the close target isn't signalled by zero cues, just one
+   instead of two. */
+.canvas-cursor-pen {
+  cursor: url("/cursors/pen.svg") 2 2, crosshair;
 }

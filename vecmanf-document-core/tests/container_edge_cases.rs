@@ -143,10 +143,17 @@ fn loro_snapshot_version_above_current_is_refused_even_when_format_version_is_cu
     match result {
         Err(OpenError::FormatTooNew { found, supported }) => {
             assert_eq!(found, CURRENT_LORO_SNAPSHOT_VERSION + 1);
-            assert_eq!(
-                supported,
-                CURRENT_FORMAT_VERSION.max(CURRENT_LORO_SNAPSHOT_VERSION)
-            );
+            // `supported` must echo back the *snapshot* version's own
+            // bound, not some combination with the (here, unrelated and
+            // already-current) container `format_version` — the
+            // production code's own documented contract is "each
+            // comparison reports found/supported from the one field it
+            // actually checked" (`src/container.rs`). A `.max()` of the
+            // two version numbers happened to equal this when both
+            // defaulted to 1; `path-node-editing` bumping only
+            // `format_version` (now 2) exposed that the `.max()` here was
+            // never actually what the implementation promises.
+            assert_eq!(supported, CURRENT_LORO_SNAPSHOT_VERSION);
         }
         Ok(_) => panic!("expected FormatTooNew, got Ok"),
         Err(other) => panic!("expected FormatTooNew, got {other:?}"),

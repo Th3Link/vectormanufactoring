@@ -13,7 +13,7 @@
 // so `CLAUDE.md` §5's unwrap/expect restriction does not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use vecmanf_document_core::{OpenError, unpack};
+use vecmanf_document_core::{AnchorKind, OpenError, unpack};
 
 fn fixture(name: &str) -> Vec<u8> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -50,4 +50,44 @@ fn future_format_version_vmf_is_refused_as_too_new() {
         unpack(2, &bytes),
         Err(OpenError::FormatTooNew { .. })
     ));
+}
+
+/// `path-node-editing` (`specs/path-node-editing/plan.md`, task 31): a
+/// `format_version = 2` document with two paths — one open with only
+/// corner anchors, one closed with a mix of corner and smooth anchors and
+/// real (non-zero) handles — round-trips through the container exactly.
+#[test]
+fn paths_v2_vmf_round_trips_both_anchor_kinds_open_and_closed() {
+    let bytes = fixture("paths_v2.vmf");
+    let document = unpack(2, &bytes).expect("a golden paths .vmf must open");
+
+    let ids = document.path_ids();
+    assert_eq!(ids.len(), 2, "exactly two paths");
+
+    let open = document.path(ids[0]).expect("first path exists");
+    assert!(!open.closed);
+    assert_eq!(open.anchors.len(), 2);
+    assert!(open.anchors.iter().all(|a| a.kind == AnchorKind::Corner));
+
+    let closed = document.path(ids[1]).expect("second path exists");
+    assert!(closed.closed);
+    assert_eq!(closed.anchors.len(), 3);
+    assert_eq!(closed.anchors[0].kind, AnchorKind::Corner);
+    assert_eq!(closed.anchors[1].kind, AnchorKind::Smooth);
+    assert_ne!(
+        closed.anchors[1].handle_out,
+        vecmanf_document_core::Vec2::ZERO
+    );
+}
+
+/// `path-node-editing`'s written migration policy
+/// (`specs/path-node-editing/adrs.md`, "`format_version` goes to 2"): a
+/// genuine `format_version = 1` container — written before paths existed
+/// at all — still opens, with an empty path list rather than an error or a
+/// partial read.
+#[test]
+fn format_version_1_vmf_opens_with_no_paths() {
+    let bytes = fixture("format_version_1.vmf");
+    let document = unpack(2, &bytes).expect("a golden format_version=1 .vmf must still open");
+    assert_eq!(document.path_ids(), Vec::new());
 }
