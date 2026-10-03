@@ -401,3 +401,23 @@ selection, node editing and tool state have no accessible representation
 **Resolution:** `docs/design-system.md` states the canvas accessibility
 strategy (DOM overlays for handles and text, keyboard-only node editing)
 before the first canvas story, and UI review checks it.
+
+## Four transitive dependencies are unmaintained, with no safe upgrade
+
+`cargo deny`'s first real run (`project-file-foundation`, the first slice to
+pull in `loro` and `tauri`) surfaces four RustSec "unmaintained" advisories,
+none with a fix we control: `im` (RUSTSEC-2026-0248), `sized-chunks`
+(RUSTSEC-2026-0251) and `bitmaps` (RUSTSEC-2026-0247), all pulled in by
+`loro-internal`'s persistent-map use; and `proc-macro-error`
+(RUSTSEC-2024-0370), pulled in by `glib-macros` via Tauri's Linux WebKitGTK
+stack (`gtk`/`glib`). None are security vulnerabilities — "unmaintained"
+only — and none have an upstream successor `loro` or `gtk-rs` has adopted
+yet.
+
+**Resolution:** acknowledged explicitly in `deny.toml`'s `[advisories]`
+`ignore` list, each with the RUSTSEC id and this rationale, rather than
+silently passing or silently failing CI. Re-check at each `loro`/`tauri`
+upgrade: `im` has a maintained fork (`imbl`) loro could adopt, and
+`glib`/`gtk-rs` could move off `proc-macro-error` independently of us. Revisit
+when either upstream does, or when a real vulnerability (not just
+"unmaintained") lands in one of these three.
