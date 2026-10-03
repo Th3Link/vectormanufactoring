@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "vecmanf-document-core",
     "vecmanf-geometry-core",
+    "vecmanf-ui-core",
     "vecmanf-storage-io",
     "vecmanf-app",
 ]

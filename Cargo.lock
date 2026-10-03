@@ -4663,6 +4663,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "vecmanf-ui-core"
+version = "0.1.0"
+dependencies = [
+ "vecmanf-document-core",
+ "vecmanf-geometry-core",
+]
+
+[[package]]
 name = "version-compare"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

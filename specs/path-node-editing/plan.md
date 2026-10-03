@@ -96,26 +96,26 @@ already named.
 
 ### Interaction layer (new `vecmanf-ui-core`), test-first
 
-- [ ] 16. `PenTool` state machine: idle → placing (node-by-node) → finished/
+- [x] 16. `PenTool` state machine: idle → placing (node-by-node) → finished/
       discarded. Ephemeral in-progress path (points + handles + per-node
       corner/smooth), never touches `document-core` until finish/close
       (AC 1–5; `adrs.md` "a pen session is one commit").
-- [ ] 17. Pen tool: plain click → corner node + line segment (AC 1); click-
+- [x] 17. Pen tool: plain click → corner node + line segment (AC 1); click-
       drag → symmetric handles + curve segment (AC 2); finish action
       (double-click/Enter) → one `create_path` commit, open (AC 3); Escape →
       drop ephemeral state, zero commits (AC 4); click on the in-progress
       path's own first node (≥3 nodes) → closes and commits (AC 5).
-- [ ] 18. `NodeTool` state: selection (nodes/handles/segments, click +
+- [x] 18. `NodeTool` state: selection (nodes/handles/segments, click +
       shift-click, AC 7, 10, 14), hit-testing against a `PathSnapshot` with
       an explicit `Tolerance` (8px node/handle, 4px segment, per
       `docs/design-system.md`), drag-in-progress geometry (ephemeral, ADR
       0009 §2) committed as one `move_anchors`/`set_handle` call on release
       (AC 8, 9, 10).
-- [ ] 19. Node-tool actions → one command each: convert corner/smooth
+- [x] 19. Node-tool actions → one command each: convert corner/smooth
       (AC 11), insert on double-click (hit-tests via geometry-core, then
       `insert_anchor`, AC 12), delete selected (AC 13), make line/make curve
       on a selected segment (AC 14).
-- [ ] 20. `cargo build --target wasm32-unknown-unknown` clean.
+- [x] 20. `cargo build --target wasm32-unknown-unknown` clean.
 
 ### Rendering (new `vecmanf-render-core`), test-first where the data shape allows it
 
