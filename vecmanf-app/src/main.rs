@@ -61,6 +61,16 @@ struct OpenErrorPayload {
     message: String,
 }
 
+/// A save failure (File → Save / Save As). Unlike [`OpenErrorPayload`]
+/// this has no three-case taxonomy — "the write failed" is the whole
+/// story the UI needs — but it must still reach the user: a save that
+/// silently fails and looks successful is the worst failure mode this
+/// product can have.
+#[derive(Clone, serde::Serialize)]
+struct SaveErrorPayload {
+    message: String,
+}
+
 /// Returns the current project's state, for the frontend to read once on
 /// mount (avoids a race with an event emitted before any listener is
 /// attached).
@@ -75,15 +85,31 @@ fn get_project_state(state: State<AppState>) -> ProjectStatePayload {
     }
 }
 
-// invariant: `.run()` only returns an `Err` for a host-level setup failure
-// (e.g. the webview engine missing) that leaves the process with nothing
-// useful to do; there is no caller to propagate a `Result` to from `main`.
+/// Returns and clears any open-error message buffered before the frontend
+/// had mounted — the file-association launch path's open attempt runs in
+/// `.setup()`, ahead of any `listen()` call. Call once, at mount, the same
+/// way as [`get_project_state`].
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+fn take_pending_open_error(state: State<AppState>) -> Option<OpenErrorPayload> {
+    state
+        .take_pending_open_error()
+        .map(|message| OpenErrorPayload { message })
+}
+
+// invariant: `.build()` only returns an `Err` for a host-level setup
+// failure (e.g. the webview engine missing) that leaves the process with
+// nothing useful to do; there is no caller to propagate a `Result` to
+// from `main`.
 #[allow(clippy::expect_used)]
 fn main() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![get_project_state])
+        .invoke_handler(tauri::generate_handler![
+            get_project_state,
+            take_pending_open_error
+        ])
         .setup(|app| {
             let handle = app.handle().clone();
             let menu = menu::build(app)?;
@@ -103,8 +129,30 @@ fn main() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running the vecmanf application");
+        .build(tauri::generate_context!())
+        .expect("error while building the vecmanf application");
+
+    // macOS (and iOS) deliver a double-clicked `.vmf` as an Apple Event,
+    // surfaced here rather than as argv[1] — the file-association half of
+    // acceptance criterion 5 that the Linux/Windows argv path above does
+    // not cover. Not build-verified on real macOS hardware in this
+    // sandbox; code-complete pending that verification.
+    app.run(|app_handle, event| {
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Opened { urls } = event {
+            for url in urls {
+                if let Ok(path) = url.to_file_path() {
+                    if path.extension().and_then(|ext| ext.to_str()) == Some(VMF_EXTENSION) {
+                        open_path(app_handle, &path);
+                    }
+                }
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (app_handle, event);
+        }
+    });
 }
 
 fn window_title(file_name: Option<&str>) -> String {
@@ -127,11 +175,26 @@ fn emit_project_state(app: &AppHandle, project: &ProjectState) {
     let _ = app.emit("project-state", payload);
 }
 
+/// Emits the live `open-error` event (for an already-mounted frontend) and
+/// buffers the same message in [`AppState`] (for the file-association
+/// launch race — see [`take_pending_open_error`]). Harmless if nobody ever
+/// reads the buffered copy: it is only polled once, at mount.
 fn emit_open_error(app: &AppHandle, error: &vecmanf_document_core::OpenError) {
-    let payload = OpenErrorPayload {
-        message: map_open_error(error),
+    let message = map_open_error(error);
+    app.state::<AppState>()
+        .set_pending_open_error(message.clone());
+    let _ = app.emit("open-error", OpenErrorPayload { message });
+}
+
+/// Reports a failed Save/Save As. There is always a running, mounted
+/// frontend by the time a save can happen (unlike open, it is never
+/// triggered from `.setup()`), so — unlike open-error — this has no
+/// pending-buffer fallback to worry about.
+fn emit_save_error(app: &AppHandle, message: &str) {
+    let payload = SaveErrorPayload {
+        message: message.to_string(),
     };
-    let _ = app.emit("open-error", payload);
+    let _ = app.emit("save-error", payload);
 }
 
 /// Handles File → New: a fresh, never-saved document replaces whatever was
@@ -227,9 +290,18 @@ fn save_to(app: &AppHandle, path: &Path) {
 
     let Ok(bytes) = vecmanf_document_core::pack(&project.document, env!("CARGO_PKG_VERSION"))
     else {
-        return; // nothing user-actionable to report for this slice.
+        // A failed save that looks successful is the worst failure mode
+        // this product can have — report it, don't just return.
+        drop(project);
+        emit_save_error(app, "This project couldn't be saved.");
+        return;
     };
     if vecmanf_storage_io::write_atomic(path, &bytes).is_err() {
+        drop(project);
+        emit_save_error(
+            app,
+            "This project couldn't be saved. Check that you have permission to write to this location and that there's enough disk space, then try again.",
+        );
         return;
     }
 

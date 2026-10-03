@@ -30,20 +30,30 @@ pub struct Document {
 
 impl Document {
     /// Creates a new, empty document at the default page size (A4
-    /// portrait, 210 × 297 mm).
+    /// portrait, 210 × 297 mm), bound to the given Loro peer id.
     ///
-    /// Each call gets its own fresh Loro peer id — Loro assigns one
-    /// internally at construction — which is what this slice's "fresh peer
-    /// id per open session" decision asks for, without this crate touching
-    /// any source of randomness itself (`CLAUDE.md` §6: `*-core` crates do
-    /// no I/O).
+    /// The peer id is a parameter rather than something this crate mints
+    /// itself: `LoroDoc::new()` would otherwise draw one from `getrandom`,
+    /// and a `*-core` crate reaching an entropy source is exactly what
+    /// `CLAUDE.md` §6 forbids ("no filesystem, network, clock, threads or
+    /// UI. Callers pass everything in.") — the same reason
+    /// `vecmanf-library-core` takes a record's UUID as a parameter instead
+    /// of generating it (ADR 0011 §6). `vecmanf-app` mints a fresh id per
+    /// open session and passes it in here
+    /// (`specs/project-file-foundation/adrs.md`, amended 2026-10-03).
     ///
     /// # Panics
     /// Does not panic in practice: it only inserts known-valid keys into a
-    /// freshly created, attached root map, which Loro's API cannot reject.
+    /// freshly created, attached root map, and sets the peer id before any
+    /// operation has been recorded — both of which Loro's API cannot
+    /// reject.
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(peer_id: u64) -> Self {
         let loro = LoroDoc::new();
+        // invariant: setting the peer id on a freshly created doc with no
+        // recorded operations yet cannot fail.
+        #[allow(clippy::unwrap_used)]
+        loro.set_peer_id(peer_id).unwrap();
         let root = loro.get_map(ROOT_MAP);
         let size = DocumentSize::default();
         // invariant: inserting known-valid keys into a freshly created,
@@ -80,9 +90,10 @@ impl Document {
     /// that file being "damaged".
     #[must_use]
     pub fn size(&self) -> DocumentSize {
+        let default = DocumentSize::default();
         let root = self.loro.get_map(ROOT_MAP);
-        let width = Self::read_mm(&root, KEY_WIDTH_MM).unwrap_or(210.0);
-        let height = Self::read_mm(&root, KEY_HEIGHT_MM).unwrap_or(297.0);
+        let width = Self::read_mm(&root, KEY_WIDTH_MM).unwrap_or(default.width.as_mm());
+        let height = Self::read_mm(&root, KEY_HEIGHT_MM).unwrap_or(default.height.as_mm());
         DocumentSize::new(Length::from_mm(width), Length::from_mm(height))
     }
 
@@ -120,11 +131,10 @@ impl Document {
     }
 }
 
-impl Default for Document {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Deliberately no `impl Default for Document`: there is no safe default
+// peer id to mint without a caller-supplied source of randomness, which is
+// exactly what `Document::new`'s `peer_id` parameter exists to avoid this
+// crate doing itself.
 
 /// The shape of the non-authoritative `document.json` export
 /// (ADR 0004 §1).
@@ -140,22 +150,21 @@ mod tests {
 
     #[test]
     fn new_document_defaults_to_a4_portrait() {
-        let document = Document::new();
+        let document = Document::new(1);
         let size = document.size();
         assert!((size.width.as_mm() - 210.0).abs() < f64::EPSILON);
         assert!((size.height.as_mm() - 297.0).abs() < f64::EPSILON);
     }
 
     #[test]
-    fn two_new_documents_get_different_peer_ids() {
-        let a = Document::new();
-        let b = Document::new();
-        assert_ne!(a.loro.peer_id(), b.loro.peer_id());
+    fn new_document_uses_the_given_peer_id() {
+        let document = Document::new(0x1234_5678_9abc_def0);
+        assert_eq!(document.loro.peer_id(), 0x1234_5678_9abc_def0);
     }
 
     #[test]
     fn loro_snapshot_round_trips_the_size() {
-        let original = Document::new();
+        let original = Document::new(1);
         let snapshot = original.export_loro_snapshot().expect("export");
         let reopened = Document::from_loro_snapshot(&snapshot).expect("import");
         assert_eq!(original.size(), reopened.size());
@@ -163,7 +172,7 @@ mod tests {
 
     #[test]
     fn json_export_matches_the_live_size() {
-        let document = Document::new();
+        let document = Document::new(1);
         let json = document.export_json().expect("export");
         let value: serde_json::Value = serde_json::from_slice(&json).expect("parse");
         assert_eq!(value["format_version"], CURRENT_FORMAT_VERSION);

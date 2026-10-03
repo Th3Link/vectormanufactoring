@@ -34,6 +34,10 @@ tauri = { version = "2", default-features = false, features = [
     "x11",
 ] }
 tauri-plugin-dialog = "2"
+# Mints a fresh Loro peer id per open session (specs/project-file-foundation/
+# adrs.md, amended 2026-10-03) — vecmanf-document-core is a *-core crate and
+# must not touch an entropy source itself (CLAUDE.md §6), so this host does.
+getrandom = "0.4"
 serde.workspace = true
 serde_json.workspace = true
 vecmanf-document-core = { path = "../vecmanf-document-core", version = "0.1.0" }

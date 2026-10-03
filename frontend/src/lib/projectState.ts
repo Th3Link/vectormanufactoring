@@ -14,7 +14,16 @@ export interface ProjectStatePayload {
   size_mm: SizeMm;
 }
 
-/** What an `open-error` event carries (acceptance criterion 7). */
+/**
+ * What an `open-error` event carries (acceptance criterion 7), and what
+ * `take_pending_open_error` returns (or `null`/`undefined` if nothing is
+ * pending) for the file-association launch race.
+ */
 export interface OpenErrorPayload {
+  message: string;
+}
+
+/** What a `save-error` event carries. */
+export interface SaveErrorPayload {
   message: string;
 }
