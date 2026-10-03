@@ -9,6 +9,15 @@ description = "The Tauri 2 desktop host: native menu, native file dialogs, the .
 [lints]
 workspace = true
 
+[features]
+# Standard Tauri 2 scaffold block: without this, a release binary falls
+# back to connecting to the Vite dev server (tauri.conf.json's `devUrl`)
+# instead of serving the bundled frontend, which breaks AC1 (empty canvas
+# never appears) and would break AC8/AC9 the moment no dev server is
+# reachable, which is every real user's machine.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
 [build-dependencies]
 tauri-build = { version = "2", default-features = false, features = ["config-json"] }
 
