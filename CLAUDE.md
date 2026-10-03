@@ -218,8 +218,9 @@ Use the ProjectAtlas MCP for code navigation before broad grep/read passes.
 - One PR per feature. PR description: link to `specs/<feature-slug>/`, what
   changed, ADRs touched, new dependencies with license and reason, how to
   try it.
-- Squash-merge after green CI and customer acceptance. The customer may grant
-  standing merge permission for `chore/` and `fix/` PRs; until then, ask.
+- Squash-merge after green CI and customer acceptance. **Standing permission
+  granted 2026-10-03: `chore/` and `fix/` PRs merge without asking.** `story/`
+  (feature) PRs still need customer acceptance first, every time.
 - Renovate updates dependencies; the lead batches them into one weekly PR.
 
 ## 10. First session
