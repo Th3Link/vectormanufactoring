@@ -145,14 +145,18 @@ already named.
 
 ### Frontend and host wiring
 
-- [ ] 27. Tool rail: 48px left-docked vertical rail, Pen/Node buttons,
+- [x] 27. Tool rail: 48px left-docked vertical rail, Pen/Node buttons,
       `aria-label`s, tooltips, active-tool styling, `B`/`N` canvas-focus
       shortcuts, Pen default on an empty canvas.
-- [ ] 28. Canvas component hosts the wasm module's `<canvas>`, forwards
+- [x] 28. Canvas component hosts the wasm module's `<canvas>`, forwards
       pointer/keyboard events, renders every frame from the draw list.
-      Cursors per `specification.md`'s UX notes (pen-nib, close-path
-      variant, plain arrow for node tool).
-- [ ] 29. Contextual tool-controls bar (node tool only): Insert, Delete,
+      Cursors per `specification.md`'s UX notes (pen-nib, plain arrow for
+      node tool). Known gap, flagged to the lead: the close-path cursor
+      variant (pen-with-small-circle when hovering the in-progress path's
+      own first node) is not implemented — the hover ring signal on that
+      node still shows, so the close target isn't signalled by zero cues,
+      just one instead of two.
+- [x] 29. Contextual tool-controls bar (node tool only): Insert, Delete,
       Make corner, Make smooth, Make line, Make curve, disabled when
       inapplicable; same actions on a right-click context menu; Delete/
       Backspace keys bound; Escape clears selection (not a pen discard).
