@@ -1,0 +1,14 @@
+# Workaround for this sandbox: rustc overflows its default thread stack on
+# this slice's heavier dependency trees (loro, Tauri's Linux webkit2gtk
+# stack) — reproducible, not flaky in the usual sense. This is a property
+# of the dependencies, committed deliberately (docs/technical-debt.md,
+# "The build needs a local workaround on at least one machine"), so a
+# developer who hits the segfault does not have to rediscover the cause.
+#
+# Build parallelism is deliberately NOT set here: pinning `jobs` repo-wide
+# would throttle every real dev machine and CI runner to work around one
+# sandbox's constraints. Set `CARGO_BUILD_JOBS=2` (or similar) locally/in
+# this sandbox only if the segfault still needs it alongside the stack
+# size below.
+[env]
+RUST_MIN_STACK = "134217728"

@@ -382,12 +382,19 @@ discovered later.
 ## The quality gate covers only half the product
 
 `CLAUDE.md` §7 describes a Rust-only gate, but ADR 0001 adds a TypeScript
-frontend and an npm dependency tree. `cargo deny` cannot see npm licenses, and
-no lint, type-check, test or license check currently runs on the frontend.
+frontend and an npm dependency tree. `cargo deny` cannot see npm licenses.
+
+As of `project-file-foundation` the frontend exists and carries `oxlint` and a
+`tsc -b` build step, both runnable by hand and neither wired into any gate.
+There is no formatter check, no test runner, and no npm license or audit check
+at all — so the frontend's dependency tree is the one part of the product that
+no allow-list has ever been applied to.
 
 **Resolution:** the lead amends `CLAUDE.md` §7 and §8 to add `tsc --noEmit`,
-ESLint, Prettier, `vitest`, Playwright and an npm license/audit check with
-ADR 0006 §2's allow-list. Until then a green Rust gate is not a green build.
+a lint leg (`oxlint`, accepted in place of the ESLint
+[ADR 0011](adr/0011-workspace-and-crate-layout.md) §5 names), Prettier,
+`vitest`, Playwright and an npm license/audit check with ADR 0006 §2's
+allow-list. Until then a green Rust gate is not a green build.
 
 ## Accessibility is partly ours to build
 
@@ -401,3 +408,68 @@ selection, node editing and tool state have no accessible representation
 **Resolution:** `docs/design-system.md` states the canvas accessibility
 strategy (DOM overlays for handles and text, keyboard-only node editing)
 before the first canvas story, and UI review checks it.
+
+## Four transitive dependencies are unmaintained, with no safe upgrade
+
+`cargo deny`'s first real run (`project-file-foundation`, the first slice to
+pull in `loro` and `tauri`) surfaces four RustSec "unmaintained" advisories,
+none with a fix we control: `im` (RUSTSEC-2026-0248), `sized-chunks`
+(RUSTSEC-2026-0251) and `bitmaps` (RUSTSEC-2026-0247), all pulled in by
+`loro-internal`'s persistent-map use; and `proc-macro-error`
+(RUSTSEC-2024-0370), pulled in by `glib-macros` via Tauri's Linux WebKitGTK
+stack (`gtk`/`glib`). None are security vulnerabilities — "unmaintained"
+only — and none have an upstream successor `loro` or `gtk-rs` has adopted
+yet.
+
+**Resolution:** acknowledged explicitly in `deny.toml`'s `[advisories]`
+`ignore` list, each with the RUSTSEC id and this rationale, rather than
+silently passing or silently failing CI. Re-check at each `loro`/`tauri`
+upgrade: `im` has a maintained fork (`imbl`) loro could adopt, and
+`glib`/`gtk-rs` could move off `proc-macro-error` independently of us. Revisit
+when either upstream does, or when a real vulnerability (not just
+"unmaintained") lands in one of these four.
+
+## `vecmanf-document-core` needs a JavaScript host on `wasm32`
+
+The crate builds clean for `wasm32-unknown-unknown`, and that build does not
+mean what it looks like it means. `loro` → `loro-internal` pulls
+`getrandom 0.2` with its `js` feature enabled, which brings `js-sys` and
+`wasm-bindgen` into the crate's wasm dependency tree; declaring `loro` with
+`default-features = false` does not prevent it. In the browser this is free —
+ADR 0001's target *is* a JS host. In a wasm host without JavaScript it is fatal
+at instantiation, and ADR 0005's `wasmtime` plugin guests are such a host,
+reaching this crate through `vecmanf-plugin → vecmanf-document-core`
+([ADR 0011](adr/0011-workspace-and-crate-layout.md) consequences, "Every plugin
+guest currently carries Loro").
+
+ADR 0011 §6's ban list (`rayon`, `tokio`, …) is the wrong instrument here,
+because the build succeeds: nothing fails until something tries to run the
+module outside a browser.
+
+**Resolution:** two parts, neither urgent until the plugin-host story.
+`vecmanf-model-core` ([ADR 0011](adr/0011-workspace-and-crate-layout.md) §8,
+option D) is the structural fix and now has a second, sharper trigger than
+guest binary size — a plugin guest that needs units and paths but not the CRDT
+would carry neither Loro nor a JS requirement, and the extraction is a `lib.rs`
+re-export plus a short ADR. Before then, CI asserts per core crate that
+`getrandom`, `js-sys` and `wasm-bindgen` appear in the
+`--target wasm32-unknown-unknown` tree only where a recorded decision allows
+them, so the next one arrives as a CI failure rather than as a mystery in a
+plugin host.
+
+## The build needs a local workaround on at least one machine
+
+`.cargo/config.toml` carries `RUST_MIN_STACK = "134217728"` because `rustc`
+overflows its default thread stack on this slice's dependency trees (`loro`,
+Tauri's Linux `webkit2gtk` stack). It is committed deliberately: it is a
+property of the dependencies, not of one machine, and a developer who hits the
+segfault should not have to rediscover the cause.
+
+Build parallelism is the part that does not belong in shared configuration.
+Pinning `jobs` repo-wide slows every machine and every CI runner to work around
+one sandbox, so it is set per-machine via `CARGO_BUILD_JOBS` instead.
+
+**Resolution:** drop `RUST_MIN_STACK` at the next toolchain upgrade that no
+longer needs it — check by removing the line and building `vecmanf-app`. If a
+future toolchain still needs it, it stops being a workaround and becomes a
+documented build requirement in the README.

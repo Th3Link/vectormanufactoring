@@ -133,3 +133,60 @@ reopens none of those decisions.
   dirty state to undo (`specification.md`, Out of scope). Do not invent a
   persisted peer id in a config file or derive one from the hostname: when device
   identity lands it is the thing the peer id should be tied to.
+  **Amended 2026-10-03 (architect, after review):** "fresh per session" must not
+  mean *minted inside the core crate*. `LoroDoc::new()` draws its peer id from
+  `getrandom`, so a `*-core` crate reaching an entropy source is the same
+  violation ADR 0011 §6 already rules out for `uuid` in `vecmanf-library-core`
+  ("records take their UUID as a parameter and `vecmanf-storage-io` mints it").
+  The peer id is a parameter of `Document::new`, and `vecmanf-app` mints it —
+  from `vecmanf-storage-io`'s CSPRNG module once that exists, which is also what
+  makes the document model deterministic under test.
+
+## Architect review notes (2026-10-03)
+
+Recorded here rather than as edits to accepted ADR text, per the ADR index's
+convention.
+
+- **`vecmanf-document-core` needs a JavaScript host on `wasm32`, and a clean
+  `wasm32-unknown-unknown` build does not prove otherwise.** Verified by hand on
+  this branch: `loro` → `loro-internal` → `getrandom 0.2` with the `js` feature
+  on, pulling `js-sys` and `wasm-bindgen` into the crate's wasm dependency tree.
+  Declaring `loro` with `default-features = false` — which this slice does — does
+  not prevent it. The browser target is unaffected (ADR 0001's engine is a JS
+  host), but **a non-JS wasm host cannot instantiate this crate**, and ADR 0005's
+  `wasmtime` plugin guests are exactly that, reached through
+  `vecmanf-plugin → vecmanf-document-core` (ADR 0011 consequences, "Every plugin
+  guest currently carries Loro"). This is a second and sharper trigger for
+  ADR 0011 §8's `vecmanf-model-core` extraction (option D), independent of guest
+  binary size. ADR 0011 §6's named ban list (`rayon`, `tokio`, …) cannot catch
+  this class: the build *passes*. CI must additionally assert, per core crate,
+  that `getrandom`/`js-sys`/`wasm-bindgen` appear in the
+  `--target wasm32-unknown-unknown` tree only where a decision says they may.
+- **`BSL-1.0` added to `deny.toml`'s allow-list, extending ADR 0006 §2's list.**
+  One crate: `xxhash-rust` 0.8.19, transitive via `loro`. Boost Software
+  License 1.0 is OSI-approved, FSF-free, strictly more permissive than MIT and
+  GPL/AGPL-compatible, so it clears ADR 0006 §2's bar. Verified: it is the only
+  BSL crate in the graph, and the graph carries no CDDL/SSPL/BUSL or
+  source-available license. This is the "decision, not a waiver" §2 asks for.
+- **Four RustSec advisories acknowledged in `deny.toml`, all verified.**
+  `im` (RUSTSEC-2026-0248), `sized-chunks` (RUSTSEC-2026-0251) and `bitmaps`
+  (RUSTSEC-2026-0247) via `loro-internal`; `proc-macro-error`
+  (RUSTSEC-2024-0370) via Tauri's Linux `glib-macros` build dependency. Each is
+  `informational = "unmaintained"` with `patched = []` in the advisory database —
+  no security vulnerability and no upgrade we control. `cargo deny check` passes
+  with these and without any other suppression.
+- **`oxlint` replaces the ESLint named in ADR 0011 §5.** Accepted: same job,
+  same gate slot, and §5's obligation is that the frontend *has* a lint leg, not
+  which binary runs it. Prettier, `vitest`, Playwright and the npm license/audit
+  check from §5 are still missing — that is the existing
+  `docs/technical-debt.md` entry "The quality gate covers only half the
+  product", now describing real code rather than a hypothetical.
+- **`vecmanf-app` depends on `vecmanf-document-core` directly**, not only
+  through `vecmanf-storage-io` as ADR 0011 §3's edge list reads
+  ("`vecmanf-app → storage-io (and the core crates through it)`"). Accepted and
+  correct: `vecmanf-storage-io` moves bytes and knows nothing about documents, so
+  routing document types through it would make it a re-export shim. §3's
+  parenthetical is read as "and the core crates", not "only via storage-io". No
+  direction is inverted and no `*-core` crate gains an outward edge, so this
+  needs no superseding ADR — §4's "new ADR required" rule binds
+  `vecmanf-crypto-core` and `vecmanf-sync-server` only.
