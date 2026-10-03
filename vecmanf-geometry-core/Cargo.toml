@@ -12,3 +12,9 @@ workspace = true
 [dependencies]
 vecmanf-document-core = { path = "../vecmanf-document-core", version = "0.1.0" }
 kurbo.workspace = true
+
+[dev-dependencies]
+# Test-only (tester-added, `specs/path-node-editing` verification): property
+# tests for the geometry kernel's flatten/nearest-point/subdivide invariants
+# (`CLAUDE.md`'s tester role, "Geometry ... property tests with proptest").
+proptest = "1"

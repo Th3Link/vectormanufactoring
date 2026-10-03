@@ -319,3 +319,30 @@ spelled out under ADR 0002 and ADR 0009 rather than assumed.
 4. **ADR 0001's WebKitGTK measurement is a prerequisite task in `plan.md`,
    ahead of the canvas work**, and a failure is an ADR, not a ticket. It is the
    one thing in this slice that can invalidate an accepted decision.
+
+## Architect review notes (2026-10-03, PR #7)
+
+- **The `Document` methods in `paths.rs` are the command funnel for this
+  slice; a serializable `Command` enum is deferred to `undo-redo` (slice 5).**
+  ADR 0002 §9's enum has no consumer before the history view and the plugin
+  host, and turning one funnel module into an enum later is internal. What is
+  not deferred: **each mutating method ends in exactly one Loro commit** with a
+  human-readable label. Without it every edit since the last save lands in one
+  auto-commit transaction, which slice 5's undo cannot split. A method that
+  can refuse resolves every id before its first write, so a refusal writes
+  nothing.
+- **`fill` is not stored while it is always `None`.** An absent key reads as
+  `None`, so slice 4 adds the register without a format change.
+- **`flatten_segment` leaves `vecmanf-geometry-core`.** Hit-testing landed on
+  nearest-point-on-segment, so flattening had no production caller (`CLAUDE.md`
+  §5). The crate's scope for this slice is nearest-point and subdivision.
+- **`document.json` writes ids as strings.** `AnchorId` (128 bit) and the
+  `NodeId` peer (63 bit) exceed the 2^53 integers JSON readers such as
+  JavaScript and `jq` keep exactly, and ADR 0004 names scripted reading and
+  recovery as this file's purpose. `AnchorId` uses the same 32-digit hex form
+  as the Loro value. `kind` is lowercase to match.
+- **Opening a `.vmf` validates the path tree before it returns a `Document`.**
+  A container whose path data does not match the schema above is refused with
+  `OpenError::Damaged` (project-file-foundation AC 7: a named error, not a
+  crash). After that check, the read helpers' `// invariant:` comments hold
+  for every reachable document.
