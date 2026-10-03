@@ -47,4 +47,21 @@ export async function createSession(): Promise<WasmSession> {
   return new WasmSession(mintPeerId());
 }
 
+/** Reopens a previously saved `.vmf` container's bytes as a fresh editing
+ * session (File → Open / the OS file association), bound to a freshly
+ * minted peer id the same way `createSession` is.
+ *
+ * `specs/path-node-editing/adrs.md`'s PR review: "Open reads bytes and
+ * calls `WasmSession::open`" — the host (`vecmanf-app`) only ever reads
+ * these bytes off disk; this is the one place they are actually parsed.
+ *
+ * @throws the exact user-facing sentence
+ * `specs/project-file-foundation/specification.md`'s "Error handling —
+ * invalid/corrupt file" names, if `bytes` is not a `.vmf` this build can
+ * open (`vecmanf-editor-wasm`'s `map_open_error`). */
+export async function openSession(bytes: Uint8Array): Promise<WasmSession> {
+  await loadOnce();
+  return WasmSession.open(mintPeerId(), bytes);
+}
+
 export type { WasmSession, NodeToolbarState } from "@/wasm-bindings/vecmanf_editor_wasm.js";

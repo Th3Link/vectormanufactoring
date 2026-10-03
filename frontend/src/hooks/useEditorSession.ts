@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { createSession } from "@/lib/editorSession";
+import { createSession, openSession } from "@/lib/editorSession";
 import type { WasmSession } from "@/lib/editorSession";
+
+/** Screen pixels per document millimetre this slice's placeholder view
+ * uses (`specs/path-node-editing/adrs.md`'s `ViewTransform` decision: no
+ * pan/zoom UI yet, so this is the whole view transform). `96 / 25.4` is
+ * CSS's own "1in == 96px" convention expressed per millimetre — close
+ * enough to a real screen's pixel density to make this slice's one fixed
+ * stroke width (0.25mm, acceptance criterion 6) and node/handle glyphs
+ * actually visible, unlike a literal 1:1 mm:px scale (0.25px is
+ * sub-pixel on every real display). */
+const CSS_PX_PER_MM = 96 / 25.4;
 
 /** Which tool is active (`specification.md`'s tool rail: Pen or Node). */
 export type Tool = "pen" | "node";
@@ -71,6 +81,10 @@ export interface EditorSession {
   containerRef: React.RefObject<HTMLDivElement | null>;
   tool: Tool;
   nodeToolbarState: NodeToolbarState;
+  /** Acceptance criterion 5's cursor cue: whether the live cursor is
+   * over the in-progress pen path's own close target — `Canvas` swaps
+   * to the "pen-with-small-circle" cursor variant while this is `true`. */
+  isHoveringPenCloseTarget: boolean;
   setTool: (tool: Tool) => void;
   escape: () => void;
   deleteSelected: () => void;
@@ -84,6 +98,20 @@ export interface EditorSession {
   onPointerUp: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerLeave: () => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void;
+  /** File → New: swaps in a brand-new, empty session. */
+  newProject: () => void;
+  /** File → Open / the OS file association: parses `bytes` as a `.vmf`
+   * and swaps it in as the live session.
+   * @throws the exact user-facing sentence naming why `bytes` could not
+   * be opened (see `@/lib/editorSession`'s `openSession`) — the caller
+   * shows it, this hook does not. */
+  openProject: (bytes: Uint8Array) => Promise<void>;
+  /** File → Save / Save As: packs the live session's document into
+   * `.vmf` container bytes for the host to write.
+   * @throws a plain `Error` if there is no live session yet, or the
+   * `JsValue` `vecmanf-editor-wasm`'s `pack` throws if the document could
+   * not be serialized — the caller shows it, this hook does not. */
+  packProject: (appVersion: string) => Uint8Array;
 }
 
 /** Owns one `WasmSession` for the app's lifetime: creates it, attaches
@@ -91,7 +119,15 @@ export interface EditorSession {
  * canvas (specs/path-node-editing/adrs.md's PASS note, requirement 2),
  * runs its per-frame render loop, and forwards pointer/keyboard input —
  * "the frontend renders state and forwards input events into it; it
- * holds no editing logic of its own" (same file, ADR 0001 §1/§2). */
+ * holds no editing logic of its own" (same file, ADR 0001 §1/§2).
+ *
+ * The session itself is swappable: `newProject`/`openProject` free
+ * whatever is currently attached and attach a different one in its
+ * place (`specs/path-node-editing/adrs.md`'s PR review: "the host does
+ * byte I/O only" — Open/New used to recreate the native `Document`;
+ * now they recreate this hook's `WasmSession`), without tearing down
+ * the mount effect's resize observer or render loop, which both always
+ * read `sessionRef.current` fresh rather than closing over one instance. */
 export function useEditorSession(
   onCursorMove: (point: { x: number; y: number }) => void,
 ): EditorSession {
@@ -107,10 +143,13 @@ export function useEditorSession(
   const [nodeToolbarState, setNodeToolbarState] = useState<NodeToolbarState>(
     EMPTY_TOOLBAR_STATE,
   );
+  const [isHoveringPenCloseTarget, setIsHoveringPenCloseTarget] =
+    useState(false);
 
-  /** Re-reads `tool`/`node_toolbar_state` from the session after any
-   * call that might have changed them — cheap, and simpler than having
-   * every call site know which ones to refresh. */
+  /** Re-reads `tool`/`node_toolbar_state`/the pen close-target hover cue
+   * from the session after any call that might have changed them —
+   * cheap, and simpler than having every call site know which ones to
+   * refresh. */
   const syncFromSession = useCallback(() => {
     const session = sessionRef.current;
     if (!session) {
@@ -118,78 +157,121 @@ export function useEditorSession(
     }
     setToolState(session.tool() === "node" ? "node" : "pen");
     setNodeToolbarState(readToolbarState(session.node_toolbar_state()));
+    setIsHoveringPenCloseTarget(session.is_hovering_pen_close_target());
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    let frame = 0;
-    let resizeObserver: ResizeObserver | null = null;
-
-    createSession().then((session) => {
-      if (cancelled) {
-        session.free();
-        return;
-      }
+  /** Frees whatever session is currently attached (if any), makes
+   * `session` the live one, and attaches it to the host's `<canvas>` —
+   * the mount effect's own first attach and every later New/Open swap
+   * all go through this one path.
+   *
+   * Known limitation: if a second call starts before the first's
+   * `attach_canvas` (async: it negotiates a `wgpu` adapter/device) has
+   * resolved, the first's session is freed out from under that in-
+   * flight call rather than the call being awaited or cancelled first —
+   * a pre-existing hazard (the original mount-only version of this
+   * effect had the same race against unmount), not something this
+   * swap support introduces. Rapid repeated New/Open clicks are the
+   * only way to hit it; no acceptance criterion exercises that. */
+  const attachSession = useCallback(
+    async (session: WasmSession) => {
+      sessionRef.current?.free();
       sessionRef.current = session;
 
       const canvas = canvasRef.current;
       if (!canvas) {
         return;
       }
+      const width = Math.max(1, Math.round(canvas.clientWidth));
+      const height = Math.max(1, Math.round(canvas.clientHeight));
+      canvas.width = width;
+      canvas.height = height;
+      await session.attach_canvas(canvas, width, height);
+      if (sessionRef.current !== session) {
+        // Superseded by another New/Open (or the hook unmounted) while
+        // `attach_canvas` was in flight; whichever call superseded this
+        // one already owns `sessionRef.current`, and this `session` has
+        // already been (or will be) freed by it — touching it further
+        // here would be a use-after-free.
+        return;
+      }
+      // CSS_PX_PER_MM screen px per document mm, origin (0,0): this
+      // slice has no pan/zoom UI yet (specs/path-node-editing/
+      // adrs.md's ViewTransform decision), so this is the whole view
+      // transform, picked to keep acceptance criterion 6's 0.25mm
+      // stroke and the node/handle glyphs actually visible on a real
+      // screen rather than sub-pixel.
+      session.set_view(CSS_PX_PER_MM, 0.0, 0.0);
+      syncFromSession();
+    },
+    [syncFromSession],
+  );
 
-      const attach = async () => {
-        const width = Math.max(1, Math.round(canvas.clientWidth));
-        const height = Math.max(1, Math.round(canvas.clientHeight));
-        canvas.width = width;
-        canvas.height = height;
-        await session.attach_canvas(canvas, width, height);
-        if (cancelled) {
+  useEffect(() => {
+    let cancelled = false;
+
+    createSession().then((session) => {
+      if (cancelled) {
+        session.free();
+        return;
+      }
+      void attachSession(session);
+    });
+
+    const canvas = canvasRef.current;
+    let resizeObserver: ResizeObserver | null = null;
+    if (canvas) {
+      resizeObserver = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (!entry) {
           return;
         }
-        // scale=1 (screen px per document mm), origin (0,0): this
-        // slice has no pan/zoom UI yet (specs/path-node-editing/
-        // adrs.md's ViewTransform decision), so document space and
-        // the canvas's own CSS pixels coincide 1:1 — the same
-        // placeholder convention project-file-foundation's Canvas
-        // used, now backed by the real transform type.
-        session.set_view(1.0, 0.0, 0.0);
-        syncFromSession();
+        const nextWidth = Math.max(1, Math.round(entry.contentRect.width));
+        const nextHeight = Math.max(1, Math.round(entry.contentRect.height));
+        canvas.width = nextWidth;
+        canvas.height = nextHeight;
+        sessionRef.current?.resize(nextWidth, nextHeight);
+      });
+      resizeObserver.observe(canvas);
+    }
 
-        resizeObserver = new ResizeObserver((entries) => {
-          const entry = entries[0];
-          if (!entry) {
-            return;
-          }
-          const nextWidth = Math.max(1, Math.round(entry.contentRect.width));
-          const nextHeight = Math.max(
-            1,
-            Math.round(entry.contentRect.height),
-          );
-          canvas.width = nextWidth;
-          canvas.height = nextHeight;
-          session.resize(nextWidth, nextHeight);
-        });
-        resizeObserver.observe(canvas);
-
-        const renderLoop = () => {
-          session.render();
-          frame = requestAnimationFrame(renderLoop);
-        };
-        frame = requestAnimationFrame(renderLoop);
-      };
-      void attach();
+    // Reads `sessionRef.current` fresh every frame (rather than closing
+    // over one session instance) so a New/Open swap underneath it is
+    // picked up on the very next frame, with no need to restart the
+    // loop itself.
+    let frame = requestAnimationFrame(function renderLoop() {
+      sessionRef.current?.render();
+      frame = requestAnimationFrame(renderLoop);
     });
 
     return () => {
       cancelled = true;
-      if (frame) {
-        cancelAnimationFrame(frame);
-      }
+      cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
       sessionRef.current?.free();
       sessionRef.current = null;
     };
-  }, [syncFromSession]);
+  }, [attachSession]);
+
+  const newProject = useCallback(() => {
+    void createSession().then(attachSession);
+  }, [attachSession]);
+
+  const openProject = useCallback(
+    async (bytes: Uint8Array) => {
+      const session = await openSession(bytes);
+      await attachSession(session);
+    },
+    [attachSession],
+  );
+
+  const packProject = useCallback((appVersion: string): Uint8Array => {
+    const session = sessionRef.current;
+    if (!session) {
+      throw new Error("no editing session is attached yet");
+    }
+    return session.pack(appVersion);
+  }, []);
 
   const setTool = useCallback(
     (next: Tool) => {
@@ -279,6 +361,9 @@ export function useEditorSession(
       const { x, y } = documentPoint(event);
       onCursorMove({ x, y });
       session?.pointer_hover(x, y);
+      setIsHoveringPenCloseTarget(
+        session?.is_hovering_pen_close_target() ?? false,
+      );
     },
     [documentPoint, onCursorMove],
   );
@@ -307,6 +392,7 @@ export function useEditorSession(
 
   const onPointerLeave = useCallback(() => {
     sessionRef.current?.pointer_leave();
+    setIsHoveringPenCloseTarget(false);
   }, []);
 
   const onKeyDown = useCallback(
@@ -345,6 +431,7 @@ export function useEditorSession(
     containerRef,
     tool,
     nodeToolbarState,
+    isHoveringPenCloseTarget,
     setTool,
     escape,
     deleteSelected,
@@ -358,5 +445,8 @@ export function useEditorSession(
     onPointerUp,
     onPointerLeave,
     onKeyDown,
+    newProject,
+    openProject,
+    packProject,
   };
 }

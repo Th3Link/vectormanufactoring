@@ -24,7 +24,11 @@ export function Canvas({ editor }: CanvasProps) {
       tabIndex={0}
       onKeyDown={editor.onKeyDown}
       className={`flex-1 outline-none ${
-        editor.tool === "pen" ? "canvas-cursor-pen" : "cursor-default"
+        editor.tool === "pen"
+          ? editor.isHoveringPenCloseTarget
+            ? "canvas-cursor-pen-close"
+            : "canvas-cursor-pen"
+          : "cursor-default"
       }`}
     >
       {/* The context-menu wrapper stays mounted across both tools —
