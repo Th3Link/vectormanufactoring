@@ -15,7 +15,14 @@ use crate::units::{Length, Point, Vec2};
 /// type in this crate's public API. Two `NodeId`s are equal exactly when
 /// they name the same tree node, regardless of when or in what order each
 /// was observed — the same guarantee `TreeID` itself makes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+///
+/// `(De)Serialize` are hand-written, not derived (see `NodeIdWire` below):
+/// `peer` is a `u64` that routinely exceeds `document.json`'s readers'
+/// safe-integer range (any JSON number above 2^53), so a plain derive
+/// would write it as a JSON number and silently lose precision for any
+/// non-Rust reader. `counter` is a plain `i32`, always within that range,
+/// and is left as a number.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NodeId {
     pub(crate) peer: u64,
     pub(crate) counter: i32,
@@ -31,6 +38,36 @@ impl NodeId {
     }
 }
 
+/// `document.json`'s on-the-wire shape for a [`NodeId`]: `peer` written as
+/// a decimal string so a non-Rust reader never has to parse a JSON number
+/// wider than it can represent exactly.
+#[derive(Serialize, Deserialize)]
+struct NodeIdWire {
+    peer: String,
+    counter: i32,
+}
+
+impl Serialize for NodeId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        NodeIdWire {
+            peer: self.peer.to_string(),
+            counter: self.counter,
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for NodeId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let wire = NodeIdWire::deserialize(deserializer)?;
+        let peer = wire.peer.parse().map_err(serde::de::Error::custom)?;
+        Ok(Self {
+            peer,
+            counter: wire.counter,
+        })
+    }
+}
+
 /// An anchor's identity within its path's movable list
 /// (`specs/path-node-editing/adrs.md`: "`AnchorId` is minted by the
 /// creating peer and is globally unique... passed into
@@ -40,7 +77,13 @@ impl NodeId {
 /// plus a per-session monotonic counter — both already available to
 /// `vecmanf-ui-core` without this crate (or its caller) touching an
 /// entropy source (`CLAUDE.md` §6).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+///
+/// `(De)Serialize` are hand-written as a lowercase, zero-padded 32-digit
+/// hex string — the same encoding `crate::paths` already stores this id
+/// as inside the Loro CRDT itself (its `id` field) — rather than derived,
+/// which would write the raw `u128` as a JSON number and silently lose
+/// precision for any non-Rust reader of `document.json`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AnchorId(u128);
 
 impl AnchorId {
@@ -61,11 +104,31 @@ impl AnchorId {
         self.0
     }
 
-    /// Rebuilds an [`AnchorId`] from its raw value — used only by
-    /// [`crate::paths`] to read one back out of storage, never to mint a
-    /// new one.
-    pub(crate) const fn from_u128(value: u128) -> Self {
-        Self(value)
+    /// This id's lowercase, zero-padded 32-digit hex encoding — the one
+    /// shape it is ever written as, in Loro storage (`crate::paths`) and
+    /// in `document.json` alike.
+    #[must_use]
+    pub fn to_hex(self) -> String {
+        format!("{:032x}", self.0)
+    }
+
+    /// Parses [`AnchorId::to_hex`]'s own encoding back into an id.
+    #[must_use]
+    pub fn from_hex(hex: &str) -> Option<Self> {
+        u128::from_str_radix(hex, 16).ok().map(Self)
+    }
+}
+
+impl Serialize for AnchorId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_hex())
+    }
+}
+
+impl<'de> Deserialize<'de> for AnchorId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        Self::from_hex(&s).ok_or_else(|| serde::de::Error::custom("invalid AnchorId hex string"))
     }
 }
 
@@ -74,6 +137,7 @@ impl AnchorId {
 /// geometry — a corner node whose handles happen to be mirrored must still
 /// behave as a corner).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum AnchorKind {
     /// Each handle moves independently (acceptance criterion 1's plain
     /// click, or a smooth node converted to corner).

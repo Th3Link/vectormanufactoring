@@ -4,7 +4,7 @@
 //! §3; `specs/project-file-foundation/adrs.md`, "a minimal document root
 //! record, and no more").
 
-use loro::{ExportMode, LoroDoc, LoroMap, LoroValue};
+use loro::{CommitOptions, ExportMode, LoroDoc, LoroMap, LoroValue};
 use serde::Serialize;
 
 use crate::error::{OpenError, SaveError};
@@ -93,7 +93,12 @@ impl Document {
     ///
     /// # Errors
     /// Returns [`OpenError::Damaged`] if the bytes are not a valid Loro
-    /// snapshot this build can import.
+    /// snapshot this build can import, or if they import cleanly but the
+    /// `paths` tree inside them does not match the shape
+    /// [`crate::path_codec`]'s writers always produce — a damaged-but-
+    /// still-unzippable file (project-file-foundation's acceptance
+    /// criterion 7: "not a crash") rather than a panic the first time some
+    /// other method reads that path.
     ///
     /// # Panics
     /// Does not panic in practice: setting the peer id on a freshly
@@ -105,6 +110,9 @@ impl Document {
         #[allow(clippy::unwrap_used)]
         loro.set_peer_id(peer_id).unwrap();
         loro.import(bytes).map_err(|_| OpenError::Damaged)?;
+        if !crate::path_codec::validate_path_tree(&loro, PATHS_TREE) {
+            return Err(OpenError::Damaged);
+        }
         Ok(Self { loro })
     }
 
@@ -128,6 +136,19 @@ impl Document {
     /// methods only — never exposed outside this crate (ADR 0004 §3).
     pub(crate) const fn loro(&self) -> &LoroDoc {
         &self.loro
+    }
+
+    /// Commits the pending auto-commit transaction with `label` as its
+    /// (persisted) commit message, so each editing method in
+    /// [`crate::paths`] ends its own transaction instead of letting every
+    /// edit since the last explicit commit pile into one (ADR 0002 §9;
+    /// `specs/path-node-editing/adrs.md`'s PR review: "a pen session is
+    /// one commit" only holds if *every* mutating method commits its own
+    /// work, undo-readiness for a future undo/redo feature depends on
+    /// one commit per interaction).
+    pub(crate) fn commit_with_label(&self, label: &str) {
+        self.loro
+            .commit_with(CommitOptions::new().commit_msg(label));
     }
 
     fn read_mm(root: &LoroMap, key: &str) -> Option<f64> {

@@ -91,3 +91,15 @@ fn format_version_1_vmf_opens_with_no_paths() {
     let document = unpack(2, &bytes).expect("a golden format_version=1 .vmf must still open");
     assert_eq!(document.path_ids(), Vec::new());
 }
+
+/// Architect review (`specs/path-node-editing/adrs.md`'s PR review note):
+/// a container whose `paths` tree does not match the schema
+/// `vecmanf_document_core::paths` writes is refused with
+/// `OpenError::Damaged`, the same "not a crash" guarantee
+/// `project-file-foundation`'s acceptance criterion 7 already gives
+/// slice 1's own three refusal cases.
+#[test]
+fn malformed_paths_vmf_is_refused_as_damaged_not_a_panic() {
+    let bytes = fixture("malformed_paths.vmf");
+    assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
+}

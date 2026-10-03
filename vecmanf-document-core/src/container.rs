@@ -288,9 +288,7 @@ mod tests {
 
         // `path-node-editing` (`specs/path-node-editing/plan.md`, task 31):
         // a `format_version = 2` fixture carrying both anchor kinds, open
-        // and closed, and a `format_version = 1` fixture proving the
-        // written migration policy ("empty by construction") actually
-        // holds against a real container.
+        // and closed.
         let with_paths = Document::new(1);
         let open_path = with_paths.create_path(
             &[
@@ -317,21 +315,68 @@ mod tests {
         let paths_v2 = pack(&with_paths, "0.1.0").expect("pack");
         std::fs::write(fixtures_dir.join("paths_v2.vmf"), &paths_v2).expect("write paths_v2.vmf");
 
-        let empty = Document::new(1);
-        let v1_loro = empty.export_loro_snapshot().expect("export");
-        let v1_manifest = Manifest {
-            format_version: 1,
+        // `format_version_1.vmf` is deliberately NOT regenerated here.
+        // Synthesizing it from this build's own `Document::new` would bake
+        // in a Loro snapshot whose root map already says
+        // `format_version: 2` (today's `CURRENT_FORMAT_VERSION`) underneath
+        // a `manifest.json` that claims 1 — a fixture that doesn't actually
+        // prove a *real* version-1 container still opens, only that a
+        // mislabeled version-2 one does (architect review,
+        // `specs/path-node-editing/adrs.md`'s PR review). The committed
+        // fixture is instead `project-file-foundation`'s own
+        // `valid.vmf` (`main`, commit 968b543), copied byte-for-byte: a
+        // genuine container written before this slice's path schema
+        // existed at all.
+
+        // `malformed_paths.vmf` (architect review, same PR review note):
+        // a perfectly valid Loro snapshot, behind a perfectly valid
+        // manifest, whose `paths` tree has one node with no `anchors`
+        // list at all — the shape `Document::from_loro_snapshot`'s path-
+        // tree validation must catch and refuse as `OpenError::Damaged`,
+        // not something any public `vecmanf_document_core::Document`
+        // method could ever produce by itself.
+        let malformed = loro::LoroDoc::new();
+        malformed.set_peer_id(1).expect("set peer id");
+        // Literal "paths", matching `document::PATHS_TREE` (private to
+        // that module; this generator only needs the tree's well-known
+        // name, not the constant itself).
+        let malformed_tree = malformed.get_tree("paths");
+        let malformed_node = malformed_tree
+            .create(loro::TreeParentId::Root)
+            .expect("create node");
+        let malformed_meta = malformed_tree.get_meta(malformed_node).expect("meta");
+        malformed_meta
+            .insert("closed", false)
+            .expect("insert closed");
+        malformed.commit();
+        let malformed_loro = malformed
+            .export(loro::ExportMode::Snapshot)
+            .expect("export");
+        let malformed_manifest = Manifest {
+            format_version: CURRENT_FORMAT_VERSION,
             loro_snapshot_version: CURRENT_LORO_SNAPSHOT_VERSION,
             app_version: "0.1.0".to_string(),
         };
-        let v1_manifest_bytes = serde_json::to_vec(&v1_manifest).expect("serialize");
-        let mut v1_writer = ZipWriter::new(Cursor::new(Vec::new()));
-        write_member(&mut v1_writer, MANIFEST_MEMBER, &v1_manifest_bytes, options)
-            .expect("manifest");
-        write_member(&mut v1_writer, LORO_SNAPSHOT_MEMBER, &v1_loro, options).expect("loro member");
-        write_member(&mut v1_writer, DOCUMENT_JSON_MEMBER, b"{}", options).expect("json member");
-        let v1_bytes = v1_writer.finish().expect("finish").into_inner();
-        std::fs::write(fixtures_dir.join("format_version_1.vmf"), &v1_bytes)
-            .expect("write format_version_1.vmf");
+        let malformed_manifest_bytes = serde_json::to_vec(&malformed_manifest).expect("serialize");
+        let mut malformed_writer = ZipWriter::new(Cursor::new(Vec::new()));
+        write_member(
+            &mut malformed_writer,
+            MANIFEST_MEMBER,
+            &malformed_manifest_bytes,
+            options,
+        )
+        .expect("manifest");
+        write_member(
+            &mut malformed_writer,
+            LORO_SNAPSHOT_MEMBER,
+            &malformed_loro,
+            options,
+        )
+        .expect("loro member");
+        write_member(&mut malformed_writer, DOCUMENT_JSON_MEMBER, b"{}", options)
+            .expect("json member");
+        let malformed_bytes = malformed_writer.finish().expect("finish").into_inner();
+        std::fs::write(fixtures_dir.join("malformed_paths.vmf"), &malformed_bytes)
+            .expect("write malformed_paths.vmf");
     }
 }

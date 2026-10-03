@@ -21,6 +21,7 @@
 mod container;
 mod document;
 mod error;
+mod path_codec;
 mod path_model;
 mod paths;
 mod units;
