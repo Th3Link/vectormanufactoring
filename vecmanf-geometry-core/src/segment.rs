@@ -14,9 +14,7 @@
 //! through without converting anything itself.
 
 use kurbo::{BezPath, CubicBez, ParamCurve, ParamCurveNearest, Point as KurboPoint};
-use vecmanf_document_core::{Length, Point, Vec2};
-
-use crate::Tolerance;
+use vecmanf_document_core::{Length, Point, Tolerance, Vec2};
 
 fn to_kurbo(point: Point) -> KurboPoint {
     KurboPoint::new(point.x, point.y)

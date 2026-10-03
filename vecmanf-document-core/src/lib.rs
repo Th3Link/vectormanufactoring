@@ -32,4 +32,4 @@ pub use path_model::{
     AnchorId, AnchorKind, AnchorSnapshot, Color, HandleSlot, NewAnchor, NodeId, PathEditError,
     PathSnapshot,
 };
-pub use units::{DocumentSize, Length, Point, Vec2};
+pub use units::{DocumentSize, Length, Point, Tolerance, Vec2};

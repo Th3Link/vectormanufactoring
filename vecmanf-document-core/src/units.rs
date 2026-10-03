@@ -36,6 +36,33 @@ impl Length {
     }
 }
 
+/// An explicit tolerance for one geometric comparison, in document
+/// millimetres (ADR 0002 §3: "every geometric comparison takes an
+/// explicit `Tolerance`. There is no global epsilon").
+///
+/// `vecmanf-geometry-core`'s flatten/nearest-point/subdivide and
+/// `vecmanf-ui-core`'s hit-testing each take one of these explicitly
+/// rather than assuming a shared constant —
+/// `vecmanf-render-core`'s own, coarser display tolerance (ADR 0003 §7)
+/// is a different value entirely and must never be reused for either.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Tolerance(Length);
+
+impl Tolerance {
+    /// Builds a [`Tolerance`] from a value already in millimetres.
+    #[must_use]
+    pub const fn from_mm(millimetres: f64) -> Self {
+        Self(Length::from_mm(millimetres))
+    }
+
+    /// Returns the tolerance as a plain millimetre value, for handing to
+    /// e.g. `kurbo`'s own accuracy-as-`f64` parameters.
+    #[must_use]
+    pub const fn as_mm(self) -> f64 {
+        self.0.as_mm()
+    }
+}
+
 /// A document's page size in millimetres (ADR 0002 §2; this slice's minimal
 /// root record, `specs/project-file-foundation/adrs.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -180,6 +207,12 @@ mod tests {
     fn length_round_trips_through_mm() {
         let length = Length::from_mm(42.5);
         assert!((length.as_mm() - 42.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn tolerance_round_trips_through_mm() {
+        let tolerance = Tolerance::from_mm(0.1);
+        assert!((tolerance.as_mm() - 0.1).abs() < f64::EPSILON);
     }
 
     #[test]

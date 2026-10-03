@@ -7,15 +7,17 @@
 //! Pure and wasm-compatible (`CLAUDE.md` §6): no filesystem, network,
 //! clock, threads or UI. `vecmanf-document-core`'s newtypes
 //! ([`vecmanf_document_core::Point`], [`vecmanf_document_core::Vec2`],
-//! [`vecmanf_document_core::Length`]) are this crate's only input/output
-//! types besides [`Tolerance`] and [`Subdivision`] — no `kurbo` type
-//! crosses this crate's public API.
+//! [`vecmanf_document_core::Length`], [`vecmanf_document_core::Tolerance`])
+//! are this crate's only input/output types besides [`Subdivision`] — no
+//! `kurbo` type crosses this crate's public API. `Tolerance` itself lives
+//! in `document-core` (ADR 0002 §3 names it there, alongside `Length`), so
+//! `vecmanf-ui-core`'s hit-testing and this crate's own flatten/nearest/
+//! subdivide share the exact same type without this crate inventing one.
 
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 mod segment;
-mod tolerance;
 
 pub use segment::{Subdivision, flatten_segment, nearest_point_on_segment, subdivide_at_parameter};
-pub use tolerance::Tolerance;
+pub use vecmanf_document_core::Tolerance;
