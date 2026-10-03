@@ -15,12 +15,14 @@
 
 mod color;
 mod decorations;
+mod pen_preview;
 mod primitives;
 mod stroke;
 mod theme;
 
 pub use color::RgbaColor;
 pub use decorations::{DecorationInput, Hovered};
+pub use pen_preview::build_pen_preview;
 pub use primitives::{DrawList, Vertex};
 
 use vecmanf_document_core::{PathSnapshot, ViewTransform};

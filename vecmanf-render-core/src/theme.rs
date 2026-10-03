@@ -5,6 +5,13 @@
 
 use crate::color::RgbaColor;
 
+/// `--canvas-bg` (`docs/design-system.md`): used as the pen tool's
+/// in-progress node glyphs' inner cutout, so they read as hollow/
+/// outline-only rather than filled (`specification.md`'s UX notes) —
+/// the committed-path idle glyph uses white instead (`decorations.rs`),
+/// since this is the one place that distinction matters.
+pub const CANVAS_BG: RgbaColor = RgbaColor::opaque(0xE8, 0xE8, 0xEB);
+
 /// `--accent` (`docs/design-system.md`): the one selection/active color.
 pub const ACCENT: RgbaColor = RgbaColor::opaque(0x2F, 0x6F, 0xEE);
 
