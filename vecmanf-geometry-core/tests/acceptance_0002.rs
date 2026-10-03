@@ -1,22 +1,27 @@
 //! Black-box + property tests for `vecmanf-geometry-core`'s slice of
 //! `specs/path-node-editing/specification.md` (acceptance criteria 12, 14,
 //! and the segment hit-testing that backs AC7/AC10 selection), written
-//! against this crate's public API only (`flatten_segment`,
-//! `nearest_point_on_segment`, `subdivide_at_parameter`), independent of
-//! `vecmanf-ui-core`'s and `vecmanf-document-core`'s own inline unit tests
-//! of the same functions.
+//! against this crate's public API only (`nearest_point_on_segment`,
+//! `subdivide_at_parameter`), independent of `vecmanf-ui-core`'s and
+//! `vecmanf-document-core`'s own inline unit tests of the same functions.
 //!
 //! Also exercises known closed-form Bézier values (the de Casteljau
 //! subdivision identity, and a pure quadratic-shaped cubic's exact
 //! midpoint) and property-based invariants across random inputs
 //! (`CLAUDE.md`'s tester role: "property tests with `proptest` for
 //! invariants").
+//!
+//! `flatten_segment` was removed from this crate (architect review,
+//! `specs/path-node-editing/adrs.md`'s "Architect review notes": it had no
+//! production caller, hit-testing landed on `nearest_point_on_segment`
+//! instead), so its tests below were removed along with it
+//! (`CLAUDE.md` §5, "delete dead code").
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use proptest::prelude::*;
 use vecmanf_document_core::{Length, Point, Tolerance, Vec2};
-use vecmanf_geometry_core::{flatten_segment, nearest_point_on_segment, subdivide_at_parameter};
+use vecmanf_geometry_core::{nearest_point_on_segment, subdivide_at_parameter};
 
 const TOLERANCE: Tolerance = Tolerance::from_mm(0.01);
 
@@ -74,23 +79,6 @@ fn subdivide_at_t_one_lands_exactly_on_the_end_point() {
     assert!((subdivision.new_point.y - end.y).abs() < 1e-9);
 }
 
-/// `flatten_segment` on a degenerate (zero-length) segment must not panic
-/// and must return a sane (empty-or-single-point-ish) polyline rather than
-/// NaNs.
-#[test]
-fn flatten_a_zero_length_segment_does_not_panic_or_produce_nan() {
-    let points = flatten_segment(
-        Point::new(3.0, 3.0),
-        Vec2::ZERO,
-        Vec2::ZERO,
-        Point::new(3.0, 3.0),
-        TOLERANCE,
-    );
-    for p in &points {
-        assert!(p.x.is_finite() && p.y.is_finite());
-    }
-}
-
 /// `nearest_point_on_segment` on a degenerate (zero-length, zero-handle)
 /// segment returns the one point available, not NaN/garbage.
 #[test]
@@ -109,28 +97,6 @@ fn nearest_point_on_a_degenerate_segment_is_finite() {
 }
 
 proptest! {
-    /// Property: every point `flatten_segment` returns lies within a small
-    /// multiple of `tolerance` of *some* point on the mathematically exact
-    /// curve — approximated here by checking the flattened polyline's own
-    /// first/last points equal the true endpoints exactly, which must hold
-    /// for every random segment (flattening must never drop or move an
-    /// endpoint).
-    #[test]
-    fn flatten_segment_endpoints_are_always_exact(
-        start in point_strategy(),
-        h_out in vec2_strategy(),
-        h_in in vec2_strategy(),
-        end in point_strategy(),
-    ) {
-        let points = flatten_segment(start, h_out, h_in, end, TOLERANCE);
-        if let (Some(first), Some(last)) = (points.first(), points.last()) {
-            prop_assert!((first.x - start.x).abs() < 1e-6);
-            prop_assert!((first.y - start.y).abs() < 1e-6);
-            prop_assert!((last.x - end.x).abs() < 1e-6);
-            prop_assert!((last.y - end.y).abs() < 1e-6);
-        }
-    }
-
     /// Property: `nearest_point_on_segment` never reports a distance
     /// larger than the straight-line distance from the query point to
     /// either endpoint (the curve always contains at least its own
@@ -218,12 +184,10 @@ proptest! {
 /// this crate's public API (`CLAUDE.md` §5 "units are types") — a
 /// compile-time check that a bare `f64` cannot be passed where a typed
 /// value is required. This test exists purely so a future accidental
-/// widening of the API (e.g. `fn flatten_segment(x: f64, y: f64, ...)`)
-/// shows up as a diff here, not just as a documentation claim.
+/// widening of the API (e.g. `fn nearest_point_on_segment(x: f64, y: f64,
+/// ...)`) shows up as a diff here, not just as a documentation claim.
 #[test]
 fn public_api_uses_typed_units_not_bare_f64() {
-    type Flatten = fn(Point, Vec2, Vec2, Point, Tolerance) -> Vec<Point>;
     type Nearest = fn(Point, Vec2, Vec2, Point, Point, Tolerance) -> (f64, Length, Point);
-    let _: Flatten = flatten_segment;
     let _: Nearest = nearest_point_on_segment;
 }
