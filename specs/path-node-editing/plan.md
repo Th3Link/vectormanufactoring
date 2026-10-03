@@ -133,15 +133,15 @@ already named.
 
 ### wasm facade (new `vecmanf-editor-wasm`)
 
-- [ ] 24. `wasm-bindgen` bindings: open/create document, dispatch pointer/
+- [x] 24. `wasm-bindgen` bindings: open/create document, dispatch pointer/
       keyboard input to `ui-core`, pull the draw list each frame, own the
       `wgpu` device/surface and submit — no editing logic of its own
       (ADR 0001 §3).
-- [ ] 25. Surface reconfigure on every resize: update canvas size, call
+- [x] 25. Surface reconfigure on every resize: update canvas size, call
       `surface.configure()`, then render, all before presenting the next
       frame (`adrs.md`'s PASS note, requirement 2 — correctness, not the
       measured crash, which is unrelated upstream teardown noise).
-- [ ] 26. `cargo build --target wasm32-unknown-unknown` clean.
+- [x] 26. `cargo build --target wasm32-unknown-unknown` clean.
 
 ### Frontend and host wiring
 
