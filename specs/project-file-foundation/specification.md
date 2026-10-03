@@ -1,6 +1,6 @@
 # Project file foundation: new, open, save a local project
 
-Status: Ready
+Status: Done
 Priority: Must
 Origin: Customer
 
@@ -220,4 +220,4 @@ supersede one.
 Requirements: R-SYS-001, R-SYS-002, R-SYS-007 (`docs/requirements.md`)
 ADRs: ADR 0002 (document model, units), ADR 0004 §1 (`.vmf` container
 format)
-PR: TBD
+PR: https://github.com/Th3Link/vectormanufactoring/pull/3
