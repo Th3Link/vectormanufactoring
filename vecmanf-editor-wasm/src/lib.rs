@@ -1,9 +1,11 @@
 //! The vecmanf wasm editor facade (ADR 0001 §3): binds
 //! `vecmanf-document-core`, `vecmanf-ui-core` and `vecmanf-render-core`
 //! and owns the `wgpu` device/surface and GPU submission. No editing
-//! logic of its own — [`session`] is a thin orchestration layer over the
-//! three crates above, and [`wasm_api`]/[`gpu`] (wasm32-only) are a thin
-//! `wasm-bindgen`/`wgpu` shell over [`session`].
+//! logic of its own — the private `session` module (its public surface
+//! is [`Session`] and [`Tool`]) is a thin orchestration layer over the
+//! three crates above, and the private `wasm_api`/`gpu` modules
+//! (wasm32-only, public surface `WasmSession`) are a thin
+//! `wasm-bindgen`/`wgpu` shell over it.
 //!
 //! `session` is plain Rust and exercised by ordinary `cargo test` on the
 //! host; `wasm_api` and `gpu` only compile for `wasm32` (`Cargo.toml`

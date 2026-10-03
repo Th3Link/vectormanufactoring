@@ -282,8 +282,18 @@ async fn create_surface_and_device(
         .await
         .map_err(|err| JsValue::from_str(&format!("no suitable GPU adapter: {err}")))?;
 
+    // `DeviceDescriptor::default()`'s limits are the full native set,
+    // which asks for things no WebGL2 backend can ever provide (e.g. a
+    // nonzero `max_compute_workgroups_per_dimension` — WebGL2 has no
+    // compute shaders at all) and makes `request_device` fail outright.
+    // `adapter.limits()` is what this specific (downlevel) adapter
+    // actually supports, which is all a flat-colored 2D draw list ever
+    // needs.
     let (device, queue) = adapter
-        .request_device(&wgpu::DeviceDescriptor::default())
+        .request_device(&wgpu::DeviceDescriptor {
+            required_limits: adapter.limits(),
+            ..wgpu::DeviceDescriptor::default()
+        })
         .await
         .map_err(|err| JsValue::from_str(&format!("requesting the GPU device failed: {err}")))?;
 
