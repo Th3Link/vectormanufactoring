@@ -110,14 +110,23 @@ pub fn unpack(bytes: &[u8]) -> Result<Document, OpenError> {
     let mut archive = ZipArchive::new(Cursor::new(bytes)).map_err(|_| OpenError::Damaged)?;
     let manifest = read_manifest(&mut archive)?;
 
-    let newest_found = manifest.format_version.max(manifest.loro_snapshot_version);
-    let newest_supported = CURRENT_FORMAT_VERSION.max(CURRENT_LORO_SNAPSHOT_VERSION);
-    if manifest.format_version > CURRENT_FORMAT_VERSION
-        || manifest.loro_snapshot_version > CURRENT_LORO_SNAPSHOT_VERSION
-    {
+    // Two independent fields, two independent bounds (ADR 0004 §9 covers
+    // the Loro snapshot version as well as the container's own). Each
+    // comparison reports `found`/`supported` from the one field it
+    // actually checked — never a `max()` of two unrelated numbers, which
+    // would misattribute the refusal to whichever field happened to have
+    // the larger value rather than whichever one actually exceeded its
+    // own bound.
+    if manifest.format_version > CURRENT_FORMAT_VERSION {
         return Err(OpenError::FormatTooNew {
-            found: newest_found,
-            supported: newest_supported,
+            found: manifest.format_version,
+            supported: CURRENT_FORMAT_VERSION,
+        });
+    }
+    if manifest.loro_snapshot_version > CURRENT_LORO_SNAPSHOT_VERSION {
+        return Err(OpenError::FormatTooNew {
+            found: manifest.loro_snapshot_version,
+            supported: CURRENT_LORO_SNAPSHOT_VERSION,
         });
     }
 
@@ -147,7 +156,7 @@ mod tests {
 
     #[test]
     fn pack_then_unpack_round_trips_size() {
-        let original = Document::new();
+        let original = Document::new(1);
         let bytes = pack(&original, "0.1.0").expect("pack");
         let reopened = unpack(&bytes).expect("unpack");
         assert_eq!(original.size(), reopened.size());
@@ -155,7 +164,7 @@ mod tests {
 
     #[test]
     fn packed_container_contains_the_required_members() {
-        let document = Document::new();
+        let document = Document::new(1);
         let bytes = pack(&document, "0.1.0").expect("pack");
         let mut archive = ZipArchive::new(Cursor::new(bytes.as_slice())).expect("zip");
         assert!(archive.by_name(MANIFEST_MEMBER).is_ok());
@@ -181,7 +190,7 @@ mod tests {
 
     #[test]
     fn truncated_zip_is_damaged() {
-        let document = Document::new();
+        let document = Document::new(1);
         let bytes = pack(&document, "0.1.0").expect("pack");
         let truncated = &bytes[..bytes.len() / 2];
         assert!(matches!(unpack(truncated), Err(OpenError::Damaged)));
@@ -236,7 +245,7 @@ mod tests {
     fn generate_golden_fixtures() {
         let fixtures_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
 
-        let document = Document::new();
+        let document = Document::new(1);
         let valid = pack(&document, "0.1.0").expect("pack");
         std::fs::write(fixtures_dir.join("valid.vmf"), &valid).expect("write valid.vmf");
 

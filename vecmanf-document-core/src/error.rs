@@ -24,14 +24,19 @@ pub enum OpenError {
     /// missing or unparsable.
     #[error("zip archive is truncated, corrupt, or missing a required member")]
     Damaged,
-    /// The container's `manifest.json` declares a `format_version` or
+    /// The container's `manifest.json` declares a `format_version` or a
     /// `loro_snapshot_version` newer than this build supports
-    /// (ADR 0004 §9).
+    /// (ADR 0004 §9). The container version is checked first; `found` and
+    /// `supported` always describe the *same* field — whichever one
+    /// actually exceeded its bound — never a mix of the two independent
+    /// version numbers.
     #[error("project format version {found} is newer than the {supported} this build supports")]
     FormatTooNew {
-        /// The version found in the file's `manifest.json`.
+        /// The version found in the file's `manifest.json`, for the one
+        /// field that exceeded its bound.
         found: u32,
-        /// The newest version this build knows how to read.
+        /// The newest version this build knows how to read, for that
+        /// same field.
         supported: u32,
     },
 }
