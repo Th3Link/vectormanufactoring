@@ -5,6 +5,7 @@ members = [
     "vecmanf-geometry-core",
     "vecmanf-ui-core",
     "vecmanf-render-core",
+    "vecmanf-editor-wasm",
     "vecmanf-storage-io",
     "vecmanf-app",
 ]
