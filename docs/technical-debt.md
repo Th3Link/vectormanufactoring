@@ -50,6 +50,39 @@ unchanged.
 golden-file fixture and either widens the modelled subset or is accepted as a
 documented limit.
 
+## WebKitGTK + NVIDIA proprietary: two GPU-driver problems on the Linux canvas
+
+Both measured 2026-10-03 on Arch Linux/X11, WebKitGTK 2.52.6, Quadro P1000,
+NVIDIA proprietary 580.178.04, in a real `wry`/`tao` webview — the spike that
+discharged [ADR 0001](adr/0001-ui-framework-and-canvas-rendering.md) §4's owed
+measurement (`specs/path-node-editing/adrs.md`). Performance itself passed:
+50 000 nodes at a vsync-locked ~60 fps. These are the two things that did not.
+
+1. **WebGL2 renders nothing unless WebKitGTK's DMA-BUF renderer is disabled.**
+   At its default the context is created and reports `WebGL 2.0`, and then no
+   frame ever appears — for `wgpu` and for hand-written WebGL2 alike. The Linux
+   build works around it with `WEBKIT_DISABLE_DMABUF_RENDERER=1` set before the
+   webview starts. The cost is that we opt out of WebKitGTK's zero-copy
+   compositing path on *all* Linux systems to satisfy one driver family, and
+   the failure mode if the variable is ever lost is a silent blank canvas.
+
+2. **The web process segfaults in `libnvidia-eglcore` on webview teardown**
+   whenever that webview held a WebGL2 context. Rendering completes normally
+   first; the crash is in the process that is already exiting, so the host
+   quits with status 0 and nothing user-visible is lost. It is **not ours**: it
+   reproduces identically from a plain WebGL2 page with no `wgpu`, no wasm and
+   no Rust in the page, and does not reproduce from a page with no GL context.
+   The cost is a coredump per application exit on affected systems, which is
+   noise in the user's journal and will pollute any crash reporting we add.
+
+**Resolution:** both are upstream (WebKitGTK/NVIDIA EGL), so neither is ours to
+fix. Re-test both on each WebKitGTK and driver bump and delete whichever has
+gone away; pin the versions we have tested. If (1) ever regresses in a way the
+env var cannot reach, that *is* an ADR 0001 §4 question, because it would mean
+no usable WebGL2 on the customer's primary platform — (2) would not be. Neither
+has been checked on Wayland, on Mesa/AMD/Intel, or on Windows and macOS; doing
+so is part of standing up CI's OS matrix, not a story.
+
 ## Per-node resolved styles, no shared styles
 
 Styles are resolved and stored per node, with no cascade and no named styles

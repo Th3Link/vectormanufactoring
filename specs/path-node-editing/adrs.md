@@ -125,6 +125,40 @@ spelled out under ADR 0002 and ADR 0009 rather than assumed.
   latency stays within one frame. A failure is not a performance ticket; it is
   an ADR superseding 0001 §4.
 
+- **2026-10-03: measured. PASS — ADR 0001 §4 stands, no superseding ADR.**
+  `wgpu` → WebGL2 in a real WebKitGTK 2.52.6 webview via `wry`/`tao` (the
+  webview library Tauri uses), Arch Linux/X11, NVIDIA Quadro P1000 with the
+  proprietary driver 580.178.04. **50 000 nodes held a vsync-locked ~60 fps
+  for 600 frames** under continuous pan/zoom with a per-frame partial
+  instance-buffer write standing in for a live single-node drag (60 frames per
+  ~960 ms, no dropped interval). The prerequisite is discharged. Two
+  implementation requirements fall out of it, neither of them an architecture
+  decision:
+
+  1. **The Linux build must disable WebKitGTK's DMA-BUF renderer before the
+     webview starts** (`WEBKIT_DISABLE_DMABUF_RENDERER=1`). Measured on this
+     machine: with it at its default, a WebGL2 context is acquired and
+     reported as `WebGL 2.0` but **zero frames ever render** — for `wgpu` and
+     for hand-written WebGL2 alike. This is the known WebKitGTK/NVIDIA
+     DMA-BUF problem, not ours. The Tauri host sets it; it must be a startup
+     requirement with a test, because the failure mode is a silent blank
+     canvas, not an error.
+  2. **The canvas layer reconfigures the `wgpu` surface on every resize** —
+     set `canvas.width`/`canvas.height`, call `surface.configure()` with the
+     new size, then render, all in one frame. Standard `wgpu` usage, verified
+     here over 44 size changes. It is required for *correctness* (a stale
+     surface composites at the wrong size); it is **not** a crash fix — see
+     below.
+
+  **The segfault reported from the first run of this spike is not caused by
+  `wgpu`, by surface resizing, or by anything this slice controls.** It
+  reproduces with **no resize of any kind** and, identically, from a plain
+  hand-written WebGL2 page with no `wgpu`, no wasm and no Rust in the page at
+  all — same `libnvidia-eglcore` stack, frame for frame. A page with no GL
+  context does not reproduce it. It happens on **webview teardown**, after
+  rendering has completed successfully, in the web process that is already
+  exiting. Recorded in `docs/technical-debt.md`; it blocks nothing here.
+
 ## Feature-local decisions
 
 - **2026-10-03: the anchor schema, and the three merge choices inside it.**
