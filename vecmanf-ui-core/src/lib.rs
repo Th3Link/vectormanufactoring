@@ -22,7 +22,7 @@ mod selection;
 pub use anchor_id_minter::AnchorIdMinter;
 pub use hit_test::{Hit, hit_test};
 pub use node_tool::{
-    HitTolerances, NodeTool, PointerDownOutcome as NodePointerDownOutcome,
+    HitTolerances, NodeTool, NodeToolbarState, PointerDownOutcome as NodePointerDownOutcome,
     PointerUpOutcome as NodePointerUpOutcome,
 };
 pub use pen_tool::{PenTool, PointerUpOutcome as PenPointerUpOutcome};

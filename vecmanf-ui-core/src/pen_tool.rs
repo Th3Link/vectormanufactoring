@@ -108,12 +108,37 @@ impl PenTool {
                 };
             }
             State::Placing { nodes, down } => {
-                let closing = nodes.len() >= 2
-                    && nodes.first().is_some_and(|first| {
-                        first.point.vector_to(point).length() <= close_tolerance.as_mm()
-                    });
+                let closing = Self::is_close_target(nodes, point, close_tolerance);
                 *down = Some(PointerDown { point, closing });
             }
+        }
+    }
+
+    /// Whether `point` is close enough to the in-progress path's own
+    /// first node, with enough nodes already placed, to read as a
+    /// close-path press (acceptance criterion 5) — the exact rule
+    /// [`PenTool::pointer_down`] commits to, factored out so a hover-
+    /// time query ([`PenTool::is_hovering_close_target`]) can use the
+    /// identical condition rather than a second copy that could drift
+    /// from it (a maker must never see a "this will close the path"
+    /// hover cue and then have the actual click decide otherwise).
+    fn is_close_target(nodes: &[PlacedAnchor], point: Point, close_tolerance: Length) -> bool {
+        nodes.len() >= 2
+            && nodes.first().is_some_and(|first| {
+                first.point.vector_to(point).length() <= close_tolerance.as_mm()
+            })
+    }
+
+    /// Acceptance criterion 5's own UX note (`specification.md`'s
+    /// "Cursors"): whether `point` (the live cursor, in document space)
+    /// is currently over the in-progress path's own close target, for
+    /// the host to swap in the close-path cursor variant and the first
+    /// node's hover ring. `false` when idle (nothing to close).
+    #[must_use]
+    pub fn is_hovering_close_target(&self, point: Point, close_tolerance: Length) -> bool {
+        match &self.state {
+            State::Idle => false,
+            State::Placing { nodes, .. } => Self::is_close_target(nodes, point, close_tolerance),
         }
     }
 
@@ -408,6 +433,39 @@ mod tests {
         let outcome = pen.pointer_up(&mut minter, &document, Point::new(0.1, 0.1), DRAG_THRESHOLD);
         assert_eq!(outcome, PointerUpOutcome::Placed);
         assert_eq!(pen.in_progress_nodes().expect("still placing").len(), 2);
+    }
+
+    /// Acceptance criterion 5's hover cue: once enough nodes are placed,
+    /// hovering near the first node reports the close target; hovering
+    /// elsewhere, or being idle, does not.
+    #[test]
+    fn is_hovering_close_target_matches_pointer_downs_own_closing_decision() {
+        let document = Document::new(1);
+        let mut minter = minter();
+        let mut pen = PenTool::new();
+        assert!(
+            !pen.is_hovering_close_target(Point::new(0.0, 0.0), CLOSE_TOLERANCE),
+            "idle: nothing to close"
+        );
+
+        pen.pointer_down(Point::new(0.0, 0.0), CLOSE_TOLERANCE);
+        pen.pointer_up(&mut minter, &document, Point::new(0.0, 0.0), DRAG_THRESHOLD);
+        pen.pointer_down(Point::new(10.0, 0.0), CLOSE_TOLERANCE);
+        pen.pointer_up(
+            &mut minter,
+            &document,
+            Point::new(10.0, 0.0),
+            DRAG_THRESHOLD,
+        );
+
+        assert!(
+            pen.is_hovering_close_target(Point::new(0.1, 0.1), CLOSE_TOLERANCE),
+            "within tolerance of the first node, with two nodes placed"
+        );
+        assert!(
+            !pen.is_hovering_close_target(Point::new(10.0, 0.0), CLOSE_TOLERANCE),
+            "near the last node, not the first, is not a close target"
+        );
     }
 
     #[test]

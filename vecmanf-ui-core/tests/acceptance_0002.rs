@@ -105,6 +105,20 @@ fn ac4_escape_after_many_nodes_commits_absolutely_nothing() {
     let document = Document::new(1);
     let mut minter = AnchorIdMinter::new(1);
     let mut pen = PenTool::new();
+    // Not just "no paths exist": the document's own Loro snapshot bytes
+    // must be identical before and after, proving the whole pen
+    // session — ten placed nodes, then Escape — committed literally
+    // nothing, not even an empty commit (`specs/path-node-editing/
+    // adrs.md`'s PR review: "each mutating method ends in exactly one
+    // Loro commit" — the flip side is that a *discarded* session must
+    // end in zero). `path_ids()` is called once, before either snapshot,
+    // so its own first-ever access to the (so far untouched) `paths`
+    // tree container — which Loro registers in the document's container
+    // list the first time *anything* asks for it by name, read or write
+    // alike — happens before `before` is captured rather than showing up
+    // as a spurious diff between the two.
+    let _ = document.path_ids();
+    let before = document.export_loro_snapshot().expect("snapshot");
     for i in 0..10 {
         let p = Point::new(f64::from(i) * 3.0, f64::from(i) * 2.0);
         pen.pointer_down(p, CLOSE_TOLERANCE);
@@ -113,6 +127,11 @@ fn ac4_escape_after_many_nodes_commits_absolutely_nothing() {
     assert!(pen.escape());
     assert_eq!(document.path_ids(), Vec::new());
     assert!(!pen.is_placing());
+    let after = document.export_loro_snapshot().expect("snapshot");
+    assert_eq!(
+        before, after,
+        "an escaped pen session must not change the document's own bytes at all"
+    );
 }
 
 /// AC4 interaction with AC2: escaping while a click-drag gesture is

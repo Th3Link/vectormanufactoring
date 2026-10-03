@@ -6,7 +6,7 @@
 //! `set_handle` commit on release.
 
 use vecmanf_document_core::{
-    AnchorKind, Document, HandleSlot, NodeId, PathSnapshot, Point, Tolerance,
+    AnchorKind, Document, HandleSlot, NodeId, PathSnapshot, Point, Tolerance, Vec2,
 };
 use vecmanf_geometry_core::{nearest_point_on_segment, subdivide_at_parameter};
 
@@ -24,6 +24,41 @@ pub struct HitTolerances {
     pub point: Tolerance,
     /// Bounds segment hits.
     pub segment: Tolerance,
+}
+
+/// Which of the node-tool's contextual-toolbar actions apply right now
+/// (`specification.md`'s UX notes: "Buttons disable (not hide) when
+/// nothing selected/applicable"). Computed fresh from the current
+/// selection by [`NodeTool::toolbar_state`], never stored.
+///
+/// Six independent `bool`s rather than an enum: these map 1:1 to the six
+/// toolbar buttons `specification.md` names, each disabled on its own
+/// condition (e.g. make-line and make-curve are each other's negation
+/// *given* a segment is selected, but become simultaneously `false`
+/// together when it isn't) — collapsing them into one flags enum would
+/// just re-derive the same six booleans at every call site.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct NodeToolbarState {
+    /// Insert: a segment is selected (splits it at its midpoint — the
+    /// toolbar button has no pointer position to hit-test against,
+    /// unlike acceptance criterion 12's double-click).
+    pub can_insert: bool,
+    /// Delete: at least one node is selected.
+    pub can_delete: bool,
+    /// Make corner / make smooth: at least one node is selected. Both
+    /// buttons stay enabled regardless of the selected node(s)' current
+    /// kind — a multi-selection can mix kinds, and converting a node to
+    /// the kind it already has is a harmless no-op, not a state to guard
+    /// against.
+    pub can_convert_to_corner: bool,
+    /// See `can_convert_to_corner`.
+    pub can_convert_to_smooth: bool,
+    /// Make line: a segment is selected and it is not already a line
+    /// (acceptance criterion 14's explicit disable example).
+    pub can_make_line: bool,
+    /// Make curve: a segment is selected and it is already a line.
+    pub can_make_curve: bool,
 }
 
 /// The node tool's state: its persistent [`NodeSelection`] plus whatever
@@ -94,11 +129,17 @@ impl NodeTool {
     /// Acceptance criterion: Escape with a selection present clears it;
     /// with nothing selected it is a no-op
     /// (`specs/path-node-editing/specification.md`'s node-tool actions
-    /// notes). Returns whether anything was cleared.
+    /// notes). Also cancels any drag currently in flight, writing nothing
+    /// — consistent with the pen tool's own Escape, which discards its
+    /// in-progress state rather than leaving a gesture half-finished.
+    /// Returns whether anything (a selection, a drag, or both) was
+    /// cancelled.
     pub fn escape(&mut self) -> bool {
         let had_selection = !self.selection.is_empty();
+        let had_drag = !matches!(self.drag, Drag::None);
         self.selection.clear();
-        had_selection
+        self.drag = Drag::None;
+        had_selection || had_drag
     }
 
     /// Acceptance criteria 7, 8, 9, 10, 14: the maker pressed the mouse
@@ -179,6 +220,14 @@ impl NodeTool {
                 down_at,
                 starts,
             } => {
+                // A zero-length delta (press and release at the same
+                // point) still commits: AC8's own acceptance test
+                // (`vecmanf-ui-core/tests/acceptance_0002.rs`'s
+                // `ac8_zero_delta_drag_is_a_well_defined_no_move`) pins
+                // this as "still a valid move commit... not a no-op that
+                // skips writing" — see this run's report for the open
+                // conflict against a later review note that asked for the
+                // opposite (skip the commit entirely on zero delta).
                 let delta = down_at.vector_to(point);
                 let moves: Vec<_> = starts
                     .iter()
@@ -201,14 +250,17 @@ impl NodeTool {
     }
 
     /// Acceptance criterion 11: converts every currently selected node to
-    /// `kind`. A no-op when the selection is not a node selection.
+    /// `kind`, as one commit for the whole multi-selection. A no-op when
+    /// the selection is not a node selection.
     pub fn convert_selected(&self, document: &Document, kind: AnchorKind) {
         let Some(path) = self.selection.path() else {
             return;
         };
-        for &anchor in self.selection.nodes() {
-            let _ = document.convert_anchor_kind(path, anchor, kind);
+        let ids = self.selection.nodes();
+        if ids.is_empty() {
+            return;
         }
+        let _ = document.convert_anchor_kind(path, ids, kind);
     }
 
     /// Acceptance criterion 13: deletes every currently selected node,
@@ -252,6 +304,33 @@ impl NodeTool {
         let path = self.selection.path()?;
         let (start, end) = self.selection.segment()?;
         Some((path, start, end))
+    }
+
+    /// Which contextual-toolbar actions apply right now, computed from
+    /// this tool's current selection against `document`'s live state —
+    /// the facade (`vecmanf-editor-wasm`'s `Session`) just calls this
+    /// rather than re-deriving the same six booleans itself.
+    #[must_use]
+    pub fn toolbar_state(&self, document: &Document) -> NodeToolbarState {
+        let has_nodes = !self.selection.nodes().is_empty();
+        let segment_is_line = self
+            .selection
+            .path()
+            .zip(self.selection.segment())
+            .and_then(|(path, (start, end))| {
+                let snapshot = document.path(path)?;
+                let start_anchor = snapshot.anchors.iter().find(|a| a.id == start)?;
+                let end_anchor = snapshot.anchors.iter().find(|a| a.id == end)?;
+                Some(start_anchor.handle_out == Vec2::ZERO && end_anchor.handle_in == Vec2::ZERO)
+            });
+        NodeToolbarState {
+            can_insert: segment_is_line.is_some(),
+            can_delete: has_nodes,
+            can_convert_to_corner: has_nodes,
+            can_convert_to_smooth: has_nodes,
+            can_make_line: segment_is_line == Some(false),
+            can_make_curve: segment_is_line == Some(true),
+        }
     }
 
     /// Acceptance criterion 12: double-clicking a point on a segment
@@ -790,6 +869,41 @@ mod tests {
         let snapshot = document.path(path).expect("exists");
         assert_ne!(snapshot.anchors[0].handle_out, Vec2::ZERO);
         assert_ne!(snapshot.anchors[1].handle_in, Vec2::ZERO);
+    }
+
+    // Note: a plain click (press and release at the exact same point) is
+    // a zero-delta move, and `pointer_up` commits it like any other move
+    // rather than special-casing it as a no-op — AC8's own acceptance
+    // test (`ac8_zero_delta_drag_is_a_well_defined_no_move` in
+    // `tests/acceptance_0002.rs`) pins this as "still a valid move
+    // commit... not a no-op that skips writing". See this run's report
+    // for an open conflict against a later review note that asked for
+    // the opposite.
+
+    /// Escape mid-drag cancels the drag (consistent with the pen tool's
+    /// own Escape): the subsequent release that would otherwise end the
+    /// drag is now a no-op, and the node never moves.
+    #[test]
+    fn escape_mid_drag_cancels_it() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path = open_two_node_path(&document, a, b);
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+
+        // Select the node first, then start a second, real drag on it.
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+        tool.pointer_up(&document, Point::new(0.0, 0.0));
+        let paths = vec![document.path(path).expect("exists")];
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+
+        assert!(tool.escape(), "a drag was in flight to cancel");
+
+        let outcome = tool.pointer_up(&document, Point::new(50.0, 50.0));
+        assert_eq!(outcome, PointerUpOutcome::NoOp, "the drag was cancelled");
+        let snapshot = document.path(path).expect("exists");
+        assert_eq!(snapshot.anchors[0].point, Point::new(0.0, 0.0), "unmoved");
     }
 
     #[test]
