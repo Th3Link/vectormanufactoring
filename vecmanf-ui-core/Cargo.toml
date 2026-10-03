@@ -10,5 +10,5 @@ description = "The vecmanf interaction layer: pen/node tool state machines, hit-
 workspace = true
 
 [dependencies]
-vecmanf-document-core = { path = "../vecmanf-document-core" }
-vecmanf-geometry-core = { path = "../vecmanf-geometry-core" }
+vecmanf-document-core = { path = "../vecmanf-document-core", version = "0.1.0" }
+vecmanf-geometry-core = { path = "../vecmanf-geometry-core", version = "0.1.0" }

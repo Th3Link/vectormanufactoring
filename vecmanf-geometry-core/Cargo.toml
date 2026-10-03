@@ -10,5 +10,5 @@ description = "The vecmanf geometry kernel: flatten-for-hit-test, nearest-point-
 workspace = true
 
 [dependencies]
-vecmanf-document-core = { path = "../vecmanf-document-core" }
+vecmanf-document-core = { path = "../vecmanf-document-core", version = "0.1.0" }
 kurbo.workspace = true
