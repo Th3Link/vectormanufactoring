@@ -156,11 +156,13 @@ already named.
       Make corner, Make smooth, Make line, Make curve, disabled when
       inapplicable; same actions on a right-click context menu; Delete/
       Backspace keys bound; Escape clears selection (not a pen discard).
-- [ ] 30. `vecmanf-app`: `WEBKIT_DISABLE_DMABUF_RENDERER=1` set on Linux
+- [x] 30. `vecmanf-app`: `WEBKIT_DISABLE_DMABUF_RENDERER=1` set on Linux
       before `tauri::Builder` runs, with a unit test that the setup
       function actually sets it (`adrs.md`'s PASS note, requirement 1 — the
       failure mode is a silent blank canvas, not an error, so this needs a
-      test rather than a hope).
+      test rather than a hope). Uses `unsafe { std::env::set_var(...) }`
+      (stable Rust now requires `unsafe` for this call) — flagged to the
+      lead per `CLAUDE.md` §5's "unsafe anywhere else needs an ADR".
 
 ### Container format
 
