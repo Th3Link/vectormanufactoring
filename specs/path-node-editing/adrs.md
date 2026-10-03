@@ -279,6 +279,23 @@ spelled out under ADR 0002 and ADR 0009 rather than assumed.
   empty by construction — a version-1 document has no path nodes — and that
   sentence is the written migration policy for this step.
 
+- **2026-10-03: `ViewTransform` is pan + uniform zoom, not a general affine
+  matrix.** ADR 0011 §3 names "the affine transform type from
+  `document-core`, passed to both [`render-core` and `ui-core`]" without
+  pinning its shape. This slice's canvas never rotates or skews, and no path
+  node carries its own transform yet (ADR 0002 §5's per-node affine transform
+  is not implemented here — this slice's anchor schema above has no
+  `transform` field), so a 6-component matrix would be unexercised generality
+  (`CLAUDE.md` §5 YAGNI). `vecmanf-document-core::ViewTransform` is a `scale`
+  (screen pixels per document mm) and an `origin` (`Point`), with
+  `document_to_screen`/`screen_to_document`. `render-core` uses it for
+  acceptance criterion 6/7's screen-space-constant decoration sizing; the
+  host (not `vecmanf-ui-core` itself) uses it to turn a raw pointer event
+  into the document `Point` the tools in this slice already take. A later
+  slice that needs real per-node rotation is free to generalize this type or
+  add a separate one — this name and shape are not a commitment past this
+  slice's own needs.
+
 ## Flagged to the lead
 
 1. **The specification's prose cites ADR 0002 §5 for *anchor* identity**

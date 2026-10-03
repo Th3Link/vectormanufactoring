@@ -199,6 +199,69 @@ impl Default for DocumentSize {
     }
 }
 
+/// Maps between document space (millimetres) and screen space (pixels):
+/// pan and uniform zoom (ADR 0011 §3's "the view transform is the affine
+/// transform type from `document-core`, passed to both" — `render-core`
+/// for screen-space-constant decoration sizing, and, via the host that
+/// owns pointer input, for turning a raw pointer event into the document
+/// point `vecmanf-ui-core`'s tools take).
+///
+/// Carries no rotation or skew: nothing in `path-node-editing` needs a
+/// canvas that rotates, and a per-node affine transform (ADR 0002 §5) is
+/// a separate, not-yet-implemented later concern — this is specifically
+/// the *view*'s transform, not a node's. A future slice that needs one is
+/// free to generalize this type rather than invent a second one.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ViewTransform {
+    /// Screen pixels per document millimetre.
+    scale: f64,
+    /// The document-space point that currently maps to screen pixel
+    /// `(0, 0)`.
+    origin: Point,
+}
+
+impl ViewTransform {
+    /// Builds a [`ViewTransform`] from its zoom factor (screen pixels per
+    /// document millimetre) and the document point currently at the
+    /// screen's top-left corner.
+    #[must_use]
+    pub const fn new(scale: f64, origin: Point) -> Self {
+        Self { scale, origin }
+    }
+
+    /// The identity view: 1 screen pixel per document millimetre, with
+    /// the document origin at the screen's top-left corner.
+    #[must_use]
+    pub const fn identity() -> Self {
+        Self::new(1.0, Point::new(0.0, 0.0))
+    }
+
+    /// Screen pixels per document millimetre — what a decoration's
+    /// screen-space-constant size (`docs/design-system.md`) must be
+    /// divided by to get its equivalent size in document millimetres at
+    /// the current zoom.
+    #[must_use]
+    pub const fn scale(self) -> f64 {
+        self.scale
+    }
+
+    /// Converts a document-space point to screen pixel coordinates.
+    #[must_use]
+    pub fn document_to_screen(self, point: Point) -> (f64, f64) {
+        let offset = self.origin.vector_to(point);
+        (offset.x * self.scale, offset.y * self.scale)
+    }
+
+    /// Converts screen pixel coordinates to a document-space point —
+    /// what the host uses to turn a pointer event into the point
+    /// `vecmanf-ui-core`'s tools take.
+    #[must_use]
+    pub fn screen_to_document(self, screen_x: f64, screen_y: f64) -> Point {
+        self.origin
+            .translated(Vec2::new(screen_x / self.scale, screen_y / self.scale))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -213,6 +276,35 @@ mod tests {
     fn tolerance_round_trips_through_mm() {
         let tolerance = Tolerance::from_mm(0.1);
         assert!((tolerance.as_mm() - 0.1).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn identity_view_transform_maps_mm_to_pixels_one_to_one() {
+        let view = ViewTransform::identity();
+        let (x, y) = view.document_to_screen(Point::new(5.0, 7.0));
+        assert!((x - 5.0).abs() < f64::EPSILON);
+        assert!((y - 7.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn view_transform_scales_and_pans() {
+        let view = ViewTransform::new(2.0, Point::new(10.0, 10.0));
+        // The origin itself maps to screen (0, 0).
+        let (x, y) = view.document_to_screen(Point::new(10.0, 10.0));
+        assert!(x.abs() < f64::EPSILON && y.abs() < f64::EPSILON);
+        // 1mm further in document space is 2px further on screen at 2x zoom.
+        let (x, y) = view.document_to_screen(Point::new(11.0, 10.0));
+        assert!((x - 2.0).abs() < f64::EPSILON && y.abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn screen_to_document_is_the_inverse_of_document_to_screen() {
+        let view = ViewTransform::new(3.0, Point::new(-4.0, 2.0));
+        let original = Point::new(12.0, -8.0);
+        let (sx, sy) = view.document_to_screen(original);
+        let round_tripped = view.screen_to_document(sx, sy);
+        assert!((round_tripped.x - original.x).abs() < 1e-9);
+        assert!((round_tripped.y - original.y).abs() < 1e-9);
     }
 
     #[test]

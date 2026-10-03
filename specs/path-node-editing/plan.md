@@ -164,10 +164,12 @@ already named.
 
 ### Container format
 
-- [ ] 31. Golden fixtures regenerated for `format_version = 2` with paths
+- [x] 31. Golden fixtures regenerated for `format_version = 2` with paths
       of both anchor kinds, open and closed, in `tests/fixtures/`. A
       fixture at the old `format_version = 1` still opens (empty path list,
-      the written migration policy).
+      the written migration policy). (Done alongside task 11:
+      `tests/fixtures/paths_v2.vmf` and `tests/fixtures/format_version_1.vmf`,
+      pinned by `vecmanf-document-core/tests/container_fixtures.rs`.)
 
 ## Validation
 
