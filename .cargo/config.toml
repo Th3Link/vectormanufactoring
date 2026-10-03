@@ -1,0 +1,11 @@
+# Workaround for this sandbox: plain `cargo build`/`clippy` at the default
+# parallelism intermittently SIGSEGVs inside rustc/LLVM on the heavier
+# dependency trees this slice introduces (loro, tauri's Linux webkit2gtk
+# stack) — reproducible, not flaky in the usual sense. A bigger thread
+# stack and less parallelism avoid it. Revisit if a future toolchain
+# upgrade removes the need.
+[build]
+jobs = 2
+
+[env]
+RUST_MIN_STACK = "134217728"
