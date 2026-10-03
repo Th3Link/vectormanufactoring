@@ -323,6 +323,14 @@ impl NodeTool {
                 subdivision.next_in,
             )
             .ok()?;
+        // A prior single click (e.g. the first half of the double-click
+        // that landed here) may have selected this same segment as
+        // `(start, end)`; that pair is no longer adjacent once the new
+        // anchor sits between them, so a selection referencing it would
+        // resolve to a stale, visually wrong overlay. Clear it, matching
+        // `insert_on_selected_segment`'s and `delete_selected`'s own rule
+        // that a structural change invalidates whatever it touches.
+        self.selection.clear();
         Some(path)
     }
 
@@ -608,6 +616,34 @@ mod tests {
         assert_eq!(snapshot.anchors.len(), 3);
         assert_eq!(snapshot.anchors[1].point, Point::new(10.0, 0.0));
         assert_eq!(snapshot.anchors[1].kind, AnchorKind::Corner);
+    }
+
+    /// A segment selected (e.g. by an earlier click at the same point —
+    /// the first half of a double-click) before `insert_at` splits it is
+    /// no longer adjacent afterwards, so the selection is cleared rather
+    /// than left dangling.
+    #[test]
+    fn insert_at_clears_a_stale_segment_selection_it_just_split() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path = open_two_node_path(&document, a, b);
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        let mut minter = AnchorIdMinter::new(1);
+
+        let outcome = tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, false);
+        assert_eq!(outcome, PointerDownOutcome::Segment);
+        assert_eq!(tool.selection().segment(), Some((a, b)));
+
+        tool.insert_at(
+            &mut minter,
+            &document,
+            &paths,
+            Point::new(10.0, 0.0),
+            TOLERANCES,
+        );
+        assert!(tool.selection().is_empty());
     }
 
     /// The contextual toolbar's "Insert node" button: splits the selected
