@@ -325,6 +325,55 @@ impl NodeTool {
             .ok()?;
         Some(path)
     }
+
+    /// The contextual toolbar's "Insert node" action
+    /// (`specification.md`'s UX notes list it alongside Delete/convert/
+    /// make-line/make-curve). Unlike [`NodeTool::insert_at`] this has no
+    /// pointer position to hit-test against — the toolbar button only
+    /// knows the current selection — so it splits the selected segment at
+    /// its midpoint (`t = 0.5`), the same well-defined default Inkscape's
+    /// own "insert node" toolbar action uses. A no-op (returns `None`)
+    /// when the selection is not a segment.
+    pub fn insert_on_selected_segment(
+        &mut self,
+        minter: &mut AnchorIdMinter,
+        document: &Document,
+        paths: &[PathSnapshot],
+    ) -> Option<NodeId> {
+        let (path, start, end) = self.selection_segment()?;
+        let snapshot = paths.iter().find(|p| p.id == path)?;
+        let start_anchor = snapshot.anchors.iter().find(|a| a.id == start)?;
+        let end_anchor = snapshot.anchors.iter().find(|a| a.id == end)?;
+
+        let subdivision = subdivide_at_parameter(
+            start_anchor.point,
+            start_anchor.handle_out,
+            end_anchor.handle_in,
+            end_anchor.point,
+            0.5,
+        );
+        let new_anchor = vecmanf_document_core::NewAnchor {
+            id: minter.mint(),
+            point: subdivision.new_point,
+            handle_in: subdivision.new_handle_in,
+            handle_out: subdivision.new_handle_out,
+            kind: AnchorKind::Corner,
+        };
+        document
+            .insert_anchor(
+                path,
+                start,
+                new_anchor,
+                subdivision.prev_out,
+                subdivision.next_in,
+            )
+            .ok()?;
+        // The old (start, end) pair is no longer adjacent, so the segment
+        // selection can no longer resolve — clear it rather than leave it
+        // dangling, matching `delete_selected`'s same choice.
+        self.selection.clear();
+        Some(path)
+    }
 }
 
 #[cfg(test)]
@@ -559,6 +608,51 @@ mod tests {
         assert_eq!(snapshot.anchors.len(), 3);
         assert_eq!(snapshot.anchors[1].point, Point::new(10.0, 0.0));
         assert_eq!(snapshot.anchors[1].kind, AnchorKind::Corner);
+    }
+
+    /// The contextual toolbar's "Insert node" button: splits the selected
+    /// segment at its midpoint, with no pointer position involved.
+    #[test]
+    fn insert_on_selected_segment_splits_at_the_midpoint() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path = open_two_node_path(&document, a, b);
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        let mut minter = AnchorIdMinter::new(1);
+
+        tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, false);
+        assert_eq!(tool.selection().segment(), Some((a, b)));
+
+        let paths = vec![document.path(path).expect("exists")];
+        let result = tool.insert_on_selected_segment(&mut minter, &document, &paths);
+        assert_eq!(result, Some(path));
+        assert!(
+            tool.selection().is_empty(),
+            "stale segment selection cleared"
+        );
+
+        let snapshot = document.path(path).expect("exists");
+        assert_eq!(snapshot.anchors.len(), 3);
+        assert_eq!(snapshot.anchors[1].point, Point::new(10.0, 0.0));
+        assert_eq!(snapshot.anchors[1].kind, AnchorKind::Corner);
+    }
+
+    /// A no-op when nothing is selected, or a node (not a segment) is.
+    #[test]
+    fn insert_on_selected_segment_is_a_no_op_without_a_segment_selection() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path = open_two_node_path(&document, a, b);
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        let mut minter = AnchorIdMinter::new(1);
+
+        let result = tool.insert_on_selected_segment(&mut minter, &document, &paths);
+        assert_eq!(result, None);
+        assert_eq!(document.path(path).expect("exists").anchors.len(), 2);
     }
 
     #[test]
