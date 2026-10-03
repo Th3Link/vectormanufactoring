@@ -4,6 +4,7 @@ members = [
     "vecmanf-document-core",
     "vecmanf-geometry-core",
     "vecmanf-ui-core",
+    "vecmanf-render-core",
     "vecmanf-storage-io",
     "vecmanf-app",
 ]
@@ -20,6 +21,7 @@ serde_json = { version = "1", default-features = false, features = ["std"] }
 zip = { version = "8", default-features = false, features = ["deflate"] }
 loro = { version = "1", default-features = false }
 kurbo = { version = "0.13", default-features = false, features = ["std"] }
+lyon = "1"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

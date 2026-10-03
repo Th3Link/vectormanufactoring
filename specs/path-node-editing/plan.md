@@ -119,17 +119,17 @@ already named.
 
 ### Rendering (new `vecmanf-render-core`), test-first where the data shape allows it
 
-- [ ] 21. Draw-list builder: path snapshot + view transform → flattened
+- [x] 21. Draw-list builder: path snapshot + view transform → flattened
       stroke geometry (0.25 mm, black, no fill — AC 6) via `lyon`, plus
       node/handle/segment decoration primitives from a `DecorationInput`
       (selected/hovered ids and flags) built by the wasm facade from
       `ui-core`'s selection — this crate never reads `ui-core` directly
       (`adrs.md` crate-boundary decision).
-- [ ] 22. Screen-space-constant sizing for every decoration (7px node, 6px
+- [x] 22. Screen-space-constant sizing for every decoration (7px node, 6px
       handle, 1px handle line, +2px segment overlay, per
       `docs/design-system.md`), computed from the view transform, not
       baked into document units.
-- [ ] 23. `cargo build --target wasm32-unknown-unknown` clean.
+- [x] 23. `cargo build --target wasm32-unknown-unknown` clean.
 
 ### wasm facade (new `vecmanf-editor-wasm`)
 
