@@ -1,0 +1,14 @@
+[package]
+name = "vecmanf-geometry-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The vecmanf geometry kernel: flatten-for-hit-test, nearest-point-on-segment and subdivide-at-parameter over cubic Bézier segments (pure, wasm-compatible)."
+
+[lints]
+workspace = true
+
+[dependencies]
+vecmanf-document-core = { path = "../vecmanf-document-core" }
+kurbo.workspace = true

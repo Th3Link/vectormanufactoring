@@ -82,17 +82,17 @@ already named.
 
 ### Geometry kernel (new `vecmanf-geometry-core`), test-first
 
-- [ ] 12. `flatten_segment(start, handle_out, handle_in, end, tolerance) ->
+- [x] 12. `flatten_segment(start, handle_out, handle_in, end, tolerance) ->
       Vec<Point>` via `kurbo::CubicBez` — used for segment hit-testing
       (AC 12, 14) and rendering's stroke tessellation input.
-- [ ] 13. `nearest_point_on_segment(..., query, tolerance) -> (t, distance,
+- [x] 13. `nearest_point_on_segment(..., query, tolerance) -> (t, distance,
       point)` — AC 12's "double-click a point on a segment" and AC 14's
       "click on a point of a segment".
-- [ ] 14. `subdivide_at_parameter(..., t) -> (left_handle_out, new_point,
+- [x] 14. `subdivide_at_parameter(..., t) -> (left_handle_out, new_point,
       new_handle_in, new_handle_out, right_handle_in)` via de Casteljau —
       AC 12's split, carrying resolved geometry back to `ui-core` (`adrs.md`
       "commands carry resolved geometry, never geometric intent").
-- [ ] 15. `cargo build --target wasm32-unknown-unknown` clean, no `unsafe`.
+- [x] 15. `cargo build --target wasm32-unknown-unknown` clean, no `unsafe`.
 
 ### Interaction layer (new `vecmanf-ui-core`), test-first
 
