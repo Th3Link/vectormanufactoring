@@ -158,9 +158,16 @@ the first canvas story, not assumed.
 - **Two dependency ecosystems to police.** `cargo deny` does not see npm.
   CI needs an npm license and audit check with the same allow-list discipline
   (ADR 0006 §2).
-- **Linux/WebKitGTK canvas performance is an unverified assumption** on the
-  customer's primary platform, and it is the one failure that would invalidate
-  this ADR rather than cost a refactor. Measure first (technical debt).
+- **Linux/WebKitGTK canvas performance was the one unverified assumption** on
+  the customer's primary platform, and the one failure that would have
+  invalidated this ADR rather than cost a refactor. **Measured 2026-10-03:
+  passed** — 50 000 nodes at a vsync-locked ~60 fps under sustained pan/zoom
+  plus a live single-node drag, in a real WebKitGTK webview. §4 stands. The
+  result and the two implementation requirements it imposes — disable
+  WebKitGTK's DMA-BUF renderer on Linux, and reconfigure the `wgpu` surface on
+  every resize — are recorded in `specs/path-node-editing/adrs.md`; the two
+  NVIDIA driver problems the measurement exposed are in
+  `docs/technical-debt.md`.
 - One renderer path (`wgpu` → WebGL2) serves desktop and browser, so the
   browser target stays genuinely close rather than nominally possible. The cost
   is that we design for the WebGL2 feature set, not WebGPU's.
