@@ -11,6 +11,16 @@ inline in a spec once they exist here.
 Only one theme exists (light). Dark mode is undecided (no ADR yet) — token
 *names* are chosen so a future dark theme is a value swap, not a rename.
 
+**2026-10-03, frontend wiring note:** `--accent`/`--accent-hover` below are
+implemented in `frontend/src/index.css` as `--editor-accent`/
+`--editor-accent-hover`, same values. This project's shadcn setup already
+reserves plain `--accent`/`--accent-foreground` for its own component hover
+states (menus, dropdowns); redefining it here would silently recolor those
+too. `--node-fill`/`--node-stroke`/`--handle-fill`/`--handle-stroke` need no
+CSS variable at all — the canvas is WebGL, not DOM, so `vecmanf-render-core`'s
+`theme.rs` is where these values actually live; this table documents the
+values, not an implementation site, for those four rows.
+
 ## Color tokens
 
 | Token | Value | Used for |

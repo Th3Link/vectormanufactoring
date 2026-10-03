@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 
 import { Canvas } from "@/components/Canvas";
 import { ErrorDialog } from "@/components/ErrorDialog";
+import { NodeToolbar } from "@/components/NodeToolbar";
 import { StatusBar } from "@/components/StatusBar";
+import { ToolRail } from "@/components/ToolRail";
+import { useEditorSession } from "@/hooks/useEditorSession";
 import type {
   OpenErrorPayload,
   ProjectStatePayload,
@@ -16,6 +19,7 @@ const DEFAULT_SIZE_MM = { width: 210, height: 297 };
 function App() {
   const [cursorMm, setCursorMm] = useState({ x: 0, y: 0 });
   const [sizeMm, setSizeMm] = useState(DEFAULT_SIZE_MM);
+  const editor = useEditorSession(setCursorMm);
   const [openErrorMessage, setOpenErrorMessage] = useState<string | null>(
     null,
   );
@@ -69,7 +73,22 @@ function App() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
-      <Canvas onPointerPositionChange={setCursorMm} />
+      {editor.tool === "node" ? (
+        <NodeToolbar
+          state={editor.nodeToolbarState}
+          actions={{
+            insertSelected: editor.insertSelected,
+            deleteSelected: editor.deleteSelected,
+            convertSelected: editor.convertSelected,
+            makeLine: editor.makeLine,
+            makeCurve: editor.makeCurve,
+          }}
+        />
+      ) : null}
+      <div className="flex min-h-0 flex-1">
+        <ToolRail tool={editor.tool} onSelect={editor.setTool} />
+        <Canvas editor={editor} />
+      </div>
       <StatusBar cursorMm={cursorMm} sizeMm={sizeMm} />
       <ErrorDialog
         title="Can't open project"
