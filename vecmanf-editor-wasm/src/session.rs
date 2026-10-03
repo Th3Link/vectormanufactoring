@@ -10,12 +10,14 @@
 //! view transform come from" — nothing a browser is required to answer.
 
 use vecmanf_document_core::{
-    AnchorKind, Document, Length, OpenError, Point, SaveError, Tolerance, Vec2, ViewTransform,
+    AnchorKind, Document, Length, OpenError, Point, SaveError, Tolerance, ViewTransform,
 };
 use vecmanf_render_core::{
     DecorationInput, DrawList, Hovered as RenderHovered, build_draw_list, build_pen_preview,
 };
-use vecmanf_ui_core::{AnchorIdMinter, Hit, HitTolerances, NodeTool, PenTool, hit_test};
+use vecmanf_ui_core::{
+    AnchorIdMinter, Hit, HitTolerances, NodeTool, NodeToolbarState, PenTool, hit_test,
+};
 
 /// 8px node/handle hit-test radius (`docs/design-system.md`).
 const POINT_TOLERANCE_PX: f64 = 8.0;
@@ -36,42 +38,6 @@ pub enum Tool {
     Pen,
     /// The node tool (acceptance criteria 7-14).
     Node,
-}
-
-/// Which of the node-tool's contextual-toolbar actions apply right now
-/// (`specification.md`'s UX notes: "Buttons disable (not hide) when
-/// nothing selected/applicable"). Computed fresh from the current
-/// selection on every call, never stored — the same read-only shape as
-/// [`Session::decoration_input`].
-///
-/// Six independent `bool`s rather than an enum: these map 1:1 to the six
-/// toolbar buttons `specification.md` names, each disabled on its own
-/// condition (e.g. make-line and make-curve are each other's negation
-/// *given* a segment is selected, but become simultaneously `false`
-/// together when it isn't) — collapsing them into one flags enum would
-/// just re-derive the same six booleans at every call site.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-#[allow(clippy::struct_excessive_bools)]
-pub struct NodeToolbarState {
-    /// Insert: a segment is selected (splits it at its midpoint — the
-    /// toolbar button has no pointer position to hit-test against,
-    /// unlike acceptance criterion 12's double-click).
-    pub can_insert: bool,
-    /// Delete: at least one node is selected.
-    pub can_delete: bool,
-    /// Make corner / make smooth: at least one node is selected. Both
-    /// buttons stay enabled regardless of the selected node(s)' current
-    /// kind — a multi-selection can mix kinds, and converting a node to
-    /// the kind it already has is a harmless no-op, not a state to guard
-    /// against.
-    pub can_convert_to_corner: bool,
-    /// See `can_convert_to_corner`.
-    pub can_convert_to_smooth: bool,
-    /// Make line: a segment is selected and it is not already a line
-    /// (acceptance criterion 14's explicit disable example).
-    pub can_make_line: bool,
-    /// Make curve: a segment is selected and it is already a line.
-    pub can_make_curve: bool,
 }
 
 /// One open document's whole editing session.
@@ -341,28 +307,7 @@ impl Session {
         if self.tool != Tool::Node {
             return NodeToolbarState::default();
         }
-        let selection = self.node.selection();
-        let has_nodes = !selection.nodes().is_empty();
-        let segment_is_line =
-            selection
-                .path()
-                .zip(selection.segment())
-                .and_then(|(path, (start, end))| {
-                    let snapshot = self.document.path(path)?;
-                    let start_anchor = snapshot.anchors.iter().find(|a| a.id == start)?;
-                    let end_anchor = snapshot.anchors.iter().find(|a| a.id == end)?;
-                    Some(
-                        start_anchor.handle_out == Vec2::ZERO && end_anchor.handle_in == Vec2::ZERO,
-                    )
-                });
-        NodeToolbarState {
-            can_insert: segment_is_line.is_some(),
-            can_delete: has_nodes,
-            can_convert_to_corner: has_nodes,
-            can_convert_to_smooth: has_nodes,
-            can_make_line: segment_is_line == Some(false),
-            can_make_curve: segment_is_line == Some(true),
-        }
+        self.node.toolbar_state(&self.document)
     }
 
     /// The in-progress pen path's placed nodes, for the host's
@@ -375,6 +320,24 @@ impl Session {
         } else {
             None
         }
+    }
+
+    /// Acceptance criterion 5's cursor cue (`specification.md`'s
+    /// "Cursors": "cursor swaps to a pen-with-small-circle... variant"):
+    /// whether the live cursor is currently over the in-progress pen
+    /// path's own close target. The host uses this to pick the cursor
+    /// class; `false` outside the pen tool, with no path in progress, or
+    /// before the pointer has ever moved over the canvas.
+    #[must_use]
+    pub fn is_hovering_pen_close_target(&self) -> bool {
+        if self.tool != Tool::Pen {
+            return false;
+        }
+        let Some(point) = self.pointer_position else {
+            return false;
+        };
+        self.pen
+            .is_hovering_close_target(point, self.point_tolerance_as_length())
     }
 
     fn decoration_input(&self) -> DecorationInput {
@@ -416,6 +379,64 @@ impl Session {
             list.extend(build_pen_preview(nodes, self.pointer_position, self.view));
         }
         list
+    }
+}
+
+/// Returns the one-sentence message the frontend's `ErrorDialog` shows
+/// for `error` — moved here from `vecmanf-app`'s native `open_error.rs`
+/// (`specs/project-file-foundation/specification.md`, "Error handling —
+/// invalid/corrupt file") now that [`Session::open`] (and the
+/// `Document::open` it wraps) only ever runs inside this wasm session,
+/// never natively (`specs/path-node-editing/adrs.md`'s PR review: "the
+/// host does byte I/O only"). Plain Rust, not `wasm_api`'s `wasm32`-only
+/// shell, so it stays exercised by ordinary `cargo test` — its only
+/// caller is `wasm_api::WasmSession::open`, which is itself `wasm32`-
+/// only, so this function is `cfg`-gated the same way plus `test`
+/// (otherwise a host `cargo build`/`clippy` sees it as genuinely unused
+/// dead code, since its one caller does not exist in that build).
+#[cfg(any(test, target_arch = "wasm32"))]
+#[must_use]
+pub const fn map_open_error(error: &OpenError) -> &'static str {
+    match error {
+        OpenError::NotAVmf => "This file isn't a vecmanf project (.vmf) file.",
+        OpenError::Damaged => "This file is damaged and can't be read.",
+        OpenError::FormatTooNew { .. } => {
+            "This file was saved by a newer version of vecmanf. Update the app to open it."
+        }
+    }
+}
+
+#[cfg(test)]
+mod map_open_error_tests {
+    use super::map_open_error;
+    use vecmanf_document_core::OpenError;
+
+    #[test]
+    fn not_a_vmf_names_the_specific_cause() {
+        assert_eq!(
+            map_open_error(&OpenError::NotAVmf),
+            "This file isn't a vecmanf project (.vmf) file."
+        );
+    }
+
+    #[test]
+    fn damaged_names_the_specific_cause() {
+        assert_eq!(
+            map_open_error(&OpenError::Damaged),
+            "This file is damaged and can't be read."
+        );
+    }
+
+    #[test]
+    fn format_too_new_names_the_specific_cause() {
+        let error = OpenError::FormatTooNew {
+            found: 2,
+            supported: 1,
+        };
+        assert_eq!(
+            map_open_error(&error),
+            "This file was saved by a newer version of vecmanf. Update the app to open it."
+        );
     }
 }
 
@@ -532,6 +553,37 @@ mod tests {
         session.pointer_leave();
         let after_leave = session.draw_list().triangle_count();
         assert_eq!(after_leave, one_node, "no cursor, no rubber-band line");
+    }
+
+    /// Acceptance criterion 5's cursor cue: hovering near the
+    /// in-progress path's own first node, with enough nodes placed,
+    /// reports the close target; the node tool, idle pen tool, and
+    /// hovering elsewhere all report `false`.
+    #[test]
+    fn is_hovering_pen_close_target_matches_the_real_close_decision() {
+        let mut session = Session::new(1);
+        assert!(!session.is_hovering_pen_close_target(), "idle: no path yet");
+
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0));
+        session.pointer_down(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0));
+
+        session.pointer_hover(Point::new(0.1, 0.1));
+        assert!(session.is_hovering_pen_close_target());
+
+        session.pointer_hover(Point::new(10.0, 0.0));
+        assert!(
+            !session.is_hovering_pen_close_target(),
+            "near the last node, not the first"
+        );
+
+        session.set_tool(Tool::Node);
+        session.pointer_hover(Point::new(0.1, 0.1));
+        assert!(
+            !session.is_hovering_pen_close_target(),
+            "the node tool never shows a pen cursor"
+        );
     }
 
     #[test]

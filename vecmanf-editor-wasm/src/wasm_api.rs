@@ -8,8 +8,10 @@ use vecmanf_document_core::{AnchorKind, Point, ViewTransform};
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 
+use vecmanf_ui_core::NodeToolbarState as SessionNodeToolbarState;
+
 use crate::gpu::Gpu;
-use crate::session::{NodeToolbarState as SessionNodeToolbarState, Session, Tool};
+use crate::session::{Session, Tool};
 
 /// Installs a panic hook that logs Rust panics to the browser console —
 /// otherwise a panic in `wasm32` surfaces as an opaque
@@ -36,7 +38,7 @@ fn kind_from_str(name: &str) -> Result<AnchorKind, JsValue> {
     }
 }
 
-/// `wasm-bindgen`'s JS-facing mirror of [`crate::session::NodeToolbarState`]
+/// `wasm-bindgen`'s JS-facing mirror of [`vecmanf_ui_core::NodeToolbarState`]
 /// — a plain `bool`-fields struct needs no getter methods, unlike a type
 /// `wasm-bindgen` can't expose by value. See that type's own doc comment
 /// for why six independent `bool`s, not an enum.
@@ -90,12 +92,21 @@ impl WasmSession {
 
     /// Reopens a previously saved `.vmf` container's bytes.
     ///
+    /// The host does byte I/O only (`specs/path-node-editing/adrs.md`'s
+    /// PR review: "Open reads bytes and calls `WasmSession::open`") — it
+    /// never sees a [`vecmanf_document_core::OpenError`] itself, so this
+    /// maps it to the exact user-facing sentence
+    /// `specs/project-file-foundation/specification.md`'s "Error
+    /// handling — invalid/corrupt file" names, the same mapping
+    /// `vecmanf-app`'s own (now-removed) native `open_error.rs` used to
+    /// do for a native-side `Document`.
+    ///
     /// # Errors
-    /// A `JsValue` (a plain string) describing why the file could not
-    /// be opened.
+    /// A `JsValue` (a plain string) — one of the three sentences named
+    /// above — describing why the file could not be opened.
     pub fn open(peer: u64, bytes: &[u8]) -> Result<WasmSession, JsValue> {
-        let session =
-            Session::open(peer, bytes).map_err(|err| JsValue::from_str(&format!("{err}")))?;
+        let session = Session::open(peer, bytes)
+            .map_err(|err| JsValue::from_str(crate::session::map_open_error(&err)))?;
         Ok(Self { session, gpu: None })
     }
 
@@ -151,6 +162,16 @@ impl WasmSession {
     /// The pointer left the canvas entirely (a DOM `pointerleave`).
     pub fn pointer_leave(&mut self) {
         self.session.pointer_leave();
+    }
+
+    /// Acceptance criterion 5's cursor cue
+    /// (`specification.md`'s "Cursors"): whether the live cursor is
+    /// currently over the in-progress pen path's own close target, so
+    /// the host can swap in the close-path cursor variant. Call after
+    /// every [`WasmSession::pointer_hover`].
+    #[must_use]
+    pub fn is_hovering_pen_close_target(&self) -> bool {
+        self.session.is_hovering_pen_close_target()
     }
 
     /// The pointer released at document-space `(x, y)`.
