@@ -1,0 +1,34 @@
+[workspace]
+resolver = "2"
+members = [
+    "vecmanf-document-core",
+    "vecmanf-storage-io",
+    "vecmanf-app",
+]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.90"
+license = "AGPL-3.0-or-later"
+
+[workspace.dependencies]
+thiserror = { version = "2", default-features = false, features = ["std"] }
+serde = { version = "1", default-features = false, features = ["derive", "std"] }
+serde_json = { version = "1", default-features = false, features = ["std"] }
+zip = { version = "8", default-features = false, features = ["deflate"] }
+loro = { version = "1", default-features = false }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "warn"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
