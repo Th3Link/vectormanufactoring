@@ -26,7 +26,20 @@ fn tool_from_str(name: &str) -> Result<Tool, JsValue> {
     match name {
         "pen" => Ok(Tool::Pen),
         "node" => Ok(Tool::Node),
+        "rectangle" => Ok(Tool::Rectangle),
+        "ellipse" => Ok(Tool::Ellipse),
+        "polygon-star" => Ok(Tool::PolygonStar),
         other => Err(JsValue::from_str(&format!("unknown tool: {other}"))),
+    }
+}
+
+fn poly_star_mode_from_str(name: &str) -> Result<vecmanf_ui_core::PolyStarMode, JsValue> {
+    match name {
+        "polygon" => Ok(vecmanf_ui_core::PolyStarMode::Polygon),
+        "star" => Ok(vecmanf_ui_core::PolyStarMode::Star),
+        other => Err(JsValue::from_str(&format!(
+            "unknown polygon/star mode: {other}"
+        ))),
     }
 }
 
@@ -121,23 +134,28 @@ impl WasmSession {
             .map_err(|err| JsValue::from_str(&format!("{err}")))
     }
 
-    /// Switches the active tool: `"pen"` or `"node"`.
+    /// Switches the active tool: `"pen"`, `"node"`, `"rectangle"`,
+    /// `"ellipse"` or `"polygon-star"`.
     ///
     /// # Errors
-    /// A `JsValue` if `tool` is neither.
+    /// A `JsValue` if `tool` is none of those.
     pub fn set_tool(&mut self, tool: &str) -> Result<(), JsValue> {
         self.session.set_tool(tool_from_str(tool)?);
         Ok(())
     }
 
-    /// The active tool, as `"pen"` or `"node"` — for the host's tool
-    /// rail (which button is active) and contextual toolbar (shown only
-    /// for the node tool).
+    /// The active tool, as one of the five strings
+    /// [`WasmSession::set_tool`] accepts — for the host's tool rail
+    /// (which button is active) and contextual toolbars (shown only for
+    /// the matching tool).
     #[must_use]
     pub fn tool(&self) -> String {
         match self.session.tool() {
             Tool::Pen => "pen".to_string(),
             Tool::Node => "node".to_string(),
+            Tool::Rectangle => "rectangle".to_string(),
+            Tool::Ellipse => "ellipse".to_string(),
+            Tool::PolygonStar => "polygon-star".to_string(),
         }
     }
 
@@ -174,9 +192,11 @@ impl WasmSession {
         self.session.is_hovering_pen_close_target()
     }
 
-    /// The pointer released at document-space `(x, y)`.
-    pub fn pointer_up(&mut self, x: f64, y: f64) {
-        self.session.pointer_up(Point::new(x, y));
+    /// The pointer released at document-space `(x, y)`. `constrain` is
+    /// the Ctrl modifier's state at release (acceptance criteria 2, 8);
+    /// ignored outside the rectangle/ellipse tools.
+    pub fn pointer_up(&mut self, x: f64, y: f64, constrain: bool) {
+        self.session.pointer_up(Point::new(x, y), constrain);
     }
 
     /// Acceptance criterion 3 / the dedicated "finish path" action.
@@ -232,6 +252,73 @@ impl WasmSession {
     #[must_use]
     pub fn node_toolbar_state(&self) -> NodeToolbarState {
         self.session.node_toolbar_state().into()
+    }
+
+    /// Acceptance criterion 6's "remove rounding" action. A no-op
+    /// outside the rectangle tool.
+    pub fn remove_corner_rounding(&mut self) {
+        self.session.remove_corner_rounding();
+    }
+
+    /// The polygon/star tool-options bar's current mode: `"polygon"` or
+    /// `"star"`.
+    #[must_use]
+    pub fn poly_star_mode(&self) -> String {
+        match self.session.poly_star_mode() {
+            vecmanf_ui_core::PolyStarMode::Polygon => "polygon".to_string(),
+            vecmanf_ui_core::PolyStarMode::Star => "star".to_string(),
+        }
+    }
+
+    /// The mode toggle (acceptance criteria 11 vs. 12).
+    ///
+    /// # Errors
+    /// A `JsValue` if `mode` is neither `"polygon"` nor `"star"`.
+    pub fn set_poly_star_mode(&mut self, mode: &str) -> Result<(), JsValue> {
+        self.session
+            .set_poly_star_mode(poly_star_mode_from_str(mode)?);
+        Ok(())
+    }
+
+    /// The polygon/star tool-options bar's current point count
+    /// (acceptance criterion 10).
+    #[must_use]
+    pub fn poly_star_point_count(&self) -> u32 {
+        self.session.poly_star_point_count().get()
+    }
+
+    /// The point-count stepper (acceptance criteria 10, 15).
+    ///
+    /// # Errors
+    /// A `JsValue` if `count` is outside `3..=1024`.
+    pub fn set_poly_star_point_count(&mut self, count: u32) -> Result<(), JsValue> {
+        let count = vecmanf_document_core::PointCount::new(count)
+            .map_err(|err| JsValue::from_str(&format!("{err}")))?;
+        self.session.set_poly_star_point_count(count);
+        Ok(())
+    }
+
+    /// The polygon/star tool-options bar's current ratio (acceptance
+    /// criterion 12).
+    #[must_use]
+    pub fn poly_star_ratio(&self) -> f64 {
+        self.session.poly_star_ratio().get()
+    }
+
+    /// The ratio field/slider (acceptance criteria 12, 14).
+    ///
+    /// # Errors
+    /// A `JsValue` if `ratio` is outside the open interval `(0, 1)`.
+    pub fn set_poly_star_ratio(&mut self, ratio: f64) -> Result<(), JsValue> {
+        let ratio = vecmanf_document_core::InnerRatio::new(ratio)
+            .map_err(|err| JsValue::from_str(&format!("{err}")))?;
+        self.session.set_poly_star_ratio(ratio);
+        Ok(())
+    }
+
+    /// "Object to path" (acceptance criteria 17, 21, 22).
+    pub fn convert_selected_to_paths(&mut self) {
+        self.session.convert_selected_to_paths();
     }
 
     /// Attaches this session to `canvas`, creating the `wgpu`
