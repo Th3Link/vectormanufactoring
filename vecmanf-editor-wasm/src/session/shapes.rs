@@ -647,4 +647,109 @@ mod tests {
         };
         assert!((inner_ratio.get() - 0.8).abs() < 1e-9, "committed once");
     }
+
+    /// Re-verification (tester, item 2): dragging the corner-radius
+    /// handle through the full `Session` pointer API (not just the
+    /// `RectangleTool` unit) must render a live preview mid-drag —
+    /// before release, before any document commit — and that preview's
+    /// radius must change continuously as the pointer moves, not only
+    /// snap to a value on `pointer_up`.
+    #[test]
+    fn corner_radius_drag_renders_a_live_preview_through_the_session() {
+        use vecmanf_ui_core::handles_for;
+
+        let mut session = Session::new(1);
+        session.set_tool(Tool::Rectangle);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 10.0), false);
+        let id = session.primitives()[0].id;
+
+        // Select it, then locate the corner-radius handle at its
+        // current (zero-radius) position.
+        session.pointer_down(Point::new(5.0, 0.0), false);
+        let snapshot = session.document.primitive(id).unwrap();
+        let handle = handles_for(&snapshot)
+            .into_iter()
+            .find(|h| matches!(h.kind, vecmanf_ui_core::HandleKind::CornerRadius))
+            .expect("corner-radius handle exists even at zero radius (AC1 UX note)");
+
+        let before_drag = session.draw_list().triangle_count();
+        session.pointer_down(handle.position, false);
+        // The drag has started but the pointer has not moved yet: the
+        // live preview already exists (an "Adjusting" preview, unlike
+        // a create-drag's "Creating" preview, shows up the instant the
+        // handle is grabbed) and still reports the starting radius.
+        let Some(Shape::Rect {
+            corner_radius: start_radius,
+            ..
+        }) = session.live_preview_shape()
+        else {
+            panic!("expected a live rect preview as soon as the handle is grabbed");
+        };
+        assert!(
+            start_radius.as_mm().abs() < f64::EPSILON,
+            "starting radius must be zero, matching the committed shape"
+        );
+
+        // Drag the handle inward along the diagonal, in two steps, and
+        // confirm the live radius increases monotonically and nothing
+        // is committed to the document until release.
+        let first_drag = Point::new(handle.position.x - 1.0, handle.position.y + 1.0);
+        session.pointer_hover(first_drag, false);
+        let Some(Shape::Rect {
+            corner_radius: first_radius,
+            ..
+        }) = session.live_preview_shape()
+        else {
+            panic!("expected a live rect preview mid-drag");
+        };
+        assert!(
+            first_radius.as_mm() > 0.0,
+            "radius must already be live-visible before release"
+        );
+        let mid_draw_list = session.draw_list().triangle_count();
+        assert!(
+            mid_draw_list > before_drag,
+            "the live preview outline must add geometry to the draw list mid-drag"
+        );
+        let Shape::Rect {
+            corner_radius: still_uncommitted,
+            ..
+        } = session.document.primitive(id).unwrap().shape
+        else {
+            panic!("expected rect");
+        };
+        assert!(
+            still_uncommitted.as_mm().abs() < f64::EPSILON,
+            "mid-drag must not have written to the document yet"
+        );
+
+        let second_drag = Point::new(handle.position.x - 2.0, handle.position.y + 2.0);
+        session.pointer_hover(second_drag, false);
+        let Some(Shape::Rect {
+            corner_radius: second_radius,
+            ..
+        }) = session.live_preview_shape()
+        else {
+            panic!("expected a live rect preview mid-drag");
+        };
+        assert!(
+            second_radius.as_mm() > first_radius.as_mm(),
+            "the live radius must track the drag continuously, not jump only on release"
+        );
+
+        session.pointer_up(second_drag, false);
+        assert!(
+            session.live_preview_shape().is_none(),
+            "no live preview once the drag is committed"
+        );
+        let Shape::Rect {
+            corner_radius: committed,
+            ..
+        } = session.document.primitive(id).unwrap().shape
+        else {
+            panic!("expected rect");
+        };
+        assert!((committed.as_mm() - second_radius.as_mm()).abs() < 1e-9);
+    }
 }

@@ -614,4 +614,99 @@ mod tests {
             "untouched by the refused batch"
         );
     }
+
+    /// Re-verification (tester, item 3): a batch corner-radius edit over
+    /// several selected rectangles must cost exactly one Loro commit for
+    /// the whole call, not one per object — `Document::loro().
+    /// len_changes()` counts committed changes directly, which is a
+    /// stronger check than comparing exported-snapshot byte counts.
+    #[test]
+    fn set_corner_radius_batch_is_one_commit_not_one_per_object() {
+        let document = Document::new(1);
+        let ids: Vec<_> = (0..5)
+            .map(|i| document.create_rect(rect_bounds(f64::from(i) * 20.0, 0.0, 10.0, 10.0)))
+            .collect();
+        let before = document.loro().len_changes();
+        document
+            .set_corner_radius(&ids, Length::from_mm(2.0))
+            .expect("batch radius");
+        let after = document.loro().len_changes();
+        assert_eq!(
+            after - before,
+            1,
+            "5-object batch must add exactly 1 change, not 5"
+        );
+        for id in ids {
+            let Shape::Rect { corner_radius, .. } = document.primitive(id).unwrap().shape else {
+                panic!("expected rect");
+            };
+            assert!((corner_radius.as_mm() - 2.0).abs() < 1e-9);
+        }
+    }
+
+    /// Same check for the point-count stepper applied to a multi-
+    /// selection of stars (acceptance criteria 10, 15).
+    #[test]
+    fn set_point_count_batch_is_one_commit_not_one_per_object() {
+        let document = Document::new(1);
+        let frame = StarFrame {
+            center: Point::new(0.0, 0.0),
+            radius: Length::from_mm(10.0),
+            angle: Angle::from_radians(0.0),
+        };
+        let ids: Vec<_> = (0..4)
+            .map(|_| {
+                document.create_star(
+                    frame,
+                    PointCount::new(5).unwrap(),
+                    InnerRatio::new(0.5).unwrap(),
+                )
+            })
+            .collect();
+        let before = document.loro().len_changes();
+        document
+            .set_point_count(&ids, PointCount::new(9).unwrap())
+            .expect("batch point count");
+        let after = document.loro().len_changes();
+        assert_eq!(
+            after - before,
+            1,
+            "4-object batch must add exactly 1 change, not 4"
+        );
+    }
+
+    /// Same check for `convert_to_paths` (AC22): converting several
+    /// selected primitives together is one commit, not one per object.
+    #[test]
+    fn convert_to_paths_batch_is_one_commit_not_one_per_object() {
+        let document = Document::new(1);
+        let ids: Vec<_> = (0..3)
+            .map(|i| document.create_rect(rect_bounds(f64::from(i) * 20.0, 0.0, 10.0, 10.0)))
+            .collect();
+        let conversions: Vec<_> = ids
+            .iter()
+            .enumerate()
+            .map(|(i, &id)| {
+                let base = u64::try_from(i).unwrap() * 10;
+                (
+                    id,
+                    vec![
+                        NewAnchor::corner(AnchorId::new(1, base + 1), Point::new(0.0, 0.0)),
+                        NewAnchor::corner(AnchorId::new(1, base + 2), Point::new(10.0, 0.0)),
+                    ],
+                )
+            })
+            .collect();
+        let before = document.loro().len_changes();
+        document.convert_to_paths(&conversions).expect("convert");
+        let after = document.loro().len_changes();
+        assert_eq!(
+            after - before,
+            1,
+            "3-object batch conversion must add exactly 1 change, not 3"
+        );
+        for id in ids {
+            assert!(document.path(id).is_some());
+        }
+    }
 }

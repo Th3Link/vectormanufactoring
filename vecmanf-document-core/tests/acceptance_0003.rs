@@ -385,6 +385,73 @@ fn ac10_a_vmf_with_point_count_exactly_at_the_valid_boundaries_still_opens() {
     assert!(unpack(2, &bytes_max).is_ok());
 }
 
+/// Re-verification (tester, item 5): a `point_count` stored as a decimal
+/// (e.g. `5.7`, a plausible mistyped-parameter case, not merely an
+/// out-of-range integer) must be refused as `Damaged`, not silently
+/// truncated to `5` or coerced in any other way. Bypasses the normal
+/// write API by overwriting the meta map's `point_count` key directly
+/// with a Loro f64 value, the same technique
+/// `craft_vmf_with_raw_point_count` uses for an out-of-range integer.
+#[test]
+fn ac10_a_vmf_with_a_decimal_point_count_is_refused_as_damaged_not_truncated() {
+    let document = Document::new(1);
+    let frame = StarFrame::from_center_and_vertex(pt(50.0, 50.0), pt(60.0, 50.0));
+    let _id = document.create_polygon(frame, PointCount::new(6).unwrap());
+    let good_bytes = document.export_loro_snapshot().unwrap();
+
+    let loro = LoroDoc::new();
+    loro.import(&good_bytes).unwrap();
+    let tree = loro.get_tree("paths");
+    let nodes = tree.nodes();
+    assert_eq!(nodes.len(), 1, "exactly one polygon node");
+    let meta = tree.get_meta(nodes[0]).unwrap();
+    // A decimal, not an integer: if this were silently truncated to 5
+    // rather than refused, the file would open with a 5-point polygon
+    // instead of being flagged damaged.
+    meta.insert("point_count", 5.7_f64).unwrap();
+    loro.commit();
+    let bad_loro_bytes = loro.export(loro::ExportMode::Snapshot).unwrap();
+    let bytes = build_vmf_zip(&bad_loro_bytes);
+
+    let result = unpack(2, &bytes);
+    assert!(
+        matches!(result, Err(OpenError::Damaged)),
+        "a decimal point_count must refuse as Damaged"
+    );
+}
+
+/// Re-verification (tester, item 5): a `shape` tag stored as something
+/// other than a string (here, an integer) must be refused as `Damaged`
+/// outright — not silently read as "absent" (which would misread the
+/// primitive as an ordinary path and likely panic or desync on its
+/// missing `anchors`/`closed` fields).
+#[test]
+fn ac_a_vmf_with_a_non_string_shape_tag_is_refused_as_damaged() {
+    let document = Document::new(1);
+    let bounds = RectBounds::from_corners(pt(0.0, 0.0), pt(10.0, 10.0));
+    let _id = document.create_rect(bounds);
+    let good_bytes = document.export_loro_snapshot().unwrap();
+
+    let loro = LoroDoc::new();
+    loro.import(&good_bytes).unwrap();
+    let tree = loro.get_tree("paths");
+    let nodes = tree.nodes();
+    assert_eq!(nodes.len(), 1, "exactly one rect node");
+    let meta = tree.get_meta(nodes[0]).unwrap();
+    // Overwrite the `shape` key (normally the string "rect") with a
+    // non-string value.
+    meta.insert("shape", 42_i64).unwrap();
+    loro.commit();
+    let bad_loro_bytes = loro.export(loro::ExportMode::Snapshot).unwrap();
+    let bytes = build_vmf_zip(&bad_loro_bytes);
+
+    let result = unpack(2, &bytes);
+    assert!(
+        matches!(result, Err(OpenError::Damaged)),
+        "a non-string shape tag must refuse as Damaged"
+    );
+}
+
 // ---------------------------------------------------------------------
 // AC11-15: polygon/star
 // ---------------------------------------------------------------------
