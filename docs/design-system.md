@@ -37,6 +37,9 @@ values, not an implementation site, for those four rows.
 | `--node-stroke` | `#3A3A3F` | Node glyph outline, both states |
 | `--handle-fill` | `#FFFFFF` (idle) / `--accent` (selected or being dragged) | Handle endpoint fill |
 | `--handle-stroke` | `--accent` | Handle endpoint outline and handle line color |
+| `--shape-handle-fill` | `#FFFFFF` (idle) / `--accent` (being dragged) | Shape handle fill (`primitive-shapes`) |
+| `--shape-handle-stroke` | `--accent` | Shape handle outline, and the primitive bounding-box selection outline |
+| `--shape-handle-guide` | `--accent-hover`, dashed | Corner-radius connecting guide — dashed, to read as distinct from the solid Bézier handle line above |
 
 ## Spacing and sizing
 
@@ -50,6 +53,9 @@ values, not an implementation site, for those four rows.
 | Segment selection overlay | +2px screen-space over the geometry's own stroke | Drawn on top, doesn't replace the real stroke |
 | Point hit-test radius | 8px screen-space | Minimum clickable radius around any node/handle, even though the visual glyph is smaller (Fitts's-law margin for mouse precision) |
 | Segment hit-test tolerance | 4px screen-space perpendicular distance | Clicking "on" a curve/line segment |
+| Shape handle | 8×8px screen-space | Hollow square, `primitive-shapes`: bounding-box resize, rectangle corner-radius, polygon/star inner-radius — deliberately square and larger than the 7px/6px node-tool glyphs so the two vocabularies never read as the same control |
+| Shape handle hit-test radius | 8px screen-space | Same margin rule as node/handle hit-testing, reused rather than invented fresh |
+| Bounding-box selection outline | 1px screen-space `--accent` (selected) / `--accent-hover` (hover) | Drawn around a selected/hovered primitive — the primitive equivalent of slice 2's node/segment selection, scoped to the primitive's own matching tool being active |
 
 ## Interaction conventions (apply to every later tool, not just this one)
 
@@ -80,6 +86,9 @@ values, not an implementation site, for those four rows.
 | New / Open / Save / Save As | Ctrl/Cmd+N/O/S/Shift+S | `project-file-foundation`, native menu accelerators |
 | Pen tool | `B` | Matches Inkscape's Bezier/pen tool key |
 | Node tool | `N` | Matches Inkscape |
+| Rectangle tool | `R` | Matches Inkscape (`primitive-shapes`) |
+| Ellipse tool | `E` | Matches Inkscape (`primitive-shapes`) |
+| Polygon/star tool | `*` | Matches Inkscape (`primitive-shapes`); not a letter, kept anyway for the same parity reason as the others |
 | Finish path | Enter (or double-click) | Matches Inkscape |
 | Cancel in-progress path | Escape | |
 | Delete selected node(s) | Delete or Backspace | Both bound; macOS keyboards label the backspace key "delete" |
