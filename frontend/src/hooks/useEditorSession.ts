@@ -11,7 +11,7 @@ import type { WasmSession } from "@/lib/editorSession";
  * stroke width (0.25mm, acceptance criterion 6) and node/handle glyphs
  * actually visible, unlike a literal 1:1 mm:px scale (0.25px is
  * sub-pixel on every real display). */
-const CSS_PX_PER_MM = 96 / 25.4;
+export const CSS_PX_PER_MM = 96 / 25.4;
 
 /** Which tool is active (`specification.md`'s tool rail: Pen or Node;
  * `specs/primitive-shapes/specification.md` adds Rectangle, Ellipse and
@@ -79,6 +79,31 @@ function readToolbarState(raw: {
   return state;
 }
 
+/** Reads the wasm-bindgen `LiveReadout` instance once, immediately, so
+ * it can be `free()`d rather than held onto — same reasoning as
+ * `readToolbarState`. */
+function readLiveReadout(
+  raw: { text: string; anchor_x: number; anchor_y: number; free(): void } | undefined,
+): LiveReadout | null {
+  if (!raw) {
+    return null;
+  }
+  const readout: LiveReadout = { text: raw.text, x: raw.anchor_x, y: raw.anchor_y };
+  raw.free();
+  return readout;
+}
+
+/** The on-canvas numeric readout shown during a shape tool's
+ * create-drag (`specs/primitive-shapes/specification.md`'s "Live
+ * creation feedback"). `x`/`y` are document-space coordinates — convert
+ * with the same `CSS_PX_PER_MM` scale this hook itself uses for the
+ * view transform. */
+export interface LiveReadout {
+  text: string;
+  x: number;
+  y: number;
+}
+
 export interface EditorSession {
   /** Attach to the `<canvas>` element the host renders. */
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
@@ -93,6 +118,9 @@ export interface EditorSession {
   polyStarPointCount: number;
   /** The polygon/star tool-options bar's current ratio. */
   polyStarRatio: number;
+  /** The live numeric readout for an in-progress create-drag, or `null`
+   * outside one (ux-engineer review item 2). */
+  liveReadout: LiveReadout | null;
   /** Acceptance criterion 5's cursor cue: whether the live cursor is
    * over the in-progress pen path's own close target — `Canvas` swaps
    * to the "pen-with-small-circle" cursor variant while this is `true`. */
@@ -111,8 +139,19 @@ export interface EditorSession {
   setPolyStarMode: (mode: PolyStarMode) => void;
   /** The point-count stepper (acceptance criteria 10, 15). */
   setPolyStarPointCount: (count: number) => void;
-  /** The ratio field/slider (acceptance criteria 12, 14). */
+  /** The ratio field's instantaneous commit (acceptance criteria 12,
+   * 14) — one commit immediately. For a continuously-dragged slider,
+   * use `previewPolyStarRatio` on every tick and `commitPolyStarRatio`
+   * once instead (architect review: one commit per tick is the bug
+   * this pair exists to avoid). */
   setPolyStarRatio: (ratio: number) => void;
+  /** The ratio slider's live, uncommitted preview — call on every
+   * slider tick. Writes nothing to the document. */
+  previewPolyStarRatio: (ratio: number) => void;
+  /** Commits whatever `previewPolyStarRatio` has accumulated, as one
+   * commit for the whole selection — call once, when the slider drag
+   * ends. */
+  commitPolyStarRatio: () => void;
   /** "Object to path" (acceptance criteria 17, 21, 22). */
   convertSelectedToPaths: () => void;
   onPointerDown: (event: React.PointerEvent<HTMLCanvasElement>) => void;
@@ -170,6 +209,7 @@ export function useEditorSession(
   const [polyStarRatio, setPolyStarRatioState] = useState(0.5);
   const [isHoveringPenCloseTarget, setIsHoveringPenCloseTarget] =
     useState(false);
+  const [liveReadout, setLiveReadout] = useState<LiveReadout | null>(null);
 
   /** Re-reads every bit of session-owned UI state after any call that
    * might have changed it — cheap, and simpler than having every call
@@ -375,6 +415,16 @@ export function useEditorSession(
     [syncFromSession],
   );
 
+  const previewPolyStarRatio = useCallback((ratio: number) => {
+    sessionRef.current?.preview_poly_star_ratio(ratio);
+    setPolyStarRatioState(ratio);
+  }, []);
+
+  const commitPolyStarRatio = useCallback(() => {
+    sessionRef.current?.commit_poly_star_ratio();
+    syncFromSession();
+  }, [syncFromSession]);
+
   const convertSelectedToPaths = useCallback(() => {
     sessionRef.current?.convert_selected_to_paths();
     syncFromSession();
@@ -421,10 +471,11 @@ export function useEditorSession(
       const session = sessionRef.current;
       const { x, y } = documentPoint(event);
       onCursorMove({ x, y });
-      session?.pointer_hover(x, y);
+      session?.pointer_hover(x, y, event.ctrlKey || event.metaKey);
       setIsHoveringPenCloseTarget(
         session?.is_hovering_pen_close_target() ?? false,
       );
+      setLiveReadout(readLiveReadout(session?.live_readout()));
     },
     [documentPoint, onCursorMove],
   );
@@ -448,6 +499,7 @@ export function useEditorSession(
       } else {
         session.pointer_up(x, y, event.ctrlKey || event.metaKey);
       }
+      setLiveReadout(null);
       syncFromSession();
     },
     [documentPoint, syncFromSession, tool],
@@ -456,6 +508,7 @@ export function useEditorSession(
   const onPointerLeave = useCallback(() => {
     sessionRef.current?.pointer_leave();
     setIsHoveringPenCloseTarget(false);
+    setLiveReadout(null);
   }, []);
 
   const onKeyDown = useCallback(
@@ -508,6 +561,7 @@ export function useEditorSession(
     polyStarMode,
     polyStarPointCount,
     polyStarRatio,
+    liveReadout,
     isHoveringPenCloseTarget,
     setTool,
     escape,
@@ -521,6 +575,8 @@ export function useEditorSession(
     setPolyStarMode,
     setPolyStarPointCount,
     setPolyStarRatio,
+    previewPolyStarRatio,
+    commitPolyStarRatio,
     convertSelectedToPaths,
     onPointerDown,
     onPointerMove,

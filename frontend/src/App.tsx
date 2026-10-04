@@ -174,7 +174,8 @@ function App() {
           polyStarRatio={editor.polyStarRatio}
           onSetPolyStarMode={editor.setPolyStarMode}
           onSetPolyStarPointCount={editor.setPolyStarPointCount}
-          onSetPolyStarRatio={editor.setPolyStarRatio}
+          onPreviewPolyStarRatio={editor.previewPolyStarRatio}
+          onCommitPolyStarRatio={editor.commitPolyStarRatio}
           onRemoveCornerRounding={editor.removeCornerRounding}
           onConvertSelectedToPaths={editor.convertSelectedToPaths}
         />

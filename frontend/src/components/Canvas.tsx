@@ -1,4 +1,5 @@
 import { NodeContextMenu } from "@/components/NodeToolbar";
+import { CSS_PX_PER_MM } from "@/hooks/useEditorSession";
 import type { EditorSession } from "@/hooks/useEditorSession";
 
 interface CanvasProps {
@@ -23,7 +24,7 @@ export function Canvas({ editor }: CanvasProps) {
       ref={editor.containerRef}
       tabIndex={0}
       onKeyDown={editor.onKeyDown}
-      className={`flex-1 outline-none ${
+      className={`relative flex-1 outline-none ${
         editor.tool === "pen"
           ? editor.isHoveringPenCloseTarget
             ? "canvas-cursor-pen-close"
@@ -67,6 +68,25 @@ export function Canvas({ editor }: CanvasProps) {
           style={{ background: "var(--canvas-bg)" }}
         />
       </NodeContextMenu>
+      {editor.liveReadout && (
+        // On-canvas, not status-bar (`specs/primitive-shapes/
+        // specification.md`'s "Live creation feedback": "direct
+        // manipulation keeps the number where the maker's eyes already
+        // are"), positioned near point B — the live drag endpoint, in
+        // document space, converted to this view's screen pixels the
+        // same way every other document-space point already is.
+        <div
+          className="pointer-events-none absolute z-10 -translate-y-full rounded-md px-1.5 py-0.5 text-xs"
+          style={{
+            left: editor.liveReadout.x * CSS_PX_PER_MM + 8,
+            top: editor.liveReadout.y * CSS_PX_PER_MM - 8,
+            background: "var(--toolbar-bg)",
+            color: "var(--toolbar-icon)",
+          }}
+        >
+          {editor.liveReadout.text}
+        </div>
+      )}
     </div>
   );
 }

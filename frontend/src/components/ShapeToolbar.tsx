@@ -7,7 +7,12 @@ export interface ShapeToolbarProps {
   polyStarRatio: number;
   onSetPolyStarMode: (mode: PolyStarMode) => void;
   onSetPolyStarPointCount: (count: number) => void;
-  onSetPolyStarRatio: (ratio: number) => void;
+  /** The ratio slider's live, uncommitted preview — call on every
+   * tick while dragging (architect review: never commit per tick). */
+  onPreviewPolyStarRatio: (ratio: number) => void;
+  /** Commits whatever `onPreviewPolyStarRatio` has accumulated — call
+   * once, when the drag on the slider ends. */
+  onCommitPolyStarRatio: () => void;
   onRemoveCornerRounding: () => void;
   onConvertSelectedToPaths: () => void;
 }
@@ -35,7 +40,8 @@ export function ShapeToolbar({
   polyStarRatio,
   onSetPolyStarMode,
   onSetPolyStarPointCount,
-  onSetPolyStarRatio,
+  onPreviewPolyStarRatio,
+  onCommitPolyStarRatio,
   onRemoveCornerRounding,
   onConvertSelectedToPaths,
 }: ShapeToolbarProps) {
@@ -116,7 +122,14 @@ export function ShapeToolbar({
                 max={0.99}
                 step={0.01}
                 value={polyStarRatio}
-                onChange={(event) => onSetPolyStarRatio(Number(event.target.value))}
+                // Every tick only previews live (architect review: a
+                // slider must not commit once per tick, ADR 0002 §9) —
+                // the real commit happens once, on release/blur/key-up,
+                // below.
+                onChange={(event) => onPreviewPolyStarRatio(Number(event.target.value))}
+                onPointerUp={onCommitPolyStarRatio}
+                onKeyUp={onCommitPolyStarRatio}
+                onBlur={onCommitPolyStarRatio}
               />
               <span className="w-10 text-right">{polyStarRatio.toFixed(2)}</span>
             </label>
