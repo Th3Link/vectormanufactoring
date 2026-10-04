@@ -25,7 +25,7 @@ interface ErrorDialogProps {
  * Uses shadcn/ui `AlertDialog` rather than a toast or `Dialog` — it is the
  * primitive that does not dismiss on an outside click, which matters here
  * because this is a failure the maker must acknowledge
- * (specs/project-file-foundation: "Error handling — invalid/corrupt
+ * (specs/0001-project-file-foundation: "Error handling — invalid/corrupt
  * file"). For the open-error case specifically: opening this dialog never
  * depends on replacing the open project's state — the host only emits the
  * error after deciding *not* to touch it.

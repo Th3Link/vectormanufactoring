@@ -1,4 +1,4 @@
-//! The ellipse/circle tool's state machine (`specs/primitive-shapes/
+//! The ellipse/circle tool's state machine (`specs/0003-primitive-shapes/
 //! specification.md`, acceptance criteria 7-9) — see
 //! [`crate::rectangle_tool`]'s own doc comment for the pattern this
 //! follows, including [`crate::LiveShape`]'s live-preview plumbing

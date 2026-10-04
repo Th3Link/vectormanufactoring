@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds vecmanf-editor-wasm for the browser and runs wasm-bindgen over it,
 # producing the ES module frontend/src/wasm-bindings/ imports
-# (specs/path-node-editing/adrs.md, ADR 0001 §3's wasm facade). Generated
+# (specs/0002-path-node-editing/adrs.md, ADR 0001 §3's wasm facade). Generated
 # output, not committed — see frontend/.gitignore.
 #
 # Needs: a Rust toolchain with the wasm32-unknown-unknown target

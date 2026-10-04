@@ -5,7 +5,7 @@
 //! no [`vecmanf_document_core::Tolerance`] that could apply to them.
 //!
 //! Renamed from `primitives.rs` in `primitive-shapes`
-//! (`specs/primitive-shapes/adrs.md`: "after this slice, 'primitive'
+//! (`specs/0003-primitive-shapes/adrs.md`: "after this slice, 'primitive'
 //! means a document shape, and a module of that name holding UI glyphs
 //! would mislead"). This module still means exactly what it always
 //! did — UI glyph geometry — never a document primitive
@@ -189,7 +189,7 @@ mod tests {
             1.0,
             RgbaColor::BLACK,
         );
-        assert!(list.triangles.is_empty());
+        assert_eq!(list.triangles.len(), 0);
     }
 
     #[test]

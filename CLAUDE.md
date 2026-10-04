@@ -63,7 +63,7 @@ safe default.
 
 Spec-driven development, adapted from
 [spec-driven-dev-kit](https://github.com/trojava/spec-driven-dev-kit). One
-folder per feature, `specs/<feature-slug>/`, with three files — template and
+folder per feature, `specs/<NNNN-feature-slug>/`, with three files — template and
 full convention in `specs/README.md`:
 
 - `specification.md` — what and why (PO): user value, numbered testable
@@ -215,7 +215,7 @@ Use the ProjectAtlas MCP for code navigation before broad grep/read passes.
 - Branches: `story/<feature-slug>`, `fix/slug`, `chore/slug`.
 - Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`,
   `chore:`), scope = crate name where it applies.
-- One PR per feature. PR description: link to `specs/<feature-slug>/`, what
+- One PR per feature. PR description: link to `specs/<NNNN-feature-slug>/`, what
   changed, ADRs touched, new dependencies with license and reason, how to
   try it.
 - Squash-merge after green CI and customer acceptance. **Standing permission

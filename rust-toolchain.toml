@@ -1,3 +1,11 @@
 [toolchain]
-channel = "stable"
+# Pinned to an exact version, not "stable" — CI (dtolnay/rust-toolchain,
+# reading this file) and every local checkout must build with the same
+# compiler, since a new stable release can add clippy lints that turn a
+# green gate red overnight (observed: 1.98.1 -> 1.99.0 added a lint on
+# using `assert!` to check that a value is empty/not empty, which fired on
+# code that was clean under 1.98.1). Renovate bumps this deliberately, as
+# its own reviewable PR.
+channel = "1.99.0"
+components = ["rustfmt", "clippy"]
 targets = ["wasm32-unknown-unknown"]

@@ -1,4 +1,4 @@
-//! Black-box acceptance tests for `specs/primitive-shapes/
+//! Black-box acceptance tests for `specs/0003-primitive-shapes/
 //! specification.md`'s 22 acceptance criteria, written against
 //! `vecmanf-ui-core`'s public API (`RectangleTool`, `EllipseTool`,
 //! `PolygonStarTool`, `PrimitiveSelection`, `NodeTool`, `handles_for`,

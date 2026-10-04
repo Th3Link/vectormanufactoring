@@ -1,5 +1,5 @@
 //! `Document`'s primitive-shape command methods
-//! (`specs/primitive-shapes/adrs.md`, "the primitive schema" and "'object
+//! (`specs/0003-primitive-shapes/adrs.md`, "the primitive schema" and "'object
 //! to path' keeps the `NodeId`"). Mirrors [`crate::paths`]'s shape for
 //! paths: each mutating method here ends in exactly one Loro commit
 //! (ADR 0002 §9), and every id is resolved before the first write so a
@@ -147,7 +147,7 @@ impl Document {
     }
 
     /// Reads one object's full current data generically, or `None` if it
-    /// no longer exists — the dispatch point `specs/primitive-shapes/
+    /// no longer exists — the dispatch point `specs/0003-primitive-shapes/
     /// adrs.md` names ("`Document::path(id)` returns `None` for a
     /// primitive node... reading goes through an object-level snapshot").
     #[must_use]

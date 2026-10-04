@@ -15,7 +15,7 @@ interface CanvasProps {
  *
  * Fills the window body edge-to-edge, no margin/border/frame — the tool
  * rail and contextual toolbar dock beside/above it, they never shrink it
- * (`specs/project-file-foundation`'s "chrome never frames the canvas"
+ * (`specs/0001-project-file-foundation`'s "chrome never frames the canvas"
  * precedent, reaffirmed by `docs/design-system.md`).
  */
 export function Canvas({ editor }: CanvasProps) {
@@ -69,7 +69,7 @@ export function Canvas({ editor }: CanvasProps) {
         />
       </NodeContextMenu>
       {editor.liveReadout && (
-        // On-canvas, not status-bar (`specs/primitive-shapes/
+        // On-canvas, not status-bar (`specs/0003-primitive-shapes/
         // specification.md`'s "Live creation feedback": "direct
         // manipulation keeps the number where the maker's eyes already
         // are"), positioned near point B — the live drag endpoint, in

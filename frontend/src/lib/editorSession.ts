@@ -1,6 +1,6 @@
 // Loads the vecmanf-editor-wasm facade (ADR 0001 §3) and mints the fresh
 // Loro peer id each open editing session needs
-// (specs/project-file-foundation/adrs.md, "a fresh Loro peer id per open
+// (specs/0001-project-file-foundation/adrs.md, "a fresh Loro peer id per open
 // session" — vecmanf-app/src/state.rs::mint_peer_id() mints the native
 // side's copy the same way; this is the wasm facade's own session, not
 // the same Document, so it mints its own).
@@ -51,12 +51,12 @@ export async function createSession(): Promise<WasmSession> {
  * session (File → Open / the OS file association), bound to a freshly
  * minted peer id the same way `createSession` is.
  *
- * `specs/path-node-editing/adrs.md`'s PR review: "Open reads bytes and
+ * `specs/0002-path-node-editing/adrs.md`'s PR review: "Open reads bytes and
  * calls `WasmSession::open`" — the host (`vecmanf-app`) only ever reads
  * these bytes off disk; this is the one place they are actually parsed.
  *
  * @throws the exact user-facing sentence
- * `specs/project-file-foundation/specification.md`'s "Error handling —
+ * `specs/0001-project-file-foundation/specification.md`'s "Error handling —
  * invalid/corrupt file" names, if `bytes` is not a `.vmf` this build can
  * open (`vecmanf-editor-wasm`'s `map_open_error`). */
 export async function openSession(bytes: Uint8Array): Promise<WasmSession> {

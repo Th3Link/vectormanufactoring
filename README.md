@@ -13,6 +13,14 @@ ADRs covering UI framework, document model, geometry kernel, persistence and
 sync, the plugin model, license, asset connectors, end-to-end encryption and
 concurrent editing. Nothing here is ready to run.
 
+## Getting started
+
+```sh
+cargo install tauri-cli --locked
+cd frontend && npm ci
+cargo tauri dev     # or: cargo tauri build
+```
+
 ## Why
 
 The motivating case is a maker who currently chains four separate tools to
@@ -115,7 +123,8 @@ for the layout conventions this project follows once code lands.
   all ten are accepted.
 - `specs/` — feature specs, spec-driven (to be added now that requirements
   and the foundational ADRs are accepted); see [`specs/README.md`](specs/README.md)
-  for the convention.
+  for the convention and [`specs/index.md`](specs/index.md) for the MVP's
+  feature sequence.
 
 ## License
 

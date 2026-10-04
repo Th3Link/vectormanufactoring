@@ -63,7 +63,7 @@ function ToolButton({ tool, active, label, shortcut, icon, onSelect }: ToolButto
  * The tool rail (`specification.md`'s UX notes, "Tool rail and tool
  * switching"): a 48px vertical rail, docked to the left, Pen then Node,
  * then Rectangle/Ellipse/Polygon-star
- * (`specs/primitive-shapes/specification.md`'s own "the order the maker
+ * (`specs/0003-primitive-shapes/specification.md`'s own "the order the maker
  * reaches for them most") — later tools append below, this slice
  * doesn't reorder for them.
  */

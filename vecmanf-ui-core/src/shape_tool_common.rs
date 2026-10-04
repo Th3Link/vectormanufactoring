@@ -1,5 +1,5 @@
 //! Shared types and pure helpers for the three primitive-shape tools
-//! (`specs/primitive-shapes/specification.md`, acceptance criteria
+//! (`specs/0003-primitive-shapes/specification.md`, acceptance criteria
 //! 1-15): [`crate::RectangleTool`], [`crate::EllipseTool`] and
 //! [`crate::PolygonStarTool`] each `use` these rather than duplicating
 //! them (ux/architect review: `shape_tools.rs` grew to cover three

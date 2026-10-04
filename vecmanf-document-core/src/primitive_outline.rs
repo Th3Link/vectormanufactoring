@@ -1,4 +1,4 @@
-//! A primitive's closed-form outline (`specs/primitive-shapes/adrs.md`,
+//! A primitive's closed-form outline (`specs/0003-primitive-shapes/adrs.md`,
 //! "outline construction lives in `vecmanf-document-core`"): one pure
 //! function per shape, parameters in, [`OutlineAnchor`]s out, no curve
 //! ever evaluated (flattened, projected, subdivided or intersected) —

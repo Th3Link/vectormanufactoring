@@ -1,6 +1,6 @@
 //! The vecmanf draw-list builder (ADR 0001 §4, ADR 0011 §1): document
 //! snapshot + view transform + decoration input → flat draw list,
-//! tessellated with `lyon` (`specs/path-node-editing/adrs.md`).
+//! tessellated with `lyon` (`specs/0002-path-node-editing/adrs.md`).
 //!
 //! Pure and wasm-compatible (`CLAUDE.md` §6): no filesystem, network,
 //! clock, threads, UI or GPU access — `vecmanf-editor-wasm` owns the
@@ -56,7 +56,7 @@ pub fn build_draw_list(
 /// Builds one frame's primitive-shape geometry: every primitive's own
 /// stroke (acceptance criterion 16), plus bounding-box selection/hover
 /// and shape-handle decorations, from `input`
-/// (`specs/primitive-shapes/specification.md`).
+/// (`specs/0003-primitive-shapes/specification.md`).
 #[must_use]
 pub fn build_shape_draw_list(
     primitives: &[PrimitiveSnapshot],
@@ -88,12 +88,12 @@ mod tests {
             ViewTransform::identity(),
             &DecorationInput::default(),
         );
-        assert!(!list.triangles.is_empty());
+        assert_ne!(list.triangles.len(), 0);
     }
 
     #[test]
     fn an_empty_document_produces_an_empty_draw_list() {
         let list = build_draw_list(&[], ViewTransform::identity(), &DecorationInput::default());
-        assert!(list.triangles.is_empty());
+        assert_eq!(list.triangles.len(), 0);
     }
 }

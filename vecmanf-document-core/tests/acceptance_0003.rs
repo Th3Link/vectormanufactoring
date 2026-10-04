@@ -1,4 +1,4 @@
-//! Black-box acceptance tests for `specs/primitive-shapes/
+//! Black-box acceptance tests for `specs/0003-primitive-shapes/
 //! specification.md`'s 22 acceptance criteria, written against
 //! `vecmanf-document-core`'s public API only (`Document`,
 //! `RectBounds`/`EllipseFrame`/`StarFrame`, `PointCount`/`InnerRatio`,

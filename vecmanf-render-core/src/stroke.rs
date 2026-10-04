@@ -153,7 +153,7 @@ mod tests {
     fn a_two_node_open_path_produces_a_non_empty_stroke() {
         let anchors = vec![corner(1, 0.0, 0.0), corner(2, 10.0, 0.0)];
         let list = path_stroke(&anchors, false, 0.25, RgbaColor::BLACK);
-        assert!(!list.triangles.is_empty());
+        assert_ne!(list.triangles.len(), 0);
         assert_eq!(
             list.triangles.len() % 3,
             0,
@@ -165,7 +165,7 @@ mod tests {
     fn fewer_than_two_anchors_produces_nothing() {
         let anchors = vec![corner(1, 0.0, 0.0)];
         let list = path_stroke(&anchors, false, 0.25, RgbaColor::BLACK);
-        assert!(list.triangles.is_empty());
+        assert_eq!(list.triangles.len(), 0);
     }
 
     #[test]
@@ -215,6 +215,6 @@ mod tests {
             2.0,
             RgbaColor::opaque(0x2F, 0x6F, 0xEE),
         );
-        assert!(!list.triangles.is_empty());
+        assert_ne!(list.triangles.len(), 0);
     }
 }

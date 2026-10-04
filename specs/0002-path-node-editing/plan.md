@@ -1,7 +1,7 @@
 # Plan for "Path and node editing: draw and edit a Bézier path with a pen tool"
 
 Canvas-perf spike (ADR 0001 §4 prerequisite): **PASS**, recorded
-2026-10-03 in `specs/path-node-editing/adrs.md` and `docs/technical-debt.md`.
+2026-10-03 in `specs/0002-path-node-editing/adrs.md` and `docs/technical-debt.md`.
 Two production requirements fall out of it and are tasks below (6, 10):
 `WEBKIT_DISABLE_DMABUF_RENDERER=1` on Linux startup, and reconfiguring the
 `wgpu` surface on every resize.

@@ -1,5 +1,5 @@
 //! The Loro value shapes and keys for the primitive-shape schema
-//! (`specs/primitive-shapes/adrs.md`, "the primitive schema"). Mirrors
+//! (`specs/0003-primitive-shapes/adrs.md`, "the primitive schema"). Mirrors
 //! [`crate::path_codec`]'s split for paths: this module owns every
 //! read/write against a primitive node's meta map, so [`crate::shapes`]'s
 //! `Document` methods stay command-shaped logic with no Loro value-shape
@@ -310,7 +310,7 @@ fn read_shape(meta: &LoroMap, shape_tag: &str) -> Option<Shape> {
 }
 
 /// Validates one primitive node against every refusal case
-/// `specs/primitive-shapes/adrs.md` names: an unknown `shape` value, a
+/// `specs/0003-primitive-shapes/adrs.md` names: an unknown `shape` value, a
 /// missing or mistyped parameter for that shape, a non-finite number, a
 /// negative size or radius, a `point_count` outside `3..=1024`, or an
 /// `inner_ratio` outside `(0, 1)`. Reuses each parameter's own validated

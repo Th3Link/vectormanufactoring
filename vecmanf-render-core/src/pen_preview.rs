@@ -148,7 +148,7 @@ mod tests {
             ViewTransform::identity(),
             false,
         );
-        assert!(list.triangles.is_empty());
+        assert_eq!(list.triangles.len(), 0);
     }
 
     #[test]

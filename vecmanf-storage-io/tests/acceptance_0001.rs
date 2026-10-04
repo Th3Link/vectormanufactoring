@@ -1,5 +1,5 @@
 //! Black-box tests for the filesystem primitives
-//! (`specs/project-file-foundation/specification.md`) that AC3/AC4/AC5/AC6
+//! (`specs/0001-project-file-foundation/specification.md`) that AC3/AC4/AC5/AC6
 //! depend on at the host layer: a "Save As" must land bytes at the exact
 //! chosen path, and a repeated "Save" must complete without corrupting
 //! what is already there. Written against the public API only

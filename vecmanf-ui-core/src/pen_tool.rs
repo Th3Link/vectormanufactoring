@@ -1,6 +1,6 @@
 //! The pen tool's state machine (acceptance criteria 1-5).
 //!
-//! `specs/path-node-editing/adrs.md`, "a pen session is one commit": from
+//! `specs/0002-path-node-editing/adrs.md`, "a pen session is one commit": from
 //! the first click to the double-click, close-path or Escape, the
 //! in-progress path lives *only* as this type's own ephemeral state
 //! (ADR 0009 §2) — [`vecmanf_document_core::Document`] gains exactly one
@@ -209,7 +209,7 @@ impl PenTool {
     }
 
     /// Acceptance criterion 4: discards the entire in-progress path,
-    /// writing nothing — not an undo (`specs/path-node-editing/adrs.md`:
+    /// writing nothing — not an undo (`specs/0002-path-node-editing/adrs.md`:
     /// "AC4's Escape is not an undo and must not be built as one").
     /// Returns whether there was anything to discard.
     pub fn escape(&mut self) -> bool {

@@ -1,7 +1,7 @@
 //! The document model's root: a Loro-backed replica carrying exactly the
 //! fields this slice needs — `format_version` and `size` — as per-field
 //! last-writer-wins registers (ADR 0009 §3; ADR 0002 §1, §9; ADR 0004 §2,
-//! §3; `specs/project-file-foundation/adrs.md`, "a minimal document root
+//! §3; `specs/0001-project-file-foundation/adrs.md`, "a minimal document root
 //! record, and no more").
 
 use loro::{CommitOptions, ExportMode, LoroDoc, LoroMap, LoroValue};
@@ -16,7 +16,7 @@ use crate::units::{DocumentSize, Length};
 /// Bumped to 3 in `primitive-shapes`: a version-2 reader would refuse a
 /// primitive node as `OpenError::Damaged` (it has no `anchors`), which is
 /// the wrong message for a file this build can actually read — ADR 0004
-/// §9 wants "newer version" instead (`specs/primitive-shapes/adrs.md`,
+/// §9 wants "newer version" instead (`specs/0003-primitive-shapes/adrs.md`,
 /// "`format_version` goes to 3"). Migration from version 2 is empty by
 /// construction: absent `shape` means path, so every version-2 path node
 /// opens unchanged.
@@ -29,7 +29,7 @@ const KEY_HEIGHT_MM: &str = "size_height_mm";
 
 /// The top-level Loro tree container holding every object — path or
 /// primitive alike (ADR 0002 §5: sibling order among tree nodes is
-/// z-order; `specs/primitive-shapes/adrs.md`: "primitives and paths share
+/// z-order; `specs/0003-primitive-shapes/adrs.md`: "primitives and paths share
 /// one z-order, so they share one tree. They are not two lists.").
 ///
 /// The Rust constant is named `OBJECTS_TREE` as of `primitive-shapes`,
@@ -62,7 +62,7 @@ impl Document {
     /// `vecmanf-library-core` takes a record's UUID as a parameter instead
     /// of generating it (ADR 0011 §6). `vecmanf-app` mints a fresh id per
     /// open session and passes it in here
-    /// (`specs/project-file-foundation/adrs.md`, amended 2026-10-03).
+    /// (`specs/0001-project-file-foundation/adrs.md`, amended 2026-10-03).
     ///
     /// # Panics
     /// Does not panic in practice: it only inserts known-valid keys into a
@@ -151,7 +151,7 @@ impl Document {
     /// (persisted) commit message, so each editing method in
     /// [`crate::paths`] ends its own transaction instead of letting every
     /// edit since the last explicit commit pile into one (ADR 0002 §9;
-    /// `specs/path-node-editing/adrs.md`'s PR review: "a pen session is
+    /// `specs/0002-path-node-editing/adrs.md`'s PR review: "a pen session is
     /// one commit" only holds if *every* mutating method commits its own
     /// work, undo-readiness for a future undo/redo feature depends on
     /// one commit per interaction).
@@ -185,7 +185,7 @@ impl Document {
     ///
     /// `primitive-shapes` renames this view's array from `paths` to
     /// `objects`, in z-order, each entry tagged with its own `shape`
-    /// (`"path"` for a path — `specs/primitive-shapes/adrs.md`,
+    /// (`"path"` for a path — `specs/0003-primitive-shapes/adrs.md`,
     /// "`document.json`'s `paths` key → `objects`").
     ///
     /// # Errors

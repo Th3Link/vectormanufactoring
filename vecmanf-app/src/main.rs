@@ -205,10 +205,14 @@ fn save_project_bytes(app: AppHandle, state: State<AppState>, bytes: Vec<u8>, sa
 }
 
 /// Whether `WEBKIT_DISABLE_DMABUF_RENDERER` still needs to be set in this
-/// process's own environment. Always compiled, on every platform, so it
-/// stays plainly testable — only Linux's `main` actually acts on a
-/// `true` result, since only `WebKitGTK` (Linux's webview engine) has
-/// the bug this variable works around.
+/// process's own environment. Compiled on Linux (where `main` acts on a
+/// `true` result, since only `WebKitGTK` has the bug this variable works
+/// around) and under `#[cfg(test)]` on every platform, so the pure
+/// environment-reading logic stays plainly testable without needing a
+/// Linux runner — it would otherwise be genuinely dead code in a
+/// non-Linux, non-test build, since its only production caller is itself
+/// Linux-only.
+#[cfg(any(target_os = "linux", test))]
 fn webkit_dmabuf_env_var_is_unset() -> bool {
     std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none()
 }
@@ -221,7 +225,7 @@ fn webkit_dmabuf_env_var_is_unset() -> bool {
 /// forbids new `unsafe` outside `*-core` crates without an ADR). Linux
 /// only, before any webview is created.
 ///
-/// `specs/path-node-editing/adrs.md`'s canvas-perf spike measured that,
+/// `specs/0002-path-node-editing/adrs.md`'s canvas-perf spike measured that,
 /// on this stack (`WebKitGTK` 2.52.6 via `wry`/`tao`, NVIDIA proprietary
 /// driver), leaving this unset acquires a `WebGL2` context that reports
 /// success but renders **zero frames** — for `wgpu` and for hand-written
@@ -281,7 +285,7 @@ fn main() {
             });
 
             // A `.vmf` opened via the OS file association on Linux/Windows
-            // arrives as argv[1] (specs/project-file-foundation, AC5).
+            // arrives as argv[1] (specs/0001-project-file-foundation, AC5).
             if let Some(path) = std::env::args().nth(1) {
                 let path = PathBuf::from(path);
                 if path.extension().and_then(|ext| ext.to_str()) == Some(VMF_EXTENSION) {
@@ -302,10 +306,10 @@ fn main() {
         #[cfg(target_os = "macos")]
         if let tauri::RunEvent::Opened { urls } = event {
             for url in urls {
-                if let Ok(path) = url.to_file_path() {
-                    if path.extension().and_then(|ext| ext.to_str()) == Some(VMF_EXTENSION) {
-                        open_path(app_handle, &path);
-                    }
+                if let Ok(path) = url.to_file_path()
+                    && path.extension().and_then(|ext| ext.to_str()) == Some(VMF_EXTENSION)
+                {
+                    open_path(app_handle, &path);
                 }
             }
         }
@@ -452,7 +456,7 @@ fn request_pack(app: &AppHandle, save_as: bool) {
 mod webkit_dmabuf_env_var_tests {
     use super::webkit_dmabuf_env_var_is_unset;
 
-    /// `specs/path-node-editing/adrs.md`'s prerequisite note: the failure
+    /// `specs/0002-path-node-editing/adrs.md`'s prerequisite note: the failure
     /// mode of leaving `WEBKIT_DISABLE_DMABUF_RENDERER` unset is a silent
     /// blank canvas, not an error, so this needs a test rather than a
     /// hope. This only pins the detection half (reading an environment

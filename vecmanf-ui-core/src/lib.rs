@@ -1,6 +1,6 @@
 //! The vecmanf interaction layer (ADR 0001 §1, §2): pen- and node-tool
 //! state machines, hit-testing, selection and command dispatch, as plain
-//! state and pure functions (`specs/path-node-editing/adrs.md`).
+//! state and pure functions (`specs/0002-path-node-editing/adrs.md`).
 //!
 //! Pure and wasm-compatible (`CLAUDE.md` §6): no filesystem, network,
 //! clock, threads or UI. The frontend renders this crate's state and

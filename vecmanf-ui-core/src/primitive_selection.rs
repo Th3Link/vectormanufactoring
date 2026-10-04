@@ -1,6 +1,6 @@
 //! The shared selection the three shape tools (`RectangleTool`,
 //! `EllipseTool`, `PolygonStarTool`) all read and write
-//! (`specs/primitive-shapes/specification.md`'s "Selection and hover
+//! (`specs/0003-primitive-shapes/specification.md`'s "Selection and hover
 //! convention for primitives": "the whole object is the selection
 //! unit"). One type rather than one per tool, so selecting a rectangle
 //! then shift-selecting an ellipse while a different shape tool is

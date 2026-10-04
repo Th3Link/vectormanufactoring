@@ -113,7 +113,7 @@ spelled out under ADR 0002 and ADR 0009 rather than assumed.
 ## Prerequisite this slice inherits
 
 - **ADR 0001's WebKitGTK canvas measurement, owed since slice 1 and now due.**
-  `specs/project-file-foundation/adrs.md` deferred it here explicitly, and
+  `specs/0001-project-file-foundation/adrs.md` deferred it here explicitly, and
   ADR 0001's consequences call it "the one failure that would invalidate this
   ADR rather than cost a refactor". It is a throwaway spike on
   `spike/webkitgtk-canvas`, never merged, run **before** the canvas work in

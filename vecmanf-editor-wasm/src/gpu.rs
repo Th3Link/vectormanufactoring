@@ -90,7 +90,7 @@ impl From<vecmanf_render_core::Vertex> for GpuVertex {
 /// to clip space — a document point's screen pixel position (via
 /// [`ViewTransform`]) further mapped to `[-1, 1]` by the canvas's own
 /// pixel size, folded into one scale-and-offset per axis so the vertex
-/// shader does only a multiply-add (`specs/path-node-editing/adrs.md`:
+/// shader does only a multiply-add (`specs/0002-path-node-editing/adrs.md`:
 /// this is the view transform ADR 0011 §3 shares with `ui-core`,
 /// applied once, uniformly, here rather than baked into any vertex).
 #[repr(C)]
@@ -355,7 +355,7 @@ impl Gpu {
 
     /// Reconfigures the surface to `width`×`height` — acceptance: the
     /// canvas layer reconfigures the `wgpu` surface on every resize,
-    /// before the next render (`specs/path-node-editing/adrs.md`'s PASS
+    /// before the next render (`specs/0002-path-node-editing/adrs.md`'s PASS
     /// note, requirement 2). A stale surface composites at the wrong
     /// size; this is a correctness fix, not the measured teardown
     /// segfault, which is unrelated and outside this crate's control.

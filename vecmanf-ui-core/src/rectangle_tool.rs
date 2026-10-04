@@ -1,4 +1,4 @@
-//! The rectangle tool's state machine (`specs/primitive-shapes/
+//! The rectangle tool's state machine (`specs/0003-primitive-shapes/
 //! specification.md`, acceptance criteria 1-6). Follows
 //! [`crate::PenTool`]/[`crate::NodeTool`]'s established pattern —
 //! ephemeral in-progress drag state (ADR 0009 §2), one

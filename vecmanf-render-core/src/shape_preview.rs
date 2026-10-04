@@ -1,5 +1,5 @@
 //! A primitive shape's own draw-list geometry
-//! (`specs/primitive-shapes/specification.md`, acceptance criterion 16;
+//! (`specs/0003-primitive-shapes/specification.md`, acceptance criterion 16;
 //! "Selection and hover convention for primitives"): its placeholder
 //! stroke (reusing [`crate::stroke::path_stroke`] on
 //! [`vecmanf_document_core::outline_of`]'s output, so AC16's identical
@@ -109,7 +109,7 @@ fn primitive_stroke(snapshot: &PrimitiveSnapshot) -> DrawList {
 }
 
 /// A shape tool's live, uncommitted create/resize/radius/ratio preview
-/// (`specs/primitive-shapes/specification.md`'s "Live creation
+/// (`specs/0003-primitive-shapes/specification.md`'s "Live creation
 /// feedback": "a maker dragging out a rectangle sees a rectangle
 /// updating live, not a placeholder box that snaps to shape on
 /// release" — ux-engineer review: this applies to every drag kind, not

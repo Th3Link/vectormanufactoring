@@ -77,7 +77,7 @@ pub const GUIDE_DASH_PX: f64 = 4.0;
 pub const GUIDE_GAP_PX: f64 = 3.0;
 
 /// A shape tool's live, uncommitted preview outline weight,
-/// screen-space pixels (`specs/primitive-shapes/specification.md`'s
+/// screen-space pixels (`specs/0003-primitive-shapes/specification.md`'s
 /// "Live creation feedback": "screen-space-constant stroke weight") —
 /// distinct from the committed placeholder stroke's document-mm
 /// weight (acceptance criterion 16), since nothing has committed yet.

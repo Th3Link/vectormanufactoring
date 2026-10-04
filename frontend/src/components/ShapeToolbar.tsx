@@ -22,7 +22,7 @@ const MAX_POINT_COUNT = 1024;
 
 /**
  * The contextual tool-options bar for the three shape tools
- * (`specs/primitive-shapes/specification.md`'s UX notes, "Tool rail
+ * (`specs/0003-primitive-shapes/specification.md`'s UX notes, "Tool rail
  * additions and shortcuts" / "Polygon/star point-count and ratio"):
  * shown directly under the main menu, full width, the same row and
  * mechanism as `NodeToolbar`'s own bar — only the controls relevant to

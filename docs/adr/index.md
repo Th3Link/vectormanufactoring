@@ -87,25 +87,28 @@ unawareness. Reversing either needs a new ADR, not an edit:
   names `-wasm` (0001 §3), `-server` (0004 §5) and the suffix-less plugin SDK
   (0005 §1) alongside `-core`/`-app`/`-io`, pointing at ADR 0011.
 - **Dangling cross-references in ADR 0004** (found while writing
-  `specs/project-file-foundation/adrs.md`, 2026-10-02): lines citing "ADR 0002
+  `specs/0001-project-file-foundation/adrs.md`, 2026-10-02): lines citing "ADR 0002
   §12" and "§12–§16" should point at ADR 0009, where peer-scoped undo and
   concurrent-editing semantics actually live — 0002's decision list ends at
   §11. Accepted decision text isn't edited, so this is a corrected pointer for
   readers, not a substantive change; fix opportunistically whenever 0004 is
   next touched for an unrelated reason.
-- **Boolean-crate spike (`spike/booleans`).** ADR 0003 §3 decides flattened
-  polygons and a pure-Rust crate; the spike picks between `i_overlay`, `geo`'s
-  boolean ops and `clipper2-rust` (added 2026-10-02 on the customer's pointer —
-  a pure-Rust Clipper2 port, not an FFI binding) on degenerate input and wasm
-  build cleanliness, before the first geometry story. The result is a dated
-  feature-local decision in that story's `specs/<feature-slug>/adrs.md`, not an
-  edit to the accepted ADR. A result rejecting all candidates would need an ADR
-  superseding 0003.
-- **Offsetting may reopen ADR 0003 §4 (customer decision, not yet asked).** If
-  the boolean spike picks `clipper2-rust`, its ported Clipper2 offsetter covers
-  the join and cleanup cases §4 decides to build on `kurbo` stroke expansion.
-  Using it would change accepted text, so it needs an ADR superseding 0003 —
-  noted in 0003 §4, pending the spike result and the customer.
+- ~~**Boolean-crate spike (`spike/booleans`).**~~ — done, 2026-10-04: all three
+  candidates (`i_overlay`, `geo`'s boolean ops, `clipper2-rust`) handled every
+  degenerate fixture with no panic, hang or divergent output, and all three
+  build cleanly for `wasm32-unknown-unknown`. The result is **`clipper2-rust`**,
+  tie-broken on `#![forbid(unsafe_code)]` (vs. internal `unsafe` in the other
+  two) and on being the Clipper2 algorithms directly rather than `geo`'s wrapper
+  over an older, pinned `i_overlay`. Recorded as the dated note ADR 0003 §3 asks
+  for, written there (not in a `specs/<feature-slug>/adrs.md`, since slice 6
+  doesn't exist as a story yet). This reopens the §4 offsetting question below —
+  still pending the customer, not resolved by this spike.
+- **Offsetting may reopen ADR 0003 §4 (customer decision, not yet asked).** Now
+  that the boolean spike has picked `clipper2-rust`, its ported Clipper2
+  offsetter covers the join and cleanup cases §4 decides to build on `kurbo`
+  stroke expansion. Using it would change accepted text, so it needs an ADR
+  superseding 0003 —
+  noted in 0003 §4, pending the customer now that the spike result is in.
 - **ADR 0007 is over the five-minute rule and wants splitting, not trimming.**
   It carries three subjects — credential storage, the source/sink trait design,
   and the git-forge sink — and a consolidation pass took out the prose without

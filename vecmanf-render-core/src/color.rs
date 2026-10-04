@@ -3,7 +3,7 @@
 //! Distinct from [`vecmanf_document_core::Color`]: that type is this
 //! slice's one placeholder *document* stroke color (acceptance criterion
 //! 6, always opaque black) — editing-UI decorations need alpha (the
-//! hover ring's "faint outer ring", `specs/path-node-editing/
+//! hover ring's "faint outer ring", `specs/0002-path-node-editing/
 //! specification.md`'s UX notes) and theme colors document-core has no
 //! reason to know about.
 
@@ -38,7 +38,7 @@ impl RgbaColor {
     pub const BLACK: Self = Self::opaque(0, 0, 0);
 
     /// White — the idle fill of an unselected node or handle glyph
-    /// (`specs/path-node-editing/specification.md`'s UX notes).
+    /// (`specs/0002-path-node-editing/specification.md`'s UX notes).
     pub const WHITE: Self = Self::opaque(255, 255, 255);
 }
 

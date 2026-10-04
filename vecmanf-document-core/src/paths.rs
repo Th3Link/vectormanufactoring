@@ -1,9 +1,9 @@
-//! `Document`'s path-editing command methods (`specs/path-node-editing/
+//! `Document`'s path-editing command methods (`specs/0002-path-node-editing/
 //! adrs.md`, "the anchor schema, and the three merge choices inside it").
 //! [`crate::path_model`] defines the pure data types a caller builds or
 //! reads; [`crate::path_codec`] owns the Loro value shapes and keys these
 //! methods write and read. This module is the command funnel itself —
-//! `specs/path-node-editing/adrs.md`'s architect review note: "a
+//! `specs/0002-path-node-editing/adrs.md`'s architect review note: "a
 //! serializable `Command` enum is deferred to `undo-redo`; what is not
 //! deferred is that each mutating method ends in exactly one Loro commit"
 //! (ADR 0002 §9).
@@ -33,7 +33,7 @@ const DEFAULT_CURVE_HANDLE_FRACTION: f64 = 1.0 / 3.0;
 
 impl Document {
     /// Commits a finished pen-tool session as one new path object
-    /// (`specs/path-node-editing/adrs.md`, "a pen session is one commit";
+    /// (`specs/0002-path-node-editing/adrs.md`, "a pen session is one commit";
     /// acceptance criteria 1, 2, 3, 5).
     ///
     /// # Panics
@@ -79,7 +79,7 @@ impl Document {
     /// Reads one path's full current data, or `None` if it no longer
     /// exists (deleted locally, or by a collaborator, since the caller
     /// last read a snapshot — ADR 0009 §2) **or is a primitive instead**
-    /// (`specs/primitive-shapes/adrs.md`: "`Document::path(id)` returns
+    /// (`specs/0003-primitive-shapes/adrs.md`: "`Document::path(id)` returns
     /// `None` for a primitive node. It must not return an empty
     /// `PathSnapshot`, so slice 2's node tool and hit-testing never
     /// mistake a primitive for a path with no anchors.").
@@ -99,7 +99,7 @@ impl Document {
 
     /// Moves every named anchor to its new absolute position, one commit
     /// for the whole drag — handles are untouched because they are stored
-    /// relative to their own anchor (`specs/path-node-editing/adrs.md`
+    /// relative to their own anchor (`specs/0002-path-node-editing/adrs.md`
     /// decision 2; acceptance criteria 8, 10).
     ///
     /// Resolves every id to an index *before* writing any of them, so a
@@ -132,7 +132,7 @@ impl Document {
     /// Sets one anchor's handle, mirroring the opposite handle when the
     /// anchor is [`AnchorKind::Smooth`] (`handle_in = -handle_out`) and
     /// touching only the named handle when it is
-    /// [`AnchorKind::Corner`] (`specs/path-node-editing/adrs.md`
+    /// [`AnchorKind::Corner`] (`specs/0002-path-node-editing/adrs.md`
     /// decision 1; acceptance criterion 9).
     ///
     /// # Errors
@@ -175,7 +175,7 @@ impl Document {
     /// neighbours. Smooth → corner leaves both handles exactly where they
     /// are and only flips `kind` — geometry cannot tell the two apart,
     /// which is exactly why `kind` is a stored field
-    /// (`specs/path-node-editing/adrs.md` decision 3).
+    /// (`specs/0002-path-node-editing/adrs.md` decision 3).
     ///
     /// # Errors
     /// [`PathEditError::NoSuchPath`] if `path` no longer exists;
@@ -210,7 +210,7 @@ impl Document {
 
     /// Inserts a new anchor right after `after`, carrying the caller-
     /// resolved subdivision geometry for the two adjoining handles
-    /// (`specs/path-node-editing/adrs.md`, "commands carry resolved
+    /// (`specs/0002-path-node-editing/adrs.md`, "commands carry resolved
     /// geometry, never geometric intent"; acceptance criterion 12).
     ///
     /// `prev_out` becomes `after`'s new `handle_out`; `next_in` becomes the

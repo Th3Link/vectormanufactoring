@@ -111,7 +111,7 @@ impl Session {
             // (`specification.md`'s UX notes: "there's nothing to select
             // or edit yet, and Pen is what lets the maker start
             // immediately"). None of the three new shape tools change
-            // this default (`specs/primitive-shapes/specification.md`'s
+            // this default (`specs/0003-primitive-shapes/specification.md`'s
             // own UX notes).
             tool: Tool::Pen,
             view: ViewTransform::identity(),
@@ -462,7 +462,7 @@ impl Session {
     /// (`specification.md`'s UX notes) when it is active, every
     /// primitive's own stroke/selection/handle decorations, and (when a
     /// shape-tool drag is in flight) its own live preview outline
-    /// (`specs/primitive-shapes/specification.md`, "Live creation
+    /// (`specs/0003-primitive-shapes/specification.md`, "Live creation
     /// feedback").
     #[must_use]
     pub fn draw_list(&self) -> DrawList {
@@ -496,10 +496,10 @@ impl Session {
 
 /// Returns the one-sentence message the frontend's `ErrorDialog` shows
 /// for `error` — moved here from `vecmanf-app`'s native `open_error.rs`
-/// (`specs/project-file-foundation/specification.md`, "Error handling —
+/// (`specs/0001-project-file-foundation/specification.md`, "Error handling —
 /// invalid/corrupt file") now that [`Session::open`] (and the
 /// `Document::open` it wraps) only ever runs inside this wasm session,
-/// never natively (`specs/path-node-editing/adrs.md`'s PR review: "the
+/// never natively (`specs/0002-path-node-editing/adrs.md`'s PR review: "the
 /// host does byte I/O only"). Plain Rust, not `wasm_api`'s `wasm32`-only
 /// shell, so it stays exercised by ordinary `cargo test` — its only
 /// caller is `wasm_api::WasmSession::open`, which is itself `wasm32`-
@@ -628,7 +628,7 @@ mod tests {
     #[test]
     fn draw_list_is_empty_for_a_brand_new_document() {
         let session = Session::new(1);
-        assert!(session.draw_list().triangles.is_empty());
+        assert_eq!(session.draw_list().triangles.len(), 0);
     }
 
     #[test]
@@ -639,7 +639,7 @@ mod tests {
         session.pointer_down(Point::new(10.0, 0.0), false);
         session.pointer_up(Point::new(10.0, 0.0), false);
         session.finish_pen();
-        assert!(!session.draw_list().triangles.is_empty());
+        assert_ne!(session.draw_list().triangles.len(), 0);
     }
 
     /// The pen tool's in-progress preview (not yet committed) also shows

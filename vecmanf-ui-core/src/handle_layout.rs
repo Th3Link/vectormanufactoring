@@ -1,6 +1,6 @@
 //! Which shape handles a selected primitive shows, where, and the
 //! parameter arithmetic each one's drag performs
-//! (`specs/primitive-shapes/adrs.md`: "handle layout lives here, not in
+//! (`specs/0003-primitive-shapes/adrs.md`: "handle layout lives here, not in
 //! `document-core`, because which handles exist is interaction design").
 //! Pure functions of a [`PrimitiveSnapshot`] (and, for the arithmetic,
 //! a drag delta) — no Loro, no rendering, no hit-testing policy; see
@@ -14,7 +14,7 @@ use vecmanf_document_core::{
 /// One of a rectangle/ellipse's eight bounding-box resize handles, or a
 /// polygon/star's four outer-radius ones (cardinal only there — "the
 /// outer bounding circle's N/E/S/W-most points",
-/// `specs/primitive-shapes/specification.md`).
+/// `specs/0003-primitive-shapes/specification.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResizeDirection {
     /// North (top edge midpoint).

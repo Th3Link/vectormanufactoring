@@ -152,7 +152,7 @@ impl NodeTool {
 
     /// Acceptance criterion: Escape with a selection present clears it;
     /// with nothing selected it is a no-op
-    /// (`specs/path-node-editing/specification.md`'s node-tool actions
+    /// (`specs/0002-path-node-editing/specification.md`'s node-tool actions
     /// notes). Also cancels any drag currently in flight, writing nothing
     /// — consistent with the pen tool's own Escape, which discards its
     /// in-progress state rather than leaving a gesture half-finished.
@@ -277,7 +277,7 @@ impl NodeTool {
                 starts,
             } => {
                 // A press and release at the exact same point writes
-                // nothing (`specs/path-node-editing/adrs.md`'s dated
+                // nothing (`specs/0002-path-node-editing/adrs.md`'s dated
                 // architect-review note): under ADR 0009 §3, `point` is
                 // an LWW register, so re-writing the same value is still
                 // a *new* operation with a newer clock — it can beat a
@@ -409,7 +409,7 @@ impl NodeTool {
     /// does not land on a segment.
     ///
     /// Double-click detection itself is the frontend's job
-    /// (`specs/path-node-editing/adrs.md`'s `PenTool` doc comment makes
+    /// (`specs/0002-path-node-editing/adrs.md`'s `PenTool` doc comment makes
     /// the same point) — this is a direct action the caller invokes once
     /// it has decided a double-click landed on a segment.
     pub fn insert_at(
@@ -791,7 +791,10 @@ mod tests {
             Point::new(10.0, 0.0),
             TOLERANCES,
         );
-        assert!(tool.selection().is_empty());
+        assert!(
+            tool.selection().is_empty(),
+            "inserting a node away from the path does not select it"
+        );
     }
 
     /// The contextual toolbar's "Insert node" button: splits the selected
@@ -881,7 +884,10 @@ mod tests {
         tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, false);
 
         tool.delete_selected(&document);
-        assert!(tool.selection().is_empty());
+        assert!(
+            tool.selection().is_empty(),
+            "deleting the selected nodes also clears the selection"
+        );
         let snapshot = document.path(path).expect("exists");
         assert_eq!(snapshot.anchors.len(), 2);
     }
@@ -986,7 +992,7 @@ mod tests {
         tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
 
         assert!(tool.escape());
-        assert!(tool.selection().is_empty());
+        assert!(tool.selection().is_empty(), "escape clears the selection");
         assert!(!tool.escape());
     }
 
@@ -999,10 +1005,13 @@ mod tests {
         let paths = vec![document.path(path).expect("exists")];
         let mut tool = NodeTool::new();
         tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
-        assert!(!tool.selection().is_empty());
+        assert!(!tool.selection().is_empty(), "clicking the node selects it");
 
         let outcome = tool.pointer_down(&paths, Point::new(1000.0, 1000.0), TOLERANCES, false);
         assert_eq!(outcome, PointerDownOutcome::Missed);
-        assert!(tool.selection().is_empty());
+        assert!(
+            tool.selection().is_empty(),
+            "clicking empty space clears the selection"
+        );
     }
 }

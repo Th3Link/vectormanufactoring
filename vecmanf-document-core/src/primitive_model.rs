@@ -1,4 +1,4 @@
-//! The primitive-shape schema's pure data types (`specs/primitive-shapes/
+//! The primitive-shape schema's pure data types (`specs/0003-primitive-shapes/
 //! adrs.md`, "the primitive schema"): a shape's parameters, the two
 //! validated newtypes the specification pins (point count, inner ratio),
 //! and the object-level read model that lets a caller tell a path from a
@@ -16,7 +16,7 @@ use crate::units::{Angle, Length, Point};
 
 /// A rectangle's bounding box, normalized so `origin` is always the
 /// top-left (minimum) corner and `width`/`height` are always
-/// non-negative (`specs/primitive-shapes/adrs.md`: "rect bounds are
+/// non-negative (`specs/0003-primitive-shapes/adrs.md`: "rect bounds are
 /// normalized on write" — a drag from A to B in any direction stores the
 /// same value, acceptance criterion 1).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -203,7 +203,7 @@ impl InnerRatio {
 }
 
 /// Which kind of primitive a node holds, and its own parameters
-/// (`specs/primitive-shapes/adrs.md`, "the primitive schema"). A closed
+/// (`specs/0003-primitive-shapes/adrs.md`, "the primitive schema"). A closed
 /// `enum` rather than a trait: "the set is closed, and `CLAUDE.md` §5
 /// applies" (`adrs.md`). `Serialize` only, not `Deserialize`: it holds
 /// [`PointCount`]/[`InnerRatio`], and neither of those derives

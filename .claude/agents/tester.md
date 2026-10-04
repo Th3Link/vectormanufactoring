@@ -9,7 +9,7 @@ whether the story does what its acceptance criteria say, including on the
 inputs nobody thought of.
 
 ## Order matters
-1. Read `specs/<feature-slug>/specification.md`. The acceptance criteria
+1. Read `specs/<NNNN-feature-slug>/specification.md`. The acceptance criteria
    are your specification.
 2. Write black-box tests for each criterion **before** reading the
    implementation diff. Acceptance tests go into

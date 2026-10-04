@@ -77,7 +77,7 @@ fn structurally_valid_but_empty_zip_is_damaged_not_not_a_vmf() {
         .into_inner();
     // Sanity: this really is a minimal-but-valid zip, not accidentally
     // empty bytes.
-    assert!(!empty_zip.is_empty());
+    assert_ne!(empty_zip.len(), 0);
 
     let result = unpack(2, &empty_zip);
     assert!(
@@ -232,7 +232,7 @@ fn unparsable_manifest_json_is_damaged() {
 /// A `document.loro` snapshot that is itself a perfectly valid Loro
 /// document, behind a perfectly valid manifest, but whose `paths` tree
 /// has a node not shaped like `vecmanf_document_core::paths` ever writes
-/// one (`specs/path-node-editing/adrs.md`'s architect review: "a
+/// one (`specs/0002-path-node-editing/adrs.md`'s architect review: "a
 /// container whose path data does not match the schema is refused with
 /// `OpenError::Damaged`"). Without that validation, this exact byte
 /// sequence would import without error and only panic the first time
@@ -272,7 +272,7 @@ fn a_path_node_missing_its_anchors_list_is_damaged_not_a_panic() {
     );
 }
 
-/// `specs/primitive-shapes/adrs.md`'s open-file validation cases: an
+/// `specs/0003-primitive-shapes/adrs.md`'s open-file validation cases: an
 /// unknown `shape` tag is refused as `Damaged`, not a crash or a
 /// silently-ignored object.
 #[test]

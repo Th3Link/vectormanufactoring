@@ -1,4 +1,4 @@
-//! `Session`'s primitive-shape-tool glue (`specs/primitive-shapes/
+//! `Session`'s primitive-shape-tool glue (`specs/0003-primitive-shapes/
 //! specification.md`, acceptance criteria 1-22): dispatching
 //! pointer events to whichever of the three shape tools is active,
 //! their tool-options bar, the live preview/readout the ux-engineer
@@ -34,7 +34,7 @@ pub struct LiveReadout {
 
 impl Session {
     /// The same two tolerances, reused for every shape tool
-    /// (`specs/primitive-shapes/specification.md`: "reuses that slice's
+    /// (`specs/0003-primitive-shapes/specification.md`: "reuses that slice's
     /// ... hit-testing tolerances").
     fn shape_tolerances(&self) -> ShapeHitTolerances {
         ShapeHitTolerances {
@@ -361,7 +361,7 @@ impl Session {
     }
 
     /// Builds this frame's primitive-shape decoration input
-    /// (`specs/primitive-shapes/specification.md`'s "Tool mismatch"
+    /// (`specs/0003-primitive-shapes/specification.md`'s "Tool mismatch"
     /// rule): empty unless a shape tool is active, and even then only
     /// for primitives of that tool's own kind.
     ///

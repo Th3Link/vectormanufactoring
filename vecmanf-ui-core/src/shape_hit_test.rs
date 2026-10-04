@@ -1,5 +1,5 @@
 //! Hit-testing a document-space point against primitives and their
-//! handles (`specs/primitive-shapes/specification.md`'s "reuses that
+//! handles (`specs/0003-primitive-shapes/specification.md`'s "reuses that
 //! slice's... hit-testing tolerances"). Mirrors [`crate::hit_test`]'s
 //! shape for paths: a primitive's own outline
 //! ([`vecmanf_document_core::outline_of`]) is hit-tested the same way a
