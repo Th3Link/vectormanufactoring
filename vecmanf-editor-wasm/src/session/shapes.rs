@@ -648,6 +648,84 @@ mod tests {
         assert!((inner_ratio.get() - 0.8).abs() < 1e-9, "committed once");
     }
 
+    /// Re-verification (architect, ratio-preview flush bug): a slider
+    /// drag released *outside* the slider element never fires the
+    /// slider's own `pointerup`/`blur` — common browser behavior. The
+    /// next canvas click must not let `Session::pointer_down` change
+    /// the selection *before* the pending preview flushes, or the
+    /// previewed ratio would commit to whatever got newly selected
+    /// instead of the star it was actually previewed against.
+    #[test]
+    fn ratio_preview_flushes_against_the_previewed_star_not_a_newly_selected_one() {
+        use vecmanf_document_core::{InnerRatio, Length, PointCount, Shape, StarFrame};
+
+        let mut session = Session::new(1);
+        let frame_a = StarFrame {
+            center: Point::new(0.0, 0.0),
+            radius: Length::from_mm(10.0),
+            angle: vecmanf_document_core::Angle::from_radians(0.0),
+        };
+        let frame_b = StarFrame {
+            center: Point::new(100.0, 0.0),
+            radius: Length::from_mm(10.0),
+            angle: vecmanf_document_core::Angle::from_radians(0.0),
+        };
+        let star_a = session.document.create_star(
+            frame_a,
+            PointCount::new(5).unwrap(),
+            InnerRatio::new(0.5).unwrap(),
+        );
+        let star_b = session.document.create_star(
+            frame_b,
+            PointCount::new(5).unwrap(),
+            InnerRatio::new(0.5).unwrap(),
+        );
+        session.set_tool(Tool::PolygonStar);
+        session.primitive_selection.select_single(star_a);
+
+        // A slider drag against star A, in progress — never committed
+        // (simulating the mouse being released off the slider, so
+        // neither the slider's `pointerup` nor its `blur` ever fires).
+        session.preview_poly_star_ratio(InnerRatio::new(0.9).unwrap());
+
+        // The maker then clicks directly on star B's own outline (its
+        // first outer vertex, at `frame_b.center + (radius, 0)`), which
+        // changes the selection — `pointer_down` must flush the pending
+        // preview first, against the selection as it was *before* this
+        // click (star A), not after.
+        let star_b_vertex = Point::new(110.0, 0.0);
+        session.pointer_down(star_b_vertex, false);
+        assert_eq!(
+            session.primitive_selection.ids(),
+            &[star_b],
+            "the click did select the new star"
+        );
+
+        let Shape::Star {
+            inner_ratio: a_ratio,
+            ..
+        } = session.document.primitive(star_a).unwrap().shape
+        else {
+            panic!("expected star");
+        };
+        assert!(
+            (a_ratio.get() - 0.9).abs() < 1e-9,
+            "the previewed ratio must commit to star A, the star it was previewed against"
+        );
+
+        let Shape::Star {
+            inner_ratio: b_ratio,
+            ..
+        } = session.document.primitive(star_b).unwrap().shape
+        else {
+            panic!("expected star");
+        };
+        assert!(
+            (b_ratio.get() - 0.5).abs() < 1e-9,
+            "star B (only just selected, never previewed) must be untouched"
+        );
+    }
+
     /// Re-verification (tester, item 2): dragging the corner-radius
     /// handle through the full `Session` pointer API (not just the
     /// `RectangleTool` unit) must render a live preview mid-drag —

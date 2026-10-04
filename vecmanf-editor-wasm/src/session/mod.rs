@@ -171,6 +171,14 @@ impl Session {
     /// no acceptance criterion exercises switching tools mid-drag, so
     /// the same conservative stance applies.
     pub fn set_tool(&mut self, tool: Tool) {
+        // Flushes any pending ratio-slider preview against the
+        // selection it was actually previewed against, before anything
+        // else can change that selection (architect re-verification: a
+        // slider drag released outside the slider element never fires
+        // the slider's own `pointerup`/`blur`, so without this the
+        // preview would otherwise sit unflushed until some later event
+        // commits it against whatever is selected *then* instead).
+        self.commit_poly_star_ratio();
         self.tool = tool;
     }
 
@@ -211,6 +219,12 @@ impl Session {
 
     /// The pointer went down at `point` (document space).
     pub fn pointer_down(&mut self, point: Point, shift: bool) {
+        // Same flush as `set_tool`'s own doc comment explains: a canvas
+        // click can change the selection (e.g. selecting a different
+        // star) before a pending ratio-slider preview ever gets a
+        // chance to commit against the selection it was previewed
+        // against, if the mouse was released outside the slider itself.
+        self.commit_poly_star_ratio();
         match self.tool {
             Tool::Pen => {
                 let tolerance = self.point_tolerance_as_length();
