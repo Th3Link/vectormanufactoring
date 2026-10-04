@@ -2,7 +2,7 @@
 
 Tokens and interaction conventions for the desktop app shell (Tauri + React +
 Tailwind + shadcn/ui, ADR 0001). Seeded by `path-node-editing`
-(`specs/path-node-editing/specification.md`), the first feature that needs
+(`specs/0002-path-node-editing/specification.md`), the first feature that needs
 real color/spacing tokens rather than the one inline `--canvas-bg` value
 `project-file-foundation` used as a placeholder. Extend this file in place as
 each later feature introduces new components or states; don't invent tokens

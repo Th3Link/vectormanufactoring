@@ -14,7 +14,7 @@ interface CanvasProps {
  *
  * Fills the window body edge-to-edge, no margin/border/frame — the tool
  * rail and contextual toolbar dock beside/above it, they never shrink it
- * (`specs/project-file-foundation`'s "chrome never frames the canvas"
+ * (`specs/0001-project-file-foundation`'s "chrome never frames the canvas"
  * precedent, reaffirmed by `docs/design-system.md`).
  */
 export function Canvas({ editor }: CanvasProps) {

@@ -1,5 +1,5 @@
 //! The Loro value shapes and keys for the path/anchor schema
-//! (`specs/path-node-editing/adrs.md`, "the anchor schema, and the three
+//! (`specs/0002-path-node-editing/adrs.md`, "the anchor schema, and the three
 //! merge choices inside it"). [`crate::paths`] is the only caller: this
 //! module owns the on-disk/in-CRDT shape and every read/write against it,
 //! so [`crate::paths`]'s `Document` methods stay command-shaped logic with
@@ -364,7 +364,7 @@ pub(crate) fn read_path_snapshot(id: NodeId, meta: &LoroMap) -> PathSnapshot {
 /// Validates that every path node in the `paths` tree matches the shape
 /// this module's own writers always produce, *without* relying on any of
 /// the `// invariant:` comments above that a trusted document gets to
-/// lean on (architect review, `specs/path-node-editing/adrs.md`'s PR
+/// lean on (architect review, `specs/0002-path-node-editing/adrs.md`'s PR
 /// review: "Opening a `.vmf` validates the path tree before it returns a
 /// `Document`"). Called once, right after import, before a freshly opened
 /// `Document` is ever handed to a caller — every read helper in this

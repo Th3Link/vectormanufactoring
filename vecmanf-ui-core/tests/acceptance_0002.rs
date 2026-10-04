@@ -1,4 +1,4 @@
-//! Black-box acceptance tests for `specs/path-node-editing/
+//! Black-box acceptance tests for `specs/0002-path-node-editing/
 //! specification.md`'s 14 acceptance criteria, written against
 //! `vecmanf-ui-core`'s public API (`PenTool`, `NodeTool`, `NodeSelection`,
 //! `AnchorIdMinter`, `hit_test`) and `vecmanf-document-core`'s own public
@@ -108,7 +108,7 @@ fn ac4_escape_after_many_nodes_commits_absolutely_nothing() {
     // Not just "no paths exist": the document's own Loro snapshot bytes
     // must be identical before and after, proving the whole pen
     // session — ten placed nodes, then Escape — committed literally
-    // nothing, not even an empty commit (`specs/path-node-editing/
+    // nothing, not even an empty commit (`specs/0002-path-node-editing/
     // adrs.md`'s PR review: "each mutating method ends in exactly one
     // Loro commit" — the flip side is that a *discarded* session must
     // end in zero). `path_ids()` is called once, before either snapshot,

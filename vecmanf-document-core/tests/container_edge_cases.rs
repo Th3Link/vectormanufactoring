@@ -232,7 +232,7 @@ fn unparsable_manifest_json_is_damaged() {
 /// A `document.loro` snapshot that is itself a perfectly valid Loro
 /// document, behind a perfectly valid manifest, but whose `paths` tree
 /// has a node not shaped like `vecmanf_document_core::paths` ever writes
-/// one (`specs/path-node-editing/adrs.md`'s architect review: "a
+/// one (`specs/0002-path-node-editing/adrs.md`'s architect review: "a
 /// container whose path data does not match the schema is refused with
 /// `OpenError::Damaged`"). Without that validation, this exact byte
 /// sequence would import without error and only panic the first time

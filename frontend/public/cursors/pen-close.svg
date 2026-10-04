@@ -5,7 +5,7 @@
   <circle cx="11" cy="11" r="2" fill="#FFFFFF"/>
   <!-- The "close path" badge: a small accent-filled ring at the nib's
        drawing tip (the same point the cursor's hotspot below sits at),
-       the pen-with-small-circle variant specs/path-node-editing/
+       the pen-with-small-circle variant specs/0002-path-node-editing/
        specification.md's "Cursors" names for hovering the in-progress
        path's own first node (acceptance criterion 5). -->
   <circle cx="2.3" cy="2.3" r="2.6" fill="none" stroke="#2F6FEE" stroke-width="1.5"/>

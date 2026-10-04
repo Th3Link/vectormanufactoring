@@ -4,7 +4,7 @@
 //! Built from a [`DecorationInput`] of [`AnchorId`]s and flags —
 //! `vecmanf-editor-wasm` builds that input from `vecmanf-ui-core`'s
 //! selection, since this crate cannot read `vecmanf-ui-core` directly
-//! (`specs/path-node-editing/adrs.md`, "the path/node crate boundary").
+//! (`specs/0002-path-node-editing/adrs.md`, "the path/node crate boundary").
 
 use vecmanf_document_core::{AnchorKind, HandleSlot, NodeId, PathSnapshot, Vec2, ViewTransform};
 

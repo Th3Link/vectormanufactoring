@@ -1,4 +1,4 @@
-//! The path/anchor schema's pure data types (`specs/path-node-editing/
+//! The path/anchor schema's pure data types (`specs/0002-path-node-editing/
 //! adrs.md`, "the anchor schema, and the three merge choices inside it"):
 //! identities, the per-anchor data a caller builds or reads, and the
 //! typed refusal reasons for an edit. No Loro type appears here — the CRDT
@@ -69,7 +69,7 @@ impl<'de> Deserialize<'de> for NodeId {
 }
 
 /// An anchor's identity within its path's movable list
-/// (`specs/path-node-editing/adrs.md`: "`AnchorId` is minted by the
+/// (`specs/0002-path-node-editing/adrs.md`: "`AnchorId` is minted by the
 /// creating peer and is globally unique... passed into
 /// `vecmanf-document-core`, never minted there").
 ///
@@ -90,7 +90,7 @@ impl AnchorId {
     /// Builds an [`AnchorId`] from a peer id and a counter that peer never
     /// reuses within one open session. Stays globally unique across
     /// sessions because the peer id itself is freshly minted per session
-    /// (`specs/project-file-foundation/adrs.md`, amended 2026-10-03).
+    /// (`specs/0001-project-file-foundation/adrs.md`, amended 2026-10-03).
     #[must_use]
     pub const fn new(peer: u64, counter: u64) -> Self {
         Self(((peer as u128) << 64) | counter as u128)
@@ -133,7 +133,7 @@ impl<'de> Deserialize<'de> for AnchorId {
 }
 
 /// Whether an anchor's two handles move together or independently
-/// (`specs/path-node-editing/adrs.md` decision 3: stored, not derived from
+/// (`specs/0002-path-node-editing/adrs.md` decision 3: stored, not derived from
 /// geometry — a corner node whose handles happen to be mirrored must still
 /// behave as a corner).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -232,7 +232,7 @@ pub struct PathSnapshot {
     /// Fill — always `None` in this slice (acceptance criterion 6).
     pub fill: Option<Color>,
     /// Anchors in traversal order (ADR 0009 §3's movable-list order, never
-    /// an array index — `specs/path-node-editing/adrs.md`).
+    /// an array index — `specs/0002-path-node-editing/adrs.md`).
     pub anchors: Vec<AnchorSnapshot>,
 }
 

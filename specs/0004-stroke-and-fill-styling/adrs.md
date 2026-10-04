@@ -51,8 +51,8 @@ work only on disjoint crates).
   boundary below.
 - [ADR 0004 §9](../../docs/adr/0004-persistence-and-cross-machine-sync.md):
   forces the `format_version` bump below.
-- [`specs/path-node-editing/adrs.md`](../path-node-editing/adrs.md) and
-  [`specs/primitive-shapes/adrs.md`](../primitive-shapes/adrs.md): caller-
+- [`specs/0002-path-node-editing/adrs.md`](../path-node-editing/adrs.md) and
+  [`specs/0003-primitive-shapes/adrs.md`](../primitive-shapes/adrs.md): caller-
   minted ids passed into `document-core`, "commands carry resolved data",
   "a press and release with no pointer movement writes nothing", open-file
   validation that dispatches on `shape` and tolerates unknown keys, and

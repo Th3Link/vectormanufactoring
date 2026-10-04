@@ -87,7 +87,7 @@ unawareness. Reversing either needs a new ADR, not an edit:
   names `-wasm` (0001 §3), `-server` (0004 §5) and the suffix-less plugin SDK
   (0005 §1) alongside `-core`/`-app`/`-io`, pointing at ADR 0011.
 - **Dangling cross-references in ADR 0004** (found while writing
-  `specs/project-file-foundation/adrs.md`, 2026-10-02): lines citing "ADR 0002
+  `specs/0001-project-file-foundation/adrs.md`, 2026-10-02): lines citing "ADR 0002
   §12" and "§12–§16" should point at ADR 0009, where peer-scoped undo and
   concurrent-editing semantics actually live — 0002's decision list ends at
   §11. Accepted decision text isn't edited, so this is a corrected pointer for

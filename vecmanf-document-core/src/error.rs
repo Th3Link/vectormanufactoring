@@ -1,5 +1,5 @@
 //! The typed refusal reasons for opening a `.vmf` project
-//! (`specs/project-file-foundation/adrs.md`, "open-refusal reasons are a
+//! (`specs/0001-project-file-foundation/adrs.md`, "open-refusal reasons are a
 //! typed error in `vecmanf-document-core`") and the (currently narrow)
 //! failure modes for building one.
 
@@ -8,7 +8,7 @@
 /// This is a pure function of the bytes: given the same input it always
 /// returns the same variant, so it is testable with fixture files and no
 /// UI (acceptance criterion 7). The host maps each variant to one of the
-/// three named sentences in `specs/project-file-foundation/specification.md`
+/// three named sentences in `specs/0001-project-file-foundation/specification.md`
 /// ("Error handling — invalid/corrupt file"); this crate names *why*, the
 /// host and frontend decide *how to say it*.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]

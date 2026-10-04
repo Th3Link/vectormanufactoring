@@ -1,8 +1,8 @@
 //! The single open project this slice's app state holds: just the path it
 //! was last saved to or opened from, if any
-//! (`specs/project-file-foundation/specification.md` — no multi-project,
+//! (`specs/0001-project-file-foundation/specification.md` — no multi-project,
 //! multi-window support is in scope here). No document lives here any
-//! more (`specs/path-node-editing/adrs.md`'s PR review: "the host does
+//! more (`specs/0002-path-node-editing/adrs.md`'s PR review: "the host does
 //! byte I/O only") — the real document is the `WasmSession` the frontend
 //! owns; this crate reads and writes `.vmf` bytes on its behalf and
 //! otherwise never looks inside them. Also buffers at most one pending
@@ -52,7 +52,7 @@ impl ProjectState {
 pub enum PendingOpen {
     /// The file at `path` was read successfully; here are its raw bytes
     /// for the frontend to hand to `WasmSession::open` itself — this host
-    /// never parses them (`specs/path-node-editing/adrs.md`'s PR review).
+    /// never parses them (`specs/0002-path-node-editing/adrs.md`'s PR review).
     Bytes {
         /// The path these bytes were read from.
         path: PathBuf,

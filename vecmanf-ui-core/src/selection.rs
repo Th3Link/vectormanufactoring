@@ -5,7 +5,7 @@
 //! [`vecmanf_document_core::PathSnapshot`] the caller hands in, so a
 //! selected anchor a collaborator (or this same session) has since
 //! deleted simply stops resolving rather than dangling
-//! (`specs/path-node-editing/adrs.md`).
+//! (`specs/0002-path-node-editing/adrs.md`).
 //!
 //! At most one of "some nodes selected" and "one segment selected" holds
 //! at a time — acceptance criterion 14 draws a selected segment as

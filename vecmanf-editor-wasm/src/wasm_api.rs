@@ -80,7 +80,7 @@ pub struct WasmSession {
 impl WasmSession {
     /// A brand-new, empty document, bound to `peer` — the same fresh
     /// Loro peer id the host already mints per open session
-    /// (`specs/project-file-foundation/adrs.md`, amended 2026-10-03).
+    /// (`specs/0001-project-file-foundation/adrs.md`, amended 2026-10-03).
     #[wasm_bindgen(constructor)]
     #[must_use]
     pub fn new(peer: u64) -> Self {
@@ -92,11 +92,11 @@ impl WasmSession {
 
     /// Reopens a previously saved `.vmf` container's bytes.
     ///
-    /// The host does byte I/O only (`specs/path-node-editing/adrs.md`'s
+    /// The host does byte I/O only (`specs/0002-path-node-editing/adrs.md`'s
     /// PR review: "Open reads bytes and calls `WasmSession::open`") — it
     /// never sees a [`vecmanf_document_core::OpenError`] itself, so this
     /// maps it to the exact user-facing sentence
-    /// `specs/project-file-foundation/specification.md`'s "Error
+    /// `specs/0001-project-file-foundation/specification.md`'s "Error
     /// handling — invalid/corrupt file" names, the same mapping
     /// `vecmanf-app`'s own (now-removed) native `open_error.rs` used to
     /// do for a native-side `Document`.
@@ -253,7 +253,7 @@ impl WasmSession {
 
     /// Reconfigures the attached canvas's `wgpu` surface — call on every
     /// resize, before the next [`WasmSession::render`]
-    /// (`specs/path-node-editing/adrs.md`'s PASS note, requirement 2).
+    /// (`specs/0002-path-node-editing/adrs.md`'s PASS note, requirement 2).
     pub fn resize(&mut self, width: u32, height: u32) {
         if let Some(gpu) = &mut self.gpu {
             gpu.resize(width, height);

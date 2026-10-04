@@ -165,7 +165,7 @@ the first canvas story, not assumed.
   plus a live single-node drag, in a real WebKitGTK webview. §4 stands. The
   result and the two implementation requirements it imposes — disable
   WebKitGTK's DMA-BUF renderer on Linux, and reconfigure the `wgpu` surface on
-  every resize — are recorded in `specs/path-node-editing/adrs.md`; the two
+  every resize — are recorded in `specs/0002-path-node-editing/adrs.md`; the two
   NVIDIA driver problems the measurement exposed are in
   `docs/technical-debt.md`.
 - One renderer path (`wgpu` → WebGL2) serves desktop and browser, so the

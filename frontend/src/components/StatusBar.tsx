@@ -5,7 +5,7 @@ interface StatusBarProps {
 
 /**
  * The one permanent piece of chrome this slice adds
- * (specs/project-file-foundation: "Canvas and empty state"). Left: cursor
+ * (specs/0001-project-file-foundation: "Canvas and empty state"). Left: cursor
  * position in mm. Right: document size in mm. Room is left for a zoom
  * control later, but nothing non-functional is added now.
  */

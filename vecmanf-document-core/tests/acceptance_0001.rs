@@ -1,5 +1,5 @@
 //! Black-box acceptance tests for
-//! `specs/project-file-foundation/specification.md`, written against this
+//! `specs/0001-project-file-foundation/specification.md`, written against this
 //! crate's public API only (`pack`, `unpack`, `Document`, `OpenError`,
 //! `DocumentSize`, `Length`) and before reading the implementation.
 //!
@@ -61,7 +61,7 @@ fn ac3_pack_produces_a_valid_zip_with_the_required_members() {
     let parsed: serde_json::Value =
         serde_json::from_slice(&json_bytes).expect("document.json must be valid JSON");
     // `path-node-editing` bumped the container's `format_version` to 2
-    // (`specs/path-node-editing/adrs.md`, "format_version goes to 2"); this
+    // (`specs/0002-path-node-editing/adrs.md`, "format_version goes to 2"); this
     // slice's own AC3 only promised a `format_version` field exists, not
     // its value, so updating the pinned number here keeps the test in
     // sync with that documented, deliberate bump rather than weakening it.

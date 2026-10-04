@@ -4,7 +4,7 @@ import { createSession, openSession } from "@/lib/editorSession";
 import type { WasmSession } from "@/lib/editorSession";
 
 /** Screen pixels per document millimetre this slice's placeholder view
- * uses (`specs/path-node-editing/adrs.md`'s `ViewTransform` decision: no
+ * uses (`specs/0002-path-node-editing/adrs.md`'s `ViewTransform` decision: no
  * pan/zoom UI yet, so this is the whole view transform). `96 / 25.4` is
  * CSS's own "1in == 96px" convention expressed per millimetre — close
  * enough to a real screen's pixel density to make this slice's one fixed
@@ -37,7 +37,7 @@ const EMPTY_TOOLBAR_STATE: NodeToolbarState = {
   canMakeCurve: false,
 };
 
-/** A hand-rolled double-click detector (specs/path-node-editing/
+/** A hand-rolled double-click detector (specs/0002-path-node-editing/
  * adrs.md's `PenTool` doc comment: "double-click detection itself is the
  * frontend's job"). A real DOM `dblclick` event fires only after BOTH
  * clicks' own `pointerdown`/`pointerup` pairs have already run — relaying
@@ -116,14 +116,14 @@ export interface EditorSession {
 
 /** Owns one `WasmSession` for the app's lifetime: creates it, attaches
  * it to the host's `<canvas>`, keeps its `wgpu` surface sized to the
- * canvas (specs/path-node-editing/adrs.md's PASS note, requirement 2),
+ * canvas (specs/0002-path-node-editing/adrs.md's PASS note, requirement 2),
  * runs its per-frame render loop, and forwards pointer/keyboard input —
  * "the frontend renders state and forwards input events into it; it
  * holds no editing logic of its own" (same file, ADR 0001 §1/§2).
  *
  * The session itself is swappable: `newProject`/`openProject` free
  * whatever is currently attached and attach a different one in its
- * place (`specs/path-node-editing/adrs.md`'s PR review: "the host does
+ * place (`specs/0002-path-node-editing/adrs.md`'s PR review: "the host does
  * byte I/O only" — Open/New used to recreate the native `Document`;
  * now they recreate this hook's `WasmSession`), without tearing down
  * the mount effect's resize observer or render loop, which both always
@@ -196,7 +196,7 @@ export function useEditorSession(
         return;
       }
       // CSS_PX_PER_MM screen px per document mm, origin (0,0): this
-      // slice has no pan/zoom UI yet (specs/path-node-editing/
+      // slice has no pan/zoom UI yet (specs/0002-path-node-editing/
       // adrs.md's ViewTransform decision), so this is the whole view
       // transform, picked to keep acceptance criterion 6's 0.25mm
       // stroke and the node/handle glyphs actually visible on a real

@@ -5,7 +5,7 @@
 //! [`DocumentSize`] as the page size the document root carries, and
 //! [`Point`]/[`Vec2`] — an absolute document-space position and a relative
 //! offset, respectively (ADR 0002 §3) — with the elementary arithmetic
-//! `specs/path-node-editing/adrs.md`'s crate-boundary decision assigns to
+//! `specs/0002-path-node-editing/adrs.md`'s crate-boundary decision assigns to
 //! this crate: add, subtract, scale, negate, normalize, length. None of it
 //! evaluates a curve; that is `vecmanf-geometry-core`'s job.
 
@@ -64,7 +64,7 @@ impl Tolerance {
 }
 
 /// A document's page size in millimetres (ADR 0002 §2; this slice's minimal
-/// root record, `specs/project-file-foundation/adrs.md`).
+/// root record, `specs/0001-project-file-foundation/adrs.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct DocumentSize {
     /// The page width.
@@ -86,7 +86,7 @@ impl DocumentSize {
 ///
 /// Distinct from [`Vec2`] even though both wrap two `f64`s — a point is
 /// "where", a vector is "how far and which way" — so a handle (always
-/// relative to its anchor, `specs/path-node-editing/adrs.md`) is a `Vec2`
+/// relative to its anchor, `specs/0002-path-node-editing/adrs.md`) is a `Vec2`
 /// and an anchor's own position is a `Point`, and the two can never be
 /// added where a subtraction was meant.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -119,7 +119,7 @@ impl Point {
 
 /// A relative offset in document space: millimetres, Y-down. Used for a
 /// node's handle (stored relative to its own anchor,
-/// `specs/path-node-editing/adrs.md` decision 2) and for drag deltas.
+/// `specs/0002-path-node-editing/adrs.md` decision 2) and for drag deltas.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Vec2 {
     /// The X component, in millimetres.
@@ -130,7 +130,7 @@ pub struct Vec2 {
 
 impl Vec2 {
     /// The zero vector — a retracted handle, i.e. "this segment is a line"
-    /// (`specs/path-node-editing/adrs.md` decision 2: a derived property of
+    /// (`specs/0002-path-node-editing/adrs.md` decision 2: a derived property of
     /// the stored value, not a separate flag).
     pub const ZERO: Self = Self { x: 0.0, y: 0.0 };
 
@@ -193,7 +193,7 @@ impl Sub for Vec2 {
 impl Default for DocumentSize {
     /// A4 portrait, 210 × 297 mm — the default when a document has never
     /// had its size set explicitly
-    /// (`specs/project-file-foundation/adrs.md`, feature-local decision).
+    /// (`specs/0001-project-file-foundation/adrs.md`, feature-local decision).
     fn default() -> Self {
         Self::new(Length::from_mm(210.0), Length::from_mm(297.0))
     }

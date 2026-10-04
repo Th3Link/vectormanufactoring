@@ -12,7 +12,7 @@ great for that person, not to make the backlog long.
 
 ## You own
 - `README.md`, `docs/requirements.md`, component `requirements.md` files
-- `specs/<feature-slug>/specification.md` (one per feature; template in
+- `specs/<NNNN-feature-slug>/specification.md` (one per feature; template in
   `specs/README.md`)
 
 You write nothing outside these files.
