@@ -279,6 +279,23 @@ spelled out under ADR 0002 and ADR 0009 rather than assumed.
   empty by construction — a version-1 document has no path nodes — and that
   sentence is the written migration policy for this step.
 
+- **2026-10-03: `ViewTransform` is pan + uniform zoom, not a general affine
+  matrix.** ADR 0011 §3 names "the affine transform type from
+  `document-core`, passed to both [`render-core` and `ui-core`]" without
+  pinning its shape. This slice's canvas never rotates or skews, and no path
+  node carries its own transform yet (ADR 0002 §5's per-node affine transform
+  is not implemented here — this slice's anchor schema above has no
+  `transform` field), so a 6-component matrix would be unexercised generality
+  (`CLAUDE.md` §5 YAGNI). `vecmanf-document-core::ViewTransform` is a `scale`
+  (screen pixels per document mm) and an `origin` (`Point`), with
+  `document_to_screen`/`screen_to_document`. `render-core` uses it for
+  acceptance criterion 6/7's screen-space-constant decoration sizing; the
+  host (not `vecmanf-ui-core` itself) uses it to turn a raw pointer event
+  into the document `Point` the tools in this slice already take. A later
+  slice that needs real per-node rotation is free to generalize this type or
+  add a separate one — this name and shape are not a commitment past this
+  slice's own needs.
+
 ## Flagged to the lead
 
 1. **The specification's prose cites ADR 0002 §5 for *anchor* identity**
@@ -302,3 +319,59 @@ spelled out under ADR 0002 and ADR 0009 rather than assumed.
 4. **ADR 0001's WebKitGTK measurement is a prerequisite task in `plan.md`,
    ahead of the canvas work**, and a failure is an ADR, not a ticket. It is the
    one thing in this slice that can invalidate an accepted decision.
+
+## Architect review notes (2026-10-03, PR #7)
+
+- **The `Document` methods in `paths.rs` are the command funnel for this
+  slice; a serializable `Command` enum is deferred to `undo-redo` (slice 5).**
+  ADR 0002 §9's enum has no consumer before the history view and the plugin
+  host, and turning one funnel module into an enum later is internal. What is
+  not deferred: **each mutating method ends in exactly one Loro commit** with a
+  human-readable label. Without it every edit since the last save lands in one
+  auto-commit transaction, which slice 5's undo cannot split. A method that
+  can refuse resolves every id before its first write, so a refusal writes
+  nothing.
+- **`fill` is not stored while it is always `None`.** An absent key reads as
+  `None`, so slice 4 adds the register without a format change.
+- **`flatten_segment` leaves `vecmanf-geometry-core`.** Hit-testing landed on
+  nearest-point-on-segment, so flattening had no production caller (`CLAUDE.md`
+  §5). The crate's scope for this slice is nearest-point and subdivision.
+- **`document.json` writes ids as strings.** `AnchorId` (128 bit) and the
+  `NodeId` peer (63 bit) exceed the 2^53 integers JSON readers such as
+  JavaScript and `jq` keep exactly, and ADR 0004 names scripted reading and
+  recovery as this file's purpose. `AnchorId` uses the same 32-digit hex form
+  as the Loro value. `kind` is lowercase to match.
+- **Opening a `.vmf` validates the path tree before it returns a `Document`.**
+  A container whose path data does not match the schema above is refused with
+  `OpenError::Damaged` (project-file-foundation AC 7: a named error, not a
+  crash). After that check, the read helpers' `// invariant:` comments hold
+  for every reachable document.
+- **2026-10-03: a press and release with no pointer movement writes nothing.**
+  This applies to node drags (AC 8, AC 10) and to handle drags (AC 9). If the
+  pointer-up position is identical to the pointer-down position,
+  `pointer_up` returns `NoOp` and does not call the document. Neither AC 8 nor
+  AC 9 says anything about a drag of zero length. They describe a drag "to a
+  new position", so this is an edge case the specification leaves open. It
+  is settled here, not by the test, for three reasons:
+  1. **Under ADR 0009 §3, writing the same value again still changes the
+     document.** `point` and both handles are LWW registers. A rewrite of an
+     unchanged value is a new operation with a newer clock. It can win
+     against a collaborator's concurrent real drag of the same node and undo
+     their move on merge. A click must not be able to do that.
+  2. **ADR 0002 §9 counts interactions that change the document.** Selecting
+     a node is ephemeral state (ADR 0009 §2), and so is clicking an
+     already-selected one. A commit for each such click would put an empty
+     step into slice 5's peer-scoped undo for every selection click. The
+     maker would then press undo and see nothing happen.
+  3. **The handle path makes it visible today.** `Drag::Handle` writes the
+     absolute pointer position. A click within hit tolerance of a handle tip
+     but not exactly on it therefore moves the handle by up to the tolerance.
+     That is a geometry change from a click. The handle drag records where
+     the pointer went down, measures the movement from there in the same way
+     node drags do, and writes nothing when the pointer did not move.
+
+  The check compares the two pointer positions for identity. It is not a
+  geometric `Tolerance` (`CLAUDE.md` §5). The host turns the same pixel into
+  the same `Point`, so "did not move" is exact. A screen-pixel drag threshold
+  against hand jitter is a separate interaction decision for the
+  `ux-engineer`. It is not part of this fix.

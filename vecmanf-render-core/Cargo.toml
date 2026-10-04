@@ -1,0 +1,14 @@
+[package]
+name = "vecmanf-render-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The vecmanf draw-list builder: document snapshot + view transform + decoration input -> flat draw list, tessellated with lyon (pure, wasm-compatible)."
+
+[lints]
+workspace = true
+
+[dependencies]
+vecmanf-document-core = { path = "../vecmanf-document-core", version = "0.1.0" }
+lyon.workspace = true

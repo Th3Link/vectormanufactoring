@@ -7,10 +7,11 @@
 //! `vecmanf-app` own the impure edges (reading/writing files, native
 //! dialogs).
 //!
-//! This slice (`specs/project-file-foundation/`) implements the thinnest
-//! possible document: no nodes, just a `format_version` and a page
-//! `size`. Later slices grow the node tree (ADR 0002 §5) without changing
-//! this crate's public shape.
+//! `project-file-foundation` (slice 1) implemented the thinnest possible
+//! document: no nodes, just a `format_version` and a page `size`.
+//! `path-node-editing` (slice 2) grows the node tree (ADR 0002 §5) with the
+//! first geometry — paths and their anchors — without changing the shape
+//! slice 1 fixed.
 
 #![forbid(unsafe_code)]
 // `CLAUDE.md` §5 allows unwrap/expect in tests; only production code is held
@@ -20,9 +21,16 @@
 mod container;
 mod document;
 mod error;
+mod path_codec;
+mod path_model;
+mod paths;
 mod units;
 
 pub use container::{CURRENT_LORO_SNAPSHOT_VERSION, pack, unpack};
 pub use document::{CURRENT_FORMAT_VERSION, Document};
 pub use error::{OpenError, SaveError};
-pub use units::{DocumentSize, Length};
+pub use path_model::{
+    AnchorId, AnchorKind, AnchorSnapshot, Color, HandleSlot, NewAnchor, NodeId, PathEditError,
+    PathSnapshot,
+};
+pub use units::{DocumentSize, Length, Point, Tolerance, Vec2, ViewTransform};

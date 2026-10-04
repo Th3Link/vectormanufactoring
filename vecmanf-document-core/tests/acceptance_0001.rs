@@ -60,7 +60,15 @@ fn ac3_pack_produces_a_valid_zip_with_the_required_members() {
     document_json.read_to_end(&mut json_bytes).unwrap();
     let parsed: serde_json::Value =
         serde_json::from_slice(&json_bytes).expect("document.json must be valid JSON");
-    assert_eq!(parsed["format_version"], 1);
+    // `path-node-editing` bumped the container's `format_version` to 2
+    // (`specs/path-node-editing/adrs.md`, "format_version goes to 2"); this
+    // slice's own AC3 only promised a `format_version` field exists, not
+    // its value, so updating the pinned number here keeps the test in
+    // sync with that documented, deliberate bump rather than weakening it.
+    assert_eq!(
+        parsed["format_version"],
+        vecmanf_document_core::CURRENT_FORMAT_VERSION
+    );
 }
 
 /// AC5/AC6: a `.vmf` previously saved by this slice reopens to an

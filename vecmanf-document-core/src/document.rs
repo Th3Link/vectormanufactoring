@@ -4,7 +4,7 @@
 //! §3; `specs/project-file-foundation/adrs.md`, "a minimal document root
 //! record, and no more").
 
-use loro::{ExportMode, LoroDoc, LoroMap, LoroValue};
+use loro::{CommitOptions, ExportMode, LoroDoc, LoroMap, LoroValue};
 use serde::Serialize;
 
 use crate::error::{OpenError, SaveError};
@@ -12,12 +12,25 @@ use crate::units::{DocumentSize, Length};
 
 /// The container `format_version` this build writes and the newest it
 /// accepts on read (ADR 0004 §9).
-pub const CURRENT_FORMAT_VERSION: u32 = 1;
+///
+/// Bumped to 2 in `path-node-editing`: a version-1 reader would silently
+/// ignore every path node in a version-2 file, which is exactly the silent
+/// geometry loss ADR 0004 §9 exists to prevent
+/// (`specs/path-node-editing/adrs.md`, "`format_version` goes to 2").
+/// Migration from version 1 is empty by construction — a version-1
+/// document has no path nodes to migrate.
+pub const CURRENT_FORMAT_VERSION: u32 = 2;
 
 const ROOT_MAP: &str = "root";
 const KEY_FORMAT_VERSION: &str = "format_version";
 const KEY_WIDTH_MM: &str = "size_width_mm";
 const KEY_HEIGHT_MM: &str = "size_height_mm";
+
+/// The top-level Loro tree container holding every path object (ADR 0002
+/// §5: sibling order among tree nodes is z-order). `vecmanf-document-core`
+/// is the only module that names this key; everything else goes through
+/// [`Document`]'s methods — see [`crate::paths`].
+pub(crate) const PATHS_TREE: &str = "paths";
 
 /// An open vecmanf document.
 ///
@@ -80,7 +93,12 @@ impl Document {
     ///
     /// # Errors
     /// Returns [`OpenError::Damaged`] if the bytes are not a valid Loro
-    /// snapshot this build can import.
+    /// snapshot this build can import, or if they import cleanly but the
+    /// `paths` tree inside them does not match the shape
+    /// [`crate::path_codec`]'s writers always produce — a damaged-but-
+    /// still-unzippable file (project-file-foundation's acceptance
+    /// criterion 7: "not a crash") rather than a panic the first time some
+    /// other method reads that path.
     ///
     /// # Panics
     /// Does not panic in practice: setting the peer id on a freshly
@@ -92,6 +110,9 @@ impl Document {
         #[allow(clippy::unwrap_used)]
         loro.set_peer_id(peer_id).unwrap();
         loro.import(bytes).map_err(|_| OpenError::Damaged)?;
+        if !crate::path_codec::validate_path_tree(&loro, PATHS_TREE) {
+            return Err(OpenError::Damaged);
+        }
         Ok(Self { loro })
     }
 
@@ -109,6 +130,25 @@ impl Document {
         let width = Self::read_mm(&root, KEY_WIDTH_MM).unwrap_or(default.width.as_mm());
         let height = Self::read_mm(&root, KEY_HEIGHT_MM).unwrap_or(default.height.as_mm());
         DocumentSize::new(Length::from_mm(width), Length::from_mm(height))
+    }
+
+    /// This document's underlying Loro replica, for [`crate::paths`]'s
+    /// methods only — never exposed outside this crate (ADR 0004 §3).
+    pub(crate) const fn loro(&self) -> &LoroDoc {
+        &self.loro
+    }
+
+    /// Commits the pending auto-commit transaction with `label` as its
+    /// (persisted) commit message, so each editing method in
+    /// [`crate::paths`] ends its own transaction instead of letting every
+    /// edit since the last explicit commit pile into one (ADR 0002 §9;
+    /// `specs/path-node-editing/adrs.md`'s PR review: "a pen session is
+    /// one commit" only holds if *every* mutating method commits its own
+    /// work, undo-readiness for a future undo/redo feature depends on
+    /// one commit per interaction).
+    pub(crate) fn commit_with_label(&self, label: &str) {
+        self.loro
+            .commit_with(CommitOptions::new().commit_msg(label));
     }
 
     fn read_mm(root: &LoroMap, key: &str) -> Option<f64> {
@@ -137,9 +177,15 @@ impl Document {
     /// # Errors
     /// Returns [`SaveError::Encode`] if the view cannot be serialized.
     pub fn export_json(&self) -> Result<Vec<u8>, SaveError> {
+        let paths = self
+            .path_ids()
+            .into_iter()
+            .filter_map(|id| self.path(id))
+            .collect();
         let view = DocumentJsonView {
             format_version: CURRENT_FORMAT_VERSION,
             size: self.size(),
+            paths,
         };
         serde_json::to_vec_pretty(&view).map_err(|_| SaveError::Encode)
     }
@@ -156,6 +202,7 @@ impl Document {
 struct DocumentJsonView {
     format_version: u32,
     size: DocumentSize,
+    paths: Vec<crate::path_model::PathSnapshot>,
 }
 
 #[cfg(test)]

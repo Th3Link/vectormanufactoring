@@ -249,6 +249,9 @@ mod tests {
     #[test]
     #[ignore = "run deliberately to regenerate tests/fixtures/*.vmf, not on every `cargo test`"]
     fn generate_golden_fixtures() {
+        use crate::path_model::{AnchorId, AnchorKind, NewAnchor};
+        use crate::units::{Point, Vec2};
+
         let fixtures_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
 
         let document = Document::new(1);
@@ -282,5 +285,98 @@ mod tests {
             &future_version,
         )
         .expect("write future_format_version.vmf");
+
+        // `path-node-editing` (`specs/path-node-editing/plan.md`, task 31):
+        // a `format_version = 2` fixture carrying both anchor kinds, open
+        // and closed.
+        let with_paths = Document::new(1);
+        let open_path = with_paths.create_path(
+            &[
+                NewAnchor::corner(AnchorId::new(1, 1), Point::new(0.0, 0.0)),
+                NewAnchor::corner(AnchorId::new(1, 2), Point::new(50.0, 0.0)),
+            ],
+            false,
+        );
+        let closed_path = with_paths.create_path(
+            &[
+                NewAnchor::corner(AnchorId::new(1, 3), Point::new(0.0, 0.0)),
+                NewAnchor {
+                    id: AnchorId::new(1, 4),
+                    point: Point::new(20.0, 0.0),
+                    handle_in: Vec2::new(-5.0, 0.0),
+                    handle_out: Vec2::new(5.0, 0.0),
+                    kind: AnchorKind::Smooth,
+                },
+                NewAnchor::corner(AnchorId::new(1, 5), Point::new(10.0, 20.0)),
+            ],
+            true,
+        );
+        let _ = (open_path, closed_path);
+        let paths_v2 = pack(&with_paths, "0.1.0").expect("pack");
+        std::fs::write(fixtures_dir.join("paths_v2.vmf"), &paths_v2).expect("write paths_v2.vmf");
+
+        // `format_version_1.vmf` is deliberately NOT regenerated here.
+        // Synthesizing it from this build's own `Document::new` would bake
+        // in a Loro snapshot whose root map already says
+        // `format_version: 2` (today's `CURRENT_FORMAT_VERSION`) underneath
+        // a `manifest.json` that claims 1 — a fixture that doesn't actually
+        // prove a *real* version-1 container still opens, only that a
+        // mislabeled version-2 one does (architect review,
+        // `specs/path-node-editing/adrs.md`'s PR review). The committed
+        // fixture is instead `project-file-foundation`'s own
+        // `valid.vmf` (`main`, commit 968b543), copied byte-for-byte: a
+        // genuine container written before this slice's path schema
+        // existed at all.
+
+        // `malformed_paths.vmf` (architect review, same PR review note):
+        // a perfectly valid Loro snapshot, behind a perfectly valid
+        // manifest, whose `paths` tree has one node with no `anchors`
+        // list at all — the shape `Document::from_loro_snapshot`'s path-
+        // tree validation must catch and refuse as `OpenError::Damaged`,
+        // not something any public `vecmanf_document_core::Document`
+        // method could ever produce by itself.
+        let malformed = loro::LoroDoc::new();
+        malformed.set_peer_id(1).expect("set peer id");
+        // Literal "paths", matching `document::PATHS_TREE` (private to
+        // that module; this generator only needs the tree's well-known
+        // name, not the constant itself).
+        let malformed_tree = malformed.get_tree("paths");
+        let malformed_node = malformed_tree
+            .create(loro::TreeParentId::Root)
+            .expect("create node");
+        let malformed_meta = malformed_tree.get_meta(malformed_node).expect("meta");
+        malformed_meta
+            .insert("closed", false)
+            .expect("insert closed");
+        malformed.commit();
+        let malformed_loro = malformed
+            .export(loro::ExportMode::Snapshot)
+            .expect("export");
+        let malformed_manifest = Manifest {
+            format_version: CURRENT_FORMAT_VERSION,
+            loro_snapshot_version: CURRENT_LORO_SNAPSHOT_VERSION,
+            app_version: "0.1.0".to_string(),
+        };
+        let malformed_manifest_bytes = serde_json::to_vec(&malformed_manifest).expect("serialize");
+        let mut malformed_writer = ZipWriter::new(Cursor::new(Vec::new()));
+        write_member(
+            &mut malformed_writer,
+            MANIFEST_MEMBER,
+            &malformed_manifest_bytes,
+            options,
+        )
+        .expect("manifest");
+        write_member(
+            &mut malformed_writer,
+            LORO_SNAPSHOT_MEMBER,
+            &malformed_loro,
+            options,
+        )
+        .expect("loro member");
+        write_member(&mut malformed_writer, DOCUMENT_JSON_MEMBER, b"{}", options)
+            .expect("json member");
+        let malformed_bytes = malformed_writer.finish().expect("finish").into_inner();
+        std::fs::write(fixtures_dir.join("malformed_paths.vmf"), &malformed_bytes)
+            .expect("write malformed_paths.vmf");
     }
 }

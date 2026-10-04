@@ -143,10 +143,17 @@ fn loro_snapshot_version_above_current_is_refused_even_when_format_version_is_cu
     match result {
         Err(OpenError::FormatTooNew { found, supported }) => {
             assert_eq!(found, CURRENT_LORO_SNAPSHOT_VERSION + 1);
-            assert_eq!(
-                supported,
-                CURRENT_FORMAT_VERSION.max(CURRENT_LORO_SNAPSHOT_VERSION)
-            );
+            // `supported` must echo back the *snapshot* version's own
+            // bound, not some combination with the (here, unrelated and
+            // already-current) container `format_version` — the
+            // production code's own documented contract is "each
+            // comparison reports found/supported from the one field it
+            // actually checked" (`src/container.rs`). A `.max()` of the
+            // two version numbers happened to equal this when both
+            // defaulted to 1; `path-node-editing` bumping only
+            // `format_version` (now 2) exposed that the `.max()` here was
+            // never actually what the implementation promises.
+            assert_eq!(supported, CURRENT_LORO_SNAPSHOT_VERSION);
         }
         Ok(_) => panic!("expected FormatTooNew, got Ok"),
         Err(other) => panic!("expected FormatTooNew, got {other:?}"),
@@ -211,6 +218,82 @@ fn unparsable_manifest_json_is_damaged() {
     let bytes = zip_with_members(&[
         ("manifest.json", b"{ this is not valid json"),
         ("document.loro", b"irrelevant"),
+        ("document.json", b"{}"),
+    ]);
+
+    let result = unpack(2, &bytes);
+    assert!(
+        matches!(result, Err(OpenError::Damaged)),
+        "expected Damaged, got {:?}",
+        result.err()
+    );
+}
+
+/// A `document.loro` snapshot that is itself a perfectly valid Loro
+/// document, behind a perfectly valid manifest, but whose `paths` tree
+/// has a node not shaped like `vecmanf_document_core::paths` ever writes
+/// one (`specs/path-node-editing/adrs.md`'s architect review: "a
+/// container whose path data does not match the schema is refused with
+/// `OpenError::Damaged`"). Without that validation, this exact byte
+/// sequence would import without error and only panic the first time
+/// something called `Document::path_ids()`/`path()` on it — this test
+/// pins the earlier, named refusal instead (project-file-foundation's
+/// acceptance criterion 7: "not a crash").
+///
+/// Built with `loro` directly rather than through
+/// `vecmanf_document_core::Document`: the public API has no way to
+/// produce a malformed path node, by design.
+#[test]
+fn a_path_node_missing_its_anchors_list_is_damaged_not_a_panic() {
+    let loro = loro::LoroDoc::new();
+    loro.set_peer_id(1).expect("set peer id");
+    let tree = loro.get_tree("paths");
+    let node = tree.create(loro::TreeParentId::Root).expect("create node");
+    let meta = tree.get_meta(node).expect("meta");
+    // A real path node always has an `anchors` movable list; this one
+    // has no `anchors` key at all, which `anchors_container` would
+    // otherwise `.unwrap()` on.
+    meta.insert("closed", false).expect("insert closed");
+    loro.commit();
+    let snapshot = loro.export(loro::ExportMode::Snapshot).expect("export");
+
+    let manifest = manifest_bytes(CURRENT_FORMAT_VERSION, CURRENT_LORO_SNAPSHOT_VERSION);
+    let bytes = zip_with_members(&[
+        ("manifest.json", &manifest),
+        ("document.loro", &snapshot),
+        ("document.json", b"{}"),
+    ]);
+
+    let result = unpack(2, &bytes);
+    assert!(
+        matches!(result, Err(OpenError::Damaged)),
+        "expected Damaged, got {:?}",
+        result.err()
+    );
+}
+
+/// The sibling case: an `anchors` list whose element is a plain value
+/// (not a map), which `anchor_map_at` would otherwise `panic!` on the
+/// first read.
+#[test]
+fn a_path_node_with_a_non_map_anchor_element_is_damaged_not_a_panic() {
+    let loro = loro::LoroDoc::new();
+    loro.set_peer_id(1).expect("set peer id");
+    let tree = loro.get_tree("paths");
+    let node = tree.create(loro::TreeParentId::Root).expect("create node");
+    let meta = tree.get_meta(node).expect("meta");
+    meta.insert("closed", false).expect("insert closed");
+    let anchors = meta
+        .insert_container("anchors", loro::LoroMovableList::new())
+        .expect("insert anchors container");
+    anchors.push("not a map".to_string()).expect("push");
+    loro.commit();
+    let snapshot = loro.export(loro::ExportMode::Snapshot).expect("export");
+
+    let manifest = manifest_bytes(CURRENT_FORMAT_VERSION, CURRENT_LORO_SNAPSHOT_VERSION);
+    let bytes = zip_with_members(&[
+        ("manifest.json", &manifest),
+        ("document.loro", &snapshot),
         ("document.json", b"{}"),
     ]);
 
