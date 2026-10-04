@@ -24,6 +24,10 @@ mod error;
 mod path_codec;
 mod path_model;
 mod paths;
+mod primitive_model;
+mod primitive_outline;
+mod shape_codec;
+mod shapes;
 mod units;
 
 pub use container::{CURRENT_LORO_SNAPSHOT_VERSION, pack, unpack};
@@ -33,4 +37,13 @@ pub use path_model::{
     AnchorId, AnchorKind, AnchorSnapshot, Color, HandleSlot, NewAnchor, NodeId, PathEditError,
     PathSnapshot,
 };
-pub use units::{DocumentSize, Length, Point, Tolerance, Vec2, ViewTransform};
+pub use primitive_model::{
+    EllipseFrame, InnerRatio, ObjectSnapshot, PointCount, PrimitiveSnapshot, RectBounds, Shape,
+    ShapeParamError, StarFrame,
+};
+pub use primitive_outline::{
+    KAPPA, OutlineAnchor, effective_corner_radius, ellipse_outline, outline_of, polygon_outline,
+    rect_outline, star_outline,
+};
+pub use shapes::ShapeEditError;
+pub use units::{Angle, DocumentSize, Length, Point, Tolerance, Vec2, ViewTransform};

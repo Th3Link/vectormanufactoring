@@ -272,6 +272,98 @@ fn a_path_node_missing_its_anchors_list_is_damaged_not_a_panic() {
     );
 }
 
+/// `specs/primitive-shapes/adrs.md`'s open-file validation cases: an
+/// unknown `shape` tag is refused as `Damaged`, not a crash or a
+/// silently-ignored object.
+#[test]
+fn a_primitive_node_with_an_unknown_shape_tag_is_damaged_not_a_panic() {
+    let bytes = primitive_fixture(|meta| {
+        meta.insert("shape", "hexagon-with-legs")
+            .expect("insert shape");
+    });
+    assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
+}
+
+/// Acceptance criterion 10: a stored `point_count` outside `3..=1024`
+/// is refused as `Damaged` on open — "a named error, not a crash or a
+/// silently clamped value" — never silently clamped into range.
+#[test]
+fn a_polygon_with_an_out_of_range_point_count_is_damaged_not_a_panic() {
+    let bytes = primitive_fixture(|meta| {
+        meta.insert("shape", "polygon").expect("insert shape");
+        meta.insert("star_frame", vec![0.0, 0.0, 10.0, 0.0])
+            .expect("insert frame");
+        meta.insert("point_count", 2_i64)
+            .expect("insert out-of-range point count");
+    });
+    assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
+}
+
+/// Acceptance criterion 12: a stored `inner_ratio` outside the open
+/// interval `(0, 1)` is refused as `Damaged`.
+#[test]
+fn a_star_with_an_out_of_range_inner_ratio_is_damaged_not_a_panic() {
+    let bytes = primitive_fixture(|meta| {
+        meta.insert("shape", "star").expect("insert shape");
+        meta.insert("star_frame", vec![0.0, 0.0, 10.0, 0.0])
+            .expect("insert frame");
+        meta.insert("point_count", 5_i64)
+            .expect("insert point count");
+        meta.insert("inner_ratio", 1.5_f64)
+            .expect("insert out-of-range ratio");
+    });
+    assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
+}
+
+/// A rectangle missing its required `corner_radius` field is refused as
+/// `Damaged`, not a panic the first time something reads it.
+#[test]
+fn a_rect_missing_corner_radius_is_damaged_not_a_panic() {
+    let bytes = primitive_fixture(|meta| {
+        meta.insert("shape", "rect").expect("insert shape");
+        meta.insert("rect_bounds", vec![0.0, 0.0, 10.0, 10.0])
+            .expect("insert bounds");
+    });
+    assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
+}
+
+/// A rectangle with a negative width is refused as `Damaged`.
+#[test]
+fn a_rect_with_a_negative_size_is_damaged_not_a_panic() {
+    let bytes = primitive_fixture(|meta| {
+        meta.insert("shape", "rect").expect("insert shape");
+        meta.insert("rect_bounds", vec![0.0, 0.0, -10.0, 10.0])
+            .expect("insert negative-width bounds");
+        meta.insert("corner_radius", 0.0_f64)
+            .expect("insert corner radius");
+    });
+    assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
+}
+
+/// Builds a one-node `.vmf` container whose single `paths`-tree node is
+/// shaped by `build_meta` directly through `loro`, bypassing
+/// `vecmanf_document_core::Document`'s public API entirely (which has no
+/// way to produce a malformed primitive, by design) — the same approach
+/// `a_path_node_missing_its_anchors_list_is_damaged_not_a_panic` above
+/// uses for a malformed path.
+fn primitive_fixture(build_meta: impl FnOnce(&loro::LoroMap)) -> Vec<u8> {
+    let loro = loro::LoroDoc::new();
+    loro.set_peer_id(1).expect("set peer id");
+    let tree = loro.get_tree("paths");
+    let node = tree.create(loro::TreeParentId::Root).expect("create node");
+    let meta = tree.get_meta(node).expect("meta");
+    build_meta(&meta);
+    loro.commit();
+    let snapshot = loro.export(loro::ExportMode::Snapshot).expect("export");
+
+    let manifest = manifest_bytes(CURRENT_FORMAT_VERSION, CURRENT_LORO_SNAPSHOT_VERSION);
+    zip_with_members(&[
+        ("manifest.json", &manifest),
+        ("document.loro", &snapshot),
+        ("document.json", b"{}"),
+    ])
+}
+
 /// The sibling case: an `anchors` list whose element is a plain value
 /// (not a map), which `anchor_map_at` would otherwise `panic!` on the
 /// first read.

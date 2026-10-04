@@ -10,7 +10,7 @@
 
 use loro::{LoroMap, LoroMovableList, TreeID, TreeParentId};
 
-use crate::document::{Document, PATHS_TREE};
+use crate::document::{Document, OBJECTS_TREE};
 use crate::path_codec::{
     self, KEY_HANDLE_IN, KEY_HANDLE_OUT, KEY_POINT, adjacent_segment_indices, anchor_index,
     anchor_map_at, anchors_container, insert_anchor_at, insert_anchors_container,
@@ -42,7 +42,7 @@ impl Document {
     /// meta map and movable list, none of which Loro's API can reject.
     #[must_use]
     pub fn create_path(&self, anchors: &[NewAnchor], closed: bool) -> NodeId {
-        let tree = self.loro().get_tree(PATHS_TREE);
+        let tree = self.loro().get_tree(OBJECTS_TREE);
         // invariant: creating a root-level node on a freshly obtained tree
         // handle cannot fail.
         #[allow(clippy::unwrap_used)]
@@ -60,11 +60,15 @@ impl Document {
         NodeId::from_parts(tree_id.peer, tree_id.counter)
     }
 
-    /// Every path object's identity, in sibling (z-)order (ADR 0002 §5) —
-    /// never an array offset a caller may rely on staying stable.
+    /// Every object's identity (path or primitive alike), in sibling
+    /// (z-)order (ADR 0002 §5) — never an array offset a caller may rely
+    /// on staying stable. Despite the name (kept from `path-node-editing`
+    /// to avoid an unrelated rename), this lists every root tree node;
+    /// [`Document::path`] and [`Document::primitive`] each filter to
+    /// their own kind.
     #[must_use]
     pub fn path_ids(&self) -> Vec<NodeId> {
-        let tree = self.loro().get_tree(PATHS_TREE);
+        let tree = self.loro().get_tree(OBJECTS_TREE);
         tree.roots()
             .into_iter()
             .map(|id| NodeId::from_parts(id.peer, id.counter))
@@ -73,15 +77,22 @@ impl Document {
 
     /// Reads one path's full current data, or `None` if it no longer
     /// exists (deleted locally, or by a collaborator, since the caller
-    /// last read a snapshot — ADR 0009 §2).
+    /// last read a snapshot — ADR 0009 §2) **or is a primitive instead**
+    /// (`specs/primitive-shapes/adrs.md`: "`Document::path(id)` returns
+    /// `None` for a primitive node. It must not return an empty
+    /// `PathSnapshot`, so slice 2's node tool and hit-testing never
+    /// mistake a primitive for a path with no anchors.").
     #[must_use]
     pub fn path(&self, id: NodeId) -> Option<PathSnapshot> {
-        let tree = self.loro().get_tree(PATHS_TREE);
+        let tree = self.loro().get_tree(OBJECTS_TREE);
         let tree_id = tree_id_of(id);
         if !node_exists(&tree, tree_id) {
             return None;
         }
         let meta = tree.get_meta(tree_id).ok()?;
+        if crate::shape_codec::read_shape_tag(&meta).is_some() {
+            return None;
+        }
         Some(path_codec::read_path_snapshot(id, &meta))
     }
 
@@ -267,7 +278,7 @@ impl Document {
 
         let remaining = anchors.len().saturating_sub(indices.len());
         if remaining < 2 {
-            let tree = self.loro().get_tree(PATHS_TREE);
+            let tree = self.loro().get_tree(OBJECTS_TREE);
             let tree_id = tree_id_of(path);
             // invariant: `path_parts` above already confirmed this node
             // exists.
@@ -357,7 +368,7 @@ impl Document {
     /// callers that need both (e.g. the `closed` flag for wraparound) read
     /// them from the same lookup.
     fn path_parts(&self, path: NodeId) -> Result<(LoroMap, LoroMovableList), PathEditError> {
-        let tree = self.loro().get_tree(PATHS_TREE);
+        let tree = self.loro().get_tree(OBJECTS_TREE);
         let tree_id = tree_id_of(path);
         if !node_exists(&tree, tree_id) {
             return Err(PathEditError::NoSuchPath);
