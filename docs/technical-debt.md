@@ -55,7 +55,7 @@ documented limit.
 Both measured 2026-10-03 on Arch Linux/X11, WebKitGTK 2.52.6, Quadro P1000,
 NVIDIA proprietary 580.178.04, in a real `wry`/`tao` webview — the spike that
 discharged [ADR 0001](adr/0001-ui-framework-and-canvas-rendering.md) §4's owed
-measurement (`specs/path-node-editing/adrs.md`). Performance itself passed:
+measurement (`specs/0002-path-node-editing/adrs.md`). Performance itself passed:
 50 000 nodes at a vsync-locked ~60 fps. These are the two things that did not.
 
 1. **WebGL2 renders nothing unless WebKitGTK's DMA-BUF renderer is disabled.**

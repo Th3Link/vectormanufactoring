@@ -1,6 +1,6 @@
 //! The vecmanf draw-list builder (ADR 0001 §4, ADR 0011 §1): document
 //! snapshot + view transform + decoration input → flat draw list,
-//! tessellated with `lyon` (`specs/path-node-editing/adrs.md`).
+//! tessellated with `lyon` (`specs/0002-path-node-editing/adrs.md`).
 //!
 //! Pure and wasm-compatible (`CLAUDE.md` §6): no filesystem, network,
 //! clock, threads, UI or GPU access — `vecmanf-editor-wasm` owns the

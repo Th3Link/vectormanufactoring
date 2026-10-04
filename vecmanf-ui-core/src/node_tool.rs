@@ -136,7 +136,7 @@ impl NodeTool {
 
     /// Acceptance criterion: Escape with a selection present clears it;
     /// with nothing selected it is a no-op
-    /// (`specs/path-node-editing/specification.md`'s node-tool actions
+    /// (`specs/0002-path-node-editing/specification.md`'s node-tool actions
     /// notes). Also cancels any drag currently in flight, writing nothing
     /// — consistent with the pen tool's own Escape, which discards its
     /// in-progress state rather than leaving a gesture half-finished.
@@ -261,7 +261,7 @@ impl NodeTool {
                 starts,
             } => {
                 // A press and release at the exact same point writes
-                // nothing (`specs/path-node-editing/adrs.md`'s dated
+                // nothing (`specs/0002-path-node-editing/adrs.md`'s dated
                 // architect-review note): under ADR 0009 §3, `point` is
                 // an LWW register, so re-writing the same value is still
                 // a *new* operation with a newer clock — it can beat a
@@ -393,7 +393,7 @@ impl NodeTool {
     /// does not land on a segment.
     ///
     /// Double-click detection itself is the frontend's job
-    /// (`specs/path-node-editing/adrs.md`'s `PenTool` doc comment makes
+    /// (`specs/0002-path-node-editing/adrs.md`'s `PenTool` doc comment makes
     /// the same point) — this is a direct action the caller invokes once
     /// it has decided a double-click landed on a segment.
     pub fn insert_at(

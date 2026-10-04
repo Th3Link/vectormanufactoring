@@ -4,7 +4,11 @@ Spec-driven development, adapted from
 [spec-driven-dev-kit](https://github.com/trojava/spec-driven-dev-kit) for
 this project's roles and file layout (see `CLAUDE.md` §2, §4).
 
-One folder per feature: `specs/<feature-slug>/`, three files.
+One folder per feature: `specs/<NNNN-feature-slug>/`, three files. `NNNN`
+is a 4-digit, zero-padded sequence number matching the feature's position in
+`specs/index.md`'s `#` column — the same numbering convention
+`docs/adr/NNNN-slug.md` already uses for ADRs. Assign the next number when a
+feature's folder is created; numbers are never reused or renumbered later.
 
 ## `specification.md` — what and why (product-owner)
 

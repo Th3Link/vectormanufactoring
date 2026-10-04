@@ -45,7 +45,7 @@ name = "vecmanf-storage-io"
 allow = ["AGPL-3.0-or-later"]
 name = "vecmanf-app"
 
-# path-node-editing's four new crates (specs/path-node-editing/adrs.md:
+# path-node-editing's four new crates (specs/0002-path-node-editing/adrs.md:
 # "the four new crate manifests... carry AGPL-3.0-or-later").
 [[licenses.exceptions]]
 allow = ["AGPL-3.0-or-later"]

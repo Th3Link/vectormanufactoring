@@ -1,5 +1,5 @@
 //! Black-box + property tests for `vecmanf-geometry-core`'s slice of
-//! `specs/path-node-editing/specification.md` (acceptance criteria 12, 14,
+//! `specs/0002-path-node-editing/specification.md` (acceptance criteria 12, 14,
 //! and the segment hit-testing that backs AC7/AC10 selection), written
 //! against this crate's public API only (`nearest_point_on_segment`,
 //! `subdivide_at_parameter`), independent of `vecmanf-ui-core`'s and
@@ -12,7 +12,7 @@
 //! invariants").
 //!
 //! `flatten_segment` was removed from this crate (architect review,
-//! `specs/path-node-editing/adrs.md`'s "Architect review notes": it had no
+//! `specs/0002-path-node-editing/adrs.md`'s "Architect review notes": it had no
 //! production caller, hit-testing landed on `nearest_point_on_segment`
 //! instead), so its tests below were removed along with it
 //! (`CLAUDE.md` §5, "delete dead code").

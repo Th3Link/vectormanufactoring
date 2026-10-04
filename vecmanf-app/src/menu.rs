@@ -1,7 +1,7 @@
 //! The native File menu: New, Open…, Save, Save As…, a separator, Quit —
 //! the one top-level menu this slice adds, with OS-standard accelerators
 //! bound directly on the menu items
-//! (`specs/project-file-foundation/specification.md`, "Keyboard shortcuts
+//! (`specs/0001-project-file-foundation/specification.md`, "Keyboard shortcuts
 //! (from day one)"). Native menus and accelerators are free accessibility
 //! and keyboard traversal on every platform (same spec, "Window chrome and
 //! menu").

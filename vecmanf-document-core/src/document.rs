@@ -1,7 +1,7 @@
 //! The document model's root: a Loro-backed replica carrying exactly the
 //! fields this slice needs — `format_version` and `size` — as per-field
 //! last-writer-wins registers (ADR 0009 §3; ADR 0002 §1, §9; ADR 0004 §2,
-//! §3; `specs/project-file-foundation/adrs.md`, "a minimal document root
+//! §3; `specs/0001-project-file-foundation/adrs.md`, "a minimal document root
 //! record, and no more").
 
 use loro::{CommitOptions, ExportMode, LoroDoc, LoroMap, LoroValue};
@@ -16,7 +16,7 @@ use crate::units::{DocumentSize, Length};
 /// Bumped to 2 in `path-node-editing`: a version-1 reader would silently
 /// ignore every path node in a version-2 file, which is exactly the silent
 /// geometry loss ADR 0004 §9 exists to prevent
-/// (`specs/path-node-editing/adrs.md`, "`format_version` goes to 2").
+/// (`specs/0002-path-node-editing/adrs.md`, "`format_version` goes to 2").
 /// Migration from version 1 is empty by construction — a version-1
 /// document has no path nodes to migrate.
 pub const CURRENT_FORMAT_VERSION: u32 = 2;
@@ -53,7 +53,7 @@ impl Document {
     /// `vecmanf-library-core` takes a record's UUID as a parameter instead
     /// of generating it (ADR 0011 §6). `vecmanf-app` mints a fresh id per
     /// open session and passes it in here
-    /// (`specs/project-file-foundation/adrs.md`, amended 2026-10-03).
+    /// (`specs/0001-project-file-foundation/adrs.md`, amended 2026-10-03).
     ///
     /// # Panics
     /// Does not panic in practice: it only inserts known-valid keys into a
@@ -142,7 +142,7 @@ impl Document {
     /// (persisted) commit message, so each editing method in
     /// [`crate::paths`] ends its own transaction instead of letting every
     /// edit since the last explicit commit pile into one (ADR 0002 §9;
-    /// `specs/path-node-editing/adrs.md`'s PR review: "a pen session is
+    /// `specs/0002-path-node-editing/adrs.md`'s PR review: "a pen session is
     /// one commit" only holds if *every* mutating method commits its own
     /// work, undo-readiness for a future undo/redo feature depends on
     /// one commit per interaction).

@@ -389,10 +389,10 @@ impl Session {
 
 /// Returns the one-sentence message the frontend's `ErrorDialog` shows
 /// for `error` — moved here from `vecmanf-app`'s native `open_error.rs`
-/// (`specs/project-file-foundation/specification.md`, "Error handling —
+/// (`specs/0001-project-file-foundation/specification.md`, "Error handling —
 /// invalid/corrupt file") now that [`Session::open`] (and the
 /// `Document::open` it wraps) only ever runs inside this wasm session,
-/// never natively (`specs/path-node-editing/adrs.md`'s PR review: "the
+/// never natively (`specs/0002-path-node-editing/adrs.md`'s PR review: "the
 /// host does byte I/O only"). Plain Rust, not `wasm_api`'s `wasm32`-only
 /// shell, so it stays exercised by ordinary `cargo test` — its only
 /// caller is `wasm_api::WasmSession::open`, which is itself `wasm32`-

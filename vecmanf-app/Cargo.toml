@@ -34,7 +34,7 @@ tauri = { version = "2", default-features = false, features = [
     "x11",
 ] }
 tauri-plugin-dialog = "2"
-# A fresh Loro peer id per open session (specs/project-file-foundation/
+# A fresh Loro peer id per open session (specs/0001-project-file-foundation/
 # adrs.md, amended 2026-10-03) is minted by the frontend itself now
 # (`frontend/src/lib/editorSession.ts`'s `mintPeerId`, the browser's own
 # CSPRNG) — `path-node-editing`'s PR review moved Open/Save so the only

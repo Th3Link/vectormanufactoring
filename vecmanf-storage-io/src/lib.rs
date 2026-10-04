@@ -2,7 +2,7 @@
 //! (ADR 0011 §2). This slice only needs the filesystem module; the other
 //! modules (OS CSPRNG, clock, credential store, HTTP, git wire, relay
 //! socket) belong to later stories and get no code here
-//! (`specs/project-file-foundation/adrs.md`).
+//! (`specs/0001-project-file-foundation/adrs.md`).
 
 // `CLAUDE.md` §5 allows unwrap/expect in tests; only production code is held
 // to the stricter rule.

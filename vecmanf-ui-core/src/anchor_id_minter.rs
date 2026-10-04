@@ -1,6 +1,6 @@
 //! Minting fresh [`AnchorId`]s for one session.
 //!
-//! `specs/path-node-editing/adrs.md`: "`AnchorId` is minted by the
+//! `specs/0002-path-node-editing/adrs.md`: "`AnchorId` is minted by the
 //! creating peer and is globally unique... passed into
 //! `vecmanf-document-core`, never minted there." Both tools in this crate
 //! create anchors — [`crate::PenTool`] placing nodes, [`crate::NodeTool`]
@@ -24,7 +24,7 @@ pub struct AnchorIdMinter {
 impl AnchorIdMinter {
     /// Starts minting for `peer` — the same Loro peer id the session's
     /// [`vecmanf_document_core::Document`] was opened with
-    /// (`specs/project-file-foundation/adrs.md`, amended 2026-10-03: a
+    /// (`specs/0001-project-file-foundation/adrs.md`, amended 2026-10-03: a
     /// fresh peer id per open session).
     #[must_use]
     pub const fn new(peer: u64) -> Self {

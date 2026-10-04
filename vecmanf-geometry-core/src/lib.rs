@@ -1,7 +1,7 @@
 //! The vecmanf geometry kernel (ADR 0003 §1): the narrow slice of
 //! operations that need to know what a cubic Bézier is, for
 //! `path-node-editing`'s hit-testing — nearest-point-on-segment and de
-//! Casteljau subdivision (`specs/path-node-editing/adrs.md`, "the
+//! Casteljau subdivision (`specs/0002-path-node-editing/adrs.md`, "the
 //! path/node crate boundary").
 //!
 //! Pure and wasm-compatible (`CLAUDE.md` §6): no filesystem, network,

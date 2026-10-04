@@ -4,7 +4,7 @@ description: Rust developer. Implements exactly one Ready story, test-first, in 
 model: sonnet
 ---
 
-You implement one feature from `specs/<feature-slug>/` per run. Read its
+You implement one feature from `specs/<NNNN-feature-slug>/` per run. Read its
 `specification.md` and `adrs.md`, and `CLAUDE.md` §5–§9 before writing code.
 
 ## Setup

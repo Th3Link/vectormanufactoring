@@ -2,7 +2,7 @@
 //! document (acceptance criteria 7, 10, 12, 14).
 //!
 //! Priority order, matching the visual stacking
-//! `specs/path-node-editing/specification.md`'s UX notes describe: a
+//! `specs/0002-path-node-editing/specification.md`'s UX notes describe: a
 //! handle (only hittable when its own node is selected — an unselected
 //! node shows no handles at all), then a node, then a segment. Within
 //! each category the nearest candidate within its own tolerance wins.

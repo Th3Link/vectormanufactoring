@@ -52,7 +52,7 @@ fn future_format_version_vmf_is_refused_as_too_new() {
     ));
 }
 
-/// `path-node-editing` (`specs/path-node-editing/plan.md`, task 31): a
+/// `path-node-editing` (`specs/0002-path-node-editing/plan.md`, task 31): a
 /// `format_version = 2` document with two paths — one open with only
 /// corner anchors, one closed with a mix of corner and smooth anchors and
 /// real (non-zero) handles — round-trips through the container exactly.
@@ -81,7 +81,7 @@ fn paths_v2_vmf_round_trips_both_anchor_kinds_open_and_closed() {
 }
 
 /// `path-node-editing`'s written migration policy
-/// (`specs/path-node-editing/adrs.md`, "`format_version` goes to 2"): a
+/// (`specs/0002-path-node-editing/adrs.md`, "`format_version` goes to 2"): a
 /// genuine `format_version = 1` container — written before paths existed
 /// at all — still opens, with an empty path list rather than an error or a
 /// partial read.
@@ -92,7 +92,7 @@ fn format_version_1_vmf_opens_with_no_paths() {
     assert_eq!(document.path_ids(), Vec::new());
 }
 
-/// Architect review (`specs/path-node-editing/adrs.md`'s PR review note):
+/// Architect review (`specs/0002-path-node-editing/adrs.md`'s PR review note):
 /// a container whose `paths` tree does not match the schema
 /// `vecmanf_document_core::paths` writes is refused with
 /// `OpenError::Damaged`, the same "not a crash" guarantee

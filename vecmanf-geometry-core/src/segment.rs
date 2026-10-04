@@ -1,20 +1,20 @@
 //! Pure geometry over one path segment's resolved control points — the
 //! two operations the path/node crate boundary assigns to this crate
 //! because they need to know what a cubic Bézier is
-//! (`specs/path-node-editing/adrs.md`, "the path/node crate boundary"):
+//! (`specs/0002-path-node-editing/adrs.md`, "the path/node crate boundary"):
 //! nearest-point-on-segment and de Casteljau subdivision. `kurbo` per
 //! ADR 0003 §2; no `kurbo` type crosses out of this module's public
 //! functions.
 //!
 //! A third operation, flatten-for-hit-test, was removed (architect review,
-//! `specs/path-node-editing/adrs.md`'s "Architect review notes"):
+//! `specs/0002-path-node-editing/adrs.md`'s "Architect review notes"):
 //! hit-testing landed on [`nearest_point_on_segment`] instead, so
 //! flattening had no production caller (`CLAUDE.md` §5, "delete dead
 //! code").
 //!
 //! Every function here takes a segment as its two endpoint anchors' own
 //! data — `start`/`end` points plus the two *relative* handles that face
-//! this segment (`specs/path-node-editing/adrs.md` decision 2) — never a
+//! this segment (`specs/0002-path-node-editing/adrs.md` decision 2) — never a
 //! pre-built absolute curve, so a caller in `vecmanf-ui-core` can pass a
 //! [`vecmanf_document_core::AnchorSnapshot`] pair's fields straight
 //! through without converting anything itself.
@@ -70,7 +70,7 @@ pub fn nearest_point_on_segment(
 /// acceptance criterion 12; every field is already relative to its own
 /// anchor, ready to pass straight into
 /// [`vecmanf_document_core::Document::insert_anchor`]
-/// (`specs/path-node-editing/adrs.md`, "commands carry resolved geometry,
+/// (`specs/0002-path-node-editing/adrs.md`, "commands carry resolved geometry,
 /// never geometric intent").
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Subdivision {
@@ -92,7 +92,7 @@ pub struct Subdivision {
 /// original one exactly.
 ///
 /// A segment whose two handles are both already the exact zero vector —
-/// a line (`specs/path-node-editing/adrs.md` decision 2) — is split along
+/// a line (`specs/0002-path-node-editing/adrs.md` decision 2) — is split along
 /// the straight chord directly rather than through `kurbo`'s de
 /// Casteljau: a cubic "disguised" as a line (`p1 == p0`, `p2 == p3`)
 /// still subdivides to the right *point*, but its new control handles

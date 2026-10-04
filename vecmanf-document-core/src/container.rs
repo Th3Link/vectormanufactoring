@@ -4,7 +4,7 @@
 //! (ADR 0011 §2, `vecmanf-document-core`'s responsibility).
 //!
 //! `manifest.json` is read first and alone decides whether the rest of the
-//! container is trusted (`specs/project-file-foundation/adrs.md`,
+//! container is trusted (`specs/0001-project-file-foundation/adrs.md`,
 //! "container version lives in a `manifest.json` member"): it carries the
 //! container `format_version`, the `loro_snapshot_version` this crate wrote
 //! the snapshot with, and an informational `app_version`.
@@ -38,7 +38,7 @@ const ZIP_EMPTY_ARCHIVE: &[u8] = b"PK\x05\x06";
 
 /// The container's `manifest.json` member.
 // All three fields ending in `version` is the on-disk shape this slice's
-// feature-local decision fixes (`specs/project-file-foundation/adrs.md`,
+// feature-local decision fixes (`specs/0001-project-file-foundation/adrs.md`,
 // "container version lives in a `manifest.json` member") — not a naming
 // accident to refactor away.
 #[allow(clippy::struct_field_names)]
@@ -54,7 +54,7 @@ struct Manifest {
 /// Writes the three required members in one pass from a single frozen
 /// read of `document` (ADR 0009 §4), so `document.loro` and
 /// `document.json` can never describe different states
-/// (`specs/project-file-foundation/adrs.md`).
+/// (`specs/0001-project-file-foundation/adrs.md`).
 ///
 /// # Errors
 /// Returns [`SaveError`] if the document cannot be exported or the zip
@@ -101,7 +101,7 @@ fn write_member(
 /// `manifest.json` is read and validated before `document.loro` is even
 /// looked at, so a refusal never partially reads the rest of the container
 /// (ADR 0004 §9) and never touches an already-open project
-/// (`specs/project-file-foundation/specification.md`, AC7).
+/// (`specs/0001-project-file-foundation/specification.md`, AC7).
 ///
 /// # Errors
 /// Returns [`OpenError::NotAVmf`] if `bytes` is not zip-shaped at all,
@@ -286,7 +286,7 @@ mod tests {
         )
         .expect("write future_format_version.vmf");
 
-        // `path-node-editing` (`specs/path-node-editing/plan.md`, task 31):
+        // `path-node-editing` (`specs/0002-path-node-editing/plan.md`, task 31):
         // a `format_version = 2` fixture carrying both anchor kinds, open
         // and closed.
         let with_paths = Document::new(1);
@@ -322,7 +322,7 @@ mod tests {
         // a `manifest.json` that claims 1 — a fixture that doesn't actually
         // prove a *real* version-1 container still opens, only that a
         // mislabeled version-2 one does (architect review,
-        // `specs/path-node-editing/adrs.md`'s PR review). The committed
+        // `specs/0002-path-node-editing/adrs.md`'s PR review). The committed
         // fixture is instead `project-file-foundation`'s own
         // `valid.vmf` (`main`, commit 968b543), copied byte-for-byte: a
         // genuine container written before this slice's path schema

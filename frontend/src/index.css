@@ -80,7 +80,7 @@
     --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: oklch(0.708 0 0);
 
-    /* This slice's one piece of chrome (specs/project-file-foundation),
+    /* This slice's one piece of chrome (specs/0001-project-file-foundation),
        kept as its own variable rather than a hardcoded hex so the
        eventual light/dark ADR work is a variable swap, not a
        search-and-replace. Only one theme exists yet. */
