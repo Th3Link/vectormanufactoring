@@ -75,6 +75,54 @@ foundation.
    >
    > This changes no accepted text. Option A stays rejected as written — it was
    > rejected for C++-via-FFI, and a pure-Rust port is option B, not option A.
+   >
+   > **Spike result, 2026-10-04 (`spike/booleans`, never merged — code
+   > discarded, result recorded here):** `i_overlay` 9.0.0, `geo` 0.33.1
+   > (`default-features = false`, `features = ["earcut"]`) and `clipper2-rust`
+   > 1.2.0 were run through union/difference/intersection on four degenerate
+   > fixtures — a self-intersecting bowtie, a contour with a duplicated point
+   > (zero-length/coincident edge), a near-degenerate sliver (10×1e-9), and
+   > 5,000 disjoint tiny-square subpaths — each under a 10s timeout with
+   > `panic::catch_unwind` on a worker thread. **All three candidates handled
+   > every case: no panic, no hang, no garbage output**, and their results
+   > agreed with each other on every case (the sliver collapsing to empty on
+   > difference/intersection in all three is consistent across a precision
+   > sweep of 2/6/10/15 decimal places for `clipper2-rust`, so it is the
+   > sliver's area being genuinely below double precision at that scale, not
+   > a candidate-specific rounding bug). On 5,000 subpaths all three completed
+   > intersection in 9–14ms with no distinguishing robustness gap. Each
+   > candidate, isolated in its own crate with `default-features = false`,
+   > also built cleanly for `wasm32-unknown-unknown` with no code changes
+   > needed; `geo` pulls `rand`/`rand_pcg` transitively through its bundled
+   > `i_overlay` 4.5.2 even with defaults off, but not `getrandom`, so nothing
+   > on ADR 0011 §6's wasm32 ban list appears for any of the three.
+   >
+   > Degenerate-input handling and wasm cleanliness being a three-way tie, the
+   > decision is **`clipper2-rust`**, on grounds the ADR's two stated criteria
+   > don't capture but that are reasonable tie-breakers: it is
+   > `#![forbid(unsafe_code)]` with zero `unsafe` in its own source (matching
+   > `CLAUDE.md` §5 most directly), whereas `i_overlay` 9.0.0 uses `unsafe`
+   > internally 49 times for performance (not FFI, but still unsafe Rust this
+   > project would otherwise avoid) and `geo` 2 times; and its algorithms are
+   > Clipper2's, the implementation this industry (including CAM/laser-cutting
+   > tooling adjacent to this product) has relied on for over a decade, so the
+   > port's job is transcription fidelity rather than novel robustness, which
+   > this spike's agreement across all four fixtures corroborates. A note on
+   > `geo`: it is not an independent third implementation here — `geo`'s own
+   > `BooleanOps` is a wrapper over a pinned, older `i_overlay` (4.5.2 vs. our
+   > direct 9.0.0), so picking it would mean inheriting `i_overlay`'s
+   > unsafe-internals profile a version behind plus `geo-types`' ecosystem
+   > weight and the transitive `rand` dependency, for no benefit this project
+   > uses (manufacturing paths stay in `vecmanf-document-core` types, not
+   > `geo-types`). `clipper2-rust`'s provenance question (AI-assisted port,
+   > "maintained in spare time") is the one open risk this spike does not
+   > fully retire — it is mitigated, not eliminated, by the cross-candidate
+   > agreement above.
+   >
+   > This decision is `vecmanf-geometry-core`'s to apply once slice 6
+   > (`boolean-operations`) exists as a story; this note is the dated
+   > feature-local record the ADR's own text asks for, written here because
+   > no `specs/<feature-slug>/adrs.md` exists yet for that slice.
 4. **Offsetting** is built on the same two pieces: expand each contour and
    union the pieces (`kurbo` stroke expansion for the geometry, the boolean
    crate for the union), with a dedicated module and golden-file tests.
