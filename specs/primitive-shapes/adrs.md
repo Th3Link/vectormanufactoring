@@ -336,6 +336,20 @@ the lead"). No acceptance criterion conflicts with an ADR.
 
   Unknown extra keys are tolerated (see "object to path").
 
+- **2026-10-04 (PR #10 review): selection after a multi-object "object to
+  path".** Reason 3 under "'object to path' keeps the `NodeId`" was half
+  right. The ids do not change, so no remapping is needed. But after the
+  conversion the selection that matters is the node tool's, and slice 2's
+  `NodeSelection` holds one path. Holding several would need multi-path
+  node commands, each still one commit, across the node tool that slice 2
+  shipped. That is a feature, not a fix, and it belongs with the general
+  selection tool that both slices' UX notes already defer to. Selection is
+  ephemeral (ADR 0009 §2), so deferring it costs nothing later. Decided:
+  for this slice, a multi-object conversion converts every selected
+  primitive in one commit and leaves the first converted path selected in
+  the node tool. AC 22's "remain selected together" clause is deferred, and
+  the PO amends its wording. Tracked in `docs/technical-debt.md`.
+
 ## Flagged to the lead
 
 1. **Conflict: AC 10 ("any N ≥ 3 with no upper limit") against crash
