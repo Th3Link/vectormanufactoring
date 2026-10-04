@@ -336,7 +336,7 @@ mod tests {
             corner_radius: Length::from_mm(0.0),
         };
         let list = build_shape_live_preview(&shape, ViewTransform::identity());
-        assert!(!list.triangles.is_empty());
+        assert_ne!(list.triangles, Vec::<glyphs::Vertex>::new());
     }
 
     #[test]
