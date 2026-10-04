@@ -57,6 +57,12 @@ const EMPTY_TOOLBAR_STATE: NodeToolbarState = {
  */
 const DOUBLE_CLICK_MS = 400;
 const DOUBLE_CLICK_PX = 5;
+/** `DOUBLE_CLICK_PX` converted to document millimetres via the one fixed
+ * `CSS_PX_PER_MM` view scale this slice uses (see the attach effect's own
+ * `set_view` comment) — `documentPoint()` below returns document-space
+ * mm, not screen pixels, so the double-click distance check has to compare
+ * in the same unit. */
+const DOUBLE_CLICK_MM = DOUBLE_CLICK_PX / CSS_PX_PER_MM;
 
 function readToolbarState(raw: {
   can_insert: boolean;
@@ -430,16 +436,28 @@ export function useEditorSession(
     syncFromSession();
   }, [syncFromSession]);
 
-  /** The pointer's document-space position, given `scale=1`/`origin=
-   * (0,0)` (see the attach effect above): identical to its position
-   * relative to the canvas's own top-left corner. */
+  /** The pointer's document-space position (millimetres), inverting the
+   * `CSS_PX_PER_MM`-scale/`(0,0)`-origin view transform the attach effect
+   * above sets via `set_view`. `getBoundingClientRect()` first converts
+   * the event's viewport-relative CSS pixels to canvas-relative CSS
+   * pixels; dividing by `CSS_PX_PER_MM` then matches
+   * `ViewTransform::screen_to_document` on the Rust side, which every
+   * `WasmSession` method taking a point (`pointer_down`, `pointer_hover`,
+   * `pointer_up`, `insert_at`, ...) documents its `(x, y)` as being in
+   * (`wasm_api.rs`). Both sides agree the canvas's backing-buffer size
+   * equals its CSS size (no devicePixelRatio scaling, set in the attach
+   * effect's own `canvas.width`/`height` assignment), so no further
+   * device-pixel-ratio correction belongs here. */
   const documentPoint = useCallback((event: { clientX: number; clientY: number }) => {
     const canvas = canvasRef.current;
     if (!canvas) {
       return { x: 0, y: 0 };
     }
     const bounds = canvas.getBoundingClientRect();
-    return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+    return {
+      x: (event.clientX - bounds.left) / CSS_PX_PER_MM,
+      y: (event.clientY - bounds.top) / CSS_PX_PER_MM,
+    };
   }, []);
 
   const onPointerDown = useCallback(
@@ -454,7 +472,7 @@ export function useEditorSession(
       const isDoubleClick =
         last !== null &&
         now - last.time < DOUBLE_CLICK_MS &&
-        Math.hypot(x - last.x, y - last.y) < DOUBLE_CLICK_PX;
+        Math.hypot(x - last.x, y - last.y) < DOUBLE_CLICK_MM;
       lastPressRef.current = { time: now, x, y };
       suppressedPressRef.current = isDoubleClick;
       if (isDoubleClick) {
