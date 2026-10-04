@@ -44,7 +44,7 @@ fn zero_byte_payload_round_trips() {
     write_atomic(&path, b"").expect("write empty bytes");
     let read_back = read_to_vec(&path).expect("read");
 
-    assert!(read_back.is_empty());
+    assert_eq!(read_back.len(), 0);
 }
 
 /// `write_atomic` must not leave its temporary sibling file behind even

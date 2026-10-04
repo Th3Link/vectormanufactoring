@@ -490,11 +490,14 @@ module outside a browser.
 option D) is the structural fix and now has a second, sharper trigger than
 guest binary size — a plugin guest that needs units and paths but not the CRDT
 would carry neither Loro nor a JS requirement, and the extraction is a `lib.rs`
-re-export plus a short ADR. Before then, CI asserts per core crate that
-`getrandom`, `js-sys` and `wasm-bindgen` appear in the
-`--target wasm32-unknown-unknown` tree only where a recorded decision allows
-them, so the next one arrives as a CI failure rather than as a mystery in a
-plugin host.
+re-export plus a short ADR. `.github/workflows/ci.yml` (`chore/ci-gate`) does
+**not** yet assert anything about `getrandom`/`js-sys`/`wasm-bindgen`
+presence — its ban-list job only checks the ADR 0011 §6 names (`rayon`,
+`tokio`, `reqwest`, `keyring`, `gix`/`gitoxide`, `mio`, `socket2`), which this
+entry's own text above says is "the wrong instrument" for this case anyway.
+A `getrandom`/`js-sys`/`wasm-bindgen` presence check, with its own recorded
+allow-list, is still to be written — part of the plugin-host story, not
+before it.
 
 ## The build needs a local workaround on at least one machine
 
@@ -520,12 +523,16 @@ surfaces one high-severity advisory,
 [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)
 (stack-exhaustion denial of service in `braces`), reached through
 `shadcn` → `@shadcn/registry` → `fast-glob`/`ts-morph` → `micromatch` →
-`braces`. `shadcn` is a component-scaffolding CLI (`npx shadcn add ...`),
-not code the shipped application imports or executes, so the real exposure
-is low — but `frontend/package.json` lists it under `dependencies` rather
-than `devDependencies`, which is almost certainly a misclassification and is
-why `npm audit --omit=dev` does not exclude it either. The only fix npm
-offers (`npm audit fix --force`) downgrades to `shadcn@1.0.0`, a breaking
+`braces`. `shadcn` the *package* is not fully inert at runtime —
+`frontend/src/index.css` does `@import "shadcn/tailwind.css"`, so its CSS
+entry point is part of the shipped bundle — but the *vulnerable* chain
+(`@shadcn/registry`'s `fast-glob`/`ts-morph`/`micromatch` glob-scanning,
+used only by the `npx shadcn add ...` component-scaffolding CLI) is never
+reached by importing a static stylesheet, so the real exposure is still low.
+Separately, `frontend/package.json` lists `shadcn` under `dependencies`
+rather than `devDependencies`, which is almost certainly a misclassification
+and is why `npm audit --omit=dev` does not exclude it either. The only fix
+npm offers (`npm audit fix --force`) downgrades to `shadcn@1.0.0`, a breaking
 change not evaluated here.
 
 **Resolution:** acknowledged explicitly in `.github/workflows/ci.yml`'s

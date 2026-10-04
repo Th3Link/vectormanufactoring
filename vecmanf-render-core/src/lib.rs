@@ -71,12 +71,12 @@ mod tests {
             ViewTransform::identity(),
             &DecorationInput::default(),
         );
-        assert!(!list.triangles.is_empty());
+        assert_ne!(list.triangles.len(), 0);
     }
 
     #[test]
     fn an_empty_document_produces_an_empty_draw_list() {
         let list = build_draw_list(&[], ViewTransform::identity(), &DecorationInput::default());
-        assert!(list.triangles.is_empty());
+        assert_eq!(list.triangles.len(), 0);
     }
 }

@@ -2,33 +2,38 @@
 #
 # Job shape (ADR 0011 §6-§7, docs/guides/rust-workspace-blueprint.md §4,
 # CLAUDE.md §7-§8). Grouped by what each job actually needs to run, not by
-# crate identity, so adding a crate is a one-line matrix edit:
+# crate identity, so adding a crate is a one-line matrix edit (or, for
+# core-wasm32, no edit at all — see its own comment):
 #
 #   frontend          — frontend/'s own gate (tsc, oxlint, npm audit/license),
 #                        ubuntu only (plain JS/TS tooling, nothing
 #                        platform-specific). Also produces frontend/dist,
 #                        which vecmanf-app's build needs (tauri::
 #                        generate_context! fails without it — confirmed
-#                        locally; see the `rust-host-gate` and `doc` jobs
-#                        below), so every job that builds vecmanf-app depends
-#                        on this one and downloads its dist/ artifact instead
-#                        of rebuilding the frontend per OS.
-#   rust-host-gate    — the full host gate (fmt, clippy, nextest) for
-#                        vecmanf-app and the crates it actually depends on
-#                        (ADR 0011 §7), matrixed over ubuntu/windows/macos
-#                        because this closure contains Tauri's
-#                        platform-specific webview/windowing code.
-#   core-wasm32       — per *-core crate (plus vecmanf-editor-wasm, see its
-#                        own comment below): build for wasm32-unknown-unknown
-#                        and assert the ADR 0011 §6 dependency ban list.
-#                        Ubuntu only, per the ADR.
-#   core-host         — ordinary host fmt/clippy/nextest for the core crates
-#                        *not* reachable from vecmanf-app today
-#                        (vecmanf-geometry-core, vecmanf-render-core,
-#                        vecmanf-ui-core, vecmanf-editor-wasm). None of these
-#                        carry platform-specific code, so one OS (ubuntu) is
-#                        enough — unlike rust-host-gate, which matrixes
-#                        because Tauri does.
+#                        locally; see rust-host-gate/doc below), so every job
+#                        that builds vecmanf-app depends on this one and
+#                        downloads its dist/ artifact instead of rebuilding
+#                        the frontend per OS.
+#   rust-host-gate    — the full host gate (fmt, clippy, nextest) over the
+#                        *whole workspace*, matrixed over ubuntu/windows/
+#                        macos. Originally this was meant to be scoped to just
+#                        vecmanf-app's dependency closure (ADR 0011 §7), with
+#                        a separate ubuntu-only `core-host` job for the rest —
+#                        dropped: hand-maintained crate lists silently go
+#                        stale, and `--workspace` isn't actually more
+#                        expensive on windows/macos here (every crate in the
+#                        workspace already builds clean on all three, so
+#                        there was nothing the split was buying beyond fewer
+#                        CPU-minutes on two platforms Tauri's own code
+#                        dominates the runtime of anyway).
+#   core-wasm32       — one job per workspace member whose name ends in
+#                        `-core`, plus `vecmanf-editor-wasm` (see its own
+#                        comment) — discovered via `cargo metadata`, not
+#                        hardcoded, so a new `*-core` crate is picked up with
+#                        no workflow edit at all. Builds for
+#                        wasm32-unknown-unknown, lints it, and asserts the
+#                        ADR 0011 §6 dependency ban list. Ubuntu only, per the
+#                        ADR.
 #   deny              — `cargo deny check`, once, over the whole workspace
 #                        (ADR 0011 §7: not matrixed — it inspects the
 #                        dependency graph, not compiled code, so one run
@@ -38,13 +43,17 @@
 #                        same reason rust-host-gate does: cargo doc expands
 #                        vecmanf-app's proc macros too.
 #
-# vecmanf-app's actual dependency closure today is {vecmanf-app,
-# vecmanf-document-core, vecmanf-storage-io} (checked via `cargo tree -p
-# vecmanf-app`) — narrower than ADR 0011 §3's full permitted graph, because
-# vecmanf-storage-io doesn't yet depend on vecmanf-ui-core/library-core/
-# crypto-core (those crates don't exist yet either). When that changes, or
-# when vecmanf-sync-server/vecmanf-plugin are added, update the two matrix
-# lists below — that is the one-line change this structure is for.
+# Toolchain: every job reads the exact version pinned in the repo's
+# `rust-toolchain.toml` (currently 1.99.0, with the `rustfmt`/`clippy`
+# components and the `wasm32-unknown-unknown` target already declared there)
+# via plain `rustup show`, rather than a `dtolnay/rust-toolchain@stable`
+# step — that action's `@stable` ref installs whatever the *current* stable
+# release is and ignores the repo's pin, which is exactly how this workflow's
+# first real run got 1.99.0 against a local verification done on 1.98.1 and
+# went red on a clippy lint that only exists in the newer compiler. Pinning
+# stops that: Renovate bumps `rust-toolchain.toml` deliberately, as its own
+# reviewable PR, instead of every CI run silently floating to whatever
+# "stable" means that day.
 name: CI
 
 on:
@@ -83,10 +92,11 @@ jobs:
       # below) — the frontend imports its wasm-bindgen output as an ES
       # module, so this job's gate (tsc, oxlint) would otherwise fail on a
       # missing module, same as building vecmanf-app without this job's
-      # dist/ output.
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
+      # dist/ output. `rustup show` installs/activates the toolchain pinned
+      # in rust-toolchain.toml (components and wasm32 target included) —
+      # see the file header on why no separate toolchain action is used.
+      - name: Install the pinned Rust toolchain
+        run: rustup show
 
       - uses: Swatinem/rust-cache@v2
 
@@ -161,10 +171,11 @@ jobs:
           path: frontend/dist
           retention-days: 7
 
-  # vecmanf-app and the crates it depends on (ADR 0011 §7): fmt, clippy,
-  # nextest, matrixed across the three desktop OSes because this closure
-  # contains Tauri's platform-specific webview/windowing stack. Narrower
-  # than the full workspace on purpose — see the file header.
+  # The full host gate (fmt, clippy, nextest) over the whole workspace,
+  # matrixed across the three desktop OSes because vecmanf-app (Tauri)
+  # carries platform-specific webview/windowing code. See the file header
+  # for why this replaced a narrower vecmanf-app-only job plus a separate
+  # core-host job.
   rust-host-gate:
     name: rust-host-gate (${{ matrix.os }})
     needs: frontend
@@ -176,9 +187,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      # vecmanf-app (Tauri) links against the system GTK/WebKitGTK stack on
+      # Linux at build time — `cargo clippy`/`cargo build` need it present
+      # even though this job never packages a bundle. Not needed on
+      # windows-latest/macos-latest, which use the OS's own native webview.
+      - name: Install Tauri's Linux system libraries
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show
 
       - uses: taiki-e/install-action@v2
         with:
@@ -191,70 +212,52 @@ jobs:
           name: frontend-dist
           path: frontend/dist
 
-      # Formatting has no OS-specific output, so one check of the whole
-      # workspace here is enough — it is not repeated in core-host.
       - name: cargo fmt --check
         run: cargo fmt --all --check
 
-      - name: cargo clippy (vecmanf-app closure)
-        run: >-
-          cargo clippy
-          -p vecmanf-app -p vecmanf-document-core -p vecmanf-storage-io
-          --all-targets --message-format=short -- -D warnings
-
-      - name: cargo nextest (vecmanf-app closure)
-        run: >-
-          cargo nextest run
-          -p vecmanf-app -p vecmanf-document-core -p vecmanf-storage-io
-          --status-level fail
-
-  # Core crates not reachable from vecmanf-app today (see file header for
-  # why the closure above is narrower than ADR 0011's full permitted graph).
-  # None carry platform-specific code — they are explicitly "pure,
-  # wasm-compatible" per their own Cargo.toml descriptions — so one OS run
-  # covers them; vecmanf-app's actual OS-specific surface is already covered
-  # by rust-host-gate.
-  core-host:
-    name: core-host
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: nextest
-
-      - uses: Swatinem/rust-cache@v2
-
       - name: cargo clippy
-        run: >-
-          cargo clippy
-          -p vecmanf-geometry-core -p vecmanf-render-core -p vecmanf-ui-core -p vecmanf-editor-wasm
-          --all-targets --message-format=short -- -D warnings
+        run: cargo clippy --workspace --all-targets --message-format=short -- -D warnings
 
       - name: cargo nextest
-        run: >-
-          cargo nextest run
-          -p vecmanf-geometry-core -p vecmanf-render-core -p vecmanf-ui-core -p vecmanf-editor-wasm
-          --status-level fail
+        run: cargo nextest run --workspace --status-level fail
 
-  # ADR 0011 §6: every *-core crate builds for wasm32-unknown-unknown, and
-  # CI asserts *which* dependency would silently break that build rather
-  # than only noticing that it broke (`cargo tree -i` per named ban-list
-  # entry). Ubuntu only, per ADR 0011 §7.
+  # Discovers the crates core-wasm32 below runs against, instead of a
+  # hand-maintained list that silently misses a new crate: every workspace
+  # member whose name ends in `-core`, plus `vecmanf-editor-wasm` (see that
+  # job's comment for why it's included by name rather than by suffix).
+  discover-core-crates:
+    name: discover core crates
+    runs-on: ubuntu-latest
+    outputs:
+      crates: ${{ steps.list.outputs.crates }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned Rust toolchain
+        run: rustup show
+      - id: list
+        run: |
+          set -euo pipefail
+          crates=$(cargo metadata --no-deps --format-version=1 \
+            | jq -c '[.packages[].name | select(endswith("-core") or . == "vecmanf-editor-wasm")]')
+          echo "Discovered: $crates"
+          echo "crates=$crates" >> "$GITHUB_OUTPUT"
+
+  # ADR 0011 §6: every *-core crate builds for wasm32-unknown-unknown, and CI
+  # asserts *which* dependency would silently break that build rather than
+  # only noticing that it broke. Ubuntu only, per ADR 0011 §7.
   #
-  # vecmanf-editor-wasm is in this matrix too, even though it is not one of
-  # ADR 0011 §2's seven `*-core` crates and is explicitly allowed to depend
-  # on wasm-bindgen/browser APIs (ADR 0001 §3): wasm32 is its only real
-  # target (crate-type cdylib), so it needs the build leg regardless, and
-  # the ban list itself (rayon, tokio, reqwest, keyring, gitoxide, mio,
-  # socket2) names nothing a "no logic of its own" wasm-bindgen facade
-  # should ever legitimately need either — the check is free to run and
-  # catches the same class of mistake. Verified clean (see PR description).
+  # vecmanf-editor-wasm is included alongside the `*-core` crates (added to
+  # discover-core-crates' output by exact name, since it doesn't end in
+  # `-core`) even though it is explicitly allowed to depend on
+  # wasm-bindgen/browser APIs (ADR 0001 §3): wasm32 is its only real target
+  # (crate-type cdylib), so it needs the build and lint legs regardless, and
+  # the ban list itself (rayon, tokio, reqwest, keyring, gix/gitoxide, mio,
+  # socket2) names nothing a "no logic of its own" wasm-bindgen facade should
+  # ever legitimately need either — the check is free to run and catches the
+  # same class of mistake. Verified clean (see PR description); its
+  # `gpu.rs`/`wasm_api.rs` are wasm32-only and otherwise never linted at all
+  # (host clippy skips `cfg(target_arch = "wasm32")` code), which is why this
+  # job lints on this target instead of only building.
   #
   # Known, deliberately out of scope here: `vecmanf-document-core` pulls
   # `getrandom`'s `js`-enabled path via `loro` (docs/technical-debt.md,
@@ -262,53 +265,60 @@ jobs:
   # entry's own text says this ban-list is "the wrong instrument" for it —
   # the build succeeds, so a tree-presence check for a *different*,
   # undecided set of names is a separate piece of work for the plugin-host
-  # story, not this one.
+  # story, not this one. (`getrandom` is also a real demonstration of why the
+  # ban-list check below reads the whole tree instead of querying each name
+  # with `cargo tree -i`: it resolves to three versions in this workspace,
+  # and `-i getrandom` errors "specification is ambiguous" rather than
+  # answering present-or-absent.)
   core-wasm32:
     name: core-wasm32 (${{ matrix.crate }})
+    needs: discover-core-crates
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        crate:
-          - vecmanf-document-core
-          - vecmanf-geometry-core
-          - vecmanf-render-core
-          - vecmanf-ui-core
-          - vecmanf-editor-wasm
+        crate: ${{ fromJSON(needs.discover-core-crates.outputs.crates) }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
+      - name: Install the pinned Rust toolchain
+        run: rustup show
 
       - uses: Swatinem/rust-cache@v2
 
       - name: cargo build --target wasm32-unknown-unknown
         run: cargo build -q --target wasm32-unknown-unknown -p ${{ matrix.crate }}
 
+      - name: cargo clippy --target wasm32-unknown-unknown
+        run: cargo clippy --target wasm32-unknown-unknown -p ${{ matrix.crate }} --message-format=short -- -D warnings
+
       - name: Assert the dependency ban list is empty
+        # `cargo tree --target wasm32-unknown-unknown -p $crate -i $dep` is
+        # NOT used here, deliberately — it has two failure modes that look
+        # like "clean" but aren't:
+        #   1. It exits 0 both for a real match and for "this package exists
+        #      somewhere in the lockfile but not in this crate's
+        #      target-filtered tree" (an empty-stdout "nothing to print"
+        #      warning on stderr) — exit code alone doesn't distinguish them.
+        #   2. When a banned name resolves to two or more versions in
+        #      Cargo.lock (common for small utility crates — getrandom does
+        #      right now, at three), `-i <name>` refuses with "specification
+        #      `<name>` is ambiguous" instead of answering present-or-absent.
+        # Both were caught on this crate (`cargo tree -i` on a reintroduced
+        # `rayon` correctly failed; `-i getrandom` demonstrates mode 2 —
+        # see the job comment). The fix: ask for the crate's whole normal
+        # dependency tree once, flattened, and grep it ourselves — no
+        # per-name query, so no per-name ambiguity error to swallow or miss.
         run: |
           set -euo pipefail
           crate="${{ matrix.crate }}"
-          banned=(rayon tokio reqwest keyring gitoxide mio socket2)
-          failed=0
-          for dep in "${banned[@]}"; do
-            # `cargo tree -i` exits 0 both when it prints a real match AND
-            # when the package exists elsewhere in the lockfile but not in
-            # this crate's wasm32-targeted tree ("nothing to print" on
-            # stderr, empty stdout) — confirmed locally with `tokio` (pulled
-            # into the workspace by Tauri, absent from every core crate's
-            # wasm32 tree). Only non-empty stdout is a real violation; the
-            # exit code alone is not a reliable signal.
-            out=$(cargo tree --target wasm32-unknown-unknown -p "$crate" -i "$dep" 2>/dev/null || true)
-            if [ -n "$out" ]; then
-              echo "::error::$crate pulls banned dependency '$dep' into its wasm32-unknown-unknown tree:"
-              echo "$out"
-              failed=1
-            fi
-          done
-          exit "$failed"
+          tree_output=$(cargo tree --target wasm32-unknown-unknown -p "$crate" -e normal --prefix none --format '{p}')
+          # gitoxide is the *project* name (ADR 0011 §6); its crate is `gix`.
+          if echo "$tree_output" | grep -E '^(rayon|tokio|reqwest|keyring|gitoxide|gix|mio|socket2) v'; then
+            echo "::error::$crate pulls a banned dependency into its wasm32-unknown-unknown tree (see the match above)"
+            exit 1
+          fi
+          echo "$crate: clean"
 
   # Dependency-graph/license check, not compiled code — one run sees every
   # target deny.toml's [graph] lists (including wasm32-unknown-unknown),
@@ -319,9 +329,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
+      - name: Install the pinned Rust toolchain
+        run: rustup show
 
       - uses: taiki-e/install-action@v2
         with:
@@ -334,7 +343,8 @@ jobs:
   # `cargo doc` over the whole workspace, once (ADR 0011 §7, same reasoning
   # as `deny`). Needs frontend/dist for the same reason rust-host-gate
   # does — `cargo doc` expands `vecmanf-app`'s `tauri::generate_context!`
-  # too, confirmed locally (it is not exempt just because it doesn't link).
+  # too, confirmed locally (it is not exempt just because it doesn't link) —
+  # and the same Linux system libraries for the same reason.
   doc:
     name: cargo doc
     needs: frontend
@@ -342,7 +352,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Tauri's Linux system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show
 
       - uses: Swatinem/rust-cache@v2
 

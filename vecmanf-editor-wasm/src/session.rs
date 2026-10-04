@@ -521,7 +521,7 @@ mod tests {
     #[test]
     fn draw_list_is_empty_for_a_brand_new_document() {
         let session = Session::new(1);
-        assert!(session.draw_list().triangles.is_empty());
+        assert_eq!(session.draw_list().triangles.len(), 0);
     }
 
     #[test]
@@ -532,7 +532,7 @@ mod tests {
         session.pointer_down(Point::new(10.0, 0.0), false);
         session.pointer_up(Point::new(10.0, 0.0));
         session.finish_pen();
-        assert!(!session.draw_list().triangles.is_empty());
+        assert_ne!(session.draw_list().triangles.len(), 0);
     }
 
     /// The pen tool's in-progress preview (not yet committed) also shows

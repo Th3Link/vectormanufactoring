@@ -77,7 +77,7 @@ fn structurally_valid_but_empty_zip_is_damaged_not_not_a_vmf() {
         .into_inner();
     // Sanity: this really is a minimal-but-valid zip, not accidentally
     // empty bytes.
-    assert!(!empty_zip.is_empty());
+    assert_ne!(empty_zip.len(), 0);
 
     let result = unpack(2, &empty_zip);
     assert!(

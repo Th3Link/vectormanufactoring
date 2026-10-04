@@ -157,7 +157,10 @@ mod tests {
     #[test]
     fn a_fresh_selection_is_empty() {
         let selection = NodeSelection::new();
-        assert!(selection.is_empty());
+        assert!(
+            selection.is_empty(),
+            "a fresh selection has nothing selected"
+        );
         assert_eq!(selection.path(), None);
         assert_eq!(selection.nodes(), &[]);
         assert_eq!(selection.segment(), None);
@@ -228,6 +231,6 @@ mod tests {
         let mut selection = NodeSelection::new();
         selection.select_single_node(path, AnchorId::new(1, 1));
         selection.clear();
-        assert!(selection.is_empty());
+        assert!(selection.is_empty(), "clear() must empty the selection");
     }
 }
