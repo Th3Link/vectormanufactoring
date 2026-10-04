@@ -55,12 +55,12 @@ export function Canvas({ editor }: CanvasProps) {
           onPointerUp={editor.onPointerUp}
           onPointerLeave={editor.onPointerLeave}
           onContextMenu={(event) => {
-            // The pen tool has no context menu of its own (UX notes:
-            // the node tool's six actions are the only ones); suppress
-            // the browser's native menu either way so a right-click
-            // never interrupts drawing. `NodeContextMenu` itself
-            // prevents default for its own (node-tool-only) menu.
-            if (editor.tool === "pen") {
+            // The pen and shape tools have no context menu of their own
+            // (UX notes: the node tool's six actions are the only
+            // ones); suppress the browser's native menu either way so a
+            // right-click never interrupts drawing. `NodeContextMenu`
+            // itself prevents default for its own (node-tool-only) menu.
+            if (editor.tool !== "node") {
               event.preventDefault();
             }
           }}

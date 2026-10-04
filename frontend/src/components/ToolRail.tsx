@@ -1,4 +1,10 @@
-import { MousePointer2, PenTool as PenToolIcon } from "lucide-react";
+import {
+  Circle as CircleIcon,
+  MousePointer2,
+  PenTool as PenToolIcon,
+  Square,
+  Star,
+} from "lucide-react";
 import { Tooltip } from "radix-ui";
 
 import type { Tool } from "@/hooks/useEditorSession";
@@ -55,8 +61,11 @@ function ToolButton({ tool, active, label, shortcut, icon, onSelect }: ToolButto
 
 /**
  * The tool rail (`specification.md`'s UX notes, "Tool rail and tool
- * switching"): a 48px vertical rail, docked to the left, Pen then Node —
- * later tools append below, this slice doesn't reorder for them.
+ * switching"): a 48px vertical rail, docked to the left, Pen then Node,
+ * then Rectangle/Ellipse/Polygon-star
+ * (`specs/primitive-shapes/specification.md`'s own "the order the maker
+ * reaches for them most") — later tools append below, this slice
+ * doesn't reorder for them.
  */
 export function ToolRail({ tool, onSelect }: ToolRailProps) {
   return (
@@ -79,6 +88,30 @@ export function ToolRail({ tool, onSelect }: ToolRailProps) {
           label="Node tool"
           shortcut="N"
           icon={<MousePointer2 size={20} />}
+          onSelect={onSelect}
+        />
+        <ToolButton
+          tool="rectangle"
+          active={tool === "rectangle"}
+          label="Rectangle tool"
+          shortcut="R"
+          icon={<Square size={20} />}
+          onSelect={onSelect}
+        />
+        <ToolButton
+          tool="ellipse"
+          active={tool === "ellipse"}
+          label="Ellipse tool"
+          shortcut="E"
+          icon={<CircleIcon size={20} />}
+          onSelect={onSelect}
+        />
+        <ToolButton
+          tool="polygon-star"
+          active={tool === "polygon-star"}
+          label="Polygon/star tool"
+          shortcut="*"
+          icon={<Star size={20} />}
           onSelect={onSelect}
         />
       </div>

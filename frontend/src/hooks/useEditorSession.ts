@@ -13,8 +13,14 @@ import type { WasmSession } from "@/lib/editorSession";
  * sub-pixel on every real display). */
 const CSS_PX_PER_MM = 96 / 25.4;
 
-/** Which tool is active (`specification.md`'s tool rail: Pen or Node). */
-export type Tool = "pen" | "node";
+/** Which tool is active (`specification.md`'s tool rail: Pen or Node;
+ * `specs/primitive-shapes/specification.md` adds Rectangle, Ellipse and
+ * Polygon/Star, appended in that order, below Pen/Node). */
+export type Tool = "pen" | "node" | "rectangle" | "ellipse" | "polygon-star";
+
+/** The polygon/star tool-options bar's mode toggle (acceptance criteria
+ * 11 vs. 12). */
+export type PolyStarMode = "polygon" | "star";
 
 /** A plain-JS copy of the Rust `NodeToolbarState` — read out of the
  * wasm-bindgen struct instance once, immediately, so the instance itself
@@ -81,6 +87,12 @@ export interface EditorSession {
   containerRef: React.RefObject<HTMLDivElement | null>;
   tool: Tool;
   nodeToolbarState: NodeToolbarState;
+  /** The polygon/star tool-options bar's current mode. */
+  polyStarMode: PolyStarMode;
+  /** The polygon/star tool-options bar's current point count. */
+  polyStarPointCount: number;
+  /** The polygon/star tool-options bar's current ratio. */
+  polyStarRatio: number;
   /** Acceptance criterion 5's cursor cue: whether the live cursor is
    * over the in-progress pen path's own close target — `Canvas` swaps
    * to the "pen-with-small-circle" cursor variant while this is `true`. */
@@ -93,6 +105,16 @@ export interface EditorSession {
   makeCurve: () => void;
   insertSelected: () => void;
   finishPen: () => void;
+  /** Acceptance criterion 6's "remove rounding" action. */
+  removeCornerRounding: () => void;
+  /** The mode toggle (acceptance criteria 11 vs. 12). */
+  setPolyStarMode: (mode: PolyStarMode) => void;
+  /** The point-count stepper (acceptance criteria 10, 15). */
+  setPolyStarPointCount: (count: number) => void;
+  /** The ratio field/slider (acceptance criteria 12, 14). */
+  setPolyStarRatio: (ratio: number) => void;
+  /** "Object to path" (acceptance criteria 17, 21, 22). */
+  convertSelectedToPaths: () => void;
   onPointerDown: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerMove: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerUp: (event: React.PointerEvent<HTMLCanvasElement>) => void;
@@ -143,21 +165,26 @@ export function useEditorSession(
   const [nodeToolbarState, setNodeToolbarState] = useState<NodeToolbarState>(
     EMPTY_TOOLBAR_STATE,
   );
+  const [polyStarMode, setPolyStarModeState] = useState<PolyStarMode>("polygon");
+  const [polyStarPointCount, setPolyStarPointCountState] = useState(6);
+  const [polyStarRatio, setPolyStarRatioState] = useState(0.5);
   const [isHoveringPenCloseTarget, setIsHoveringPenCloseTarget] =
     useState(false);
 
-  /** Re-reads `tool`/`node_toolbar_state`/the pen close-target hover cue
-   * from the session after any call that might have changed them —
-   * cheap, and simpler than having every call site know which ones to
-   * refresh. */
+  /** Re-reads every bit of session-owned UI state after any call that
+   * might have changed it — cheap, and simpler than having every call
+   * site know which ones to refresh. */
   const syncFromSession = useCallback(() => {
     const session = sessionRef.current;
     if (!session) {
       return;
     }
-    setToolState(session.tool() === "node" ? "node" : "pen");
+    setToolState(session.tool() as Tool);
     setNodeToolbarState(readToolbarState(session.node_toolbar_state()));
     setIsHoveringPenCloseTarget(session.is_hovering_pen_close_target());
+    setPolyStarModeState(session.poly_star_mode() as PolyStarMode);
+    setPolyStarPointCountState(session.poly_star_point_count());
+    setPolyStarRatioState(session.poly_star_ratio());
   }, []);
 
   /** Frees whatever session is currently attached (if any), makes
@@ -319,6 +346,40 @@ export function useEditorSession(
     syncFromSession();
   }, [syncFromSession]);
 
+  const removeCornerRounding = useCallback(() => {
+    sessionRef.current?.remove_corner_rounding();
+    syncFromSession();
+  }, [syncFromSession]);
+
+  const setPolyStarMode = useCallback(
+    (mode: PolyStarMode) => {
+      sessionRef.current?.set_poly_star_mode(mode);
+      syncFromSession();
+    },
+    [syncFromSession],
+  );
+
+  const setPolyStarPointCount = useCallback(
+    (count: number) => {
+      sessionRef.current?.set_poly_star_point_count(count);
+      syncFromSession();
+    },
+    [syncFromSession],
+  );
+
+  const setPolyStarRatio = useCallback(
+    (ratio: number) => {
+      sessionRef.current?.set_poly_star_ratio(ratio);
+      syncFromSession();
+    },
+    [syncFromSession],
+  );
+
+  const convertSelectedToPaths = useCallback(() => {
+    sessionRef.current?.convert_selected_to_paths();
+    syncFromSession();
+  }, [syncFromSession]);
+
   /** The pointer's document-space position, given `scale=1`/`origin=
    * (0,0)` (see the attach effect above): identical to its position
    * relative to the canvas's own top-left corner. */
@@ -379,11 +440,13 @@ export function useEditorSession(
         suppressedPressRef.current = false;
         if (tool === "pen") {
           session.finish_pen();
-        } else {
+        } else if (tool === "node") {
           session.insert_at(x, y);
+        } else {
+          session.pointer_up(x, y, event.ctrlKey || event.metaKey);
         }
       } else {
-        session.pointer_up(x, y);
+        session.pointer_up(x, y, event.ctrlKey || event.metaKey);
       }
       syncFromSession();
     },
@@ -405,6 +468,17 @@ export function useEditorSession(
         case "n":
         case "N":
           setTool("node");
+          break;
+        case "r":
+        case "R":
+          setTool("rectangle");
+          break;
+        case "e":
+        case "E":
+          setTool("ellipse");
+          break;
+        case "*":
+          setTool("polygon-star");
           break;
         case "Enter":
           if (tool === "pen") {
@@ -431,6 +505,9 @@ export function useEditorSession(
     containerRef,
     tool,
     nodeToolbarState,
+    polyStarMode,
+    polyStarPointCount,
+    polyStarRatio,
     isHoveringPenCloseTarget,
     setTool,
     escape,
@@ -440,6 +517,11 @@ export function useEditorSession(
     makeCurve,
     insertSelected,
     finishPen,
+    removeCornerRounding,
+    setPolyStarMode,
+    setPolyStarPointCount,
+    setPolyStarRatio,
+    convertSelectedToPaths,
     onPointerDown,
     onPointerMove,
     onPointerUp,

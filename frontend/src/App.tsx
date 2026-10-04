@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Canvas } from "@/components/Canvas";
 import { ErrorDialog } from "@/components/ErrorDialog";
 import { NodeToolbar } from "@/components/NodeToolbar";
+import { ShapeToolbar } from "@/components/ShapeToolbar";
 import { StatusBar } from "@/components/StatusBar";
 import { ToolRail } from "@/components/ToolRail";
 import type { EditorSession } from "@/hooks/useEditorSession";
@@ -161,6 +162,21 @@ function App() {
             makeLine: editor.makeLine,
             makeCurve: editor.makeCurve,
           }}
+        />
+      ) : null}
+      {editor.tool === "rectangle" ||
+      editor.tool === "ellipse" ||
+      editor.tool === "polygon-star" ? (
+        <ShapeToolbar
+          tool={editor.tool}
+          polyStarMode={editor.polyStarMode}
+          polyStarPointCount={editor.polyStarPointCount}
+          polyStarRatio={editor.polyStarRatio}
+          onSetPolyStarMode={editor.setPolyStarMode}
+          onSetPolyStarPointCount={editor.setPolyStarPointCount}
+          onSetPolyStarRatio={editor.setPolyStarRatio}
+          onRemoveCornerRounding={editor.removeCornerRounding}
+          onConvertSelectedToPaths={editor.convertSelectedToPaths}
         />
       ) : null}
       <div className="flex min-h-0 flex-1">
