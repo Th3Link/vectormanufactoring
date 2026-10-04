@@ -80,6 +80,41 @@ impl From<SessionNodeToolbarState> for NodeToolbarState {
     }
 }
 
+/// `wasm-bindgen`'s JS-facing mirror of
+/// [`crate::session::LiveReadout`] (`specs/primitive-shapes/
+/// specification.md`'s "Live creation feedback": the on-canvas numeric
+/// readout shown during a create-drag, ux-engineer review item 2).
+/// `anchor_x`/`anchor_y` are document-space coordinates — the host
+/// converts them to screen pixels the same way it already does for
+/// every other document-space point.
+#[wasm_bindgen]
+#[derive(Debug, Clone)]
+pub struct LiveReadout {
+    text: String,
+    pub anchor_x: f64,
+    pub anchor_y: f64,
+}
+
+#[wasm_bindgen]
+impl LiveReadout {
+    /// The formatted text (e.g. `"20.0 × 10.0 mm"`).
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn text(&self) -> String {
+        self.text.clone()
+    }
+}
+
+impl From<crate::session::LiveReadout> for LiveReadout {
+    fn from(readout: crate::session::LiveReadout) -> Self {
+        Self {
+            text: readout.text,
+            anchor_x: readout.anchor.x,
+            anchor_y: readout.anchor.y,
+        }
+    }
+}
+
 /// One open document's whole session, as the host (`frontend/`) sees it:
 /// edit it through the methods below, read back `draw_list_*` each
 /// frame.
@@ -172,9 +207,15 @@ impl WasmSession {
         self.session.pointer_down(Point::new(x, y), shift);
     }
 
-    /// The pointer moved to document-space `(x, y)` with no button held.
-    pub fn pointer_hover(&mut self, x: f64, y: f64) {
-        self.session.pointer_hover(Point::new(x, y));
+    /// The pointer moved to document-space `(x, y)`. `constrain` is the
+    /// Ctrl modifier's current state, consulted only by the rectangle/
+    /// ellipse tools' live create-drag preview (acceptance criteria 2,
+    /// 8). Call this on every pointer move, not only while a button is
+    /// held — it also feeds whatever shape-tool drag is in flight for
+    /// the live preview (ux-engineer review), and the method itself is
+    /// a no-op when no drag is in progress.
+    pub fn pointer_hover(&mut self, x: f64, y: f64, constrain: bool) {
+        self.session.pointer_hover(Point::new(x, y), constrain);
     }
 
     /// The pointer left the canvas entirely (a DOM `pointerleave`).
@@ -305,7 +346,10 @@ impl WasmSession {
         self.session.poly_star_ratio().get()
     }
 
-    /// The ratio field/slider (acceptance criteria 12, 14).
+    /// The ratio field's instantaneous commit (acceptance criteria 12,
+    /// 14) — one commit immediately. For a continuously-dragged slider,
+    /// call [`WasmSession::preview_poly_star_ratio`] on every tick and
+    /// [`WasmSession::commit_poly_star_ratio`] once instead.
     ///
     /// # Errors
     /// A `JsValue` if `ratio` is outside the open interval `(0, 1)`.
@@ -316,9 +360,38 @@ impl WasmSession {
         Ok(())
     }
 
+    /// The ratio slider's live, uncommitted preview (acceptance
+    /// criterion 14's "updates live") — call on every slider tick,
+    /// e.g. a `<input type="range">`'s own `input` event. Writes
+    /// nothing to the document.
+    ///
+    /// # Errors
+    /// A `JsValue` if `ratio` is outside the open interval `(0, 1)`.
+    pub fn preview_poly_star_ratio(&mut self, ratio: f64) -> Result<(), JsValue> {
+        let ratio = vecmanf_document_core::InnerRatio::new(ratio)
+            .map_err(|err| JsValue::from_str(&format!("{err}")))?;
+        self.session.preview_poly_star_ratio(ratio);
+        Ok(())
+    }
+
+    /// Commits whatever [`WasmSession::preview_poly_star_ratio`] has
+    /// accumulated, as one commit for the whole selection — call once,
+    /// on the slider's own `change`/pointer-up event.
+    pub fn commit_poly_star_ratio(&mut self) {
+        self.session.commit_poly_star_ratio();
+    }
+
     /// "Object to path" (acceptance criteria 17, 21, 22).
     pub fn convert_selected_to_paths(&mut self) {
         self.session.convert_selected_to_paths();
+    }
+
+    /// The numeric readout for an in-progress create-drag
+    /// (`specification.md`'s "Live creation feedback"), or `undefined`
+    /// outside one — call after every [`WasmSession::pointer_hover`].
+    #[must_use]
+    pub fn live_readout(&self) -> Option<LiveReadout> {
+        self.session.live_readout().map(LiveReadout::from)
     }
 
     /// Attaches this session to `canvas`, creating the `wgpu`
