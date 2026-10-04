@@ -173,9 +173,11 @@ per criterion below and in "Out of scope", not silently dropped.
     stays a primitive with its own parameters; no implicit trigger performs
     the conversion.
 22. Given two or more primitives selected together, when the maker invokes
-    "object to path", then each selected primitive is converted independently
-    per criteria 17–20, and the resulting path objects remain selected
-    together afterward.
+    "object to path", then each selected primitive converts independently
+    and correctly per criteria 17–20 (correct geometry, kept node identity,
+    no duplication or dropped shapes), the whole batch committed as one
+    atomic operation — which, if any, of the resulting path objects end up
+    selected afterward is not specified by this slice (see "Out of scope").
 
 ## Out of scope
 
@@ -213,6 +215,11 @@ per criterion below and in "Out of scope", not silently dropped.
 - Reverting "object to path" back to a primitive. The conversion is one-way,
   per criterion 17 and R-EDIT-004's own wording; there is no inverse
   "path to primitive" action.
+- Multi-path node selection — selecting and editing nodes across more than
+  one path object at once, needed to make a multi-object "object to path"
+  (criterion 22) leave every result selected together. `NodeSelection`
+  (`vecmanf-ui-core`) holds one path at a time; this is deferred to the
+  future general selection-tool story slices 2 and 3 already point at.
 
 ## UX notes
 
