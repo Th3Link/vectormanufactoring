@@ -134,6 +134,22 @@ impl NodeTool {
         &self.selection
     }
 
+    /// Selects every anchor of `path` as one multi-node selection —
+    /// `primitive-shapes`' "object to path" (acceptance criterion 17)
+    /// uses this so a freshly converted primitive is immediately
+    /// editable with the node tool, exactly as if the maker had drawn
+    /// it with the pen tool and then selected every node by hand.
+    pub fn select_all_anchors(&mut self, path: &PathSnapshot) {
+        self.selection.clear();
+        let Some((first, rest)) = path.anchors.split_first() else {
+            return;
+        };
+        self.selection.select_single_node(path.id, first.id);
+        for anchor in rest {
+            self.selection.toggle_node(path.id, anchor.id);
+        }
+    }
+
     /// Acceptance criterion: Escape with a selection present clears it;
     /// with nothing selected it is a no-op
     /// (`specs/path-node-editing/specification.md`'s node-tool actions

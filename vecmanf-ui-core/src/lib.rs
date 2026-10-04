@@ -14,16 +14,28 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 mod anchor_id_minter;
+mod handle_layout;
 mod hit_test;
 mod node_tool;
 mod pen_tool;
+mod primitive_selection;
 mod selection;
+mod shape_hit_test;
+mod shape_tools;
 
 pub use anchor_id_minter::AnchorIdMinter;
+pub use handle_layout::{HandleKind, ResizeDirection, ShapeHandle, handles_for};
 pub use hit_test::{Hit, hit_test};
 pub use node_tool::{
     HitTolerances, NodeTool, NodeToolbarState, PointerDownOutcome as NodePointerDownOutcome,
     PointerUpOutcome as NodePointerUpOutcome,
 };
 pub use pen_tool::{PenTool, PointerUpOutcome as PenPointerUpOutcome};
+pub use primitive_selection::PrimitiveSelection;
 pub use selection::NodeSelection;
+pub use shape_hit_test::{hit_test_handle, hit_test_primitive};
+pub use shape_tools::{
+    EllipsePointerDownOutcome, EllipsePointerUpOutcome, EllipseTool, PolyStarMode,
+    PolyStarPointerDownOutcome, PolyStarPointerUpOutcome, PolygonStarTool, RectPointerDownOutcome,
+    RectPointerUpOutcome, RectangleTool, ShapeHitTolerances,
+};
