@@ -13,7 +13,7 @@
 
 use vecmanf_document_core::{AnchorKind, AnchorSnapshot, Point, ViewTransform};
 
-use crate::primitives::{self, DrawList};
+use crate::glyphs::{self, DrawList};
 use crate::stroke;
 use crate::theme;
 
@@ -73,8 +73,8 @@ pub fn build_pen_preview(
 
     for anchor in nodes {
         let glyph = match anchor.kind {
-            AnchorKind::Corner => primitives::square,
-            AnchorKind::Smooth => primitives::diamond,
+            AnchorKind::Corner => glyphs::square,
+            AnchorKind::Smooth => glyphs::diamond,
         };
         list.extend(glyph(anchor.point, node_size, theme::ACCENT));
         list.extend(glyph(
@@ -88,7 +88,7 @@ pub fn build_pen_preview(
     // extends from: it gets the hover ring treatment permanently, not
     // just on hover (`specification.md`'s UX notes).
     if let Some(last) = nodes.last() {
-        list.extend(primitives::ring(
+        list.extend(glyphs::ring(
             last.point,
             hover_ring_diameter,
             hover_ring_thickness,
@@ -108,7 +108,7 @@ pub fn build_pen_preview(
         && nodes.len() > 1
         && let Some(first) = nodes.first()
     {
-        list.extend(primitives::ring(
+        list.extend(glyphs::ring(
             first.point,
             hover_ring_diameter,
             hover_ring_thickness,
@@ -123,7 +123,7 @@ pub fn build_pen_preview(
     // full accent opacity, same as every other editing-UI line here).
     if let (Some(last), Some(cursor)) = (nodes.last(), cursor) {
         let line_width = screen_px_to_mm(view, theme::HANDLE_LINE_WIDTH_PX);
-        list.extend(primitives::thick_line(
+        list.extend(glyphs::thick_line(
             last.point,
             cursor,
             line_width,

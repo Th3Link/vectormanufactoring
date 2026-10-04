@@ -15,17 +15,19 @@
 
 mod color;
 mod decorations;
+mod glyphs;
 mod pen_preview;
-mod primitives;
+mod shape_preview;
 mod stroke;
 mod theme;
 
 pub use color::RgbaColor;
 pub use decorations::{DecorationInput, Hovered};
+pub use glyphs::{DrawList, Vertex};
 pub use pen_preview::build_pen_preview;
-pub use primitives::{DrawList, Vertex};
+pub use shape_preview::{RenderShapeHandle, ShapeDecorationInput, ShapeHandleKind};
 
-use vecmanf_document_core::{PathSnapshot, ViewTransform};
+use vecmanf_document_core::{PathSnapshot, PrimitiveSnapshot, ViewTransform};
 
 /// Builds the full draw list for one frame: every path's stroke
 /// (acceptance criterion 6), plus node/handle/segment decorations
@@ -47,6 +49,19 @@ pub fn build_draw_list(
     }
     list.extend(decorations::build(paths, view, input));
     list
+}
+
+/// Builds one frame's primitive-shape geometry: every primitive's own
+/// stroke (acceptance criterion 16), plus bounding-box selection/hover
+/// and shape-handle decorations, from `input`
+/// (`specs/primitive-shapes/specification.md`).
+#[must_use]
+pub fn build_shape_draw_list(
+    primitives: &[PrimitiveSnapshot],
+    view: ViewTransform,
+    input: &ShapeDecorationInput,
+) -> DrawList {
+    shape_preview::build(primitives, view, input)
 }
 
 #[cfg(test)]

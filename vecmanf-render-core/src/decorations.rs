@@ -9,7 +9,7 @@
 use vecmanf_document_core::{AnchorKind, HandleSlot, NodeId, PathSnapshot, Vec2, ViewTransform};
 
 use crate::color::RgbaColor;
-use crate::primitives::{self, DrawList};
+use crate::glyphs::{self, DrawList};
 use crate::theme;
 
 /// One node or handle currently under the pointer, for the hover ring
@@ -78,14 +78,14 @@ pub fn build(paths: &[PathSnapshot], view: ViewTransform, input: &DecorationInpu
                         continue;
                     }
                     let endpoint = anchor.point.translated(handle);
-                    list.extend(primitives::thick_line(
+                    list.extend(glyphs::thick_line(
                         anchor.point,
                         endpoint,
                         handle_line_width,
                         theme::ACCENT,
                     ));
                     if input.hovered == Some(Hovered::Handle(snapshot.id, anchor.id, slot)) {
-                        list.extend(primitives::ring(
+                        list.extend(glyphs::ring(
                             endpoint,
                             hover_ring_diameter,
                             hover_ring_thickness,
@@ -94,8 +94,8 @@ pub fn build(paths: &[PathSnapshot], view: ViewTransform, input: &DecorationInpu
                     }
                     // Idle handle style: accent outline, white fill
                     // (`docs/design-system.md`).
-                    list.extend(primitives::circle(endpoint, handle_diameter, theme::ACCENT));
-                    list.extend(primitives::circle(
+                    list.extend(glyphs::circle(endpoint, handle_diameter, theme::ACCENT));
+                    list.extend(glyphs::circle(
                         endpoint,
                         (handle_diameter - 2.0 * hover_ring_thickness).max(0.0),
                         RgbaColor::WHITE,
@@ -104,8 +104,8 @@ pub fn build(paths: &[PathSnapshot], view: ViewTransform, input: &DecorationInpu
             }
 
             let glyph = match anchor.kind {
-                AnchorKind::Corner => primitives::square,
-                AnchorKind::Smooth => primitives::diamond,
+                AnchorKind::Corner => glyphs::square,
+                AnchorKind::Smooth => glyphs::diamond,
             };
             if selected {
                 list.extend(glyph(anchor.point, node_size, theme::ACCENT));
@@ -119,7 +119,7 @@ pub fn build(paths: &[PathSnapshot], view: ViewTransform, input: &DecorationInpu
             }
 
             if input.hovered == Some(Hovered::Node(snapshot.id, anchor.id)) {
-                list.extend(primitives::ring(
+                list.extend(glyphs::ring(
                     anchor.point,
                     hover_ring_diameter,
                     hover_ring_thickness,
