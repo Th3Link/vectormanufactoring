@@ -1,6 +1,6 @@
 # Path and node editing: draw and edit a Bézier path with a pen tool
 
-Status: Ready
+Status: Done
 Priority: Must
 Origin: Customer
 
@@ -310,4 +310,4 @@ ADRs: ADR 0002 §5 (node identity, movable-list anchors), §6 (curve
 representation), §9 (command journal / one commit per interaction); ADR 0009
 §3 (merge granularity for anchors — not exercised single-user, but shapes
 which operations are well-defined per node/handle)
-PR: (none yet)
+PR: https://github.com/Th3Link/vectormanufactoring/pull/7
