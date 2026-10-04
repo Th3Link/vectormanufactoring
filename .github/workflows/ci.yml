@@ -1,0 +1,356 @@
+# CI gate for the whole repository: the Rust workspace and the frontend.
+#
+# Job shape (ADR 0011 §6-§7, docs/guides/rust-workspace-blueprint.md §4,
+# CLAUDE.md §7-§8). Grouped by what each job actually needs to run, not by
+# crate identity, so adding a crate is a one-line matrix edit:
+#
+#   frontend          — frontend/'s own gate (tsc, oxlint, npm audit/license),
+#                        ubuntu only (plain JS/TS tooling, nothing
+#                        platform-specific). Also produces frontend/dist,
+#                        which vecmanf-app's build needs (tauri::
+#                        generate_context! fails without it — confirmed
+#                        locally; see the `rust-host-gate` and `doc` jobs
+#                        below), so every job that builds vecmanf-app depends
+#                        on this one and downloads its dist/ artifact instead
+#                        of rebuilding the frontend per OS.
+#   rust-host-gate    — the full host gate (fmt, clippy, nextest) for
+#                        vecmanf-app and the crates it actually depends on
+#                        (ADR 0011 §7), matrixed over ubuntu/windows/macos
+#                        because this closure contains Tauri's
+#                        platform-specific webview/windowing code.
+#   core-wasm32       — per *-core crate (plus vecmanf-editor-wasm, see its
+#                        own comment below): build for wasm32-unknown-unknown
+#                        and assert the ADR 0011 §6 dependency ban list.
+#                        Ubuntu only, per the ADR.
+#   core-host         — ordinary host fmt/clippy/nextest for the core crates
+#                        *not* reachable from vecmanf-app today
+#                        (vecmanf-geometry-core, vecmanf-render-core,
+#                        vecmanf-ui-core, vecmanf-editor-wasm). None of these
+#                        carry platform-specific code, so one OS (ubuntu) is
+#                        enough — unlike rust-host-gate, which matrixes
+#                        because Tauri does.
+#   deny              — `cargo deny check`, once, over the whole workspace
+#                        (ADR 0011 §7: not matrixed — it inspects the
+#                        dependency graph, not compiled code, so one run
+#                        sees everything every OS would).
+#   doc               — `cargo doc`, once, over the whole workspace, same
+#                        reasoning as `deny`. Needs frontend/dist for the
+#                        same reason rust-host-gate does: cargo doc expands
+#                        vecmanf-app's proc macros too.
+#
+# vecmanf-app's actual dependency closure today is {vecmanf-app,
+# vecmanf-document-core, vecmanf-storage-io} (checked via `cargo tree -p
+# vecmanf-app`) — narrower than ADR 0011 §3's full permitted graph, because
+# vecmanf-storage-io doesn't yet depend on vecmanf-ui-core/library-core/
+# crypto-core (those crates don't exist yet either). When that changes, or
+# when vecmanf-sync-server/vecmanf-plugin are added, update the two matrix
+# lists below — that is the one-line change this structure is for.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # frontend/ is not a workspace member (ADR 0011 §5) and gets its own gate:
+  # tsc, the lint tool actually configured (oxlint, not ESLint — ADR 0011 §5
+  # assumed ESLint; CLAUDE.md §8 already names oxlint as the accepted
+  # substitute), and an npm license/audit check since `cargo deny` cannot see
+  # npm dependencies (ADR 0006 §2). No Prettier config exists in frontend/
+  # today, so no Prettier step is added — adding one unconfigured would check
+  # nothing.
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Needed to build vecmanf-editor-wasm for the browser (build:wasm
+      # below) — the frontend imports its wasm-bindgen output as an ES
+      # module, so this job's gate (tsc, oxlint) would otherwise fail on a
+      # missing module, same as building vecmanf-app without this job's
+      # dist/ output.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: npm ci
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install wasm-bindgen CLI matching Cargo.lock
+        # wasm-bindgen's CLI and crate versions must match exactly
+        # (frontend/scripts/build-wasm.sh's own comment) — read the crate
+        # version out of the lockfile instead of hand-pinning a second copy
+        # that can drift when Renovate bumps the crate.
+        run: |
+          set -euo pipefail
+          version=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | grep '^version' | head -1 | sed -E 's/version = "(.*)"/\1/')
+          echo "wasm-bindgen crate version: $version"
+          cargo install wasm-bindgen-cli --version "$version" --locked
+
+      - name: Build the wasm-bindgen JS bindings
+        working-directory: frontend
+        run: npm run build:wasm
+
+      - name: Type-check (tsc)
+        working-directory: frontend
+        run: npx tsc -b --noEmit
+
+      - name: Lint (oxlint)
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Build (produces frontend/dist)
+        working-directory: frontend
+        run: npm run build
+
+      - name: npm license check
+        # Mirrors deny.toml's allow-list (ADR 0006 §2) plus permissive
+        # licenses that are genuinely present in the npm tree but don't occur
+        # in the Rust one: Python-2.0 (argparse, a transitive CLI dep),
+        # CC-BY-4.0 (caniuse-lite's data file), BlueOak-1.0.0 (isaacs'
+        # isexe/minimatch) and 0BSD — all permissive, OSI-approved/FSF-free,
+        # none copyleft. "Apache-2.0 OR MIT" and "(MIT OR CC0-1.0)" are
+        # dual-license SPDX expressions where either side is already
+        # allowed; license-checker treats them as one opaque string, so they
+        # are listed verbatim rather than split. --excludePrivatePackages
+        # drops our own `frontend` package (private, AGPL-3.0-or-later,
+        # like deny.toml's exceptions for our own crates) from the scan.
+        # Version pinned (tested against this exact tree); bump deliberately.
+        working-directory: frontend
+        run: |
+          npx --yes license-checker-rseidelsohn@5.0.1 \
+            --excludePrivatePackages \
+            --onlyAllow 'MIT;Apache-2.0;Apache-2.0 WITH LLVM-exception;BSD-2-Clause;BSD-3-Clause;ISC;Unicode-3.0;Zlib;MPL-2.0;CC0-1.0;BSL-1.0;Apache-2.0 OR MIT;(MIT OR CC0-1.0);Python-2.0;CC-BY-4.0;BlueOak-1.0.0;0BSD' \
+            --summary
+
+      - name: npm audit
+        # --high: fail on high/critical. The one current allowlisted
+        # advisory (GHSA-vfj7-8cjw-p6xm, "braces" stack-exhaustion DoS, via
+        # shadcn's own fast-glob/micromatch toolchain — a component
+        # scaffolding CLI, not code the shipped app executes) predates this
+        # workflow, is not ours to fix in a CI-only change, and is recorded
+        # in docs/technical-debt.md. audit-ci's --allowlist mirrors
+        # deny.toml's advisories.ignore pattern: a documented, narrow
+        # exception, not a weakened check — any *other* high/critical
+        # advisory still fails this step. Version pinned; bump deliberately.
+        working-directory: frontend
+        run: |
+          npx --yes audit-ci@7.1.0 --high --allowlist GHSA-vfj7-8cjw-p6xm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  # vecmanf-app and the crates it depends on (ADR 0011 §7): fmt, clippy,
+  # nextest, matrixed across the three desktop OSes because this closure
+  # contains Tauri's platform-specific webview/windowing stack. Narrower
+  # than the full workspace on purpose — see the file header.
+  rust-host-gate:
+    name: rust-host-gate (${{ matrix.os }})
+    needs: frontend
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      # Formatting has no OS-specific output, so one check of the whole
+      # workspace here is enough — it is not repeated in core-host.
+      - name: cargo fmt --check
+        run: cargo fmt --all --check
+
+      - name: cargo clippy (vecmanf-app closure)
+        run: >-
+          cargo clippy
+          -p vecmanf-app -p vecmanf-document-core -p vecmanf-storage-io
+          --all-targets --message-format=short -- -D warnings
+
+      - name: cargo nextest (vecmanf-app closure)
+        run: >-
+          cargo nextest run
+          -p vecmanf-app -p vecmanf-document-core -p vecmanf-storage-io
+          --status-level fail
+
+  # Core crates not reachable from vecmanf-app today (see file header for
+  # why the closure above is narrower than ADR 0011's full permitted graph).
+  # None carry platform-specific code — they are explicitly "pure,
+  # wasm-compatible" per their own Cargo.toml descriptions — so one OS run
+  # covers them; vecmanf-app's actual OS-specific surface is already covered
+  # by rust-host-gate.
+  core-host:
+    name: core-host
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo clippy
+        run: >-
+          cargo clippy
+          -p vecmanf-geometry-core -p vecmanf-render-core -p vecmanf-ui-core -p vecmanf-editor-wasm
+          --all-targets --message-format=short -- -D warnings
+
+      - name: cargo nextest
+        run: >-
+          cargo nextest run
+          -p vecmanf-geometry-core -p vecmanf-render-core -p vecmanf-ui-core -p vecmanf-editor-wasm
+          --status-level fail
+
+  # ADR 0011 §6: every *-core crate builds for wasm32-unknown-unknown, and
+  # CI asserts *which* dependency would silently break that build rather
+  # than only noticing that it broke (`cargo tree -i` per named ban-list
+  # entry). Ubuntu only, per ADR 0011 §7.
+  #
+  # vecmanf-editor-wasm is in this matrix too, even though it is not one of
+  # ADR 0011 §2's seven `*-core` crates and is explicitly allowed to depend
+  # on wasm-bindgen/browser APIs (ADR 0001 §3): wasm32 is its only real
+  # target (crate-type cdylib), so it needs the build leg regardless, and
+  # the ban list itself (rayon, tokio, reqwest, keyring, gitoxide, mio,
+  # socket2) names nothing a "no logic of its own" wasm-bindgen facade
+  # should ever legitimately need either — the check is free to run and
+  # catches the same class of mistake. Verified clean (see PR description).
+  #
+  # Known, deliberately out of scope here: `vecmanf-document-core` pulls
+  # `getrandom`'s `js`-enabled path via `loro` (docs/technical-debt.md,
+  # "`vecmanf-document-core` needs a JavaScript host on `wasm32`"). That
+  # entry's own text says this ban-list is "the wrong instrument" for it —
+  # the build succeeds, so a tree-presence check for a *different*,
+  # undecided set of names is a separate piece of work for the plugin-host
+  # story, not this one.
+  core-wasm32:
+    name: core-wasm32 (${{ matrix.crate }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crate:
+          - vecmanf-document-core
+          - vecmanf-geometry-core
+          - vecmanf-render-core
+          - vecmanf-ui-core
+          - vecmanf-editor-wasm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo build --target wasm32-unknown-unknown
+        run: cargo build -q --target wasm32-unknown-unknown -p ${{ matrix.crate }}
+
+      - name: Assert the dependency ban list is empty
+        run: |
+          set -euo pipefail
+          crate="${{ matrix.crate }}"
+          banned=(rayon tokio reqwest keyring gitoxide mio socket2)
+          failed=0
+          for dep in "${banned[@]}"; do
+            # `cargo tree -i` exits 0 both when it prints a real match AND
+            # when the package exists elsewhere in the lockfile but not in
+            # this crate's wasm32-targeted tree ("nothing to print" on
+            # stderr, empty stdout) — confirmed locally with `tokio` (pulled
+            # into the workspace by Tauri, absent from every core crate's
+            # wasm32 tree). Only non-empty stdout is a real violation; the
+            # exit code alone is not a reliable signal.
+            out=$(cargo tree --target wasm32-unknown-unknown -p "$crate" -i "$dep" 2>/dev/null || true)
+            if [ -n "$out" ]; then
+              echo "::error::$crate pulls banned dependency '$dep' into its wasm32-unknown-unknown tree:"
+              echo "$out"
+              failed=1
+            fi
+          done
+          exit "$failed"
+
+  # Dependency-graph/license check, not compiled code — one run sees every
+  # target deny.toml's [graph] lists (including wasm32-unknown-unknown),
+  # so this does not need an OS matrix (ADR 0011 §7).
+  deny:
+    name: cargo deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      - uses: Swatinem/rust-cache@v2
+
+      - run: cargo deny check
+
+  # `cargo doc` over the whole workspace, once (ADR 0011 §7, same reasoning
+  # as `deny`). Needs frontend/dist for the same reason rust-host-gate
+  # does — `cargo doc` expands `vecmanf-app`'s `tauri::generate_context!`
+  # too, confirmed locally (it is not exempt just because it doesn't link).
+  doc:
+    name: cargo doc
+    needs: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc -q --workspace --no-deps
