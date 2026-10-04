@@ -376,7 +376,12 @@ impl Session {
         if self.tool == Tool::Pen
             && let Some(nodes) = self.pen.in_progress_nodes()
         {
-            list.extend(build_pen_preview(nodes, self.pointer_position, self.view));
+            list.extend(build_pen_preview(
+                nodes,
+                self.pointer_position,
+                self.view,
+                self.is_hovering_pen_close_target(),
+            ));
         }
         list
     }
