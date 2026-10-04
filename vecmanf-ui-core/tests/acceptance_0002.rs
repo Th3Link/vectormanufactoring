@@ -93,7 +93,7 @@ fn finish_with_zero_nodes_is_a_no_op() {
     pen.pointer_down(Point::new(0.0, 0.0), CLOSE_TOLERANCE);
     // No pointer_up: the state is "Placing" with zero committed nodes.
     assert_eq!(pen.finish(&document), None);
-    assert_eq!(document.path_ids(), Vec::new());
+    assert_eq!(document.object_ids(), Vec::new());
 }
 
 /// AC4: Escape discards every placed node, even a long multi-node
@@ -111,13 +111,13 @@ fn ac4_escape_after_many_nodes_commits_absolutely_nothing() {
     // nothing, not even an empty commit (`specs/path-node-editing/
     // adrs.md`'s PR review: "each mutating method ends in exactly one
     // Loro commit" — the flip side is that a *discarded* session must
-    // end in zero). `path_ids()` is called once, before either snapshot,
+    // end in zero). `object_ids()` is called once, before either snapshot,
     // so its own first-ever access to the (so far untouched) `paths`
     // tree container — which Loro registers in the document's container
     // list the first time *anything* asks for it by name, read or write
     // alike — happens before `before` is captured rather than showing up
     // as a spurious diff between the two.
-    let _ = document.path_ids();
+    let _ = document.object_ids();
     let before = document.export_loro_snapshot().expect("snapshot");
     for i in 0..10 {
         let p = Point::new(f64::from(i) * 3.0, f64::from(i) * 2.0);
@@ -125,7 +125,7 @@ fn ac4_escape_after_many_nodes_commits_absolutely_nothing() {
         pen.pointer_up(&mut minter, &document, p, DRAG_THRESHOLD);
     }
     assert!(pen.escape());
-    assert_eq!(document.path_ids(), Vec::new());
+    assert_eq!(document.object_ids(), Vec::new());
     assert!(!pen.is_placing());
     let after = document.export_loro_snapshot().expect("snapshot");
     assert_eq!(
@@ -149,7 +149,7 @@ fn escape_mid_drag_gesture_discards_cleanly() {
     pen.pointer_down(Point::new(10.0, 0.0), CLOSE_TOLERANCE);
     assert!(pen.escape());
     assert!(!pen.is_placing());
-    assert_eq!(document.path_ids(), Vec::new());
+    assert_eq!(document.object_ids(), Vec::new());
 }
 
 // ---------------------------------------------------------------------
@@ -198,7 +198,7 @@ fn ac5_closing_resets_the_tool_for_a_new_path() {
     }
     pen.pointer_down(Point::new(0.0, 0.0), CLOSE_TOLERANCE);
     pen.pointer_up(&mut minter, &document, Point::new(0.0, 0.0), DRAG_THRESHOLD);
-    assert_eq!(document.path_ids().len(), 1);
+    assert_eq!(document.object_ids().len(), 1);
 
     pen.pointer_down(Point::new(100.0, 100.0), CLOSE_TOLERANCE);
     pen.pointer_up(
@@ -209,7 +209,7 @@ fn ac5_closing_resets_the_tool_for_a_new_path() {
     );
     assert!(pen.is_placing());
     assert_eq!(
-        document.path_ids().len(),
+        document.object_ids().len(),
         1,
         "the new click must not have touched the already-closed path"
     );
@@ -489,7 +489,7 @@ fn ac13_deleting_down_to_exactly_one_node_removes_the_whole_path() {
         None,
         "two of three deleted -> one left -> whole path gone"
     );
-    assert_eq!(document.path_ids(), Vec::new());
+    assert_eq!(document.object_ids(), Vec::new());
 }
 
 /// AC13: deleting ALL nodes of a path at once also removes the whole path

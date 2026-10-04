@@ -327,7 +327,7 @@ mod tests {
         );
         assert_eq!(pen.in_progress_nodes().expect("new path").len(), 1);
         assert_eq!(
-            document.path_ids().len(),
+            document.object_ids().len(),
             1,
             "the new click did not extend the finished path"
         );
@@ -348,7 +348,7 @@ mod tests {
             pen.is_placing(),
             "the single node is still there to continue from"
         );
-        assert_eq!(document.path_ids(), Vec::new());
+        assert_eq!(document.object_ids(), Vec::new());
     }
 
     /// AC4: Escape discards everything and writes nothing.
@@ -369,7 +369,7 @@ mod tests {
 
         assert!(pen.escape());
         assert!(!pen.is_placing());
-        assert_eq!(document.path_ids(), Vec::new());
+        assert_eq!(document.object_ids(), Vec::new());
 
         // Escape with nothing in progress changes nothing and says so.
         assert!(!pen.escape());
