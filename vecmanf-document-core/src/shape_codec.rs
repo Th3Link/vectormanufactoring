@@ -66,12 +66,43 @@ pub(crate) const ALL_PRIMITIVE_KEYS: &[&str] = &[
     KEY_INNER_RATIO,
 ];
 
-/// This node's `shape` tag, or `None` if absent (a path) — the one
-/// dispatch point `adrs.md` names ("dispatch on `shape` alone").
+/// This node's `shape` tag, or `None` if absent (a path) or mistyped —
+/// the one dispatch point `adrs.md` names ("dispatch on `shape`
+/// alone"). Used by ordinary reads on an already-[`validate_primitive_
+/// node`]-checked document, where "mistyped" cannot actually occur
+/// (every writer here only ever inserts a plain string); open-file
+/// validation itself uses [`read_shape_tag_checked`] instead, which
+/// does not collapse "mistyped" into "absent" (architect review: a
+/// `shape` field that isn't a string must refuse as `Damaged`, not
+/// silently open as a plain path).
 pub(crate) fn read_shape_tag(meta: &LoroMap) -> Option<String> {
-    match meta.get(KEY_SHAPE)?.get_deep_value() {
-        LoroValue::String(s) => Some(s.to_string()),
-        _ => None,
+    match read_shape_tag_checked(meta) {
+        ShapeTag::Present(shape) => Some(shape),
+        ShapeTag::Absent | ShapeTag::Mistyped => None,
+    }
+}
+
+/// Whether a node's `shape` key is absent, present with a valid string,
+/// or present but not a string at all — the three cases open-file
+/// validation must tell apart (`adrs.md`: "a missing or mistyped
+/// parameter for the given `shape`" is `Damaged`, and that rule applies
+/// to the `shape` key itself, not just a shape's own parameters).
+pub(crate) enum ShapeTag {
+    /// No `shape` key at all — a path.
+    Absent,
+    /// A `shape` key holding this string.
+    Present(String),
+    /// A `shape` key present but not a string — refused as `Damaged`.
+    Mistyped,
+}
+
+pub(crate) fn read_shape_tag_checked(meta: &LoroMap) -> ShapeTag {
+    match meta.get(KEY_SHAPE) {
+        None => ShapeTag::Absent,
+        Some(value) => match value.get_deep_value() {
+            LoroValue::String(s) => ShapeTag::Present(s.to_string()),
+            _ => ShapeTag::Mistyped,
+        },
     }
 }
 
@@ -207,15 +238,15 @@ fn read_f64(meta: &LoroMap, key: &str) -> Option<f64> {
     path_codec::as_f64(&meta.get(key)?.get_deep_value())
 }
 
+/// `point_count` must be a genuine integer — a decimal value (e.g.
+/// `5.7`) is a mistyped parameter, refused as `Damaged` by
+/// [`validate_polygon`]/[`validate_star`] below, not silently truncated
+/// (architect review: `adrs.md` names "a missing or mistyped parameter"
+/// as a refusal case, and truncating `5.7` to `5` would be exactly the
+/// silent coercion that rule exists to rule out).
 fn read_i64(meta: &LoroMap, key: &str) -> Option<i64> {
     match meta.get(key)?.get_deep_value() {
         LoroValue::I64(n) => Some(n),
-        // A `point_count` written as a JSON/Loro double (e.g. by a
-        // non-Rust writer) is read tolerantly rather than rejected
-        // outright; `PointCount::new`'s own range check downstream
-        // still refuses anything outside `3..=1024` either way.
-        #[allow(clippy::cast_possible_truncation)]
-        LoroValue::Double(n) => Some(n as i64),
         _ => None,
     }
 }

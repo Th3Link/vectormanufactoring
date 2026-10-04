@@ -62,12 +62,13 @@ impl Document {
 
     /// Every object's identity (path or primitive alike), in sibling
     /// (z-)order (ADR 0002 §5) — never an array offset a caller may rely
-    /// on staying stable. Despite the name (kept from `path-node-editing`
-    /// to avoid an unrelated rename), this lists every root tree node;
-    /// [`Document::path`] and [`Document::primitive`] each filter to
-    /// their own kind.
+    /// on staying stable. Renamed from `path_ids` in `primitive-shapes`
+    /// (architect review): it always listed every root tree node, and
+    /// now that some of those are primitives, the old name was
+    /// misleading. [`Document::path`] and [`Document::primitive`] each
+    /// filter the result to their own kind.
     #[must_use]
-    pub fn path_ids(&self) -> Vec<NodeId> {
+    pub fn object_ids(&self) -> Vec<NodeId> {
         let tree = self.loro().get_tree(OBJECTS_TREE);
         tree.roots()
             .into_iter()
@@ -427,11 +428,11 @@ mod tests {
     }
 
     #[test]
-    fn path_ids_lists_every_created_path_in_order() {
+    fn object_ids_lists_every_created_object_in_order() {
         let document = Document::new(1);
         let first = document.create_path(&[anchor(1, 0.0, 0.0), anchor(2, 1.0, 0.0)], false);
         let second = document.create_path(&[anchor(3, 0.0, 0.0), anchor(4, 1.0, 0.0)], false);
-        assert_eq!(document.path_ids(), vec![first, second]);
+        assert_eq!(document.object_ids(), vec![first, second]);
     }
 
     #[test]
@@ -715,7 +716,7 @@ mod tests {
             .delete_anchors(id, &[AnchorId::new(1, 1)])
             .expect("delete");
         assert_eq!(document.path(id), None);
-        assert_eq!(document.path_ids(), Vec::new());
+        assert_eq!(document.object_ids(), Vec::new());
     }
 
     #[test]

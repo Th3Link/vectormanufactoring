@@ -194,16 +194,33 @@ impl Document {
         Ok(())
     }
 
-    /// Sets a rectangle's corner radius as entered — clamped only where
-    /// it is later evaluated, never here (acceptance criteria 4, 5, 6).
-    /// A negative value is floored to zero defensively; nothing in this
-    /// slice's UI can produce one.
+    /// Sets a corner radius as entered — clamped only where it is later
+    /// evaluated, never here (acceptance criteria 4, 5, 6) — on every
+    /// named rectangle, as **one commit for the whole batch** (architect
+    /// review: a resize-handle drag always names exactly one id, but
+    /// "remove rounding" can name an entire multi-rectangle selection,
+    /// and that must not cost one commit per object). Every id is
+    /// resolved and confirmed to be a rectangle before any of them is
+    /// written, so one unknown or non-rectangle id anywhere in `ids`
+    /// refuses the whole call — the same contract
+    /// [`Document::convert_to_paths`] already uses. A negative value is
+    /// floored to zero defensively; nothing in this slice's UI can
+    /// produce one.
     ///
     /// # Errors
-    /// Same as [`Document::set_rect_bounds`].
-    pub fn set_corner_radius(&self, id: NodeId, radius: Length) -> Result<(), ShapeEditError> {
-        let meta = self.require_shape(id, SHAPE_RECT)?;
-        shape_codec::write_corner_radius(&meta, Length::from_mm(radius.as_mm().max(0.0)));
+    /// [`ShapeEditError::NoSuchObject`] if any named id no longer
+    /// exists; [`ShapeEditError::NotAPrimitive`] /
+    /// [`ShapeEditError::WrongShape`] if any named id is not a
+    /// rectangle.
+    pub fn set_corner_radius(&self, ids: &[NodeId], radius: Length) -> Result<(), ShapeEditError> {
+        let radius = Length::from_mm(radius.as_mm().max(0.0));
+        let metas: Vec<_> = ids
+            .iter()
+            .map(|&id| self.require_shape(id, SHAPE_RECT))
+            .collect::<Result<_, _>>()?;
+        for meta in metas {
+            shape_codec::write_corner_radius(&meta, radius);
+        }
         self.commit_with_label("set_corner_radius");
         Ok(())
     }
@@ -235,35 +252,55 @@ impl Document {
         Ok(())
     }
 
-    /// Sets a polygon or star's point count as one commit (acceptance
-    /// criterion 15), independent of `star_frame`/`inner_ratio` (`adrs.md`
-    /// decision 2: separate registers).
+    /// Sets a point count as one commit for the **whole batch**
+    /// (architect review, same reasoning as [`Document::set_corner_
+    /// radius`]: the tool-options bar's point-count stepper can apply
+    /// to an entire multi-selection, acceptance criteria 10, 15),
+    /// independent of `star_frame`/`inner_ratio` (`adrs.md` decision 2:
+    /// separate registers). Every id is resolved and confirmed to be a
+    /// polygon or a star before any of them is written.
     ///
     /// # Errors
-    /// Same as [`Document::set_star_frame`].
+    /// [`ShapeEditError::NoSuchObject`] if any named id no longer
+    /// exists; [`ShapeEditError::NotAPrimitive`] if any named id is
+    /// neither a polygon nor a star.
     pub fn set_point_count(
         &self,
-        id: NodeId,
+        ids: &[NodeId],
         point_count: PointCount,
     ) -> Result<(), ShapeEditError> {
-        let meta = self.require_polygon_or_star(id)?;
-        shape_codec::write_point_count(&meta, point_count);
+        let metas: Vec<_> = ids
+            .iter()
+            .map(|&id| self.require_polygon_or_star(id))
+            .collect::<Result<_, _>>()?;
+        for meta in metas {
+            shape_codec::write_point_count(&meta, point_count);
+        }
         self.commit_with_label("set_point_count");
         Ok(())
     }
 
-    /// Sets a star's inner/outer ratio as one commit (acceptance
-    /// criterion 14), independent of `star_frame` — the outer radius
-    /// stays exactly as stored.
+    /// Sets a star's inner/outer ratio as one commit for the **whole
+    /// batch** (architect review, same reasoning as
+    /// [`Document::set_corner_radius`], acceptance criteria 12, 14),
+    /// independent of `star_frame` — the outer radius stays exactly as
+    /// stored. Every id is resolved and confirmed to be a star before
+    /// any of them is written.
     ///
     /// # Errors
-    /// [`ShapeEditError::NoSuchObject`] if `id` no longer exists;
-    /// [`ShapeEditError::WrongShape`] if it is a plain polygon (acceptance
-    /// criterion 14: "a polygon has no inner radius... distinct from its
-    /// outer one") or anything other than a star.
-    pub fn set_inner_ratio(&self, id: NodeId, ratio: InnerRatio) -> Result<(), ShapeEditError> {
-        let meta = self.require_shape(id, SHAPE_STAR)?;
-        shape_codec::write_inner_ratio(&meta, ratio);
+    /// [`ShapeEditError::NoSuchObject`] if any named id no longer
+    /// exists; [`ShapeEditError::WrongShape`] if any named id is a
+    /// plain polygon (acceptance criterion 14: "a polygon has no inner
+    /// radius... distinct from its outer one") or anything else that
+    /// is not a star.
+    pub fn set_inner_ratio(&self, ids: &[NodeId], ratio: InnerRatio) -> Result<(), ShapeEditError> {
+        let metas: Vec<_> = ids
+            .iter()
+            .map(|&id| self.require_shape(id, SHAPE_STAR))
+            .collect::<Result<_, _>>()?;
+        for meta in metas {
+            shape_codec::write_inner_ratio(&meta, ratio);
+        }
         self.commit_with_label("set_inner_ratio");
         Ok(())
     }
@@ -401,7 +438,7 @@ mod tests {
         let document = Document::new(1);
         let id = document.create_rect(rect_bounds(0.0, 0.0, 10.0, 10.0));
         document
-            .set_corner_radius(id, Length::from_mm(3.0))
+            .set_corner_radius(&[id], Length::from_mm(3.0))
             .expect("set radius");
         document
             .set_rect_bounds(id, rect_bounds(5.0, 5.0, 20.0, 20.0))
@@ -426,7 +463,7 @@ mod tests {
             rx: Length::from_mm(5.0),
             ry: Length::from_mm(5.0),
         });
-        let result = document.set_corner_radius(id, Length::from_mm(1.0));
+        let result = document.set_corner_radius(&[id], Length::from_mm(1.0));
         assert_eq!(result, Err(ShapeEditError::WrongShape));
     }
 
@@ -439,7 +476,7 @@ mod tests {
             angle: Angle::from_radians(0.0),
         };
         let id = document.create_polygon(frame, PointCount::new(5).unwrap());
-        let result = document.set_inner_ratio(id, InnerRatio::new(0.5).unwrap());
+        let result = document.set_inner_ratio(&[id], InnerRatio::new(0.5).unwrap());
         assert_eq!(result, Err(ShapeEditError::WrongShape));
     }
 
@@ -457,7 +494,7 @@ mod tests {
             InnerRatio::new(0.5).unwrap(),
         );
         document
-            .set_point_count(id, PointCount::new(7).unwrap())
+            .set_point_count(&[id], PointCount::new(7).unwrap())
             .expect("set count");
         let snapshot = document.primitive(id).expect("exists");
         let Shape::Star {

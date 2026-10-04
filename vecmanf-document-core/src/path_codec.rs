@@ -31,6 +31,7 @@ use loro::{Container, LoroDoc, LoroMap, LoroMovableList, LoroTree, LoroValue, Va
 use crate::path_model::{
     AnchorId, AnchorKind, AnchorSnapshot, Color, NewAnchor, NodeId, PathSnapshot,
 };
+use crate::shape_codec::ShapeTag;
 use crate::units::{Length, Point, Vec2};
 
 pub(crate) const KEY_CLOSED: &str = "closed";
@@ -398,9 +399,14 @@ fn validate_object_node(tree: &LoroTree, id: loro::TreeID) -> bool {
     let Ok(meta) = tree.get_meta(id) else {
         return false;
     };
-    match crate::shape_codec::read_shape_tag(&meta) {
-        Some(shape) => crate::shape_codec::validate_primitive_node(&meta, &shape),
-        None => validate_path_node(&meta),
+    // `read_shape_tag_checked` (not the lenient `read_shape_tag`) so a
+    // `shape` key present but not a string refuses outright (architect
+    // review) instead of being silently read as "absent" and validated
+    // as a plain path.
+    match crate::shape_codec::read_shape_tag_checked(&meta) {
+        ShapeTag::Present(shape) => crate::shape_codec::validate_primitive_node(&meta, &shape),
+        ShapeTag::Absent => validate_path_node(&meta),
+        ShapeTag::Mistyped => false,
     }
 }
 

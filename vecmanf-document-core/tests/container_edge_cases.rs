@@ -236,7 +236,7 @@ fn unparsable_manifest_json_is_damaged() {
 /// container whose path data does not match the schema is refused with
 /// `OpenError::Damaged`"). Without that validation, this exact byte
 /// sequence would import without error and only panic the first time
-/// something called `Document::path_ids()`/`path()` on it — this test
+/// something called `Document::object_ids()`/`path()` on it — this test
 /// pins the earlier, named refusal instead (project-file-foundation's
 /// acceptance criterion 7: "not a crash").
 ///
@@ -295,6 +295,55 @@ fn a_polygon_with_an_out_of_range_point_count_is_damaged_not_a_panic() {
             .expect("insert frame");
         meta.insert("point_count", 2_i64)
             .expect("insert out-of-range point count");
+    });
+    assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
+}
+
+/// Acceptance criterion 10's upper bound: a stored `point_count` of
+/// 1025 (one above the cap) is refused as `Damaged`, the same as a
+/// value below the floor.
+#[test]
+fn a_polygon_with_a_point_count_above_the_cap_is_damaged_not_a_panic() {
+    let bytes = primitive_fixture(|meta| {
+        meta.insert("shape", "polygon").expect("insert shape");
+        meta.insert("star_frame", vec![0.0, 0.0, 10.0, 0.0])
+            .expect("insert frame");
+        meta.insert("point_count", 1025_i64)
+            .expect("insert out-of-range point count");
+    });
+    assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
+}
+
+/// Architect review: a `point_count` stored as a decimal (`5.7`) must
+/// be refused as a mistyped parameter, not silently truncated to `5`.
+#[test]
+fn a_polygon_with_a_decimal_point_count_is_damaged_not_silently_truncated() {
+    let bytes = primitive_fixture(|meta| {
+        meta.insert("shape", "polygon").expect("insert shape");
+        meta.insert("star_frame", vec![0.0, 0.0, 10.0, 0.0])
+            .expect("insert frame");
+        meta.insert("point_count", 5.7_f64)
+            .expect("insert a decimal point count");
+    });
+    assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
+}
+
+/// Architect review: a `shape` key present but not a string (e.g. a
+/// number) must be refused as `Damaged`, not silently read as "absent"
+/// and opened as a plain path.
+#[test]
+fn a_non_string_shape_tag_is_damaged_not_opened_as_a_path() {
+    let bytes = primitive_fixture(|meta| {
+        meta.insert("shape", 42_i64)
+            .expect("insert a non-string shape");
+        // A real path's required field, so the only reason this must
+        // refuse is the mistyped `shape` key itself, not a missing
+        // `anchors` list.
+        let anchors = meta
+            .insert_container("anchors", loro::LoroMovableList::new())
+            .expect("insert anchors container");
+        let _ = anchors;
+        meta.insert("closed", false).expect("insert closed");
     });
     assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
 }

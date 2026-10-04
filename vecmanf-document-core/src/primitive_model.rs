@@ -132,7 +132,13 @@ pub enum ShapeParamError {
 /// construction (acceptance criterion 10) so no public signature in this
 /// crate ever accepts a bare, unchecked `u32` for it (`adrs.md`: "a
 /// validated newtype... not a bare u32/f64 on a public signature").
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// `Serialize` only, deliberately not `Deserialize`: a derived
+/// `Deserialize` would skip [`PointCount::new`]'s own range check
+/// entirely (architect review) — nothing in this crate reads one back
+/// this way in any case; `crate::shape_codec` reads the raw stored
+/// integer and calls `new` itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct PointCount(u32);
 
 impl PointCount {
@@ -169,7 +175,10 @@ impl PointCount {
 /// `(0, 1)` at construction (acceptance criterion 12: "0 < R < 1 taken
 /// literally — the field never allows exactly 0 or 1, which would
 /// collapse the star to a point or a plain polygon").
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+///
+/// `Serialize` only, deliberately not `Deserialize` — same reasoning as
+/// [`PointCount`]'s own doc comment.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct InnerRatio(f64);
 
 impl InnerRatio {
@@ -196,8 +205,10 @@ impl InnerRatio {
 /// Which kind of primitive a node holds, and its own parameters
 /// (`specs/primitive-shapes/adrs.md`, "the primitive schema"). A closed
 /// `enum` rather than a trait: "the set is closed, and `CLAUDE.md` §5
-/// applies" (`adrs.md`).
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+/// applies" (`adrs.md`). `Serialize` only, not `Deserialize`: it holds
+/// [`PointCount`]/[`InnerRatio`], and neither of those derives
+/// `Deserialize` either — see their own doc comments.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub enum Shape {
     /// Acceptance criteria 1-6.
     Rect {
@@ -233,8 +244,10 @@ pub enum Shape {
 }
 
 /// A primitive's full data as read from the document — the primitive
-/// counterpart to [`PathSnapshot`].
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+/// counterpart to [`PathSnapshot`]. `Serialize` only, not
+/// `Deserialize`: it holds a [`Shape`], which does not derive
+/// `Deserialize` either.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct PrimitiveSnapshot {
     /// This primitive's identity — the same [`NodeId`] a path or any
     /// other object would carry (ADR 0002 §5: one shared tree).
@@ -253,8 +266,9 @@ pub struct PrimitiveSnapshot {
 /// One tree node's data, read generically without first knowing whether
 /// it is a path or a primitive (`adrs.md`: "`Document::path(id)` returns
 /// `None` for a primitive node... reading goes through an object-level
-/// snapshot").
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// snapshot"). `Serialize` only, not `Deserialize`: it holds a
+/// [`PrimitiveSnapshot`], which does not derive `Deserialize` either.
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum ObjectSnapshot {
     /// A path node (no `shape` tag).
     Path(PathSnapshot),

@@ -61,7 +61,7 @@ fn paths_v2_vmf_round_trips_both_anchor_kinds_open_and_closed() {
     let bytes = fixture("paths_v2.vmf");
     let document = unpack(2, &bytes).expect("a golden paths .vmf must open");
 
-    let ids = document.path_ids();
+    let ids = document.object_ids();
     assert_eq!(ids.len(), 2, "exactly two paths");
 
     let open = document.path(ids[0]).expect("first path exists");
@@ -89,7 +89,7 @@ fn paths_v2_vmf_round_trips_both_anchor_kinds_open_and_closed() {
 fn format_version_1_vmf_opens_with_no_paths() {
     let bytes = fixture("format_version_1.vmf");
     let document = unpack(2, &bytes).expect("a golden format_version=1 .vmf must still open");
-    assert_eq!(document.path_ids(), Vec::new());
+    assert_eq!(document.object_ids(), Vec::new());
 }
 
 /// `primitive-shapes` (`specs/primitive-shapes/plan.md`, task 19): a
@@ -102,7 +102,7 @@ fn primitives_v3_vmf_round_trips_every_shape_kind() {
     let bytes = fixture("primitives_v3.vmf");
     let document = unpack(2, &bytes).expect("a golden primitives .vmf must open");
 
-    let ids = document.path_ids();
+    let ids = document.object_ids();
     assert_eq!(ids.len(), 5, "4 primitives + 1 path");
 
     let mut saw_rect = false;

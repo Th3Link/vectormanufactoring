@@ -314,7 +314,7 @@ mod tests {
             height: Length::from_mm(10.0),
         });
         with_primitives
-            .set_corner_radius(rect_id, Length::from_mm(2.0))
+            .set_corner_radius(&[rect_id], Length::from_mm(2.0))
             .expect("set corner radius");
         let _ = with_primitives.create_ellipse(crate::primitive_model::EllipseFrame {
             center: Point::new(50.0, 0.0),

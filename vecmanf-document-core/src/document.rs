@@ -192,7 +192,7 @@ impl Document {
     /// Returns [`SaveError::Encode`] if the view cannot be serialized.
     pub fn export_json(&self) -> Result<Vec<u8>, SaveError> {
         let objects = self
-            .path_ids()
+            .object_ids()
             .into_iter()
             .filter_map(|id| self.object(id))
             .map(ObjectJson::from)
