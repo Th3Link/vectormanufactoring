@@ -25,7 +25,9 @@ pub use color::RgbaColor;
 pub use decorations::{DecorationInput, Hovered};
 pub use glyphs::{DrawList, Vertex};
 pub use pen_preview::build_pen_preview;
-pub use shape_preview::{RenderShapeHandle, ShapeDecorationInput, ShapeHandleKind};
+pub use shape_preview::{
+    RenderShapeHandle, ShapeDecorationInput, ShapeHandleKind, build_shape_live_preview,
+};
 
 use vecmanf_document_core::{PathSnapshot, PrimitiveSnapshot, ViewTransform};
 

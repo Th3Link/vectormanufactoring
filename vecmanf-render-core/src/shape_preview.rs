@@ -108,6 +108,26 @@ fn primitive_stroke(snapshot: &PrimitiveSnapshot) -> DrawList {
     )
 }
 
+/// A shape tool's live, uncommitted create/resize/radius/ratio preview
+/// (`specs/primitive-shapes/specification.md`'s "Live creation
+/// feedback": "a maker dragging out a rectangle sees a rectangle
+/// updating live, not a placeholder box that snaps to shape on
+/// release" — ux-engineer review: this applies to every drag kind, not
+/// only create). Hollow, `--accent` outline, screen-space-constant
+/// stroke weight — distinct from this module's own placeholder stroke
+/// (acceptance criterion 16's black, document-mm-weighted one), since
+/// nothing has committed yet. `vecmanf-ui-core`'s own shape tools
+/// decide *whether* there is a live shape to preview right now
+/// (`vecmanf_ui_core::LiveShape`); this function only draws the
+/// [`Shape`] it is given.
+#[must_use]
+pub fn build_shape_live_preview(shape: &Shape, view: ViewTransform) -> DrawList {
+    let outline = outline_of(shape);
+    let anchors = outline_to_anchors(&outline);
+    let width = screen_px_to_mm(view, theme::LIVE_PREVIEW_STROKE_PX);
+    stroke::path_stroke(&anchors, true, width, theme::ACCENT)
+}
+
 /// The axis-aligned bounding box's `(min, max)` corners for any shape —
 /// what the selection/hover outline is drawn around.
 fn bounding_box(shape: &Shape) -> (Point, Point) {
@@ -300,6 +320,23 @@ mod tests {
             height: Length::from_mm(10.0),
         });
         (id, document.primitive(id).expect("exists"))
+    }
+
+    /// ux-engineer review item 1: a live preview draws a non-empty
+    /// outline for an in-progress shape, independent of any committed
+    /// primitive.
+    #[test]
+    fn build_shape_live_preview_draws_a_rect_outline() {
+        let shape = Shape::Rect {
+            bounds: RectBounds {
+                origin: Point::new(0.0, 0.0),
+                width: Length::from_mm(10.0),
+                height: Length::from_mm(10.0),
+            },
+            corner_radius: Length::from_mm(0.0),
+        };
+        let list = build_shape_live_preview(&shape, ViewTransform::identity());
+        assert!(!list.triangles.is_empty());
     }
 
     #[test]
