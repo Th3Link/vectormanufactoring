@@ -423,11 +423,17 @@ There is no formatter check, no test runner, and no npm license or audit check
 at all — so the frontend's dependency tree is the one part of the product that
 no allow-list has ever been applied to.
 
-**Resolution:** the lead amends `CLAUDE.md` §7 and §8 to add `tsc --noEmit`,
-a lint leg (`oxlint`, accepted in place of the ESLint
-[ADR 0011](adr/0011-workspace-and-crate-layout.md) §5 names), Prettier,
-`vitest`, Playwright and an npm license/audit check with ADR 0006 §2's
-allow-list. Until then a green Rust gate is not a green build.
+**Resolution, partly done (`chore/ci-gate`):** `.github/workflows/ci.yml` now
+runs `tsc --noEmit`, `oxlint` (via `npm run lint`), and an npm license check
+and `npm audit` with an allow-list mirroring ADR 0006 §2 (plus the
+npm-ecosystem-specific permissive licenses the real tree has —
+see the workflow's own comment). What that workflow still does *not* cover,
+because nothing is configured for it yet: Prettier (no config file exists),
+`vitest` and Playwright (no test runner is wired up — the frontend has no
+tests to run). Each needs its own setup story before it can be a gate step.
+The lead still needs to amend `CLAUDE.md` §7/§8 to describe the new gate
+commands once accepted; that line in this entry is deliberately left for the
+lead to action, not for a chore PR to do on its own.
 
 ## Accessibility is partly ours to build
 
@@ -484,11 +490,14 @@ module outside a browser.
 option D) is the structural fix and now has a second, sharper trigger than
 guest binary size — a plugin guest that needs units and paths but not the CRDT
 would carry neither Loro nor a JS requirement, and the extraction is a `lib.rs`
-re-export plus a short ADR. Before then, CI asserts per core crate that
-`getrandom`, `js-sys` and `wasm-bindgen` appear in the
-`--target wasm32-unknown-unknown` tree only where a recorded decision allows
-them, so the next one arrives as a CI failure rather than as a mystery in a
-plugin host.
+re-export plus a short ADR. `.github/workflows/ci.yml` (`chore/ci-gate`) does
+**not** yet assert anything about `getrandom`/`js-sys`/`wasm-bindgen`
+presence — its ban-list job only checks the ADR 0011 §6 names (`rayon`,
+`tokio`, `reqwest`, `keyring`, `gix`/`gitoxide`, `mio`, `socket2`), which this
+entry's own text above says is "the wrong instrument" for this case anyway.
+A `getrandom`/`js-sys`/`wasm-bindgen` presence check, with its own recorded
+allow-list, is still to be written — part of the plugin-host story, not
+before it.
 
 ## The build needs a local workaround on at least one machine
 
@@ -506,3 +515,34 @@ one sandbox, so it is set per-machine via `CARGO_BUILD_JOBS` instead.
 longer needs it — check by removing the line and building `vecmanf-app`. If a
 future toolchain still needs it, it stops being a workaround and becomes a
 documented build requirement in the README.
+
+## `shadcn` pulls a vulnerable `braces` through its own codegen tooling
+
+`npm audit`'s first real run (`chore/ci-gate`, standing up the CI workflow)
+surfaces one high-severity advisory,
+[GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)
+(stack-exhaustion denial of service in `braces`), reached through
+`shadcn` → `@shadcn/registry` → `fast-glob`/`ts-morph` → `micromatch` →
+`braces`. `shadcn` the *package* is not fully inert at runtime —
+`frontend/src/index.css` does `@import "shadcn/tailwind.css"`, so its CSS
+entry point is part of the shipped bundle — but the *vulnerable* chain
+(`@shadcn/registry`'s `fast-glob`/`ts-morph`/`micromatch` glob-scanning,
+used only by the `npx shadcn add ...` component-scaffolding CLI) is never
+reached by importing a static stylesheet, so the real exposure is still low.
+Separately, `frontend/package.json` lists `shadcn` under `dependencies`
+rather than `devDependencies`, which is almost certainly a misclassification
+and is why `npm audit --omit=dev` does not exclude it either. The only fix
+npm offers (`npm audit fix --force`) downgrades to `shadcn@1.0.0`, a breaking
+change not evaluated here.
+
+**Resolution:** acknowledged explicitly in `.github/workflows/ci.yml`'s
+`audit-ci --allowlist` for this one advisory ID, with this rationale,
+mirroring `deny.toml`'s `[advisories]` `ignore` pattern — not silently
+passing or silently failing CI. A real fix is two separate, smaller
+decisions, neither done here because this is a CI-only change: move
+`shadcn` to `devDependencies` (a one-line `package.json` edit, if nothing at
+runtime actually needs it — worth checking first), and separately decide
+whether to take the breaking `shadcn@1.0.0` upgrade or wait for a non-major
+fix. Revisit when either lands, or when `npm audit` surfaces a *different*
+advisory against this allowlist entry (which would mean the allowlisted ID
+no longer matches what's actually there).

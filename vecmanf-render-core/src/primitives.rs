@@ -180,7 +180,7 @@ mod tests {
             1.0,
             RgbaColor::BLACK,
         );
-        assert!(list.triangles.is_empty());
+        assert_eq!(list.triangles.len(), 0);
     }
 
     #[test]

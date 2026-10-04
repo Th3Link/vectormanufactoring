@@ -775,7 +775,10 @@ mod tests {
             Point::new(10.0, 0.0),
             TOLERANCES,
         );
-        assert!(tool.selection().is_empty());
+        assert!(
+            tool.selection().is_empty(),
+            "inserting a node away from the path does not select it"
+        );
     }
 
     /// The contextual toolbar's "Insert node" button: splits the selected
@@ -865,7 +868,10 @@ mod tests {
         tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, false);
 
         tool.delete_selected(&document);
-        assert!(tool.selection().is_empty());
+        assert!(
+            tool.selection().is_empty(),
+            "deleting the selected nodes also clears the selection"
+        );
         let snapshot = document.path(path).expect("exists");
         assert_eq!(snapshot.anchors.len(), 2);
     }
@@ -970,7 +976,7 @@ mod tests {
         tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
 
         assert!(tool.escape());
-        assert!(tool.selection().is_empty());
+        assert!(tool.selection().is_empty(), "escape clears the selection");
         assert!(!tool.escape());
     }
 
@@ -983,10 +989,13 @@ mod tests {
         let paths = vec![document.path(path).expect("exists")];
         let mut tool = NodeTool::new();
         tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
-        assert!(!tool.selection().is_empty());
+        assert!(!tool.selection().is_empty(), "clicking the node selects it");
 
         let outcome = tool.pointer_down(&paths, Point::new(1000.0, 1000.0), TOLERANCES, false);
         assert_eq!(outcome, PointerDownOutcome::Missed);
-        assert!(tool.selection().is_empty());
+        assert!(
+            tool.selection().is_empty(),
+            "clicking empty space clears the selection"
+        );
     }
 }

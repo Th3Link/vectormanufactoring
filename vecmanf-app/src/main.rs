@@ -205,10 +205,14 @@ fn save_project_bytes(app: AppHandle, state: State<AppState>, bytes: Vec<u8>, sa
 }
 
 /// Whether `WEBKIT_DISABLE_DMABUF_RENDERER` still needs to be set in this
-/// process's own environment. Always compiled, on every platform, so it
-/// stays plainly testable — only Linux's `main` actually acts on a
-/// `true` result, since only `WebKitGTK` (Linux's webview engine) has
-/// the bug this variable works around.
+/// process's own environment. Compiled on Linux (where `main` acts on a
+/// `true` result, since only `WebKitGTK` has the bug this variable works
+/// around) and under `#[cfg(test)]` on every platform, so the pure
+/// environment-reading logic stays plainly testable without needing a
+/// Linux runner — it would otherwise be genuinely dead code in a
+/// non-Linux, non-test build, since its only production caller is itself
+/// Linux-only.
+#[cfg(any(target_os = "linux", test))]
 fn webkit_dmabuf_env_var_is_unset() -> bool {
     std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none()
 }
@@ -302,10 +306,10 @@ fn main() {
         #[cfg(target_os = "macos")]
         if let tauri::RunEvent::Opened { urls } = event {
             for url in urls {
-                if let Ok(path) = url.to_file_path() {
-                    if path.extension().and_then(|ext| ext.to_str()) == Some(VMF_EXTENSION) {
-                        open_path(app_handle, &path);
-                    }
+                if let Ok(path) = url.to_file_path()
+                    && path.extension().and_then(|ext| ext.to_str()) == Some(VMF_EXTENSION)
+                {
+                    open_path(app_handle, &path);
                 }
             }
         }
