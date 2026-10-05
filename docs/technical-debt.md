@@ -46,10 +46,14 @@ selected in the node tool (`specs/0003-primitive-shapes/adrs.md`, 2026-10-04
 PR #10 review note). Node editing across several paths at once, as
 Inkscape allows, is not possible.
 
-**Resolution:** the general selection tool story. It needs multi-path
-node commands that still make one commit per interaction (ADR 0002 §9).
-Nothing is stored, because selection is ephemeral (ADR 0009 §2), so no
-file format change is involved.
+**Resolution:** a story that asks for node editing across several paths.
+`canvas-navigation-and-selection` (slice 4) does not: its Select tool hands
+one path to the node tool. Since that slice, the converted objects stay
+selected together at object level, because the object selection is shared
+(`specs/0004-canvas-navigation-and-selection/adrs.md`). Multi-path node
+editing still needs multi-path node commands that make one commit per
+interaction (ADR 0002 §9). Selection is ephemeral (ADR 0009 §2), so no file
+format change is involved.
 
 ## SVG round-trip is lossy
 
@@ -412,7 +416,7 @@ files, listed and searched by walking the directory
 **Resolution:** a rebuildable local index (SQLite in `vecmanf-storage-io`,
 never authoritative), once a collection is big enough to measure the problem.
 
-## Canvas performance on Linux/WebKitGTK is unverified
+## Canvas performance on Linux/WebKitGTK: measured once, renderer not cached
 
 The shell is Tauri, so on Linux — the customer's primary platform — the canvas
 runs on WebKitGTK, the weakest of the three engines for sustained WebGL2 work
@@ -420,10 +424,29 @@ runs on WebKitGTK, the weakest of the three engines for sustained WebGL2 work
 WebGPU is not reliably available there, so WebGL2 is the baseline. Headless
 rendering for golden-image tests is also assumed rather than proven.
 
-**Resolution:** measure with a real stress scene (thousands of nodes, live node
-drag, zoom) before the first canvas story. This is the one result that would
-invalidate ADR 0001 rather than cost a refactor, so it is measured first, not
-discovered later.
+**Status 2026-10-03: measured, PASS** (`specs/0002-path-node-editing/adrs.md`).
+50 000 nodes held about 60 fps under pan/zoom on WebKitGTK. ADR 0001 stands.
+
+**What remains:** the spike drew from a persistent instance buffer. The
+shipped renderer rebuilds, re-tessellates and re-uploads the whole draw list
+on every frame. Slice 4 makes pan and zoom interactive, so a large document
+may stutter where the spike did not.
+
+**Resolution:** cache the draw list by (document version, view scale), so
+that a pan only rewrites the view uniform. A draw list depends on scale and
+never on origin (slice 4 rule). Do this when a real document is measured to
+stutter, not before.
+
+## The canvas ignores devicePixelRatio
+
+The canvas backing store equals its CSS size (`useEditorSession.ts`), so on
+a HiDPI display every frame is rendered at CSS resolution and upscaled.
+Strokes and glyphs look soft. Zoom does not change this.
+
+**Resolution:** size the backing store as CSS size × `devicePixelRatio`,
+reconfigure the surface to match, and fold the ratio into the screen
+transform. Pointer coordinates stay in CSS px. One change in `editor-wasm`
+and the hook, and no change to any `*-core` crate.
 
 ## The quality gate covers only half the product
 

@@ -219,15 +219,15 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
 
 ## Out of scope
 
-- Undo/redo of any operation in this slice — `undo-redo` (slice 5). Every
+- Undo/redo of any operation in this slice — `undo-redo` (slice 6). Every
   edit here is still one well-formed commit per interaction (one style-field
   change, one stop add/remove/edit, one multi-object batch), the same
-  discipline every prior slice has kept, so slice 5 has a clean, single
+  discipline every prior slice has kept, so slice 6 has a clean, single
   commit per action to attach undo to — it just isn't reachable yet.
-- Boolean operations, grouping, layers — slices 6 and 7.
+- Boolean operations, grouping, layers — slices 7 and 8.
 - How stroke/fill maps to a laser job (which color means cut vs. engrave,
   power/speed per color, kerf compensation) — `manufacturing-roles` (slice
-  11) and later. This slice is appearance only.
+  12) and later. This slice is appearance only.
 - Custom numeric dash-array entry in the UI (typing an arbitrary on/off
   sequence rather than picking a preset). Criterion 9's stored format
   supports it; exposing it is a later refinement if a maker asks for a dash
@@ -238,7 +238,7 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
 - Fill-rule toggle (nonzero vs. even-odd). Nonzero only (criterion 14) —
   even-odd mainly matters for self-intersecting or multi-subpath geometry,
   and this product has no multi-subpath paths until boolean operations
-  (slice 6) can produce them.
+  (slice 7) can produce them.
 - Pattern fill and swatch/texture fill (Inkscape's other two fill types
   beyond flat color and the two gradients). Not needed for a laser-cutting
   MVP; revisit if a maker workflow asks for it.
@@ -264,6 +264,22 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
   about the project's own `.vmf` file only.
 
 ## UX notes
+
+**2026-10-05 amendment:** the customer asked for a Blender/Affinity-leaning
+chrome direction across the whole app (`docs/design-system.md`'s
+2026-10-05 section). The placement, sizing, collapsibility and shortcut
+decided below all still hold exactly as written — this slice's own
+reasoning for "docked right, fixed, not a toolbar or dialog" is what the
+customer's "right side, everything configurable, fixed in place" ask
+independently arrives at, so nothing here needed to change on the merits.
+What changes is scope and naming only: this is no longer a one-off
+`StylePanel` but the **first section of a general-purpose `PropertiesPanel`**
+that later slices' object properties also plug into (one scrolling column
+of named sections, not tabs — see `docs/design-system.md` for why). Every
+"`StylePanel`" reference below means "the Style section of
+`PropertiesPanel`"; every placement/sizing/collapse/shortcut decision
+applies to the panel as a whole, not to this slice's section specifically.
+No acceptance criterion, control, or interaction decided below changes.
 
 This is the first slice with no new canvas tool and the first properties UI
 that isn't a contextual tool-options bar (`path-node-editing`'s node-actions
