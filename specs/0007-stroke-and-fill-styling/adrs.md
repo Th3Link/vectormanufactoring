@@ -14,9 +14,15 @@ its two open points (AC 16's stop count, interior selection) were resolved
 in the specification on 2026-10-04; see "Flagged to the lead".
 
 **Build order:** this slice touches `vecmanf-document-core`,
-`vecmanf-render-core` and `vecmanf-ui-core`, which `story/primitive-shapes`
-also changes. It starts after that branch merges (`CLAUDE.md` §4, parallel
-work only on disjoint crates).
+`vecmanf-render-core` and `vecmanf-ui-core`. `primitive-shapes` and
+`path-merge-split-and-node-types` are both merged. **2026-10-05 (architect):
+`object-transform` (slice 5) also touches these same crates and this
+slice's `style: Style` replaces the `stroke_width` field slice 5's resize
+(AC 8) writes directly — a real collision, not just a shared-crate caution.
+This slice starts after `object-transform` merges** (`CLAUDE.md` §4). Once
+that lands, `path_topology.rs`'s `split_at_anchor` must copy `style` with
+fresh `StopId`s for its new object, alongside slice 5's `rotation` copy
+already there.
 
 ## Depends on
 
@@ -383,6 +389,21 @@ work only on disjoint crates).
   resolution). Read "version 3" above as "version 5". A version number in
   an `adrs.md` is provisional: the PR that merges takes `main`'s
   `CURRENT_FORMAT_VERSION + 1`.
+
+- **2026-10-05 (architect): gradient box orientation vs. rotation — open,
+  decide once `object-transform` merges.** This slice computes the linear/
+  radial gradient box from the object's outline in `vecmanf-render-core`.
+  Once `object-transform` ships rotation, that outline is already rotated,
+  so the question is whether the gradient box is derived from the object's
+  own (oriented) local frame — so the gradient turns with the object, like
+  SVG's own `rotate()` transform on a gradient-filled shape — or from the
+  rotated outline's axis-aligned bounding box, which would keep the
+  gradient's screen-space direction fixed while the object turns under it.
+  **Recommendation: the object's own oriented frame** (matches SVG and
+  every reference tool's intuition that a gradient is part of the object,
+  not the viewport). Not decided now because no rotation exists yet to
+  test against; whoever builds this slice after `object-transform` merges
+  should confirm this default and add a test, not silently inherit it.
 
 ## Flagged to the lead
 
