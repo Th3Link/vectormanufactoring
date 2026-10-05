@@ -83,11 +83,13 @@ pub fn build_pen_preview(
     // connecting stroke reuses the exact tessellation a committed path
     // gets, so a placed curve (acceptance criterion 2) already previews
     // correctly with no extra code here.
+    let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
     list.extend(stroke::path_stroke(
         nodes,
         false,
         STROKE_WIDTH_MM,
         theme::ACCENT,
+        tolerance_mm,
     ));
 
     let node_size = screen_px_to_mm(view, theme::NODE_SIZE_PX);
@@ -164,6 +166,7 @@ pub fn build_pen_preview(
                 pending.point,
                 STROKE_WIDTH_MM,
                 theme::ACCENT,
+                tolerance_mm,
             ));
         }
 

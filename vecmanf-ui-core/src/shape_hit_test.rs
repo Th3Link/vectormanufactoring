@@ -1,54 +1,39 @@
 //! Hit-testing a document-space point against primitives and their
 //! handles (`specs/0003-primitive-shapes/specification.md`'s "reuses that
-//! slice's... hit-testing tolerances"). Mirrors [`crate::hit_test`]'s
-//! shape for paths: a primitive's own outline
-//! ([`vecmanf_document_core::outline_of`]) is hit-tested the same way a
-//! path's segments are, via `vecmanf-geometry-core`'s
-//! `nearest_point_on_segment` — outline construction, not a second
-//! geometry implementation.
+//! slice's... hit-testing tolerances").
+//!
+//! [`hit_test_primitive`] is [`crate::hit_test_object`]'s one "near an
+//! outline" definition, restricted to the active shape tool's own kind
+//! (`specs/0004-canvas-navigation-and-selection/adrs.md`: "`hit_test_
+//! primitive` becomes the same call restricted to the active shape
+//! tool's kind... Rejected: having the Select tool call `hit_test` and
+//! `hit_test_primitive` and compare results. That keeps two definitions
+//! of 'near an outline'"), not a second, independent implementation of
+//! "near a primitive's outline".
 
-use vecmanf_document_core::{NodeId, Point, PrimitiveSnapshot, Tolerance, outline_of};
-use vecmanf_geometry_core::nearest_point_on_segment;
+use vecmanf_document_core::{NodeId, ObjectSnapshot, Point, PrimitiveSnapshot, Tolerance};
 
 use crate::handle_layout::ShapeHandle;
+use crate::hit_test_object::hit_test_object;
 
 /// Hit-tests `point` against every primitive's own outline, returning
 /// the nearest one within `tolerance` — the selection convention
 /// (`specification.md`: "the whole object is the selection unit").
+/// `primitives` is already filtered to one kind by the caller (e.g.
+/// `rects_only`); [`hit_test_object`] does the actual outline distance
+/// work.
 #[must_use]
 pub fn hit_test_primitive(
     primitives: &[PrimitiveSnapshot],
     point: Point,
     tolerance: Tolerance,
 ) -> Option<NodeId> {
-    let mut best: Option<(f64, NodeId)> = None;
-    for snapshot in primitives {
-        let outline = outline_of(&snapshot.shape);
-        if outline.len() < 2 {
-            continue;
-        }
-        for i in 0..outline.len() {
-            let j = (i + 1) % outline.len();
-            let start = outline[i];
-            let end = outline[j];
-            let (_, distance, _) = nearest_point_on_segment(
-                start.point,
-                start.handle_out,
-                end.handle_in,
-                end.point,
-                point,
-                tolerance,
-            );
-            let distance = distance.as_mm();
-            if distance > tolerance.as_mm() {
-                continue;
-            }
-            if best.is_none_or(|(best_distance, _)| distance < best_distance) {
-                best = Some((distance, snapshot.id));
-            }
-        }
-    }
-    best.map(|(_, id)| id)
+    let objects: Vec<ObjectSnapshot> = primitives
+        .iter()
+        .copied()
+        .map(ObjectSnapshot::Primitive)
+        .collect();
+    hit_test_object(&objects, point, tolerance)
 }
 
 /// Hit-tests `point` against a selected primitive's own handles,

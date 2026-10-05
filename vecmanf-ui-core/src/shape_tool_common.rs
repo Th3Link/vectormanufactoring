@@ -9,7 +9,7 @@
 
 use vecmanf_document_core::{NodeId, Point, PrimitiveSnapshot, Shape, Tolerance};
 
-use crate::PrimitiveSelection;
+use crate::ObjectSelection;
 
 /// The two hit-test tolerances every shape tool needs — mirrors
 /// [`crate::HitTolerances`]'s split for the node tool. `outline` bounds
@@ -103,7 +103,7 @@ pub(crate) fn polygons_and_stars_only(primitives: &[PrimitiveSnapshot]) -> Vec<P
 /// selecting-click convention. A plain click that hits nothing clears
 /// the selection unless shift is held.
 pub(crate) fn apply_selection_click(
-    selection: &mut PrimitiveSelection,
+    selection: &mut ObjectSelection,
     hit: Option<NodeId>,
     shift: bool,
 ) {

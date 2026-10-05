@@ -182,11 +182,11 @@ function App() {
           onConvertSelectedToPaths={editor.convertSelectedToPaths}
         />
       ) : null}
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <ToolRail tool={editor.tool} onSelect={editor.setTool} />
         <Canvas editor={editor} />
       </div>
-      <StatusBar cursorMm={cursorMm} sizeMm={sizeMm} />
+      <StatusBar cursorMm={cursorMm} sizeMm={sizeMm} zoomPercent={editor.zoomPercent} />
       <ErrorDialog
         title="Can't open project"
         message={openErrorMessage}

@@ -1,7 +1,7 @@
 //! Black-box acceptance tests for `specs/0003-primitive-shapes/
 //! specification.md`'s 22 acceptance criteria, written against
 //! `vecmanf-ui-core`'s public API (`RectangleTool`, `EllipseTool`,
-//! `PolygonStarTool`, `PrimitiveSelection`, `NodeTool`, `handles_for`,
+//! `PolygonStarTool`, `ObjectSelection`, `NodeTool`, `handles_for`,
 //! `hit_test_handle`) and `vecmanf-document-core`'s own public
 //! `Document`, before reading the implementation diff. Complements
 //! `vecmanf-document-core/tests/acceptance_0003.rs`, which covers the
@@ -14,7 +14,7 @@ use vecmanf_document_core::{
 };
 use vecmanf_ui_core::{
     EllipsePointerDownOutcome, EllipsePointerUpOutcome, EllipseTool, HandleKind, NodeTool,
-    PolyStarMode, PolyStarPointerUpOutcome, PolygonStarTool, PrimitiveSelection,
+    ObjectSelection, PolyStarMode, PolyStarPointerUpOutcome, PolygonStarTool,
     RectPointerDownOutcome, RectPointerUpOutcome, RectangleTool, ShapeHitTolerances, handles_for,
     hit_test_handle,
 };
@@ -36,7 +36,7 @@ const TOL: ShapeHitTolerances = ShapeHitTolerances {
 fn ac1_drag_creates_a_rect_sized_from_a_to_b_zero_radius_and_selected() {
     let document = Document::new(1);
     let mut tool = RectangleTool::new();
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
 
     let down =
         RectangleTool::pointer_down(&mut tool, &[], &mut selection, pt(10.0, 10.0), TOL, false);
@@ -64,7 +64,7 @@ fn ac1_drag_creates_a_rect_sized_from_a_to_b_zero_radius_and_selected() {
 fn ac1_a_plain_click_with_no_movement_creates_nothing() {
     let document = Document::new(1);
     let mut tool = RectangleTool::new();
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     tool.pointer_down(&[], &mut selection, pt(5.0, 5.0), TOL, false);
     let up = tool.pointer_up(&document, pt(5.0, 5.0), false);
     assert_eq!(up, RectPointerUpOutcome::NoOp);
@@ -75,7 +75,7 @@ fn ac1_a_plain_click_with_no_movement_creates_nothing() {
 fn ac2_ctrl_constrain_makes_a_square_sized_to_the_larger_extent() {
     let document = Document::new(1);
     let mut tool = RectangleTool::new();
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     tool.pointer_down(&[], &mut selection, pt(0.0, 0.0), TOL, false);
     // Drag 10mm right, 30mm down: larger extent is 30 -> square 30x30.
     let up = tool.pointer_up(&document, pt(10.0, 30.0), true);
@@ -105,7 +105,7 @@ fn ac3_dragging_a_resize_handle_changes_bounds_keeps_rect_a_primitive() {
         .unwrap();
 
     let mut tool = RectangleTool::new();
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     selection.select_single(id);
     let snapshot = document.primitive(id).unwrap();
 
@@ -148,7 +148,7 @@ fn ac3_dragging_a_resize_handle_changes_bounds_keeps_rect_a_primitive() {
 fn ac7_drag_creates_an_ellipse_with_half_extent_radii_and_selected() {
     let document = Document::new(1);
     let mut tool = EllipseTool::new();
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     let down = tool.pointer_down(&[], &mut selection, pt(0.0, 0.0), TOL, false);
     assert_eq!(down, EllipsePointerDownOutcome::Creating);
     let up = tool.pointer_up(&document, pt(20.0, 10.0), false);
@@ -167,7 +167,7 @@ fn ac7_drag_creates_an_ellipse_with_half_extent_radii_and_selected() {
 fn ac7_a_equals_b_creates_nothing() {
     let document = Document::new(1);
     let mut tool = EllipseTool::new();
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     tool.pointer_down(&[], &mut selection, pt(7.0, 7.0), TOL, false);
     let up = tool.pointer_up(&document, pt(7.0, 7.0), false);
     assert_eq!(up, EllipsePointerUpOutcome::NoOp);
@@ -178,7 +178,7 @@ fn ac7_a_equals_b_creates_nothing() {
 fn ac8_ctrl_constrain_makes_a_circle() {
     let document = Document::new(1);
     let mut tool = EllipseTool::new();
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     tool.pointer_down(&[], &mut selection, pt(0.0, 0.0), TOL, false);
     let up = tool.pointer_up(&document, pt(4.0, 20.0), true);
     let EllipsePointerUpOutcome::Created(id) = up else {
@@ -200,7 +200,7 @@ fn ac9_resizing_an_ellipse_can_break_rx_eq_ry() {
         ry: Length::from_mm(10.0),
     });
     let mut tool = EllipseTool::new();
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     selection.select_single(id);
     let snapshot = document.primitive(id).unwrap();
     let handles = vecmanf_ui_core::handles_for(&snapshot);
@@ -239,7 +239,7 @@ fn ac9_resizing_an_ellipse_can_break_rx_eq_ry() {
 fn ac10_point_count_control_persists_across_shapes_not_reset() {
     let document = Document::new(1);
     let mut tool = PolygonStarTool::new();
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     tool.set_point_count(PointCount::new(9).unwrap(), &document, &selection);
 
     tool.pointer_down(&[], &mut selection, pt(0.0, 0.0), TOL, false);
@@ -275,7 +275,7 @@ fn ac11_polygon_drag_centers_at_a_one_vertex_at_b() {
     let document = Document::new(1);
     let mut tool = PolygonStarTool::new();
     tool.set_mode(PolyStarMode::Polygon);
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     tool.pointer_down(&[], &mut selection, pt(0.0, 0.0), TOL, false);
     let up = tool.pointer_up(&document, pt(10.0, 0.0));
     let PolyStarPointerUpOutcome::Created(id) = up else {
@@ -292,7 +292,7 @@ fn ac11_polygon_drag_centers_at_a_one_vertex_at_b() {
 fn ac11_zero_movement_polygon_drag_creates_nothing() {
     let document = Document::new(1);
     let mut tool = PolygonStarTool::new();
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     tool.pointer_down(&[], &mut selection, pt(3.0, 3.0), TOL, false);
     let up = tool.pointer_up(&document, pt(3.0, 3.0));
     assert_eq!(up, PolyStarPointerUpOutcome::NoOp);
@@ -304,7 +304,7 @@ fn ac12_star_drag_creates_outer_and_inner_vertices_at_the_set_ratio() {
     let document = Document::new(1);
     let mut tool = PolygonStarTool::new();
     tool.set_mode(PolyStarMode::Star);
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     tool.set_ratio(InnerRatio::new(0.3).unwrap(), &document, &selection);
     tool.pointer_down(&[], &mut selection, pt(0.0, 0.0), TOL, false);
     let up = tool.pointer_up(&document, pt(10.0, 0.0));
@@ -326,7 +326,7 @@ fn ac12_zero_movement_star_drag_creates_nothing() {
     let document = Document::new(1);
     let mut tool = PolygonStarTool::new();
     tool.set_mode(PolyStarMode::Star);
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     tool.pointer_down(&[], &mut selection, pt(9.0, 9.0), TOL, false);
     let up = tool.pointer_up(&document, pt(9.0, 9.0));
     assert_eq!(up, PolyStarPointerUpOutcome::NoOp);
@@ -346,7 +346,7 @@ fn ac13_resize_handle_scales_uniformly_keeping_count_and_ratio() {
         InnerRatio::new(0.5).unwrap(),
     );
     let mut tool = PolygonStarTool::new();
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     selection.select_single(id);
     let snapshot = document.primitive(id).unwrap();
     let handles = handles_for(&snapshot);
@@ -383,7 +383,7 @@ fn ac14_inner_radius_handle_changes_ratio_keeps_outer_radius() {
         InnerRatio::new(0.5).unwrap(),
     );
     let mut tool = PolygonStarTool::new();
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     selection.select_single(id);
     let snapshot = document.primitive(id).unwrap();
     let handles = handles_for(&snapshot);
@@ -434,7 +434,7 @@ fn ac15_point_count_change_updates_the_selected_shape_live_keeping_size_and_rati
         InnerRatio::new(0.4).unwrap(),
     );
     let mut tool = PolygonStarTool::new();
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     selection.select_single(id);
     tool.set_point_count(PointCount::new(12).unwrap(), &document, &selection);
     let Shape::Star {
@@ -461,7 +461,7 @@ fn ac21_selecting_and_deselecting_a_primitive_never_converts_it() {
         pt(0.0, 0.0),
         pt(10.0, 10.0),
     ));
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     selection.select_single(id);
     selection.clear();
     selection.select_single(id);
@@ -504,7 +504,7 @@ fn ac22_multi_object_conversion_cannot_keep_both_paths_selected_together() {
         pt(10.0, 10.0),
     ));
 
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     selection.select_single(rect_id);
     selection.toggle(ellipse_id);
     assert_eq!(
@@ -579,7 +579,7 @@ fn as_path(document: &Document, id: NodeId) -> PathSnapshot {
 fn escape_during_a_create_drag_writes_nothing() {
     let document = Document::new(1);
     let mut tool = RectangleTool::new();
-    let mut selection = PrimitiveSelection::new();
+    let mut selection = ObjectSelection::new();
     tool.pointer_down(&[], &mut selection, pt(0.0, 0.0), TOL, false);
     assert!(tool.escape());
     let up = tool.pointer_up(&document, pt(50.0, 50.0), false);

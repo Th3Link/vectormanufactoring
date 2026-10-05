@@ -16,12 +16,6 @@ use vecmanf_document_core::{AnchorSnapshot, Point, Vec2};
 use crate::color::RgbaColor;
 use crate::glyphs::{DrawList, Vertex};
 
-/// `lyon`'s own display tolerance for approximating a curve with line
-/// segments during stroking — unrelated to, and coarser than,
-/// `vecmanf-geometry-core`'s hit-testing [`vecmanf_document_core::Tolerance`]
-/// (ADR 0003 §7).
-const DISPLAY_TOLERANCE_MM: f32 = 0.05;
-
 struct WithColor(RgbaColor);
 
 impl StrokeVertexConstructor<Vertex> for WithColor {
@@ -75,13 +69,13 @@ fn build_path(anchors: &[AnchorSnapshot], closed: bool) -> Option<Path> {
     Some(builder.build())
 }
 
-fn stroke(path: &Path, width_mm: f64, color: RgbaColor) -> DrawList {
+fn stroke(path: &Path, width_mm: f64, color: RgbaColor, tolerance_mm: f64) -> DrawList {
     let mut buffers: VertexBuffers<Vertex, u16> = VertexBuffers::new();
     let mut tessellator = StrokeTessellator::new();
     #[allow(clippy::cast_possible_truncation)]
     let options = StrokeOptions::default()
         .with_line_width(width_mm as f32)
-        .with_tolerance(DISPLAY_TOLERANCE_MM);
+        .with_tolerance(tolerance_mm as f32);
     let mut output = BuffersBuilder::new(&mut buffers, WithColor(color));
     if tessellator
         .tessellate_path(path, &options, &mut output)
@@ -106,21 +100,30 @@ fn stroke(path: &Path, width_mm: f64, color: RgbaColor) -> DrawList {
 
 /// Tessellates a whole path's stroke (acceptance criterion 6: this
 /// slice's one placeholder stroke, regardless of node types or
-/// curvature).
+/// curvature). `tolerance_mm` is the curve-approximation display
+/// tolerance (`crate::theme::DISPLAY_TOLERANCE_PX`, converted to document
+/// millimetres by the caller at its own view scale — screen-space, so
+/// curves stay visually smooth at every zoom level
+/// (`specs/0004-canvas-navigation-and-selection/adrs.md`), unrelated to,
+/// and coarser than, `vecmanf-geometry-core`'s hit-testing
+/// [`vecmanf_document_core::Tolerance`] (ADR 0003 §7).
 #[must_use]
 pub fn path_stroke(
     anchors: &[AnchorSnapshot],
     closed: bool,
     width_mm: f64,
     color: RgbaColor,
+    tolerance_mm: f64,
 ) -> DrawList {
-    build_path(anchors, closed)
-        .map_or_else(DrawList::default, |path| stroke(&path, width_mm, color))
+    build_path(anchors, closed).map_or_else(DrawList::default, |path| {
+        stroke(&path, width_mm, color, tolerance_mm)
+    })
 }
 
 /// Tessellates one segment's stroke in isolation — the selected-segment
 /// overlay (acceptance criterion 14), drawn on top of the path's own
-/// stroke rather than replacing it.
+/// stroke rather than replacing it. See [`path_stroke`] for
+/// `tolerance_mm`.
 #[must_use]
 pub fn segment_stroke(
     start: Point,
@@ -129,6 +132,7 @@ pub fn segment_stroke(
     end: Point,
     width_mm: f64,
     color: RgbaColor,
+    tolerance_mm: f64,
 ) -> DrawList {
     let mut builder = Path::builder();
     builder.begin(to_lyon(start));
@@ -136,7 +140,7 @@ pub fn segment_stroke(
     let c2 = end.translated(end_handle_in);
     builder.cubic_bezier_to(to_lyon(c1), to_lyon(c2), to_lyon(end));
     builder.end(false);
-    stroke(&builder.build(), width_mm, color)
+    stroke(&builder.build(), width_mm, color, tolerance_mm)
 }
 
 #[cfg(test)]
@@ -152,7 +156,7 @@ mod tests {
     #[test]
     fn a_two_node_open_path_produces_a_non_empty_stroke() {
         let anchors = vec![corner(1, 0.0, 0.0), corner(2, 10.0, 0.0)];
-        let list = path_stroke(&anchors, false, 0.25, RgbaColor::BLACK);
+        let list = path_stroke(&anchors, false, 0.25, RgbaColor::BLACK, 0.01);
         assert_ne!(list.triangles.len(), 0);
         assert_eq!(
             list.triangles.len() % 3,
@@ -164,7 +168,7 @@ mod tests {
     #[test]
     fn fewer_than_two_anchors_produces_nothing() {
         let anchors = vec![corner(1, 0.0, 0.0)];
-        let list = path_stroke(&anchors, false, 0.25, RgbaColor::BLACK);
+        let list = path_stroke(&anchors, false, 0.25, RgbaColor::BLACK, 0.01);
         assert_eq!(list.triangles.len(), 0);
     }
 
@@ -175,12 +179,40 @@ mod tests {
             corner(2, 10.0, 0.0),
             corner(3, 5.0, 10.0),
         ];
-        let open = path_stroke(&anchors, false, 0.25, RgbaColor::BLACK);
-        let closed = path_stroke(&anchors, true, 0.25, RgbaColor::BLACK);
+        let open = path_stroke(&anchors, false, 0.25, RgbaColor::BLACK, 0.01);
+        let closed = path_stroke(&anchors, true, 0.25, RgbaColor::BLACK, 0.01);
         assert!(
             closed.triangle_count() > open.triangle_count(),
             "closing adds the third segment's geometry"
         );
+    }
+
+    /// `tolerance_mm` is a real parameter, not vestigial: a finer
+    /// (smaller) tolerance on the same curve must tessellate to at least
+    /// as many triangles as a coarser one (`specs/0004-canvas-navigation-
+    /// and-selection/adrs.md`'s screen-space display tolerance — the
+    /// caller passes a smaller value at higher zoom).
+    #[test]
+    fn a_finer_tolerance_produces_at_least_as_much_geometry() {
+        let anchors = vec![
+            NewAnchor {
+                id: AnchorId::new(1, 1),
+                point: Point::new(0.0, 0.0),
+                handle_in: Vec2::ZERO,
+                handle_out: Vec2::new(0.0, 20.0),
+                kind: AnchorKind::Symmetric,
+            },
+            NewAnchor {
+                id: AnchorId::new(1, 2),
+                point: Point::new(40.0, 0.0),
+                handle_in: Vec2::new(0.0, 20.0),
+                handle_out: Vec2::ZERO,
+                kind: AnchorKind::Symmetric,
+            },
+        ];
+        let coarse = path_stroke(&anchors, false, 0.25, RgbaColor::BLACK, 5.0);
+        let fine = path_stroke(&anchors, false, 0.25, RgbaColor::BLACK, 0.001);
+        assert!(fine.triangle_count() >= coarse.triangle_count());
     }
 
     #[test]
@@ -195,7 +227,7 @@ mod tests {
             },
             corner(2, 10.0, 0.0),
         ];
-        let list = path_stroke(&anchors, false, 0.25, RgbaColor::BLACK);
+        let list = path_stroke(&anchors, false, 0.25, RgbaColor::BLACK, 0.01);
         for vertex in &list.triangles {
             // A generous bound: the curve plus half the stroke width
             // must stay well within the control polygon's bounding box
@@ -214,6 +246,7 @@ mod tests {
             Point::new(10.0, 0.0),
             2.0,
             RgbaColor::opaque(0x2F, 0x6F, 0xEE),
+            0.01,
         );
         assert_ne!(list.triangles.len(), 0);
     }

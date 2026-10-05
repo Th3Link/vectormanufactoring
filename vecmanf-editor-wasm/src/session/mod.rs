@@ -20,17 +20,21 @@
 //! methods join this type's `impl Session` the same way any other
 //! `impl` block in the same crate would.
 
+mod navigation;
+mod select;
 mod shapes;
 
 use vecmanf_document_core::{
-    AnchorKind, Document, Length, NodeId, OpenError, Point, SaveError, Tolerance, ViewTransform,
+    AnchorKind, Document, Length, NodeId, ObjectSnapshot, OpenError, Point, SaveError, Tolerance,
+    Vec2,
 };
 use vecmanf_render_core::{
     DecorationInput, DrawList, Hovered as RenderHovered, build_draw_list, build_pen_preview,
+    build_select_draw_list,
 };
 use vecmanf_ui_core::{
-    AnchorIdMinter, EllipseTool, Hit, HitTolerances, NodeTool, NodeToolbarState, PenTool,
-    PolygonStarTool, PrimitiveSelection, RectangleTool, hit_test,
+    AnchorIdMinter, EllipseTool, Hit, HitTolerances, NodeTool, NodeToolbarState, ObjectSelection,
+    PenTool, PolygonStarTool, RectangleTool, SelectTool, Viewport, hit_test,
 };
 
 // Re-exported only for `wasm_api`'s own `LiveReadout` wrapper (its only
@@ -65,11 +69,16 @@ const SEGMENT_TOLERANCE_PX: f64 = 4.0;
 const PEN_DRAG_THRESHOLD_PX: f64 = 3.0;
 
 /// Which tool is active. Exactly one at a time — `specification.md`'s
-/// tool rail has five buttons (Pen, Node, Rectangle, Ellipse,
+/// tool rail has six buttons (Select, Pen, Node, Rectangle, Ellipse,
 /// Polygon/Star), and switching tools is a single active-tool state,
 /// not independent flags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tool {
+    /// The Select tool (acceptance criteria 12-24,
+    /// `canvas-navigation-and-selection`) — first in the tool rail, and
+    /// the launch default for both `New` and `Open` (acceptance
+    /// criterion 13).
+    Select,
     /// The pen tool (acceptance criteria 1-5, `path-node-editing`).
     Pen,
     /// The node tool (acceptance criteria 7-14, `path-node-editing`).
@@ -91,15 +100,24 @@ pub struct Session {
     rectangle: RectangleTool,
     ellipse: EllipseTool,
     poly_star: PolygonStarTool,
+    select: SelectTool,
     /// Shared across the three shape tools (acceptance criterion 22:
-    /// two or more primitives can be selected together).
-    primitive_selection: PrimitiveSelection,
+    /// two or more primitives can be selected together) and the Select
+    /// tool (`specs/0004-canvas-navigation-and-selection/adrs.md`: "one
+    /// object selection, shared by the Select tool and the shape tools").
+    selection: ObjectSelection,
     tool: Tool,
-    view: ViewTransform,
+    /// Pan/zoom view state (ADR 0009 §2: ephemeral — never written to
+    /// the document, resets on `New`/`Open`).
+    viewport: Viewport,
     hovered: Option<Hit>,
     /// The primitive currently hovered while a shape tool is active —
     /// the shape-tool counterpart to `hovered` above.
     hovered_primitive: Option<NodeId>,
+    /// The object currently hovered while the Select tool is active —
+    /// the Select-tool counterpart to `hovered`/`hovered_primitive`
+    /// above (acceptance criteria 14, 15's hover box).
+    hovered_object: Option<NodeId>,
     /// The live pointer position in document space, tracked regardless
     /// of the active tool — the pen tool's rubber-band preview
     /// (`specification.md`'s UX notes) needs it even though it keeps no
@@ -121,17 +139,20 @@ impl Session {
             rectangle: RectangleTool::new(),
             ellipse: EllipseTool::new(),
             poly_star: PolygonStarTool::new(),
-            primitive_selection: PrimitiveSelection::new(),
-            // Pen is the default tool on an empty canvas
-            // (`specification.md`'s UX notes: "there's nothing to select
-            // or edit yet, and Pen is what lets the maker start
-            // immediately"). None of the three new shape tools change
-            // this default (`specs/0003-primitive-shapes/specification.md`'s
-            // own UX notes).
-            tool: Tool::Pen,
-            view: ViewTransform::identity(),
+            select: SelectTool::new(),
+            selection: ObjectSelection::new(),
+            // Select is the launch default for New and Open alike
+            // (acceptance criterion 13; `specs/0004-canvas-navigation-and-
+            // selection/adrs.md`: "Select is the launch tool for New and
+            // for Open" — matching Inkscape's own default and replacing
+            // `path-node-editing`'s provisional Pen default, which that
+            // slice's own spec explicitly flagged "revisit once a general
+            // selection tool exists").
+            tool: Tool::Select,
+            viewport: Viewport::new(),
             hovered: None,
             hovered_primitive: None,
+            hovered_object: None,
             pointer_position: None,
         }
     }
@@ -151,11 +172,13 @@ impl Session {
             rectangle: RectangleTool::new(),
             ellipse: EllipseTool::new(),
             poly_star: PolygonStarTool::new(),
-            primitive_selection: PrimitiveSelection::new(),
-            tool: Tool::Node,
-            view: ViewTransform::identity(),
+            select: SelectTool::new(),
+            selection: ObjectSelection::new(),
+            tool: Tool::Select,
+            viewport: Viewport::new(),
             hovered: None,
             hovered_primitive: None,
+            hovered_object: None,
             pointer_position: None,
         })
     }
@@ -197,28 +220,16 @@ impl Session {
         self.tool = tool;
     }
 
-    /// Updates the view transform (pan/zoom).
-    pub fn set_view(&mut self, view: ViewTransform) {
-        self.view = view;
-    }
-
-    /// The current view transform, for the host's GPU layer to build
-    /// this frame's screen transform from.
-    #[must_use]
-    pub const fn view(&self) -> ViewTransform {
-        self.view
-    }
-
     fn point_tolerance(&self) -> Tolerance {
-        Tolerance::from_mm(POINT_TOLERANCE_PX / self.view.scale())
+        Tolerance::from_mm(POINT_TOLERANCE_PX / self.view().scale())
     }
 
     fn handle_tolerance(&self) -> Tolerance {
-        Tolerance::from_mm(HANDLE_TOLERANCE_PX / self.view.scale())
+        Tolerance::from_mm(HANDLE_TOLERANCE_PX / self.view().scale())
     }
 
     fn segment_tolerance(&self) -> Tolerance {
-        Tolerance::from_mm(SEGMENT_TOLERANCE_PX / self.view.scale())
+        Tolerance::from_mm(SEGMENT_TOLERANCE_PX / self.view().scale())
     }
 
     fn hit_tolerances(&self) -> HitTolerances {
@@ -237,6 +248,30 @@ impl Session {
             .collect()
     }
 
+    /// Every object in the document, any kind, in z-order — the Select
+    /// tool's own counterpart to [`Session::paths`]/[`Session::
+    /// primitives`]: both a path and a primitive are "any object" to
+    /// `hit_test_object`/`object_bounds`.
+    fn objects(&self) -> Vec<ObjectSnapshot> {
+        self.document
+            .object_ids()
+            .into_iter()
+            .filter_map(|id| self.document.object(id))
+            .collect()
+    }
+
+    /// The Select tool's own live, uncommitted move offset while a drag
+    /// is in flight (acceptance criterion 20's "live") — `None` outside
+    /// the Select tool, with no drag in flight, or before the pointer has
+    /// ever moved over the canvas.
+    fn select_live_offset(&self) -> Option<Vec2> {
+        if self.tool != Tool::Select {
+            return None;
+        }
+        let cursor = self.pointer_position?;
+        self.select.live_offset(cursor)
+    }
+
     /// [`Session::paths`], with the node tool's in-flight drag (if any)
     /// substituted into the relevant anchor's live, not-yet-committed
     /// position/handle values — resolved by [`NodeTool::live_drag`]
@@ -245,16 +280,36 @@ impl Session {
     /// geometry of its own. Falls back to the committed snapshot
     /// unmodified outside the node tool, with no drag in flight, or with
     /// the pointer off the canvas (`self.pointer_position` is `None`).
+    /// Also applies the Select tool's own live move offset
+    /// (`select_live_offset`) to every selected path, via the same
+    /// [`vecmanf_document_core::ObjectSnapshot::translated`] rule
+    /// [`Document::translate_objects`] commits with
+    /// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "Preview and
+    /// commit therefore share one implementation").
     fn live_node_drag_paths(&self) -> Vec<vecmanf_document_core::PathSnapshot> {
         let mut paths = self.paths();
-        if self.tool != Tool::Node {
-            return paths;
+        if self.tool == Tool::Node {
+            self.apply_live_node_drag(&mut paths);
         }
+        if let Some(offset) = self.select_live_offset() {
+            for snapshot in &mut paths {
+                if self.selection.contains(snapshot.id) {
+                    let translated = ObjectSnapshot::Path(snapshot.clone()).translated(offset);
+                    if let ObjectSnapshot::Path(path) = translated {
+                        *snapshot = path;
+                    }
+                }
+            }
+        }
+        paths
+    }
+
+    fn apply_live_node_drag(&self, paths: &mut [vecmanf_document_core::PathSnapshot]) {
         let Some(cursor) = self.pointer_position else {
-            return paths;
+            return;
         };
         let Some(live) = self.node.live_drag(cursor) else {
-            return paths;
+            return;
         };
         match live {
             vecmanf_ui_core::LiveNodeDrag::Nodes { path, positions } => {
@@ -286,7 +341,6 @@ impl Session {
                 }
             }
         }
-        paths
     }
 
     /// The pointer went down at `point` (document space).
@@ -298,6 +352,9 @@ impl Session {
         // against, if the mouse was released outside the slider itself.
         self.commit_poly_star_ratio();
         match self.tool {
+            Tool::Select => {
+                self.select_pointer_down(point, shift);
+            }
             Tool::Pen => {
                 let tolerance = self.point_tolerance_as_length();
                 self.pen.pointer_down(point, tolerance);
@@ -333,7 +390,11 @@ impl Session {
         self.pointer_position = Some(point);
         self.hovered = None;
         self.hovered_primitive = None;
+        self.hovered_object = None;
         match self.tool {
+            Tool::Select => {
+                self.select_hover(point);
+            }
             Tool::Node => {
                 let paths = self.paths();
                 self.hovered = hit_test(
@@ -368,6 +429,9 @@ impl Session {
     /// ellipse tools (acceptance criteria 2, 8).
     pub fn pointer_up(&mut self, point: Point, constrain: bool) {
         match self.tool {
+            Tool::Select => {
+                self.select_pointer_up(point);
+            }
             Tool::Pen => {
                 let threshold = self.drag_threshold();
                 self.pen
@@ -383,7 +447,7 @@ impl Session {
     }
 
     fn drag_threshold(&self) -> Length {
-        Length::from_mm(PEN_DRAG_THRESHOLD_PX / self.view.scale())
+        Length::from_mm(PEN_DRAG_THRESHOLD_PX / self.view().scale())
     }
 
     /// Acceptance criterion 3 / the dedicated "finish path" action
@@ -399,6 +463,9 @@ impl Session {
     /// Escape only ever touches the active tool's own state.
     pub fn escape(&mut self) {
         match self.tool {
+            Tool::Select => {
+                self.select.escape();
+            }
             Tool::Pen => {
                 self.pen.escape();
             }
@@ -411,11 +478,18 @@ impl Session {
         }
     }
 
-    /// Acceptance criterion 13 (Delete/Backspace, or the contextual
-    /// toolbar's Delete button). A no-op for the pen tool.
+    /// Acceptance criteria 19, 21 (Delete/Backspace, or the contextual
+    /// toolbar's Delete button): removes every selected object when the
+    /// Select or Node tool is active. A no-op for every other tool.
     pub fn delete_selected(&mut self) {
-        if self.tool == Tool::Node {
-            self.node.delete_selected(&self.document);
+        match self.tool {
+            Tool::Select => {
+                let objects = self.objects();
+                self.select
+                    .delete_selected(&self.document, &objects, &mut self.selection);
+            }
+            Tool::Node => self.node.delete_selected(&self.document),
+            Tool::Pen | Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {}
         }
     }
 
@@ -478,6 +552,28 @@ impl Session {
             let paths = self.paths();
             self.node
                 .insert_on_selected_segment(&mut self.minter, &self.document, &paths);
+        }
+    }
+
+    /// The one double-click dispatch point
+    /// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "the host
+    /// detects a double-click... and calls `double_click(x, y)`.
+    /// `Session` dispatches it"): the pen tool finishes its in-progress
+    /// path (acceptance criterion 3), the node tool inserts a node on the
+    /// hit segment (acceptance criterion 12, via
+    /// [`Session::insert_at`]), the Select tool hands off to the hit
+    /// object's own tool (acceptance criteria 22, 23), and every shape
+    /// tool treats it exactly like an ordinary release (unchanged from
+    /// before this slice — the first click of a double-click is an
+    /// ordinary press with no movement, which already writes nothing).
+    pub fn double_click(&mut self, point: Point) {
+        match self.tool {
+            Tool::Pen => self.finish_pen(),
+            Tool::Node => self.insert_at(point),
+            Tool::Select => self.select_double_click(point),
+            Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
+                self.shape_pointer_up(point, false);
+            }
         }
     }
 
@@ -568,18 +664,23 @@ impl Session {
     /// already committed.
     #[must_use]
     pub fn draw_list(&self) -> DrawList {
+        let view = self.view();
         let paths = self.live_node_drag_paths();
-        let mut list = build_draw_list(&paths, self.view, &self.decoration_input());
+        let mut list = build_draw_list(&paths, view, &self.decoration_input());
         let primitives = self.primitives_for_render();
         list.extend(vecmanf_render_core::build_shape_draw_list(
             &primitives,
-            self.view,
+            view,
             &self.shape_decoration_input(),
+        ));
+        list.extend(build_select_draw_list(
+            view,
+            &self.select_decoration_input(),
         ));
         if let Some(live_shape) = self.live_preview_shape() {
             list.extend(vecmanf_render_core::build_shape_live_preview(
                 &live_shape,
-                self.view,
+                view,
             ));
         }
         if self.tool == Tool::Pen
@@ -598,7 +699,7 @@ impl Session {
                 nodes,
                 self.pointer_position,
                 pending.as_ref(),
-                self.view,
+                view,
                 self.is_hovering_pen_close_target(),
             ));
         }
@@ -670,16 +771,20 @@ mod tests {
 
     use super::*;
 
+    /// Acceptance criterion 13: Select, not Pen, is the launch default —
+    /// `path-node-editing`'s own Pen default was provisional, explicitly
+    /// flagged "revisit once a general selection tool exists".
     #[test]
-    fn a_new_session_defaults_to_the_pen_tool_on_an_empty_document() {
+    fn a_new_session_defaults_to_the_select_tool_on_an_empty_document() {
         let session = Session::new(1);
-        assert_eq!(session.tool(), Tool::Pen);
+        assert_eq!(session.tool(), Tool::Select);
         assert_eq!(session.document.object_ids(), Vec::new());
     }
 
     #[test]
     fn drawing_an_open_path_with_the_pen_tool_then_reading_it_back() {
         let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(10.0, 0.0), false);
@@ -694,6 +799,7 @@ mod tests {
     #[test]
     fn escape_discards_the_in_progress_pen_path_only() {
         let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
         session.escape();
@@ -703,6 +809,7 @@ mod tests {
     #[test]
     fn switching_to_the_node_tool_selects_and_edits_a_finished_path() {
         let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(10.0, 0.0), false);
@@ -720,6 +827,7 @@ mod tests {
     #[test]
     fn convert_and_delete_dispatch_only_when_the_node_tool_is_active() {
         let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(10.0, 0.0), false);
@@ -746,6 +854,7 @@ mod tests {
     #[test]
     fn draw_list_includes_geometry_once_a_path_exists() {
         let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(10.0, 0.0), false);
@@ -760,6 +869,7 @@ mod tests {
     #[test]
     fn draw_list_includes_the_pen_tools_in_progress_preview() {
         let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
         let empty = session.draw_list().triangle_count();
 
         session.pointer_down(Point::new(0.0, 0.0), false);
@@ -789,6 +899,7 @@ mod tests {
     #[test]
     fn draw_list_shows_the_live_curve_preview_during_a_pen_drag() {
         let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
 
@@ -816,6 +927,7 @@ mod tests {
     #[test]
     fn draw_list_shows_the_live_node_position_during_a_node_drag() {
         let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(10.0, 0.0), false);
@@ -850,6 +962,7 @@ mod tests {
     #[test]
     fn draw_list_shows_the_live_handle_value_during_a_handle_drag() {
         let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
         // AC2: a click-drag places a smooth node with symmetric handles.
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
@@ -896,6 +1009,7 @@ mod tests {
     #[test]
     fn is_hovering_pen_close_target_matches_the_real_close_decision() {
         let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
         assert!(!session.is_hovering_pen_close_target(), "idle: no path yet");
 
         session.pointer_down(Point::new(0.0, 0.0), false);
@@ -920,6 +1034,23 @@ mod tests {
         );
     }
 
+    /// Resets `session`'s viewport to an identity-equivalent view (1
+    /// screen px per document mm, origin at the document origin) — these
+    /// two tests were written and pinned against `ViewTransform::
+    /// identity()`, back when `Session`'s only view was a bare,
+    /// never-defaulted-to-100%-zoom `ViewTransform`. `canvas-navigation-
+    /// and-selection` gives `Session` a real `Viewport` defaulting to
+    /// 100% zoom (`Zoom::default()`, acceptance criterion 7's `96/25.4`
+    /// px/mm) instead, so the exact-pixel-distance reasoning these two
+    /// tests pin needs an explicit identity view rather than relying on
+    /// the session's own default.
+    fn reset_to_identity_view(session: &mut Session) {
+        session.viewport = Viewport::new();
+        session
+            .viewport
+            .zoom_about(0.0, 0.0, 1.0 / vecmanf_ui_core::PX_PER_MM_AT_100);
+    }
+
     /// Tester verification (PR #20, handles-doubled fix, 2026-10-05):
     /// `HANDLE_TOLERANCE_PX` is 16.0 (was 8.0 before that round; by this
     /// round `POINT_TOLERANCE_PX` is 16.0 too, but was still 8.0 when
@@ -934,6 +1065,8 @@ mod tests {
     #[test]
     fn a_click_13px_from_a_handle_hits_under_the_doubled_tolerance() {
         let mut session = Session::new(1);
+        reset_to_identity_view(&mut session);
+        session.set_tool(Tool::Pen);
         // A at (0, 0), a plain corner click.
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
@@ -981,6 +1114,8 @@ mod tests {
     #[test]
     fn a_click_13px_from_a_node_hits_under_the_doubled_tolerance() {
         let mut session = Session::new(1);
+        reset_to_identity_view(&mut session);
+        session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(200.0, 0.0), false);
@@ -1006,6 +1141,7 @@ mod tests {
     #[test]
     fn pack_then_open_round_trips_a_drawn_path() {
         let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(10.0, 0.0), false);
@@ -1029,6 +1165,7 @@ mod tests {
     #[test]
     fn node_toolbar_state_for_a_selected_node() {
         let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(10.0, 0.0), false);
@@ -1059,6 +1196,7 @@ mod tests {
         // lands on the segment itself rather than being read as a node
         // hit of whichever endpoint happens to be nearest.
         let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(100.0, 0.0), false);
@@ -1091,6 +1229,7 @@ mod tests {
         // `is_hovering_pen_close_target_matches_the_real_close_decision`'s
         // own doc comment already names for this exact reason.
         let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(50.0, 0.0), false);
@@ -1119,6 +1258,7 @@ mod tests {
     #[test]
     fn split_selected_on_an_interior_node_through_the_session() {
         let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(10.0, 0.0), false);

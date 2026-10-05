@@ -18,30 +18,40 @@ mod conversion;
 mod ellipse_tool;
 mod handle_layout;
 mod hit_test;
+mod hit_test_object;
 mod node_tool;
+mod object_bounds;
+mod object_selection;
 mod pen_tool;
 mod poly_star_tool;
-mod primitive_selection;
 mod rectangle_tool;
+mod select_tool;
 mod selection;
 mod shape_hit_test;
 mod shape_tool_common;
+mod viewport;
 
 pub use anchor_id_minter::AnchorIdMinter;
 pub use conversion::build_primitive_conversions;
 pub use ellipse_tool::{EllipsePointerDownOutcome, EllipsePointerUpOutcome, EllipseTool};
 pub use handle_layout::{HandleKind, ResizeDirection, ShapeHandle, handles_for};
 pub use hit_test::{Hit, hit_test};
+pub use hit_test_object::hit_test_object;
 pub use node_tool::{
     HitTolerances, LiveNodeDrag, NodeTool, NodeToolbarState,
     PointerDownOutcome as NodePointerDownOutcome, PointerUpOutcome as NodePointerUpOutcome,
 };
+pub use object_bounds::object_bounds;
+pub use object_selection::ObjectSelection;
 pub use pen_tool::{PenTool, PointerUpOutcome as PenPointerUpOutcome};
 pub use poly_star_tool::{
     PolyStarMode, PolyStarPointerDownOutcome, PolyStarPointerUpOutcome, PolygonStarTool,
 };
-pub use primitive_selection::PrimitiveSelection;
 pub use rectangle_tool::{RectPointerDownOutcome, RectPointerUpOutcome, RectangleTool};
+pub use select_tool::{
+    SelectDoubleClickOutcome, SelectPointerDownOutcome, SelectTool, double_click,
+};
 pub use selection::NodeSelection;
 pub use shape_hit_test::{hit_test_handle, hit_test_primitive};
 pub use shape_tool_common::{LiveShape, ShapeHitTolerances};
+pub use viewport::{PX_PER_MM_AT_100, Viewport, Zoom};

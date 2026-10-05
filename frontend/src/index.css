@@ -101,6 +101,11 @@
     --toolbar-icon-active-fg: #FFFFFF;
     --editor-accent: #2F6FEE;
     --editor-accent-hover: color-mix(in srgb, #2F6FEE 20%, transparent);
+    /* docs/design-system.md, 2026-10-05: drop shadow on every floating
+       chrome surface (the left tool panel, the per-selection contextual
+       mini-toolbar) — what makes them read as "floating over" the
+       canvas rather than framing it. */
+    --panel-elevation-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
 }
 
 .dark {

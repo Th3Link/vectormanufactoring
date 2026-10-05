@@ -8,7 +8,7 @@ use vecmanf_document_core::{
     Document, InnerRatio, NodeId, Point, PointCount, PrimitiveSnapshot, Shape, StarFrame,
 };
 
-use crate::PrimitiveSelection;
+use crate::ObjectSelection;
 use crate::handle_layout::{
     self, HandleKind, ResizeDirection, inner_ratio_from_drag, scale_star_frame,
 };
@@ -164,7 +164,7 @@ impl PolygonStarTool {
         &mut self,
         count: PointCount,
         document: &Document,
-        selection: &PrimitiveSelection,
+        selection: &ObjectSelection,
     ) {
         self.point_count = count;
         let ids = polygon_or_star_ids(document, selection.ids());
@@ -189,7 +189,7 @@ impl PolygonStarTool {
         &mut self,
         ratio: InnerRatio,
         document: &Document,
-        selection: &PrimitiveSelection,
+        selection: &ObjectSelection,
     ) {
         self.ratio = ratio;
         self.ratio_preview = None;
@@ -225,7 +225,7 @@ impl PolygonStarTool {
     /// accumulated, as one commit for the whole selection, the same way
     /// [`PolygonStarTool::set_ratio`] does — a no-op if the slider was
     /// never touched.
-    pub fn commit_ratio_preview(&mut self, document: &Document, selection: &PrimitiveSelection) {
+    pub fn commit_ratio_preview(&mut self, document: &Document, selection: &ObjectSelection) {
         let Some(ratio) = self.ratio_preview.take() else {
             return;
         };
@@ -241,7 +241,7 @@ impl PolygonStarTool {
     pub fn pointer_down(
         &mut self,
         primitives: &[PrimitiveSnapshot],
-        selection: &mut PrimitiveSelection,
+        selection: &mut ObjectSelection,
         point: Point,
         tolerances: ShapeHitTolerances,
         shift: bool,
@@ -498,7 +498,7 @@ mod tests {
     fn ac10_point_count_persists_between_shapes() {
         let document = Document::new(1);
         let mut tool = PolygonStarTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         tool.set_point_count(PointCount::new(8).unwrap(), &document, &selection);
 
         tool.pointer_down(&[], &mut selection, Point::new(0.0, 0.0), TOLERANCES, false);
@@ -533,7 +533,7 @@ mod tests {
     fn ac11_polygon_drag_places_a_vertex_at_b() {
         let document = Document::new(1);
         let mut tool = PolygonStarTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         tool.pointer_down(&[], &mut selection, Point::new(0.0, 0.0), TOLERANCES, false);
         tool.pointer_move(Point::new(10.0, 0.0));
         let Some(LiveShape::Creating(
@@ -570,9 +570,9 @@ mod tests {
         tool.set_ratio(
             InnerRatio::new(0.3).unwrap(),
             &document,
-            &PrimitiveSelection::new(),
+            &ObjectSelection::new(),
         );
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         tool.pointer_down(&[], &mut selection, Point::new(0.0, 0.0), TOLERANCES, false);
         let outcome = tool.pointer_up(&document, Point::new(10.0, 0.0));
         let PolyStarPointerUpOutcome::Created(id) = outcome else {
@@ -607,7 +607,7 @@ mod tests {
             InnerRatio::new(0.4).unwrap(),
         );
         let mut tool = PolygonStarTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         selection.select_single(id);
 
         let primitives = snapshots(&document);
@@ -663,7 +663,7 @@ mod tests {
             InnerRatio::new(0.5).unwrap(),
         );
         let mut tool = PolygonStarTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         selection.select_single(star_id);
 
         let handle_position = handle_layout::inner_radius_handle_position(
@@ -698,7 +698,7 @@ mod tests {
 
         // A plain polygon shows no inner-radius handle at all.
         let polygon_id = document.create_polygon(frame, PointCount::new(5).unwrap());
-        let mut polygon_selection = PrimitiveSelection::new();
+        let mut polygon_selection = ObjectSelection::new();
         polygon_selection.select_single(polygon_id);
         let primitives = snapshots(&document);
         let outcome = tool.pointer_down(
@@ -727,7 +727,7 @@ mod tests {
             InnerRatio::new(0.5).unwrap(),
         );
         let mut tool = PolygonStarTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         selection.select_single(id);
 
         tool.set_point_count(PointCount::new(9).unwrap(), &document, &selection);
@@ -768,7 +768,7 @@ mod tests {
         ));
 
         let mut tool = PolygonStarTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         selection.select_single(polygon_id);
         selection.toggle(star_id);
         selection.toggle(rect_id);
@@ -797,7 +797,7 @@ mod tests {
     fn escape_mid_drag_writes_nothing() {
         let document = Document::new(1);
         let mut tool = PolygonStarTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         tool.pointer_down(&[], &mut selection, Point::new(0.0, 0.0), TOLERANCES, false);
         assert!(tool.escape());
         assert!(tool.live_shape().is_none());
@@ -823,7 +823,7 @@ mod tests {
             InnerRatio::new(0.5).unwrap(),
         );
         let mut tool = PolygonStarTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         selection.select_single(id);
 
         for tick in [0.3, 0.4, 0.6, 0.7] {

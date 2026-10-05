@@ -67,17 +67,31 @@ impl Session {
     /// state.
     pub(super) fn primitives_for_render(&self) -> Vec<PrimitiveSnapshot> {
         let mut primitives = self.primitives();
-        let Tool::PolygonStar = self.tool else {
-            return primitives;
-        };
-        let Some(preview_ratio) = self.poly_star.ratio_preview() else {
-            return primitives;
-        };
-        for primitive in &mut primitives {
-            if self.primitive_selection.contains(primitive.id)
-                && let Shape::Star { inner_ratio, .. } = &mut primitive.shape
-            {
-                *inner_ratio = preview_ratio;
+        if let Tool::PolygonStar = self.tool
+            && let Some(preview_ratio) = self.poly_star.ratio_preview()
+        {
+            for primitive in &mut primitives {
+                if self.selection.contains(primitive.id)
+                    && let Shape::Star { inner_ratio, .. } = &mut primitive.shape
+                {
+                    *inner_ratio = preview_ratio;
+                }
+            }
+        }
+        // The Select tool's own live move offset (acceptance criterion
+        // 20's "live"), applied via the one shared `ObjectSnapshot::
+        // translated` rule `Document::translate_objects` commits with
+        // (`specs/0004-canvas-navigation-and-selection/adrs.md`) — so the
+        // preview and the eventual commit can never disagree.
+        if let Some(offset) = self.select_live_offset() {
+            for primitive in &mut primitives {
+                if self.selection.contains(primitive.id) {
+                    let translated = vecmanf_document_core::ObjectSnapshot::Primitive(*primitive)
+                        .translated(offset);
+                    if let vecmanf_document_core::ObjectSnapshot::Primitive(moved) = translated {
+                        *primitive = moved;
+                    }
+                }
             }
         }
         primitives
@@ -87,17 +101,15 @@ impl Session {
     /// creates/edits — the "tool mismatch" rule
     /// (`specification.md`'s "Selection and hover convention for
     /// primitives": a primitive's selection visuals only render while
-    /// its own matching tool is active).
+    /// its own matching tool is active). Derived from
+    /// [`super::select::tool_for_shape`]
+    /// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "The
+    /// existing `shape_matches_active_tool` is then derived from it, so
+    /// the two directions of the mapping cannot drift apart") — the same
+    /// per-shape mapping the Select tool's double-click handoff uses to
+    /// pick which tool a primitive hands off to.
     fn shape_matches_active_tool(&self, shape: &Shape) -> bool {
-        matches!(
-            (self.tool, shape),
-            (Tool::Rectangle, Shape::Rect { .. })
-                | (Tool::Ellipse, Shape::Ellipse { .. })
-                | (
-                    Tool::PolygonStar,
-                    Shape::Polygon { .. } | Shape::Star { .. }
-                )
-        )
+        super::select::tool_for_shape(shape) == self.tool
     }
 
     /// Acceptance criteria 1, 2 (rectangle), 7, 8 (ellipse), 11, 12
@@ -110,7 +122,7 @@ impl Session {
             Tool::Rectangle => {
                 self.rectangle.pointer_down(
                     &primitives,
-                    &mut self.primitive_selection,
+                    &mut self.selection,
                     point,
                     tolerances,
                     shift,
@@ -119,7 +131,7 @@ impl Session {
             Tool::Ellipse => {
                 self.ellipse.pointer_down(
                     &primitives,
-                    &mut self.primitive_selection,
+                    &mut self.selection,
                     point,
                     tolerances,
                     shift,
@@ -128,13 +140,13 @@ impl Session {
             Tool::PolygonStar => {
                 self.poly_star.pointer_down(
                     &primitives,
-                    &mut self.primitive_selection,
+                    &mut self.selection,
                     point,
                     tolerances,
                     shift,
                 );
             }
-            Tool::Pen | Tool::Node => {}
+            Tool::Select | Tool::Pen | Tool::Node => {}
         }
     }
 
@@ -146,7 +158,7 @@ impl Session {
             Tool::Rectangle => self.rectangle.pointer_move(point, constrain),
             Tool::Ellipse => self.ellipse.pointer_move(point, constrain),
             Tool::PolygonStar => self.poly_star.pointer_move(point),
-            Tool::Pen | Tool::Node => {}
+            Tool::Select | Tool::Pen | Tool::Node => {}
         }
     }
 
@@ -177,7 +189,7 @@ impl Session {
             Tool::PolygonStar => {
                 self.poly_star.pointer_up(&self.document, point);
             }
-            Tool::Pen | Tool::Node => {}
+            Tool::Select | Tool::Pen | Tool::Node => {}
         }
     }
 
@@ -194,7 +206,7 @@ impl Session {
             Tool::PolygonStar => {
                 self.poly_star.escape();
             }
-            Tool::Pen | Tool::Node => {}
+            Tool::Select | Tool::Pen | Tool::Node => {}
         }
     }
 
@@ -204,7 +216,7 @@ impl Session {
     pub fn remove_corner_rounding(&mut self) {
         if self.tool == Tool::Rectangle {
             self.rectangle
-                .remove_rounding(&self.document, &self.primitive_selection);
+                .remove_rounding(&self.document, &self.selection);
         }
     }
 
@@ -235,7 +247,7 @@ impl Session {
     /// The point-count stepper (acceptance criteria 10, 15).
     pub fn set_poly_star_point_count(&mut self, count: PointCount) {
         self.poly_star
-            .set_point_count(count, &self.document, &self.primitive_selection);
+            .set_point_count(count, &self.document, &self.selection);
     }
 
     /// The ratio field's instantaneous commit (acceptance criteria 12,
@@ -246,7 +258,7 @@ impl Session {
     /// exists to avoid).
     pub fn set_poly_star_ratio(&mut self, ratio: InnerRatio) {
         self.poly_star
-            .set_ratio(ratio, &self.document, &self.primitive_selection);
+            .set_ratio(ratio, &self.document, &self.selection);
     }
 
     /// The ratio slider's live, uncommitted preview (acceptance
@@ -263,7 +275,7 @@ impl Session {
     /// drag ends.
     pub fn commit_poly_star_ratio(&mut self) {
         self.poly_star
-            .commit_ratio_preview(&self.document, &self.primitive_selection);
+            .commit_ratio_preview(&self.document, &self.selection);
     }
 
     /// "Object to path" (acceptance criteria 17, 21, 22): converts every
@@ -280,17 +292,23 @@ impl Session {
     ///
     /// When exactly one primitive was selected, every one of its new
     /// anchors is selected in the node tool afterward, so it reads as
-    /// "immediately editable" (acceptance criterion 17). A multi-object
-    /// conversion (acceptance criterion 22) selects the first converted
-    /// path's anchors the same way — `vecmanf-ui-core`'s
-    /// [`vecmanf_ui_core::NodeSelection`] has no representation for
-    /// "these anchors across several different paths are selected
-    /// together", so a multi-object conversion's node-tool selection
-    /// after the fact is an approximation of AC22's "remain selected
-    /// together" wording, not a literal one — a known, narrowed scope
-    /// (see this crate's own report).
+    /// "immediately editable" (acceptance criterion 17). The converted
+    /// ids stay in `self.selection` — unlike the pre-`canvas-navigation-
+    /// and-selection` behaviour, which cleared them — because "object to
+    /// path" keeps the `NodeId` (`specs/0003-primitive-shapes/adrs.md`):
+    /// they are still the same objects, now sharing their id space with
+    /// the Select tool's own selection
+    /// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "a multi-
+    /// object conversion therefore stays selected together at object
+    /// level"). A multi-object conversion (acceptance criterion 22)
+    /// additionally selects the first converted path's anchors the same
+    /// way — `vecmanf-ui-core`'s [`vecmanf_ui_core::NodeSelection`] has no
+    /// representation for "these anchors across several different paths
+    /// are selected together", so that part remains an approximation of
+    /// AC22's "remain selected together" wording, not a literal one — a
+    /// known, narrowed scope (see this crate's own report).
     pub fn convert_selected_to_paths(&mut self) {
-        let ids = self.primitive_selection.ids().to_vec();
+        let ids = self.selection.ids().to_vec();
         if ids.is_empty() {
             return;
         }
@@ -300,7 +318,6 @@ impl Session {
         }
         let first_converted = conversions[0].0;
         if self.document.convert_to_paths(&conversions).is_ok() {
-            self.primitive_selection.remove_all(&ids);
             self.tool = Tool::Node;
             if let Some(path) = self.document.path(first_converted) {
                 self.node.select_all_anchors(&path);
@@ -316,7 +333,7 @@ impl Session {
             Tool::Rectangle => self.rectangle.live_shape(),
             Tool::Ellipse => self.ellipse.live_shape(),
             Tool::PolygonStar => self.poly_star.live_shape(),
-            Tool::Pen | Tool::Node => None,
+            Tool::Select | Tool::Pen | Tool::Node => None,
         }
     }
 
@@ -384,7 +401,7 @@ impl Session {
         }
         let primitives = self.primitives_for_render();
         let selected: Vec<NodeId> = self
-            .primitive_selection
+            .selection
             .ids()
             .iter()
             .copied()
@@ -589,8 +606,8 @@ mod tests {
             .expect("ellipse exists")
             .id;
 
-        session.primitive_selection.select_single(rect_id);
-        session.primitive_selection.toggle(ellipse_id);
+        session.selection.select_single(rect_id);
+        session.selection.toggle(ellipse_id);
         session.convert_selected_to_paths();
 
         assert!(session.document.path(rect_id).is_some());
@@ -616,7 +633,7 @@ mod tests {
             InnerRatio::new(0.5).unwrap(),
         );
         session.set_tool(Tool::PolygonStar);
-        session.primitive_selection.select_single(id);
+        session.selection.select_single(id);
 
         for tick in [0.3, 0.6, 0.8] {
             session.preview_poly_star_ratio(InnerRatio::new(tick).unwrap());
@@ -681,7 +698,7 @@ mod tests {
             InnerRatio::new(0.5).unwrap(),
         );
         session.set_tool(Tool::PolygonStar);
-        session.primitive_selection.select_single(star_a);
+        session.selection.select_single(star_a);
 
         // A slider drag against star A, in progress — never committed
         // (simulating the mouse being released off the slider, so
@@ -696,7 +713,7 @@ mod tests {
         let star_b_vertex = Point::new(110.0, 0.0);
         session.pointer_down(star_b_vertex, false);
         assert_eq!(
-            session.primitive_selection.ids(),
+            session.selection.ids(),
             &[star_b],
             "the click did select the new star"
         );

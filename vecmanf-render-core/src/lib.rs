@@ -17,6 +17,7 @@ mod color;
 mod decorations;
 mod glyphs;
 mod pen_preview;
+mod select_decoration;
 mod shape_preview;
 mod stroke;
 mod theme;
@@ -25,11 +26,16 @@ pub use color::RgbaColor;
 pub use decorations::{DecorationInput, Hovered};
 pub use glyphs::{DrawList, Vertex};
 pub use pen_preview::build_pen_preview;
+pub use select_decoration::{SelectDecorationInput, SelectionBox};
 pub use shape_preview::{
     RenderShapeHandle, ShapeDecorationInput, ShapeHandleKind, build_shape_live_preview,
 };
 
 use vecmanf_document_core::{PathSnapshot, PrimitiveSnapshot, ViewTransform};
+
+fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
+    px / view.scale()
+}
 
 /// Builds the full draw list for one frame: every path's stroke
 /// (acceptance criterion 6), plus node/handle/segment decorations
@@ -40,13 +46,16 @@ pub fn build_draw_list(
     view: ViewTransform,
     input: &DecorationInput,
 ) -> DrawList {
+    let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
+    let min_width_mm = screen_px_to_mm(view, theme::MIN_DISPLAY_STROKE_WIDTH_PX);
     let mut list = DrawList::default();
     for snapshot in paths {
         list.extend(stroke::path_stroke(
             &snapshot.anchors,
             snapshot.closed,
-            snapshot.stroke_width.as_mm(),
+            snapshot.stroke_width.as_mm().max(min_width_mm),
             snapshot.stroke.into(),
+            tolerance_mm,
         ));
     }
     list.extend(decorations::build(paths, view, input));
@@ -64,6 +73,16 @@ pub fn build_shape_draw_list(
     input: &ShapeDecorationInput,
 ) -> DrawList {
     shape_preview::build(primitives, view, input)
+}
+
+/// Builds the Select tool's own decoration geometry for this frame: a
+/// plain bounding box per selected/hovered object, no shape handles, no
+/// path nodes (acceptance criteria 14, 15, 20;
+/// `specs/0004-canvas-navigation-and-selection/specification.md`'s "a new,
+/// unified 'selected' indicator").
+#[must_use]
+pub fn build_select_draw_list(view: ViewTransform, input: &SelectDecorationInput) -> DrawList {
+    select_decoration::build(view, input)
 }
 
 #[cfg(test)]

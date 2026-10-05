@@ -8,7 +8,7 @@
 //! only compiles for that target, so `cargo test`/`cargo clippy` on the
 //! host never needs a GPU driver.
 
-use vecmanf_document_core::ViewTransform;
+use vecmanf_document_core::{Point, ViewTransform};
 use vecmanf_render_core::DrawList;
 use wasm_bindgen::JsValue;
 use web_sys::HtmlCanvasElement;
@@ -129,18 +129,33 @@ struct GpuVertex {
     color: [f32; 4],
 }
 
-impl From<vecmanf_render_core::Vertex> for GpuVertex {
-    fn from(vertex: vecmanf_render_core::Vertex) -> Self {
-        #[allow(clippy::cast_possible_truncation)]
-        let position = [vertex.position.x as f32, vertex.position.y as f32];
-        let color = [
-            f32::from(vertex.color.r) / 255.0,
-            f32::from(vertex.color.g) / 255.0,
-            f32::from(vertex.color.b) / 255.0,
-            f32::from(vertex.color.a) / 255.0,
-        ];
-        Self { position, color }
-    }
+/// Converts a draw-list vertex to the GPU's own vertex shape, **relative
+/// to `origin`** (the document point currently at screen pixel `(0, 0)`)
+/// — subtracted in `f64`, before the `f32` cast
+/// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "The GPU upload
+/// subtracts the view origin in `f64` before the `f32` cast"). Casting
+/// an *absolute* document-mm position straight to `f32` (the previous
+/// behaviour) loses precision proportional to its distance from the
+/// document origin; panning far from the origin at high zoom (pan is
+/// unbounded, and nothing in this spec limits it) made that loss
+/// catastrophic once it approached half the stroke width. Subtracting
+/// `origin` first keeps the `f32` error proportional to distance from
+/// the *viewport's* origin — i.e. roughly proportional to distance on
+/// screen, in pixels — regardless of where the document origin is.
+/// [`ScreenTransform`]'s own offset no longer needs `origin` at all,
+/// since every vertex arrives already shifted.
+fn to_gpu_vertex(vertex: vecmanf_render_core::Vertex, origin: Point) -> GpuVertex {
+    let relative_x = vertex.position.x - origin.x;
+    let relative_y = vertex.position.y - origin.y;
+    #[allow(clippy::cast_possible_truncation)]
+    let position = [relative_x as f32, relative_y as f32];
+    let color = [
+        f32::from(vertex.color.r) / 255.0,
+        f32::from(vertex.color.g) / 255.0,
+        f32::from(vertex.color.b) / 255.0,
+        f32::from(vertex.color.a) / 255.0,
+    ];
+    GpuVertex { position, color }
 }
 
 /// The CPU-computed per-frame mapping from document millimetres straight
@@ -170,23 +185,23 @@ impl ScreenTransform {
     /// [`Gpu::render`] is the one caller, and it is the one place the
     /// physical-vs-CSS distinction is resolved — nothing downstream of
     /// this type needs to know about `devicePixelRatio` at all.
+    ///
+    /// The offset is now a fixed `-1`/`+1`, not derived from `view`'s
+    /// origin: every vertex [`to_gpu_vertex`] hands the GPU has already
+    /// been shifted by that same origin in `f64`, so this uniform no
+    /// longer needs to repeat that subtraction (`specs/0004-canvas-
+    /// navigation-and-selection/adrs.md`: "the shader is unchanged; only
+    /// the offset term changes").
     fn new(view: ViewTransform, css_width: f64, css_height: f64) -> Self {
         let (width, height) = (css_width.max(1.0), css_height.max(1.0));
         let scale_x = 2.0 * view.scale() / width;
         let scale_y = -2.0 * view.scale() / height;
-        // The document point that currently maps to screen pixel (0, 0)
-        // — exactly what `ViewTransform::screen_to_document` answers.
-        let origin = view.screen_to_document(0.0, 0.0);
-        #[allow(clippy::cast_possible_truncation)]
-        let offset_x = (-origin.x * scale_x) as f32 - 1.0;
-        #[allow(clippy::cast_possible_truncation)]
-        let offset_y = (-origin.y * scale_y) as f32 + 1.0;
         #[allow(clippy::cast_possible_truncation)]
         Self {
             scale_x: scale_x as f32,
-            offset_x,
+            offset_x: -1.0,
             scale_y: scale_y as f32,
-            offset_y,
+            offset_y: 1.0,
         }
     }
 }
@@ -560,11 +575,15 @@ impl Gpu {
         self.queue
             .write_buffer(&self.transform_buffer, 0, bytemuck::bytes_of(&transform));
 
+        // The document point currently at screen pixel (0, 0) — every
+        // vertex below is shifted by this same point in `f64`, before
+        // its own `f32` cast (`to_gpu_vertex`'s own doc comment).
+        let origin = view.screen_to_document(0.0, 0.0);
         let vertices: Vec<GpuVertex> = draw_list
             .triangles
             .iter()
             .copied()
-            .map(GpuVertex::from)
+            .map(|vertex| to_gpu_vertex(vertex, origin))
             .collect();
 
         let frame = match self.surface.get_current_texture() {

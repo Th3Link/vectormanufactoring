@@ -1,6 +1,7 @@
 import {
   Circle as CircleIcon,
   MousePointer2,
+  MousePointer as SelectIcon,
   PenTool as PenToolIcon,
   Square,
   Star,
@@ -60,20 +61,34 @@ function ToolButton({ tool, active, label, shortcut, icon, onSelect }: ToolButto
 }
 
 /**
- * The tool rail (`specification.md`'s UX notes, "Tool rail and tool
- * switching"): a 48px vertical rail, docked to the left, Pen then Node,
- * then Rectangle/Ellipse/Polygon-star
- * (`specs/0003-primitive-shapes/specification.md`'s own "the order the maker
- * reaches for them most") — later tools append below, this slice
- * doesn't reorder for them.
+ * The tool rail (`docs/design-system.md`'s 2026-10-05 "Left tool panel":
+ * floats *over* the canvas, inset 12px from the left and top edges,
+ * elevated with `--panel-elevation-shadow`, fixed 48px icon-column
+ * width — the canvas is never resized or repositioned to make room for
+ * it). Select is first — a deliberate, one-time exception to "new tools
+ * append in ship order" (acceptance criterion 12; `docs/design-system.md`:
+ * "the rail's new default/master tool"), then Pen, Node, Rectangle,
+ * Ellipse, Polygon-star, each shifted down one slot but otherwise in
+ * their own established order.
  */
 export function ToolRail({ tool, onSelect }: ToolRailProps) {
   return (
     <Tooltip.Provider>
       <div
-        className="flex w-12 shrink-0 flex-col items-center gap-1 py-1"
-        style={{ background: "var(--toolbar-bg)" }}
+        className="absolute top-3 left-3 z-20 flex w-12 flex-col items-center gap-1 rounded-lg py-1"
+        style={{
+          background: "var(--toolbar-bg)",
+          boxShadow: "var(--panel-elevation-shadow)",
+        }}
       >
+        <ToolButton
+          tool="select"
+          active={tool === "select"}
+          label="Select tool"
+          shortcut="S"
+          icon={<SelectIcon size={20} />}
+          onSelect={onSelect}
+        />
         <ToolButton
           tool="pen"
           active={tool === "pen"}

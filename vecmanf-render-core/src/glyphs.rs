@@ -143,6 +143,30 @@ pub fn thick_line(a: Point, b: Point, width_mm: f64, color: RgbaColor) -> DrawLi
     list
 }
 
+/// An axis-aligned rectangle outline between `min` and `max` corners,
+/// `width_mm` thick on every edge — the Select tool's own bounding-box
+/// decoration (`select_decoration.rs`) and the shape tools' primitive
+/// bounding-box selection/hover outline (`shape_preview.rs`) both draw
+/// exactly this shape; this is their one shared implementation
+/// (architect review: the four-`thick_line` loop was duplicated between
+/// the two).
+#[must_use]
+pub fn box_outline(min: Point, max: Point, width_mm: f64, color: RgbaColor) -> DrawList {
+    let corners = [
+        Point::new(min.x, min.y),
+        Point::new(max.x, min.y),
+        Point::new(max.x, max.y),
+        Point::new(min.x, max.y),
+    ];
+    let mut list = DrawList::default();
+    for i in 0..4 {
+        let a = corners[i];
+        let b = corners[(i + 1) % 4];
+        list.extend(thick_line(a, b, width_mm, color));
+    }
+    list
+}
+
 /// A filled circle centered at `center`, `diameter_mm` across — a handle
 /// endpoint glyph.
 #[must_use]
