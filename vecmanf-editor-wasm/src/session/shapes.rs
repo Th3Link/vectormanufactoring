@@ -94,6 +94,19 @@ impl Session {
                 }
             }
         }
+        // The Select tool's own live resize/rotate preview
+        // (`specs/0005-object-transform/specification.md`, acceptance
+        // criteria 14, 22) — same "preview and commit share one
+        // implementation" reasoning as the move offset above.
+        if let Some(vecmanf_document_core::ObjectSnapshot::Primitive(live)) =
+            self.select_live_transform()
+        {
+            for primitive in &mut primitives {
+                if primitive.id == live.id {
+                    *primitive = live;
+                }
+            }
+        }
         primitives
     }
 
@@ -461,7 +474,7 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Rectangle);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 10.0), false);
+        session.pointer_up(Point::new(10.0, 10.0), false, false);
 
         let primitives = session.primitives();
         assert_eq!(primitives.len(), 1);
@@ -474,7 +487,7 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Ellipse);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 10.0), false);
+        session.pointer_up(Point::new(10.0, 10.0), false, false);
 
         let primitives = session.primitives();
         assert_eq!(primitives.len(), 1);
@@ -487,7 +500,7 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::PolygonStar);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false, false);
 
         let primitives = session.primitives();
         assert_eq!(primitives.len(), 1);
@@ -507,14 +520,14 @@ mod tests {
         let still_degenerate = session.draw_list().triangle_count();
         assert_eq!(still_degenerate, empty, "no movement yet: no preview");
 
-        session.pointer_hover(Point::new(20.0, 10.0), false);
+        session.pointer_hover(Point::new(20.0, 10.0), false, false);
         let with_preview = session.draw_list().triangle_count();
         assert!(
             with_preview > empty,
             "the live rectangle preview must draw before release"
         );
 
-        session.pointer_up(Point::new(20.0, 10.0), false);
+        session.pointer_up(Point::new(20.0, 10.0), false, false);
         assert_eq!(session.primitives().len(), 1, "and it still commits once");
     }
 
@@ -531,16 +544,16 @@ mod tests {
         );
 
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_hover(Point::new(20.0, 10.0), false);
+        session.pointer_hover(Point::new(20.0, 10.0), false, false);
         let readout = session.live_readout().expect("a create-drag is in flight");
         assert_eq!(readout.anchor, Point::new(20.0, 10.0));
         assert!(readout.text.contains("20.0"));
         assert!(readout.text.contains("10.0"));
 
-        session.pointer_up(Point::new(20.0, 10.0), false);
+        session.pointer_up(Point::new(20.0, 10.0), false, false);
         let id = session.primitives()[0].id;
         session.pointer_down(Point::new(0.0, 0.0), false); // select it
-        session.pointer_hover(Point::new(0.0, 0.0), false);
+        session.pointer_hover(Point::new(0.0, 0.0), false, false);
         let _ = id;
         // A plain resize/radius drag (not a create-drag) never shows a
         // readout, even while its own live preview is visible.
@@ -559,7 +572,7 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Rectangle);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 10.0), false);
+        session.pointer_up(Point::new(10.0, 10.0), false, false);
         let id = session.primitives()[0].id;
 
         // Switching tools and back does not convert it.
@@ -593,12 +606,12 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Rectangle);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 10.0), false);
+        session.pointer_up(Point::new(10.0, 10.0), false, false);
         let rect_id = session.primitives()[0].id;
 
         session.set_tool(Tool::Ellipse);
         session.pointer_down(Point::new(50.0, 50.0), false);
-        session.pointer_up(Point::new(60.0, 60.0), false);
+        session.pointer_up(Point::new(60.0, 60.0), false, false);
         let ellipse_id = session
             .primitives()
             .into_iter()
@@ -756,7 +769,7 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Rectangle);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 10.0), false);
+        session.pointer_up(Point::new(10.0, 10.0), false, false);
         let id = session.primitives()[0].id;
 
         // Select it, then locate the corner-radius handle at its
@@ -790,7 +803,7 @@ mod tests {
         // confirm the live radius increases monotonically and nothing
         // is committed to the document until release.
         let first_drag = Point::new(handle.position.x - 1.0, handle.position.y + 1.0);
-        session.pointer_hover(first_drag, false);
+        session.pointer_hover(first_drag, false, false);
         let Some(Shape::Rect {
             corner_radius: first_radius,
             ..
@@ -820,7 +833,7 @@ mod tests {
         );
 
         let second_drag = Point::new(handle.position.x - 2.0, handle.position.y + 2.0);
-        session.pointer_hover(second_drag, false);
+        session.pointer_hover(second_drag, false, false);
         let Some(Shape::Rect {
             corner_radius: second_radius,
             ..
@@ -833,7 +846,7 @@ mod tests {
             "the live radius must track the drag continuously, not jump only on release"
         );
 
-        session.pointer_up(second_drag, false);
+        session.pointer_up(second_drag, false, false);
         assert!(
             session.live_preview_shape().is_none(),
             "no live preview once the drag is committed"

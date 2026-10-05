@@ -8,10 +8,16 @@
 //! same type's `impl Session` `session/mod.rs` itself defines.
 
 use vecmanf_document_core::{ObjectSnapshot, Point, Shape};
-use vecmanf_render_core::SelectDecorationInput;
-use vecmanf_ui_core::{SelectDoubleClickOutcome, double_click, hit_test_object, object_bounds};
+use vecmanf_render_core::{SelectDecorationInput, TransformDecorationInput, TransformHandleGlyph};
+use vecmanf_ui_core::{
+    SelectDoubleClickOutcome, SelectTool, TransformHandle, TransformHandleTolerances, double_click,
+    hit_test_object, object_bounds,
+};
 
-use super::{Session, Tool};
+use super::{
+    Session, TRANSFORM_RESIZE_HANDLE_TOLERANCE_PX, TRANSFORM_ROTATE_HANDLE_OFFSET_PX,
+    TRANSFORM_ROTATE_HANDLE_TOLERANCE_PX, Tool,
+};
 
 /// Which tool a primitive of this shape is created/edited with — the one
 /// mapping both directions funnel through
@@ -38,20 +44,54 @@ pub(super) fn tool_for(object: &ObjectSnapshot) -> Tool {
 }
 
 impl Session {
-    /// Acceptance criteria 14-18: dispatches a press to the Select tool.
+    /// The three tolerances the Select tool's own transform handles need
+    /// (`specs/0005-object-transform/specification.md`, acceptance
+    /// criterion 1), converted from screen pixels to document
+    /// millimetres at the current zoom — the same conversion every
+    /// other hit-test tolerance in this module already uses.
+    fn transform_handle_tolerances(&self) -> TransformHandleTolerances {
+        let scale = self.view().scale();
+        TransformHandleTolerances {
+            resize: vecmanf_document_core::Tolerance::from_mm(
+                TRANSFORM_RESIZE_HANDLE_TOLERANCE_PX / scale,
+            ),
+            rotate: vecmanf_document_core::Tolerance::from_mm(
+                TRANSFORM_ROTATE_HANDLE_TOLERANCE_PX / scale,
+            ),
+            rotate_offset_mm: TRANSFORM_ROTATE_HANDLE_OFFSET_PX / scale,
+        }
+    }
+
+    /// Acceptance criteria 1, 4-18: dispatches a press to the Select
+    /// tool — first against the current single-object selection's own
+    /// transform handles, then (unchanged) against every object's body.
     pub(super) fn select_pointer_down(&mut self, point: Point, shift: bool) {
         let objects = self.objects();
         let tolerance = self.segment_tolerance();
-        self.select
-            .pointer_down(&objects, &mut self.selection, point, tolerance, shift);
+        let handle_tolerances = self.transform_handle_tolerances();
+        self.select.pointer_down(
+            &objects,
+            &mut self.selection,
+            point,
+            tolerance,
+            handle_tolerances,
+            shift,
+        );
     }
 
-    /// Acceptance criterion 20: commits whatever move-drag
-    /// [`Session::select_pointer_down`] began.
-    pub(super) fn select_pointer_up(&mut self, point: Point) {
+    /// Acceptance criteria 3, 15-18, 20: commits whatever move/resize/
+    /// rotate drag [`Session::select_pointer_down`] began. `shift`/
+    /// `ctrl` are the modifiers' state at release.
+    pub(super) fn select_pointer_up(&mut self, point: Point, shift: bool, ctrl: bool) {
         let objects = self.objects();
-        self.select
-            .pointer_up(&self.document, &objects, &mut self.selection, point);
+        self.select.pointer_up(
+            &self.document,
+            &objects,
+            &mut self.selection,
+            point,
+            shift,
+            ctrl,
+        );
     }
 
     /// Updates the Select tool's own hover state (UX notes: "Hover, tool
@@ -127,5 +167,51 @@ impl Session {
                     .map(|object| (id, object_bounds(object)))
             });
         SelectDecorationInput { selected, hovered }
+    }
+
+    /// Builds the Select tool's transform-handle overlay for this frame
+    /// (`specs/0005-object-transform/specification.md`, acceptance
+    /// criteria 1, 14-17, 22): every handle of the current single-object
+    /// selection, using the *live* (possibly drag-resized/rotated)
+    /// object so the handles themselves track the live preview, plus the
+    /// active pivot marker while a drag is in flight.
+    ///
+    /// The bounding-box outline itself (`select_decoration_input`,
+    /// above) still draws the plain, axis-aligned box inherited from
+    /// `canvas-navigation-and-selection` — drawing it oriented to a
+    /// rotated object's own angle (acceptance criterion 18) is follow-up
+    /// work for whoever wires the exact on-canvas chrome next; this
+    /// method's own handle positions are already fully rotation-aware
+    /// (`vecmanf_ui_core::SelectTool::transform_handles`), which is the
+    /// part every acceptance criterion in this slice actually exercises.
+    pub(super) fn select_transform_decoration_input(&self) -> TransformDecorationInput {
+        if self.tool != Tool::Select {
+            return TransformDecorationInput::default();
+        }
+        let mut objects: Vec<ObjectSnapshot> = self
+            .live_node_drag_paths()
+            .into_iter()
+            .map(ObjectSnapshot::Path)
+            .collect();
+        objects.extend(
+            self.primitives_for_render()
+                .into_iter()
+                .map(ObjectSnapshot::Primitive),
+        );
+        let tolerances = self.transform_handle_tolerances();
+        let dragging = self.select.dragging_handle();
+        let handles = SelectTool::transform_handles(&objects, &self.selection, tolerances)
+            .into_iter()
+            .map(|(handle, position)| TransformHandleGlyph {
+                position,
+                is_rotate: matches!(handle, TransformHandle::Rotate),
+                dragging: dragging == Some(handle),
+            })
+            .collect();
+        let pivot_marker = self.select.live_pivot(self.select_shift_held);
+        TransformDecorationInput {
+            handles,
+            pivot_marker,
+        }
     }
 }
