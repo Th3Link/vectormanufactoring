@@ -37,6 +37,20 @@ impl AnchorIdMinter {
         self.next += 1;
         id
     }
+
+    /// The [`AnchorId`] the *next* [`AnchorIdMinter::mint`] call would
+    /// return, without consuming it. For a live preview (e.g.
+    /// [`crate::PenTool::pending_anchor`]) that needs to show the id a
+    /// not-yet-committed node would actually get: previewing must never
+    /// advance this counter itself, or it would desync from what the
+    /// gesture might still turn into (Escape discards it, a press turning
+    /// out to be a close-path gesture mints nothing) — the same anchor id
+    /// could then be minted twice, once by a stale preview and once for
+    /// real.
+    #[must_use]
+    pub const fn peek(&self) -> AnchorId {
+        AnchorId::new(self.peer, self.next)
+    }
 }
 
 #[cfg(test)]
@@ -56,5 +70,22 @@ mod tests {
         let mut a = AnchorIdMinter::new(1);
         let mut b = AnchorIdMinter::new(2);
         assert_ne!(a.mint(), b.mint());
+    }
+
+    #[test]
+    fn peek_reports_what_the_next_mint_will_return_without_consuming_it() {
+        let mut minter = AnchorIdMinter::new(1);
+        let peeked = minter.peek();
+        assert_eq!(peeked, minter.peek(), "peeking twice reports the same id");
+        assert_eq!(
+            peeked,
+            minter.mint(),
+            "the next real mint must be exactly what was peeked"
+        );
+        assert_ne!(
+            peeked,
+            minter.peek(),
+            "peek moves on once something has actually been minted"
+        );
     }
 }

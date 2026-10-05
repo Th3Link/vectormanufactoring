@@ -39,8 +39,23 @@ use vecmanf_ui_core::{
 #[cfg(target_arch = "wasm32")]
 pub use shapes::LiveReadout;
 
-/// 8px node/handle hit-test radius (`docs/design-system.md`).
-const POINT_TOLERANCE_PX: f64 = 8.0;
+/// 16px node hit-test radius (`docs/design-system.md`; 2026-10-05:
+/// doubled from 8px — customer feedback: "you can click on the nodes
+/// too — the node squares and diamonds need to be bigger too," the same
+/// fix one round earlier applied to `HANDLE_TOLERANCE_PX` below, now
+/// extended to nodes alongside `vecmanf-render-core::theme::
+/// NODE_SIZE_PX`'s own doubling. Now equal to `HANDLE_TOLERANCE_PX` —
+/// that is not a problem: `vecmanf-ui-core::hit_test` picks the nearer
+/// candidate regardless of either tolerance's value, a handle winning
+/// only an exact tie, so two equal tolerances do not change which of a
+/// coincident node and handle wins, only that both are now reachable
+/// from farther away.
+const POINT_TOLERANCE_PX: f64 = 16.0;
+/// 16px handle hit-test radius (`docs/design-system.md`; 2026-10-05:
+/// doubled from the node's own then-8px alongside the handle glyph's
+/// doubled visual size, `vecmanf-render-core::theme::
+/// HANDLE_DIAMETER_PX`'s own doc comment).
+const HANDLE_TOLERANCE_PX: f64 = 16.0;
 /// 4px segment hit-test tolerance (`docs/design-system.md`).
 const SEGMENT_TOLERANCE_PX: f64 = 4.0;
 /// How far (screen pixels) a pen-tool press must move before it counts
@@ -198,6 +213,10 @@ impl Session {
         Tolerance::from_mm(POINT_TOLERANCE_PX / self.view.scale())
     }
 
+    fn handle_tolerance(&self) -> Tolerance {
+        Tolerance::from_mm(HANDLE_TOLERANCE_PX / self.view.scale())
+    }
+
     fn segment_tolerance(&self) -> Tolerance {
         Tolerance::from_mm(SEGMENT_TOLERANCE_PX / self.view.scale())
     }
@@ -205,6 +224,7 @@ impl Session {
     fn hit_tolerances(&self) -> HitTolerances {
         HitTolerances {
             point: self.point_tolerance(),
+            handle: self.handle_tolerance(),
             segment: self.segment_tolerance(),
         }
     }
@@ -215,6 +235,58 @@ impl Session {
             .into_iter()
             .filter_map(|id| self.document.path(id))
             .collect()
+    }
+
+    /// [`Session::paths`], with the node tool's in-flight drag (if any)
+    /// substituted into the relevant anchor's live, not-yet-committed
+    /// position/handle values — resolved by [`NodeTool::live_drag`]
+    /// itself (the same helpers [`NodeTool::pointer_up`] uses to commit),
+    /// so this is a pure "apply already-resolved data" step with no
+    /// geometry of its own. Falls back to the committed snapshot
+    /// unmodified outside the node tool, with no drag in flight, or with
+    /// the pointer off the canvas (`self.pointer_position` is `None`).
+    fn live_node_drag_paths(&self) -> Vec<vecmanf_document_core::PathSnapshot> {
+        let mut paths = self.paths();
+        if self.tool != Tool::Node {
+            return paths;
+        }
+        let Some(cursor) = self.pointer_position else {
+            return paths;
+        };
+        let Some(live) = self.node.live_drag(cursor) else {
+            return paths;
+        };
+        match live {
+            vecmanf_ui_core::LiveNodeDrag::Nodes { path, positions } => {
+                if let Some(snapshot) = paths.iter_mut().find(|p| p.id == path) {
+                    for (id, point) in positions {
+                        if let Some(anchor) = snapshot.anchors.iter_mut().find(|a| a.id == id) {
+                            anchor.point = point;
+                        }
+                    }
+                }
+            }
+            vecmanf_ui_core::LiveNodeDrag::Handle {
+                path,
+                anchor,
+                handle_in,
+                handle_out,
+            } => {
+                // `handle_in`/`handle_out` already fully resolved by
+                // `NodeTool::live_drag` (which calls the exact same
+                // `vecmanf_document_core::resolve_handle_pair` function
+                // `Document::set_handle` itself commits with) — a plain
+                // assignment, no slot/mirror logic of its own to
+                // independently drift from the commit.
+                if let Some(snapshot) = paths.iter_mut().find(|p| p.id == path)
+                    && let Some(anchor) = snapshot.anchors.iter_mut().find(|a| a.id == anchor)
+                {
+                    anchor.handle_in = handle_in;
+                    anchor.handle_out = handle_out;
+                }
+            }
+        }
+        paths
     }
 
     /// The pointer went down at `point` (document space).
@@ -269,6 +341,7 @@ impl Session {
                     self.node.selection(),
                     point,
                     self.point_tolerance(),
+                    self.handle_tolerance(),
                     self.segment_tolerance(),
                 );
             }
@@ -464,9 +537,20 @@ impl Session {
     /// shape-tool drag is in flight) its own live preview outline
     /// (`specs/0003-primitive-shapes/specification.md`, "Live creation
     /// feedback").
+    ///
+    /// When the node tool has a node/handle drag in flight
+    /// (acceptance criteria 8, 9, 10's "update live during the drag"),
+    /// `live_node_drag_paths` (private: this module's own internal step,
+    /// not part of its public surface) substitutes that drag's live,
+    /// not-yet-committed position/handle values into the snapshot before
+    /// anything downstream ever sees it — `vecmanf-render-core` needs no
+    /// drag-specific code of its own for this: it already draws whatever
+    /// `PathSnapshot` it is handed, so a locally live-overridden one
+    /// reshapes the stroke and every decoration exactly as if it had
+    /// already committed.
     #[must_use]
     pub fn draw_list(&self) -> DrawList {
-        let paths = self.paths();
+        let paths = self.live_node_drag_paths();
         let mut list = build_draw_list(&paths, self.view, &self.decoration_input());
         let primitives = self.primitives_for_render();
         list.extend(vecmanf_render_core::build_shape_draw_list(
@@ -483,9 +567,19 @@ impl Session {
         if self.tool == Tool::Pen
             && let Some(nodes) = self.pen.in_progress_nodes()
         {
+            // The id this pending anchor would actually get if the
+            // gesture ended right now — `peek`, never `mint`: a preview
+            // must not advance the minter's own counter out of step with
+            // what might still be escaped or turn into a close gesture
+            // instead (`AnchorIdMinter::peek`'s own doc comment).
+            let pending = self.pointer_position.and_then(|cursor| {
+                self.pen
+                    .pending_anchor(self.minter.peek(), cursor, self.drag_threshold())
+            });
             list.extend(build_pen_preview(
                 nodes,
                 self.pointer_position,
+                pending.as_ref(),
                 self.view,
                 self.is_hovering_pen_close_target(),
             ));
@@ -554,7 +648,7 @@ mod map_open_error_tests {
 
 #[cfg(test)]
 mod tests {
-    use vecmanf_document_core::AnchorKind;
+    use vecmanf_document_core::{AnchorKind, Vec2};
 
     use super::*;
 
@@ -667,10 +761,120 @@ mod tests {
         assert_eq!(after_leave, one_node, "no cursor, no rubber-band line");
     }
 
+    /// The bug this run fixes: acceptance criterion 2's live
+    /// drag-to-curve preview — dragging while placing a new node (mouse
+    /// held down, not yet released) must render strictly more than the
+    /// plain rubber-band line a hover alone draws, through the actual
+    /// `Session::draw_list` path the host calls every frame (not just
+    /// `vecmanf-render-core`'s own unit test of `build_pen_preview`
+    /// directly).
+    #[test]
+    fn draw_list_shows_the_live_curve_preview_during_a_pen_drag() {
+        let mut session = Session::new(1);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+
+        // Press down at C and move the cursor without releasing — a drag
+        // in flight, same as `pointer_up`'s own AC2 test fixture.
+        session.pointer_down(Point::new(10.0, 0.0), false);
+        session.pointer_hover(Point::new(10.0, 0.0), false);
+        let press_with_no_movement_yet = session.draw_list().triangle_count();
+
+        session.pointer_hover(Point::new(13.0, 4.0), false);
+        let mid_drag = session.draw_list().triangle_count();
+        assert!(
+            mid_drag > press_with_no_movement_yet,
+            "the live curve segment and C's growing handle lines/endpoints must add geometry \
+             as the drag moves, not just a static rubber-band line"
+        );
+    }
+
+    /// The bug this run fixes: acceptance criteria 8/10's "the two
+    /// adjoining segments update live during the drag" — dragging a
+    /// selected node with the node tool (mouse held down, not yet
+    /// released) must already draw the node at its live position,
+    /// through the actual `Session::draw_list` path, not only after
+    /// `pointer_up` commits it.
+    #[test]
+    fn draw_list_shows_the_live_node_position_during_a_node_drag() {
+        let mut session = Session::new(1);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_down(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.finish_pen();
+
+        session.set_tool(Tool::Node);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_hover(Point::new(0.0, 0.0), false);
+        let press_with_no_movement_yet = session.draw_list();
+
+        session.pointer_hover(Point::new(40.0, 40.0), false);
+        let mid_drag = session.draw_list();
+
+        // The committed document must not have moved yet — this is a
+        // rendering-only preview (ADR 0009 §2: ephemeral, not written).
+        assert_eq!(session.paths()[0].anchors[0].point, Point::new(0.0, 0.0));
+        assert_ne!(
+            mid_drag, press_with_no_movement_yet,
+            "the dragged node (and the segment reshaping with it) must draw at its live \
+             position mid-drag, not the stale committed one"
+        );
+
+        // On release, the commit matches what was just being previewed.
+        session.pointer_up(Point::new(40.0, 40.0), false);
+        assert_eq!(session.paths()[0].anchors[0].point, Point::new(40.0, 40.0));
+    }
+
+    /// Same bug, the handle-drag half (acceptance criterion 9): dragging
+    /// a selected node's handle must show it (and, for a smooth node, its
+    /// mirrored opposite) at the live value mid-drag.
+    #[test]
+    fn draw_list_shows_the_live_handle_value_during_a_handle_drag() {
+        let mut session = Session::new(1);
+        // AC2: a click-drag places a smooth node with symmetric handles.
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_down(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(13.0, 4.0), false);
+        session.finish_pen();
+
+        session.set_tool(Tool::Node);
+        // Select the node first — handles are only hittable once selected.
+        session.pointer_down(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false);
+        let selected_not_dragging = session.draw_list();
+
+        // Press on the handle endpoint (anchor + handle_out, (13, 4)) and
+        // drag it without releasing.
+        session.pointer_down(Point::new(13.0, 4.0), false);
+        session.pointer_hover(Point::new(20.0, 8.0), false);
+        let mid_drag = session.draw_list();
+
+        assert_eq!(
+            session.paths()[0].anchors[1].handle_out,
+            Vec2::new(3.0, 4.0),
+            "not committed yet"
+        );
+        assert_ne!(
+            mid_drag, selected_not_dragging,
+            "the dragged handle (and its mirrored opposite) must draw at its live value \
+             mid-drag"
+        );
+    }
+
     /// Acceptance criterion 5's cursor cue: hovering near the
     /// in-progress path's own first node, with enough nodes placed,
     /// reports the close target; the node tool, idle pen tool, and
     /// hovering elsewhere all report `false`.
+    ///
+    /// 2026-10-05 (node-size round): the second node moved from (10, 0)
+    /// to (50, 0) — at the identity view used here, 1 document mm is 1
+    /// screen px, and `POINT_TOLERANCE_PX` doubling to 16 means the old
+    /// 10mm separation would have put "hovering the last node" (distance
+    /// 10 from the first) *inside* the now-16mm close tolerance, turning
+    /// this into a false positive unrelated to what the test actually
+    /// guards. 50mm stays unambiguously outside tolerance regardless.
     #[test]
     fn is_hovering_pen_close_target_matches_the_real_close_decision() {
         let mut session = Session::new(1);
@@ -678,13 +882,13 @@ mod tests {
 
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
-        session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.pointer_down(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 0.0), false);
 
         session.pointer_hover(Point::new(0.1, 0.1), false);
         assert!(session.is_hovering_pen_close_target());
 
-        session.pointer_hover(Point::new(10.0, 0.0), false);
+        session.pointer_hover(Point::new(50.0, 0.0), false);
         assert!(
             !session.is_hovering_pen_close_target(),
             "near the last node, not the first"
@@ -695,6 +899,89 @@ mod tests {
         assert!(
             !session.is_hovering_pen_close_target(),
             "the node tool never shows a pen cursor"
+        );
+    }
+
+    /// Tester verification (PR #20, handles-doubled fix, 2026-10-05):
+    /// `HANDLE_TOLERANCE_PX` is 16.0 (was 8.0 before that round; by this
+    /// round `POINT_TOLERANCE_PX` is 16.0 too, but was still 8.0 when
+    /// this test was written); at the identity view (1 screen px per
+    /// document mm, `ViewTransform::identity`) a click 13px from a
+    /// selected smooth node's handle endpoint — outside the old 8px
+    /// radius, inside the new 16px one — must register as a handle hit.
+    /// The click point is also kept far from the anchor itself (~23.8px,
+    /// still outside even the now-doubled 16px node tolerance) and from
+    /// the segment, so this cannot pass by accidentally hitting
+    /// something else.
+    #[test]
+    fn a_click_13px_from_a_handle_hits_under_the_doubled_tolerance() {
+        let mut session = Session::new(1);
+        // A at (0, 0), a plain corner click.
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        // B at (50, 0), dragged so its handle_out lands at (50, 20) —
+        // a handle endpoint 20px straight up from B.
+        session.pointer_down(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 20.0), false);
+        session.finish_pen();
+
+        session.set_tool(Tool::Node);
+        // Select B first: handles are only hittable on a selected node.
+        session.pointer_down(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 0.0), false);
+
+        let b = session.paths()[0].anchors[1].id;
+        assert_eq!(
+            session.paths()[0].anchors[1].handle_out,
+            Vec2::new(0.0, 20.0),
+            "handle endpoint is at document (50, 20)"
+        );
+
+        // 13px from the handle endpoint (50, 20); ~23.8px from B itself
+        // and far from the A-B segment, so only the handle tolerance can
+        // explain a hit here.
+        session.pointer_hover(Point::new(63.0, 20.0), false);
+        assert_eq!(
+            session.hovered,
+            Some(Hit::Handle {
+                path: session.paths()[0].id,
+                anchor: b,
+                slot: vecmanf_document_core::HandleSlot::Out,
+            }),
+            "13px is outside the old 8px handle radius but inside the new 16px one"
+        );
+    }
+
+    /// Pins the node-size round's own hit-test doubling, the same way
+    /// `a_click_13px_from_a_handle_hits_under_the_doubled_tolerance`
+    /// pins the earlier handle one: `POINT_TOLERANCE_PX` is 16.0 now
+    /// (was 8.0). At the identity view, a click 13px from node A (a
+    /// classic 5-12-13 offset) — outside the old 8px radius, inside the
+    /// new 16px one — must register as a node hit. B sits far away
+    /// (200, 0) so neither it nor the long A-B segment can explain a hit
+    /// here; only the node tolerance can.
+    #[test]
+    fn a_click_13px_from_a_node_hits_under_the_doubled_tolerance() {
+        let mut session = Session::new(1);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_down(Point::new(200.0, 0.0), false);
+        session.pointer_up(Point::new(200.0, 0.0), false);
+        session.finish_pen();
+
+        session.set_tool(Tool::Node);
+        let a = session.paths()[0].anchors[0].id;
+
+        // 13px from A (0, 0) — a 5-12-13 offset, well clear of the
+        // 200px-long A-B segment and of B itself.
+        session.pointer_hover(Point::new(5.0, 12.0), false);
+        assert_eq!(
+            session.hovered,
+            Some(Hit::Node {
+                path: session.paths()[0].id,
+                anchor: a,
+            }),
+            "13px is outside the old 8px node radius but inside the new 16px one"
         );
     }
 
@@ -748,8 +1035,9 @@ mod tests {
     /// selection.
     #[test]
     fn node_toolbar_state_and_insert_selected_for_a_line_segment() {
-        // A long segment: its midpoint sits well outside the 8px/mm
-        // point-hit tolerance around either endpoint, so the click below
+        // A long segment: its midpoint sits well outside the 16px/mm
+        // point-hit tolerance around either endpoint (2026-10-05: was
+        // 8px/mm, doubled alongside the node glyph), so the click below
         // lands on the segment itself rather than being read as a node
         // hit of whichever endpoint happens to be nearest.
         let mut session = Session::new(1);

@@ -251,15 +251,12 @@ them that way: Split's handle/kind rule is Join's rule run backwards.
 
 ## UX notes
 
-**Sizing baseline for everything below:** `fix/canvas-interaction-bugs`
-(not yet merged to `main` as of this writing, but a `fix/` branch with
-standing merge permission per `CLAUDE.md` §9) doubles the node-tool glyphs:
-node glyph 7px→14px, node/handle hit-test radius 8px→16px, node hover ring
-10px→18px. `docs/design-system.md` on `main` still shows the old numbers
-until that PR lands. Everything below is sized against the **new** 14px
-node glyph, 16px hit radius, 18px hover ring — not the stale numbers
-currently committed on `main`. Flagging this once here so the lead doesn't
-read the two specs as disagreeing.
+**Sizing baseline for everything below:** PR #20 (`fix/canvas-interaction-
+bugs`) has since merged to `main` and doubled the node-tool glyphs: node
+glyph 7px→14px, node/handle hit-test radius 8px→16px, node hover ring
+10px→18px. `docs/design-system.md` on `main` reflects these current
+numbers. Everything below is sized against the 14px node glyph, 16px hit
+radius, 18px hover ring.
 
 ### Third node glyph: Asymmetric = triangle
 

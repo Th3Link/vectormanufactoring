@@ -17,6 +17,7 @@ const CLOSE_TOLERANCE: vecmanf_document_core::Length = vecmanf_document_core::Le
 const DRAG_THRESHOLD: vecmanf_document_core::Length = vecmanf_document_core::Length::from_mm(1.0);
 const TOLERANCES: HitTolerances = HitTolerances {
     point: Tolerance::from_mm(2.0),
+    handle: Tolerance::from_mm(4.0),
     segment: Tolerance::from_mm(1.0),
 };
 

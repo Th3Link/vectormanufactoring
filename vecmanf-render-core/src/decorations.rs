@@ -62,6 +62,7 @@ pub fn build(paths: &[PathSnapshot], view: ViewTransform, input: &DecorationInpu
     let handle_diameter = screen_px_to_mm(view, theme::HANDLE_DIAMETER_PX);
     let handle_line_width = screen_px_to_mm(view, theme::HANDLE_LINE_WIDTH_PX);
     let hover_ring_diameter = screen_px_to_mm(view, theme::HOVER_RING_DIAMETER_PX);
+    let handle_hover_ring_diameter = screen_px_to_mm(view, theme::HANDLE_HOVER_RING_DIAMETER_PX);
     let hover_ring_thickness = screen_px_to_mm(view, 1.0);
 
     let mut list = DrawList::default();
@@ -84,14 +85,6 @@ pub fn build(paths: &[PathSnapshot], view: ViewTransform, input: &DecorationInpu
                         handle_line_width,
                         theme::ACCENT,
                     ));
-                    if input.hovered == Some(Hovered::Handle(snapshot.id, anchor.id, slot)) {
-                        list.extend(glyphs::ring(
-                            endpoint,
-                            hover_ring_diameter,
-                            hover_ring_thickness,
-                            theme::ACCENT_HOVER,
-                        ));
-                    }
                     // Idle handle style: accent outline, white fill
                     // (`docs/design-system.md`).
                     list.extend(glyphs::circle(endpoint, handle_diameter, theme::ACCENT));
@@ -100,6 +93,24 @@ pub fn build(paths: &[PathSnapshot], view: ViewTransform, input: &DecorationInpu
                         (handle_diameter - 2.0 * hover_ring_thickness).max(0.0),
                         RgbaColor::WHITE,
                     ));
+                    // Drawn *after* the handle's own glyph, and sized
+                    // from it (`theme::HANDLE_HOVER_RING_DIAMETER_PX`),
+                    // not the shared node-ring token — either alone would
+                    // keep the ring visible once `HANDLE_DIAMETER_PX`
+                    // doubled past the old shared ring size, but a
+                    // smaller glyph drawn on top of a wider ring is the
+                    // only ordering that reads as "a ring around a
+                    // glyph" regardless of their relative sizes, so both
+                    // are kept (`theme::HANDLE_HOVER_RING_DIAMETER_PX`'s
+                    // own doc comment).
+                    if input.hovered == Some(Hovered::Handle(snapshot.id, anchor.id, slot)) {
+                        list.extend(glyphs::ring(
+                            endpoint,
+                            handle_hover_ring_diameter,
+                            hover_ring_thickness,
+                            theme::ACCENT_HOVER,
+                        ));
+                    }
                 }
             }
 
@@ -224,6 +235,76 @@ mod tests {
         let with = build(&paths, ViewTransform::identity(), &input);
 
         assert!(with.triangle_count() > without.triangle_count());
+    }
+
+    /// The bug this run fixes: once `theme::HANDLE_DIAMETER_PX` doubled
+    /// past the old shared hover-ring size, a hovered handle's ring drew
+    /// fully behind (and so fully hidden by) the handle's own opaque
+    /// fill — the same triangle-count-grows assertion the other hover
+    /// tests use could not have caught that (geometry was still being
+    /// *emitted*, just invisibly, under the glyph). This test instead
+    /// checks the actual pixel footprint: at least one ring vertex must
+    /// sit strictly outside the handle glyph's own radius, proving the
+    /// ring extends past the glyph rather than nesting entirely inside
+    /// it.
+    #[test]
+    fn a_hovered_handles_ring_extends_past_the_handles_own_glyph() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path = document.create_path(
+            &[
+                NewAnchor {
+                    id: a,
+                    point: Point::new(0.0, 0.0),
+                    handle_in: Vec2::ZERO,
+                    handle_out: Vec2::new(5.0, 0.0),
+                    kind: AnchorKind::Smooth,
+                },
+                NewAnchor::corner(b, Point::new(20.0, 0.0)),
+            ],
+            false,
+        );
+        let paths = vec![document.path(path).expect("exists")];
+        let input = DecorationInput {
+            selected_nodes: vec![(path, a)],
+            hovered: Some(Hovered::Handle(path, a, HandleSlot::Out)),
+            ..DecorationInput::default()
+        };
+        let view = ViewTransform::identity();
+        let list = build(&paths, view, &input);
+
+        // The handle endpoint sits at document (5.0, 0.0) (anchor at
+        // (0,0) + handle_out (5,0)); the glyph's own radius at identity
+        // view scale is theme::HANDLE_DIAMETER_PX / 2 document mm.
+        //
+        // Filtered to the ring's own color (`theme::ACCENT_HOVER`) —
+        // architect review: the unfiltered whole-draw-list version of
+        // this test passed even with the ring branch disabled entirely,
+        // satisfied instead by unrelated geometry already farther than
+        // the glyph radius (node A's own selected glyph/handle line,
+        // and node B 15mm away) — nothing in that version actually
+        // exercised the ring. No other glyph `build` draws uses this
+        // color (every other handle/node glyph uses `theme::ACCENT`,
+        // `theme::NODE_STROKE`, or white), so a vertex of this color
+        // existing at all already proves the ring was drawn; requiring
+        // one farther than the glyph radius additionally proves it is
+        // not nested entirely inside (or behind) the glyph.
+        let endpoint = Point::new(5.0, 0.0);
+        let glyph_radius = theme::HANDLE_DIAMETER_PX / 2.0;
+        let max_ring_vertex_distance = list
+            .triangles
+            .iter()
+            .filter(|v| v.color == theme::ACCENT_HOVER)
+            .map(|v| v.position.vector_to(endpoint).length())
+            .fold(0.0_f64, f64::max);
+        assert!(
+            max_ring_vertex_distance > glyph_radius,
+            "no ACCENT_HOVER-colored vertex drawn farther than the glyph's own radius \
+             ({glyph_radius}mm) from the handle endpoint (farthest ring vertex found: \
+             {max_ring_vertex_distance}mm, 0.0 if none at all) — the hover ring must exist and \
+             extend past the glyph, not nest entirely inside (or behind) it"
+        );
     }
 
     #[test]
