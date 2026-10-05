@@ -37,6 +37,7 @@ pub use path_model::{
     AnchorId, AnchorKind, AnchorSnapshot, Color, HandleSlot, NewAnchor, NodeId, PathEditError,
     PathSnapshot,
 };
+pub use paths::resolve_handle_pair;
 pub use primitive_model::{
     EllipseFrame, InnerRatio, ObjectSnapshot, PointCount, PrimitiveSnapshot, RectBounds, Shape,
     ShapeParamError, StarFrame,

@@ -396,7 +396,13 @@ impl WasmSession {
 
     /// Attaches this session to `canvas`, creating the `wgpu`
     /// device/surface (ADR 0001 §3). Call once, after construction,
-    /// before the first [`WasmSession::render`].
+    /// before the first [`WasmSession::render`]. `width`×`height` are the
+    /// surface's backing-buffer (physical) pixel size and
+    /// `device_pixel_ratio` is `window.devicePixelRatio` — the host sizes
+    /// the buffer `css_size * device_pixel_ratio` (`useEditorSession.ts`'s
+    /// attach effect) so the canvas renders at the display's actual
+    /// resolution instead of being upscaled and softened on any `HiDPI`
+    /// screen.
     ///
     /// # Errors
     /// A `JsValue` (a plain string) if no adapter/device could be
@@ -406,18 +412,43 @@ impl WasmSession {
         canvas: HtmlCanvasElement,
         width: u32,
         height: u32,
+        device_pixel_ratio: f64,
     ) -> Result<(), JsValue> {
-        self.gpu = Some(Gpu::attach(canvas, width, height).await?);
+        self.gpu = Some(Gpu::attach(canvas, width, height, device_pixel_ratio).await?);
         Ok(())
     }
 
-    /// Reconfigures the attached canvas's `wgpu` surface — call on every
-    /// resize, before the next [`WasmSession::render`]
-    /// (`specs/0002-path-node-editing/adrs.md`'s PASS note, requirement 2).
-    pub fn resize(&mut self, width: u32, height: u32) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.resize(width, height);
-        }
+    /// Reconfigures the attached canvas's `wgpu` surface to `width`×
+    /// `height` physical pixels and `device_pixel_ratio`, **and renders
+    /// the next frame immediately**, in this same call — call on every
+    /// resize. Folding the two together (rather than reconfiguring here
+    /// and leaving the next frame to the host's own animation-frame loop)
+    /// is what the canvas-perf spike's requirement actually asks for
+    /// (`specs/0002-path-node-editing/adrs.md`'s PASS note, requirement 2:
+    /// "reconfigures the `wgpu` surface on every resize... then render,
+    /// all in one frame"): reconfigure-then-wait-for-the-next-tick leaves
+    /// one empty/stale frame on screen for every resize, which on a
+    /// webview without a free-running compositor (or a throttled/
+    /// backgrounded one) can be visibly stuck rather than a single
+    /// imperceptible frame.
+    ///
+    /// # Errors
+    /// A `JsValue` (a plain string) if the subsequent render's surface
+    /// texture could not be acquired — see [`crate::gpu::Gpu::render`].
+    /// A no-op (`Ok(())`) before [`WasmSession::attach_canvas`] has
+    /// completed, same as [`WasmSession::render`].
+    pub fn resize(
+        &mut self,
+        width: u32,
+        height: u32,
+        device_pixel_ratio: f64,
+    ) -> Result<(), JsValue> {
+        let Some(gpu) = &mut self.gpu else {
+            return Ok(());
+        };
+        gpu.resize(width, height, device_pixel_ratio);
+        let draw_list = self.session.draw_list();
+        gpu.render(&draw_list, self.session.view())
     }
 
     /// Builds this frame's draw list and submits it. A no-op (not an

@@ -21,16 +21,33 @@ pub const ACCENT_HOVER: RgbaColor = ACCENT.with_alpha(51); // 20% of 255, rounde
 /// `--node-stroke`: a corner/smooth node glyph's outline, both states.
 pub const NODE_STROKE: RgbaColor = RgbaColor::opaque(0x3A, 0x3A, 0x3F);
 
-/// Node glyph size, screen-space pixels (7×7, `docs/design-system.md`).
-pub const NODE_SIZE_PX: f64 = 7.0;
+/// Node glyph size, screen-space pixels (14×14, `docs/design-system.md`;
+/// 2026-10-05: doubled from 7px — customer feedback: "you can click on
+/// the nodes too — the node squares and diamonds need to be bigger too,"
+/// the same complaint and the same fix already applied to
+/// [`HANDLE_DIAMETER_PX`] one round earlier, now extended to nodes. The
+/// node hit-test radius doubles alongside this in
+/// `vecmanf-editor-wasm::session::POINT_TOLERANCE_PX`, same reasoning as
+/// the handle doc comment above: a visual-only change would look right
+/// but still feel exactly as hard to hit.
+pub const NODE_SIZE_PX: f64 = 14.0;
 
 /// Node glyph outline thickness, screen-space pixels. Not a separate
 /// design-system token (the table gives only the glyph's overall size);
 /// 1px is this crate's own reasonable minimum for a visible outline.
 pub const NODE_OUTLINE_PX: f64 = 1.0;
 
-/// Handle endpoint circle diameter, screen-space pixels.
-pub const HANDLE_DIAMETER_PX: f64 = 6.0;
+/// Handle endpoint circle diameter, screen-space pixels (`docs/design-
+/// system.md`; 2026-10-05: doubled from 6px — customer feedback called
+/// the handles "hard to hit... and very delicate/thin". Node glyphs
+/// ([`NODE_SIZE_PX`]) were deliberately left untouched in *this* round —
+/// the customer called out handles specifically, not nodes — but a later
+/// 2026-10-05 follow-up request did the same for nodes too, so that
+/// distinction no longer holds; see `NODE_SIZE_PX`'s own doc comment. The
+/// hit-test radius around a handle doubles alongside this in
+/// `vecmanf-ui-core::hit_test` — a visual-only change here would look
+/// right but still feel exactly as hard to hit.
+pub const HANDLE_DIAMETER_PX: f64 = 12.0;
 
 /// Handle line weight, screen-space pixels.
 pub const HANDLE_LINE_WIDTH_PX: f64 = 1.0;
@@ -39,10 +56,37 @@ pub const HANDLE_LINE_WIDTH_PX: f64 = 1.0;
 /// is drawn, screen-space pixels.
 pub const SEGMENT_OVERLAY_EXTRA_PX: f64 = 2.0;
 
-/// The hover ring's diameter, screen-space pixels ("a 10px circle",
-/// `docs/design-system.md`'s UX notes are in `specification.md`; the
-/// token table itself does not repeat this one, so it is named here).
-pub const HOVER_RING_DIAMETER_PX: f64 = 10.0;
+/// The hover ring's diameter, screen-space pixels (originally "a 10px
+/// circle" per `docs/design-system.md`'s UX notes in `specification.md`;
+/// now computed from [`NODE_SIZE_PX`] — 2026-10-05: once `NODE_SIZE_PX`
+/// doubled to 14px it exceeded the old fixed 10px value, which would
+/// have reopened exactly the "ring hidden behind the glyph's own opaque
+/// fill" bug [`HANDLE_HOVER_RING_DIAMETER_PX`]'s doc comment describes
+/// for handles, one round earlier, for nodes this time. Same margin
+/// (+4px) that constant keeps over [`HANDLE_DIAMETER_PX`], so a future
+/// `NODE_SIZE_PX` change cannot silently reopen this again. Used for a
+/// node's own hover ring and the pen tool's close-target/most-recently-
+/// placed-node rings — every ring drawn around a *node*, never a handle
+/// (see [`HANDLE_HOVER_RING_DIAMETER_PX`]).
+pub const HOVER_RING_DIAMETER_PX: f64 = NODE_SIZE_PX + 4.0;
+
+/// The handle hover ring's own diameter, screen-space pixels — a
+/// separate token from [`HOVER_RING_DIAMETER_PX`] (2026-10-05): once
+/// [`HANDLE_DIAMETER_PX`] doubled to 12px it exceeded the shared 10px
+/// ring of the time, so a selected handle's hover ring drew fully behind
+/// (and so completely hidden by) the handle's own opaque fill — no hover
+/// cue at all, breaking `specs/0002-path-node-editing/specification.md`'s
+/// hover feedback. A dedicated token rather than deriving this one from
+/// `HANDLE_DIAMETER_PX` the same way `HOVER_RING_DIAMETER_PX` now derives
+/// from `NODE_SIZE_PX` (both followed the same "+4px margin" reasoning
+/// when sized, just not the same mechanism) — `vecmanf-render-core`'s
+/// `decorations::build` draws every handle hover ring after the handle's
+/// own glyph, with this diameter, so it reads as a ring around it either
+/// way; keeping both independently correct (size *and* draw order) is
+/// deliberate, not redundant — either alone would have been enough to
+/// fix this, but a future, unrelated glyph-size change should not be
+/// able to silently reopen this exact bug.
+pub const HANDLE_HOVER_RING_DIAMETER_PX: f64 = HANDLE_DIAMETER_PX + 4.0;
 
 /// How many straight segments approximate one handle/hover circle.
 /// Coarse on purpose: these are small, flat-colored UI glyphs, not
@@ -55,8 +99,15 @@ pub const CIRCLE_SEGMENTS: usize = 16;
 pub const SHAPE_HANDLE_STROKE: RgbaColor = ACCENT;
 
 /// Shape handle size, screen-space pixels (8×8, `docs/design-system.md`
-/// — deliberately larger than [`NODE_SIZE_PX`] so the two glyph
-/// vocabularies never read as the same control).
+/// — originally deliberately larger than [`NODE_SIZE_PX`] so the two
+/// glyph vocabularies would never read as the same control; no longer
+/// true since [`HANDLE_DIAMETER_PX`]'s 2026-10-05 doubling to 12px, and
+/// now even less true since `NODE_SIZE_PX`'s own 2026-10-05 doubling to
+/// 14px made it the *larger* of the two — this token itself was not
+/// revisited either time (`docs/design-system.md`'s own token-table row
+/// notes this). The two vocabularies still read as distinct by shape
+/// (square/diamond vs. hollow square) and color convention, not by
+/// relative size.
 pub const SHAPE_HANDLE_SIZE_PX: f64 = 8.0;
 
 /// Shape handle outline thickness, screen-space pixels — same
