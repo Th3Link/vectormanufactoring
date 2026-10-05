@@ -15,7 +15,7 @@
 
 use vecmanf_document_core::{NodeId, Point, ViewTransform};
 
-use crate::glyphs::{self, DrawList};
+use crate::glyphs::{DrawList, box_outline};
 use crate::theme;
 
 /// One object's axis-aligned selection-box bounds, `(min, max)` corners —
@@ -39,30 +39,6 @@ fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
     px / view.scale()
 }
 
-/// Draws a plain rectangle outline around `(min, max)` — the Select
-/// tool's one shared indicator shape, independent of the object's own
-/// kind (`specification.md`: "no shape handles... no path nodes, only
-/// the bounding box").
-fn bounding_box_outline(
-    (min, max): SelectionBox,
-    width_mm: f64,
-    color: crate::RgbaColor,
-) -> DrawList {
-    let corners = [
-        Point::new(min.x, min.y),
-        Point::new(max.x, min.y),
-        Point::new(max.x, max.y),
-        Point::new(min.x, max.y),
-    ];
-    let mut list = DrawList::default();
-    for i in 0..4 {
-        let a = corners[i];
-        let b = corners[(i + 1) % 4];
-        list.extend(glyphs::thick_line(a, b, width_mm, color));
-    }
-    list
-}
-
 /// Builds the Select tool's decoration geometry for this frame: one
 /// `--accent` box per selected object, plus a `--accent-hover` box for a
 /// hovered-but-unselected one (`docs/design-system.md`'s "Bounding-box
@@ -71,15 +47,11 @@ fn bounding_box_outline(
 pub fn build(view: ViewTransform, input: &SelectDecorationInput) -> DrawList {
     let width_mm = screen_px_to_mm(view, theme::BOUNDING_BOX_OUTLINE_PX);
     let mut list = DrawList::default();
-    for &(_, selection_box) in &input.selected {
-        list.extend(bounding_box_outline(selection_box, width_mm, theme::ACCENT));
+    for &(_, (min, max)) in &input.selected {
+        list.extend(box_outline(min, max, width_mm, theme::ACCENT));
     }
-    if let Some((_, selection_box)) = input.hovered {
-        list.extend(bounding_box_outline(
-            selection_box,
-            width_mm,
-            theme::ACCENT_HOVER,
-        ));
+    if let Some((_, (min, max))) = input.hovered {
+        list.extend(box_outline(min, max, width_mm, theme::ACCENT_HOVER));
     }
     list
 }

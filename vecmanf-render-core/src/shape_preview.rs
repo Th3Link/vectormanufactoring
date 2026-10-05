@@ -136,26 +136,16 @@ pub fn build_shape_live_preview(shape: &Shape, view: ViewTransform) -> DrawList 
 }
 
 fn bounding_box_outline(shape: &Shape, width_mm: f64, color: RgbaColor) -> DrawList {
-    // Moved to `vecmanf-document-core` (`specs/0004-canvas-navigation-and-
-    // selection/adrs.md`: "the primitive box... moves to `document-core`
-    // as plain arithmetic on its own types") so `vecmanf-ui-core`'s
-    // `object_bounds` can share the exact same rule for the Select tool's
-    // own bounding box, rather than this crate keeping a second,
-    // private copy.
+    // The frame-bounds rule itself moved to `vecmanf-document-core`
+    // (`specs/0004-canvas-navigation-and-selection/adrs.md`: "the
+    // primitive box... moves to `document-core` as plain arithmetic on
+    // its own types") so `vecmanf-ui-core`'s `object_bounds` can share
+    // it for the Select tool's own bounding box; the rectangle-outline
+    // *drawing* itself is `glyphs::box_outline`, shared with
+    // `select_decoration.rs` (architect review: the four-`thick_line`
+    // loop was duplicated between the two).
     let (min, max) = vecmanf_document_core::shape_frame_bounds(shape);
-    let corners = [
-        Point::new(min.x, min.y),
-        Point::new(max.x, min.y),
-        Point::new(max.x, max.y),
-        Point::new(min.x, max.y),
-    ];
-    let mut list = DrawList::default();
-    for i in 0..4 {
-        let a = corners[i];
-        let b = corners[(i + 1) % 4];
-        list.extend(glyphs::thick_line(a, b, width_mm, color));
-    }
-    list
+    glyphs::box_outline(min, max, width_mm, color)
 }
 
 /// A hollow shape-handle glyph: `--accent` outline, white idle fill or
