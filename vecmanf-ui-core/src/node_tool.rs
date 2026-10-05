@@ -579,14 +579,16 @@ impl NodeTool {
     /// (acceptance criterion 8): the current selection names exactly two
     /// `(path, anchor)` pairs (same-path AC 10, or Split's own two-
     /// object result AC 15 — see [`NodeSelection::join_pairs`] for why
-    /// those are the only two sources), each the first-or-last anchor of
-    /// an *open* path, not the same anchor, and — for two ends of the
-    /// same path — that path has more than two anchors.
+    /// those are the only two sources), and `document.check_join` — the
+    /// same refusal rule `Document::join_endpoints` itself runs,
+    /// checked here rather than re-derived independently (architect
+    /// review: the same "one rule, one place" principle
+    /// `resolve_handle_pair` already follows) — accepts them.
     #[must_use]
     pub fn can_join(&self, document: &Document) -> bool {
         self.selection
             .join_pairs()
-            .is_some_and(|(a, b)| is_joinable(document, a, b))
+            .is_some_and(|(a, b)| document.check_join(a.0, a.1, b.0, b.1))
     }
 
     /// Acceptance criteria 12-15: Split. A no-op (no commit, and
@@ -618,8 +620,10 @@ impl NodeTool {
 
     /// Whether [`NodeTool::split_selected`] would do anything right now
     /// (acceptance criterion 12): the current selection is exactly one
-    /// node, and it is either an interior node of an open path or any
-    /// node of a closed path.
+    /// node, and `document.check_split` — the same refusal rule
+    /// `Document::split_at_anchor` itself runs — accepts it (see
+    /// [`NodeTool::can_join`]'s own doc comment for why this checks the
+    /// document-core rule rather than a local copy of it).
     #[must_use]
     pub fn can_split(&self, document: &Document) -> bool {
         let Some(path) = self.selection.path() else {
@@ -628,13 +632,7 @@ impl NodeTool {
         let [anchor] = self.selection.nodes() else {
             return false;
         };
-        let Some(snapshot) = document.path(path) else {
-            return false;
-        };
-        let Some(index) = snapshot.anchors.iter().position(|a| a.id == *anchor) else {
-            return false;
-        };
-        snapshot.closed || !is_endpoint(&snapshot, index)
+        document.check_split(path, *anchor)
     }
 
     /// Acceptance criterion 12: double-clicking a point on a segment
@@ -766,67 +764,6 @@ impl NodeTool {
         self.selection.clear();
         Some(path)
     }
-}
-
-/// Whether `index` is the first or last anchor of `snapshot` — the node
-/// tool's own copy of `vecmanf-document-core`'s private predicate of the
-/// same name (`specs/0006-path-merge-split-and-node-types/adrs.md`:
-/// toolbar state is "computed from the selection with the same
-/// conditions the commands refuse on" — a read-only mirror, not a shared
-/// function, since `document-core`'s own version is private to its
-/// `join_endpoints`/`split_at_anchor`).
-fn is_endpoint(snapshot: &vecmanf_document_core::PathSnapshot, index: usize) -> bool {
-    index == 0 || index == snapshot.anchors.len() - 1
-}
-
-/// [`NodeTool::can_join`]'s own condition, against live document state:
-/// `a` and `b` each resolve, each is the first-or-last anchor of an open
-/// path, they are not the same anchor, and — when they name the same
-/// path — that path has more than two anchors.
-fn is_joinable(
-    document: &Document,
-    a: (NodeId, vecmanf_document_core::AnchorId),
-    b: (NodeId, vecmanf_document_core::AnchorId),
-) -> bool {
-    let Some(a_snapshot) = document.path(a.0) else {
-        return false;
-    };
-    let Some(a_index) = a_snapshot
-        .anchors
-        .iter()
-        .position(|anchor| anchor.id == a.1)
-    else {
-        return false;
-    };
-    if a_snapshot.closed || !is_endpoint(&a_snapshot, a_index) {
-        return false;
-    }
-
-    if a.0 == b.0 {
-        if a.1 == b.1 {
-            return false;
-        }
-        let Some(b_index) = a_snapshot
-            .anchors
-            .iter()
-            .position(|anchor| anchor.id == b.1)
-        else {
-            return false;
-        };
-        return is_endpoint(&a_snapshot, b_index) && a_snapshot.anchors.len() > 2;
-    }
-
-    let Some(b_snapshot) = document.path(b.0) else {
-        return false;
-    };
-    let Some(b_index) = b_snapshot
-        .anchors
-        .iter()
-        .position(|anchor| anchor.id == b.1)
-    else {
-        return false;
-    };
-    !b_snapshot.closed && is_endpoint(&b_snapshot, b_index)
 }
 
 #[cfg(test)]

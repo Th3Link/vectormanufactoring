@@ -1,10 +1,10 @@
 //! The Loro value shapes and keys for the path/anchor schema
 //! (`specs/0002-path-node-editing/adrs.md`, "the anchor schema, and the three
-//! merge choices inside it"). [`crate::paths`] is the only caller: this
-//! module owns the on-disk/in-CRDT shape and every read/write against it,
-//! so [`crate::paths`]'s `Document` methods stay command-shaped logic with
-//! no Loro value-shape details of their own (`CLAUDE.md` §5, "one
-//! responsibility per module").
+//! merge choices inside it"). [`crate::paths`] and [`crate::path_topology`]
+//! are the only callers: this module owns the on-disk/in-CRDT shape and
+//! every read/write against it, so those two modules' `Document` methods
+//! stay command-shaped logic with no Loro value-shape details of their
+//! own (`CLAUDE.md` §5, "one responsibility per module").
 //!
 //! On-disk/in-CRDT shape, one Loro tree node per path (ADR 0002 §5):
 //!
@@ -20,7 +20,9 @@
 //!     handle_out : [x, y] (f64), relative     ONE LWW register
 //!     kind       : "corner" | "symmetric" | "asymmetric"   LWW register
 //!                  (read also: legacy "smooth" → Symmetric, `format_version`
-//!                  ≤ 4 — `specs/0006-path-merge-split-and-node-types/adrs.md`)
+//!                  ≤ 3 — `specs/0006-path-merge-split-and-node-types/adrs.md`,
+//!                  the architect's resolution: a version-4 writer never
+//!                  writes "smooth")
 //! ```
 //!
 //! `fill` is not stored: this slice's fill is always `None` (acceptance
@@ -300,7 +302,7 @@ pub(crate) fn write_vec2(map: &LoroMap, key: &str, v: Vec2) {
 /// Reads an anchor's `kind` tag (`specs/0006-path-merge-split-and-node-types/
 /// adrs.md`, feature-local decision "the stored tag of the renamed one
 /// changes", option (B)): `"symmetric"` and `"asymmetric"` round-trip as
-/// themselves; the legacy `"smooth"` tag a `format_version` ≤ 4 document
+/// themselves; the legacy `"smooth"` tag a `format_version` ≤ 3 document
 /// may still carry reads as [`AnchorKind::Symmetric`] **and is never
 /// rewritten in place** — this is the whole migration, not a destructive
 /// read-then-write. Any other value (including absent) reads as
@@ -331,7 +333,8 @@ const fn kind_to_str(kind: AnchorKind) -> &'static str {
 /// Sets a path's `closed` flag after creation
 /// (`specs/0006-path-merge-split-and-node-types/adrs.md`: Join closes an
 /// open path (AC 10) and Split opens a closed one (AC 14), neither of
-/// which `write_path_fields` — called only at `create_path` time — covers.
+/// which `write_path_style` — called only at creation time, by
+/// `create_path`/`create_path_uncommitted` — covers.
 pub(crate) fn write_closed(meta: &LoroMap, closed: bool) {
     // invariant: see `write_point`.
     #[allow(clippy::unwrap_used)]
