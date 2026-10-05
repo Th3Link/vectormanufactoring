@@ -127,6 +127,25 @@ pub const GUIDE_DASH_PX: f64 = 4.0;
 /// The gap between two dashes, screen-space pixels.
 pub const GUIDE_GAP_PX: f64 = 3.0;
 
+/// The curve-approximation display tolerance for stroking, in screen
+/// pixels (`specs/0004-canvas-navigation-and-selection/adrs.md`: "Display
+/// tolerance becomes screen-space... Use 0.25 px / scale. ADR 0003 §7's
+/// 'separate, coarser than the kernel' still holds"). A fixed millimetre
+/// tolerance (`stroke.rs`'s old `DISPLAY_TOLERANCE_MM = 0.05`) was a 15px
+/// chord error at 8000% zoom — visible facets exactly where acceptance
+/// criterion 7 promises precise node placement; this screen-space value
+/// keeps curves visually smooth at every zoom level instead.
+pub const DISPLAY_TOLERANCE_PX: f64 = 0.25;
+
+/// The minimum width, screen-space pixels, any committed stroke ever
+/// renders at (`adrs.md`'s flag 2, default (a)): "draw every document
+/// stroke at least 1 screen px wide, for display only". Below this, the
+/// default 0.25mm stroke's sub-pixel triangles can drop out entirely at
+/// low zoom (2%: 0.019px wide), turning acceptance criterion 7's "overview
+/// a full sheet" into an empty-looking canvas. Display only — the stored
+/// width is never touched.
+pub const MIN_DISPLAY_STROKE_WIDTH_PX: f64 = 1.0;
+
 /// A shape tool's live, uncommitted preview outline weight,
 /// screen-space pixels (`specs/0003-primitive-shapes/specification.md`'s
 /// "Live creation feedback": "screen-space-constant stroke weight") —

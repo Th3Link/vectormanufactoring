@@ -53,7 +53,7 @@ pub struct RenderShapeHandle {
 }
 
 /// What to decorate, built from `vecmanf-ui-core`'s
-/// `PrimitiveSelection` and `handle_layout` module by whoever owns both
+/// `vecmanf_ui_core::ObjectSelection` and `handle_layout` module by whoever owns both
 /// it and this crate (`vecmanf-editor-wasm`).
 #[derive(Debug, Clone, Default)]
 pub struct ShapeDecorationInput {
@@ -96,15 +96,21 @@ fn outline_to_anchors(
 
 /// A primitive's own placeholder stroke (acceptance criterion 16):
 /// identical weight/color/no-fill to a path's, built from the exact
-/// same outline "object to path" would convert.
-fn primitive_stroke(snapshot: &PrimitiveSnapshot) -> DrawList {
+/// same outline "object to path" would convert. `view` feeds the
+/// screen-space display tolerance and the minimum on-screen stroke width
+/// (`specs/0004-canvas-navigation-and-selection/adrs.md`), the same way
+/// [`crate::build_draw_list`] does for a path's own stroke.
+fn primitive_stroke(snapshot: &PrimitiveSnapshot, view: ViewTransform) -> DrawList {
     let outline = outline_of(&snapshot.shape);
     let anchors = outline_to_anchors(&outline);
+    let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
+    let min_width_mm = screen_px_to_mm(view, theme::MIN_DISPLAY_STROKE_WIDTH_PX);
     stroke::path_stroke(
         &anchors,
         true,
-        snapshot.stroke_width.as_mm(),
+        snapshot.stroke_width.as_mm().max(min_width_mm),
         snapshot.stroke.into(),
+        tolerance_mm,
     )
 }
 
@@ -125,45 +131,18 @@ pub fn build_shape_live_preview(shape: &Shape, view: ViewTransform) -> DrawList 
     let outline = outline_of(shape);
     let anchors = outline_to_anchors(&outline);
     let width = screen_px_to_mm(view, theme::LIVE_PREVIEW_STROKE_PX);
-    stroke::path_stroke(&anchors, true, width, theme::ACCENT)
-}
-
-/// The axis-aligned bounding box's `(min, max)` corners for any shape —
-/// what the selection/hover outline is drawn around.
-fn bounding_box(shape: &Shape) -> (Point, Point) {
-    match *shape {
-        Shape::Rect { bounds, .. } => (
-            bounds.origin,
-            bounds.origin.translated(vecmanf_document_core::Vec2::new(
-                bounds.width.as_mm(),
-                bounds.height.as_mm(),
-            )),
-        ),
-        Shape::Ellipse { frame } => (
-            Point::new(
-                frame.center.x - frame.rx.as_mm(),
-                frame.center.y - frame.ry.as_mm(),
-            ),
-            Point::new(
-                frame.center.x + frame.rx.as_mm(),
-                frame.center.y + frame.ry.as_mm(),
-            ),
-        ),
-        Shape::Polygon { frame, .. } | Shape::Star { frame, .. } => (
-            Point::new(
-                frame.center.x - frame.radius.as_mm(),
-                frame.center.y - frame.radius.as_mm(),
-            ),
-            Point::new(
-                frame.center.x + frame.radius.as_mm(),
-                frame.center.y + frame.radius.as_mm(),
-            ),
-        ),
-    }
+    let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
+    stroke::path_stroke(&anchors, true, width, theme::ACCENT, tolerance_mm)
 }
 
 fn bounding_box_outline(shape: &Shape, width_mm: f64, color: RgbaColor) -> DrawList {
-    let (min, max) = bounding_box(shape);
+    // Moved to `vecmanf-document-core` (`specs/0004-canvas-navigation-and-
+    // selection/adrs.md`: "the primitive box... moves to `document-core`
+    // as plain arithmetic on its own types") so `vecmanf-ui-core`'s
+    // `object_bounds` can share the exact same rule for the Select tool's
+    // own bounding box, rather than this crate keeping a second,
+    // private copy.
+    let (min, max) = vecmanf_document_core::shape_frame_bounds(shape);
     let corners = [
         Point::new(min.x, min.y),
         Point::new(max.x, min.y),
@@ -257,7 +236,7 @@ pub fn build(
     let guide_width = screen_px_to_mm(view, 1.0);
 
     for snapshot in primitives {
-        list.extend(primitive_stroke(snapshot));
+        list.extend(primitive_stroke(snapshot, view));
         let selected = input.selected.contains(&snapshot.id);
         let hovered = input.hovered == Some(snapshot.id);
         if selected {
