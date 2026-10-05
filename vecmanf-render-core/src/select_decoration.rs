@@ -15,7 +15,8 @@
 
 use vecmanf_document_core::{NodeId, Point, ViewTransform};
 
-use crate::glyphs::{DrawList, box_outline};
+use crate::color::RgbaColor;
+use crate::glyphs::{self, DrawList, box_outline};
 use crate::theme;
 
 /// One object's axis-aligned selection-box bounds, `(min, max)` corners —
@@ -52,6 +53,96 @@ pub fn build(view: ViewTransform, input: &SelectDecorationInput) -> DrawList {
     }
     if let Some((_, (min, max))) = input.hovered {
         list.extend(box_outline(min, max, width_mm, theme::ACCENT_HOVER));
+    }
+    list
+}
+
+/// One of `object-transform`'s own transform handles — this crate's own
+/// minimal shape (ADR 0011 §3: it cannot read `vecmanf-ui-core`'s
+/// `TransformHandle` directly), carrying only what drawing needs: where
+/// it is, which of the two glyph vocabularies it uses, and whether it is
+/// the one currently being dragged (solid `--accent` fill instead of the
+/// idle hollow/transparent state, `docs/design-system.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TransformHandleGlyph {
+    /// Document-space position.
+    pub position: Point,
+    /// A resize handle (squircle-ish hollow square) or the rotate
+    /// handle (circular-arrow icon, drawn as a plain circle — see
+    /// `theme::TRANSFORM_ROTATE_HANDLE_SIZE_PX`'s own doc comment).
+    pub is_rotate: bool,
+    /// Whether this exact handle is the one currently being dragged.
+    pub dragging: bool,
+}
+
+/// What the Select tool's transform-handle overlay decorates this frame
+/// (acceptance criteria 1, 14-17, 22 of `specs/0005-object-transform/
+/// specification.md`) — every handle of the single selected object
+/// currently showing them, plus the pivot marker shown for the duration
+/// of a scale/rotate drag only.
+#[derive(Debug, Clone, Default)]
+pub struct TransformDecorationInput {
+    /// Every transform handle currently shown (empty when zero or two-
+    /// plus objects are selected, acceptance criterion 2).
+    pub handles: Vec<TransformHandleGlyph>,
+    /// The active scale/rotate pivot, shown only while a drag is in
+    /// flight (`docs/design-system.md`'s "Transform pivot marker").
+    pub pivot_marker: Option<Point>,
+}
+
+/// A hollow resize-handle glyph: `--accent` outline, white idle fill or
+/// solid `--accent` fill while dragging — the same nested-square
+/// construction `shape_preview.rs`'s own shape-handle glyph uses
+/// (`docs/design-system.md`'s "one fill-state rule for every handle in
+/// the product").
+fn resize_handle_glyph(view: ViewTransform, center: Point, dragging: bool) -> DrawList {
+    let size = screen_px_to_mm(view, theme::TRANSFORM_RESIZE_HANDLE_SIZE_PX);
+    let outline = screen_px_to_mm(view, theme::TRANSFORM_RESIZE_HANDLE_OUTLINE_PX);
+    let mut list = glyphs::square(center, size, theme::ACCENT);
+    let fill = if dragging {
+        theme::ACCENT
+    } else {
+        RgbaColor::WHITE
+    };
+    list.extend(glyphs::square(
+        center,
+        (size - 2.0 * outline).max(0.0),
+        fill,
+    ));
+    list
+}
+
+/// The rotate handle's glyph — `--accent` stroke / transparent idle,
+/// solid `--accent` fill while dragging (`docs/design-system.md`). Drawn
+/// as a plain ring/disc in this crate; the "circular-arrow icon" detail
+/// is frontend/ux-engineer follow-up (`theme::TRANSFORM_ROTATE_HANDLE_
+/// SIZE_PX`'s own doc comment).
+fn rotate_handle_glyph(view: ViewTransform, center: Point, dragging: bool) -> DrawList {
+    let size = screen_px_to_mm(view, theme::TRANSFORM_ROTATE_HANDLE_SIZE_PX);
+    if dragging {
+        glyphs::circle(center, size, theme::ACCENT)
+    } else {
+        glyphs::ring(center, size, screen_px_to_mm(view, 1.5), theme::ACCENT)
+    }
+}
+
+/// Builds the Select tool's transform-handle overlay for this frame.
+#[must_use]
+pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationInput) -> DrawList {
+    let mut list = DrawList::default();
+    for handle in &input.handles {
+        if handle.is_rotate {
+            list.extend(rotate_handle_glyph(view, handle.position, handle.dragging));
+        } else {
+            list.extend(resize_handle_glyph(view, handle.position, handle.dragging));
+        }
+    }
+    if let Some(pivot) = input.pivot_marker {
+        list.extend(glyphs::circle(
+            pivot,
+            screen_px_to_mm(view, theme::TRANSFORM_PIVOT_MARKER_SIZE_PX),
+            theme::TRANSFORM_PIVOT_MARKER_COLOR,
+        ));
     }
     list
 }
@@ -121,5 +212,50 @@ mod tests {
         let one_list = build(ViewTransform::identity(), &one);
         let two_list = build(ViewTransform::identity(), &two);
         assert!(two_list.triangle_count() > one_list.triangle_count());
+    }
+
+    /// No handles and no pivot marker draws nothing (acceptance
+    /// criterion 2: multi/no selection shows no transform handles).
+    #[test]
+    fn no_transform_handles_and_no_pivot_draws_nothing() {
+        let list = build_transform_handles(
+            ViewTransform::identity(),
+            &TransformDecorationInput::default(),
+        );
+        assert_eq!(list.triangles.len(), 0);
+    }
+
+    /// Acceptance criterion 1: a resize handle and the rotate handle
+    /// both draw geometry.
+    #[test]
+    fn resize_and_rotate_handles_each_draw_geometry() {
+        let input = TransformDecorationInput {
+            handles: vec![
+                TransformHandleGlyph {
+                    position: Point::new(10.0, 10.0),
+                    is_rotate: false,
+                    dragging: false,
+                },
+                TransformHandleGlyph {
+                    position: Point::new(5.0, -10.0),
+                    is_rotate: true,
+                    dragging: false,
+                },
+            ],
+            pivot_marker: None,
+        };
+        let list = build_transform_handles(ViewTransform::identity(), &input);
+        assert_ne!(list.triangles.len(), 0);
+    }
+
+    /// The pivot marker draws only while present.
+    #[test]
+    fn pivot_marker_draws_when_present() {
+        let input = TransformDecorationInput {
+            handles: vec![],
+            pivot_marker: Some(Point::new(5.0, 5.0)),
+        };
+        let list = build_transform_handles(ViewTransform::identity(), &input);
+        assert_ne!(list.triangles.len(), 0);
     }
 }

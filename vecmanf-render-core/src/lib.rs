@@ -26,7 +26,9 @@ pub use color::RgbaColor;
 pub use decorations::{DecorationInput, Hovered};
 pub use glyphs::{DrawList, Vertex};
 pub use pen_preview::build_pen_preview;
-pub use select_decoration::{SelectDecorationInput, SelectionBox};
+pub use select_decoration::{
+    SelectDecorationInput, SelectionBox, TransformDecorationInput, TransformHandleGlyph,
+};
 pub use shape_preview::{
     RenderShapeHandle, ShapeDecorationInput, ShapeHandleKind, build_shape_live_preview,
 };
@@ -83,6 +85,18 @@ pub fn build_shape_draw_list(
 #[must_use]
 pub fn build_select_draw_list(view: ViewTransform, input: &SelectDecorationInput) -> DrawList {
     select_decoration::build(view, input)
+}
+
+/// Builds the Select tool's own transform-handle overlay for this frame
+/// (acceptance criteria 1, 14-17, 22 of `specs/0005-object-transform/
+/// specification.md`): the 8 resize + 1 rotate handles of a single
+/// selected object, plus the active pivot marker during a drag.
+#[must_use]
+pub fn build_transform_draw_list(
+    view: ViewTransform,
+    input: &TransformDecorationInput,
+) -> DrawList {
+    select_decoration::build_transform_handles(view, input)
 }
 
 #[cfg(test)]
