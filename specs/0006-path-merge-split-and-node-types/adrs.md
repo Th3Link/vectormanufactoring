@@ -212,6 +212,22 @@ copies it, Join keeps the survivor's).
   **`stroke-and-fill-styling` moves to 6** (dated note in its `adrs.md`),
   because this slice is now sequenced before it.
 
+- **2026-10-05 (implementer): taken as `format_version` 4, not 5, on
+  `main` as actually branched.** The note above assumed `object-
+  transform` (slice 5, claiming 4) had already merged. This slice was
+  instead built in parallel with `canvas-navigation-and-selection`
+  (slice 4) directly off `main`, before either slice 4 or slice 5 had
+  merged — `main`'s `CURRENT_FORMAT_VERSION` was still 3 at the time,
+  with no `rotation` register at all. Taking 4 (the next free version on
+  the branch this was actually built from) rather than pre-claiming 5
+  for a predecessor that does not exist here. Consequence: Join and
+  Split do not copy or carry a `rotation` field today, because none
+  exists yet to copy — whichever of this slice and `object-transform`
+  merges second needs its `format_version` (and, for `object-
+  transform`, Join/Split's handling of `rotation`) reconciled against
+  the other. Flagged as expected integration work in both slices' PRs,
+  not a defect in either one considered alone.
+
 - **2026-10-05: the crate boundary.**
   - `vecmanf-document-core`: the three-variant `AnchorKind`, the codec tags
     and read alias, the per-kind handle rule, the conversion table,
