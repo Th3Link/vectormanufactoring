@@ -283,10 +283,15 @@ snaps to shape on release. Specifically:
 
 **2026-10-05 note:** the "larger than the node tool's 7px/6px glyphs"
 comparison below was true when this slice shipped; the node tool's
-handle endpoint has since doubled to 12px (`canvas-interaction-bugs`
-follow-up), so the shape handle (unchanged at 8px) is no longer the
-larger of the two. `docs/design-system.md`'s own token table is the live
-source of truth for current sizes — this file is not updated in place.
+handle endpoint has since doubled to 12px, and later the same day the
+node glyph itself doubled to 14px too (`canvas-interaction-bugs`
+follow-up, both rounds), so the shape handle (unchanged at 8px) is now
+the *smaller* of the two, not merely no longer the larger one. Its own
+hit-test radius grew anyway, to 16px, as a side effect of sharing
+`Session::point_tolerance()` with the node tool rather than from any
+deliberate shape-handle-specific change. `docs/design-system.md`'s own
+token table is the live source of truth for current sizes — this file
+is not updated in place.
 
 **On-canvas handle, not a tool-options numeric field, for this first pass.**
 Rationale: this is pure drag-to-create-then-adjust territory, the same

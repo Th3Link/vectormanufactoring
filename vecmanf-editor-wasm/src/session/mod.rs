@@ -39,12 +39,22 @@ use vecmanf_ui_core::{
 #[cfg(target_arch = "wasm32")]
 pub use shapes::LiveReadout;
 
-/// 8px node hit-test radius (`docs/design-system.md`).
-const POINT_TOLERANCE_PX: f64 = 8.0;
+/// 16px node hit-test radius (`docs/design-system.md`; 2026-10-05:
+/// doubled from 8px — customer feedback: "you can click on the nodes
+/// too — the node squares and diamonds need to be bigger too," the same
+/// fix one round earlier applied to `HANDLE_TOLERANCE_PX` below, now
+/// extended to nodes alongside `vecmanf-render-core::theme::
+/// NODE_SIZE_PX`'s own doubling. Now equal to `HANDLE_TOLERANCE_PX` —
+/// that is not a problem: `vecmanf-ui-core::hit_test` picks the nearer
+/// candidate regardless of either tolerance's value, a handle winning
+/// only an exact tie, so two equal tolerances do not change which of a
+/// coincident node and handle wins, only that both are now reachable
+/// from farther away.
+const POINT_TOLERANCE_PX: f64 = 16.0;
 /// 16px handle hit-test radius (`docs/design-system.md`; 2026-10-05:
-/// doubled from the node's own 8px alongside the handle glyph's doubled
-/// visual size, `vecmanf-render-core::theme::HANDLE_DIAMETER_PX`'s own
-/// doc comment).
+/// doubled from the node's own then-8px alongside the handle glyph's
+/// doubled visual size, `vecmanf-render-core::theme::
+/// HANDLE_DIAMETER_PX`'s own doc comment).
 const HANDLE_TOLERANCE_PX: f64 = 16.0;
 /// 4px segment hit-test tolerance (`docs/design-system.md`).
 const SEGMENT_TOLERANCE_PX: f64 = 4.0;
@@ -857,6 +867,14 @@ mod tests {
     /// in-progress path's own first node, with enough nodes placed,
     /// reports the close target; the node tool, idle pen tool, and
     /// hovering elsewhere all report `false`.
+    ///
+    /// 2026-10-05 (node-size round): the second node moved from (10, 0)
+    /// to (50, 0) — at the identity view used here, 1 document mm is 1
+    /// screen px, and `POINT_TOLERANCE_PX` doubling to 16 means the old
+    /// 10mm separation would have put "hovering the last node" (distance
+    /// 10 from the first) *inside* the now-16mm close tolerance, turning
+    /// this into a false positive unrelated to what the test actually
+    /// guards. 50mm stays unambiguously outside tolerance regardless.
     #[test]
     fn is_hovering_pen_close_target_matches_the_real_close_decision() {
         let mut session = Session::new(1);
@@ -864,13 +882,13 @@ mod tests {
 
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(0.0, 0.0), false);
-        session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.pointer_down(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 0.0), false);
 
         session.pointer_hover(Point::new(0.1, 0.1), false);
         assert!(session.is_hovering_pen_close_target());
 
-        session.pointer_hover(Point::new(10.0, 0.0), false);
+        session.pointer_hover(Point::new(50.0, 0.0), false);
         assert!(
             !session.is_hovering_pen_close_target(),
             "near the last node, not the first"
@@ -885,12 +903,14 @@ mod tests {
     }
 
     /// Tester verification (PR #20, handles-doubled fix, 2026-10-05):
-    /// `HANDLE_TOLERANCE_PX` is 16.0 now (was 8.0, the same as
-    /// `POINT_TOLERANCE_PX`); at the identity view (1 screen px per
+    /// `HANDLE_TOLERANCE_PX` is 16.0 (was 8.0 before that round; by this
+    /// round `POINT_TOLERANCE_PX` is 16.0 too, but was still 8.0 when
+    /// this test was written); at the identity view (1 screen px per
     /// document mm, `ViewTransform::identity`) a click 13px from a
     /// selected smooth node's handle endpoint — outside the old 8px
     /// radius, inside the new 16px one — must register as a handle hit.
-    /// The click point is also kept far from the anchor itself and from
+    /// The click point is also kept far from the anchor itself (~23.8px,
+    /// still outside even the now-doubled 16px node tolerance) and from
     /// the segment, so this cannot pass by accidentally hitting
     /// something else.
     #[test]
@@ -929,6 +949,39 @@ mod tests {
                 slot: vecmanf_document_core::HandleSlot::Out,
             }),
             "13px is outside the old 8px handle radius but inside the new 16px one"
+        );
+    }
+
+    /// Pins the node-size round's own hit-test doubling, the same way
+    /// `a_click_13px_from_a_handle_hits_under_the_doubled_tolerance`
+    /// pins the earlier handle one: `POINT_TOLERANCE_PX` is 16.0 now
+    /// (was 8.0). At the identity view, a click 13px from node A (a
+    /// classic 5-12-13 offset) — outside the old 8px radius, inside the
+    /// new 16px one — must register as a node hit. B sits far away
+    /// (200, 0) so neither it nor the long A-B segment can explain a hit
+    /// here; only the node tolerance can.
+    #[test]
+    fn a_click_13px_from_a_node_hits_under_the_doubled_tolerance() {
+        let mut session = Session::new(1);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_down(Point::new(200.0, 0.0), false);
+        session.pointer_up(Point::new(200.0, 0.0), false);
+        session.finish_pen();
+
+        session.set_tool(Tool::Node);
+        let a = session.paths()[0].anchors[0].id;
+
+        // 13px from A (0, 0) — a 5-12-13 offset, well clear of the
+        // 200px-long A-B segment and of B itself.
+        session.pointer_hover(Point::new(5.0, 12.0), false);
+        assert_eq!(
+            session.hovered,
+            Some(Hit::Node {
+                path: session.paths()[0].id,
+                anchor: a,
+            }),
+            "13px is outside the old 8px node radius but inside the new 16px one"
         );
     }
 
@@ -982,8 +1035,9 @@ mod tests {
     /// selection.
     #[test]
     fn node_toolbar_state_and_insert_selected_for_a_line_segment() {
-        // A long segment: its midpoint sits well outside the 8px/mm
-        // point-hit tolerance around either endpoint, so the click below
+        // A long segment: its midpoint sits well outside the 16px/mm
+        // point-hit tolerance around either endpoint (2026-10-05: was
+        // 8px/mm, doubled alongside the node glyph), so the click below
         // lands on the segment itself rather than being read as a node
         // hit of whichever endpoint happens to be nearest.
         let mut session = Session::new(1);
