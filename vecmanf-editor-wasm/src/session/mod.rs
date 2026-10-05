@@ -259,25 +259,20 @@ impl Session {
             vecmanf_ui_core::LiveNodeDrag::Handle {
                 path,
                 anchor,
-                slot,
-                value,
-                mirror,
+                handle_in,
+                handle_out,
             } => {
+                // `handle_in`/`handle_out` already fully resolved by
+                // `NodeTool::live_drag` (which calls the exact same
+                // `vecmanf_document_core::resolve_handle_pair` function
+                // `Document::set_handle` itself commits with) — a plain
+                // assignment, no slot/mirror logic of its own to
+                // independently drift from the commit.
                 if let Some(snapshot) = paths.iter_mut().find(|p| p.id == path)
                     && let Some(anchor) = snapshot.anchors.iter_mut().find(|a| a.id == anchor)
                 {
-                    let (own, other) = match slot {
-                        vecmanf_document_core::HandleSlot::In => {
-                            (&mut anchor.handle_in, &mut anchor.handle_out)
-                        }
-                        vecmanf_document_core::HandleSlot::Out => {
-                            (&mut anchor.handle_out, &mut anchor.handle_in)
-                        }
-                    };
-                    *own = value;
-                    if let Some(mirror) = mirror {
-                        *other = mirror;
-                    }
+                    anchor.handle_in = handle_in;
+                    anchor.handle_out = handle_out;
                 }
             }
         }

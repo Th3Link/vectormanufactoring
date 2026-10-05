@@ -281,6 +281,13 @@ snaps to shape on release. Specifically:
 
 ### Corner-radius adjustment (rectangle)
 
+**2026-10-05 note:** the "larger than the node tool's 7px/6px glyphs"
+comparison below was true when this slice shipped; the node tool's
+handle endpoint has since doubled to 12px (`canvas-interaction-bugs`
+follow-up), so the shape handle (unchanged at 8px) is no longer the
+larger of the two. `docs/design-system.md`'s own token table is the live
+source of truth for current sizes — this file is not updated in place.
+
 **On-canvas handle, not a tool-options numeric field, for this first pass.**
 Rationale: this is pure drag-to-create-then-adjust territory, the same
 category as slice 2's handle drags, and Inkscape's own rectangle tool

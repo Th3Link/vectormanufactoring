@@ -2,10 +2,18 @@
 //! document (acceptance criteria 7, 10, 12, 14).
 //!
 //! Priority order, matching the visual stacking
-//! `specs/0002-path-node-editing/specification.md`'s UX notes describe: a
-//! handle (only hittable when its own node is selected — an unselected
-//! node shows no handles at all), then a node, then a segment. Within
-//! each category the nearest candidate within its own tolerance wins.
+//! `specs/0002-path-node-editing/specification.md`'s UX notes describe:
+//! a handle or a node (only a handle whose own node is selected is in
+//! play at all — an unselected node shows no handles), then a segment.
+//! Node and handle hits compete on *distance*, not a fixed category
+//! order: the nearer candidate wins, a handle winning an exact tie
+//! (2026-10-05, architect review — the handle tolerance is now wider
+//! than the node tolerance, `docs/design-system.md`, so a fixed
+//! "handles always win" rule let a click aimed at a node register on a
+//! nearby handle instead, e.g. a short pen-drag handle sitting close to
+//! its own or a neighbouring node). Segment hits are checked only once
+//! neither a node nor a handle hit, and the nearest segment candidate
+//! within its own tolerance wins, same as before.
 
 use vecmanf_document_core::{AnchorId, HandleSlot, NodeId, PathSnapshot, Point, Tolerance, Vec2};
 use vecmanf_geometry_core::nearest_point_on_segment;
@@ -67,9 +75,24 @@ pub fn hit_test(
     handle_tolerance: Tolerance,
     segment_tolerance: Tolerance,
 ) -> Option<Hit> {
-    hit_test_handle(paths, selection, point, handle_tolerance)
-        .or_else(|| hit_test_node(paths, point, node_tolerance))
-        .or_else(|| hit_test_segment(paths, point, segment_tolerance))
+    let handle = hit_test_handle(paths, selection, point, handle_tolerance);
+    let node = hit_test_node(paths, point, node_tolerance);
+    // The nearer of the two wins; a handle wins an exact tie (its own
+    // glyph draws on top of the node's, `vecmanf-render-core::
+    // decorations`, so winning the tie is what the maker actually sees
+    // under the cursor).
+    let point_hit = match (handle, node) {
+        (Some((handle_distance, handle_hit)), Some((node_distance, node_hit))) => {
+            Some(if handle_distance <= node_distance {
+                handle_hit
+            } else {
+                node_hit
+            })
+        }
+        (Some((_, hit)), None) | (None, Some((_, hit))) => Some(hit),
+        (None, None) => None,
+    };
+    point_hit.or_else(|| hit_test_segment(paths, point, segment_tolerance))
 }
 
 fn better(
@@ -92,7 +115,7 @@ fn hit_test_handle(
     selection: &NodeSelection,
     point: Point,
     tolerance: Tolerance,
-) -> Option<Hit> {
+) -> Option<(f64, Hit)> {
     let path_id = selection.path()?;
     let snapshot = paths.iter().find(|p| p.id == path_id)?;
     let mut best: Option<(f64, Hit)> = None;
@@ -116,10 +139,10 @@ fn hit_test_handle(
             });
         }
     }
-    best.map(|(_, hit)| hit)
+    best
 }
 
-fn hit_test_node(paths: &[PathSnapshot], point: Point, tolerance: Tolerance) -> Option<Hit> {
+fn hit_test_node(paths: &[PathSnapshot], point: Point, tolerance: Tolerance) -> Option<(f64, Hit)> {
     let mut best: Option<(f64, Hit)> = None;
     for snapshot in paths {
         for anchor in &snapshot.anchors {
@@ -130,7 +153,7 @@ fn hit_test_node(paths: &[PathSnapshot], point: Point, tolerance: Tolerance) -> 
             });
         }
     }
-    best.map(|(_, hit)| hit)
+    best
 }
 
 /// Every path-adjacent pair of anchors in traversal order, including the
@@ -392,6 +415,62 @@ mod tests {
         );
     }
 
+    /// The bug this run fixes: with the handle tolerance wider than the
+    /// node tolerance, a fixed "handles always win" priority let a click
+    /// aimed squarely at a node register on a short handle instead,
+    /// whenever that handle happened to also be within its own (wider)
+    /// tolerance. A click exactly on the node (distance 0) must still
+    /// select the node, not a handle 3mm away, even though both are
+    /// within their own tolerances.
+    #[test]
+    fn a_click_aimed_at_the_node_hits_the_node_not_a_nearby_short_handle() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path = document.create_path(
+            &[
+                NewAnchor {
+                    id: a,
+                    point: Point::new(0.0, 0.0),
+                    handle_in: Vec2::ZERO,
+                    // A short handle, 3mm long — within HANDLE_TOLERANCE
+                    // (4mm) of a click exactly on the node itself.
+                    handle_out: Vec2::new(3.0, 0.0),
+                    kind: AnchorKind::Smooth,
+                },
+                NewAnchor::corner(b, Point::new(20.0, 0.0)),
+            ],
+            false,
+        );
+        let paths = vec![document.path(path).expect("exists")];
+        let mut selected = NodeSelection::new();
+        selected.select_single_node(path, a);
+
+        let click_on_the_node = Point::new(0.0, 0.0);
+        // Sanity check: the handle endpoint (3.0, 0.0) really is within
+        // HANDLE_TOLERANCE of this click, or the old "handles always
+        // win" behaviour and the fixed "nearer wins" behaviour could not
+        // be told apart by this test.
+        assert!(
+            distance(Point::new(3.0, 0.0), click_on_the_node) <= HANDLE_TOLERANCE.as_mm(),
+            "test setup: the short handle must be within handle tolerance of the click"
+        );
+
+        assert_eq!(
+            hit_test(
+                &paths,
+                &selected,
+                click_on_the_node,
+                POINT_TOLERANCE,
+                HANDLE_TOLERANCE,
+                SEGMENT_TOLERANCE
+            ),
+            Some(Hit::Node { path, anchor: a }),
+            "the node (distance 0) is strictly nearer than its own handle (distance 3mm); the \
+             node must win even though the handle is also within its own, wider tolerance"
+        );
+    }
+
     #[test]
     fn a_zero_handle_is_never_hittable() {
         let a = AnchorId::new(1, 1);
@@ -411,6 +490,58 @@ mod tests {
             SEGMENT_TOLERANCE,
         );
         assert_eq!(hit, Some(Hit::Node { path, anchor: a }));
+    }
+
+    /// An exact distance tie between a node and a handle: the handle
+    /// wins (its own glyph draws on top of the node's).
+    #[test]
+    fn an_exact_distance_tie_between_a_node_and_a_handle_favors_the_handle() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path = document.create_path(
+            &[
+                NewAnchor {
+                    id: a,
+                    point: Point::new(5.0, 5.0),
+                    handle_in: Vec2::ZERO,
+                    // Handle endpoint lands at world (2.0, 0.0).
+                    handle_out: Vec2::new(-3.0, -5.0),
+                    kind: AnchorKind::Smooth,
+                },
+                // Node B sits at world (0.0, 2.0) — the exact same
+                // distance from the click below as A's handle endpoint.
+                NewAnchor::corner(b, Point::new(0.0, 2.0)),
+            ],
+            false,
+        );
+        let paths = vec![document.path(path).expect("exists")];
+        let mut selected = NodeSelection::new();
+        selected.select_single_node(path, a);
+
+        let click = Point::new(0.0, 0.0);
+        assert_eq!(
+            distance(Point::new(2.0, 0.0), click),
+            distance(Point::new(0.0, 2.0), click),
+            "test setup: handle and node must be exactly equidistant from the click"
+        );
+
+        assert_eq!(
+            hit_test(
+                &paths,
+                &selected,
+                click,
+                POINT_TOLERANCE,
+                HANDLE_TOLERANCE,
+                SEGMENT_TOLERANCE
+            ),
+            Some(Hit::Handle {
+                path,
+                anchor: a,
+                slot: HandleSlot::Out
+            }),
+            "an exact tie must favor the handle"
+        );
     }
 
     #[test]

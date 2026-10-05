@@ -31,6 +31,38 @@ const DEFAULT_SMOOTH_HANDLE_LENGTH_MM: f64 = 10.0;
 /// approximation fraction, not a value any acceptance criterion pins).
 const DEFAULT_CURVE_HANDLE_FRACTION: f64 = 1.0 / 3.0;
 
+/// Resolves what an anchor's whole `(handle_in, handle_out)` pair becomes
+/// when `slot`'s handle is set to `value` — acceptance criterion 9's one
+/// rule (mirror for [`AnchorKind::Smooth`], touch only the named handle
+/// for [`AnchorKind::Corner`]), as a single pure function rather than
+/// logic duplicated at each of its two callers. [`Document::set_handle`]
+/// calls this to build what it writes; `vecmanf-ui-core`'s live handle-
+/// drag preview calls the exact same function to build what it
+/// *previews*, so the two can never independently drift apart (the same
+/// gap the pen-tool preview/commit split had — `specs/0002-path-node-
+/// editing/adrs.md`'s "commands carry resolved geometry, never geometric
+/// intent", read here as "one resolution rule, not two").
+///
+/// `handle_in`/`handle_out` are the anchor's values *before* this write —
+/// needed only to pass the untouched side through unchanged for a
+/// [`AnchorKind::Corner`] anchor, since this function has no document to
+/// read them from itself.
+#[must_use]
+pub fn resolve_handle_pair(
+    kind: AnchorKind,
+    slot: HandleSlot,
+    value: Vec2,
+    handle_in: Vec2,
+    handle_out: Vec2,
+) -> (Vec2, Vec2) {
+    match (slot, kind) {
+        (HandleSlot::In, AnchorKind::Smooth) => (value, value.negated()),
+        (HandleSlot::Out, AnchorKind::Smooth) => (value.negated(), value),
+        (HandleSlot::In, AnchorKind::Corner) => (value, handle_out),
+        (HandleSlot::Out, AnchorKind::Corner) => (handle_in, value),
+    }
+}
+
 impl Document {
     /// Commits a finished pen-tool session as one new path object
     /// (`specs/0002-path-node-editing/adrs.md`, "a pen session is one commit";
@@ -153,9 +185,29 @@ impl Document {
             HandleSlot::In => (KEY_HANDLE_IN, KEY_HANDLE_OUT),
             HandleSlot::Out => (KEY_HANDLE_OUT, KEY_HANDLE_IN),
         };
-        write_vec2(&map, own_key, value);
+        // `resolve_handle_pair` is the one place this rule lives; the
+        // placeholder `Vec2::ZERO` pair below is never actually read by
+        // it for either of `slot`'s own two branches, only by the
+        // opposite anchor kind's — the real current values are not read
+        // from storage at all here, since a `Corner` anchor's untouched
+        // side must stay unwritten (not merely rewritten to its current
+        // value), the same LWW-register hazard this slice's own "a press
+        // and release with no pointer movement writes nothing" rule
+        // guards against (`specs/0002-path-node-editing/adrs.md`) — a
+        // redundant write with a newer clock can still beat a
+        // collaborator's concurrent edit to that same field.
+        let (new_in, new_out) = resolve_handle_pair(kind, slot, value, Vec2::ZERO, Vec2::ZERO);
+        let own_value = match slot {
+            HandleSlot::In => new_in,
+            HandleSlot::Out => new_out,
+        };
+        write_vec2(&map, own_key, own_value);
         if kind == AnchorKind::Smooth {
-            write_vec2(&map, mirror_key, value.negated());
+            let mirror_value = match slot {
+                HandleSlot::In => new_out,
+                HandleSlot::Out => new_in,
+            };
+            write_vec2(&map, mirror_key, mirror_value);
         }
         self.commit_with_label("set_handle");
         Ok(())
@@ -491,6 +543,62 @@ mod tests {
             snapshot.anchors[0].point,
             Point::new(0.0, 0.0),
             "the valid id earlier in the batch must not have moved either"
+        );
+    }
+
+    /// The shared rule itself, independent of any document: a `Smooth`
+    /// anchor mirrors, regardless of which slot was set.
+    #[test]
+    fn resolve_handle_pair_mirrors_for_a_smooth_anchor_either_slot() {
+        assert_eq!(
+            resolve_handle_pair(
+                AnchorKind::Smooth,
+                HandleSlot::Out,
+                Vec2::new(3.0, 4.0),
+                Vec2::ZERO,
+                Vec2::ZERO,
+            ),
+            (Vec2::new(-3.0, -4.0), Vec2::new(3.0, 4.0)),
+        );
+        assert_eq!(
+            resolve_handle_pair(
+                AnchorKind::Smooth,
+                HandleSlot::In,
+                Vec2::new(3.0, 4.0),
+                Vec2::ZERO,
+                Vec2::ZERO,
+            ),
+            (Vec2::new(3.0, 4.0), Vec2::new(-3.0, -4.0)),
+        );
+    }
+
+    /// A `Corner` anchor leaves the other handle exactly as given, for
+    /// either slot.
+    #[test]
+    fn resolve_handle_pair_leaves_the_other_handle_untouched_for_a_corner_anchor() {
+        let existing_in = Vec2::new(-5.0, 0.0);
+        let existing_out = Vec2::new(5.0, 0.0);
+        assert_eq!(
+            resolve_handle_pair(
+                AnchorKind::Corner,
+                HandleSlot::Out,
+                Vec2::new(3.0, 4.0),
+                existing_in,
+                existing_out,
+            ),
+            (existing_in, Vec2::new(3.0, 4.0)),
+            "handle_in passed through unchanged"
+        );
+        assert_eq!(
+            resolve_handle_pair(
+                AnchorKind::Corner,
+                HandleSlot::In,
+                Vec2::new(3.0, 4.0),
+                existing_in,
+                existing_out,
+            ),
+            (Vec2::new(3.0, 4.0), existing_out),
+            "handle_out passed through unchanged"
         );
     }
 

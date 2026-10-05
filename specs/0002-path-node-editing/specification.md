@@ -213,6 +213,14 @@ file instead of inventing tokens inline.
 
 ### Node and handle visual convention
 
+**2026-10-05 note:** the pixel sizes below (handle endpoint, hit-test
+radii, hover ring) are what this slice shipped with; several have since
+changed (the handle endpoint doubled to 12px, its hit-test radius to
+16px, and it gained its own 16px hover ring, `canvas-interaction-bugs`
+follow-up). `docs/design-system.md`'s own token table is the live source
+of truth for current sizes — this file is not updated in place, so it
+stays an accurate record of what was true when this slice shipped.
+
 Follows Inkscape's shape convention exactly, minus the circle/"symmetric"
 node shape — this slice merges smooth and symmetric into one type (see "Out
 of scope"), so only two node shapes exist:

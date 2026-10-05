@@ -7,6 +7,7 @@
 
 use vecmanf_document_core::{
     AnchorKind, Document, HandleSlot, NodeId, PathSnapshot, Point, Tolerance, Vec2,
+    resolve_handle_pair,
 };
 use vecmanf_geometry_core::{nearest_point_on_segment, subdivide_at_parameter};
 
@@ -87,17 +88,20 @@ enum Drag {
         starts: Vec<(vecmanf_document_core::AnchorId, Point)>,
     },
     /// Dragging one handle (acceptance criterion 9). `down_at` and
-    /// `start_value` are recorded at press time so the commit on release
-    /// writes `start_value` moved by the press→release displacement —
-    /// never the absolute pointer position (architect review: a press
-    /// within hit tolerance but off the handle's exact tip would
-    /// otherwise relocate it to wherever the click landed, even with no
-    /// drag at all). `kind` is the anchor's kind at press time (an anchor
-    /// cannot change kind while one continuous drag gesture holds it, so
-    /// caching it here is exact, not stale) — needed only by
-    /// [`NodeTool::live_drag`]'s mirror preview, since
-    /// [`vecmanf_document_core::Document::set_handle`] re-reads it itself
-    /// on commit.
+    /// `start_value` (the dragged slot's own value at press time) are
+    /// recorded so the commit on release writes `start_value` moved by
+    /// the press→release displacement — never the absolute pointer
+    /// position (architect review: a press within hit tolerance but off
+    /// the handle's exact tip would otherwise relocate it to wherever
+    /// the click landed, even with no drag at all). `kind` and *both*
+    /// starting handle values are cached too (an anchor's kind and its
+    /// handles cannot change while one continuous drag gesture holds it,
+    /// so caching them here is exact, not stale) so
+    /// [`NodeTool::live_drag`] can call
+    /// [`vecmanf_document_core::resolve_handle_pair`] — the exact
+    /// function [`vecmanf_document_core::Document::set_handle`] itself
+    /// calls to commit — rather than recomputing the mirror rule
+    /// independently.
     Handle {
         path: NodeId,
         anchor: vecmanf_document_core::AnchorId,
@@ -105,16 +109,19 @@ enum Drag {
         down_at: Point,
         start_value: Vec2,
         kind: AnchorKind,
+        start_handle_in: Vec2,
+        start_handle_out: Vec2,
     },
 }
 
 /// What [`NodeTool::live_drag`] resolves a drag in flight to — mirrors
 /// the two shapes [`NodeTool::pointer_up`] can commit (acceptance
 /// criteria 8, 9, 10), built by the exact same resolution helpers
-/// (`NodeTool::resolve_node_positions`/`resolve_handle_value`) so a live
-/// preview and the eventual commit can never disagree — the same
-/// discipline `vecmanf_ui_core::PenTool::pending_anchor` uses for the pen
-/// tool's own live preview.
+/// (`NodeTool::resolve_node_positions`/`resolve_handle_value`, and —
+/// for a handle drag — `vecmanf_document_core::resolve_handle_pair`
+/// itself) so a live preview and the eventual commit can never disagree
+/// — the same discipline `vecmanf_ui_core::PenTool::pending_anchor` uses
+/// for the pen tool's own live preview.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LiveNodeDrag {
     /// One or more selected nodes, each at its live (not yet committed)
@@ -129,24 +136,21 @@ pub enum LiveNodeDrag {
         /// Each selected node's id and live position.
         positions: Vec<(vecmanf_document_core::AnchorId, Point)>,
     },
-    /// One handle, at its live (not yet committed) value — acceptance
-    /// criterion 9.
+    /// One anchor's live (not yet committed) `(handle_in, handle_out)`
+    /// pair — acceptance criterion 9. Already fully resolved by
+    /// [`vecmanf_document_core::resolve_handle_pair`] (mirrored for a
+    /// `Smooth` anchor, the other side passed through unchanged for a
+    /// `Corner` one): the caller assigns both fields directly, with no
+    /// slot/mirror logic of its own to get wrong.
     Handle {
         /// The handle's path.
         path: NodeId,
         /// The handle's own anchor.
         anchor: vecmanf_document_core::AnchorId,
-        /// Which of the anchor's two handles is being dragged.
-        slot: HandleSlot,
-        /// The dragged handle's own live value.
-        value: Vec2,
-        /// The *opposite* handle's live value, when the anchor is
-        /// [`AnchorKind::Smooth`] — mirroring `Document::set_handle`'s
-        /// own "the opposite handle moves to stay collinear" rule
-        /// (acceptance criterion 9) for the preview. `None` for a
-        /// [`AnchorKind::Corner`] anchor: the other handle is untouched,
-        /// exactly as it already renders.
-        mirror: Option<Vec2>,
+        /// The anchor's live `handle_in`.
+        handle_in: Vec2,
+        /// The anchor's live `handle_out`.
+        handle_out: Vec2,
     },
 }
 
@@ -310,10 +314,12 @@ impl NodeTool {
             .iter()
             .find(|p| p.id == path)
             .and_then(|snapshot| snapshot.anchors.iter().find(|a| a.id == anchor));
-        let start_value = found.map_or(Vec2::ZERO, |a| match slot {
-            HandleSlot::In => a.handle_in,
-            HandleSlot::Out => a.handle_out,
-        });
+        let start_handle_in = found.map_or(Vec2::ZERO, |a| a.handle_in);
+        let start_handle_out = found.map_or(Vec2::ZERO, |a| a.handle_out);
+        let start_value = match slot {
+            HandleSlot::In => start_handle_in,
+            HandleSlot::Out => start_handle_out,
+        };
         let kind = found.map_or(AnchorKind::Corner, |a| a.kind);
         self.drag = Drag::Handle {
             path,
@@ -322,6 +328,8 @@ impl NodeTool {
             down_at,
             start_value,
             kind,
+            start_handle_in,
+            start_handle_out,
         };
     }
 
@@ -379,19 +387,20 @@ impl NodeTool {
                 down_at,
                 start_value,
                 kind,
+                start_handle_in,
+                start_handle_out,
             } => {
                 let value = Self::resolve_handle_value(*down_at, *start_value, cursor);
-                // Mirrors `Document::set_handle`'s own rule exactly
-                // (`vecmanf-document-core/src/paths.rs`): a Smooth
-                // anchor's opposite handle is always the negation of the
-                // one just written; a Corner anchor's is untouched.
-                let mirror = (*kind == AnchorKind::Smooth).then(|| value.negated());
+                // The exact same function `Document::set_handle` itself
+                // calls to commit — not a re-derivation of its mirror
+                // rule.
+                let (handle_in, handle_out) =
+                    resolve_handle_pair(*kind, *slot, value, *start_handle_in, *start_handle_out);
                 Some(LiveNodeDrag::Handle {
                     path: *path,
                     anchor: *anchor,
-                    slot: *slot,
-                    value,
-                    mirror,
+                    handle_in,
+                    handle_out,
                 })
             }
         }
@@ -433,6 +442,8 @@ impl NodeTool {
                 down_at,
                 start_value,
                 kind: _,
+                start_handle_in: _,
+                start_handle_out: _,
             } => {
                 // Same zero-movement rule as the node-drag branch above,
                 // and for the same reason.
@@ -874,9 +885,8 @@ mod tests {
             Some(LiveNodeDrag::Handle {
                 path,
                 anchor: a,
-                slot: HandleSlot::Out,
-                value: Vec2::new(3.0, 4.0),
-                mirror: Some(Vec2::new(-3.0, -4.0)),
+                handle_in: Vec2::new(-3.0, -4.0),
+                handle_out: Vec2::new(3.0, 4.0),
             }),
             "mid-drag: the opposite handle's live mirror must already show, not just on release"
         );
@@ -920,9 +930,8 @@ mod tests {
             Some(LiveNodeDrag::Handle {
                 path,
                 anchor: a,
-                slot: HandleSlot::Out,
-                value: Vec2::new(3.0, 4.0),
-                mirror: None,
+                handle_in: Vec2::new(-5.0, 0.0),
+                handle_out: Vec2::new(3.0, 4.0),
             }),
         );
     }

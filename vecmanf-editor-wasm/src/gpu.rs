@@ -41,13 +41,28 @@ const CANVAS_BACKGROUND: wgpu::Color = wgpu::Color {
 /// if smaller, further improvement when the adapter supports it, because
 /// MSAA only resolves *edge coverage* at a fixed number of sample
 /// positions per pixel — it has a ceiling this crate's technique cannot
-/// cross no matter the count. Inkscape's Cairo backend uses an
-/// analytic/coverage-based software rasterizer (exact fractional pixel
-/// coverage, not a fixed sample grid), which is why it stays visibly
-/// crisper even at the same logical line width; matching that exactly
-/// would mean a different rendering technique (e.g. supersampling the
-/// whole frame at a higher resolution and downsampling, `docs/
-/// technical-debt.md`), which is a follow-up, not this fix.
+/// cross no matter the count (and 8 is the practical ceiling for this
+/// `wgpu`/GL stack specifically, not just this slice's own choice — see
+/// the `WebGPU note` below). Inkscape's Cairo backend uses an analytic/
+/// coverage-based software rasterizer, computed on a much finer subpixel
+/// grid than any fixed sample count — not literally unlimited, but far
+/// more coverage levels than 8x MSAA samples — which is why it stays
+/// visibly crisper even at the same logical line width; matching that
+/// exactly would mean a different rendering technique (supersampling, or
+/// a shader-side analytic/distance-based edge fringe — both named, with
+/// their trade-offs, in `docs/technical-debt.md`), which is a follow-up
+/// story, not this fix.
+///
+/// **WebGPU note:** this crate's `wgpu::Instance` only requests
+/// `Backends::GL` today, so this 8x finding is specific to that backend/
+/// adapter. The WebGPU spec itself guarantees only `sampleCount` 1 and 4
+/// everywhere; anything above 4x is adapter-optional, gated behind the
+/// `TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` feature. Adding
+/// `Backends::BROWSER_WEBGPU` as a target later needs this reconsidered —
+/// either cap the preference list at 4x on that backend, or request
+/// `TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` explicitly in
+/// `request_device` and keep querying as today — not assumed to keep
+/// working unexamined.
 const PREFERRED_SAMPLE_COUNTS: [u32; 2] = [8, 4];
 
 /// Picks the first of [`PREFERRED_SAMPLE_COUNTS`] `flags` (the surface

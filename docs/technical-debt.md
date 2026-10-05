@@ -496,21 +496,45 @@ The customer compared this slice's lines directly against Inkscape's and
 found them "noticeably" less crisp even after the 4x-then-8x MSAA fixes
 above (`gpu::choose_sample_count`). This is expected, not a bug still to
 find: MSAA resolves edge anti-aliasing at a fixed number of sample
-positions per pixel, however high; Inkscape's Cairo backend rasterizes
-with analytic/coverage-based anti-aliasing — exact fractional pixel
-coverage, computed directly, not sampled — which has no such ceiling.
-Raising the sample count (8x, the max this fix reaches) narrows the gap but
-cannot close it.
+positions per pixel, however high (8x is this fix's own ceiling, and the
+highest `wgpu`'s `TextureFormatFeatureFlags` enumerates at all — see the
+WebGPU note below); Inkscape's Cairo backend rasterizes with analytic/
+coverage-based anti-aliasing, computed on a much finer subpixel grid —
+not literally unlimited, but far more coverage levels than 8x MSAA
+samples, which is what reads as smoother at the same logical line width.
+Raising the sample count (8x, the max this fix reaches) narrows the gap
+but cannot close it.
 
-**Resolution:** the next real lever is supersampling — render the whole
-frame at a higher resolution (e.g. 2x the backing buffer in each
-dimension) and downsample to the display size, which approximates analytic
-coverage far more closely than a fixed MSAA sample grid, at the cost of
-the same multiplied fill-rate/memory concern the entry above already
-flags, now squared with MSAA stacked on top. A separate story: it changes
-the render pipeline's output-texture handling, not a one-constant tweak,
-and should be scoped and measured on its own rather than folded into a
-bug-fix PR.
+**Resolution, two options, left to a future spike to measure and choose
+between, not decided here:**
+- **Supersampling** — render the whole frame at a higher resolution (e.g.
+  2x the backing buffer in each dimension) and downsample to the display
+  size, approximating analytic coverage far more closely than a fixed
+  MSAA sample grid, at the cost of the same multiplied fill-rate/memory
+  concern the entry above already flags, now squared with MSAA stacked on
+  top.
+- **Shader-side analytic edge AA** — a distance-based fringe computed in
+  the fragment shader (the technique NanoVG uses), which needs no extra
+  resolution or multisampled target at all and runs on plain WebGL2, at
+  the cost of reworking the stroke tessellation to carry the extra
+  per-vertex data (or a signed-distance field) the shader needs.
+
+Either is a separate story: both change the render pipeline's geometry or
+output-texture handling, not a one-constant tweak, and should be scoped
+and measured against each other before picking one, rather than folded
+into a bug-fix PR.
+
+**WebGPU note:** this product's `wgpu` instance is GL-backed only
+(`Backends::GL`, `gpu.rs`) — `choose_sample_count`'s 8x finding is
+specific to that backend/adapter. The WebGPU spec itself only guarantees
+`sampleCount` 1 or 4 are supported everywhere; 8x (and any count above 4)
+is adapter-optional and gated behind the
+`TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` feature. If `Backends::BROWSER_WEBGPU`
+is ever added as a target alongside or instead of GL, `choose_sample_count`
+needs re-checking against that spec floor — either cap the preference list
+at 4x for that backend, or explicitly request
+`TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` in `request_device` and keep
+querying as today.
 
 ## The quality gate covers only half the product
 

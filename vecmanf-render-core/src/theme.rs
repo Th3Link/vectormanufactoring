@@ -49,7 +49,28 @@ pub const SEGMENT_OVERLAY_EXTRA_PX: f64 = 2.0;
 /// The hover ring's diameter, screen-space pixels ("a 10px circle",
 /// `docs/design-system.md`'s UX notes are in `specification.md`; the
 /// token table itself does not repeat this one, so it is named here).
+/// Used for a node's own hover ring (bigger than [`NODE_SIZE_PX`]'s 7px,
+/// so it still rings the glyph) and the pen tool's close-target/
+/// most-recently-placed-node rings — every ring drawn around a *node*,
+/// never a handle (see [`HANDLE_HOVER_RING_DIAMETER_PX`]).
 pub const HOVER_RING_DIAMETER_PX: f64 = 10.0;
+
+/// The handle hover ring's own diameter, screen-space pixels — a
+/// separate token from [`HOVER_RING_DIAMETER_PX`] (2026-10-05): once
+/// [`HANDLE_DIAMETER_PX`] doubled to 12px it exceeded the shared 10px
+/// ring, so a selected handle's hover ring drew fully behind (and so
+/// completely hidden by) the handle's own opaque fill — no hover cue at
+/// all, breaking `specs/0002-path-node-editing/specification.md`'s hover
+/// feedback. Sized relative to the handle glyph it rings, the same
+/// margin `HOVER_RING_DIAMETER_PX` already keeps over `NODE_SIZE_PX`
+/// (a few px larger, never computed from it) — `vecmanf-render-core`'s
+/// `decorations::build` draws every handle hover ring after the handle's
+/// own glyph, with this diameter, so it reads as a ring around it either
+/// way; keeping both independently correct (size *and* draw order) is
+/// deliberate, not redundant — either alone would have been enough to
+/// fix this, but a future, unrelated glyph-size change should not be
+/// able to silently reopen this exact bug.
+pub const HANDLE_HOVER_RING_DIAMETER_PX: f64 = HANDLE_DIAMETER_PX + 4.0;
 
 /// How many straight segments approximate one handle/hover circle.
 /// Coarse on purpose: these are small, flat-colored UI glyphs, not
