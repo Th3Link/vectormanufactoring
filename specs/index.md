@@ -31,16 +31,17 @@ triggered is a bug, not a variant.
 | 1 | `project-file-foundation` | Create, open and save a local `.vmf` project with an empty canvas; survives close/reopen, same result on relaunch. | R-SYS-001, R-SYS-002 | Must |
 | 2 | `path-node-editing` | Draw and edit a Bézier path with a pen tool: add/move/delete nodes, drag handles, same node/handle/segment mental model as Inkscape. | R-EDIT-001 | Must |
 | 3 | `primitive-shapes` | Rectangle (with corner radius), circle/ellipse and polygon/star tools; "object to path" converts any of them to an editable path. | R-EDIT-002, R-EDIT-004 | Must |
-| 4 | `stroke-and-fill-styling` | Stroke width/dash/join/cap/color; solid fill and linear/radial gradient fill, on any path or primitive. | R-EDIT-005, R-EDIT-006 | Must |
-| 5 | `undo-redo` | Ctrl+Z/Ctrl+Y undoes/redoes every editing operation shipped in slices 2–4, one interaction = one undo step, no silent data loss. | R-EDIT-008 | Must |
-| 6 | `boolean-operations` | Union, difference, intersection on closed paths. | R-EDIT-003 | Must |
-| 7 | `layers-and-grouping` | Group/ungroup objects; layers with per-layer visibility and lock, to separate cut/engrave/reference geometry. | R-EDIT-009 | Must |
-| 8 | `svg-import-export` | Open a plain SVG from Inkscape and re-export it without hand-fixing geometry; named, listed loss report for anything outside our supported subset. | R-SYS-006 | Must |
-| 9 | `raster-trace` | Trace a raster image to vector paths with adjustable threshold/color-count, parity with Inkscape's "Trace Bitmap". | R-VEC-001 | Must |
-| 10 | `machine-profile` | Define and reuse a machine profile (work area, connection, limits) for a laser cutter; select it for a project. | R-MFG-001 | Must |
-| 11 | `manufacturing-roles` | Assign cut/engrave role to geometry (by layer) within one file. | R-MFG-002 | Must |
-| 12 | `material-test-library` | Generate a power/speed test-cut grid for the selected machine, record which cell worked, store it as a reusable material record. | R-MAT-001, R-MAT-002, R-MAT-003 | Must |
-| 13 | `laser-job-preview-and-output` | Toolpath/time preview, an explicit machine+material gate before export, and GRBL G-code export for cut + engrave geometry. The MVP's capstone: a maker's own design goes from drawing to a file their laser runs. | R-MFG-003, R-MFG-LASER-001, R-SYS-008 | Must |
+| 4 | `canvas-navigation-and-selection` | Pan/zoom the canvas (zoom toward cursor), stable behaviour across window resize, and a general Select tool to click/move/delete any object without re-entering its creation tool. | R-EDIT-010, R-EDIT-011 | Must |
+| 5 | `stroke-and-fill-styling` | Stroke width/dash/join/cap/color; solid fill and linear/radial gradient fill, on any path or primitive. | R-EDIT-005, R-EDIT-006 | Must |
+| 6 | `undo-redo` | Ctrl+Z/Ctrl+Y undoes/redoes every editing operation shipped in slices 2–3 and 5, one interaction = one undo step, no silent data loss. | R-EDIT-008 | Must |
+| 7 | `boolean-operations` | Union, difference, intersection on closed paths. | R-EDIT-003 | Must |
+| 8 | `layers-and-grouping` | Group/ungroup objects; layers with per-layer visibility and lock, to separate cut/engrave/reference geometry. | R-EDIT-009 | Must |
+| 9 | `svg-import-export` | Open a plain SVG from Inkscape and re-export it without hand-fixing geometry; named, listed loss report for anything outside our supported subset. | R-SYS-006 | Must |
+| 10 | `raster-trace` | Trace a raster image to vector paths with adjustable threshold/color-count, parity with Inkscape's "Trace Bitmap". | R-VEC-001 | Must |
+| 11 | `machine-profile` | Define and reuse a machine profile (work area, connection, limits) for a laser cutter; select it for a project. | R-MFG-001 | Must |
+| 12 | `manufacturing-roles` | Assign cut/engrave role to geometry (by layer) within one file. | R-MFG-002 | Must |
+| 13 | `material-test-library` | Generate a power/speed test-cut grid for the selected machine, record which cell worked, store it as a reusable material record. | R-MAT-001, R-MAT-002, R-MAT-003 | Must |
+| 14 | `laser-job-preview-and-output` | Toolpath/time preview, an explicit machine+material gate before export, and GRBL G-code export for cut + engrave geometry. The MVP's capstone: a maker's own design goes from drawing to a file their laser runs. | R-MFG-003, R-MFG-LASER-001, R-SYS-008 | Must |
 
 ## Notes on ordering
 
@@ -53,20 +54,33 @@ triggered is a bug, not a variant.
   path-editing surface exists to convert *into*. Building the node/handle
   surface first also means the shape tools in 3 are a thin layer over
   already-working machinery, not a parallel implementation.
-- **5 (undo) after 2–4, before 6–7**: undo is cross-cutting infrastructure
-  (ADR 0002 §9, ADR 0004 §2 — peer-scoped, CRDT-backed) but "covers every
-  editing operation" (R-EDIT-008) is only checkable once there is more than
-  one operation to undo. Slices 6 and 7 each add an acceptance criterion
-  that their new operation is undoable through the mechanism slice 5
-  establishes, rather than repeating slice 5's work.
-- **8 (SVG round-trip) after 4 and 7**: round-tripping a real Inkscape file
+- **4 (canvas navigation and selection) inserted after 3, before 5**:
+  added 2026-10-05, after the customer tested slices 1–3 by hand and found
+  two real gaps — the canvas has no pan/zoom, and there is no general
+  Select tool, so an object made with a creation tool (pen, rectangle,
+  ellipse, polygon/star) cannot be clicked, moved or deleted without
+  re-entering that same tool. Sequenced before 5 at the customer's explicit
+  request ("before we continue with slice 4" — the then-current slice 4,
+  renumbered to 5 by this same change) since styling controls are hard to
+  evaluate on objects you can't select or view at a useful zoom level. Not
+  a hard dependency for 2–3 (both shipped and work without it), but every
+  slice from 5 onward benefits from a working Select tool to test against.
+- **6 (undo) after 2–3 and 5, before 7–8**: undo is cross-cutting
+  infrastructure (ADR 0002 §9, ADR 0004 §2 — peer-scoped, CRDT-backed) but
+  "covers every editing operation" (R-EDIT-008) is only checkable once
+  there is more than one operation to undo. Slice 4's pan/zoom/selection is
+  view state, not document state, so it has no undo surface and is not
+  part of this dependency; slices 7 and 8 each add an acceptance criterion
+  that their new operation is undoable through the mechanism slice 6
+  establishes, rather than repeating slice 6's work.
+- **9 (SVG round-trip) after 5 and 8**: round-tripping a real Inkscape file
   is only a meaningful test once paths, primitives, styling, groups and
   layers all exist to round-trip. Earlier would mean testing against
   near-empty documents.
-- **10–13 last and in that order**: a job needs a machine profile (10)
-  before roles can target one (11), roles and a machine before a material
-  test is worth running (12), and all three before the capstone job-preview
-  export story (13) — which is where R-SYS-008's "no job without a machine
+- **11–14 last and in that order**: a job needs a machine profile (11)
+  before roles can target one (12), roles and a machine before a material
+  test is worth running (13), and all three before the capstone job-preview
+  export story (14) — which is where R-SYS-008's "no job without a machine
   profile" gate actually bites.
 
 ## Out of sequence (tracked in `docs/requirements.md`, not listed above)
