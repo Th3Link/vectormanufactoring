@@ -22,6 +22,15 @@ const CANVAS_BACKGROUND: wgpu::Color = wgpu::Color {
     a: 1.0,
 };
 
+/// Multisample count for every draw-list triangle (node glyphs, handle
+/// lines and every `lyon`-tessellated stroke are flat-colored polygon
+/// edges with no AA of their own). 4x is the common WebGL2/downlevel
+/// baseline and is what fixes the jagged/"pixelated" edges a real
+/// display showed on this slice's thin (often sub-1px at this view
+/// scale) strokes — `wgpu::MultisampleState::default()`'s implicit
+/// `count: 1` was the bug: no multisampling at all.
+const MSAA_SAMPLE_COUNT: u32 = 4;
+
 const SHADER_SOURCE: &str = r"
 struct ScreenTransform {
     scale_x: f32,
@@ -103,11 +112,18 @@ struct ScreenTransform {
 }
 
 impl ScreenTransform {
-    fn new(view: ViewTransform, canvas_width: u32, canvas_height: u32) -> Self {
-        let (width, height) = (
-            f64::from(canvas_width.max(1)),
-            f64::from(canvas_height.max(1)),
-        );
+    /// `css_width`/`css_height` are the canvas's CSS (layout) pixel size
+    /// — *not* its backing-buffer resolution. The two differ whenever
+    /// `devicePixelRatio` is not `1` (every modern `HiDPI` display): the clip-
+    /// space fraction a document point maps to depends only on where it
+    /// sits within the canvas's displayed box, so computing this ratio
+    /// against the (possibly DPR-scaled) physical buffer size instead
+    /// would be wrong by exactly a factor of the device pixel ratio.
+    /// [`Gpu::render`] is the one caller, and it is the one place the
+    /// physical-vs-CSS distinction is resolved — nothing downstream of
+    /// this type needs to know about `devicePixelRatio` at all.
+    fn new(view: ViewTransform, css_width: f64, css_height: f64) -> Self {
+        let (width, height) = (css_width.max(1.0), css_height.max(1.0));
         let scale_x = 2.0 * view.scale() / width;
         let scale_y = -2.0 * view.scale() / height;
         // The document point that currently maps to screen pixel (0, 0)
@@ -136,6 +152,20 @@ pub struct Gpu {
     pipeline: wgpu::RenderPipeline,
     transform_buffer: wgpu::Buffer,
     transform_bind_group: wgpu::BindGroup,
+    /// The offscreen multisampled color target every frame actually
+    /// renders into; [`Gpu::render`] resolves it down into the surface's
+    /// own (single-sampled) texture. Recreated whenever the surface's
+    /// size changes ([`Gpu::resize`]) — it must always match
+    /// `config.width`/`height` exactly, or `wgpu` refuses the render
+    /// pass.
+    msaa_view: wgpu::TextureView,
+    /// `window.devicePixelRatio` at the last `attach`/`resize` — the
+    /// surface's backing buffer is sized `css_size * device_pixel_ratio`
+    /// (the host's job, see `useEditorSession.ts`'s attach effect and
+    /// resize observer), so this is what lets [`Gpu::render`] recover the
+    /// canvas's *CSS* pixel size (what `ScreenTransform` actually needs)
+    /// from `config.width`/`height` (the physical buffer size).
+    device_pixel_ratio: f64,
 }
 
 /// The buffer/bind-group pair that feeds [`ScreenTransform`] to the vertex
@@ -244,10 +274,39 @@ fn create_pipeline(
         }),
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
+        multisample: wgpu::MultisampleState {
+            count: MSAA_SAMPLE_COUNT,
+            mask: !0,
+            alpha_to_coverage_enabled: false,
+        },
         multiview_mask: None,
         cache: None,
     })
+}
+
+/// (Re)creates the offscreen multisampled color target
+/// [`Gpu::render`] draws into — must be called after every
+/// [`wgpu::Surface::configure`] that changes `config.width`/`height`,
+/// since the two textures must match size exactly.
+fn create_msaa_view(
+    device: &wgpu::Device,
+    config: &wgpu::SurfaceConfiguration,
+) -> wgpu::TextureView {
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("vecmanf msaa color target"),
+        size: wgpu::Extent3d {
+            width: config.width.max(1),
+            height: config.height.max(1),
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: MSAA_SAMPLE_COUNT,
+        dimension: wgpu::TextureDimension::D2,
+        format: config.format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
 
 /// The surface, its backing adapter-derived device/queue, and the
@@ -312,8 +371,13 @@ async fn create_surface_and_device(
 }
 
 impl Gpu {
-    /// Creates the `wgpu` device/surface for `canvas`, sized
-    /// `width`×`height` CSS pixels.
+    /// Creates the `wgpu` device/surface for `canvas`. `width`×`height`
+    /// are the surface's *backing-buffer* (physical) pixel size — the
+    /// host sizes this `css_size * device_pixel_ratio` (see
+    /// `useEditorSession.ts`'s attach effect) so the canvas's actual
+    /// resolution matches a `HiDPI` display instead of being upscaled and
+    /// softened; `device_pixel_ratio` is what lets [`Gpu::render`] map
+    /// back to the canvas's CSS size for the clip-space transform.
     ///
     /// # Errors
     /// Returns a `JsValue` error (a plain string) if no adapter/device
@@ -326,6 +390,7 @@ impl Gpu {
         canvas: HtmlCanvasElement,
         width: u32,
         height: u32,
+        device_pixel_ratio: f64,
     ) -> Result<Self, JsValue> {
         let SurfaceAndDevice {
             surface,
@@ -341,6 +406,7 @@ impl Gpu {
         } = create_transform_resources(&device);
 
         let pipeline = create_pipeline(&device, &transform_bind_group_layout, config.format);
+        let msaa_view = create_msaa_view(&device, &config);
 
         Ok(Self {
             surface,
@@ -350,29 +416,52 @@ impl Gpu {
             pipeline,
             transform_buffer,
             transform_bind_group,
+            msaa_view,
+            device_pixel_ratio: if device_pixel_ratio > 0.0 {
+                device_pixel_ratio
+            } else {
+                1.0
+            },
         })
     }
 
-    /// Reconfigures the surface to `width`×`height` — acceptance: the
-    /// canvas layer reconfigures the `wgpu` surface on every resize,
+    /// Reconfigures the surface (and its MSAA target) to `width`×`height`
+    /// physical pixels and the current `device_pixel_ratio` — acceptance:
+    /// the canvas layer reconfigures the `wgpu` surface on every resize,
     /// before the next render (`specs/0002-path-node-editing/adrs.md`'s PASS
     /// note, requirement 2). A stale surface composites at the wrong
     /// size; this is a correctness fix, not the measured teardown
     /// segfault, which is unrelated and outside this crate's control.
-    pub fn resize(&mut self, width: u32, height: u32) {
+    ///
+    /// This only reconfigures the surface; it does not submit a frame.
+    /// [`crate::wasm_api::WasmSession::resize`] calls this and then
+    /// renders immediately, in the same call, so a resize never shows a
+    /// stale or empty frame while waiting for the next animation frame.
+    pub fn resize(&mut self, width: u32, height: u32, device_pixel_ratio: f64) {
         let width = width.max(1);
         let height = height.max(1);
+        self.device_pixel_ratio = if device_pixel_ratio > 0.0 {
+            device_pixel_ratio
+        } else {
+            1.0
+        };
         if self.config.width == width && self.config.height == height {
             return;
         }
         self.config.width = width;
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
+        self.msaa_view = create_msaa_view(&self.device, &self.config);
     }
 
     /// Uploads `draw_list` and submits one frame, using `view` to build
-    /// this frame's screen transform (the canvas's current pixel size is
-    /// `self.config.width`/`height`, kept in sync by [`Gpu::resize`]).
+    /// this frame's screen transform against the canvas's current *CSS*
+    /// pixel size (`self.config.width`/`height`, the physical
+    /// backing-buffer size kept in sync by [`Gpu::resize`], divided back
+    /// down by `self.device_pixel_ratio`). Draws into an offscreen 4x
+    /// multisampled target and resolves it into the surface's own
+    /// texture, which is what actually anti-aliases every stroke/glyph
+    /// edge — see [`MSAA_SAMPLE_COUNT`].
     ///
     /// # Errors
     /// Returns a `JsValue` error if the surface's current texture could
@@ -380,7 +469,9 @@ impl Gpu {
     /// host rather than panicking, since a dropped frame should not
     /// crash the editor.
     pub fn render(&mut self, draw_list: &DrawList, view: ViewTransform) -> Result<(), JsValue> {
-        let transform = ScreenTransform::new(view, self.config.width, self.config.height);
+        let css_width = f64::from(self.config.width) / self.device_pixel_ratio;
+        let css_height = f64::from(self.config.height) / self.device_pixel_ratio;
+        let transform = ScreenTransform::new(view, css_width, css_height);
         self.queue
             .write_buffer(&self.transform_buffer, 0, bytemuck::bytes_of(&transform));
 
@@ -430,12 +521,17 @@ impl Gpu {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("vecmanf draw-list pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view_texture,
+                    view: &self.msaa_view,
                     depth_slice: None,
-                    resolve_target: None,
+                    // Resolved into the surface's own (single-sampled)
+                    // texture at the end of the pass — this is the actual
+                    // anti-aliasing step. `Discard`: nothing downstream
+                    // ever reads the multisampled texture itself, only
+                    // its resolved result.
+                    resolve_target: Some(&view_texture),
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(CANVAS_BACKGROUND),
-                        store: wgpu::StoreOp::Store,
+                        store: wgpu::StoreOp::Discard,
                     },
                 })],
                 depth_stencil_attachment: None,

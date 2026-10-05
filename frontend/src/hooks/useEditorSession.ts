@@ -13,6 +13,31 @@ import type { WasmSession } from "@/lib/editorSession";
  * sub-pixel on every real display). */
 export const CSS_PX_PER_MM = 96 / 25.4;
 
+/** The canvas's backing-buffer (physical pixel) size for a given CSS
+ * (layout) size, plus the `devicePixelRatio` that relates the two —
+ * `vecmanf-editor-wasm`'s `Gpu` needs both: the buffer itself sized to
+ * the display's actual resolution (correctness fix: a HiDPI display
+ * previously got a buffer sized 1:1 to CSS pixels, then upscaled and
+ * softened by the browser compositor — the same class of bug as this
+ * slice's `wgpu` surface-resize requirement, but for resolution rather
+ * than staleness), and the ratio itself so `Gpu::render` can map back to
+ * CSS pixels for the clip-space transform (`CSS_PX_PER_MM`'s own view
+ * scale is, and stays, CSS-pixel-based — only the buffer resolution
+ * changes here). `devicePixelRatio` can be a fractional, non-integer
+ * value (Windows/Linux fractional scaling, e.g. 1.25 or 1.5), so the
+ * buffer size is rounded, not assumed to divide evenly. */
+function backingBufferSize(
+  cssWidth: number,
+  cssHeight: number,
+): { width: number; height: number; devicePixelRatio: number } {
+  const devicePixelRatio = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1;
+  return {
+    width: Math.max(1, Math.round(cssWidth * devicePixelRatio)),
+    height: Math.max(1, Math.round(cssHeight * devicePixelRatio)),
+    devicePixelRatio,
+  };
+}
+
 /** Which tool is active (`specification.md`'s tool rail: Pen or Node;
  * `specs/0003-primitive-shapes/specification.md` adds Rectangle, Ellipse and
  * Polygon/Star, appended in that order, below Pen/Node). */
@@ -255,11 +280,13 @@ export function useEditorSession(
       if (!canvas) {
         return;
       }
-      const width = Math.max(1, Math.round(canvas.clientWidth));
-      const height = Math.max(1, Math.round(canvas.clientHeight));
+      const { width, height, devicePixelRatio } = backingBufferSize(
+        canvas.clientWidth,
+        canvas.clientHeight,
+      );
       canvas.width = width;
       canvas.height = height;
-      await session.attach_canvas(canvas, width, height);
+      await session.attach_canvas(canvas, width, height, devicePixelRatio);
       if (sessionRef.current !== session) {
         // Superseded by another New/Open (or the hook unmounted) while
         // `attach_canvas` was in flight; whichever call superseded this
@@ -299,11 +326,25 @@ export function useEditorSession(
         if (!entry) {
           return;
         }
-        const nextWidth = Math.max(1, Math.round(entry.contentRect.width));
-        const nextHeight = Math.max(1, Math.round(entry.contentRect.height));
-        canvas.width = nextWidth;
-        canvas.height = nextHeight;
-        sessionRef.current?.resize(nextWidth, nextHeight);
+        const { width, height, devicePixelRatio } = backingBufferSize(
+          entry.contentRect.width,
+          entry.contentRect.height,
+        );
+        canvas.width = width;
+        canvas.height = height;
+        try {
+          // Reconfigures the wgpu surface *and* renders the next frame
+          // in this one call (see WasmSession::resize's own doc
+          // comment) — a resize never leaves a stale/empty frame on
+          // screen waiting for the render loop's next animation-frame
+          // tick.
+          sessionRef.current?.resize(width, height, devicePixelRatio);
+        } catch {
+          // A dropped frame on resize (e.g. a momentarily lost surface)
+          // is not fatal — the render loop's own next tick recovers it;
+          // swallow rather than let it break the ResizeObserver callback
+          // for every future resize.
+        }
       });
       resizeObserver.observe(canvas);
     }

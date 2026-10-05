@@ -11,7 +11,7 @@
 //! ephemeral `vecmanf-ui-core::PenTool` state, not a document node), and
 //! `NodeId` has no public constructor outside `vecmanf-document-core`.
 
-use vecmanf_document_core::{AnchorKind, AnchorSnapshot, Point, ViewTransform};
+use vecmanf_document_core::{AnchorKind, AnchorSnapshot, Point, Vec2, ViewTransform};
 
 use crate::glyphs::{self, DrawList};
 use crate::stroke;
@@ -28,10 +28,25 @@ fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
 
 /// Builds the pen tool's in-progress preview. `nodes` is whatever
 /// `vecmanf_ui_core::PenTool::in_progress_nodes` currently holds (empty
-/// or absent: nothing to preview, returns an empty list); `cursor` is the
-/// live pointer position in document space for the rubber-band line
-/// (acceptance criterion 1: "showing where a plain click would land") —
-/// `None` suppresses it (e.g. the pointer has left the canvas).
+/// or absent, with no drag in flight either: nothing to preview, returns
+/// an empty list); `cursor` is the live pointer position in document
+/// space for the rubber-band line (acceptance criterion 1: "showing
+/// where a plain click would land") — `None` suppresses it (e.g. the
+/// pointer has left the canvas).
+///
+/// `drag_origin` is `vecmanf_ui_core::PenTool::pending_drag_origin` —
+/// `Some(C)` while the maker is holding the mouse button down over the
+/// new point C, `None` otherwise. When `Some`, this is acceptance
+/// criterion 2's live drag-to-curve preview: both symmetric handle
+/// lines/endpoints growing from C, and (when there is a previously
+/// placed node B to connect from) the B→C segment reshaped live as a
+/// curve using C's still-uncommitted handle — in place of the plain
+/// straight rubber-band line `cursor` alone would otherwise draw. This
+/// is a genuinely different case from just having `cursor`: a hover
+/// between gestures (button up) only ever warrants the straight
+/// placement preview: acceptance criterion 1's "where a plain click
+/// would land" is a straight line precisely because releasing now
+/// places a corner node, not a curved one.
 ///
 /// `is_hovering_close_target` is the host's own
 /// `is_hovering_pen_close_target()` (acceptance criterion 5's "Cursors"
@@ -44,11 +59,12 @@ fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
 pub fn build_pen_preview(
     nodes: &[AnchorSnapshot],
     cursor: Option<Point>,
+    drag_origin: Option<Point>,
     view: ViewTransform,
     is_hovering_close_target: bool,
 ) -> DrawList {
     let mut list = DrawList::default();
-    if nodes.is_empty() {
+    if nodes.is_empty() && drag_origin.is_none() {
         return list;
     }
 
@@ -70,6 +86,8 @@ pub fn build_pen_preview(
     let node_outline = screen_px_to_mm(view, theme::NODE_OUTLINE_PX);
     let hover_ring_diameter = screen_px_to_mm(view, theme::HOVER_RING_DIAMETER_PX);
     let hover_ring_thickness = screen_px_to_mm(view, 1.0);
+    let handle_diameter = screen_px_to_mm(view, theme::HANDLE_DIAMETER_PX);
+    let line_width = screen_px_to_mm(view, theme::HANDLE_LINE_WIDTH_PX);
 
     for anchor in nodes {
         let glyph = match anchor.kind {
@@ -116,13 +134,67 @@ pub fn build_pen_preview(
         ));
     }
 
-    // Rubber-band preview: a line from the last placed node to the
-    // cursor. Solid rather than the UX notes' stated 1px dashed line —
-    // this crate has no dashed-line primitive yet; a flagged
-    // simplification, not a missing signal (the line itself is drawn at
-    // full accent opacity, same as every other editing-UI line here).
-    if let (Some(last), Some(cursor)) = (nodes.last(), cursor) {
-        let line_width = screen_px_to_mm(view, theme::HANDLE_LINE_WIDTH_PX);
+    if let (Some(origin), Some(cursor)) = (drag_origin, cursor) {
+        // Acceptance criterion 2's live curve preview. `handle_out` is
+        // exactly what `PenTool::pointer_up` will commit if the maker
+        // released right now (the press→cursor displacement); mirroring
+        // it for `handle_in` previews the same symmetric-handle node
+        // `pointer_up` creates.
+        let handle_out = origin.vector_to(cursor);
+        let handle_in = handle_out.negated();
+
+        // Reshape the B→C segment live as a curve — only when a B
+        // exists to connect from; dragging while placing the very first
+        // node of a brand-new path has no prior node yet, so there is
+        // nothing to reshape (C's own handles below still preview).
+        if let Some(last) = nodes.last() {
+            list.extend(stroke::segment_stroke(
+                last.point,
+                last.handle_out,
+                handle_in,
+                origin,
+                STROKE_WIDTH_MM,
+                theme::ACCENT,
+            ));
+        }
+
+        // Both symmetric handle lines/endpoints growing from C in real
+        // time. Filled accent endpoints, matching `docs/design-
+        // system.md`'s "being dragged: filled accent" handle convention
+        // — this drag is live, the same visual a node tool handle drag
+        // already uses.
+        for handle in [handle_out, handle_in] {
+            if handle == Vec2::ZERO {
+                continue;
+            }
+            let endpoint = origin.translated(handle);
+            list.extend(glyphs::thick_line(
+                origin,
+                endpoint,
+                line_width,
+                theme::ACCENT,
+            ));
+            list.extend(glyphs::circle(endpoint, handle_diameter, theme::ACCENT));
+        }
+
+        // C's own node glyph, in the same hollow style as every other
+        // placed node above — a drag always produces a Smooth node
+        // (acceptance criterion 2), so the diamond glyph previews the
+        // kind it is about to commit as, not just its position.
+        list.extend(glyphs::diamond(origin, node_size, theme::ACCENT));
+        list.extend(glyphs::diamond(
+            origin,
+            (node_size - 2.0 * node_outline).max(0.0),
+            theme::CANVAS_BG,
+        ));
+    } else if let (Some(last), Some(cursor)) = (nodes.last(), cursor) {
+        // Rubber-band preview: a line from the last placed node to the
+        // cursor, for the plain-click case (acceptance criterion 1).
+        // Solid rather than the UX notes' stated 1px dashed line — this
+        // crate has no dashed-line primitive yet; a flagged
+        // simplification, not a missing signal (the line itself is drawn
+        // at full accent opacity, same as every other editing-UI line
+        // here).
         list.extend(glyphs::thick_line(
             last.point,
             cursor,
@@ -145,6 +217,7 @@ mod tests {
         let list = build_pen_preview(
             &[],
             Some(Point::new(5.0, 5.0)),
+            None,
             ViewTransform::identity(),
             false,
         );
@@ -157,10 +230,12 @@ mod tests {
         let with_cursor = build_pen_preview(
             &nodes,
             Some(Point::new(10.0, 0.0)),
+            None,
             ViewTransform::identity(),
             false,
         );
-        let without_cursor = build_pen_preview(&nodes, None, ViewTransform::identity(), false);
+        let without_cursor =
+            build_pen_preview(&nodes, None, None, ViewTransform::identity(), false);
         assert!(
             !without_cursor.triangles.is_empty(),
             "glyph + hover ring still draw"
@@ -177,8 +252,8 @@ mod tests {
             NewAnchor::corner(AnchorId::new(1, 1), Point::new(0.0, 0.0)),
             NewAnchor::corner(AnchorId::new(1, 2), Point::new(20.0, 0.0)),
         ];
-        let one_node = build_pen_preview(&nodes[..1], None, ViewTransform::identity(), false);
-        let two_nodes = build_pen_preview(&nodes, None, ViewTransform::identity(), false);
+        let one_node = build_pen_preview(&nodes[..1], None, None, ViewTransform::identity(), false);
+        let two_nodes = build_pen_preview(&nodes, None, None, ViewTransform::identity(), false);
         assert!(
             two_nodes.triangle_count() > one_node.triangle_count(),
             "the stroke between the two placed nodes adds geometry"
@@ -197,8 +272,8 @@ mod tests {
             NewAnchor::corner(AnchorId::new(1, 2), Point::new(10.0, 0.0)),
             NewAnchor::corner(AnchorId::new(1, 3), Point::new(5.0, 10.0)),
         ];
-        let not_hovering = build_pen_preview(&nodes, None, ViewTransform::identity(), false);
-        let hovering = build_pen_preview(&nodes, None, ViewTransform::identity(), true);
+        let not_hovering = build_pen_preview(&nodes, None, None, ViewTransform::identity(), false);
+        let hovering = build_pen_preview(&nodes, None, None, ViewTransform::identity(), true);
         assert!(
             hovering.triangle_count() > not_hovering.triangle_count(),
             "the first node's hover ring must add geometry when closing is one click away"
@@ -212,12 +287,72 @@ mod tests {
     #[test]
     fn hovering_close_target_with_one_node_does_not_double_the_ring() {
         let nodes = [NewAnchor::corner(AnchorId::new(1, 1), Point::new(0.0, 0.0))];
-        let not_hovering = build_pen_preview(&nodes, None, ViewTransform::identity(), false);
-        let hovering = build_pen_preview(&nodes, None, ViewTransform::identity(), true);
+        let not_hovering = build_pen_preview(&nodes, None, None, ViewTransform::identity(), false);
+        let hovering = build_pen_preview(&nodes, None, None, ViewTransform::identity(), true);
         assert_eq!(
             hovering.triangle_count(),
             not_hovering.triangle_count(),
             "first == last for one node; the flag must not draw a second ring on top"
         );
+    }
+
+    /// Acceptance criterion 2's live drag-to-curve preview, the bug this
+    /// slice fixes: dragging while placing a new node C (one node B
+    /// already placed) must draw strictly more geometry than the same
+    /// moment with no drag in flight — the B→C curve segment plus C's
+    /// own symmetric handle lines/endpoints, not just the plain
+    /// rubber-band line to the cursor.
+    #[test]
+    fn dragging_while_placing_previews_the_live_curve_and_handles() {
+        let nodes = [NewAnchor::corner(AnchorId::new(1, 1), Point::new(0.0, 0.0))];
+        let cursor = Some(Point::new(13.0, 4.0));
+        let origin = Point::new(10.0, 0.0);
+
+        let hovering_only =
+            build_pen_preview(&nodes, cursor, None, ViewTransform::identity(), false);
+        let dragging = build_pen_preview(
+            &nodes,
+            cursor,
+            Some(origin),
+            ViewTransform::identity(),
+            false,
+        );
+        assert!(
+            dragging.triangle_count() > hovering_only.triangle_count(),
+            "the live curve segment and C's handle lines/endpoints must add geometry over the \
+             plain straight rubber-band preview"
+        );
+    }
+
+    /// Dragging while placing the very first node of a brand-new path
+    /// (no B exists yet to connect from) still previews C's own growing
+    /// handles — there just is no segment to reshape.
+    #[test]
+    fn dragging_the_very_first_node_previews_its_own_handles_with_no_segment() {
+        let origin = Point::new(0.0, 0.0);
+        let cursor = Some(Point::new(5.0, 5.0));
+        let dragging =
+            build_pen_preview(&[], cursor, Some(origin), ViewTransform::identity(), false);
+        assert!(
+            !dragging.triangles.is_empty(),
+            "C's own handle lines/endpoints and node glyph must still draw"
+        );
+    }
+
+    /// A zero-length drag (the cursor hasn't moved off the press point
+    /// yet) must not draw degenerate zero-length handle lines.
+    #[test]
+    fn a_zero_length_drag_draws_no_handle_geometry() {
+        let origin = Point::new(5.0, 5.0);
+        let dragging = build_pen_preview(
+            &[],
+            Some(origin),
+            Some(origin),
+            ViewTransform::identity(),
+            false,
+        );
+        // Only C's own node glyph (hollow diamond: outline + fill, 2
+        // quads each) should draw — no handle lines, no handle endpoints.
+        assert_eq!(dragging.triangle_count(), 4);
     }
 }

@@ -486,6 +486,7 @@ impl Session {
             list.extend(build_pen_preview(
                 nodes,
                 self.pointer_position,
+                self.pen.pending_drag_origin(),
                 self.view,
                 self.is_hovering_pen_close_target(),
             ));
@@ -665,6 +666,34 @@ mod tests {
         session.pointer_leave();
         let after_leave = session.draw_list().triangle_count();
         assert_eq!(after_leave, one_node, "no cursor, no rubber-band line");
+    }
+
+    /// The bug this run fixes: acceptance criterion 2's live
+    /// drag-to-curve preview — dragging while placing a new node (mouse
+    /// held down, not yet released) must render strictly more than the
+    /// plain rubber-band line a hover alone draws, through the actual
+    /// `Session::draw_list` path the host calls every frame (not just
+    /// `vecmanf-render-core`'s own unit test of `build_pen_preview`
+    /// directly).
+    #[test]
+    fn draw_list_shows_the_live_curve_preview_during_a_pen_drag() {
+        let mut session = Session::new(1);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+
+        // Press down at C and move the cursor without releasing — a drag
+        // in flight, same as `pointer_up`'s own AC2 test fixture.
+        session.pointer_down(Point::new(10.0, 0.0), false);
+        session.pointer_hover(Point::new(10.0, 0.0), false);
+        let press_with_no_movement_yet = session.draw_list().triangle_count();
+
+        session.pointer_hover(Point::new(13.0, 4.0), false);
+        let mid_drag = session.draw_list().triangle_count();
+        assert!(
+            mid_drag > press_with_no_movement_yet,
+            "the live curve segment and C's growing handle lines/endpoints must add geometry \
+             as the drag moves, not just a static rubber-band line"
+        );
     }
 
     /// Acceptance criterion 5's cursor cue: hovering near the

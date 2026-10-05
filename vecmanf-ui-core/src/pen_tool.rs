@@ -88,6 +88,33 @@ impl PenTool {
         }
     }
 
+    /// The point `C` of a press currently held down and not yet
+    /// released, for the renderer's live drag-to-curve preview
+    /// (acceptance criterion 2: "show both symmetric handle lines/
+    /// endpoints growing from C in real time, and reshape the B→C
+    /// segment live as a curve"). `None` when idle, between gestures (the
+    /// mouse is up), or the pending press is a close-path gesture
+    /// (acceptance criterion 5 closes on a plain click; closing has no
+    /// handle-drag preview of its own to show).
+    ///
+    /// This is a *different* point from the last entry of
+    /// [`PenTool::in_progress_nodes`]: that list only gains `C` once the
+    /// press *releases* ([`PenTool::pointer_up`] is what actually pushes
+    /// it), so a renderer asking only `in_progress_nodes` has no way to
+    /// know a drag is even in flight, let alone where it started — which
+    /// is exactly why the live drag preview needs this method and not
+    /// just the existing one.
+    #[must_use]
+    pub fn pending_drag_origin(&self) -> Option<Point> {
+        match &self.state {
+            State::Idle => None,
+            State::Placing { down, .. } => down
+                .as_ref()
+                .filter(|down| !down.closing)
+                .map(|down| down.point),
+        }
+    }
+
     /// Acceptance criteria 1, 2, 5: the maker pressed the mouse button
     /// down at `point`. Starts a new path if none is in progress.
     ///
@@ -475,5 +502,83 @@ mod tests {
         let mut pen = PenTool::new();
         let outcome = pen.pointer_up(&mut minter, &document, Point::new(0.0, 0.0), DRAG_THRESHOLD);
         assert_eq!(outcome, PointerUpOutcome::Ignored);
+    }
+
+    /// Acceptance criterion 2's live drag preview needs to know a press
+    /// is currently held down and where it started — idle (nothing
+    /// pressed), and a press that has already released (consumed by
+    /// `pointer_up`), both report `None`.
+    #[test]
+    fn pending_drag_origin_is_none_when_idle_or_between_gestures() {
+        let document = Document::new(1);
+        let mut minter = minter();
+        let mut pen = PenTool::new();
+        assert_eq!(pen.pending_drag_origin(), None, "idle");
+
+        pen.pointer_down(Point::new(0.0, 0.0), CLOSE_TOLERANCE);
+        pen.pointer_up(&mut minter, &document, Point::new(0.0, 0.0), DRAG_THRESHOLD);
+        assert_eq!(
+            pen.pending_drag_origin(),
+            None,
+            "released: the drag already committed"
+        );
+    }
+
+    /// While a press is held down (not yet released), `pending_drag_origin`
+    /// reports exactly the point it started at — point C, which stays
+    /// fixed at the press position even as the live cursor moves
+    /// elsewhere (acceptance criterion 2: "a new node is added at C",
+    /// the pointer-down point, not wherever the drag ends).
+    #[test]
+    fn pending_drag_origin_reports_the_held_press_point() {
+        let mut pen = PenTool::new();
+        // Even the very first press of a brand-new path reports its own
+        // origin: dragging while placing the first node pulls out that
+        // node's own handles, with no B→C segment yet (nothing precedes
+        // it) — the renderer is the one that decides there is no segment
+        // to draw, not this method.
+        pen.pointer_down(Point::new(0.0, 0.0), CLOSE_TOLERANCE);
+        assert_eq!(pen.pending_drag_origin(), Some(Point::new(0.0, 0.0)));
+
+        let mut minter = minter();
+        let document = Document::new(1);
+        pen.pointer_up(&mut minter, &document, Point::new(0.0, 0.0), DRAG_THRESHOLD);
+
+        pen.pointer_down(Point::new(10.0, 0.0), CLOSE_TOLERANCE);
+        assert_eq!(
+            pen.pending_drag_origin(),
+            Some(Point::new(10.0, 0.0)),
+            "held at C, the press position"
+        );
+    }
+
+    /// A press held down over the close target (acceptance criterion 5)
+    /// is a plain-click gesture, not a drag-to-curve one — no live curve
+    /// preview applies to it.
+    #[test]
+    fn pending_drag_origin_is_none_while_closing() {
+        let mut minter = minter();
+        let document = Document::new(1);
+        let mut pen = PenTool::new();
+        pen.pointer_down(Point::new(0.0, 0.0), CLOSE_TOLERANCE);
+        pen.pointer_up(&mut minter, &document, Point::new(0.0, 0.0), DRAG_THRESHOLD);
+        pen.pointer_down(Point::new(10.0, 0.0), CLOSE_TOLERANCE);
+        pen.pointer_up(
+            &mut minter,
+            &document,
+            Point::new(10.0, 0.0),
+            DRAG_THRESHOLD,
+        );
+        pen.pointer_down(Point::new(5.0, 10.0), CLOSE_TOLERANCE);
+        pen.pointer_up(
+            &mut minter,
+            &document,
+            Point::new(5.0, 10.0),
+            DRAG_THRESHOLD,
+        );
+
+        // Press back down near the first node: a close-path gesture.
+        pen.pointer_down(Point::new(0.1, 0.1), CLOSE_TOLERANCE);
+        assert_eq!(pen.pending_drag_origin(), None, "closing, not dragging");
     }
 }
