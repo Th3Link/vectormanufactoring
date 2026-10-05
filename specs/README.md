@@ -1,5 +1,9 @@
 # Feature specs
 
+**[→ specs/index.md](index.md) — the MVP's feature sequence, in order,
+with status.** Start there to see what exists and what's next; this file
+is the convention, not the list.
+
 Spec-driven development, adapted from
 [spec-driven-dev-kit](https://github.com/trojava/spec-driven-dev-kit) for
 this project's roles and file layout (see `CLAUDE.md` §2, §4).
