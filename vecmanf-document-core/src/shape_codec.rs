@@ -287,7 +287,7 @@ pub(crate) fn read_primitive_snapshot(
     }
 }
 
-fn read_shape(meta: &LoroMap, shape_tag: &str) -> Option<Shape> {
+pub(crate) fn read_shape(meta: &LoroMap, shape_tag: &str) -> Option<Shape> {
     match shape_tag {
         SHAPE_RECT => Some(Shape::Rect {
             bounds: read_rect_bounds(meta)?,

@@ -4,7 +4,7 @@
 //! No editing logic lives here — every method is a direct pass-through
 //! to `Session`, `vecmanf-ui-core` or `vecmanf-render-core`.
 
-use vecmanf_document_core::{AnchorKind, Point, ViewTransform};
+use vecmanf_document_core::{AnchorKind, ViewTransform};
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 
@@ -24,6 +24,7 @@ pub fn init_panic_hook() {
 
 fn tool_from_str(name: &str) -> Result<Tool, JsValue> {
     match name {
+        "select" => Ok(Tool::Select),
         "pen" => Ok(Tool::Pen),
         "node" => Ok(Tool::Node),
         "rectangle" => Ok(Tool::Rectangle),
@@ -84,9 +85,11 @@ impl From<SessionNodeToolbarState> for NodeToolbarState {
 /// [`crate::session::LiveReadout`] (`specs/0003-primitive-shapes/
 /// specification.md`'s "Live creation feedback": the on-canvas numeric
 /// readout shown during a create-drag, ux-engineer review item 2).
-/// `anchor_x`/`anchor_y` are document-space coordinates — the host
-/// converts them to screen pixels the same way it already does for
-/// every other document-space point.
+/// `anchor_x`/`anchor_y` are already canvas-relative CSS pixels
+/// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "Anything the
+/// DOM positions... is returned already converted") — the host positions
+/// its overlay `<div>` directly from these, with no conversion math of
+/// its own.
 #[wasm_bindgen]
 #[derive(Debug, Clone)]
 pub struct LiveReadout {
@@ -105,14 +108,29 @@ impl LiveReadout {
     }
 }
 
-impl From<crate::session::LiveReadout> for LiveReadout {
-    fn from(readout: crate::session::LiveReadout) -> Self {
+impl LiveReadout {
+    /// Converts a document-space [`crate::session::LiveReadout`] to this
+    /// screen-pixel-anchored mirror, via `view`'s own
+    /// `document_to_screen` — [`WasmSession::live_readout`] is the one
+    /// caller, and the one place this conversion happens.
+    fn from_document_space(readout: crate::session::LiveReadout, view: ViewTransform) -> Self {
+        let (anchor_x, anchor_y) = view.document_to_screen(readout.anchor);
         Self {
             text: readout.text,
-            anchor_x: readout.anchor.x,
-            anchor_y: readout.anchor.y,
+            anchor_x,
+            anchor_y,
         }
     }
+}
+
+/// A document-space point, for [`WasmSession::screen_to_document`] — a
+/// plain `f64`-fields struct needs no getter methods, same reasoning as
+/// [`NodeToolbarState`]'s own doc comment.
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy)]
+pub struct DocumentPoint {
+    pub x: f64,
+    pub y: f64,
 }
 
 /// One open document's whole session, as the host (`frontend/`) sees it:
@@ -169,8 +187,8 @@ impl WasmSession {
             .map_err(|err| JsValue::from_str(&format!("{err}")))
     }
 
-    /// Switches the active tool: `"pen"`, `"node"`, `"rectangle"`,
-    /// `"ellipse"` or `"polygon-star"`.
+    /// Switches the active tool: `"select"`, `"pen"`, `"node"`,
+    /// `"rectangle"`, `"ellipse"` or `"polygon-star"`.
     ///
     /// # Errors
     /// A `JsValue` if `tool` is none of those.
@@ -179,13 +197,14 @@ impl WasmSession {
         Ok(())
     }
 
-    /// The active tool, as one of the five strings
+    /// The active tool, as one of the six strings
     /// [`WasmSession::set_tool`] accepts — for the host's tool rail
     /// (which button is active) and contextual toolbars (shown only for
     /// the matching tool).
     #[must_use]
     pub fn tool(&self) -> String {
         match self.session.tool() {
+            Tool::Select => "select".to_string(),
             Tool::Pen => "pen".to_string(),
             Tool::Node => "node".to_string(),
             Tool::Rectangle => "rectangle".to_string(),
@@ -194,28 +213,39 @@ impl WasmSession {
         }
     }
 
-    /// Updates the view transform: `scale` is screen pixels per document
-    /// millimetre; `origin_x`/`origin_y` is the document point currently
-    /// at the canvas's top-left corner.
-    pub fn set_view(&mut self, scale: f64, origin_x: f64, origin_y: f64) {
-        self.session
-            .set_view(ViewTransform::new(scale, Point::new(origin_x, origin_y)));
+    /// Converts canvas-relative CSS pixels to a document point
+    /// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "all
+    /// screen↔document conversion happens in Rust") — the host's own
+    /// status-bar cursor-position readout calls this instead of
+    /// dividing by a fixed scale itself.
+    #[must_use]
+    pub fn screen_to_document(&self, x: f64, y: f64) -> DocumentPoint {
+        let point = self.session.screen_to_document(x, y);
+        DocumentPoint {
+            x: point.x,
+            y: point.y,
+        }
     }
 
-    /// The pointer went down at document-space `(x, y)`.
+    /// The pointer went down at canvas-relative CSS pixel `(x, y)`
+    /// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "all
+    /// screen↔document conversion happens in Rust" — converted via
+    /// [`crate::session::Session::screen_to_document`] before dispatch).
     pub fn pointer_down(&mut self, x: f64, y: f64, shift: bool) {
-        self.session.pointer_down(Point::new(x, y), shift);
+        let point = self.session.screen_to_document(x, y);
+        self.session.pointer_down(point, shift);
     }
 
-    /// The pointer moved to document-space `(x, y)`. `constrain` is the
-    /// Ctrl modifier's current state, consulted only by the rectangle/
-    /// ellipse tools' live create-drag preview (acceptance criteria 2,
-    /// 8). Call this on every pointer move, not only while a button is
-    /// held — it also feeds whatever shape-tool drag is in flight for
-    /// the live preview (ux-engineer review), and the method itself is
-    /// a no-op when no drag is in progress.
+    /// The pointer moved to canvas-relative CSS pixel `(x, y)`.
+    /// `constrain` is the Ctrl modifier's current state, consulted only
+    /// by the rectangle/ellipse tools' live create-drag preview
+    /// (acceptance criteria 2, 8). Call this on every pointer move, not
+    /// only while a button is held — it also feeds whatever shape-tool
+    /// drag is in flight for the live preview (ux-engineer review), and
+    /// the method itself is a no-op when no drag is in progress.
     pub fn pointer_hover(&mut self, x: f64, y: f64, constrain: bool) {
-        self.session.pointer_hover(Point::new(x, y), constrain);
+        let point = self.session.screen_to_document(x, y);
+        self.session.pointer_hover(point, constrain);
     }
 
     /// The pointer left the canvas entirely (a DOM `pointerleave`).
@@ -233,11 +263,64 @@ impl WasmSession {
         self.session.is_hovering_pen_close_target()
     }
 
-    /// The pointer released at document-space `(x, y)`. `constrain` is
-    /// the Ctrl modifier's state at release (acceptance criteria 2, 8);
-    /// ignored outside the rectangle/ellipse tools.
+    /// The pointer released at canvas-relative CSS pixel `(x, y)`.
+    /// `constrain` is the Ctrl modifier's state at release (acceptance
+    /// criteria 2, 8); ignored outside the rectangle/ellipse tools.
     pub fn pointer_up(&mut self, x: f64, y: f64, constrain: bool) {
-        self.session.pointer_up(Point::new(x, y), constrain);
+        let point = self.session.screen_to_document(x, y);
+        self.session.pointer_up(point, constrain);
+    }
+
+    /// The one double-click dispatch point (acceptance criteria 3, 12,
+    /// 22, 23) at canvas-relative CSS pixel `(x, y)` — the host's own
+    /// double-click detector (unchanged, now in pixels) calls this
+    /// instead of choosing per tool itself
+    /// (`specs/0004-canvas-navigation-and-selection/adrs.md`).
+    pub fn double_click(&mut self, x: f64, y: f64) {
+        let point = self.session.screen_to_document(x, y);
+        self.session.double_click(point);
+    }
+
+    /// A wheel event at canvas-relative CSS pixel `(x, y)`: pans
+    /// (acceptance criteria 1, 2) or, with Ctrl/Cmd held, zooms about
+    /// that point (acceptance criterion 6). `delta_x`/`delta_y` are
+    /// already normalized to pixels by the host (`deltaMode`).
+    pub fn wheel(&mut self, delta_x: f64, delta_y: f64, x: f64, y: f64, shift: bool, ctrl: bool) {
+        self.session.wheel(delta_x, delta_y, x, y, shift, ctrl);
+    }
+
+    /// Starts a drag-pan gesture (middle-mouse or Space+primary,
+    /// acceptance criteria 3, 4) at canvas-relative CSS pixel `(x, y)`.
+    /// The host calls this instead of [`WasmSession::pointer_down`] for
+    /// exactly these two gestures.
+    pub fn begin_pan(&mut self, x: f64, y: f64) {
+        self.session.begin_pan(x, y);
+    }
+
+    /// Continues the drag-pan gesture [`WasmSession::begin_pan`] started.
+    pub fn pan_to(&mut self, x: f64, y: f64) {
+        self.session.pan_to(x, y);
+    }
+
+    /// Ends the drag-pan gesture, if one is in flight.
+    pub fn end_pan(&mut self) {
+        self.session.end_pan();
+    }
+
+    /// Whether a drag-pan gesture is currently in flight — the host's
+    /// grab/grabbing cursor convention (`docs/design-system.md`'s "Pan
+    /// cursor").
+    #[must_use]
+    pub fn is_panning(&self) -> bool {
+        self.session.is_panning()
+    }
+
+    /// The current zoom level's integer percentage read-out (acceptance
+    /// criterion 9), for the status bar's center segment.
+    #[must_use]
+    pub fn zoom_percent(&self) -> i32 {
+        #[allow(clippy::cast_possible_truncation)]
+        (self.session.zoom_percent() as i32)
     }
 
     /// Acceptance criterion 3 / the dedicated "finish path" action.
@@ -273,12 +356,6 @@ impl WasmSession {
     /// Acceptance criterion 14's "make curve".
     pub fn make_curve(&mut self) {
         self.session.make_curve();
-    }
-
-    /// Acceptance criterion 12: a double-click (already recognized by
-    /// the host) at document-space `(x, y)`.
-    pub fn insert_at(&mut self, x: f64, y: f64) {
-        self.session.insert_at(Point::new(x, y));
     }
 
     /// The contextual toolbar's "Insert node" button: splits the
@@ -391,7 +468,10 @@ impl WasmSession {
     /// outside one — call after every [`WasmSession::pointer_hover`].
     #[must_use]
     pub fn live_readout(&self) -> Option<LiveReadout> {
-        self.session.live_readout().map(LiveReadout::from)
+        let view = self.session.view();
+        self.session
+            .live_readout()
+            .map(|readout| LiveReadout::from_document_space(readout, view))
     }
 
     /// Attaches this session to `canvas`, creating the `wgpu`
@@ -415,7 +495,23 @@ impl WasmSession {
         device_pixel_ratio: f64,
     ) -> Result<(), JsValue> {
         self.gpu = Some(Gpu::attach(canvas, width, height, device_pixel_ratio).await?);
+        self.set_viewport_css_size(width, height, device_pixel_ratio);
         Ok(())
+    }
+
+    /// Records the canvas's CSS (layout) pixel size on the viewport
+    /// (acceptance criterion 10) — `width`/`height` are the backing-
+    /// buffer (physical) pixel size this method's two callers both
+    /// receive; dividing by `device_pixel_ratio` recovers the CSS size
+    /// pointer events and `Session::screen_to_document` already agree on.
+    fn set_viewport_css_size(&mut self, width: u32, height: u32, device_pixel_ratio: f64) {
+        let ratio = if device_pixel_ratio > 0.0 {
+            device_pixel_ratio
+        } else {
+            1.0
+        };
+        self.session
+            .resize_viewport(f64::from(width) / ratio, f64::from(height) / ratio);
     }
 
     /// Reconfigures the attached canvas's `wgpu` surface to `width`×
@@ -443,6 +539,7 @@ impl WasmSession {
         height: u32,
         device_pixel_ratio: f64,
     ) -> Result<(), JsValue> {
+        self.set_viewport_css_size(width, height, device_pixel_ratio);
         let Some(gpu) = &mut self.gpu else {
             return Ok(());
         };

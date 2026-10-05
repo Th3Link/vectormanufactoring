@@ -24,7 +24,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use vecmanf_document_core::Point;
-use vecmanf_editor_wasm::Session;
+use vecmanf_editor_wasm::{Session, Tool};
 
 /// Same shape as the implementer's own
 /// `draw_list_shows_the_live_curve_preview_during_a_pen_drag` (B at the
@@ -43,6 +43,7 @@ use vecmanf_editor_wasm::Session;
 #[test]
 fn pen_drag_preview_draws_curve_geometry_not_just_a_longer_straight_line() {
     let mut session = Session::new(1);
+    session.set_tool(Tool::Pen);
     session.pointer_down(Point::new(0.0, 0.0), false);
     session.pointer_up(Point::new(0.0, 0.0), false);
 
@@ -125,7 +126,24 @@ fn pen_drag_preview_matches_the_pending_anchor_some_branch_not_the_none_branch()
     assert!(pending.is_some(), "a held press must have a pending anchor");
 
     let nodes = pen.in_progress_nodes().expect("still placing").to_vec();
-    let view = vecmanf_document_core::ViewTransform::identity();
+
+    // Drive the exact same sequence through `Session` (what the host
+    // actually calls every frame) first, so the manual
+    // `build_pen_preview` calls below use `Session`'s own current view
+    // (100% zoom, `canvas-navigation-and-selection`'s `Viewport`
+    // default) rather than assuming the identity view
+    // `path-node-editing` built this repro against — the display
+    // tolerance is screen-space now (`specs/0004-canvas-navigation-and-
+    // selection/adrs.md`), so a mismatched view changes the tessellated
+    // triangle count even for geometrically-identical input.
+    let mut session = Session::new(1);
+    session.set_tool(Tool::Pen);
+    session.pointer_down(Point::new(0.0, 0.0), false);
+    session.pointer_up(Point::new(0.0, 0.0), false);
+    session.pointer_down(Point::new(100.0, 0.0), false);
+    session.pointer_hover(cursor, false);
+    let session_list = session.draw_list();
+    let view = session.view();
 
     let with_pending = build_pen_preview(&nodes, Some(cursor), pending.as_ref(), view, false);
     let without_pending = build_pen_preview(&nodes, Some(cursor), None, view, false);
@@ -137,16 +155,6 @@ fn pen_drag_preview_matches_the_pending_anchor_some_branch_not_the_none_branch()
          produce different amounts of geometry for this input, or this comparison can't \
          tell them apart"
     );
-
-    // Now drive the exact same sequence through `Session` (what the host
-    // actually calls every frame) and confirm it lines up with the
-    // `Some(pending)` call above, not the `None` one.
-    let mut session = Session::new(1);
-    session.pointer_down(Point::new(0.0, 0.0), false);
-    session.pointer_up(Point::new(0.0, 0.0), false);
-    session.pointer_down(Point::new(100.0, 0.0), false);
-    session.pointer_hover(cursor, false);
-    let session_list = session.draw_list();
 
     assert_eq!(
         session_list.triangle_count(),

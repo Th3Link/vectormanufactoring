@@ -164,8 +164,10 @@ fn selected_segment_overlay(
     let snapshot = paths.iter().find(|p| p.id == path)?;
     let start_anchor = snapshot.anchors.iter().find(|a| a.id == start)?;
     let end_anchor = snapshot.anchors.iter().find(|a| a.id == end)?;
-    let overlay_width =
-        snapshot.stroke_width.as_mm() + screen_px_to_mm(view, theme::SEGMENT_OVERLAY_EXTRA_PX);
+    let min_width_mm = screen_px_to_mm(view, theme::MIN_DISPLAY_STROKE_WIDTH_PX);
+    let overlay_width = snapshot.stroke_width.as_mm().max(min_width_mm)
+        + screen_px_to_mm(view, theme::SEGMENT_OVERLAY_EXTRA_PX);
+    let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
     Some(crate::stroke::segment_stroke(
         start_anchor.point,
         start_anchor.handle_out,
@@ -173,6 +175,7 @@ fn selected_segment_overlay(
         end_anchor.point,
         overlay_width,
         theme::ACCENT,
+        tolerance_mm,
     ))
 }
 

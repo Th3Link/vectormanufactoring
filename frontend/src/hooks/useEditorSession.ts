@@ -3,16 +3,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createSession, openSession } from "@/lib/editorSession";
 import type { WasmSession } from "@/lib/editorSession";
 
-/** Screen pixels per document millimetre this slice's placeholder view
- * uses (`specs/0002-path-node-editing/adrs.md`'s `ViewTransform` decision: no
- * pan/zoom UI yet, so this is the whole view transform). `96 / 25.4` is
- * CSS's own "1in == 96px" convention expressed per millimetre — close
- * enough to a real screen's pixel density to make this slice's one fixed
- * stroke width (0.25mm, acceptance criterion 6) and node/handle glyphs
- * actually visible, unlike a literal 1:1 mm:px scale (0.25px is
- * sub-pixel on every real display). */
-export const CSS_PX_PER_MM = 96 / 25.4;
-
 /** The canvas's backing-buffer (physical pixel) size for a given CSS
  * (layout) size, plus the `devicePixelRatio` that relates the two —
  * `vecmanf-editor-wasm`'s `Gpu` needs both: the buffer itself sized to
@@ -21,11 +11,10 @@ export const CSS_PX_PER_MM = 96 / 25.4;
  * softened by the browser compositor — the same class of bug as this
  * slice's `wgpu` surface-resize requirement, but for resolution rather
  * than staleness), and the ratio itself so `Gpu::render` can map back to
- * CSS pixels for the clip-space transform (`CSS_PX_PER_MM`'s own view
- * scale is, and stays, CSS-pixel-based — only the buffer resolution
- * changes here). `devicePixelRatio` can be a fractional, non-integer
- * value (Windows/Linux fractional scaling, e.g. 1.25 or 1.5), so the
- * buffer size is rounded, not assumed to divide evenly. */
+ * CSS pixels for the clip-space transform. `devicePixelRatio` can be a
+ * fractional, non-integer value (Windows/Linux fractional scaling, e.g.
+ * 1.25 or 1.5), so the buffer size is rounded, not assumed to divide
+ * evenly. */
 function backingBufferSize(
   cssWidth: number,
   cssHeight: number,
@@ -38,10 +27,10 @@ function backingBufferSize(
   };
 }
 
-/** Which tool is active (`specification.md`'s tool rail: Pen or Node;
- * `specs/0003-primitive-shapes/specification.md` adds Rectangle, Ellipse and
- * Polygon/Star, appended in that order, below Pen/Node). */
-export type Tool = "pen" | "node" | "rectangle" | "ellipse" | "polygon-star";
+/** Which tool is active (`specification.md`'s tool rail: Select is first
+ * — `canvas-navigation-and-selection`'s launch default, acceptance
+ * criterion 13 — then Pen, Node, Rectangle, Ellipse, Polygon/Star). */
+export type Tool = "select" | "pen" | "node" | "rectangle" | "ellipse" | "polygon-star";
 
 /** The polygon/star tool-options bar's mode toggle (acceptance criteria
  * 11 vs. 12). */
@@ -76,18 +65,40 @@ const EMPTY_TOOLBAR_STATE: NodeToolbarState = {
  * criterion 3: a finishing double-click is "instead of placing another
  * node", not in addition to it). This tracks press timing/position
  * itself instead, so the second press of a double-click can be withheld
- * from the session entirely and read as "finish"/"insert" once its
- * matching release arrives. The first press still committed normally —
- * exactly the node the maker expects to end up with (matching Inkscape).
+ * from the session entirely and read as one `double_click(x, y)` call
+ * once its matching release arrives
+ * (`specs/0004-canvas-navigation-and-selection/adrs.md`: "the host
+ * detects a double-click... and calls `double_click(x, y)`. `Session`
+ * dispatches it" — no more per-tool branching here). The first press
+ * still committed normally — exactly the node the maker expects to end
+ * up with (matching Inkscape).
  */
 const DOUBLE_CLICK_MS = 400;
+/** Canvas-relative CSS pixels now (`canvas-navigation-and-selection`: all
+ * screen↔document conversion moved into Rust), not document millimetres
+ * — comparing in screen space is also exactly right for "did the two
+ * presses land close enough to read as one double-click", independent
+ * of zoom. */
 const DOUBLE_CLICK_PX = 5;
-/** `DOUBLE_CLICK_PX` converted to document millimetres via the one fixed
- * `CSS_PX_PER_MM` view scale this slice uses (see the attach effect's own
- * `set_view` comment) — `documentPoint()` below returns document-space
- * mm, not screen pixels, so the double-click distance check has to compare
- * in the same unit. */
-const DOUBLE_CLICK_MM = DOUBLE_CLICK_PX / CSS_PX_PER_MM;
+
+/** How many wheel-delta pixels correspond to one print-sized "line" of
+ * scroll (`deltaMode === 1`) or one "page" (`deltaMode === 2`) — most
+ * browsers never actually send these modes for a mouse wheel/trackpad,
+ * but normalizing them here means `Session::wheel` only ever has to
+ * reason about pixels (`adrs.md`'s frontend requirement: "normalize
+ * `deltaMode` to pixels"). */
+const WHEEL_LINE_HEIGHT_PX = 16;
+const WHEEL_PAGE_HEIGHT_PX = 800;
+
+function normalizedWheelDelta(event: WheelEvent): { deltaX: number; deltaY: number } {
+  let factor = 1;
+  if (event.deltaMode === 1) {
+    factor = WHEEL_LINE_HEIGHT_PX;
+  } else if (event.deltaMode === 2) {
+    factor = WHEEL_PAGE_HEIGHT_PX;
+  }
+  return { deltaX: event.deltaX * factor, deltaY: event.deltaY * factor };
+}
 
 function readToolbarState(raw: {
   can_insert: boolean;
@@ -124,11 +135,24 @@ function readLiveReadout(
   return readout;
 }
 
+/** Reads a wasm-bindgen `DocumentPoint` instance once, immediately, so
+ * it can be `free()`d rather than held onto — same reasoning as
+ * `readToolbarState`. */
+function readDocumentPoint(raw: { x: number; y: number; free(): void }): {
+  x: number;
+  y: number;
+} {
+  const point = { x: raw.x, y: raw.y };
+  raw.free();
+  return point;
+}
+
 /** The on-canvas numeric readout shown during a shape tool's
  * create-drag (`specs/0003-primitive-shapes/specification.md`'s "Live
- * creation feedback"). `x`/`y` are document-space coordinates — convert
- * with the same `CSS_PX_PER_MM` scale this hook itself uses for the
- * view transform. */
+ * creation feedback"). `x`/`y` are already canvas-relative CSS pixels
+ * (`specs/0004-canvas-navigation-and-selection/adrs.md`: "Anything the
+ * DOM positions... is returned already converted") — position the
+ * overlay directly from these, no conversion math here. */
 export interface LiveReadout {
   text: string;
   x: number;
@@ -156,6 +180,17 @@ export interface EditorSession {
    * over the in-progress pen path's own close target — `Canvas` swaps
    * to the "pen-with-small-circle" cursor variant while this is `true`. */
   isHoveringPenCloseTarget: boolean;
+  /** The current zoom level's integer percentage read-out (acceptance
+   * criterion 9) — `StatusBar`'s new center segment. */
+  zoomPercent: number;
+  /** Whether a drag-pan gesture (middle-mouse or Space+primary,
+   * acceptance criteria 3, 4) is currently in flight — `Canvas`'s own
+   * grabbing-cursor convention. */
+  isPanning: boolean;
+  /** Whether Space is currently held — `Canvas`'s own open-hand cursor
+   * convention, the moment Space is held but before any drag motion
+   * (`docs/design-system.md`'s "Pan cursor"). */
+  isSpaceHeld: boolean;
   setTool: (tool: Tool) => void;
   escape: () => void;
   deleteSelected: () => void;
@@ -190,6 +225,7 @@ export interface EditorSession {
   onPointerUp: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerLeave: () => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void;
+  onKeyUp: (event: React.KeyboardEvent<HTMLDivElement>) => void;
   /** File → New: swaps in a brand-new, empty session. */
   newProject: () => void;
   /** File → Open / the OS file association: parses `bytes` as a `.vmf`
@@ -209,9 +245,13 @@ export interface EditorSession {
 /** Owns one `WasmSession` for the app's lifetime: creates it, attaches
  * it to the host's `<canvas>`, keeps its `wgpu` surface sized to the
  * canvas (specs/0002-path-node-editing/adrs.md's PASS note, requirement 2),
- * runs its per-frame render loop, and forwards pointer/keyboard input —
- * "the frontend renders state and forwards input events into it; it
- * holds no editing logic of its own" (same file, ADR 0001 §1/§2).
+ * runs its per-frame render loop, and forwards pointer/keyboard/wheel
+ * input — "the frontend renders state and forwards input events into it;
+ * it holds no editing logic of its own" (same file, ADR 0001 §1/§2).
+ * `canvas-navigation-and-selection` moves every screen↔document
+ * conversion into Rust (`Session::screen_to_document`) — this hook now
+ * only ever passes canvas-relative CSS pixels across the wasm boundary,
+ * never a document-space point it computed itself.
  *
  * The session itself is swappable: `newProject`/`openProject` free
  * whatever is currently attached and attach a different one in its
@@ -230,8 +270,13 @@ export function useEditorSession(
     null,
   );
   const suppressedPressRef = useRef(false);
+  /** Whether a drag-pan gesture is in flight — a ref (not just the
+   * mirrored `isPanning` state below) so `onPointerMove`/`onPointerUp`
+   * read the current value synchronously within the same event, not a
+   * stale one from before the latest `setState` re-render. */
+  const panningRef = useRef(false);
 
-  const [tool, setToolState] = useState<Tool>("pen");
+  const [tool, setToolState] = useState<Tool>("select");
   const [nodeToolbarState, setNodeToolbarState] = useState<NodeToolbarState>(
     EMPTY_TOOLBAR_STATE,
   );
@@ -241,6 +286,9 @@ export function useEditorSession(
   const [isHoveringPenCloseTarget, setIsHoveringPenCloseTarget] =
     useState(false);
   const [liveReadout, setLiveReadout] = useState<LiveReadout | null>(null);
+  const [zoomPercent, setZoomPercent] = useState(100);
+  const [isPanning, setIsPanning] = useState(false);
+  const [isSpaceHeld, setIsSpaceHeld] = useState(false);
 
   /** Re-reads every bit of session-owned UI state after any call that
    * might have changed it — cheap, and simpler than having every call
@@ -256,6 +304,7 @@ export function useEditorSession(
     setPolyStarModeState(session.poly_star_mode() as PolyStarMode);
     setPolyStarPointCountState(session.poly_star_point_count());
     setPolyStarRatioState(session.poly_star_ratio());
+    setZoomPercent(session.zoom_percent());
   }, []);
 
   /** Frees whatever session is currently attached (if any), makes
@@ -286,6 +335,10 @@ export function useEditorSession(
       );
       canvas.width = width;
       canvas.height = height;
+      // `attach_canvas` also records the canvas's CSS size on the new
+      // session's viewport (acceptance criterion 10's "resize keeps the
+      // center" starts from a correctly-sized viewport on attach, not
+      // just on the first later resize).
       await session.attach_canvas(canvas, width, height, devicePixelRatio);
       if (sessionRef.current !== session) {
         // Superseded by another New/Open (or the hook unmounted) while
@@ -295,13 +348,6 @@ export function useEditorSession(
         // here would be a use-after-free.
         return;
       }
-      // CSS_PX_PER_MM screen px per document mm, origin (0,0): this
-      // slice has no pan/zoom UI yet (specs/0002-path-node-editing/
-      // adrs.md's ViewTransform decision), so this is the whole view
-      // transform, picked to keep acceptance criterion 6's 0.25mm
-      // stroke and the node/handle glyphs actually visible on a real
-      // screen rather than sub-pixel.
-      session.set_view(CSS_PX_PER_MM, 0.0, 0.0);
       syncFromSession();
     },
     [syncFromSession],
@@ -333,11 +379,12 @@ export function useEditorSession(
         canvas.width = width;
         canvas.height = height;
         try {
-          // Reconfigures the wgpu surface *and* renders the next frame
-          // in this one call (see WasmSession::resize's own doc
-          // comment) — a resize never leaves a stale/empty frame on
-          // screen waiting for the render loop's next animation-frame
-          // tick.
+          // Reconfigures the wgpu surface, updates the viewport's own
+          // CSS size (acceptance criterion 10), and renders the next
+          // frame — all in this one call (see `WasmSession::resize`'s
+          // own doc comment) — a resize never leaves a stale/empty
+          // frame on screen waiting for the render loop's next
+          // animation-frame tick.
           sessionRef.current?.resize(width, height, devicePixelRatio);
         } catch {
           // A dropped frame on resize (e.g. a momentarily lost surface)
@@ -348,6 +395,26 @@ export function useEditorSession(
       });
       resizeObserver.observe(canvas);
     }
+
+    // React's `onWheel` is passive and cannot `preventDefault`, so
+    // Ctrl+wheel would zoom the whole webview page itself rather than
+    // just the canvas (`specs/0004-canvas-navigation-and-selection/
+    // adrs.md`'s frontend requirement) — a native, non-passive listener
+    // is the only way to stop that.
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const session = sessionRef.current;
+      if (!session || !canvas) {
+        return;
+      }
+      const bounds = canvas.getBoundingClientRect();
+      const x = event.clientX - bounds.left;
+      const y = event.clientY - bounds.top;
+      const { deltaX, deltaY } = normalizedWheelDelta(event);
+      session.wheel(deltaX, deltaY, x, y, event.shiftKey, event.ctrlKey || event.metaKey);
+      setZoomPercent(session.zoom_percent());
+    };
+    canvas?.addEventListener("wheel", onWheel, { passive: false });
 
     // Reads `sessionRef.current` fresh every frame (rather than closing
     // over one session instance) so a New/Open swap underneath it is
@@ -362,6 +429,7 @@ export function useEditorSession(
       cancelled = true;
       cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
+      canvas?.removeEventListener("wheel", onWheel);
       sessionRef.current?.free();
       sessionRef.current = null;
     };
@@ -477,27 +545,19 @@ export function useEditorSession(
     syncFromSession();
   }, [syncFromSession]);
 
-  /** The pointer's document-space position (millimetres), inverting the
-   * `CSS_PX_PER_MM`-scale/`(0,0)`-origin view transform the attach effect
-   * above sets via `set_view`. `getBoundingClientRect()` first converts
-   * the event's viewport-relative CSS pixels to canvas-relative CSS
-   * pixels; dividing by `CSS_PX_PER_MM` then matches
-   * `ViewTransform::screen_to_document` on the Rust side, which every
-   * `WasmSession` method taking a point (`pointer_down`, `pointer_hover`,
-   * `pointer_up`, `insert_at`, ...) documents its `(x, y)` as being in
-   * (`wasm_api.rs`). Both sides agree the canvas's backing-buffer size
-   * equals its CSS size (no devicePixelRatio scaling, set in the attach
-   * effect's own `canvas.width`/`height` assignment), so no further
-   * device-pixel-ratio correction belongs here. */
-  const documentPoint = useCallback((event: { clientX: number; clientY: number }) => {
+  /** The event's canvas-relative CSS pixel position — pure DOM geometry,
+   * no wasm call and no document-space conversion (that happens inside
+   * `Session` now, `specs/0004-canvas-navigation-and-selection/adrs.md`).
+   */
+  const canvasPoint = useCallback((event: { clientX: number; clientY: number }) => {
     const canvas = canvasRef.current;
     if (!canvas) {
       return { x: 0, y: 0 };
     }
     const bounds = canvas.getBoundingClientRect();
     return {
-      x: (event.clientX - bounds.left) / CSS_PX_PER_MM,
-      y: (event.clientY - bounds.top) / CSS_PX_PER_MM,
+      x: event.clientX - bounds.left,
+      y: event.clientY - bounds.top,
     };
   }, []);
 
@@ -507,13 +567,28 @@ export function useEditorSession(
       if (!session) {
         return;
       }
-      const { x, y } = documentPoint(event);
+      const { x, y } = canvasPoint(event);
+
+      // Middle-mouse or Space+primary: a drag-pan gesture (acceptance
+      // criteria 3, 4), never forwarded to the active tool — captured so
+      // the gesture continues even if the cursor leaves the canvas.
+      const isMiddleButton = event.button === 1;
+      const isSpacePrimary = event.button === 0 && isSpaceHeld;
+      if (isMiddleButton || isSpacePrimary) {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        panningRef.current = true;
+        setIsPanning(true);
+        session.begin_pan(x, y);
+        return;
+      }
+
       const now = performance.now();
       const last = lastPressRef.current;
       const isDoubleClick =
         last !== null &&
         now - last.time < DOUBLE_CLICK_MS &&
-        Math.hypot(x - last.x, y - last.y) < DOUBLE_CLICK_MM;
+        Math.hypot(x - last.x, y - last.y) < DOUBLE_CLICK_PX;
       lastPressRef.current = { time: now, x, y };
       suppressedPressRef.current = isDoubleClick;
       if (isDoubleClick) {
@@ -522,21 +597,27 @@ export function useEditorSession(
       session.pointer_down(x, y, event.shiftKey);
       syncFromSession();
     },
-    [documentPoint, syncFromSession],
+    [canvasPoint, isSpaceHeld, syncFromSession],
   );
 
   const onPointerMove = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
       const session = sessionRef.current;
-      const { x, y } = documentPoint(event);
-      onCursorMove({ x, y });
+      const { x, y } = canvasPoint(event);
+      if (session) {
+        onCursorMove(readDocumentPoint(session.screen_to_document(x, y)));
+      }
+      if (panningRef.current) {
+        session?.pan_to(x, y);
+        return;
+      }
       session?.pointer_hover(x, y, event.ctrlKey || event.metaKey);
       setIsHoveringPenCloseTarget(
         session?.is_hovering_pen_close_target() ?? false,
       );
       setLiveReadout(readLiveReadout(session?.live_readout()));
     },
-    [documentPoint, onCursorMove],
+    [canvasPoint, onCursorMove],
   );
 
   const onPointerUp = useCallback(
@@ -545,23 +626,33 @@ export function useEditorSession(
       if (!session) {
         return;
       }
-      const { x, y } = documentPoint(event);
+      const { x, y } = canvasPoint(event);
+
+      if (panningRef.current) {
+        panningRef.current = false;
+        setIsPanning(false);
+        session.end_pan();
+        try {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        } catch {
+          // Already released (e.g. the pointer was already up) — not an
+          // error worth surfacing.
+        }
+        return;
+      }
+
       if (suppressedPressRef.current) {
         suppressedPressRef.current = false;
-        if (tool === "pen") {
-          session.finish_pen();
-        } else if (tool === "node") {
-          session.insert_at(x, y);
-        } else {
-          session.pointer_up(x, y, event.ctrlKey || event.metaKey);
-        }
+        // One dispatch point for every tool (acceptance criteria 3, 12,
+        // 22, 23) — `Session` itself decides what a double-click does.
+        session.double_click(x, y);
       } else {
         session.pointer_up(x, y, event.ctrlKey || event.metaKey);
       }
       setLiveReadout(null);
       syncFromSession();
     },
-    [documentPoint, syncFromSession, tool],
+    [canvasPoint, syncFromSession],
   );
 
   const onPointerLeave = useCallback(() => {
@@ -573,6 +664,10 @@ export function useEditorSession(
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       switch (event.key) {
+        case "s":
+        case "S":
+          setTool("select");
+          break;
         case "b":
         case "B":
           setTool("pen");
@@ -605,12 +700,28 @@ export function useEditorSession(
           event.preventDefault();
           deleteSelected();
           break;
+        case " ":
+          // Space+drag pans (acceptance criterion 4) — `preventDefault`
+          // so it never activates a focused button
+          // (`specs/0004-canvas-navigation-and-selection/adrs.md`'s
+          // frontend requirement); the open-hand cursor shows from this
+          // moment, before any drag motion (`docs/design-system.md`'s
+          // "Pan cursor").
+          event.preventDefault();
+          setIsSpaceHeld(true);
+          break;
         default:
           return;
       }
     },
     [deleteSelected, escape, finishPen, setTool, tool],
   );
+
+  const onKeyUp = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === " ") {
+      setIsSpaceHeld(false);
+    }
+  }, []);
 
   return {
     canvasRef,
@@ -622,6 +733,9 @@ export function useEditorSession(
     polyStarRatio,
     liveReadout,
     isHoveringPenCloseTarget,
+    zoomPercent,
+    isPanning,
+    isSpaceHeld,
     setTool,
     escape,
     deleteSelected,
@@ -642,6 +756,7 @@ export function useEditorSession(
     onPointerUp,
     onPointerLeave,
     onKeyDown,
+    onKeyUp,
     newProject,
     openProject,
     packProject,
