@@ -623,14 +623,14 @@ impl Session {
             return DecorationInput::default();
         }
         let selection = self.node.selection();
-        let selected_nodes = selection
-            .nodes()
-            .iter()
-            .filter_map(|&id| selection.path().map(|path| (path, id)))
-            .collect();
-        let selected_segment = selection
-            .segment()
-            .and_then(|(start, end)| selection.path().map(|path| (path, start, end)));
+        // `node_pairs` directly, not `nodes()` zipped with `path()`: the
+        // selection can now genuinely span several path objects
+        // (`specs/0006-path-merge-split-and-node-types/specification.md`
+        // acceptance criteria 6, 7, 15), and `path()` reports `None` for
+        // that case — zipping against it would silently render none of
+        // the selected nodes as selected instead of all of them.
+        let selected_nodes = selection.node_pairs().to_vec();
+        let selected_segment = selection.segment_with_path();
         let hovered = self.hovered.and_then(|hit| match hit {
             Hit::Node { path, anchor } => Some(RenderHovered::Node(path, anchor)),
             Hit::Handle { path, anchor, slot } => Some(RenderHovered::Handle(path, anchor, slot)),
@@ -1275,5 +1275,108 @@ mod tests {
         session.split_selected();
 
         assert_eq!(session.paths().len(), 2, "two separate objects now");
+    }
+
+    /// `specs/0006-path-merge-split-and-node-types/specification.md`
+    /// acceptance criteria 6, 7, 9: the real UI flow, through the whole
+    /// `Session` surface — select two *pre-existing*, unrelated path
+    /// objects with the Select tool (shift-click, `canvas-navigation-
+    /// and-selection`), switch to the Node tool (a rail click / `N`, not
+    /// the double-click handoff), click one endpoint and shift-click an
+    /// endpoint on the *other* visible path, then Join — merging two
+    /// objects that were never touched by Split at all, unlike every
+    /// other Join test in this file.
+    #[test]
+    fn select_two_objects_then_join_their_endpoints_across_paths() {
+        let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_down(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 0.0), false);
+        session.finish_pen();
+
+        session.pointer_down(Point::new(0.0, 100.0), false);
+        session.pointer_up(Point::new(0.0, 100.0), false);
+        session.pointer_down(Point::new(50.0, 100.0), false);
+        session.pointer_up(Point::new(50.0, 100.0), false);
+        session.finish_pen();
+
+        assert_eq!(session.paths().len(), 2, "two separate, unrelated objects");
+
+        // Select tool: shift-click selects both objects together
+        // (acceptance criterion 17).
+        session.set_tool(Tool::Select);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_down(Point::new(0.0, 100.0), true);
+        session.pointer_up(Point::new(0.0, 100.0), false);
+
+        // Switch to the Node tool via the rail/shortcut, not a double-
+        // click — acceptance criterion 6: every selected path object's
+        // nodes are visible and editable in this one Node-tool session.
+        session.set_tool(Tool::Node);
+        let paths = session.paths();
+        assert_eq!(paths.len(), 2, "both objects still exist, unmerged so far");
+
+        // Click one endpoint, then shift-click an endpoint on the
+        // *other* visible path (acceptance criterion 7).
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_down(Point::new(0.0, 100.0), true);
+        session.pointer_up(Point::new(0.0, 100.0), false);
+
+        assert!(
+            session.node_toolbar_state().can_join,
+            "two endpoint nodes of two different open path objects: joinable (AC 8, 9)"
+        );
+
+        session.join_selected();
+
+        let paths = session.paths();
+        assert_eq!(paths.len(), 1, "the two objects merged into one (AC 9)");
+        assert_eq!(
+            paths[0].anchors.len(),
+            3,
+            "2 + 2 anchors, minus the merged pair"
+        );
+        assert!(!paths[0].closed);
+    }
+
+    /// The bug this round fixes: `decoration_input()` used to zip
+    /// `selection.nodes()` against `selection.path()`, which is `None`
+    /// for a genuine cross-path selection — so neither of two selected
+    /// nodes on two different paths ever reached `DecorationInput`, and
+    /// neither drew as selected. Confirms both land in `selected_nodes`
+    /// now, directly, without rendering a frame.
+    #[test]
+    fn decoration_input_includes_every_selected_node_across_two_different_paths() {
+        let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_down(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 0.0), false);
+        session.finish_pen();
+        session.pointer_down(Point::new(0.0, 100.0), false);
+        session.pointer_up(Point::new(0.0, 100.0), false);
+        session.pointer_down(Point::new(50.0, 100.0), false);
+        session.pointer_up(Point::new(50.0, 100.0), false);
+        session.finish_pen();
+        let (path_a, path_b) = {
+            let paths = session.paths();
+            (paths[0].id, paths[1].id)
+        };
+
+        session.set_tool(Tool::Node);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_down(Point::new(0.0, 100.0), true);
+        session.pointer_up(Point::new(0.0, 100.0), false);
+
+        let input = session.decoration_input();
+        assert_eq!(input.selected_nodes.len(), 2);
+        assert!(input.selected_nodes.iter().any(|&(p, _)| p == path_a));
+        assert!(input.selected_nodes.iter().any(|&(p, _)| p == path_b));
     }
 }
