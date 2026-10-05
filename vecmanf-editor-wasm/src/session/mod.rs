@@ -441,6 +441,24 @@ impl Session {
         }
     }
 
+    /// Acceptance criteria 8-11: Join (the contextual toolbar/context
+    /// menu button). A no-op outside the node tool or when the current
+    /// selection does not qualify.
+    pub fn join_selected(&mut self) {
+        if self.tool == Tool::Node {
+            self.node.join_selected(&self.document);
+        }
+    }
+
+    /// Acceptance criteria 12-15: Split (the contextual toolbar/context
+    /// menu button). A no-op outside the node tool or when the current
+    /// selection does not qualify.
+    pub fn split_selected(&mut self) {
+        if self.tool == Tool::Node {
+            self.node.split_selected(&mut self.minter, &self.document);
+        }
+    }
+
     /// Acceptance criterion 12: a double-click (already recognized by
     /// the host) at `point`.
     pub fn insert_at(&mut self, point: Point) {
@@ -709,14 +727,14 @@ mod tests {
         session.finish_pen();
 
         // Pen tool is still active: these are no-ops.
-        session.convert_selected(AnchorKind::Smooth);
+        session.convert_selected(AnchorKind::Symmetric);
         session.delete_selected();
         assert_eq!(session.paths()[0].anchors.len(), 2);
 
         session.set_tool(Tool::Node);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.convert_selected(AnchorKind::Smooth);
-        assert_eq!(session.paths()[0].anchors[0].kind, AnchorKind::Smooth);
+        session.convert_selected(AnchorKind::Symmetric);
+        assert_eq!(session.paths()[0].anchors[0].kind, AnchorKind::Symmetric);
     }
 
     #[test]
@@ -1024,7 +1042,7 @@ mod tests {
         let state = session.node_toolbar_state();
         assert!(state.can_delete);
         assert!(state.can_convert_to_corner);
-        assert!(state.can_convert_to_smooth);
+        assert!(state.can_convert_to_symmetric);
         assert!(!state.can_insert);
         assert!(!state.can_make_line);
         assert!(!state.can_make_curve);
@@ -1060,5 +1078,62 @@ mod tests {
         session.insert_selected();
         assert_eq!(session.paths()[0].anchors.len(), 3);
         assert_eq!(session.node_toolbar_state(), NodeToolbarState::default());
+    }
+
+    /// Acceptance criteria 8-11: selecting the two ends of one open path
+    /// and triggering Join through the whole `Session` surface closes
+    /// it, as one merged node.
+    #[test]
+    fn join_selected_closes_an_open_path_through_the_session() {
+        // Far enough apart that the third click does not land inside the
+        // (doubled, 16px/mm at this identity view) close-path tolerance
+        // around the first node — the same pitfall
+        // `is_hovering_pen_close_target_matches_the_real_close_decision`'s
+        // own doc comment already names for this exact reason.
+        let mut session = Session::new(1);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_down(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 0.0), false);
+        session.pointer_down(Point::new(25.0, 50.0), false);
+        session.pointer_up(Point::new(25.0, 50.0), false);
+        session.finish_pen();
+
+        session.set_tool(Tool::Node);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_down(Point::new(25.0, 50.0), true);
+        session.pointer_up(Point::new(25.0, 50.0), false);
+        assert!(session.node_toolbar_state().can_join);
+
+        session.join_selected();
+
+        let paths = session.paths();
+        assert_eq!(paths.len(), 1, "still one object, now closed");
+        assert!(paths[0].closed);
+        assert_eq!(paths[0].anchors.len(), 2);
+    }
+
+    /// Acceptance criteria 12-15: splitting an interior node through the
+    /// whole `Session` surface produces two objects.
+    #[test]
+    fn split_selected_on_an_interior_node_through_the_session() {
+        let mut session = Session::new(1);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_down(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.pointer_down(Point::new(20.0, 0.0), false);
+        session.pointer_up(Point::new(20.0, 0.0), false);
+        session.finish_pen();
+
+        session.set_tool(Tool::Node);
+        session.pointer_down(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false);
+        assert!(session.node_toolbar_state().can_split);
+
+        session.split_selected();
+
+        assert_eq!(session.paths().len(), 2, "two separate objects now");
     }
 }

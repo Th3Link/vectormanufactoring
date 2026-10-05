@@ -161,6 +161,8 @@ function App() {
             convertSelected: editor.convertSelected,
             makeLine: editor.makeLine,
             makeCurve: editor.makeCurve,
+            joinSelected: editor.joinSelected,
+            splitSelected: editor.splitSelected,
           }}
         />
       ) : null}

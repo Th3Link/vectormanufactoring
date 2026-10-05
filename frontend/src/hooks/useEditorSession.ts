@@ -54,18 +54,26 @@ export interface NodeToolbarState {
   canInsert: boolean;
   canDelete: boolean;
   canConvertToCorner: boolean;
-  canConvertToSmooth: boolean;
+  canConvertToSymmetric: boolean;
+  canConvertToAsymmetric: boolean;
   canMakeLine: boolean;
   canMakeCurve: boolean;
+  /** Join (acceptance criterion 8). */
+  canJoin: boolean;
+  /** Split (acceptance criterion 12). */
+  canSplit: boolean;
 }
 
 const EMPTY_TOOLBAR_STATE: NodeToolbarState = {
   canInsert: false,
   canDelete: false,
   canConvertToCorner: false,
-  canConvertToSmooth: false,
+  canConvertToSymmetric: false,
+  canConvertToAsymmetric: false,
   canMakeLine: false,
   canMakeCurve: false,
+  canJoin: false,
+  canSplit: false,
 };
 
 /** A hand-rolled double-click detector (specs/0002-path-node-editing/
@@ -93,18 +101,24 @@ function readToolbarState(raw: {
   can_insert: boolean;
   can_delete: boolean;
   can_convert_to_corner: boolean;
-  can_convert_to_smooth: boolean;
+  can_convert_to_symmetric: boolean;
+  can_convert_to_asymmetric: boolean;
   can_make_line: boolean;
   can_make_curve: boolean;
+  can_join: boolean;
+  can_split: boolean;
   free(): void;
 }): NodeToolbarState {
   const state: NodeToolbarState = {
     canInsert: raw.can_insert,
     canDelete: raw.can_delete,
     canConvertToCorner: raw.can_convert_to_corner,
-    canConvertToSmooth: raw.can_convert_to_smooth,
+    canConvertToSymmetric: raw.can_convert_to_symmetric,
+    canConvertToAsymmetric: raw.can_convert_to_asymmetric,
     canMakeLine: raw.can_make_line,
     canMakeCurve: raw.can_make_curve,
+    canJoin: raw.can_join,
+    canSplit: raw.can_split,
   };
   raw.free();
   return state;
@@ -159,9 +173,16 @@ export interface EditorSession {
   setTool: (tool: Tool) => void;
   escape: () => void;
   deleteSelected: () => void;
-  convertSelected: (kind: "corner" | "smooth") => void;
+  convertSelected: (kind: "corner" | "symmetric" | "asymmetric") => void;
   makeLine: () => void;
   makeCurve: () => void;
+  /** Join: merges the two selected endpoint nodes into one (acceptance
+   * criteria 8-11). No keyboard shortcut (specification.md's "Out of
+   * scope"). */
+  joinSelected: () => void;
+  /** Split: breaks a path apart at the one selected node (acceptance
+   * criteria 12-15). No keyboard shortcut, same reasoning as Join. */
+  splitSelected: () => void;
   insertSelected: () => void;
   finishPen: () => void;
   /** Acceptance criterion 6's "remove rounding" action. */
@@ -406,7 +427,7 @@ export function useEditorSession(
   }, [syncFromSession]);
 
   const convertSelected = useCallback(
-    (kind: "corner" | "smooth") => {
+    (kind: "corner" | "symmetric" | "asymmetric") => {
       sessionRef.current?.convert_selected(kind);
       syncFromSession();
     },
@@ -420,6 +441,16 @@ export function useEditorSession(
 
   const makeCurve = useCallback(() => {
     sessionRef.current?.make_curve();
+    syncFromSession();
+  }, [syncFromSession]);
+
+  const joinSelected = useCallback(() => {
+    sessionRef.current?.join_selected();
+    syncFromSession();
+  }, [syncFromSession]);
+
+  const splitSelected = useCallback(() => {
+    sessionRef.current?.split_selected();
     syncFromSession();
   }, [syncFromSession]);
 
@@ -628,6 +659,8 @@ export function useEditorSession(
     convertSelected,
     makeLine,
     makeCurve,
+    joinSelected,
+    splitSelected,
     insertSelected,
     finishPen,
     removeCornerRounding,

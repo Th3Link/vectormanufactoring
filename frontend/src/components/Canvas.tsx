@@ -46,6 +46,8 @@ export function Canvas({ editor }: CanvasProps) {
           convertSelected: editor.convertSelected,
           makeLine: editor.makeLine,
           makeCurve: editor.makeCurve,
+          joinSelected: editor.joinSelected,
+          splitSelected: editor.splitSelected,
         }}
       >
         <canvas
