@@ -1,6 +1,6 @@
 # Primitive shapes: rectangle, ellipse and polygon/star tools, and "object to path"
 
-Status: Ready
+Status: Done
 Priority: Must
 Origin: Customer
 
@@ -420,4 +420,4 @@ outline, and the `R`/`E`/`*` shortcuts and rail order above.
 
 ## Links
 Requirements: R-EDIT-002, R-EDIT-004 (`docs/requirements.md`)
-PR: TBD
+PR: https://github.com/Th3Link/vectormanufactoring/pull/10
