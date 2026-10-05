@@ -136,15 +136,31 @@ impl<'de> Deserialize<'de> for AnchorId {
 /// (`specs/0002-path-node-editing/adrs.md` decision 3: stored, not derived from
 /// geometry — a corner node whose handles happen to be mirrored must still
 /// behave as a corner).
+///
+/// Renamed and extended by `specs/0006-path-merge-split-and-node-types/
+/// adrs.md`: the slice-2 `Smooth` variant is renamed `Symmetric` (a
+/// mechanical rename — every call site matches on the variant, never on
+/// its name) and a third variant, `Asymmetric`, is added alongside it.
+/// The three names are deliberately distinct from Inkscape's own
+/// confusingly-overloaded "smooth"/"symmetric" pair — see that spec's own
+/// naming note — and no code may reuse "Smooth" for anything.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AnchorKind {
     /// Each handle moves independently (acceptance criterion 1's plain
-    /// click, or a smooth node converted to corner).
+    /// click, or a symmetric/asymmetric node converted to corner).
     Corner,
     /// Dragging one handle keeps the other collinear through the anchor at
-    /// the same distance (acceptance criterion 2's click-drag).
-    Smooth,
+    /// the same distance, mirrored (acceptance criterion 2's click-drag;
+    /// `specs/0002-path-node-editing/specification.md` called this kind
+    /// "smooth").
+    Symmetric,
+    /// Tangent-continuous like [`AnchorKind::Symmetric`], but each
+    /// handle's length is independently adjustable: dragging one handle
+    /// rotates the opposite one to stay collinear without changing its
+    /// own length (`specs/0006-path-merge-split-and-node-types/
+    /// specification.md` acceptance criterion 3).
+    Asymmetric,
 }
 
 /// Which of an anchor's two handles an operation targets.
@@ -255,4 +271,18 @@ pub enum PathEditError {
     /// segment) and did not get them.
     #[error("the given anchors are not an adjacent segment on this path")]
     NotAnAdjacentSegment,
+    /// `Document::join_endpoints` refused: the two given anchors are not
+    /// each the first-or-last anchor of an open path, are the same
+    /// anchor, or (for two ends of the same path) that path has only two
+    /// anchors, so joining them would collapse it to a one-anchor closed
+    /// path `render-core` cannot draw
+    /// (`specs/0006-path-merge-split-and-node-types/specification.md`
+    /// acceptance criterion 8).
+    #[error("the given anchors cannot be joined")]
+    NotJoinable,
+    /// `Document::split_at_anchor` refused: the given anchor is the first
+    /// or last anchor of an open path, which has nothing on one side to
+    /// split off (acceptance criterion 12).
+    #[error("the given anchor cannot be split")]
+    NotSplittable,
 }

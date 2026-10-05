@@ -20,7 +20,37 @@ use crate::units::{DocumentSize, Length};
 /// "`format_version` goes to 3"). Migration from version 2 is empty by
 /// construction: absent `shape` means path, so every version-2 path node
 /// opens unchanged.
-pub const CURRENT_FORMAT_VERSION: u32 = 3;
+///
+/// Bumped to 4 here (`specs/0006-path-merge-split-and-node-types/adrs.md`,
+/// "`format_version` goes to 5" — taken as 4 on this branch instead: that
+/// note assumed `object-transform` (slice 5, claiming 4) had already
+/// merged, which it had not when this slice branched from `main`; see this
+/// crate's own dated note below for the reconciliation). A version-3
+/// reader maps any unknown `kind` string to `Corner` (slice 2's lenient
+/// read), so it would open a version-4 file with `Asymmetric` anchors and
+/// silently turn them into corners — the silent partial read ADR 0004 §9
+/// forbids. Migration from version 3 is the `"smooth"` → `Symmetric` read
+/// alias in `path_codec::read_kind` and nothing else: no anchor's stored
+/// shape changes, only the kind tag's legacy spelling is now also
+/// understood.
+pub const CURRENT_FORMAT_VERSION: u32 = 4;
+
+// 2026-10-05 (implementer, `specs/0006-path-merge-split-and-node-types/
+// adrs.md` flagged item 1 as "resolved by sequence"): that note assumed
+// this slice ships *after* `object-transform` (slice 5) merges and takes
+// `format_version` 4, leaving 5 for this slice. This slice was instead
+// built in parallel, directly on `main`, before either `canvas-navigation-
+// and-selection` (slice 4) or `object-transform` (slice 5) had merged —
+// so `main`'s `CURRENT_FORMAT_VERSION` was still 3, with no `rotation`
+// register at all yet. This build takes the next free version, 4, rather
+// than pre-claiming 5 for a predecessor version that does not exist on
+// this branch. Whichever of this slice and `object-transform` merges
+// second will need its own version renumbered (and, for `object-
+// transform`'s `rotation` register, threaded through `join_endpoints`/
+// `split_at_anchor` below, which do not copy or carry a `rotation` field
+// today because none exists yet to copy) — expected integration work the
+// lead's brief for this slice already called out, not a defect in either
+// slice considered alone.
 
 const ROOT_MAP: &str = "root";
 const KEY_FORMAT_VERSION: &str = "format_version";

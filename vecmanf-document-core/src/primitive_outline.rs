@@ -64,7 +64,7 @@ pub fn effective_corner_radius(bounds: RectBounds, corner_radius: Length) -> Len
 
 /// A rectangle's outline (acceptance criteria 1-6, 18): 4 sharp corners
 /// at effective radius 0, or 8 tangent points (all [`AnchorKind::Corner`]
-/// — a line-to-arc join cannot be [`AnchorKind::Smooth`], see `adrs.md`)
+/// — a line-to-arc join cannot be [`AnchorKind::Symmetric`], see `adrs.md`)
 /// once rounded.
 #[must_use]
 pub fn rect_outline(bounds: RectBounds, corner_radius: Length) -> Vec<OutlineAnchor> {
@@ -155,7 +155,7 @@ pub fn ellipse_outline(frame: EllipseFrame) -> Vec<OutlineAnchor> {
     let ry = ry.as_mm();
     let kx = KAPPA * rx;
     let ky = KAPPA * ry;
-    let smooth = AnchorKind::Smooth;
+    let smooth = AnchorKind::Symmetric;
     vec![
         // East (the rx extreme): vertical handles, length κ·ry.
         OutlineAnchor {
@@ -343,7 +343,7 @@ mod tests {
         };
         let outline = ellipse_outline(frame);
         assert_eq!(outline.len(), 4);
-        assert!(outline.iter().all(|a| a.kind == AnchorKind::Smooth));
+        assert!(outline.iter().all(|a| a.kind == AnchorKind::Symmetric));
         for anchor in &outline {
             assert_eq!(anchor.handle_in, anchor.handle_out.negated());
         }
