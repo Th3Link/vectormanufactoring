@@ -48,3 +48,37 @@ pub const HOVER_RING_DIAMETER_PX: f64 = 10.0;
 /// Coarse on purpose: these are small, flat-colored UI glyphs, not
 /// document geometry, so no [`vecmanf_document_core::Tolerance`] applies.
 pub const CIRCLE_SEGMENTS: usize = 16;
+
+/// `--shape-handle-fill`/`--shape-handle-stroke` idle state
+/// (`docs/design-system.md`, `primitive-shapes`): white fill, accent
+/// outline — same two-tone construction as a node glyph's idle state.
+pub const SHAPE_HANDLE_STROKE: RgbaColor = ACCENT;
+
+/// Shape handle size, screen-space pixels (8×8, `docs/design-system.md`
+/// — deliberately larger than [`NODE_SIZE_PX`] so the two glyph
+/// vocabularies never read as the same control).
+pub const SHAPE_HANDLE_SIZE_PX: f64 = 8.0;
+
+/// Shape handle outline thickness, screen-space pixels — same
+/// reasoning as [`NODE_OUTLINE_PX`].
+pub const SHAPE_HANDLE_OUTLINE_PX: f64 = 1.0;
+
+/// The primitive bounding-box selection/hover outline's weight,
+/// screen-space pixels (`docs/design-system.md`'s "Bounding-box
+/// selection outline").
+pub const BOUNDING_BOX_OUTLINE_PX: f64 = 1.0;
+
+/// One dash's length, screen-space pixels, for the corner-radius
+/// connecting guide (`docs/design-system.md`: "dashed `--accent-hover`
+/// line").
+pub const GUIDE_DASH_PX: f64 = 4.0;
+
+/// The gap between two dashes, screen-space pixels.
+pub const GUIDE_GAP_PX: f64 = 3.0;
+
+/// A shape tool's live, uncommitted preview outline weight,
+/// screen-space pixels (`specs/0003-primitive-shapes/specification.md`'s
+/// "Live creation feedback": "screen-space-constant stroke weight") —
+/// distinct from the committed placeholder stroke's document-mm
+/// weight (acceptance criterion 16), since nothing has committed yet.
+pub const LIVE_PREVIEW_STROKE_PX: f64 = 1.5;

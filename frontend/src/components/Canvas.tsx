@@ -1,4 +1,5 @@
 import { NodeContextMenu } from "@/components/NodeToolbar";
+import { CSS_PX_PER_MM } from "@/hooks/useEditorSession";
 import type { EditorSession } from "@/hooks/useEditorSession";
 
 interface CanvasProps {
@@ -23,7 +24,7 @@ export function Canvas({ editor }: CanvasProps) {
       ref={editor.containerRef}
       tabIndex={0}
       onKeyDown={editor.onKeyDown}
-      className={`flex-1 outline-none ${
+      className={`relative flex-1 outline-none ${
         editor.tool === "pen"
           ? editor.isHoveringPenCloseTarget
             ? "canvas-cursor-pen-close"
@@ -55,18 +56,37 @@ export function Canvas({ editor }: CanvasProps) {
           onPointerUp={editor.onPointerUp}
           onPointerLeave={editor.onPointerLeave}
           onContextMenu={(event) => {
-            // The pen tool has no context menu of its own (UX notes:
-            // the node tool's six actions are the only ones); suppress
-            // the browser's native menu either way so a right-click
-            // never interrupts drawing. `NodeContextMenu` itself
-            // prevents default for its own (node-tool-only) menu.
-            if (editor.tool === "pen") {
+            // The pen and shape tools have no context menu of their own
+            // (UX notes: the node tool's six actions are the only
+            // ones); suppress the browser's native menu either way so a
+            // right-click never interrupts drawing. `NodeContextMenu`
+            // itself prevents default for its own (node-tool-only) menu.
+            if (editor.tool !== "node") {
               event.preventDefault();
             }
           }}
           style={{ background: "var(--canvas-bg)" }}
         />
       </NodeContextMenu>
+      {editor.liveReadout && (
+        // On-canvas, not status-bar (`specs/0003-primitive-shapes/
+        // specification.md`'s "Live creation feedback": "direct
+        // manipulation keeps the number where the maker's eyes already
+        // are"), positioned near point B — the live drag endpoint, in
+        // document space, converted to this view's screen pixels the
+        // same way every other document-space point already is.
+        <div
+          className="pointer-events-none absolute z-10 -translate-y-full rounded-md px-1.5 py-0.5 text-xs"
+          style={{
+            left: editor.liveReadout.x * CSS_PX_PER_MM + 8,
+            top: editor.liveReadout.y * CSS_PX_PER_MM - 8,
+            background: "var(--toolbar-bg)",
+            color: "var(--toolbar-icon)",
+          }}
+        >
+          {editor.liveReadout.text}
+        </div>
+      )}
     </div>
   );
 }

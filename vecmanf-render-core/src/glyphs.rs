@@ -3,6 +3,15 @@
 //! through `lyon`'s fill tessellator: these are small, constant-shape UI
 //! glyphs, not document geometry, so there is no curve to tessellate and
 //! no [`vecmanf_document_core::Tolerance`] that could apply to them.
+//!
+//! Renamed from `primitives.rs` in `primitive-shapes`
+//! (`specs/0003-primitive-shapes/adrs.md`: "after this slice, 'primitive'
+//! means a document shape, and a module of that name holding UI glyphs
+//! would mislead"). This module still means exactly what it always
+//! did — UI glyph geometry — never a document primitive
+//! ([`vecmanf_document_core::Shape`]); [`crate::shape_preview`] is where
+//! a document primitive's own stroke and handles are built, reusing
+//! these glyphs as its drawing primitives.
 
 use vecmanf_document_core::{Point, Vec2};
 

@@ -248,9 +248,14 @@ mod tests {
     /// not this generator.
     #[test]
     #[ignore = "run deliberately to regenerate tests/fixtures/*.vmf, not on every `cargo test`"]
+    // One linear sequence of fixture-writing steps, each with its own
+    // explanatory comment; splitting it into sub-functions would just
+    // move the same line count behind extra indirection for a
+    // `#[ignore]`d, one-off generator nobody calls from production code.
+    #[allow(clippy::too_many_lines)]
     fn generate_golden_fixtures() {
-        use crate::path_model::{AnchorId, AnchorKind, NewAnchor};
-        use crate::units::{Point, Vec2};
+        use crate::path_model::{AnchorId, NewAnchor};
+        use crate::units::{Length, Point};
 
         let fixtures_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
 
@@ -286,34 +291,63 @@ mod tests {
         )
         .expect("write future_format_version.vmf");
 
-        // `path-node-editing` (`specs/0002-path-node-editing/plan.md`, task 31):
-        // a `format_version = 2` fixture carrying both anchor kinds, open
-        // and closed.
-        let with_paths = Document::new(1);
-        let open_path = with_paths.create_path(
+        // `paths_v2.vmf` is deliberately NOT regenerated here, for the
+        // same reason as `format_version_1.vmf` below: `primitive-shapes`
+        // bumped `CURRENT_FORMAT_VERSION` to 3, so running this build's
+        // own `Document`/`pack` would bake a `format_version: 3` manifest
+        // onto it, destroying its value as proof that a *genuine*
+        // version-2 container (one `path-node-editing` actually wrote,
+        // before this slice's primitive schema existed) still opens
+        // unchanged under the new build (`specs/0003-primitive-shapes/plan.md`,
+        // task 19). The committed fixture is `path-node-editing`'s own,
+        // untouched.
+
+        // `primitives_v3.vmf` (`specs/0003-primitive-shapes/plan.md`, task 19):
+        // a genuine `format_version = 3` fixture carrying one of each
+        // primitive kind — a rounded rectangle, a circle (rx == ry), a
+        // plain polygon and a star — plus one ordinary path, proving the
+        // two kinds share one tree/z-order.
+        let with_primitives = Document::new(1);
+        let rect_id = with_primitives.create_rect(crate::primitive_model::RectBounds {
+            origin: Point::new(0.0, 0.0),
+            width: Length::from_mm(20.0),
+            height: Length::from_mm(10.0),
+        });
+        with_primitives
+            .set_corner_radius(&[rect_id], Length::from_mm(2.0))
+            .expect("set corner radius");
+        let _ = with_primitives.create_ellipse(crate::primitive_model::EllipseFrame {
+            center: Point::new(50.0, 0.0),
+            rx: Length::from_mm(5.0),
+            ry: Length::from_mm(5.0),
+        });
+        let _ = with_primitives.create_polygon(
+            crate::primitive_model::StarFrame {
+                center: Point::new(0.0, 50.0),
+                radius: Length::from_mm(10.0),
+                angle: crate::units::Angle::from_radians(0.0),
+            },
+            crate::primitive_model::PointCount::new(6).expect("valid point count"),
+        );
+        let _ = with_primitives.create_star(
+            crate::primitive_model::StarFrame {
+                center: Point::new(50.0, 50.0),
+                radius: Length::from_mm(10.0),
+                angle: crate::units::Angle::from_radians(0.0),
+            },
+            crate::primitive_model::PointCount::new(5).expect("valid point count"),
+            crate::primitive_model::InnerRatio::new(0.5).expect("valid inner ratio"),
+        );
+        let _ = with_primitives.create_path(
             &[
-                NewAnchor::corner(AnchorId::new(1, 1), Point::new(0.0, 0.0)),
-                NewAnchor::corner(AnchorId::new(1, 2), Point::new(50.0, 0.0)),
+                NewAnchor::corner(AnchorId::new(1, 101), Point::new(-10.0, -10.0)),
+                NewAnchor::corner(AnchorId::new(1, 102), Point::new(-10.0, -20.0)),
             ],
             false,
         );
-        let closed_path = with_paths.create_path(
-            &[
-                NewAnchor::corner(AnchorId::new(1, 3), Point::new(0.0, 0.0)),
-                NewAnchor {
-                    id: AnchorId::new(1, 4),
-                    point: Point::new(20.0, 0.0),
-                    handle_in: Vec2::new(-5.0, 0.0),
-                    handle_out: Vec2::new(5.0, 0.0),
-                    kind: AnchorKind::Smooth,
-                },
-                NewAnchor::corner(AnchorId::new(1, 5), Point::new(10.0, 20.0)),
-            ],
-            true,
-        );
-        let _ = (open_path, closed_path);
-        let paths_v2 = pack(&with_paths, "0.1.0").expect("pack");
-        std::fs::write(fixtures_dir.join("paths_v2.vmf"), &paths_v2).expect("write paths_v2.vmf");
+        let primitives_v3 = pack(&with_primitives, "0.1.0").expect("pack");
+        std::fs::write(fixtures_dir.join("primitives_v3.vmf"), &primitives_v3)
+            .expect("write primitives_v3.vmf");
 
         // `format_version_1.vmf` is deliberately NOT regenerated here.
         // Synthesizing it from this build's own `Document::new` would bake

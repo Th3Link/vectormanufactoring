@@ -14,7 +14,7 @@ use lyon::tessellation::{
 use vecmanf_document_core::{AnchorSnapshot, Point, Vec2};
 
 use crate::color::RgbaColor;
-use crate::primitives::{DrawList, Vertex};
+use crate::glyphs::{DrawList, Vertex};
 
 /// `lyon`'s own display tolerance for approximating a curve with line
 /// segments during stroking — unrelated to, and coarser than,

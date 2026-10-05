@@ -13,7 +13,7 @@
 // so `CLAUDE.md` §5's unwrap/expect restriction does not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use vecmanf_document_core::{AnchorKind, OpenError, unpack};
+use vecmanf_document_core::{AnchorKind, ObjectSnapshot, OpenError, Shape, unpack};
 
 fn fixture(name: &str) -> Vec<u8> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -61,7 +61,7 @@ fn paths_v2_vmf_round_trips_both_anchor_kinds_open_and_closed() {
     let bytes = fixture("paths_v2.vmf");
     let document = unpack(2, &bytes).expect("a golden paths .vmf must open");
 
-    let ids = document.path_ids();
+    let ids = document.object_ids();
     assert_eq!(ids.len(), 2, "exactly two paths");
 
     let open = document.path(ids[0]).expect("first path exists");
@@ -89,7 +89,59 @@ fn paths_v2_vmf_round_trips_both_anchor_kinds_open_and_closed() {
 fn format_version_1_vmf_opens_with_no_paths() {
     let bytes = fixture("format_version_1.vmf");
     let document = unpack(2, &bytes).expect("a golden format_version=1 .vmf must still open");
-    assert_eq!(document.path_ids(), Vec::new());
+    assert_eq!(document.object_ids(), Vec::new());
+}
+
+/// `primitive-shapes` (`specs/0003-primitive-shapes/plan.md`, task 19): a
+/// genuine `format_version = 3` document carrying one of each primitive
+/// kind plus one ordinary path, round-trips through the container
+/// exactly — proving `format_version` 3 opens, and that paths and
+/// primitives coexist in the same z-ordered object list.
+#[test]
+fn primitives_v3_vmf_round_trips_every_shape_kind() {
+    let bytes = fixture("primitives_v3.vmf");
+    let document = unpack(2, &bytes).expect("a golden primitives .vmf must open");
+
+    let ids = document.object_ids();
+    assert_eq!(ids.len(), 5, "4 primitives + 1 path");
+
+    let mut saw_rect = false;
+    let mut saw_ellipse = false;
+    let mut saw_polygon = false;
+    let mut saw_star = false;
+    let mut saw_path = false;
+    for id in ids {
+        match document.object(id).expect("object exists") {
+            ObjectSnapshot::Path(path) => {
+                saw_path = true;
+                assert_eq!(path.anchors.len(), 2);
+            }
+            ObjectSnapshot::Primitive(primitive) => match primitive.shape {
+                Shape::Rect { corner_radius, .. } => {
+                    saw_rect = true;
+                    assert!((corner_radius.as_mm() - 2.0).abs() < f64::EPSILON);
+                }
+                Shape::Ellipse { frame } => {
+                    saw_ellipse = true;
+                    assert!((frame.rx.as_mm() - frame.ry.as_mm()).abs() < f64::EPSILON);
+                }
+                Shape::Polygon { point_count, .. } => {
+                    saw_polygon = true;
+                    assert_eq!(point_count.get(), 6);
+                }
+                Shape::Star {
+                    point_count,
+                    inner_ratio,
+                    ..
+                } => {
+                    saw_star = true;
+                    assert_eq!(point_count.get(), 5);
+                    assert!((inner_ratio.get() - 0.5).abs() < f64::EPSILON);
+                }
+            },
+        }
+    }
+    assert!(saw_rect && saw_ellipse && saw_polygon && saw_star && saw_path);
 }
 
 /// Architect review (`specs/0002-path-node-editing/adrs.md`'s PR review note):

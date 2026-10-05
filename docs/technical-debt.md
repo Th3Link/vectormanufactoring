@@ -38,6 +38,19 @@ route to what OpenVoronoi does, and still not free: `centerline` depends on
 V-carve a desktop-only capability or force a reimplementation of that filter.
 That trade is what makes it an escalation rather than the first choice.
 
+## Node selection holds one path
+
+`vecmanf-ui-core`'s `NodeSelection` refers to a single path. After
+"object to path" on several primitives, only the first converted path is
+selected in the node tool (`specs/0003-primitive-shapes/adrs.md`, 2026-10-04
+PR #10 review note). Node editing across several paths at once, as
+Inkscape allows, is not possible.
+
+**Resolution:** the general selection tool story. It needs multi-path
+node commands that still make one commit per interaction (ADR 0002 §9).
+Nothing is stored, because selection is ephemeral (ADR 0009 §2), so no
+file format change is involved.
+
 ## SVG round-trip is lossy
 
 We own a documented SVG subset; unmodelled attributes survive in a per-node

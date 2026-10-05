@@ -8,16 +8,36 @@
 //! `vecmanf-ui-core`'s and `vecmanf-render-core`'s, and this module's own
 //! job is exactly "which tool is active, and where do its inputs and the
 //! view transform come from" — nothing a browser is required to answer.
+//!
+//! `primitive-shapes` adds three shape tools (Rectangle, Ellipse,
+//! Polygon/Star) alongside Pen and Node, plus "object to path"
+//! (acceptance criteria 1-22). Everything specific to those three tools
+//! — tool-options, live preview/readout, decoration input, "object to
+//! path" itself — lives in the `shapes` submodule (architect review:
+//! this file alone grew past a size that still read as "one
+//! responsibility"); it reaches this module's otherwise-private fields
+//! because a child module shares its parent's privacy boundary, and its
+//! methods join this type's `impl Session` the same way any other
+//! `impl` block in the same crate would.
+
+mod shapes;
 
 use vecmanf_document_core::{
-    AnchorKind, Document, Length, OpenError, Point, SaveError, Tolerance, ViewTransform,
+    AnchorKind, Document, Length, NodeId, OpenError, Point, SaveError, Tolerance, ViewTransform,
 };
 use vecmanf_render_core::{
     DecorationInput, DrawList, Hovered as RenderHovered, build_draw_list, build_pen_preview,
 };
 use vecmanf_ui_core::{
-    AnchorIdMinter, Hit, HitTolerances, NodeTool, NodeToolbarState, PenTool, hit_test,
+    AnchorIdMinter, EllipseTool, Hit, HitTolerances, NodeTool, NodeToolbarState, PenTool,
+    PolygonStarTool, PrimitiveSelection, RectangleTool, hit_test,
 };
+
+// Re-exported only for `wasm_api`'s own `LiveReadout` wrapper (its only
+// consumer, and itself `wasm32`-only) — `#[cfg]`-gated the same way so
+// a host build does not see an unused public re-export.
+#[cfg(target_arch = "wasm32")]
+pub use shapes::LiveReadout;
 
 /// 8px node/handle hit-test radius (`docs/design-system.md`).
 const POINT_TOLERANCE_PX: f64 = 8.0;
@@ -30,14 +50,21 @@ const SEGMENT_TOLERANCE_PX: f64 = 4.0;
 const PEN_DRAG_THRESHOLD_PX: f64 = 3.0;
 
 /// Which tool is active. Exactly one at a time — `specification.md`'s
-/// tool rail has two buttons, Pen and Node, and switching tools is a
-/// single active-tool state, not independent flags.
+/// tool rail has five buttons (Pen, Node, Rectangle, Ellipse,
+/// Polygon/Star), and switching tools is a single active-tool state,
+/// not independent flags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tool {
-    /// The pen tool (acceptance criteria 1-5).
+    /// The pen tool (acceptance criteria 1-5, `path-node-editing`).
     Pen,
-    /// The node tool (acceptance criteria 7-14).
+    /// The node tool (acceptance criteria 7-14, `path-node-editing`).
     Node,
+    /// The rectangle tool (acceptance criteria 1-6).
+    Rectangle,
+    /// The ellipse/circle tool (acceptance criteria 7-9).
+    Ellipse,
+    /// The polygon/star tool (acceptance criteria 10-15).
+    PolygonStar,
 }
 
 /// One open document's whole editing session.
@@ -46,9 +73,18 @@ pub struct Session {
     minter: AnchorIdMinter,
     pen: PenTool,
     node: NodeTool,
+    rectangle: RectangleTool,
+    ellipse: EllipseTool,
+    poly_star: PolygonStarTool,
+    /// Shared across the three shape tools (acceptance criterion 22:
+    /// two or more primitives can be selected together).
+    primitive_selection: PrimitiveSelection,
     tool: Tool,
     view: ViewTransform,
     hovered: Option<Hit>,
+    /// The primitive currently hovered while a shape tool is active —
+    /// the shape-tool counterpart to `hovered` above.
+    hovered_primitive: Option<NodeId>,
     /// The live pointer position in document space, tracked regardless
     /// of the active tool — the pen tool's rubber-band preview
     /// (`specification.md`'s UX notes) needs it even though it keeps no
@@ -67,13 +103,20 @@ impl Session {
             minter: AnchorIdMinter::new(peer),
             pen: PenTool::new(),
             node: NodeTool::new(),
+            rectangle: RectangleTool::new(),
+            ellipse: EllipseTool::new(),
+            poly_star: PolygonStarTool::new(),
+            primitive_selection: PrimitiveSelection::new(),
             // Pen is the default tool on an empty canvas
             // (`specification.md`'s UX notes: "there's nothing to select
             // or edit yet, and Pen is what lets the maker start
-            // immediately").
+            // immediately"). None of the three new shape tools change
+            // this default (`specs/0003-primitive-shapes/specification.md`'s
+            // own UX notes).
             tool: Tool::Pen,
             view: ViewTransform::identity(),
             hovered: None,
+            hovered_primitive: None,
             pointer_position: None,
         }
     }
@@ -90,9 +133,14 @@ impl Session {
             minter: AnchorIdMinter::new(peer),
             pen: PenTool::new(),
             node: NodeTool::new(),
+            rectangle: RectangleTool::new(),
+            ellipse: EllipseTool::new(),
+            poly_star: PolygonStarTool::new(),
+            primitive_selection: PrimitiveSelection::new(),
             tool: Tool::Node,
             view: ViewTransform::identity(),
             hovered: None,
+            hovered_primitive: None,
             pointer_position: None,
         })
     }
@@ -112,14 +160,25 @@ impl Session {
         self.tool
     }
 
-    /// Switches the active tool (`B`/`N` canvas-focus shortcuts, or the
-    /// tool rail). Switching away from the pen tool mid-path does
-    /// **not** discard it — only Escape or finishing does
+    /// Switches the active tool (`B`/`N`/`R`/`E`/`*` canvas-focus
+    /// shortcuts, or the tool rail). Switching away from the pen tool
+    /// mid-path does **not** discard it — only Escape or finishing does
     /// (`specification.md`'s pen tool is not itself scoped to stay
     /// active just because another tool was clicked; no acceptance
     /// criterion covers this edge, so the safer, less surprising choice
-    /// — not silently losing work — is kept).
+    /// — not silently losing work — is kept). Likewise, switching away
+    /// from a shape tool mid-drag does not discard that drag either —
+    /// no acceptance criterion exercises switching tools mid-drag, so
+    /// the same conservative stance applies.
     pub fn set_tool(&mut self, tool: Tool) {
+        // Flushes any pending ratio-slider preview against the
+        // selection it was actually previewed against, before anything
+        // else can change that selection (architect re-verification: a
+        // slider drag released outside the slider element never fires
+        // the slider's own `pointerup`/`blur`, so without this the
+        // preview would otherwise sit unflushed until some later event
+        // commits it against whatever is selected *then* instead).
+        self.commit_poly_star_ratio();
         self.tool = tool;
     }
 
@@ -152,7 +211,7 @@ impl Session {
 
     fn paths(&self) -> Vec<vecmanf_document_core::PathSnapshot> {
         self.document
-            .path_ids()
+            .object_ids()
             .into_iter()
             .filter_map(|id| self.document.path(id))
             .collect()
@@ -160,6 +219,12 @@ impl Session {
 
     /// The pointer went down at `point` (document space).
     pub fn pointer_down(&mut self, point: Point, shift: bool) {
+        // Same flush as `set_tool`'s own doc comment explains: a canvas
+        // click can change the selection (e.g. selecting a different
+        // star) before a pending ratio-slider preview ever gets a
+        // chance to commit against the selection it was previewed
+        // against, if the mouse was released outside the slider itself.
+        self.commit_poly_star_ratio();
         match self.tool {
             Tool::Pen => {
                 let tolerance = self.point_tolerance_as_length();
@@ -170,6 +235,9 @@ impl Session {
                 let tolerances = self.hit_tolerances();
                 self.node.pointer_down(&paths, point, tolerances, shift);
             }
+            Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
+                self.shape_pointer_down(point, shift);
+            }
         }
     }
 
@@ -177,26 +245,39 @@ impl Session {
         Length::from_mm(self.point_tolerance().as_mm())
     }
 
-    /// The pointer moved to `point` with no button held. Always records
-    /// `point` as the live cursor position — [`Session::draw_list`]'s
-    /// pen-tool rubber-band preview needs it (`specification.md`'s UX
-    /// notes) even though the pen tool keeps no hit-test hover state of
-    /// its own. For the node tool, additionally updates hover state for
-    /// the hover ring (same UX notes).
-    pub fn pointer_hover(&mut self, point: Point) {
+    /// The pointer moved to `point`. Always records `point` as the live
+    /// cursor position — [`Session::draw_list`]'s pen-tool rubber-band
+    /// preview needs it (`specification.md`'s UX notes) even though the
+    /// pen tool keeps no hit-test hover state of its own. For the node
+    /// tool, additionally updates hover state for the hover ring (same
+    /// UX notes); for a shape tool, updates the hovered primitive for
+    /// its bounding-box hover outline, *and* feeds whatever drag is in
+    /// flight for the live preview (ux-engineer review: acceptance
+    /// criteria 3, 4, 5, 9, 13, 14, 15's "updates live" wording).
+    /// `constrain` is the Ctrl modifier's current state, consulted only
+    /// by the rectangle/ellipse tools' create-drag preview (acceptance
+    /// criteria 2, 8).
+    pub fn pointer_hover(&mut self, point: Point, constrain: bool) {
         self.pointer_position = Some(point);
-        if self.tool != Tool::Node {
-            self.hovered = None;
-            return;
+        self.hovered = None;
+        self.hovered_primitive = None;
+        match self.tool {
+            Tool::Node => {
+                let paths = self.paths();
+                self.hovered = hit_test(
+                    &paths,
+                    self.node.selection(),
+                    point,
+                    self.point_tolerance(),
+                    self.segment_tolerance(),
+                );
+            }
+            Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
+                self.shape_pointer_move(point, constrain);
+                self.update_hovered_primitive(point);
+            }
+            Tool::Pen => {}
         }
-        let paths = self.paths();
-        self.hovered = hit_test(
-            &paths,
-            self.node.selection(),
-            point,
-            self.point_tolerance(),
-            self.segment_tolerance(),
-        );
     }
 
     /// The pointer left the canvas entirely — clears the live cursor
@@ -205,11 +286,14 @@ impl Session {
     pub fn pointer_leave(&mut self) {
         self.pointer_position = None;
         self.hovered = None;
+        self.hovered_primitive = None;
     }
 
     /// The pointer released at `point`, ending whatever gesture
-    /// [`Session::pointer_down`] began.
-    pub fn pointer_up(&mut self, point: Point) {
+    /// [`Session::pointer_down`] began. `constrain` is the Ctrl
+    /// modifier's state at release — consulted only by the rectangle and
+    /// ellipse tools (acceptance criteria 2, 8).
+    pub fn pointer_up(&mut self, point: Point, constrain: bool) {
         match self.tool {
             Tool::Pen => {
                 let threshold = self.drag_threshold();
@@ -218,6 +302,9 @@ impl Session {
             }
             Tool::Node => {
                 self.node.pointer_up(&self.document, point);
+            }
+            Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
+                self.shape_pointer_up(point, constrain);
             }
         }
     }
@@ -233,9 +320,10 @@ impl Session {
     }
 
     /// Escape: discards the in-progress pen path (acceptance criterion
-    /// 4), or clears the node tool's selection, whichever tool is
-    /// active — never both, matching `specification.md`'s own rule that
-    /// Escape with the node tool active never discards a pen path.
+    /// 4), clears the node tool's selection, or cancels whichever shape
+    /// tool's in-progress drag, depending on the active tool — never
+    /// more than one, matching `specification.md`'s own rule that
+    /// Escape only ever touches the active tool's own state.
     pub fn escape(&mut self) {
         match self.tool {
             Tool::Pen => {
@@ -243,6 +331,9 @@ impl Session {
             }
             Tool::Node => {
                 self.node.escape();
+            }
+            Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
+                self.shape_escape();
             }
         }
     }
@@ -368,11 +459,27 @@ impl Session {
     /// Builds this frame's draw list from the document's current state,
     /// the active view transform, and the node tool's selection/hover —
     /// plus the pen tool's in-progress preview
-    /// (`specification.md`'s UX notes) when it is active.
+    /// (`specification.md`'s UX notes) when it is active, every
+    /// primitive's own stroke/selection/handle decorations, and (when a
+    /// shape-tool drag is in flight) its own live preview outline
+    /// (`specs/0003-primitive-shapes/specification.md`, "Live creation
+    /// feedback").
     #[must_use]
     pub fn draw_list(&self) -> DrawList {
         let paths = self.paths();
         let mut list = build_draw_list(&paths, self.view, &self.decoration_input());
+        let primitives = self.primitives_for_render();
+        list.extend(vecmanf_render_core::build_shape_draw_list(
+            &primitives,
+            self.view,
+            &self.shape_decoration_input(),
+        ));
+        if let Some(live_shape) = self.live_preview_shape() {
+            list.extend(vecmanf_render_core::build_shape_live_preview(
+                &live_shape,
+                self.view,
+            ));
+        }
         if self.tool == Tool::Pen
             && let Some(nodes) = self.pen.in_progress_nodes()
         {
@@ -455,16 +562,16 @@ mod tests {
     fn a_new_session_defaults_to_the_pen_tool_on_an_empty_document() {
         let session = Session::new(1);
         assert_eq!(session.tool(), Tool::Pen);
-        assert_eq!(session.document.path_ids(), Vec::new());
+        assert_eq!(session.document.object_ids(), Vec::new());
     }
 
     #[test]
     fn drawing_an_open_path_with_the_pen_tool_then_reading_it_back() {
         let mut session = Session::new(1);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0));
+        session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0));
+        session.pointer_up(Point::new(10.0, 0.0), false);
         session.finish_pen();
 
         let paths = session.paths();
@@ -476,23 +583,23 @@ mod tests {
     fn escape_discards_the_in_progress_pen_path_only() {
         let mut session = Session::new(1);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0));
+        session.pointer_up(Point::new(0.0, 0.0), false);
         session.escape();
-        assert_eq!(session.document.path_ids(), Vec::new());
+        assert_eq!(session.document.object_ids(), Vec::new());
     }
 
     #[test]
     fn switching_to_the_node_tool_selects_and_edits_a_finished_path() {
         let mut session = Session::new(1);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0));
+        session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0));
+        session.pointer_up(Point::new(10.0, 0.0), false);
         session.finish_pen();
 
         session.set_tool(Tool::Node);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(5.0, 5.0));
+        session.pointer_up(Point::new(5.0, 5.0), false);
 
         let paths = session.paths();
         assert_eq!(paths[0].anchors[0].point, Point::new(5.0, 5.0));
@@ -502,9 +609,9 @@ mod tests {
     fn convert_and_delete_dispatch_only_when_the_node_tool_is_active() {
         let mut session = Session::new(1);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0));
+        session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0));
+        session.pointer_up(Point::new(10.0, 0.0), false);
         session.finish_pen();
 
         // Pen tool is still active: these are no-ops.
@@ -528,9 +635,9 @@ mod tests {
     fn draw_list_includes_geometry_once_a_path_exists() {
         let mut session = Session::new(1);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0));
+        session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0));
+        session.pointer_up(Point::new(10.0, 0.0), false);
         session.finish_pen();
         assert_ne!(session.draw_list().triangles.len(), 0);
     }
@@ -544,11 +651,11 @@ mod tests {
         let empty = session.draw_list().triangle_count();
 
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0));
+        session.pointer_up(Point::new(0.0, 0.0), false);
         let one_node = session.draw_list().triangle_count();
         assert!(one_node > empty, "the placed node's glyph/hover ring draw");
 
-        session.pointer_hover(Point::new(10.0, 0.0));
+        session.pointer_hover(Point::new(10.0, 0.0), false);
         let with_rubber_band = session.draw_list().triangle_count();
         assert!(
             with_rubber_band > one_node,
@@ -570,21 +677,21 @@ mod tests {
         assert!(!session.is_hovering_pen_close_target(), "idle: no path yet");
 
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0));
+        session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0));
+        session.pointer_up(Point::new(10.0, 0.0), false);
 
-        session.pointer_hover(Point::new(0.1, 0.1));
+        session.pointer_hover(Point::new(0.1, 0.1), false);
         assert!(session.is_hovering_pen_close_target());
 
-        session.pointer_hover(Point::new(10.0, 0.0));
+        session.pointer_hover(Point::new(10.0, 0.0), false);
         assert!(
             !session.is_hovering_pen_close_target(),
             "near the last node, not the first"
         );
 
         session.set_tool(Tool::Node);
-        session.pointer_hover(Point::new(0.1, 0.1));
+        session.pointer_hover(Point::new(0.1, 0.1), false);
         assert!(
             !session.is_hovering_pen_close_target(),
             "the node tool never shows a pen cursor"
@@ -595,9 +702,9 @@ mod tests {
     fn pack_then_open_round_trips_a_drawn_path() {
         let mut session = Session::new(1);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0));
+        session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0));
+        session.pointer_up(Point::new(10.0, 0.0), false);
         session.finish_pen();
 
         let bytes = session.pack("0.1.0").expect("pack");
@@ -618,14 +725,14 @@ mod tests {
     fn node_toolbar_state_for_a_selected_node() {
         let mut session = Session::new(1);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0));
+        session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0));
+        session.pointer_up(Point::new(10.0, 0.0), false);
         session.finish_pen();
 
         session.set_tool(Tool::Node);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0));
+        session.pointer_up(Point::new(0.0, 0.0), false);
 
         let state = session.node_toolbar_state();
         assert!(state.can_delete);
@@ -647,14 +754,14 @@ mod tests {
         // hit of whichever endpoint happens to be nearest.
         let mut session = Session::new(1);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0));
+        session.pointer_up(Point::new(0.0, 0.0), false);
         session.pointer_down(Point::new(100.0, 0.0), false);
-        session.pointer_up(Point::new(100.0, 0.0));
+        session.pointer_up(Point::new(100.0, 0.0), false);
         session.finish_pen();
 
         session.set_tool(Tool::Node);
         session.pointer_down(Point::new(50.0, 0.0), false);
-        session.pointer_up(Point::new(50.0, 0.0));
+        session.pointer_up(Point::new(50.0, 0.0), false);
 
         let state = session.node_toolbar_state();
         assert!(state.can_insert);

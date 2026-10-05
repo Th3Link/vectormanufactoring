@@ -11,10 +11,16 @@ import type { WasmSession } from "@/lib/editorSession";
  * stroke width (0.25mm, acceptance criterion 6) and node/handle glyphs
  * actually visible, unlike a literal 1:1 mm:px scale (0.25px is
  * sub-pixel on every real display). */
-const CSS_PX_PER_MM = 96 / 25.4;
+export const CSS_PX_PER_MM = 96 / 25.4;
 
-/** Which tool is active (`specification.md`'s tool rail: Pen or Node). */
-export type Tool = "pen" | "node";
+/** Which tool is active (`specification.md`'s tool rail: Pen or Node;
+ * `specs/0003-primitive-shapes/specification.md` adds Rectangle, Ellipse and
+ * Polygon/Star, appended in that order, below Pen/Node). */
+export type Tool = "pen" | "node" | "rectangle" | "ellipse" | "polygon-star";
+
+/** The polygon/star tool-options bar's mode toggle (acceptance criteria
+ * 11 vs. 12). */
+export type PolyStarMode = "polygon" | "star";
 
 /** A plain-JS copy of the Rust `NodeToolbarState` — read out of the
  * wasm-bindgen struct instance once, immediately, so the instance itself
@@ -51,6 +57,12 @@ const EMPTY_TOOLBAR_STATE: NodeToolbarState = {
  */
 const DOUBLE_CLICK_MS = 400;
 const DOUBLE_CLICK_PX = 5;
+/** `DOUBLE_CLICK_PX` converted to document millimetres via the one fixed
+ * `CSS_PX_PER_MM` view scale this slice uses (see the attach effect's own
+ * `set_view` comment) — `documentPoint()` below returns document-space
+ * mm, not screen pixels, so the double-click distance check has to compare
+ * in the same unit. */
+const DOUBLE_CLICK_MM = DOUBLE_CLICK_PX / CSS_PX_PER_MM;
 
 function readToolbarState(raw: {
   can_insert: boolean;
@@ -73,6 +85,31 @@ function readToolbarState(raw: {
   return state;
 }
 
+/** Reads the wasm-bindgen `LiveReadout` instance once, immediately, so
+ * it can be `free()`d rather than held onto — same reasoning as
+ * `readToolbarState`. */
+function readLiveReadout(
+  raw: { text: string; anchor_x: number; anchor_y: number; free(): void } | undefined,
+): LiveReadout | null {
+  if (!raw) {
+    return null;
+  }
+  const readout: LiveReadout = { text: raw.text, x: raw.anchor_x, y: raw.anchor_y };
+  raw.free();
+  return readout;
+}
+
+/** The on-canvas numeric readout shown during a shape tool's
+ * create-drag (`specs/0003-primitive-shapes/specification.md`'s "Live
+ * creation feedback"). `x`/`y` are document-space coordinates — convert
+ * with the same `CSS_PX_PER_MM` scale this hook itself uses for the
+ * view transform. */
+export interface LiveReadout {
+  text: string;
+  x: number;
+  y: number;
+}
+
 export interface EditorSession {
   /** Attach to the `<canvas>` element the host renders. */
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
@@ -81,6 +118,15 @@ export interface EditorSession {
   containerRef: React.RefObject<HTMLDivElement | null>;
   tool: Tool;
   nodeToolbarState: NodeToolbarState;
+  /** The polygon/star tool-options bar's current mode. */
+  polyStarMode: PolyStarMode;
+  /** The polygon/star tool-options bar's current point count. */
+  polyStarPointCount: number;
+  /** The polygon/star tool-options bar's current ratio. */
+  polyStarRatio: number;
+  /** The live numeric readout for an in-progress create-drag, or `null`
+   * outside one (ux-engineer review item 2). */
+  liveReadout: LiveReadout | null;
   /** Acceptance criterion 5's cursor cue: whether the live cursor is
    * over the in-progress pen path's own close target — `Canvas` swaps
    * to the "pen-with-small-circle" cursor variant while this is `true`. */
@@ -93,6 +139,27 @@ export interface EditorSession {
   makeCurve: () => void;
   insertSelected: () => void;
   finishPen: () => void;
+  /** Acceptance criterion 6's "remove rounding" action. */
+  removeCornerRounding: () => void;
+  /** The mode toggle (acceptance criteria 11 vs. 12). */
+  setPolyStarMode: (mode: PolyStarMode) => void;
+  /** The point-count stepper (acceptance criteria 10, 15). */
+  setPolyStarPointCount: (count: number) => void;
+  /** The ratio field's instantaneous commit (acceptance criteria 12,
+   * 14) — one commit immediately. For a continuously-dragged slider,
+   * use `previewPolyStarRatio` on every tick and `commitPolyStarRatio`
+   * once instead (architect review: one commit per tick is the bug
+   * this pair exists to avoid). */
+  setPolyStarRatio: (ratio: number) => void;
+  /** The ratio slider's live, uncommitted preview — call on every
+   * slider tick. Writes nothing to the document. */
+  previewPolyStarRatio: (ratio: number) => void;
+  /** Commits whatever `previewPolyStarRatio` has accumulated, as one
+   * commit for the whole selection — call once, when the slider drag
+   * ends. */
+  commitPolyStarRatio: () => void;
+  /** "Object to path" (acceptance criteria 17, 21, 22). */
+  convertSelectedToPaths: () => void;
   onPointerDown: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerMove: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerUp: (event: React.PointerEvent<HTMLCanvasElement>) => void;
@@ -143,21 +210,27 @@ export function useEditorSession(
   const [nodeToolbarState, setNodeToolbarState] = useState<NodeToolbarState>(
     EMPTY_TOOLBAR_STATE,
   );
+  const [polyStarMode, setPolyStarModeState] = useState<PolyStarMode>("polygon");
+  const [polyStarPointCount, setPolyStarPointCountState] = useState(6);
+  const [polyStarRatio, setPolyStarRatioState] = useState(0.5);
   const [isHoveringPenCloseTarget, setIsHoveringPenCloseTarget] =
     useState(false);
+  const [liveReadout, setLiveReadout] = useState<LiveReadout | null>(null);
 
-  /** Re-reads `tool`/`node_toolbar_state`/the pen close-target hover cue
-   * from the session after any call that might have changed them —
-   * cheap, and simpler than having every call site know which ones to
-   * refresh. */
+  /** Re-reads every bit of session-owned UI state after any call that
+   * might have changed it — cheap, and simpler than having every call
+   * site know which ones to refresh. */
   const syncFromSession = useCallback(() => {
     const session = sessionRef.current;
     if (!session) {
       return;
     }
-    setToolState(session.tool() === "node" ? "node" : "pen");
+    setToolState(session.tool() as Tool);
     setNodeToolbarState(readToolbarState(session.node_toolbar_state()));
     setIsHoveringPenCloseTarget(session.is_hovering_pen_close_target());
+    setPolyStarModeState(session.poly_star_mode() as PolyStarMode);
+    setPolyStarPointCountState(session.poly_star_point_count());
+    setPolyStarRatioState(session.poly_star_ratio());
   }, []);
 
   /** Frees whatever session is currently attached (if any), makes
@@ -319,16 +392,72 @@ export function useEditorSession(
     syncFromSession();
   }, [syncFromSession]);
 
-  /** The pointer's document-space position, given `scale=1`/`origin=
-   * (0,0)` (see the attach effect above): identical to its position
-   * relative to the canvas's own top-left corner. */
+  const removeCornerRounding = useCallback(() => {
+    sessionRef.current?.remove_corner_rounding();
+    syncFromSession();
+  }, [syncFromSession]);
+
+  const setPolyStarMode = useCallback(
+    (mode: PolyStarMode) => {
+      sessionRef.current?.set_poly_star_mode(mode);
+      syncFromSession();
+    },
+    [syncFromSession],
+  );
+
+  const setPolyStarPointCount = useCallback(
+    (count: number) => {
+      sessionRef.current?.set_poly_star_point_count(count);
+      syncFromSession();
+    },
+    [syncFromSession],
+  );
+
+  const setPolyStarRatio = useCallback(
+    (ratio: number) => {
+      sessionRef.current?.set_poly_star_ratio(ratio);
+      syncFromSession();
+    },
+    [syncFromSession],
+  );
+
+  const previewPolyStarRatio = useCallback((ratio: number) => {
+    sessionRef.current?.preview_poly_star_ratio(ratio);
+    setPolyStarRatioState(ratio);
+  }, []);
+
+  const commitPolyStarRatio = useCallback(() => {
+    sessionRef.current?.commit_poly_star_ratio();
+    syncFromSession();
+  }, [syncFromSession]);
+
+  const convertSelectedToPaths = useCallback(() => {
+    sessionRef.current?.convert_selected_to_paths();
+    syncFromSession();
+  }, [syncFromSession]);
+
+  /** The pointer's document-space position (millimetres), inverting the
+   * `CSS_PX_PER_MM`-scale/`(0,0)`-origin view transform the attach effect
+   * above sets via `set_view`. `getBoundingClientRect()` first converts
+   * the event's viewport-relative CSS pixels to canvas-relative CSS
+   * pixels; dividing by `CSS_PX_PER_MM` then matches
+   * `ViewTransform::screen_to_document` on the Rust side, which every
+   * `WasmSession` method taking a point (`pointer_down`, `pointer_hover`,
+   * `pointer_up`, `insert_at`, ...) documents its `(x, y)` as being in
+   * (`wasm_api.rs`). Both sides agree the canvas's backing-buffer size
+   * equals its CSS size (no devicePixelRatio scaling, set in the attach
+   * effect's own `canvas.width`/`height` assignment), so no further
+   * device-pixel-ratio correction belongs here. */
   const documentPoint = useCallback((event: { clientX: number; clientY: number }) => {
     const canvas = canvasRef.current;
     if (!canvas) {
       return { x: 0, y: 0 };
     }
     const bounds = canvas.getBoundingClientRect();
-    return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+    return {
+      x: (event.clientX - bounds.left) / CSS_PX_PER_MM,
+      y: (event.clientY - bounds.top) / CSS_PX_PER_MM,
+    };
   }, []);
 
   const onPointerDown = useCallback(
@@ -343,7 +472,7 @@ export function useEditorSession(
       const isDoubleClick =
         last !== null &&
         now - last.time < DOUBLE_CLICK_MS &&
-        Math.hypot(x - last.x, y - last.y) < DOUBLE_CLICK_PX;
+        Math.hypot(x - last.x, y - last.y) < DOUBLE_CLICK_MM;
       lastPressRef.current = { time: now, x, y };
       suppressedPressRef.current = isDoubleClick;
       if (isDoubleClick) {
@@ -360,10 +489,11 @@ export function useEditorSession(
       const session = sessionRef.current;
       const { x, y } = documentPoint(event);
       onCursorMove({ x, y });
-      session?.pointer_hover(x, y);
+      session?.pointer_hover(x, y, event.ctrlKey || event.metaKey);
       setIsHoveringPenCloseTarget(
         session?.is_hovering_pen_close_target() ?? false,
       );
+      setLiveReadout(readLiveReadout(session?.live_readout()));
     },
     [documentPoint, onCursorMove],
   );
@@ -379,12 +509,15 @@ export function useEditorSession(
         suppressedPressRef.current = false;
         if (tool === "pen") {
           session.finish_pen();
-        } else {
+        } else if (tool === "node") {
           session.insert_at(x, y);
+        } else {
+          session.pointer_up(x, y, event.ctrlKey || event.metaKey);
         }
       } else {
-        session.pointer_up(x, y);
+        session.pointer_up(x, y, event.ctrlKey || event.metaKey);
       }
+      setLiveReadout(null);
       syncFromSession();
     },
     [documentPoint, syncFromSession, tool],
@@ -393,6 +526,7 @@ export function useEditorSession(
   const onPointerLeave = useCallback(() => {
     sessionRef.current?.pointer_leave();
     setIsHoveringPenCloseTarget(false);
+    setLiveReadout(null);
   }, []);
 
   const onKeyDown = useCallback(
@@ -405,6 +539,17 @@ export function useEditorSession(
         case "n":
         case "N":
           setTool("node");
+          break;
+        case "r":
+        case "R":
+          setTool("rectangle");
+          break;
+        case "e":
+        case "E":
+          setTool("ellipse");
+          break;
+        case "*":
+          setTool("polygon-star");
           break;
         case "Enter":
           if (tool === "pen") {
@@ -431,6 +576,10 @@ export function useEditorSession(
     containerRef,
     tool,
     nodeToolbarState,
+    polyStarMode,
+    polyStarPointCount,
+    polyStarRatio,
+    liveReadout,
     isHoveringPenCloseTarget,
     setTool,
     escape,
@@ -440,6 +589,13 @@ export function useEditorSession(
     makeCurve,
     insertSelected,
     finishPen,
+    removeCornerRounding,
+    setPolyStarMode,
+    setPolyStarPointCount,
+    setPolyStarRatio,
+    previewPolyStarRatio,
+    commitPolyStarRatio,
+    convertSelectedToPaths,
     onPointerDown,
     onPointerMove,
     onPointerUp,

@@ -26,7 +26,20 @@ fn tool_from_str(name: &str) -> Result<Tool, JsValue> {
     match name {
         "pen" => Ok(Tool::Pen),
         "node" => Ok(Tool::Node),
+        "rectangle" => Ok(Tool::Rectangle),
+        "ellipse" => Ok(Tool::Ellipse),
+        "polygon-star" => Ok(Tool::PolygonStar),
         other => Err(JsValue::from_str(&format!("unknown tool: {other}"))),
+    }
+}
+
+fn poly_star_mode_from_str(name: &str) -> Result<vecmanf_ui_core::PolyStarMode, JsValue> {
+    match name {
+        "polygon" => Ok(vecmanf_ui_core::PolyStarMode::Polygon),
+        "star" => Ok(vecmanf_ui_core::PolyStarMode::Star),
+        other => Err(JsValue::from_str(&format!(
+            "unknown polygon/star mode: {other}"
+        ))),
     }
 }
 
@@ -63,6 +76,41 @@ impl From<SessionNodeToolbarState> for NodeToolbarState {
             can_convert_to_smooth: state.can_convert_to_smooth,
             can_make_line: state.can_make_line,
             can_make_curve: state.can_make_curve,
+        }
+    }
+}
+
+/// `wasm-bindgen`'s JS-facing mirror of
+/// [`crate::session::LiveReadout`] (`specs/0003-primitive-shapes/
+/// specification.md`'s "Live creation feedback": the on-canvas numeric
+/// readout shown during a create-drag, ux-engineer review item 2).
+/// `anchor_x`/`anchor_y` are document-space coordinates — the host
+/// converts them to screen pixels the same way it already does for
+/// every other document-space point.
+#[wasm_bindgen]
+#[derive(Debug, Clone)]
+pub struct LiveReadout {
+    text: String,
+    pub anchor_x: f64,
+    pub anchor_y: f64,
+}
+
+#[wasm_bindgen]
+impl LiveReadout {
+    /// The formatted text (e.g. `"20.0 × 10.0 mm"`).
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn text(&self) -> String {
+        self.text.clone()
+    }
+}
+
+impl From<crate::session::LiveReadout> for LiveReadout {
+    fn from(readout: crate::session::LiveReadout) -> Self {
+        Self {
+            text: readout.text,
+            anchor_x: readout.anchor.x,
+            anchor_y: readout.anchor.y,
         }
     }
 }
@@ -121,23 +169,28 @@ impl WasmSession {
             .map_err(|err| JsValue::from_str(&format!("{err}")))
     }
 
-    /// Switches the active tool: `"pen"` or `"node"`.
+    /// Switches the active tool: `"pen"`, `"node"`, `"rectangle"`,
+    /// `"ellipse"` or `"polygon-star"`.
     ///
     /// # Errors
-    /// A `JsValue` if `tool` is neither.
+    /// A `JsValue` if `tool` is none of those.
     pub fn set_tool(&mut self, tool: &str) -> Result<(), JsValue> {
         self.session.set_tool(tool_from_str(tool)?);
         Ok(())
     }
 
-    /// The active tool, as `"pen"` or `"node"` — for the host's tool
-    /// rail (which button is active) and contextual toolbar (shown only
-    /// for the node tool).
+    /// The active tool, as one of the five strings
+    /// [`WasmSession::set_tool`] accepts — for the host's tool rail
+    /// (which button is active) and contextual toolbars (shown only for
+    /// the matching tool).
     #[must_use]
     pub fn tool(&self) -> String {
         match self.session.tool() {
             Tool::Pen => "pen".to_string(),
             Tool::Node => "node".to_string(),
+            Tool::Rectangle => "rectangle".to_string(),
+            Tool::Ellipse => "ellipse".to_string(),
+            Tool::PolygonStar => "polygon-star".to_string(),
         }
     }
 
@@ -154,9 +207,15 @@ impl WasmSession {
         self.session.pointer_down(Point::new(x, y), shift);
     }
 
-    /// The pointer moved to document-space `(x, y)` with no button held.
-    pub fn pointer_hover(&mut self, x: f64, y: f64) {
-        self.session.pointer_hover(Point::new(x, y));
+    /// The pointer moved to document-space `(x, y)`. `constrain` is the
+    /// Ctrl modifier's current state, consulted only by the rectangle/
+    /// ellipse tools' live create-drag preview (acceptance criteria 2,
+    /// 8). Call this on every pointer move, not only while a button is
+    /// held — it also feeds whatever shape-tool drag is in flight for
+    /// the live preview (ux-engineer review), and the method itself is
+    /// a no-op when no drag is in progress.
+    pub fn pointer_hover(&mut self, x: f64, y: f64, constrain: bool) {
+        self.session.pointer_hover(Point::new(x, y), constrain);
     }
 
     /// The pointer left the canvas entirely (a DOM `pointerleave`).
@@ -174,9 +233,11 @@ impl WasmSession {
         self.session.is_hovering_pen_close_target()
     }
 
-    /// The pointer released at document-space `(x, y)`.
-    pub fn pointer_up(&mut self, x: f64, y: f64) {
-        self.session.pointer_up(Point::new(x, y));
+    /// The pointer released at document-space `(x, y)`. `constrain` is
+    /// the Ctrl modifier's state at release (acceptance criteria 2, 8);
+    /// ignored outside the rectangle/ellipse tools.
+    pub fn pointer_up(&mut self, x: f64, y: f64, constrain: bool) {
+        self.session.pointer_up(Point::new(x, y), constrain);
     }
 
     /// Acceptance criterion 3 / the dedicated "finish path" action.
@@ -232,6 +293,105 @@ impl WasmSession {
     #[must_use]
     pub fn node_toolbar_state(&self) -> NodeToolbarState {
         self.session.node_toolbar_state().into()
+    }
+
+    /// Acceptance criterion 6's "remove rounding" action. A no-op
+    /// outside the rectangle tool.
+    pub fn remove_corner_rounding(&mut self) {
+        self.session.remove_corner_rounding();
+    }
+
+    /// The polygon/star tool-options bar's current mode: `"polygon"` or
+    /// `"star"`.
+    #[must_use]
+    pub fn poly_star_mode(&self) -> String {
+        match self.session.poly_star_mode() {
+            vecmanf_ui_core::PolyStarMode::Polygon => "polygon".to_string(),
+            vecmanf_ui_core::PolyStarMode::Star => "star".to_string(),
+        }
+    }
+
+    /// The mode toggle (acceptance criteria 11 vs. 12).
+    ///
+    /// # Errors
+    /// A `JsValue` if `mode` is neither `"polygon"` nor `"star"`.
+    pub fn set_poly_star_mode(&mut self, mode: &str) -> Result<(), JsValue> {
+        self.session
+            .set_poly_star_mode(poly_star_mode_from_str(mode)?);
+        Ok(())
+    }
+
+    /// The polygon/star tool-options bar's current point count
+    /// (acceptance criterion 10).
+    #[must_use]
+    pub fn poly_star_point_count(&self) -> u32 {
+        self.session.poly_star_point_count().get()
+    }
+
+    /// The point-count stepper (acceptance criteria 10, 15).
+    ///
+    /// # Errors
+    /// A `JsValue` if `count` is outside `3..=1024`.
+    pub fn set_poly_star_point_count(&mut self, count: u32) -> Result<(), JsValue> {
+        let count = vecmanf_document_core::PointCount::new(count)
+            .map_err(|err| JsValue::from_str(&format!("{err}")))?;
+        self.session.set_poly_star_point_count(count);
+        Ok(())
+    }
+
+    /// The polygon/star tool-options bar's current ratio (acceptance
+    /// criterion 12).
+    #[must_use]
+    pub fn poly_star_ratio(&self) -> f64 {
+        self.session.poly_star_ratio().get()
+    }
+
+    /// The ratio field's instantaneous commit (acceptance criteria 12,
+    /// 14) — one commit immediately. For a continuously-dragged slider,
+    /// call [`WasmSession::preview_poly_star_ratio`] on every tick and
+    /// [`WasmSession::commit_poly_star_ratio`] once instead.
+    ///
+    /// # Errors
+    /// A `JsValue` if `ratio` is outside the open interval `(0, 1)`.
+    pub fn set_poly_star_ratio(&mut self, ratio: f64) -> Result<(), JsValue> {
+        let ratio = vecmanf_document_core::InnerRatio::new(ratio)
+            .map_err(|err| JsValue::from_str(&format!("{err}")))?;
+        self.session.set_poly_star_ratio(ratio);
+        Ok(())
+    }
+
+    /// The ratio slider's live, uncommitted preview (acceptance
+    /// criterion 14's "updates live") — call on every slider tick,
+    /// e.g. a `<input type="range">`'s own `input` event. Writes
+    /// nothing to the document.
+    ///
+    /// # Errors
+    /// A `JsValue` if `ratio` is outside the open interval `(0, 1)`.
+    pub fn preview_poly_star_ratio(&mut self, ratio: f64) -> Result<(), JsValue> {
+        let ratio = vecmanf_document_core::InnerRatio::new(ratio)
+            .map_err(|err| JsValue::from_str(&format!("{err}")))?;
+        self.session.preview_poly_star_ratio(ratio);
+        Ok(())
+    }
+
+    /// Commits whatever [`WasmSession::preview_poly_star_ratio`] has
+    /// accumulated, as one commit for the whole selection — call once,
+    /// on the slider's own `change`/pointer-up event.
+    pub fn commit_poly_star_ratio(&mut self) {
+        self.session.commit_poly_star_ratio();
+    }
+
+    /// "Object to path" (acceptance criteria 17, 21, 22).
+    pub fn convert_selected_to_paths(&mut self) {
+        self.session.convert_selected_to_paths();
+    }
+
+    /// The numeric readout for an in-progress create-drag
+    /// (`specification.md`'s "Live creation feedback"), or `undefined`
+    /// outside one — call after every [`WasmSession::pointer_hover`].
+    #[must_use]
+    pub fn live_readout(&self) -> Option<LiveReadout> {
+        self.session.live_readout().map(LiveReadout::from)
     }
 
     /// Attaches this session to `canvas`, creating the `wgpu`

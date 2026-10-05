@@ -13,24 +13,33 @@ use crate::units::{DocumentSize, Length};
 /// The container `format_version` this build writes and the newest it
 /// accepts on read (ADR 0004 §9).
 ///
-/// Bumped to 2 in `path-node-editing`: a version-1 reader would silently
-/// ignore every path node in a version-2 file, which is exactly the silent
-/// geometry loss ADR 0004 §9 exists to prevent
-/// (`specs/0002-path-node-editing/adrs.md`, "`format_version` goes to 2").
-/// Migration from version 1 is empty by construction — a version-1
-/// document has no path nodes to migrate.
-pub const CURRENT_FORMAT_VERSION: u32 = 2;
+/// Bumped to 3 in `primitive-shapes`: a version-2 reader would refuse a
+/// primitive node as `OpenError::Damaged` (it has no `anchors`), which is
+/// the wrong message for a file this build can actually read — ADR 0004
+/// §9 wants "newer version" instead (`specs/0003-primitive-shapes/adrs.md`,
+/// "`format_version` goes to 3"). Migration from version 2 is empty by
+/// construction: absent `shape` means path, so every version-2 path node
+/// opens unchanged.
+pub const CURRENT_FORMAT_VERSION: u32 = 3;
 
 const ROOT_MAP: &str = "root";
 const KEY_FORMAT_VERSION: &str = "format_version";
 const KEY_WIDTH_MM: &str = "size_width_mm";
 const KEY_HEIGHT_MM: &str = "size_height_mm";
 
-/// The top-level Loro tree container holding every path object (ADR 0002
-/// §5: sibling order among tree nodes is z-order). `vecmanf-document-core`
-/// is the only module that names this key; everything else goes through
-/// [`Document`]'s methods — see [`crate::paths`].
-pub(crate) const PATHS_TREE: &str = "paths";
+/// The top-level Loro tree container holding every object — path or
+/// primitive alike (ADR 0002 §5: sibling order among tree nodes is
+/// z-order; `specs/0003-primitive-shapes/adrs.md`: "primitives and paths share
+/// one z-order, so they share one tree. They are not two lists.").
+///
+/// The Rust constant is named `OBJECTS_TREE` as of `primitive-shapes`,
+/// but the on-disk/in-CRDT container key stays the literal `"paths"` it
+/// has always been: renaming the stored key would be a container
+/// migration for no benefit, since it is an opaque name in a format this
+/// crate already writes (`adrs.md`). `vecmanf-document-core` is the only
+/// module that names this key; everything else goes through
+/// [`Document`]'s methods — see [`crate::paths`] and [`crate::shapes`].
+pub(crate) const OBJECTS_TREE: &str = "paths";
 
 /// An open vecmanf document.
 ///
@@ -110,7 +119,7 @@ impl Document {
         #[allow(clippy::unwrap_used)]
         loro.set_peer_id(peer_id).unwrap();
         loro.import(bytes).map_err(|_| OpenError::Damaged)?;
-        if !crate::path_codec::validate_path_tree(&loro, PATHS_TREE) {
+        if !crate::path_codec::validate_path_tree(&loro, OBJECTS_TREE) {
             return Err(OpenError::Damaged);
         }
         Ok(Self { loro })
@@ -174,18 +183,24 @@ impl Document {
     /// this one immutable snapshot of the document rather than live state
     /// (ADR 0009 §4).
     ///
+    /// `primitive-shapes` renames this view's array from `paths` to
+    /// `objects`, in z-order, each entry tagged with its own `shape`
+    /// (`"path"` for a path — `specs/0003-primitive-shapes/adrs.md`,
+    /// "`document.json`'s `paths` key → `objects`").
+    ///
     /// # Errors
     /// Returns [`SaveError::Encode`] if the view cannot be serialized.
     pub fn export_json(&self) -> Result<Vec<u8>, SaveError> {
-        let paths = self
-            .path_ids()
+        let objects = self
+            .object_ids()
             .into_iter()
-            .filter_map(|id| self.path(id))
+            .filter_map(|id| self.object(id))
+            .map(ObjectJson::from)
             .collect();
         let view = DocumentJsonView {
             format_version: CURRENT_FORMAT_VERSION,
             size: self.size(),
-            paths,
+            objects,
         };
         serde_json::to_vec_pretty(&view).map_err(|_| SaveError::Encode)
     }
@@ -202,7 +217,119 @@ impl Document {
 struct DocumentJsonView {
     format_version: u32,
     size: DocumentSize,
-    paths: Vec<crate::path_model::PathSnapshot>,
+    objects: Vec<ObjectJson>,
+}
+
+/// One `document.json` object entry, tagged by its own `shape`
+/// (`"path"` for a path) rather than serde's default untagged-enum
+/// shape, so a non-Rust reader of this non-authoritative view can tell
+/// the five kinds apart without guessing from which fields are present.
+#[derive(Serialize)]
+#[serde(tag = "shape", rename_all = "lowercase")]
+enum ObjectJson {
+    Path {
+        id: crate::path_model::NodeId,
+        closed: bool,
+        stroke_width: Length,
+        stroke: crate::path_model::Color,
+        fill: Option<crate::path_model::Color>,
+        anchors: Vec<crate::path_model::AnchorSnapshot>,
+    },
+    Rect {
+        id: crate::path_model::NodeId,
+        bounds: crate::primitive_model::RectBounds,
+        corner_radius: Length,
+        stroke_width: Length,
+        stroke: crate::path_model::Color,
+        fill: Option<crate::path_model::Color>,
+    },
+    Ellipse {
+        id: crate::path_model::NodeId,
+        frame: crate::primitive_model::EllipseFrame,
+        stroke_width: Length,
+        stroke: crate::path_model::Color,
+        fill: Option<crate::path_model::Color>,
+    },
+    Polygon {
+        id: crate::path_model::NodeId,
+        frame: crate::primitive_model::StarFrame,
+        point_count: u32,
+        stroke_width: Length,
+        stroke: crate::path_model::Color,
+        fill: Option<crate::path_model::Color>,
+    },
+    Star {
+        id: crate::path_model::NodeId,
+        frame: crate::primitive_model::StarFrame,
+        point_count: u32,
+        inner_ratio: f64,
+        stroke_width: Length,
+        stroke: crate::path_model::Color,
+        fill: Option<crate::path_model::Color>,
+    },
+}
+
+impl From<crate::primitive_model::ObjectSnapshot> for ObjectJson {
+    fn from(snapshot: crate::primitive_model::ObjectSnapshot) -> Self {
+        use crate::primitive_model::{ObjectSnapshot, Shape};
+        match snapshot {
+            ObjectSnapshot::Path(path) => Self::Path {
+                id: path.id,
+                closed: path.closed,
+                stroke_width: path.stroke_width,
+                stroke: path.stroke,
+                fill: path.fill,
+                anchors: path.anchors,
+            },
+            ObjectSnapshot::Primitive(primitive) => {
+                let id = primitive.id;
+                let stroke_width = primitive.stroke_width;
+                let stroke = primitive.stroke;
+                let fill = primitive.fill;
+                match primitive.shape {
+                    Shape::Rect {
+                        bounds,
+                        corner_radius,
+                    } => Self::Rect {
+                        id,
+                        bounds,
+                        corner_radius,
+                        stroke_width,
+                        stroke,
+                        fill,
+                    },
+                    Shape::Ellipse { frame } => Self::Ellipse {
+                        id,
+                        frame,
+                        stroke_width,
+                        stroke,
+                        fill,
+                    },
+                    Shape::Polygon { frame, point_count } => Self::Polygon {
+                        id,
+                        frame,
+                        point_count: point_count.get(),
+                        stroke_width,
+                        stroke,
+                        fill,
+                    },
+                    Shape::Star {
+                        frame,
+                        point_count,
+                        inner_ratio,
+                    } => Self::Star {
+                        id,
+                        frame,
+                        point_count: point_count.get(),
+                        inner_ratio: inner_ratio.get(),
+                        stroke_width,
+                        stroke,
+                        fill,
+                    },
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

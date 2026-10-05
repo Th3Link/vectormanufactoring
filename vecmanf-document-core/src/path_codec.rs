@@ -31,6 +31,7 @@ use loro::{Container, LoroDoc, LoroMap, LoroMovableList, LoroTree, LoroValue, Va
 use crate::path_model::{
     AnchorId, AnchorKind, AnchorSnapshot, Color, NewAnchor, NodeId, PathSnapshot,
 };
+use crate::shape_codec::ShapeTag;
 use crate::units::{Length, Point, Vec2};
 
 pub(crate) const KEY_CLOSED: &str = "closed";
@@ -74,7 +75,7 @@ pub(crate) fn write_path_fields(meta: &LoroMap, closed: bool) {
     }
 }
 
-fn color_to_value(color: Color) -> Vec<i64> {
+pub(crate) fn color_to_value(color: Color) -> Vec<i64> {
     vec![i64::from(color.r), i64::from(color.g), i64::from(color.b)]
 }
 
@@ -85,14 +86,14 @@ pub(crate) fn read_closed(meta: &LoroMap) -> bool {
     )
 }
 
-fn read_stroke_width(meta: &LoroMap) -> Length {
+pub(crate) fn read_stroke_width(meta: &LoroMap) -> Length {
     match meta.get(KEY_STROKE_WIDTH).map(|v| v.get_deep_value()) {
         Some(LoroValue::Double(mm)) => Length::from_mm(mm),
         _ => Length::from_mm(DEFAULT_STROKE_WIDTH_MM),
     }
 }
 
-fn read_stroke(meta: &LoroMap) -> Color {
+pub(crate) fn read_stroke(meta: &LoroMap) -> Color {
     match meta.get(KEY_STROKE).map(|v| v.get_deep_value()) {
         Some(LoroValue::List(list)) if list.len() == 3 => Color {
             r: as_u8(&list[0]),
@@ -103,7 +104,7 @@ fn read_stroke(meta: &LoroMap) -> Color {
     }
 }
 
-fn as_u8(value: &LoroValue) -> u8 {
+pub(crate) fn as_u8(value: &LoroValue) -> u8 {
     match value {
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         LoroValue::I64(n) => (*n).clamp(0, 255) as u8,
@@ -245,14 +246,14 @@ pub(crate) fn anchor_id_to_value(id: AnchorId) -> String {
     id.to_hex()
 }
 
-fn read_xy(map: &LoroMap, key: &str) -> Option<(f64, f64)> {
+pub(crate) fn read_xy(map: &LoroMap, key: &str) -> Option<(f64, f64)> {
     match map.get(key)?.get_deep_value() {
         LoroValue::List(list) if list.len() == 2 => Some((as_f64(&list[0])?, as_f64(&list[1])?)),
         _ => None,
     }
 }
 
-fn as_f64(value: &LoroValue) -> Option<f64> {
+pub(crate) fn as_f64(value: &LoroValue) -> Option<f64> {
     match value {
         LoroValue::Double(n) => Some(*n),
         #[allow(clippy::cast_precision_loss)]
@@ -383,13 +384,33 @@ pub(crate) fn validate_path_tree(loro: &LoroDoc, paths_tree_key: &str) -> bool {
     let tree = loro.get_tree(paths_tree_key);
     tree.roots()
         .into_iter()
-        .all(|id| validate_path_node(&tree, id))
+        .all(|id| validate_object_node(&tree, id))
 }
 
-fn validate_path_node(tree: &LoroTree, id: loro::TreeID) -> bool {
+/// Dispatches one object (root tree node) to path validation when its
+/// `shape` tag is absent, or to
+/// [`crate::shape_codec::validate_primitive_node`] when present
+/// (`specs/0003-primitive-shapes/adrs.md`: "open-file validation dispatches
+/// on `shape` alone"). Unknown extra keys on either kind of node are
+/// tolerated — see that module's own doc comment for why ("object to
+/// path" can leave a stray primitive key behind on a path node under a
+/// concurrent edit).
+fn validate_object_node(tree: &LoroTree, id: loro::TreeID) -> bool {
     let Ok(meta) = tree.get_meta(id) else {
         return false;
     };
+    // `read_shape_tag_checked` (not the lenient `read_shape_tag`) so a
+    // `shape` key present but not a string refuses outright (architect
+    // review) instead of being silently read as "absent" and validated
+    // as a plain path.
+    match crate::shape_codec::read_shape_tag_checked(&meta) {
+        ShapeTag::Present(shape) => crate::shape_codec::validate_primitive_node(&meta, &shape),
+        ShapeTag::Absent => validate_path_node(&meta),
+        ShapeTag::Mistyped => false,
+    }
+}
+
+fn validate_path_node(meta: &LoroMap) -> bool {
     let Some(ValueOrContainer::Container(Container::MovableList(anchors))) = meta.get(KEY_ANCHORS)
     else {
         return false;

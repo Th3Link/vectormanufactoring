@@ -63,6 +63,27 @@ impl Tolerance {
     }
 }
 
+/// An angle in radians (ADR 0002 §3; `specs/0003-primitive-shapes/adrs.md`: "the
+/// first use of §3's `Angle`"). A newtype rather than a bare `f64` for the
+/// same reason [`Length`] is one (`CLAUDE.md` §5): a polygon/star's
+/// rotation can never be confused with a length or a plain scalar.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Angle(f64);
+
+impl Angle {
+    /// Builds an [`Angle`] from a value already in radians.
+    #[must_use]
+    pub const fn from_radians(radians: f64) -> Self {
+        Self(radians)
+    }
+
+    /// Returns the angle as a plain radian value.
+    #[must_use]
+    pub const fn as_radians(self) -> f64 {
+        self.0
+    }
+}
+
 /// A document's page size in millimetres (ADR 0002 §2; this slice's minimal
 /// root record, `specs/0001-project-file-foundation/adrs.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -305,6 +326,12 @@ mod tests {
         let round_tripped = view.screen_to_document(sx, sy);
         assert!((round_tripped.x - original.x).abs() < 1e-9);
         assert!((round_tripped.y - original.y).abs() < 1e-9);
+    }
+
+    #[test]
+    fn angle_round_trips_through_radians() {
+        let angle = Angle::from_radians(1.25);
+        assert!((angle.as_radians() - 1.25).abs() < f64::EPSILON);
     }
 
     #[test]
