@@ -1,6 +1,6 @@
 # Canvas navigation and a general Select tool
 
-Status: Draft
+Status: Ready
 Priority: Must
 Origin: Customer
 
@@ -91,14 +91,17 @@ memory for, not a reinvention.
    after the zoom; it does not jump toward the canvas center.
 7. Given the zoom range, then the minimum selectable zoom is **2%** and the
    maximum is **8000%**, where "100%" means one document millimetre renders
-   as one physical millimetre on the maker's display (the display's
-   reported DPI) - the same "actual size" convention as Inkscape's "1:1"
-   and Illustrator's "100%". At 8000%, a 0.1 mm feature renders at least 24
-   physical screen pixels long on a standard 96 DPI display - enough to
-   place a node precisely by eye, with headroom over `path-node-editing`'s
-   8px hit-test radius. At 2%, a 600 mm x 400 mm sheet (a common laser-bed
-   size) renders at 12 mm x 8 mm, fitting inside any window at least that
-   large with margin to spare. Together these bound the range a laser maker
+   as 96 ÷ 25.4 ≈ 3.78 CSS pixels - the standard CSS reference-pixel
+   convention this product already uses elsewhere (`CSS_PX_PER_MM`), not a
+   physically-measured display size, which a webview has no way to read.
+   This is the same conventional "actual size" mapping Inkscape's "1:1" and
+   Illustrator's "100%" already use. At 8000%, a 0.1 mm feature renders at
+   roughly 30 CSS pixels long - enough to place a node precisely by eye,
+   with headroom over `path-node-editing`'s 8px hit-test radius. At 2%, a
+   600 mm x 400 mm sheet (a common laser-bed size) renders at roughly
+   45 x 30 CSS pixels total - small, but the floor's job is only that the
+   whole sheet stays visible without scrolling, not that it's comfortable
+   to inspect at that extreme. Together these bound the range a laser maker
    actually needs, from inspecting sub-millimetre detail to overviewing a
    full sheet.
 8. Given the view is already at the minimum or maximum zoom, when the maker
@@ -251,7 +254,151 @@ memory for, not a reinvention.
   precedent is untouched by this slice.
 
 ## UX notes
-(filled in by ux-engineer before Ready)
+
+This is the first slice built *against* the 2026-10-05 chrome direction
+(floating left tool panel, fixed right Properties panel, no layout shift on
+tool switch), not a redesign of existing chrome, so everything below is new
+construction on that foundation rather than a migration note. Tokens and
+conventions referenced here are extended in `docs/design-system.md`
+alongside this file.
+
+### Select tool - rail position, icon, shortcut
+
+- **First in the floating left tool panel, above Pen** - a deliberate,
+  one-time exception to the rail's own "new tools append in ship order,
+  existing icons don't get reordered" rule (`primitive-shapes`). That rule
+  protects against reshuffling the rail for a later tool's convenience;
+  Select isn't a peer creation tool being slotted in for convenience, it's
+  the rail's new default/master tool (criterion 13), and every reference
+  tool this spec already commits to (Inkscape's Selector, Illustrator's and
+  Affinity's selection arrow) puts it first, above the drawing tools, for
+  exactly that reason. Pen, Node, Rectangle, Ellipse, Polygon/Star all shift
+  down one slot; their own relative order is unchanged. Recorded as an
+  explicit carve-out in `docs/design-system.md` so it reads as a one-time,
+  reasoned exception rather than a precedent for reordering the rail again
+  later.
+- **Icon:** a solid arrow/pointer cursor glyph - the one icon every
+  reference tool above uses for this exact tool, and visually unlike
+  Pen/Node/Rectangle/Ellipse/Polygon-Star's own glyphs by construction (none
+  of them are arrow-shaped). Same 24px glyph size inside the same 48x48
+  button, same `--toolbar-icon`/`--toolbar-icon-active-bg`/
+  `--toolbar-icon-active-fg` tokens, same hover/focus/active states as
+  B/N/R/E/*.
+- **Shortcut `S`**, bound at canvas-focus scope exactly like B/N/R/E/* (not
+  a native-menu accelerator). `aria-label`: "Select tool (S)". Tooltip shows
+  name + shortcut, same convention as every other rail button.
+
+### Selection visual language: a new, unified "selected" indicator, distinct from "editing"
+
+**Decision: the Select tool shows the same plain bounding-box outline on
+every object type, with no handles and no nodes - not each type's own
+existing editing look.** This is already what the acceptance criteria
+require (criterion 14's "a bounding box... extended here to paths too";
+criterion 20's "the Select tool shows no shape handles and no path nodes,
+only the bounding box"), and it's the right call independent of that,
+because it answers a question `path-node-editing` and `primitive-shapes`
+never had to: "selected, but not yet committed to editing" is now a real,
+distinct state from "actively editing with this object's own tool," and the
+two need to look different or a maker can't tell which mode they're in.
+
+- **Selected (Select tool active):** reuse the existing bounding-box token
+  (`docs/design-system.md`'s "Bounding-box selection outline," 1px
+  screen-space `--accent`) for every object kind, paths included - for a
+  path, this is the axis-aligned bounding box of its geometry, computed
+  fresh, not a per-node display. No shape handles (primitives), no
+  node/handle glyphs (paths). Hover, tool not yet clicked into selection:
+  same box at `--accent-hover`, the existing 20%-opacity rule - identical
+  hover treatment to what `primitive-shapes` already does for its own tool.
+- **Editing (after double-click handoff, criteria 22-23):** each type's
+  existing look, unchanged - `path-node-editing`'s node/handle glyphs for a
+  path (no bounding box; slice 2 never drew one), `primitive-shapes`'s
+  bounding-box-plus-shape-handles for a primitive. Nothing new to build
+  here; this is exactly what double-clicking switches *to*.
+- **Why unified rather than type-specific for the Select tool itself:** a
+  simpler, common "this is selected" look that doesn't vary by type is what
+  makes the Select tool read as general-purpose, matching its own job
+  (criterion 21's "identically for a path, a rectangle, an ellipse, and a
+  polygon/star"). It also sets the right precedent for every future object
+  type this product adds (text, embroidery stitch regions, whatever comes
+  next): Select-tool selection is always "plain bounding box, no
+  type-specific affordance," full stop, not a per-type decision each new
+  object kind's slice has to re-litigate. The bounding-box-to-handles (or
+  bounding-box-to-nodes) transition on double-click becomes that precedent's
+  other half: it IS the "you're now editing" signal, on top of the tool-rail
+  highlight below.
+
+### Multi-select: each object keeps its own indicator, no group summary
+
+Shift-clicking objects of different types (criterion 17) shows each
+selected object with its own normal Select-tool indicator (the bounding box
+above) simultaneously - a path and a rectangle selected together each get
+their own box, at their own position and size, drawn at the same time. No
+single box is drawn around the combined group, and no "N objects selected"
+text replaces the per-object boxes.
+
+This is the same philosophy `stroke-and-fill-styling`'s mixed-state
+convention established for heterogeneous multi-select, applied to
+selection display instead of property display: show each object's own real
+state truthfully rather than collapsing a mixed selection into one
+simplified summary. The UI mechanism differs (that spec's "Mixed" text/
+checkerboard swatch is for a *shared control* that can't show two values at
+once; selection indicators have no such conflict - every selected object
+can just show its own box at the same time) but the underlying rule is the
+same one: don't paper over heterogeneity, show it. Because the Select tool's
+indicator is already unified-by-type (previous section), this falls out for
+free - nothing extra to build for the mixed-type case specifically.
+
+### Zoom readout
+
+**Status bar, as a new center segment** - `project-file-foundation`'s
+status bar already has cursor position on the left and document size on
+the right, with room explicitly reserved for a zoom control between them.
+Add the zoom level there: plain percentage text, integer (no decimals -
+`path-node-editing`-grade precision doesn't help a number whose job is
+situational awareness, not measurement), e.g. "100%", range 2%-8000% per
+criterion 7. No input affordance in this slice (numeric zoom entry is
+explicitly out of scope) - display-only text, same `--statusbar-bg`
+treatment as the other two segments, updates live during scroll/pinch zoom
+(criterion 6) and stays correct across window resize (criterion 10).
+
+### Pan/zoom input feedback: cursor only, no new overlay
+
+- **Space-held or middle-mouse-drag pan (criteria 3-4):** standard
+  grab/grabbing cursor convention - open-hand cursor the moment Space is
+  held down or the middle button is pressed (before any drag motion),
+  closed-hand/grabbing cursor for the duration of the drag, reverting to
+  the active tool's normal cursor on release or Space-up. This overrides
+  whatever cursor the active tool would otherwise show (e.g. Pen's
+  crosshair) for exactly the duration of the pan - the same "pan interrupts
+  nothing" rule criterion 5 already states for the tool's in-progress
+  state, applied to the cursor.
+- **Scroll-wheel pan (criteria 1-2) and Ctrl+scroll/pinch zoom (criterion
+  6):** no cursor change and no other visual indicator beyond the zoom
+  readout above - these are instantaneous, not a "mode" the maker enters or
+  holds, so there's nothing to signal before or after. The view moving (or
+  the zoom readout updating) is the only feedback, and it's sufficient;
+  don't add a transient on-canvas zoom-percentage popup or similar - that's
+  chrome the criteria don't ask for and the status-bar readout above already
+  covers.
+
+### Double-click handoff: tool-rail highlight, confirmed as the mechanism, plus the selection-indicator change for free
+
+Yes, and it already works by construction: `path-node-editing`'s rail
+convention is "active tool: filled `--accent` background, white icon, stays
+active until [changed]" - switching the active tool on double-click
+(criteria 22-23) updates this highlight the same way clicking a rail button
+does, no new mechanism needed. Select's icon un-highlights, the target
+tool's icon highlights.
+
+This is reinforced, not carried alone, by the selection-indicator change
+from bounding-box-only to type-specific handles/nodes (previous section) -
+that change happens right where the maker's eyes already are (at the
+object they just double-clicked), which is a faster read than the rail
+highlight off at the canvas edge. No additional flash, animation, or cursor
+change at the moment of handoff; two existing, reinforcing signals are
+enough, and no layout shift occurs on either (the rail doesn't move, the
+Properties panel's shape-tool-options section swap, if any, follows the
+same no-layout-shift rule already established 2026-10-05).
 
 ## Links
 Requirements: R-EDIT-010, R-EDIT-011 (`docs/requirements.md`)

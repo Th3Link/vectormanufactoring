@@ -171,9 +171,10 @@ values, not an implementation site, for those four rows.
 | Segment hit-test tolerance | 4px screen-space perpendicular distance | Clicking "on" a curve/line segment |
 | Shape handle | 8×8px screen-space | Hollow square, `primitive-shapes`: bounding-box resize, rectangle corner-radius, polygon/star inner-radius — deliberately square and larger than the 7px/6px node-tool glyphs so the two vocabularies never read as the same control |
 | Shape handle hit-test radius | 8px screen-space | Same margin rule as node/handle hit-testing, reused rather than invented fresh |
-| Bounding-box selection outline | 1px screen-space `--accent` (selected) / `--accent-hover` (hover) | Drawn around a selected/hovered primitive — the primitive equivalent of slice 2's node/segment selection, scoped to the primitive's own matching tool being active |
+| Bounding-box selection outline | 1px screen-space `--accent` (selected) / `--accent-hover` (hover) | Drawn around a selected/hovered primitive when its own matching tool is active (`primitive-shapes`) — **and, as of `canvas-navigation-and-selection`, around any selected/hovered object of any type (path or primitive) when the Select tool is active, with no shape handles or path nodes added on top.** Same token, two contexts: Select-tool selection is deliberately plain; the type-specific handles/nodes layer in only after double-click handoff into the object's own tool. |
 | `PropertiesPanel` width | 280px, fixed | Right-docked panel (`stroke-and-fill-styling`'s `StylePanel` is its first section); canvas fills the remaining width |
 | Contextual mini-toolbar padding | 6px | Floating per-selection toolbar (`NodeToolbar`'s actions, 2026-10-05), anchored near the current canvas selection rather than docked |
+| Status bar zoom field | integer percentage, no decimals | New center segment (`canvas-navigation-and-selection`), between the existing cursor-position (left) and document-size (right) fields `project-file-foundation` already shipped; e.g. "100%", range 2%–8000% |
 
 ## Interaction conventions (apply to every later tool, not just this one)
 
@@ -198,6 +199,15 @@ values, not an implementation site, for those four rows.
   stays the same as when it was a docked rail; only its CSS positioning
   changed. New tools are still appended top-to-bottom in ship order;
   existing icons don't get reordered for a later feature's convenience.
+  **One exception, made explicit so it doesn't read as a precedent:** the
+  Select tool (`canvas-navigation-and-selection`) goes *first*, above Pen,
+  because it's the rail's new default/master tool (every reference tool
+  this product tracks — Inkscape, Illustrator, Affinity — puts its
+  selection tool at the top of its toolbox), not a peer creation tool being
+  slotted in for convenience. Pen/Node/Rectangle/Ellipse/Polygon-Star all
+  shift down one slot, keeping their own relative order. This is a one-time
+  carve-out for "the tool that replaces the launch default"; a later tool
+  that is just another creation tool still appends at the bottom.
 - **Floating contextual mini-toolbar** (2026-10-05, new): the pattern for
   *transient*, selection-dependent tool actions — today, `NodeToolbar`'s
   Insert/Delete/Make-corner/Make-smooth/Make-line/Make-curve. Anchored in
@@ -251,13 +261,32 @@ values, not an implementation site, for those four rows.
   numeric fields, a checkerboard swatch for `ColorAlphaPicker`, no option
   highlighted for a segmented control. Established in
   `stroke-and-fill-styling` as the house convention for every later
-  multi-select-editing panel.
+  multi-select-editing panel. **Extended by `canvas-navigation-and-
+  selection`'s Select tool to selection *indicators*, not just property
+  controls:** a heterogeneous multi-select (e.g. a path and a rectangle
+  together) shows each object's own real selection box simultaneously,
+  never a single merged box or an "N objects selected" text summary in its
+  place — same underlying rule (show the true, possibly-mixed state rather
+  than collapsing it), applied to the one UI where it costs nothing extra,
+  since every selected object already draws the same plain Select-tool box
+  regardless of its type (see "Bounding-box selection outline" above).
+- **Pan cursor** (`canvas-navigation-and-selection`): standard grab/grabbing
+  convention for the drag-initiated pans only — open-hand cursor from the
+  moment Space is held or the middle mouse button is pressed, closed-hand/
+  grabbing cursor for the drag's duration, reverting to the active tool's
+  own cursor on release. Overrides the active tool's cursor for exactly the
+  pan's duration, consistent with "panning never cancels or interrupts the
+  active tool's in-progress state." Scroll-wheel pan and Ctrl+scroll/pinch
+  zoom get no cursor change and no other overlay — they're instantaneous,
+  not a held "mode," so the view (or the status-bar zoom readout) moving is
+  feedback enough; don't add a transient on-canvas zoom popup.
 
 ## Keyboard shortcuts established so far
 
 | Action | Shortcut | Notes |
 |---|---|---|
 | New / Open / Save / Save As | Ctrl/Cmd+N/O/S/Shift+S | `project-file-foundation`, native menu accelerators |
+| Select tool | `S` | Matches Inkscape's Selector key (`canvas-navigation-and-selection`); launch default, replacing Pen |
 | Pen tool | `B` | Matches Inkscape's Bezier/pen tool key |
 | Node tool | `N` | Matches Inkscape |
 | Rectangle tool | `R` | Matches Inkscape (`primitive-shapes`) |
