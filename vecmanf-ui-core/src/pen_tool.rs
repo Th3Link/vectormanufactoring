@@ -163,7 +163,7 @@ impl PenTool {
                 point: down,
                 handle_in: drag.negated(),
                 handle_out: drag,
-                kind: AnchorKind::Smooth,
+                kind: AnchorKind::Symmetric,
             }
         } else {
             NewAnchor::corner(id, down)
@@ -358,7 +358,7 @@ mod tests {
             Point::new(10.0, 0.0),
             "the node sits at C, not the release point"
         );
-        assert_eq!(c.kind, AnchorKind::Smooth);
+        assert_eq!(c.kind, AnchorKind::Symmetric);
         assert_eq!(c.handle_out, vecmanf_document_core::Vec2::new(3.0, 4.0));
         assert_eq!(c.handle_in, c.handle_out.negated());
     }
@@ -595,7 +595,7 @@ mod tests {
                 point: Point::new(0.0, 0.0),
                 handle_in: vecmanf_document_core::Vec2::new(-3.0, -4.0),
                 handle_out: vecmanf_document_core::Vec2::new(3.0, 4.0),
-                kind: AnchorKind::Smooth,
+                kind: AnchorKind::Symmetric,
             })
         );
 
@@ -611,7 +611,7 @@ mod tests {
                 point: Point::new(10.0, 0.0),
                 handle_in: vecmanf_document_core::Vec2::new(-3.0, -4.0),
                 handle_out: vecmanf_document_core::Vec2::new(3.0, 4.0),
-                kind: AnchorKind::Smooth,
+                kind: AnchorKind::Symmetric,
             }),
             "held at C, the press position — not wherever the cursor ended up"
         );

@@ -311,7 +311,7 @@ mod tests {
                     point: Point::new(0.0, 0.0),
                     handle_in: Vec2::ZERO,
                     handle_out: Vec2::new(5.0, 0.0),
-                    kind: AnchorKind::Smooth,
+                    kind: AnchorKind::Symmetric,
                 },
                 NewAnchor::corner(b, Point::new(20.0, 0.0)),
             ],
@@ -372,7 +372,7 @@ mod tests {
                     point: Point::new(0.0, 0.0),
                     handle_in: Vec2::ZERO,
                     handle_out: Vec2::new(5.0, 0.0),
-                    kind: AnchorKind::Smooth,
+                    kind: AnchorKind::Symmetric,
                 },
                 NewAnchor::corner(b, Point::new(20.0, 0.0)),
             ],
@@ -436,7 +436,7 @@ mod tests {
                     // A short handle, 3mm long — within HANDLE_TOLERANCE
                     // (4mm) of a click exactly on the node itself.
                     handle_out: Vec2::new(3.0, 0.0),
-                    kind: AnchorKind::Smooth,
+                    kind: AnchorKind::Symmetric,
                 },
                 NewAnchor::corner(b, Point::new(20.0, 0.0)),
             ],
@@ -507,7 +507,7 @@ mod tests {
                     handle_in: Vec2::ZERO,
                     // Handle endpoint lands at world (2.0, 0.0).
                     handle_out: Vec2::new(-3.0, -5.0),
-                    kind: AnchorKind::Smooth,
+                    kind: AnchorKind::Symmetric,
                 },
                 // Node B sits at world (0.0, 2.0) — the exact same
                 // distance from the click below as A's handle endpoint.

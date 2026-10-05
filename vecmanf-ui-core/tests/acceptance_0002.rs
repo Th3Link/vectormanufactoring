@@ -344,7 +344,7 @@ fn ac9_zero_delta_handle_drag_off_tip_is_a_no_op() {
                 point: Point::new(0.0, 0.0),
                 handle_in: Vec2::new(-5.0, 0.0),
                 handle_out: Vec2::new(5.0, 0.0),
-                kind: AnchorKind::Smooth,
+                kind: AnchorKind::Symmetric,
             },
             NewAnchor::corner(b, Point::new(20.0, 0.0)),
         ],
@@ -411,7 +411,7 @@ fn ac9_dragging_a_handle_to_zero_retracts_it_without_changing_kind() {
                 point: Point::new(0.0, 0.0),
                 handle_in: Vec2::new(-5.0, 0.0),
                 handle_out: Vec2::new(5.0, 0.0),
-                kind: AnchorKind::Smooth,
+                kind: AnchorKind::Symmetric,
             },
             NewAnchor::corner(b, Point::new(20.0, 0.0)),
         ],
@@ -437,7 +437,7 @@ fn ac9_dragging_a_handle_to_zero_retracts_it_without_changing_kind() {
     );
     assert_eq!(
         anchor.kind,
-        AnchorKind::Smooth,
+        AnchorKind::Symmetric,
         "kind itself is untouched by geometry"
     );
 }
@@ -461,10 +461,10 @@ fn ac11_convert_selected_applies_to_every_selected_node() {
     let paths = vec![document.path(path).unwrap()];
     tool.pointer_down(&paths, Point::new(20.0, 0.0), TOLERANCES, true);
 
-    tool.convert_selected(&document, AnchorKind::Smooth);
+    tool.convert_selected(&document, AnchorKind::Symmetric);
     let snapshot = document.path(path).unwrap();
-    assert_eq!(snapshot.anchors[0].kind, AnchorKind::Smooth);
-    assert_eq!(snapshot.anchors[2].kind, AnchorKind::Smooth);
+    assert_eq!(snapshot.anchors[0].kind, AnchorKind::Symmetric);
+    assert_eq!(snapshot.anchors[2].kind, AnchorKind::Symmetric);
     assert_eq!(snapshot.anchors[1].kind, AnchorKind::Corner, "untouched");
 }
 
@@ -694,7 +694,7 @@ fn ac6_every_path_shape_gets_the_identical_placeholder_style() {
                 point: Point::new(0.0, 0.0),
                 handle_in: Vec2::ZERO,
                 handle_out: Vec2::new(1.0, 1.0),
-                kind: AnchorKind::Smooth,
+                kind: AnchorKind::Symmetric,
             },
             NewAnchor::corner(AnchorId::new(1, 4), Point::new(5.0, 5.0)),
         ],
@@ -730,7 +730,7 @@ fn set_handle_in_slot_on_smooth_mirrors_out_slot_too() {
                 point: Point::new(0.0, 0.0),
                 handle_in: Vec2::new(-5.0, 0.0),
                 handle_out: Vec2::new(5.0, 0.0),
-                kind: AnchorKind::Smooth,
+                kind: AnchorKind::Symmetric,
             },
             NewAnchor::corner(AnchorId::new(1, 2), Point::new(10.0, 0.0)),
         ],

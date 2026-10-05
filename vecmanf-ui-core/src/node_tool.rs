@@ -39,12 +39,17 @@ pub struct HitTolerances {
 /// nothing selected/applicable"). Computed fresh from the current
 /// selection by [`NodeTool::toolbar_state`], never stored.
 ///
-/// Six independent `bool`s rather than an enum: these map 1:1 to the six
-/// toolbar buttons `specification.md` names, each disabled on its own
-/// condition (e.g. make-line and make-curve are each other's negation
-/// *given* a segment is selected, but become simultaneously `false`
-/// together when it isn't) — collapsing them into one flags enum would
-/// just re-derive the same six booleans at every call site.
+/// Independent `bool`s rather than an enum: these map 1:1 to the toolbar
+/// buttons `specification.md` names, each disabled on its own condition
+/// (e.g. make-line and make-curve are each other's negation *given* a
+/// segment is selected, but become simultaneously `false` together when
+/// it isn't) — collapsing them into one flags enum would just re-derive
+/// the same booleans at every call site.
+///
+/// `can_convert_to_smooth` is renamed `can_convert_to_symmetric`, and
+/// `can_convert_to_asymmetric`/`can_join`/`can_split` are new
+/// (`specs/0006-path-merge-split-and-node-types/adrs.md`; acceptance
+/// criteria 1, 2, 8, 12).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct NodeToolbarState {
@@ -54,19 +59,30 @@ pub struct NodeToolbarState {
     pub can_insert: bool,
     /// Delete: at least one node is selected.
     pub can_delete: bool,
-    /// Make corner / make smooth: at least one node is selected. Both
-    /// buttons stay enabled regardless of the selected node(s)' current
-    /// kind — a multi-selection can mix kinds, and converting a node to
-    /// the kind it already has is a harmless no-op, not a state to guard
-    /// against.
+    /// Make corner: at least one node is selected. Stays enabled
+    /// regardless of the selected node(s)' current kind — a multi-
+    /// selection can mix kinds, and converting a node to the kind it
+    /// already has is a no-op (acceptance criterion 16), not a state to
+    /// guard against.
     pub can_convert_to_corner: bool,
-    /// See `can_convert_to_corner`.
-    pub can_convert_to_smooth: bool,
+    /// Make symmetric: see `can_convert_to_corner`. Renamed from
+    /// `can_convert_to_smooth` (criterion 1's label-only rename).
+    pub can_convert_to_symmetric: bool,
+    /// Make asymmetric: see `can_convert_to_corner` (criterion 2).
+    pub can_convert_to_asymmetric: bool,
     /// Make line: a segment is selected and it is not already a line
     /// (acceptance criterion 14's explicit disable example).
     pub can_make_line: bool,
     /// Make curve: a segment is selected and it is already a line.
     pub can_make_curve: bool,
+    /// Join: the current selection is exactly two endpoint nodes of
+    /// open paths (same path or two different objects), not the two
+    /// ends of a 2-anchor open path (acceptance criterion 8).
+    pub can_join: bool,
+    /// Split: the current selection is exactly one node, either an
+    /// interior node of an open path or any node of a closed path
+    /// (acceptance criterion 12).
+    pub can_split: bool,
 }
 
 /// The node tool's state: its persistent [`NodeSelection`] plus whatever
@@ -517,7 +533,7 @@ impl NodeTool {
     /// Which contextual-toolbar actions apply right now, computed from
     /// this tool's current selection against `document`'s live state —
     /// the facade (`vecmanf-editor-wasm`'s `Session`) just calls this
-    /// rather than re-deriving the same six booleans itself.
+    /// rather than re-deriving the same booleans itself.
     #[must_use]
     pub fn toolbar_state(&self, document: &Document) -> NodeToolbarState {
         let has_nodes = !self.selection.nodes().is_empty();
@@ -535,10 +551,90 @@ impl NodeTool {
             can_insert: segment_is_line.is_some(),
             can_delete: has_nodes,
             can_convert_to_corner: has_nodes,
-            can_convert_to_smooth: has_nodes,
+            can_convert_to_symmetric: has_nodes,
+            can_convert_to_asymmetric: has_nodes,
             can_make_line: segment_is_line == Some(false),
             can_make_curve: segment_is_line == Some(true),
+            can_join: self.can_join(document),
+            can_split: self.can_split(document),
         }
+    }
+
+    /// Acceptance criteria 8-11: Join. A no-op (no commit) when the
+    /// current selection does not qualify — [`NodeTool::can_join`]'s own
+    /// condition, which `Document::join_endpoints` independently refuses
+    /// on too. On success, selects only the merged node (criterion 11),
+    /// so the maker can immediately continue working at the junction.
+    pub fn join_selected(&mut self, document: &Document) {
+        let Some((a, b)) = self.selection.join_pairs() else {
+            return;
+        };
+        let Ok((path, anchor)) = document.join_endpoints(a.0, a.1, b.0, b.1) else {
+            return;
+        };
+        self.selection.select_single_node(path, anchor);
+    }
+
+    /// Whether [`NodeTool::join_selected`] would do anything right now
+    /// (acceptance criterion 8): the current selection names exactly two
+    /// `(path, anchor)` pairs (same-path AC 10, or Split's own two-
+    /// object result AC 15 — see [`NodeSelection::join_pairs`] for why
+    /// those are the only two sources), each the first-or-last anchor of
+    /// an *open* path, not the same anchor, and — for two ends of the
+    /// same path — that path has more than two anchors.
+    #[must_use]
+    pub fn can_join(&self, document: &Document) -> bool {
+        self.selection
+            .join_pairs()
+            .is_some_and(|(a, b)| is_joinable(document, a, b))
+    }
+
+    /// Acceptance criteria 12-15: Split. A no-op (no commit, and
+    /// `minter` is not advanced) when the current selection is not
+    /// exactly one node, or [`Document::split_at_anchor`] itself refuses.
+    /// On success, selects both resulting coincident nodes (criterion
+    /// 15) — an ordinary two-node selection on one path when the split
+    /// anchor's path stayed one object (criterion 14's closed-path
+    /// case), or [`NodeSelection::select_split_pair`] when it became two
+    /// (criterion 13's open-path case).
+    pub fn split_selected(&mut self, minter: &mut AnchorIdMinter, document: &Document) {
+        let Some(path) = self.selection.path() else {
+            return;
+        };
+        let [anchor] = self.selection.nodes() else {
+            return;
+        };
+        let new_id = minter.mint();
+        let Ok((first, second)) = document.split_at_anchor(path, *anchor, new_id) else {
+            return;
+        };
+        if first.0 == second.0 {
+            self.selection.select_single_node(first.0, first.1);
+            self.selection.toggle_node(second.0, second.1);
+        } else {
+            self.selection.select_split_pair(first, second);
+        }
+    }
+
+    /// Whether [`NodeTool::split_selected`] would do anything right now
+    /// (acceptance criterion 12): the current selection is exactly one
+    /// node, and it is either an interior node of an open path or any
+    /// node of a closed path.
+    #[must_use]
+    pub fn can_split(&self, document: &Document) -> bool {
+        let Some(path) = self.selection.path() else {
+            return false;
+        };
+        let [anchor] = self.selection.nodes() else {
+            return false;
+        };
+        let Some(snapshot) = document.path(path) else {
+            return false;
+        };
+        let Some(index) = snapshot.anchors.iter().position(|a| a.id == *anchor) else {
+            return false;
+        };
+        snapshot.closed || !is_endpoint(&snapshot, index)
     }
 
     /// Acceptance criterion 12: double-clicking a point on a segment
@@ -672,6 +768,67 @@ impl NodeTool {
     }
 }
 
+/// Whether `index` is the first or last anchor of `snapshot` — the node
+/// tool's own copy of `vecmanf-document-core`'s private predicate of the
+/// same name (`specs/0006-path-merge-split-and-node-types/adrs.md`:
+/// toolbar state is "computed from the selection with the same
+/// conditions the commands refuse on" — a read-only mirror, not a shared
+/// function, since `document-core`'s own version is private to its
+/// `join_endpoints`/`split_at_anchor`).
+fn is_endpoint(snapshot: &vecmanf_document_core::PathSnapshot, index: usize) -> bool {
+    index == 0 || index == snapshot.anchors.len() - 1
+}
+
+/// [`NodeTool::can_join`]'s own condition, against live document state:
+/// `a` and `b` each resolve, each is the first-or-last anchor of an open
+/// path, they are not the same anchor, and — when they name the same
+/// path — that path has more than two anchors.
+fn is_joinable(
+    document: &Document,
+    a: (NodeId, vecmanf_document_core::AnchorId),
+    b: (NodeId, vecmanf_document_core::AnchorId),
+) -> bool {
+    let Some(a_snapshot) = document.path(a.0) else {
+        return false;
+    };
+    let Some(a_index) = a_snapshot
+        .anchors
+        .iter()
+        .position(|anchor| anchor.id == a.1)
+    else {
+        return false;
+    };
+    if a_snapshot.closed || !is_endpoint(&a_snapshot, a_index) {
+        return false;
+    }
+
+    if a.0 == b.0 {
+        if a.1 == b.1 {
+            return false;
+        }
+        let Some(b_index) = a_snapshot
+            .anchors
+            .iter()
+            .position(|anchor| anchor.id == b.1)
+        else {
+            return false;
+        };
+        return is_endpoint(&a_snapshot, b_index) && a_snapshot.anchors.len() > 2;
+    }
+
+    let Some(b_snapshot) = document.path(b.0) else {
+        return false;
+    };
+    let Some(b_index) = b_snapshot
+        .anchors
+        .iter()
+        .position(|anchor| anchor.id == b.1)
+    else {
+        return false;
+    };
+    !b_snapshot.closed && is_endpoint(&b_snapshot, b_index)
+}
+
 #[cfg(test)]
 mod tests {
     use vecmanf_document_core::{AnchorId, NewAnchor, Vec2};
@@ -723,7 +880,7 @@ mod tests {
                     point: Point::new(0.0, 0.0),
                     handle_in: Vec2::new(-3.0, 0.0),
                     handle_out: Vec2::new(3.0, 0.0),
-                    kind: AnchorKind::Smooth,
+                    kind: AnchorKind::Symmetric,
                 },
                 NewAnchor::corner(b, Point::new(20.0, 0.0)),
             ],
@@ -796,7 +953,7 @@ mod tests {
                     point: Point::new(0.0, 0.0),
                     handle_in: Vec2::new(-5.0, 0.0),
                     handle_out: Vec2::new(5.0, 0.0),
-                    kind: AnchorKind::Smooth,
+                    kind: AnchorKind::Symmetric,
                 },
                 NewAnchor::corner(b, Point::new(20.0, 0.0)),
             ],
@@ -867,7 +1024,7 @@ mod tests {
                     point: Point::new(0.0, 0.0),
                     handle_in: Vec2::new(-5.0, 0.0),
                     handle_out: Vec2::new(5.0, 0.0),
-                    kind: AnchorKind::Smooth,
+                    kind: AnchorKind::Symmetric,
                 },
                 NewAnchor::corner(b, Point::new(20.0, 0.0)),
             ],
@@ -992,10 +1149,10 @@ mod tests {
         let mut tool = NodeTool::new();
         tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, false);
 
-        tool.convert_selected(&document, AnchorKind::Smooth);
+        tool.convert_selected(&document, AnchorKind::Symmetric);
         let snapshot = document.path(path).expect("exists");
         let middle = &snapshot.anchors[1];
-        assert_eq!(middle.kind, AnchorKind::Smooth);
+        assert_eq!(middle.kind, AnchorKind::Symmetric);
         assert_eq!(middle.handle_in, middle.handle_out.negated());
 
         tool.convert_selected(&document, AnchorKind::Corner);
@@ -1171,14 +1328,14 @@ mod tests {
                     point: Point::new(0.0, 0.0),
                     handle_in: Vec2::ZERO,
                     handle_out: Vec2::new(5.0, 0.0),
-                    kind: AnchorKind::Smooth,
+                    kind: AnchorKind::Symmetric,
                 },
                 NewAnchor {
                     id: b,
                     point: Point::new(20.0, 0.0),
                     handle_in: Vec2::new(-5.0, 0.0),
                     handle_out: Vec2::ZERO,
-                    kind: AnchorKind::Smooth,
+                    kind: AnchorKind::Symmetric,
                 },
             ],
             false,
@@ -1278,5 +1435,164 @@ mod tests {
             tool.selection().is_empty(),
             "clicking empty space clears the selection"
         );
+    }
+
+    /// Acceptance criterion 1: the existing two-kind toggle is renamed
+    /// at the toolbar-state surface (`can_convert_to_smooth` →
+    /// `can_convert_to_symmetric`), with the identical enablement rule.
+    #[test]
+    fn toolbar_state_exposes_symmetric_and_asymmetric_and_join_split() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path = open_two_node_path(&document, a, b);
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+
+        let state = tool.toolbar_state(&document);
+        assert!(state.can_convert_to_corner);
+        assert!(state.can_convert_to_symmetric);
+        assert!(state.can_convert_to_asymmetric);
+        // A 2-anchor open path's one endpoint: Join is disabled (would
+        // need the *other* endpoint too), Split is disabled (an
+        // endpoint, not an interior/closed node).
+        assert!(!state.can_join);
+        assert!(!state.can_split);
+    }
+
+    /// AC8/AC10/AC11: selecting the two ends of one open path enables
+    /// Join; triggering it closes the path and selects only the merged
+    /// node.
+    #[test]
+    fn join_selected_closes_one_open_path_and_selects_the_merged_node() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let c = AnchorId::new(1, 3);
+        let path = document.create_path(
+            &[
+                NewAnchor::corner(a, Point::new(0.0, 0.0)),
+                NewAnchor::corner(b, Point::new(10.0, 0.0)),
+                NewAnchor::corner(c, Point::new(5.0, 10.0)),
+            ],
+            false,
+        );
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+        let paths = vec![document.path(path).expect("exists")];
+        tool.pointer_down(&paths, Point::new(5.0, 10.0), TOLERANCES, true);
+        assert_eq!(tool.selection().nodes(), &[a, c]);
+        assert!(tool.toolbar_state(&document).can_join);
+
+        tool.join_selected(&document);
+
+        let snapshot = document.path(path).expect("exists");
+        assert!(snapshot.closed);
+        assert_eq!(snapshot.anchors.len(), 2);
+        assert_eq!(tool.selection().nodes().len(), 1, "only the merged node");
+        let merged_id = tool.selection().nodes()[0];
+        assert!(snapshot.anchors.iter().any(|anchor| anchor.id == merged_id));
+    }
+
+    /// AC12/AC13/AC15: splitting an interior node of an open path
+    /// produces two objects, both resulting nodes selected across them.
+    #[test]
+    fn split_selected_on_an_interior_node_selects_both_new_objects_nodes() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let middle = AnchorId::new(1, 2);
+        let c = AnchorId::new(1, 3);
+        let path = document.create_path(
+            &[
+                NewAnchor::corner(a, Point::new(0.0, 0.0)),
+                NewAnchor::corner(middle, Point::new(10.0, 0.0)),
+                NewAnchor::corner(c, Point::new(20.0, 0.0)),
+            ],
+            false,
+        );
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        let mut minter = AnchorIdMinter::new(9);
+        tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, false);
+        assert!(tool.toolbar_state(&document).can_split);
+
+        tool.split_selected(&mut minter, &document);
+
+        assert_eq!(document.object_ids().len(), 2, "two separate objects now");
+        let selected = tool.selection().join_pairs().expect(
+            "AC15: Split's own two-object result selects both coincident nodes, reachable \
+             via NodeSelection::join_pairs for an immediate re-Join",
+        );
+        assert_ne!(selected.0.0, selected.1.0, "on two different path objects");
+    }
+
+    /// AC14: splitting a node of a closed path opens it, selecting both
+    /// resulting nodes as an ordinary same-path multi-selection.
+    #[test]
+    fn split_selected_on_a_closed_path_node_opens_it_selecting_both_ends() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let c = AnchorId::new(1, 3);
+        let path = document.create_path(
+            &[
+                NewAnchor::corner(a, Point::new(0.0, 0.0)),
+                NewAnchor::corner(b, Point::new(10.0, 0.0)),
+                NewAnchor::corner(c, Point::new(5.0, 10.0)),
+            ],
+            true,
+        );
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        let mut minter = AnchorIdMinter::new(9);
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+        assert!(
+            tool.toolbar_state(&document).can_split,
+            "any closed-path node splits"
+        );
+
+        tool.split_selected(&mut minter, &document);
+
+        let snapshot = document.path(path).expect("exists");
+        assert!(!snapshot.closed);
+        assert_eq!(snapshot.anchors.len(), 4);
+        assert_eq!(
+            tool.selection().nodes().len(),
+            2,
+            "both ends of one open path"
+        );
+    }
+
+    /// Split then immediately re-Join (AC15's own stated reason for
+    /// selecting both resulting nodes) round-trips back to one object.
+    #[test]
+    fn split_then_rejoin_restores_one_object() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let middle = AnchorId::new(1, 2);
+        let c = AnchorId::new(1, 3);
+        let path = document.create_path(
+            &[
+                NewAnchor::corner(a, Point::new(0.0, 0.0)),
+                NewAnchor::corner(middle, Point::new(10.0, 0.0)),
+                NewAnchor::corner(c, Point::new(20.0, 0.0)),
+            ],
+            false,
+        );
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        let mut minter = AnchorIdMinter::new(9);
+        tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, false);
+        tool.split_selected(&mut minter, &document);
+        assert_eq!(document.object_ids().len(), 2);
+        assert!(
+            tool.toolbar_state(&document).can_join,
+            "AC15: immediately re-joinable"
+        );
+
+        tool.join_selected(&document);
+        assert_eq!(document.object_ids().len(), 1, "back to one object");
     }
 }

@@ -11,11 +11,37 @@
 //! at a time — acceptance criterion 14 draws a selected segment as
 //! "distinct from either endpoint node being selected" — so this is one
 //! enum, not two independent flags that could disagree.
+//!
+//! `specs/0006-path-merge-split-and-node-types/adrs.md` adds one more
+//! state, [`SelectionKind::SplitPair`], for Split's own result
+//! (acceptance criterion 15): the two coincident copies a successful
+//! Split produces can land on two *different* path objects (criterion
+//! 13's open-path case), which this type's existing `path: Option<NodeId>`
+//! field cannot express for an ordinary `Nodes` selection. This is
+//! deliberately narrow rather than a full generalization of `Nodes` to
+//! an arbitrary cross-path set: every ordinary interactive selection
+//! (`select_single_node`, `toggle_node`, `select_segment`) stays exactly
+//! as single-path as it always was — only Split's own result constructor
+//! ([`NodeSelection::select_split_pair`]) can produce this state, and
+//! [`NodeSelection::path`] reports `None` for it, so the existing
+//! single-path-only convert/delete/make-line/make-curve actions
+//! correctly stay disabled until the maker clicks one of the two nodes
+//! (collapsing back to an ordinary single-path selection) — see
+//! `crate::node_tool`'s own `pointer_down`. Building the general
+//! multi-object selection mechanism (criteria 6-7) is explicitly
+//! deferred to `canvas-navigation-and-selection`'s `ObjectSelection`;
+//! this one additional, narrowly-scoped state is not that mechanism, it
+//! only carries Split's own already-computed result so the maker can
+//! immediately drag either node apart or re-Join them (criterion 15's
+//! stated reason), without inventing a way to *select* two arbitrary
+//! objects' nodes together.
 
 use vecmanf_document_core::{AnchorId, NodeId};
 
 /// The node tool's current selection: nothing, one or more nodes on one
-/// path, or one segment (a path-adjacent pair of anchors) on one path.
+/// path, one segment (a path-adjacent pair of anchors) on one path, or
+/// the two coincident results of a Split that landed on two different
+/// path objects.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct NodeSelection {
     path: Option<NodeId>,
@@ -28,6 +54,16 @@ enum SelectionKind {
     None,
     Nodes(Vec<AnchorId>),
     Segment(AnchorId, AnchorId),
+    /// Split's own result when the two copies landed on different path
+    /// objects (acceptance criteria 13, 15) — see this module's own doc
+    /// comment for why this is a separate, narrow state rather than a
+    /// general cross-path `Nodes`.
+    SplitPair {
+        /// The first copy's path and anchor id.
+        first: (NodeId, AnchorId),
+        /// The second copy's path and anchor id.
+        second: (NodeId, AnchorId),
+    },
 }
 
 impl NodeSelection {
@@ -44,22 +80,54 @@ impl NodeSelection {
     }
 
     /// The currently selected nodes, in selection order. Empty when the
-    /// selection is empty or is a segment instead.
+    /// selection is empty, is a segment, or is a [`SelectionKind::
+    /// SplitPair`] instead — the latter is deliberately excluded here so
+    /// the single-path-only convert/delete/make-line/make-curve actions
+    /// (all gated on `has_nodes = !nodes().is_empty()`) correctly stay
+    /// disabled for it; [`NodeSelection::join_pairs`] is the accessor
+    /// that does see it.
     #[must_use]
     pub fn nodes(&self) -> &[AnchorId] {
         match &self.kind {
             SelectionKind::Nodes(ids) => ids,
-            SelectionKind::None | SelectionKind::Segment(..) => &[],
+            SelectionKind::None | SelectionKind::Segment(..) | SelectionKind::SplitPair { .. } => {
+                &[]
+            }
         }
     }
 
     /// The currently selected segment's two path-adjacent endpoint ids,
-    /// if a segment (rather than nodes or nothing) is selected.
+    /// if a segment (rather than nodes, a split pair, or nothing) is
+    /// selected.
     #[must_use]
     pub const fn segment(&self) -> Option<(AnchorId, AnchorId)> {
         match self.kind {
             SelectionKind::Segment(start, end) => Some((start, end)),
-            SelectionKind::None | SelectionKind::Nodes(_) => None,
+            SelectionKind::None | SelectionKind::Nodes(_) | SelectionKind::SplitPair { .. } => None,
+        }
+    }
+
+    /// The two `(path, anchor)` pairs Join should act on, if the current
+    /// selection qualifies at all: either exactly two nodes selected on
+    /// one path (the common case — same-path Join, acceptance criterion
+    /// 10), or a `SelectionKind::SplitPair` (Split's own result,
+    /// possibly on two different path objects — acceptance criterion 9's
+    /// "two different open path objects" case, reachable today only by
+    /// immediately re-Joining a just-split path, not by any general
+    /// cross-object selection). `None` for any other selection shape;
+    /// callers (`crate::node_tool::NodeTool::can_join`/`join_selected`)
+    /// still check endpoint-ness and open/closed against the live
+    /// document — this only resolves *which* two anchors a qualifying
+    /// selection names.
+    #[must_use]
+    pub fn join_pairs(&self) -> Option<((NodeId, AnchorId), (NodeId, AnchorId))> {
+        match &self.kind {
+            SelectionKind::Nodes(ids) if ids.len() == 2 => {
+                let path = self.path?;
+                Some(((path, ids[0]), (path, ids[1])))
+            }
+            SelectionKind::SplitPair { first, second } => Some((*first, *second)),
+            _ => None,
         }
     }
 
@@ -100,7 +168,13 @@ impl NodeSelection {
         }
         let mut ids = match std::mem::take(&mut self.kind) {
             SelectionKind::Nodes(ids) => ids,
-            SelectionKind::None | SelectionKind::Segment(..) => Vec::new(),
+            // `SplitPair` is unreachable here in practice: `self.path` is
+            // always `None` for it, so the early return above already
+            // fired. Handled anyway for exhaustiveness, the same empty-
+            // start-fresh fallback as `None`/`Segment`.
+            SelectionKind::None | SelectionKind::Segment(..) | SelectionKind::SplitPair { .. } => {
+                Vec::new()
+            }
         };
         if let Some(position) = ids.iter().position(|&id| id == anchor) {
             ids.remove(position);
@@ -119,6 +193,19 @@ impl NodeSelection {
     pub fn select_segment(&mut self, path: NodeId, start: AnchorId, end: AnchorId) {
         self.path = Some(path);
         self.kind = SelectionKind::Segment(start, end);
+    }
+
+    /// Acceptance criterion 15: selects Split's own two resulting
+    /// coincident nodes, replacing whatever was selected before. `path()`
+    /// reports `None` for this selection (see this module's own doc
+    /// comment) even when `first` and `second` happen to share one path
+    /// (criterion 14's closed-path case) — a subsequent plain click on
+    /// either node still correctly collapses to an ordinary single-node
+    /// selection on its own path, same as switching to any other path
+    /// does for an ordinary `Nodes` selection.
+    pub fn select_split_pair(&mut self, first: (NodeId, AnchorId), second: (NodeId, AnchorId)) {
+        self.path = None;
+        self.kind = SelectionKind::SplitPair { first, second };
     }
 }
 
