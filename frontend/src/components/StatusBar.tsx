@@ -1,15 +1,20 @@
 interface StatusBarProps {
   cursorMm: { x: number; y: number };
   sizeMm: { width: number; height: number };
+  /** The current zoom level's integer percentage (acceptance criterion
+   * 9), range 2-8000. */
+  zoomPercent: number;
 }
 
 /**
- * The one permanent piece of chrome this slice adds
- * (specs/0001-project-file-foundation: "Canvas and empty state"). Left: cursor
- * position in mm. Right: document size in mm. Room is left for a zoom
- * control later, but nothing non-functional is added now.
+ * The permanent piece of chrome `project-file-foundation` added
+ * (specs/0001-project-file-foundation: "Canvas and empty state") and
+ * `canvas-navigation-and-selection` extends: left, cursor position in
+ * mm; **center, the zoom percentage** (acceptance criterion 9 — the
+ * room `project-file-foundation` reserved for it); right, document size
+ * in mm.
  */
-export function StatusBar({ cursorMm, sizeMm }: StatusBarProps) {
+export function StatusBar({ cursorMm, sizeMm, zoomPercent }: StatusBarProps) {
   return (
     <div
       className="flex h-6 shrink-0 items-center justify-between px-2 text-xs"
@@ -18,6 +23,7 @@ export function StatusBar({ cursorMm, sizeMm }: StatusBarProps) {
       <span>
         x: {cursorMm.x.toFixed(1)}  y: {cursorMm.y.toFixed(1)}
       </span>
+      <span>{zoomPercent}%</span>
       <span>
         {sizeMm.width.toFixed(1)} × {sizeMm.height.toFixed(1)} mm
       </span>

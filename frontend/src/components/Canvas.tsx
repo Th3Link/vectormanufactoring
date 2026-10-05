@@ -1,5 +1,4 @@
 import { NodeContextMenu } from "@/components/NodeToolbar";
-import { CSS_PX_PER_MM } from "@/hooks/useEditorSession";
 import type { EditorSession } from "@/hooks/useEditorSession";
 
 interface CanvasProps {
@@ -24,12 +23,22 @@ export function Canvas({ editor }: CanvasProps) {
       ref={editor.containerRef}
       tabIndex={0}
       onKeyDown={editor.onKeyDown}
+      onKeyUp={editor.onKeyUp}
       className={`relative flex-1 outline-none ${
-        editor.tool === "pen"
-          ? editor.isHoveringPenCloseTarget
-            ? "canvas-cursor-pen-close"
-            : "canvas-cursor-pen"
-          : "cursor-default"
+        // Pan cursor convention (`docs/design-system.md`): grabbing for
+        // the duration of a drag-pan, open-hand from the moment Space is
+        // held (even before any drag motion) — both override whatever
+        // cursor the active tool would otherwise show, for exactly the
+        // pan's duration (acceptance criteria 3, 4).
+        editor.isPanning
+          ? "cursor-grabbing"
+          : editor.isSpaceHeld
+            ? "cursor-grab"
+            : editor.tool === "pen"
+              ? editor.isHoveringPenCloseTarget
+                ? "canvas-cursor-pen-close"
+                : "canvas-cursor-pen"
+              : "cursor-default"
       }`}
     >
       {/* The context-menu wrapper stays mounted across both tools —
@@ -72,14 +81,17 @@ export function Canvas({ editor }: CanvasProps) {
         // On-canvas, not status-bar (`specs/0003-primitive-shapes/
         // specification.md`'s "Live creation feedback": "direct
         // manipulation keeps the number where the maker's eyes already
-        // are"), positioned near point B — the live drag endpoint, in
-        // document space, converted to this view's screen pixels the
-        // same way every other document-space point already is.
+        // are"), positioned near point B — the live drag endpoint.
+        // `editor.liveReadout.x`/`y` already arrive as canvas-relative
+        // CSS pixels (`specs/0004-canvas-navigation-and-selection/
+        // adrs.md`: "Anything the DOM positions... is returned already
+        // converted"), so this positions the overlay directly, with no
+        // conversion math here.
         <div
           className="pointer-events-none absolute z-10 -translate-y-full rounded-md px-1.5 py-0.5 text-xs"
           style={{
-            left: editor.liveReadout.x * CSS_PX_PER_MM + 8,
-            top: editor.liveReadout.y * CSS_PX_PER_MM - 8,
+            left: editor.liveReadout.x + 8,
+            top: editor.liveReadout.y - 8,
             background: "var(--toolbar-bg)",
             color: "var(--toolbar-icon)",
           }}
