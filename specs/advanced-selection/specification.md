@@ -146,11 +146,25 @@ modifiers are now independent and combine:
   effect (add vs. remove the same result). This spec resolves it
   deterministically: **Ctrl wins** — holding both removes the drag's
   result, exactly as Ctrl alone would, with Shift having no further effect.
-  Rationale: removing is the smaller mistake if the maker's own input is
-  contradictory (it never adds something unwanted; it can only fail to
-  remove something they meant to keep). Flagged for the `ux-engineer` to
-  confirm this edge case needs no dedicated cursor/legend signal of its
-  own, since it is a fallback, not a designed interaction.
+  **Confirmed by the `ux-engineer`, 2026-10-05** (see "Modifier-state
+  legend" and "Cursor changes" under UX notes for the fuller reasoning):
+  Ctrl-wins stays, but not for the PO's original "removing is the smaller
+  mistake" framing alone — that framing only holds when the *stray*
+  modifier is Shift (an unwanted add left in place is harmless to undo by
+  hand). It does not hold symmetrically: if the stray modifier were instead
+  Ctrl, "Shift wins" would silently deselect objects the maker meant to
+  keep, which is the actually destructive failure mode, not the safer one.
+  Ctrl-wins is right for a more concrete reason instead: the realistic way
+  a maker ends up holding both at once is mid-session — keeping Shift held
+  down across a string of additive drags, then pressing Ctrl *in addition*
+  for one drag they want to subtract instead. Ctrl is the just-pressed,
+  most-recent modifier in that sequence, so "last-pressed wins" and
+  "Ctrl wins" agree. No dedicated cursor or legend state for this
+  combination: its effect is byte-for-byte identical to Ctrl held alone, so
+  the legend renders exactly the same `−Remove` it would for Ctrl alone
+  (see "Modifier-state legend" below) — inventing a fourth, visually
+  distinct state for a combination that behaves identically to an existing
+  one would imply a behavior difference that does not exist.
 
 This also removes the previous section's one deliberate LightBurn deviation:
 Shift now always adds, matching LightBurn's own documented Shift exactly;
@@ -241,7 +255,10 @@ behavior for drags that were already Alt-held at press).
    begins instead of clearing the selection outright. A press-and-release
    within that 3px threshold is a plain click: criterion 15 of
    `canvas-navigation-and-selection` ("clicking empty canvas clears the
-   selection") still applies. This threshold also protects criterion 4's
+   selection") still applies — except that a Ctrl-held click-without-movement
+   leaves the current selection unchanged instead of clearing it, since
+   "clear on empty click" is a no-modifier behavior and Ctrl must not remove
+   more than the click/drag actually touches. This threshold also protects criterion 4's
    Alt-click cycling: without it, a pixel or two of hand jitter during a
    stationary Alt-click would register as a (zero-length) lasso and select
    every candidate along that accidental line instead of cycling to one.
@@ -535,13 +552,18 @@ mode" rather than "every modifier combination" matches the
 `object-transform` cursor rule's own scope (cursors distinguish
 manipulation kind, not every modifier nuance).
 
-**Flagged for the `ux-engineer` to confirm, not decided unilaterally
-here:** whether "the cursor locks at press and ignores live Alt state
-thereafter" (the rule above) feels right once built, versus some other
-treatment of the box cursor while Alt-inverted (e.g. a small mode glyph on
-the cursor itself). This spec only guarantees the cursor never falsely
-implies a lasso once a box drag has already started; it does not mandate
-anything beyond that.
+**Confirmed by the `ux-engineer`, 2026-10-05:** the plain crosshair stays,
+with no added mode glyph on the cursor itself when Alt inverts a box's
+mode mid-drag. The box's own color swap (green↔red) is already the
+feedback for that inversion, and it sits exactly where the maker's
+attention already is — right under the cursor, filling the whole drag
+rectangle — so a second, smaller signal on the cursor glyph itself would
+duplicate information already given more visibly, for no gain. It would
+also break the cursor-vocabulary rule this section already states for
+`object-transform` (cursors distinguish manipulation *kind*, not every
+modifier nuance): mode-invert is a nuance of the box gesture, not a
+different gesture, and the box recoloring is that nuance's one correct
+feedback channel, not the cursor.
 
 ### Modifier-state legend
 
@@ -565,17 +587,28 @@ signal at all. This gap matters more than before, not less: getting
 Ctrl's new remove wrong on a crowded drawing now silently *deselects*
 objects the maker meant to keep — a destructive mistake the old scheme's
 add-only Ctrl could never make. The label reads e.g. `Touch · Replace`,
-`Contain · Remove`, `Touch (line) · Add`, updating live as modifiers
+`Contain · −Remove`, `Touch (line) · +Add`, updating live as modifiers
 change, the drag direction reverses, or Alt is pressed/released mid-drag
 to invert a box's mode (criterion 14) — one line, matching the existing
 on-canvas readout precedent rather than adding a new status-bar segment.
 
-**Flagged for the `ux-engineer` to double check:** whether "Replace" /
-"Add" / "Remove" as plain text reads clearly enough at a glance now that
-Remove is a destructive-feeling operation, or whether it warrants a
-stronger visual cue (e.g. a +/− glyph, or a distinct text color for
-"Remove") beyond what this spec mandates — an interaction-feel judgment
-call, not decided here.
+**Confirmed by the `ux-engineer`, 2026-10-05:** plain text alone is not
+quite enough now that Remove is destructive, but the fix stays small and
+reuses nothing new. The combine word gets a one-character prefix only —
+`+Add`, `−Remove`, plain `Replace` (no prefix: it is the default,
+non-modified state, so it needs no marker). No color change:
+`--marquee-contain` (red) already means "contain mode" on the box itself,
+and coloring the word "Remove" with that same token would overload one
+color with a second, unrelated meaning (mode vs. combine) on the same
+label — exactly the kind of reuse `docs/design-system.md` already avoids
+elsewhere (`--marquee-touch`/`--marquee-contain` were deliberately
+introduced rather than reusing `--accent`, for this same reason). A plain
+`−` carries "subtraction" on its own, independent of hue, so it needs no
+new token and stays legible for a maker who can't distinguish red from
+green. This also settles the Shift+Ctrl tie-break's own legend question
+(see "Combinations" under Marquee above): that combination renders the
+identical `−Remove`, with no further distinction, since its effect is
+identical to Ctrl held alone.
 
 ### Status
 
