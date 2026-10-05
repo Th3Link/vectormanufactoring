@@ -110,8 +110,11 @@ unrequested capability smuggled in to make them compose.
    then slice 4 criterion 14's plain bounding box grows 8 resize handles —
    one at each corner, one at the midpoint of each edge — plus one rotate
    handle offset a fixed screen-space distance above the top-edge handle's
-   midpoint, using the same 8px shape-handle hit size `primitive-shapes`
-   already established. This is the only change to slice 4 criterion 20's
+   midpoint, using the same hit size as `primitive-shapes`' own shape
+   handles, whatever that is at build time (`docs/design-system.md` is the
+   live source — it was 8px when this slice was written but has since
+   doubled to 16px alongside the node/handle sizing round, 2026-10-05).
+   This is the only change to slice 4 criterion 20's
    "the Select tool shows no shape handles... only the bounding box"
    wording; nothing else about that criterion changes.
 2. Given the Select tool is active with two or more objects selected (slice
@@ -376,17 +379,21 @@ nothing below changes that baseline for multi-select (criterion 2) — it only
 applies once a single object is selected and the transform handles in
 criterion 1 are added on top of the same box.
 
-**Coordinating with the handle-sizing fix in flight:** `fix/canvas-
-interaction-bugs` (not yet merged) doubles the node tool's Bézier handle
-endpoint from 6px to 12px diameter (hit radius 8px → 16px) in response to
-the customer's "hard to hit, too delicate" complaint, but deliberately
-leaves the `primitive-shapes` shape handle at 8×8px / 8px hit radius — that
-fix's own note in `docs/design-system.md` says the shape handle's size "was
-not revisited." Criterion 1 of this spec already pins the new transform
-handles to that same 8px shape-handle hit size, not the doubled Bézier-
-handle size, so there is no live coordination needed on the *size* axis —
-only on keeping the new glyph's *silhouette* distinct from both existing
-vocabularies at their (different) sizes. The decisions below do that.
+**Coordinating with the handle-sizing fix, now settled:** `fix/canvas-
+interaction-bugs` doubled the node tool's Bézier handle (6px→12px
+diameter, hit radius 8px→16px) and, in a later round of the same fix,
+the node glyph itself (7px→14px, hit radius 8px→16px) — and that second
+round's size change propagated into `primitive-shapes`' shape handle too
+(its hit radius is computed from the same shared tolerance function), so
+it is now 16px hit radius as well, not the 8px this spec was written
+against. Criterion 1's "same hit size as `primitive-shapes`' own shape
+handles, whatever that is at build time" (amended above, 2026-10-05)
+already accounts for this — build against `docs/design-system.md`'s
+current value, not the number anywhere in this paragraph. The remaining
+coordination is keeping the new glyph's *silhouette* distinct from both
+existing vocabularies, which may now be the same size as each other even
+though they started different — the decisions below still achieve that
+through shape, not size.
 
 ### Handle glyph set — a third vocabulary, deliberately distinct from the other two
 
