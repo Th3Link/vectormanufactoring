@@ -256,6 +256,33 @@ this branch merges and threads its `rotation` register through Split
   replaces `SplitPair` with the ordered `(NodeId, AnchorId)` list decided
   above. It does not keep both.
 
+- **2026-10-05 (architect, review of the AC 6/7 follow-up): what the
+  multi-path session decision above means in the code as built.**
+  - **No editing set.** The Node tool hit-tests and draws every path
+    (`Session::paths()`, no selection filter), so every path selected
+    per AC 6 is already shown and editable. The `ObjectSelection`-derived
+    editing set above is not built; slice 4's AC 22 handoff relies on the
+    same behaviour. If a later story limits node display to selected
+    paths, it adds the set then.
+  - **Drag stays multi-path, as decided above.** AC 7 adopts
+    `path-node-editing` AC 10 "exactly" across paths, and AC 10 is the
+    group-drag rule: pressing any selected node drags every selected
+    node, on every path, as one commit. `move_anchors` takes
+    `(NodeId, AnchorId, Point)` triples across paths and commits once; a
+    plain press on any contained node keeps the selection, whether it
+    spans one path or several. Rejected: collapsing a cross-path selection
+    on a plain press. It breaks AC 10 across paths, and it only appeared
+    to serve AC 15 because `path()` is `None` there. The closed-path Split
+    (AC 14) leaves both copies on one path, and that case already
+    group-drags them.
+  - **Convert and delete stay single-path.** They are disabled for a
+    selection that spans paths. No criterion converts or deletes across
+    paths, so `convert_anchor_kind` keeps its one-path signature (this
+    narrows the boundary line below).
+  - **AC 15's "immediately drag them apart"** conflicts with AC 10 for any
+    two coincident selected nodes, because one offset never separates
+    them. AC 10 wins. Flagged for the PO to reword (item 8 below).
+
 - **2026-10-05: the crate boundary.**
   - `vecmanf-document-core`: the three-variant `AnchorKind`, the codec tags
     and read alias, the per-kind handle rule, the conversion table,
@@ -299,3 +326,11 @@ this branch merges and threads its `rotation` register through Split
    `paths_v2.vmf` with `"smooth"` and check it reads as Symmetric; a
    multi-path node drag is one commit.
 7. **No new crate, no new dependency, no ADR amendment.**
+8. **AC 15 vs `path-node-editing` AC 10.** Two coincident selected nodes
+   cannot be dragged apart while AC 10 moves every selected node by the
+   same offset. Default: AC 10 holds. AC 15 keeps "both selected" and
+   drops "immediately drag them apart". To separate them, the maker
+   clicks empty canvas, then clicks and drags one node. Optional, for the
+   `ux-engineer`: Inkscape's rule that a click without movement on a
+   selected node collapses the selection to that node. That needs no
+   document write, but it changes accepted slice-2 behaviour.

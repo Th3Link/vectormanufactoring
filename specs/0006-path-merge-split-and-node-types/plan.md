@@ -93,10 +93,27 @@ defect in either slice.
 - [x] 9. Golden-file migration test: reused `paths_v2.vmf` (already
       stores the legacy `"smooth"` tag) rather than adding a new
       fixture, per `adrs.md`'s own note that this is the intended test.
-- [ ] 10. **Deferred**: AC 6, AC 7, and AC 9's "two different
-      pre-existing open path objects" case — no multi-object Node-tool
-      session, no cross-object selection UI. Blocked on
-      `canvas-navigation-and-selection`'s `ObjectSelection` landing.
+- [x] 10. AC 6, AC 7, and AC 9's "two different pre-existing open path
+      objects" case, once `canvas-navigation-and-selection`'s
+      `ObjectSelection` landed: multi-object Node-tool session,
+      cross-object `NodeSelection` (ordered `(NodeId, AnchorId)` pairs),
+      cross-object Join.
+- [x] 11. **2026-10-05, fix round: the architect rejected a plain-click
+      cross-path collapse that shipped with task 10.** `NodeTool::
+      pointer_down`/`begin_node_drag` had collapsed a cross-path
+      selection to the clicked node on a plain press, breaking AC 10
+      across paths and contradicting this file's own "a multi-path node
+      drag is one commit" decision. Fixed: `pointer_down` now keeps the
+      selection whenever the clicked node satisfies `contains_node`,
+      regardless of path; `Document::move_anchors` takes `(NodeId,
+      AnchorId, Point)` triples across paths and commits once;
+      `Drag::Nodes`/`LiveNodeDrag::Nodes` carry those cross-path triples
+      instead of one path plus `(AnchorId, Point)` pairs. New tests:
+      `vecmanf-document-core::paths` (two cross-path move tests, one
+      asserting `len_changes() == 1`), `vecmanf-ui-core::node_tool`
+      (plain click keeps a cross-path selection and drags both paths),
+      `vecmanf-editor-wasm/tests/acceptance_0006.rs` (same, through
+      `Session`'s public API).
 
 ## Validation
 

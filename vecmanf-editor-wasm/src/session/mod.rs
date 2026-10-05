@@ -312,12 +312,12 @@ impl Session {
             return;
         };
         match live {
-            vecmanf_ui_core::LiveNodeDrag::Nodes { path, positions } => {
-                if let Some(snapshot) = paths.iter_mut().find(|p| p.id == path) {
-                    for (id, point) in positions {
-                        if let Some(anchor) = snapshot.anchors.iter_mut().find(|a| a.id == id) {
-                            anchor.point = point;
-                        }
+            vecmanf_ui_core::LiveNodeDrag::Nodes { positions } => {
+                for (path, id, point) in positions {
+                    if let Some(snapshot) = paths.iter_mut().find(|p| p.id == path)
+                        && let Some(anchor) = snapshot.anchors.iter_mut().find(|a| a.id == id)
+                    {
+                        anchor.point = point;
                     }
                 }
             }

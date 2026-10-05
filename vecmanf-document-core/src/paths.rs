@@ -175,32 +175,35 @@ impl Document {
     }
 
     /// Moves every named anchor to its new absolute position, one commit
-    /// for the whole drag — handles are untouched because they are stored
-    /// relative to their own anchor (`specs/0002-path-node-editing/adrs.md`
-    /// decision 2; acceptance criteria 8, 10).
+    /// for the whole drag, whether every anchor shares one path or `moves`
+    /// spans several — a multi-path node drag is one commit, exactly like
+    /// a single-path one (`specs/0006-path-merge-split-and-node-types/
+    /// adrs.md`'s "one Node-tool session over several paths": "a
+    /// multi-path node drag is one commit") — handles are untouched
+    /// because they are stored relative to their own anchor
+    /// (`specs/0002-path-node-editing/adrs.md` decision 2; acceptance
+    /// criteria 8, 10).
     ///
-    /// Resolves every id to an index *before* writing any of them, so a
-    /// refused move (one stale id anywhere in `moves`) never leaves the
+    /// Resolves every `(path, anchor)` pair to its container and index
+    /// *before* writing any of them, so a refused move (one stale id
+    /// anywhere in `moves`, on any of the paths involved) never leaves any
     /// path half-moved.
     ///
     /// # Errors
-    /// [`PathEditError::NoSuchPath`] if `path` no longer exists;
+    /// [`PathEditError::NoSuchPath`] if any named path no longer exists;
     /// [`PathEditError::NoSuchAnchor`] if any named anchor no longer
     /// exists.
-    pub fn move_anchors(
-        &self,
-        path: NodeId,
-        moves: &[(AnchorId, Point)],
-    ) -> Result<(), PathEditError> {
-        let (_, anchors) = self.path_parts(path)?;
-        let resolved: Vec<(usize, Point)> = moves
+    pub fn move_anchors(&self, moves: &[(NodeId, AnchorId, Point)]) -> Result<(), PathEditError> {
+        let resolved: Vec<(LoroMovableList, usize, Point)> = moves
             .iter()
-            .map(|&(anchor_id, point)| {
-                anchor_index(&anchors, anchor_id).map(|index| (index, point))
+            .map(|&(path, anchor_id, point)| {
+                let (_, anchors) = self.path_parts(path)?;
+                let index = anchor_index(&anchors, anchor_id)?;
+                Ok((anchors, index, point))
             })
-            .collect::<Result<_, _>>()?;
-        for (index, point) in resolved {
-            write_point(&anchor_map_at(&anchors, index), KEY_POINT, point);
+            .collect::<Result<_, PathEditError>>()?;
+        for (anchors, index, point) in &resolved {
+            write_point(&anchor_map_at(anchors, *index), KEY_POINT, *point);
         }
         self.commit_with_label("move_anchors");
         Ok(())
@@ -652,7 +655,7 @@ mod tests {
             false,
         );
         document
-            .move_anchors(id, &[(AnchorId::new(1, 1), Point::new(3.0, 4.0))])
+            .move_anchors(&[(id, AnchorId::new(1, 1), Point::new(3.0, 4.0))])
             .expect("move");
         let snapshot = document.path(id).expect("path exists");
         assert_eq!(snapshot.anchors[0].point, Point::new(3.0, 4.0));
@@ -663,7 +666,7 @@ mod tests {
     fn move_anchors_on_a_stale_anchor_is_refused() {
         let document = Document::new(1);
         let id = document.create_path(&[anchor(1, 0.0, 0.0), anchor(2, 1.0, 0.0)], false);
-        let result = document.move_anchors(id, &[(AnchorId::new(9, 9), Point::new(0.0, 0.0))]);
+        let result = document.move_anchors(&[(id, AnchorId::new(9, 9), Point::new(0.0, 0.0))]);
         assert_eq!(result, Err(PathEditError::NoSuchAnchor));
     }
 
@@ -674,19 +677,67 @@ mod tests {
     fn move_anchors_refuses_the_whole_batch_on_one_stale_id() {
         let document = Document::new(1);
         let id = document.create_path(&[anchor(1, 0.0, 0.0), anchor(2, 10.0, 0.0)], false);
-        let result = document.move_anchors(
-            id,
-            &[
-                (AnchorId::new(1, 1), Point::new(99.0, 99.0)),
-                (AnchorId::new(9, 9), Point::new(0.0, 0.0)),
-            ],
-        );
+        let result = document.move_anchors(&[
+            (id, AnchorId::new(1, 1), Point::new(99.0, 99.0)),
+            (id, AnchorId::new(9, 9), Point::new(0.0, 0.0)),
+        ]);
         assert_eq!(result, Err(PathEditError::NoSuchAnchor));
         let snapshot = document.path(id).expect("path exists");
         assert_eq!(
             snapshot.anchors[0].point,
             Point::new(0.0, 0.0),
             "the valid id earlier in the batch must not have moved either"
+        );
+    }
+
+    /// The generalization this slice's architect review requires: `moves`
+    /// can span two different path objects and still lands as one commit
+    /// (`specs/0006-path-merge-split-and-node-types/adrs.md`'s "a
+    /// multi-path node drag is one commit").
+    #[test]
+    fn move_anchors_moves_anchors_across_two_paths_in_one_commit() {
+        let document = Document::new(1);
+        let first = document.create_path(&[anchor(1, 0.0, 0.0), anchor(2, 10.0, 0.0)], false);
+        let second = document.create_path(&[anchor(3, 0.0, 5.0), anchor(4, 10.0, 5.0)], false);
+        let before = document.loro().len_changes();
+        document
+            .move_anchors(&[
+                (first, AnchorId::new(1, 1), Point::new(1.0, 1.0)),
+                (second, AnchorId::new(1, 3), Point::new(2.0, 2.0)),
+            ])
+            .expect("cross-path move");
+        let after = document.loro().len_changes();
+        assert_eq!(
+            after - before,
+            1,
+            "one commit for the whole cross-path drag"
+        );
+        assert_eq!(
+            document.path(first).expect("first path exists").anchors[0].point,
+            Point::new(1.0, 1.0)
+        );
+        assert_eq!(
+            document.path(second).expect("second path exists").anchors[0].point,
+            Point::new(2.0, 2.0)
+        );
+    }
+
+    /// Same half-applied guarantee as the single-path case above, but with
+    /// the stale id on a *different* path than the valid one.
+    #[test]
+    fn move_anchors_refuses_the_whole_cross_path_batch_on_one_stale_id() {
+        let document = Document::new(1);
+        let first = document.create_path(&[anchor(1, 0.0, 0.0), anchor(2, 10.0, 0.0)], false);
+        let second = document.create_path(&[anchor(3, 0.0, 5.0), anchor(4, 10.0, 5.0)], false);
+        let result = document.move_anchors(&[
+            (first, AnchorId::new(1, 1), Point::new(99.0, 99.0)),
+            (second, AnchorId::new(9, 9), Point::new(0.0, 0.0)),
+        ]);
+        assert_eq!(result, Err(PathEditError::NoSuchAnchor));
+        assert_eq!(
+            document.path(first).expect("first path exists").anchors[0].point,
+            Point::new(0.0, 0.0),
+            "the valid id on the first path must not have moved either"
         );
     }
 
@@ -1296,7 +1347,7 @@ mod tests {
             .expect("delete");
         let unknown = other;
         assert_eq!(
-            document.move_anchors(unknown, &[]),
+            document.move_anchors(&[(unknown, AnchorId::new(1, 1), Point::new(0.0, 0.0))]),
             Err(PathEditError::NoSuchPath)
         );
     }

@@ -97,11 +97,14 @@ pub struct NodeTool {
 enum Drag {
     #[default]
     None,
-    /// Dragging one or more selected nodes (acceptance criteria 8, 10).
+    /// Dragging one or more selected nodes, possibly across several path
+    /// objects at once (acceptance criteria 8, 10;
+    /// `specs/0006-path-merge-split-and-node-types/adrs.md`'s architect
+    /// review: "Drag stays multi-path... a plain press on any contained
+    /// node keeps the selection, whether it spans one path or several").
     Nodes {
-        path: NodeId,
         down_at: Point,
-        starts: Vec<(vecmanf_document_core::AnchorId, Point)>,
+        starts: Vec<(NodeId, vecmanf_document_core::AnchorId, Point)>,
     },
     /// Dragging one handle (acceptance criterion 9). `down_at` and
     /// `start_value` (the dragged slot's own value at press time) are
@@ -141,16 +144,15 @@ enum Drag {
 #[derive(Debug, Clone, PartialEq)]
 pub enum LiveNodeDrag {
     /// One or more selected nodes, each at its live (not yet committed)
-    /// position — acceptance criteria 8, 10. Handles are not listed:
-    /// they are stored relative to their own anchor
-    /// (`specs/0002-path-node-editing/adrs.md` decision 2), so moving the
-    /// anchor's `point` alone already keeps them correct, with no
-    /// separate value to resolve.
+    /// position — acceptance criteria 8, 10, possibly spanning several
+    /// path objects at once (`specs/0006-.../adrs.md`'s architect
+    /// review). Handles are not listed: they are stored relative to
+    /// their own anchor (`specs/0002-path-node-editing/adrs.md` decision
+    /// 2), so moving the anchor's `point` alone already keeps them
+    /// correct, with no separate value to resolve.
     Nodes {
-        /// The dragged nodes' own path.
-        path: NodeId,
-        /// Each selected node's id and live position.
-        positions: Vec<(vecmanf_document_core::AnchorId, Point)>,
+        /// Each selected node's path, id and live position.
+        positions: Vec<(NodeId, vecmanf_document_core::AnchorId, Point)>,
     },
     /// One anchor's live (not yet committed) `(handle_in, handle_out)`
     /// pair — acceptance criterion 9. Already fully resolved by
@@ -247,24 +249,15 @@ impl NodeTool {
     /// `specs/0006-path-merge-split-and-node-types/specification.md`
     /// acceptance criterion 7: shift-clicking a node on a different path
     /// than the ones already selected adds it (`toggle_node` no longer
-    /// restricts this to one path). A *plain* click's own reset
-    /// condition below (`self.selection.path() != Some(path)`) is
-    /// deliberately left as-is rather than loosened to "already
-    /// contained, on any path": `self.selection.path()` is `None`
-    /// whenever the current selection spans more than one path, so a
-    /// plain click on *either* of two cross-path selected nodes always
-    /// resets to a single-node selection on just the clicked one, rather
-    /// than beginning a drag of the whole cross-path set. This is what
-    /// makes Split's own result "the maker can immediately drag them
-    /// apart" (acceptance criterion 15) work with an ordinary plain
-    /// click-drag — dragging both of two *coincident* nodes by the same
-    /// offset could never actually separate them. A deliberately
-    /// shift-built cross-path selection (criterion 7) therefore cannot
-    /// be dragged as one group either; Join is the one action that
-    /// already treats it as a unit (`NodeSelection::join_pairs`, via
-    /// `NodeTool::can_join`),
-    /// which is what every acceptance criterion that exercises a
-    /// cross-path selection actually asks it to do.
+    /// restricts this to one path). A *plain* click keeps the current
+    /// selection whenever the clicked node is already part of it —
+    /// regardless of which path it belongs to — rather than collapsing a
+    /// cross-path selection down to just the clicked node
+    /// (`specs/0006-.../adrs.md`'s architect review: "Rejected: collapsing
+    /// a cross-path selection on a plain press. It breaks AC 10 across
+    /// paths"). Only a click on a node that is *not* already selected
+    /// replaces the selection with that one node; a click that hits
+    /// nothing clears the selection unless `shift` is held.
     pub fn pointer_down(
         &mut self,
         paths: &[PathSnapshot],
@@ -287,12 +280,10 @@ impl NodeTool {
             Some(Hit::Node { path, anchor }) => {
                 if shift {
                     self.selection.toggle_node(path, anchor);
-                } else if self.selection.path() != Some(path)
-                    || !self.selection.contains_node(anchor)
-                {
+                } else if !self.selection.contains_node(anchor) {
                     self.selection.select_single_node(path, anchor);
                 }
-                self.begin_node_drag(paths, path, point);
+                self.begin_node_drag(paths, point);
                 PointerDownOutcome::Node
             }
             Some(Hit::Segment { path, start, end }) => {
@@ -308,38 +299,28 @@ impl NodeTool {
         }
     }
 
-    /// Begins a drag of every selected node that resolves against
-    /// `path`'s own snapshot — any selected node on a *different* path
-    /// (reachable only right after a shift-click that just added one,
-    /// `pointer_down`'s own doc comment) is silently excluded from
-    /// `starts` here, not dragged. A plain click always collapses the
-    /// selection to one path first, so this filtering only ever matters
-    /// for a continued drag of the very shift-click gesture that built
-    /// a cross-path selection — and that gesture's own two presses are
-    /// each a stationary click (acceptance criterion 7's own wording),
-    /// which commits nothing regardless (the zero-delta rule
-    /// `NodeTool::pointer_up` already applies to every node drag).
-    fn begin_node_drag(&mut self, paths: &[PathSnapshot], path: NodeId, down_at: Point) {
-        let Some(snapshot) = paths.iter().find(|p| p.id == path) else {
-            return;
-        };
+    /// Begins a drag of every currently selected node, resolved against
+    /// whichever of `paths`' snapshots each one belongs to — the drag can
+    /// span several path objects at once, exactly like the resulting
+    /// commit (`specs/0006-.../adrs.md`'s architect review: "Drag stays
+    /// multi-path, as decided above... a plain press on any contained
+    /// node keeps the selection, whether it spans one path or several").
+    /// A selected node that no longer resolves (deleted since selection,
+    /// `ADR 0009 §2`) is silently excluded from `starts`, not dragged.
+    fn begin_node_drag(&mut self, paths: &[PathSnapshot], down_at: Point) {
         let starts = self
             .selection
-            .nodes()
+            .node_pairs()
             .iter()
-            .filter_map(|&id| {
-                snapshot
-                    .anchors
+            .filter_map(|&(path, anchor_id)| {
+                paths
                     .iter()
-                    .find(|a| a.id == id)
-                    .map(|a| (id, a.point))
+                    .find(|p| p.id == path)
+                    .and_then(|snapshot| snapshot.anchors.iter().find(|a| a.id == anchor_id))
+                    .map(|a| (path, anchor_id, a.point))
             })
             .collect();
-        self.drag = Drag::Nodes {
-            path,
-            down_at,
-            starts,
-        };
+        self.drag = Drag::Nodes { down_at, starts };
     }
 
     /// Records the handle's current value (and its anchor's kind, for
@@ -390,13 +371,13 @@ impl NodeTool {
     /// independently drift apart.
     fn resolve_node_positions(
         down_at: Point,
-        starts: &[(vecmanf_document_core::AnchorId, Point)],
+        starts: &[(NodeId, vecmanf_document_core::AnchorId, Point)],
         release: Point,
-    ) -> Vec<(vecmanf_document_core::AnchorId, Point)> {
+    ) -> Vec<(NodeId, vecmanf_document_core::AnchorId, Point)> {
         let delta = down_at.vector_to(release);
         starts
             .iter()
-            .map(|&(id, p)| (id, p.translated(delta)))
+            .map(|&(path, id, p)| (path, id, p.translated(delta)))
             .collect()
     }
 
@@ -421,12 +402,7 @@ impl NodeTool {
     pub fn live_drag(&self, cursor: Point) -> Option<LiveNodeDrag> {
         match &self.drag {
             Drag::None => None,
-            Drag::Nodes {
-                path,
-                down_at,
-                starts,
-            } => Some(LiveNodeDrag::Nodes {
-                path: *path,
+            Drag::Nodes { down_at, starts } => Some(LiveNodeDrag::Nodes {
                 positions: Self::resolve_node_positions(*down_at, starts, cursor),
             }),
             Drag::Handle {
@@ -461,11 +437,7 @@ impl NodeTool {
     pub fn pointer_up(&mut self, document: &Document, point: Point) -> PointerUpOutcome {
         match std::mem::take(&mut self.drag) {
             Drag::None => PointerUpOutcome::NoOp,
-            Drag::Nodes {
-                path,
-                down_at,
-                starts,
-            } => {
+            Drag::Nodes { down_at, starts } => {
                 // A press and release at the exact same point writes
                 // nothing (`specs/0002-path-node-editing/adrs.md`'s dated
                 // architect-review note): under ADR 0009 §3, `point` is
@@ -481,7 +453,7 @@ impl NodeTool {
                     return PointerUpOutcome::NoOp;
                 }
                 let moves = Self::resolve_node_positions(down_at, &starts, point);
-                let _ = document.move_anchors(path, &moves);
+                let _ = document.move_anchors(&moves);
                 PointerUpOutcome::NodesMoved
             }
             Drag::Handle {
@@ -883,8 +855,7 @@ mod tests {
         assert_eq!(
             tool.live_drag(Point::new(5.0, 7.0)),
             Some(LiveNodeDrag::Nodes {
-                path,
-                positions: vec![(a, Point::new(5.0, 7.0))],
+                positions: vec![(path, a, Point::new(5.0, 7.0))],
             }),
             "mid-drag, before release"
         );
@@ -1505,6 +1476,76 @@ mod tests {
         // AC 9 (via AC 8's shared rule): both are endpoint nodes of open
         // paths, so Join applies to this selection too.
         assert!(tool.toolbar_state(&document).can_join);
+    }
+
+    /// Architect review of the AC 6/7 follow-up
+    /// (`specs/0006-path-merge-split-and-node-types/adrs.md`): "Rejected:
+    /// collapsing a cross-path selection on a plain press. It breaks
+    /// AC 10 across paths." A plain (non-shift) click on a node that is
+    /// already part of a cross-path selection must keep the whole
+    /// selection — not reset it to just the clicked node — so a
+    /// following drag moves every selected node, on every path it spans,
+    /// as one `Document::move_anchors` commit.
+    #[test]
+    fn plain_click_on_a_cross_path_selected_node_keeps_the_whole_selection_and_drags_it_as_one_commit()
+     {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path_one = open_two_node_path(&document, a, b);
+        let c = AnchorId::new(2, 1);
+        let d = AnchorId::new(2, 2);
+        let path_two = document.create_path(
+            &[
+                NewAnchor::corner(c, Point::new(0.0, 50.0)),
+                NewAnchor::corner(d, Point::new(20.0, 50.0)),
+            ],
+            false,
+        );
+
+        let mut tool = NodeTool::new();
+        let paths = vec![
+            document.path(path_one).expect("exists"),
+            document.path(path_two).expect("exists"),
+        ];
+        // Build a cross-path selection the same way AC 7's own test does.
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+        tool.pointer_down(&paths, Point::new(0.0, 50.0), TOLERANCES, true);
+        assert_eq!(
+            tool.selection().node_pairs(),
+            &[(path_one, a), (path_two, c)],
+            "cross-path selection built as in AC 7"
+        );
+
+        // A *plain* click (no shift) back on one of the two already-
+        // selected nodes must not collapse the selection to just that
+        // node.
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+        assert_eq!(
+            tool.selection().node_pairs(),
+            &[(path_one, a), (path_two, c)],
+            "a plain press on an already-contained node keeps the whole \
+             cross-path selection, whether it spans one path or several"
+        );
+
+        // Dragging from there moves both selected nodes, on both paths,
+        // as one commit.
+        let outcome = tool.pointer_up(&document, Point::new(3.0, 4.0));
+        assert_eq!(outcome, PointerUpOutcome::NodesMoved);
+
+        let moved_one = document.path(path_one).expect("exists");
+        let moved_two = document.path(path_two).expect("exists");
+        assert_eq!(
+            moved_one.anchors[0].point,
+            Point::new(3.0, 4.0),
+            "path one's selected node moved by the drag offset"
+        );
+        assert_eq!(
+            moved_two.anchors[0].point,
+            Point::new(3.0, 54.0),
+            "path two's selected node moved by the same offset, even \
+             though the press landed on path one's node"
+        );
     }
 
     /// AC12/AC13/AC15: splitting an interior node of an open path
