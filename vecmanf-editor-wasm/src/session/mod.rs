@@ -889,6 +889,54 @@ mod tests {
         );
     }
 
+    /// Tester verification (PR #20, handles-doubled fix, 2026-10-05):
+    /// `HANDLE_TOLERANCE_PX` is 16.0 now (was 8.0, the same as
+    /// `POINT_TOLERANCE_PX`); at the identity view (1 screen px per
+    /// document mm, `ViewTransform::identity`) a click 13px from a
+    /// selected smooth node's handle endpoint — outside the old 8px
+    /// radius, inside the new 16px one — must register as a handle hit.
+    /// The click point is also kept far from the anchor itself and from
+    /// the segment, so this cannot pass by accidentally hitting
+    /// something else.
+    #[test]
+    fn a_click_13px_from_a_handle_hits_under_the_doubled_tolerance() {
+        let mut session = Session::new(1);
+        // A at (0, 0), a plain corner click.
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        // B at (50, 0), dragged so its handle_out lands at (50, 20) —
+        // a handle endpoint 20px straight up from B.
+        session.pointer_down(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 20.0), false);
+        session.finish_pen();
+
+        session.set_tool(Tool::Node);
+        // Select B first: handles are only hittable on a selected node.
+        session.pointer_down(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 0.0), false);
+
+        let b = session.paths()[0].anchors[1].id;
+        assert_eq!(
+            session.paths()[0].anchors[1].handle_out,
+            Vec2::new(0.0, 20.0),
+            "handle endpoint is at document (50, 20)"
+        );
+
+        // 13px from the handle endpoint (50, 20); ~23.8px from B itself
+        // and far from the A-B segment, so only the handle tolerance can
+        // explain a hit here.
+        session.pointer_hover(Point::new(63.0, 20.0), false);
+        assert_eq!(
+            session.hovered,
+            Some(Hit::Handle {
+                path: session.paths()[0].id,
+                anchor: b,
+                slot: vecmanf_document_core::HandleSlot::Out,
+            }),
+            "13px is outside the old 8px handle radius but inside the new 16px one"
+        );
+    }
+
     #[test]
     fn pack_then_open_round_trips_a_drawn_path() {
         let mut session = Session::new(1);
