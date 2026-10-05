@@ -12,7 +12,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::path_model::{Color, NodeId, PathSnapshot};
-use crate::units::{Angle, Length, Point};
+use crate::units::{Angle, Length, Point, Vec2};
 
 /// A rectangle's bounding box, normalized so `origin` is always the
 /// top-left (minimum) corner and `width`/`height` are always
@@ -285,6 +285,119 @@ impl ObjectSnapshot {
             Self::Primitive(snapshot) => snapshot.id,
         }
     }
+
+    /// This object translated by `offset` — a path's anchor `point`s (its
+    /// handles are relative to their own anchor and so need no write,
+    /// `specs/0002-path-node-editing/adrs.md` decision 2) or a primitive's
+    /// frame origin/center (`translate_shape`). Elementary arithmetic, no
+    /// document access — the Select tool's live move preview
+    /// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "a move
+    /// rewrites geometry... Preview and commit therefore share one
+    /// implementation") renders this directly, and
+    /// [`crate::Document::translate_objects`] commits the same rule.
+    #[must_use]
+    pub fn translated(&self, offset: Vec2) -> Self {
+        match self {
+            Self::Path(path) => {
+                let mut path = path.clone();
+                for anchor in &mut path.anchors {
+                    anchor.point = anchor.point.translated(offset);
+                }
+                Self::Path(path)
+            }
+            Self::Primitive(primitive) => {
+                let mut primitive = *primitive;
+                primitive.shape = translate_shape(primitive.shape, offset);
+                Self::Primitive(primitive)
+            }
+        }
+    }
+}
+
+/// Translates a primitive's own frame by `offset`: a rectangle's `origin`,
+/// an ellipse's `center`, or a polygon/star's `center` — point count,
+/// orientation, inner ratio and (for a rectangle) corner radius are all
+/// untouched. The one rule [`ObjectSnapshot::translated`]'s primitive arm
+/// and [`crate::Document::translate_objects`]'s primitive writes both call,
+/// so a moved primitive's live preview and its committed result can never
+/// independently drift apart.
+#[must_use]
+pub(crate) fn translate_shape(shape: Shape, offset: Vec2) -> Shape {
+    match shape {
+        Shape::Rect {
+            bounds,
+            corner_radius,
+        } => Shape::Rect {
+            bounds: RectBounds {
+                origin: bounds.origin.translated(offset),
+                ..bounds
+            },
+            corner_radius,
+        },
+        Shape::Ellipse { frame } => Shape::Ellipse {
+            frame: EllipseFrame {
+                center: frame.center.translated(offset),
+                ..frame
+            },
+        },
+        Shape::Polygon { frame, point_count } => Shape::Polygon {
+            frame: StarFrame {
+                center: frame.center.translated(offset),
+                ..frame
+            },
+            point_count,
+        },
+        Shape::Star {
+            frame,
+            point_count,
+            inner_ratio,
+        } => Shape::Star {
+            frame: StarFrame {
+                center: frame.center.translated(offset),
+                ..frame
+            },
+            point_count,
+            inner_ratio,
+        },
+    }
+}
+
+/// The axis-aligned frame bounds of any primitive shape — what the
+/// Select-tool (and shape-tool) bounding-box decoration draws around
+/// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "the primitive box
+/// that `render-core/src/shape_preview.rs` computes privately... moves to
+/// `document-core` as plain arithmetic on its own types"). A star keeps its
+/// circumscribed-frame box, matching `primitive-shapes`' own convention.
+#[must_use]
+pub fn shape_frame_bounds(shape: &Shape) -> (Point, Point) {
+    match *shape {
+        Shape::Rect { bounds, .. } => (
+            bounds.origin,
+            bounds
+                .origin
+                .translated(Vec2::new(bounds.width.as_mm(), bounds.height.as_mm())),
+        ),
+        Shape::Ellipse { frame } => (
+            Point::new(
+                frame.center.x - frame.rx.as_mm(),
+                frame.center.y - frame.ry.as_mm(),
+            ),
+            Point::new(
+                frame.center.x + frame.rx.as_mm(),
+                frame.center.y + frame.ry.as_mm(),
+            ),
+        ),
+        Shape::Polygon { frame, .. } | Shape::Star { frame, .. } => (
+            Point::new(
+                frame.center.x - frame.radius.as_mm(),
+                frame.center.y - frame.radius.as_mm(),
+            ),
+            Point::new(
+                frame.center.x + frame.radius.as_mm(),
+                frame.center.y + frame.radius.as_mm(),
+            ),
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -342,5 +455,96 @@ mod tests {
         assert!(InnerRatio::new(0.0).is_err());
         assert!(InnerRatio::new(1.0).is_err());
         assert!(InnerRatio::new(f64::NAN).is_err());
+    }
+
+    #[test]
+    fn translated_primitive_moves_the_frame_only() {
+        let shape = Shape::Rect {
+            bounds: RectBounds {
+                origin: Point::new(0.0, 0.0),
+                width: Length::from_mm(10.0),
+                height: Length::from_mm(5.0),
+            },
+            corner_radius: Length::from_mm(2.0),
+        };
+        let snapshot = PrimitiveSnapshot {
+            id: NodeId::from_parts(1, 1),
+            shape,
+            stroke_width: Length::from_mm(0.25),
+            stroke: Color::BLACK,
+            fill: None,
+        };
+        let moved = ObjectSnapshot::Primitive(snapshot).translated(Vec2::new(3.0, 4.0));
+        let ObjectSnapshot::Primitive(moved) = moved else {
+            panic!("expected a primitive");
+        };
+        let Shape::Rect {
+            bounds,
+            corner_radius,
+        } = moved.shape
+        else {
+            panic!("expected a rect");
+        };
+        assert_eq!(bounds.origin, Point::new(3.0, 4.0));
+        assert!((bounds.width.as_mm() - 10.0).abs() < f64::EPSILON);
+        assert!((corner_radius.as_mm() - 2.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn translated_path_moves_every_anchor_point_but_not_its_handles() {
+        use crate::path_model::{AnchorId, AnchorKind, NewAnchor};
+
+        let anchor = NewAnchor {
+            id: AnchorId::new(1, 1),
+            point: Point::new(0.0, 0.0),
+            handle_in: Vec2::ZERO,
+            handle_out: Vec2::new(5.0, 0.0),
+            kind: AnchorKind::Smooth,
+        };
+        let path = PathSnapshot {
+            id: NodeId::from_parts(1, 2),
+            closed: false,
+            stroke_width: Length::from_mm(0.25),
+            stroke: Color::BLACK,
+            fill: None,
+            anchors: vec![anchor],
+        };
+        let moved = ObjectSnapshot::Path(path).translated(Vec2::new(1.0, 2.0));
+        let ObjectSnapshot::Path(moved) = moved else {
+            panic!("expected a path");
+        };
+        assert_eq!(moved.anchors[0].point, Point::new(1.0, 2.0));
+        assert_eq!(moved.anchors[0].handle_out, Vec2::new(5.0, 0.0));
+    }
+
+    #[test]
+    fn shape_frame_bounds_of_a_rect_is_its_own_box() {
+        let shape = Shape::Rect {
+            bounds: RectBounds {
+                origin: Point::new(1.0, 2.0),
+                width: Length::from_mm(10.0),
+                height: Length::from_mm(5.0),
+            },
+            corner_radius: Length::from_mm(0.0),
+        };
+        let (min, max) = shape_frame_bounds(&shape);
+        assert_eq!(min, Point::new(1.0, 2.0));
+        assert_eq!(max, Point::new(11.0, 7.0));
+    }
+
+    #[test]
+    fn shape_frame_bounds_of_a_star_is_its_circumscribed_frame() {
+        let shape = Shape::Star {
+            frame: StarFrame {
+                center: Point::new(0.0, 0.0),
+                radius: Length::from_mm(10.0),
+                angle: Angle::from_radians(0.0),
+            },
+            point_count: PointCount::new(5).unwrap(),
+            inner_ratio: InnerRatio::new(0.5).unwrap(),
+        };
+        let (min, max) = shape_frame_bounds(&shape);
+        assert_eq!(min, Point::new(-10.0, -10.0));
+        assert_eq!(max, Point::new(10.0, 10.0));
     }
 }
