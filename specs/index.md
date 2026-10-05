@@ -33,16 +33,17 @@ triggered is a bug, not a variant.
 | 3 | `primitive-shapes` | Rectangle (with corner radius), circle/ellipse and polygon/star tools; "object to path" converts any of them to an editable path. | R-EDIT-002, R-EDIT-004 | Must |
 | 4 | `canvas-navigation-and-selection` | Pan/zoom the canvas (zoom toward cursor), stable behaviour across window resize, and a general Select tool to click/move/delete any object without re-entering its creation tool. | R-EDIT-010, R-EDIT-011 | Must |
 | 5 | `object-transform` | Move, scale and rotate any path or primitive via on-canvas handles on the Select tool's bounding box, with proportional stroke-width/corner-radius scaling. | R-EDIT-012 | Must |
-| 6 | `stroke-and-fill-styling` | Stroke width/dash/join/cap/color; solid fill and linear/radial gradient fill, on any path or primitive. | R-EDIT-005, R-EDIT-006 | Must |
-| 7 | `undo-redo` | Ctrl+Z/Ctrl+Y undoes/redoes every editing operation shipped in slices 2–3, 5 and 6, one interaction = one undo step, no silent data loss. | R-EDIT-008 | Must |
-| 8 | `boolean-operations` | Union, difference, intersection on closed paths. | R-EDIT-003 | Must |
-| 9 | `layers-and-grouping` | Group/ungroup objects; layers with per-layer visibility and lock, to separate cut/engrave/reference geometry. | R-EDIT-009 | Must |
-| 10 | `svg-import-export` | Open a plain SVG from Inkscape and re-export it without hand-fixing geometry; named, listed loss report for anything outside our supported subset. | R-SYS-006 | Must |
-| 11 | `raster-trace` | Trace a raster image to vector paths with adjustable threshold/color-count, parity with Inkscape's "Trace Bitmap". | R-VEC-001 | Must |
-| 12 | `machine-profile` | Define and reuse a machine profile (work area, connection, limits) for a laser cutter; select it for a project. | R-MFG-001 | Must |
-| 13 | `manufacturing-roles` | Assign cut/engrave role to geometry (by layer) within one file. | R-MFG-002 | Must |
-| 14 | `material-test-library` | Generate a power/speed test-cut grid for the selected machine, record which cell worked, store it as a reusable material record. | R-MAT-001, R-MAT-002, R-MAT-003 | Must |
-| 15 | `laser-job-preview-and-output` | Toolpath/time preview, an explicit machine+material gate before export, and GRBL G-code export for cut + engrave geometry. The MVP's capstone: a maker's own design goes from drawing to a file their laser runs. | R-MFG-003, R-MFG-LASER-001, R-SYS-008 | Must |
+| 6 | `path-merge-split-and-node-types` | Join two path endpoints into one node, split a path at a node into two; a third node type (Asymmetric) alongside Corner and Symmetric. | R-EDIT-014 | Must |
+| 7 | `stroke-and-fill-styling` | Stroke width/dash/join/cap/color; solid fill and linear/radial gradient fill, on any path or primitive. | R-EDIT-005, R-EDIT-006 | Must |
+| 8 | `undo-redo` | Ctrl+Z/Ctrl+Y undoes/redoes every editing operation shipped in slices 2–3 and 5–7, one interaction = one undo step, no silent data loss. | R-EDIT-008 | Must |
+| 9 | `boolean-operations` | Union, difference, intersection on closed paths. | R-EDIT-003 | Must |
+| 10 | `layers-and-grouping` | Group/ungroup objects; layers with per-layer visibility and lock, to separate cut/engrave/reference geometry. | R-EDIT-009 | Must |
+| 11 | `svg-import-export` | Open a plain SVG from Inkscape and re-export it without hand-fixing geometry; named, listed loss report for anything outside our supported subset. | R-SYS-006 | Must |
+| 12 | `raster-trace` | Trace a raster image to vector paths with adjustable threshold/color-count, parity with Inkscape's "Trace Bitmap". | R-VEC-001 | Must |
+| 13 | `machine-profile` | Define and reuse a machine profile (work area, connection, limits) for a laser cutter; select it for a project. | R-MFG-001 | Must |
+| 14 | `manufacturing-roles` | Assign cut/engrave role to geometry (by layer) within one file. | R-MFG-002 | Must |
+| 15 | `material-test-library` | Generate a power/speed test-cut grid for the selected machine, record which cell worked, store it as a reusable material record. | R-MAT-001, R-MAT-002, R-MAT-003 | Must |
+| 16 | `laser-job-preview-and-output` | Toolpath/time preview, an explicit machine+material gate before export, and GRBL G-code export for cut + engrave geometry. The MVP's capstone: a maker's own design goes from drawing to a file their laser runs. | R-MFG-003, R-MFG-LASER-001, R-SYS-008 | Must |
 
 ## Notes on ordering
 
@@ -75,22 +76,36 @@ triggered is a bug, not a variant.
   per-node transform question, finally due) — `format_version` goes to 4
   as a direct result; `stroke-and-fill-styling` moves to `format_version`
   5 behind it, a dated note in its own `adrs.md`.
-- **7 (undo) after 2–3, 5 and 6, before 8–9**: undo is cross-cutting
+- **6 (path merge/split and node types) inserted immediately after 5**:
+  added the same day as a third customer ask in the same round — Join,
+  Split and a third node type (Asymmetric, alongside Corner and a
+  relabelled Symmetric — Symmetric is slice 2's existing `Smooth`, renamed
+  for clarity now that a third kind exists). Builds on slice 4's Select
+  tool for cross-object Join (select two path objects, then switch to Node
+  tool to pick the specific endpoints) and on slice 5's `rotation` register
+  (a joined/split object's rotation must carry over correctly). Sequenced
+  before styling for the same reason as 4 and 5. `format_version` goes to
+  5; `stroke-and-fill-styling` moves to `format_version` 6 behind it, a
+  dated note in its own `adrs.md`. The `AnchorKind` enum gains a variant
+  (`Corner`/`Symmetric`/`Asymmetric`) — `Smooth`'s on-disk tag is renamed to
+  `symmetric` going forward, with a documented one-line migration (an old
+  file's `smooth` tag still reads as `Symmetric`, never rewritten in place).
+- **8 (undo) after 2–3 and 5–7, before 9–10**: undo is cross-cutting
   infrastructure (ADR 0002 §9, ADR 0004 §2 — peer-scoped, CRDT-backed) but
   "covers every editing operation" (R-EDIT-008) is only checkable once
   there is more than one operation to undo. Slice 4's pan/zoom/selection is
   view state, not document state, so it has no undo surface and is not
-  part of this dependency; slices 8 and 9 each add an acceptance criterion
-  that their new operation is undoable through the mechanism slice 7
-  establishes, rather than repeating slice 7's work.
-- **10 (SVG round-trip) after 6 and 9**: round-tripping a real Inkscape
+  part of this dependency; slices 9 and 10 each add an acceptance criterion
+  that their new operation is undoable through the mechanism slice 8
+  establishes, rather than repeating slice 8's work.
+- **11 (SVG round-trip) after 7 and 10**: round-tripping a real Inkscape
   file is only a meaningful test once paths, primitives, styling, groups
   and layers all exist to round-trip. Earlier would mean testing against
   near-empty documents.
-- **12–15 last and in that order**: a job needs a machine profile (12)
-  before roles can target one (13), roles and a machine before a material
-  test is worth running (14), and all three before the capstone job-preview
-  export story (15) — which is where R-SYS-008's "no job without a machine
+- **13–16 last and in that order**: a job needs a machine profile (13)
+  before roles can target one (14), roles and a machine before a material
+  test is worth running (15), and all three before the capstone job-preview
+  export story (16) — which is where R-SYS-008's "no job without a machine
   profile" gate actually bites.
 
 ## Out of sequence (tracked in `docs/requirements.md`, not listed above)

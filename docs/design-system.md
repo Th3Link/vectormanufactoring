@@ -163,7 +163,7 @@ values, not an implementation site, for those four rows.
 | Left tool panel width | 48px | Floating vertical icon panel (2026-10-05: floats over the canvas, inset 12px from the left edge; no longer a docked rail claiming layout width) |
 | Left tool panel inset | 12px | Distance from the canvas's left and top edges to the floating panel |
 | Tool icon size | 24px | Icon glyph inside a 48×48 button |
-| Node glyph | 7×7px screen-space | Corner (square) and smooth (diamond) node markers |
+| Node glyph | 7×7px screen-space | Corner (square), Symmetric (diamond) and Asymmetric (triangle) node markers (`path-merge-split-and-node-types`: renamed "smooth" to "Symmetric" and added the Asymmetric triangle — a genuinely different-sided polygon, not a further rotation of the square/diamond pair, so it stays distinct from both at a glance. Value cell here is the pre-`fix/canvas-interaction-bugs` size; see that branch/this file's own note above for the pending 14px doubling, which the triangle is also sized against once it lands.) |
 | Handle endpoint | 6px diameter screen-space | Circle |
 | Handle line weight | 1px screen-space | Node-to-handle connector |
 | Segment selection overlay | +2px screen-space over the geometry's own stroke | Drawn on top, doesn't replace the real stroke |
@@ -253,7 +253,11 @@ values, not an implementation site, for those four rows.
   its own `aria-label`. Reuse this instead of a `Select` dropdown whenever
   the choice set is small (≤4) and icons read faster than words — Join/Cap/
   Fill-mode all qualify, a longer list (e.g. the dash preset, 4 options but
-  pattern samples read better in a list) uses `Select` instead.
+  pattern samples read better in a list) uses `Select` instead. Also used
+  for the node-tool's kind control (`path-merge-split-and-node-types`):
+  Make corner / Make symmetric / Make asymmetric, icons being the node
+  glyphs themselves (square/diamond/triangle), replacing the two flat
+  "Make corner"/"Make smooth" buttons `path-node-editing` shipped.
 - **`ColorAlphaPicker`**: the one shared color-with-alpha control
   (swatch + popover: saturation/hue area, hex input, alpha or opacity
   slider), introduced in `stroke-and-fill-styling` for stroke color, solid
