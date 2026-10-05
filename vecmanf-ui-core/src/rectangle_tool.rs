@@ -12,7 +12,7 @@ use vecmanf_document_core::{
     Document, Length, NodeId, Point, PrimitiveSnapshot, RectBounds, Shape, effective_corner_radius,
 };
 
-use crate::PrimitiveSelection;
+use crate::ObjectSelection;
 use crate::handle_layout::{
     self, HandleKind, ResizeDirection, corner_radius_from_drag, resize_rect_bounds,
 };
@@ -84,7 +84,7 @@ pub enum RectPointerUpOutcome {
 }
 
 /// The rectangle tool's state (acceptance criteria 1-6). Selection is
-/// shared ([`PrimitiveSelection`]), passed in rather than owned, so the
+/// shared ([`ObjectSelection`]), passed in rather than owned, so the
 /// ellipse and polygon/star tools can accumulate a mixed-kind selection
 /// alongside it (acceptance criterion 22).
 #[derive(Debug, Default)]
@@ -109,7 +109,7 @@ impl RectangleTool {
     pub fn pointer_down(
         &mut self,
         primitives: &[PrimitiveSnapshot],
-        selection: &mut PrimitiveSelection,
+        selection: &mut ObjectSelection,
         point: Point,
         tolerances: ShapeHitTolerances,
         shift: bool,
@@ -320,7 +320,7 @@ impl RectangleTool {
     /// corner radius of every currently selected rectangle, in one
     /// commit for the whole selection (architect review: previously one
     /// commit per selected id).
-    pub fn remove_rounding(&self, document: &Document, selection: &PrimitiveSelection) {
+    pub fn remove_rounding(&self, document: &Document, selection: &ObjectSelection) {
         let ids: Vec<NodeId> = rects_only_ids(document, selection.ids());
         if ids.is_empty() {
             return;
@@ -369,7 +369,7 @@ mod tests {
     fn ac1_rectangle_drag_creates_a_zero_radius_rect() {
         let document = Document::new(1);
         let mut tool = RectangleTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
 
         tool.pointer_down(&[], &mut selection, Point::new(0.0, 0.0), TOLERANCES, false);
         let outcome = tool.pointer_up(&document, Point::new(10.0, 20.0), false);
@@ -401,7 +401,7 @@ mod tests {
     #[test]
     fn live_shape_during_create_drag_matches_what_pointer_up_would_commit() {
         let mut tool = RectangleTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         tool.pointer_down(&[], &mut selection, Point::new(0.0, 0.0), TOLERANCES, false);
         assert!(tool.live_shape().is_none(), "no movement yet: no preview");
 
@@ -419,7 +419,7 @@ mod tests {
     #[test]
     fn live_shape_during_create_drag_respects_constrain() {
         let mut tool = RectangleTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         tool.pointer_down(&[], &mut selection, Point::new(0.0, 0.0), TOLERANCES, false);
         tool.pointer_move(Point::new(5.0, 20.0), true);
         let Some(LiveShape::Creating(Shape::Rect { bounds, .. }, _)) = tool.live_shape() else {
@@ -435,7 +435,7 @@ mod tests {
     fn ac2_constrain_makes_a_square_sized_to_the_larger_extent() {
         let document = Document::new(1);
         let mut tool = RectangleTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         tool.pointer_down(&[], &mut selection, Point::new(0.0, 0.0), TOLERANCES, false);
         let outcome = tool.pointer_up(&document, Point::new(5.0, 20.0), true);
         let RectPointerUpOutcome::Created(id) = outcome else {
@@ -464,7 +464,7 @@ mod tests {
             .set_corner_radius(&[id], Length::from_mm(2.0))
             .expect("set radius");
         let mut tool = RectangleTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         selection.select_single(id);
 
         let primitives = snapshots(&document);
@@ -514,7 +514,7 @@ mod tests {
             height: Length::from_mm(10.0),
         });
         let mut tool = RectangleTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         selection.select_single(id);
 
         let primitives = snapshots(&document);
@@ -561,7 +561,7 @@ mod tests {
             .expect("resize");
 
         let mut tool = RectangleTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         selection.select_single(id);
         let primitives = snapshots(&document);
         let shrunk_bounds = RectBounds::from_corners(Point::new(0.0, 0.0), Point::new(100.0, 20.0));
@@ -613,7 +613,7 @@ mod tests {
             .set_corner_radius(&[id], Length::from_mm(4.0))
             .expect("set radius");
         let tool = RectangleTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         selection.select_single(id);
         tool.remove_rounding(&document, &selection);
 
@@ -645,7 +645,7 @@ mod tests {
             .unwrap();
 
         let tool = RectangleTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         selection.select_single(a);
         selection.toggle(b);
         tool.remove_rounding(&document, &selection);
@@ -663,7 +663,7 @@ mod tests {
     fn escape_mid_drag_writes_nothing() {
         let document = Document::new(1);
         let mut tool = RectangleTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         tool.pointer_down(&[], &mut selection, Point::new(0.0, 0.0), TOLERANCES, false);
         assert!(tool.escape());
         assert!(tool.live_shape().is_none());

@@ -6,7 +6,7 @@
 
 use vecmanf_document_core::{Document, EllipseFrame, NodeId, Point, PrimitiveSnapshot, Shape};
 
-use crate::PrimitiveSelection;
+use crate::ObjectSelection;
 use crate::handle_layout::{self, HandleKind, ResizeDirection, resize_ellipse_frame};
 use crate::shape_hit_test::{hit_test_handle, hit_test_primitive};
 use crate::shape_tool_common::{
@@ -75,7 +75,7 @@ impl EllipseTool {
     pub fn pointer_down(
         &mut self,
         primitives: &[PrimitiveSnapshot],
-        selection: &mut PrimitiveSelection,
+        selection: &mut ObjectSelection,
         point: Point,
         tolerances: ShapeHitTolerances,
         shift: bool,
@@ -243,7 +243,7 @@ mod tests {
     fn ac7_ac8_ellipse_drag_and_circle_constrain() {
         let document = Document::new(1);
         let mut tool = EllipseTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
 
         tool.pointer_down(&[], &mut selection, Point::new(0.0, 0.0), TOLERANCES, false);
         tool.pointer_move(Point::new(20.0, 10.0), false);
@@ -293,7 +293,7 @@ mod tests {
             ry: Length::from_mm(10.0),
         });
         let mut tool = EllipseTool::new();
-        let mut selection = PrimitiveSelection::new();
+        let mut selection = ObjectSelection::new();
         selection.select_single(id);
 
         let primitives = snapshots(&document);
