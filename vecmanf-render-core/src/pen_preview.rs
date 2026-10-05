@@ -102,7 +102,8 @@ pub fn build_pen_preview(
     for anchor in nodes {
         let glyph = match anchor.kind {
             AnchorKind::Corner => glyphs::square,
-            AnchorKind::Smooth => glyphs::diamond,
+            AnchorKind::Symmetric => glyphs::diamond,
+            AnchorKind::Asymmetric => glyphs::triangle,
         };
         list.extend(glyph(anchor.point, node_size, theme::ACCENT));
         list.extend(glyph(
@@ -199,7 +200,8 @@ pub fn build_pen_preview(
         // exactly what would commit.
         let glyph = match pending.kind {
             AnchorKind::Corner => glyphs::square,
-            AnchorKind::Smooth => glyphs::diamond,
+            AnchorKind::Symmetric => glyphs::diamond,
+            AnchorKind::Asymmetric => glyphs::triangle,
         };
         list.extend(glyph(pending.point, node_size, theme::ACCENT));
         list.extend(glyph(
@@ -334,7 +336,7 @@ mod tests {
             point: Point::new(10.0, 0.0),
             handle_in: Vec2::new(-3.0, -4.0),
             handle_out: Vec2::new(3.0, 4.0),
-            kind: AnchorKind::Smooth,
+            kind: AnchorKind::Symmetric,
         };
 
         let hovering_only =
@@ -364,7 +366,7 @@ mod tests {
             point: Point::new(0.0, 0.0),
             handle_in: Vec2::new(-5.0, -5.0),
             handle_out: Vec2::new(5.0, 5.0),
-            kind: AnchorKind::Smooth,
+            kind: AnchorKind::Symmetric,
         };
         let dragging = build_pen_preview(
             &[],
@@ -427,7 +429,7 @@ mod tests {
             point: origin,
             handle_in: Vec2::new(-0.3, 0.0),
             handle_out: Vec2::new(0.3, 0.0),
-            kind: AnchorKind::Smooth,
+            kind: AnchorKind::Symmetric,
         };
         let smooth_preview = build_pen_preview(
             &[],

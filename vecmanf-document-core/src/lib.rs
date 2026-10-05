@@ -24,6 +24,7 @@ mod error;
 mod objects;
 mod path_codec;
 mod path_model;
+mod path_topology;
 mod paths;
 mod primitive_model;
 mod primitive_outline;

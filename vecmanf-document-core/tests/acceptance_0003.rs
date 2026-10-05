@@ -225,7 +225,7 @@ fn ac19_ellipse_outline_is_4_smooth_nodes_within_0_1_percent_of_a_true_circle() 
     };
     let outline = vecmanf_document_core::ellipse_outline(frame);
     assert_eq!(outline.len(), 4);
-    assert!(outline.iter().all(|a| a.kind == AnchorKind::Smooth));
+    assert!(outline.iter().all(|a| a.kind == AnchorKind::Symmetric));
 
     // Sample the cubic Bezier at t=0.5 between the East and South
     // anchors and confirm it lies within 0.1% of radius from center.
@@ -261,7 +261,7 @@ fn ac19_ellipse_outline_handles_are_mirrored_and_equal_length_smooth_handles() {
         ry: Length::from_mm(8.0),
     };
     for anchor in vecmanf_document_core::ellipse_outline(frame) {
-        assert_eq!(anchor.kind, AnchorKind::Smooth);
+        assert_eq!(anchor.kind, AnchorKind::Symmetric);
         assert!(
             (anchor.handle_in.x + anchor.handle_out.x).abs() < 1e-9
                 && (anchor.handle_in.y + anchor.handle_out.y).abs() < 1e-9,

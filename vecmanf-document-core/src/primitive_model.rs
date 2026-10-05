@@ -499,7 +499,7 @@ mod tests {
             point: Point::new(0.0, 0.0),
             handle_in: Vec2::ZERO,
             handle_out: Vec2::new(5.0, 0.0),
-            kind: AnchorKind::Smooth,
+            kind: AnchorKind::Symmetric,
         };
         let path = PathSnapshot {
             id: NodeId::from_parts(1, 2),

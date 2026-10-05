@@ -20,7 +20,25 @@ use crate::units::{DocumentSize, Length};
 /// "`format_version` goes to 3"). Migration from version 2 is empty by
 /// construction: absent `shape` means path, so every version-2 path node
 /// opens unchanged.
-pub const CURRENT_FORMAT_VERSION: u32 = 3;
+///
+/// Bumped to 4 in `path-merge-split-and-node-types` (`specs/0006-path-
+/// merge-split-and-node-types/adrs.md`, architect's 2026-10-05
+/// resolution): this slice merges before `object-transform` has a
+/// branch at all, so it takes the next free version outright —
+/// `object-transform` is sequenced after it and takes 5,
+/// `stroke-and-fill-styling` takes 6. The standing rule going forward:
+/// a version number named in an `adrs.md` is provisional until its PR
+/// actually merges; whichever one merges first takes `main`'s
+/// `CURRENT_FORMAT_VERSION + 1`, and a later PR rebases and renumbers
+/// itself, its fixtures and its own notes. A version-3 reader maps any
+/// unknown `kind` string to `Corner` (slice 2's lenient read), so it
+/// would open a version-4 file with `Asymmetric` anchors and silently
+/// turn them into corners — the silent partial read ADR 0004 §9
+/// forbids. Migration from version 3 is the `"smooth"` → `Symmetric`
+/// read alias in `path_codec::read_kind` and nothing else: no anchor's
+/// stored shape changes, only the kind tag's legacy spelling is now
+/// also understood.
+pub const CURRENT_FORMAT_VERSION: u32 = 4;
 
 const ROOT_MAP: &str = "root";
 const KEY_FORMAT_VERSION: &str = "format_version";

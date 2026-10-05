@@ -116,7 +116,8 @@ pub fn build(paths: &[PathSnapshot], view: ViewTransform, input: &DecorationInpu
 
             let glyph = match anchor.kind {
                 AnchorKind::Corner => glyphs::square,
-                AnchorKind::Smooth => glyphs::diamond,
+                AnchorKind::Symmetric => glyphs::diamond,
+                AnchorKind::Asymmetric => glyphs::triangle,
             };
             if selected {
                 list.extend(glyph(anchor.point, node_size, theme::ACCENT));
@@ -209,6 +210,39 @@ mod tests {
         assert_eq!(list.triangle_count(), 8);
     }
 
+    /// An Asymmetric node draws with the triangle glyph — one outline
+    /// triangle plus one fill triangle, unlike Corner/Symmetric's
+    /// four-sided (2-quad) glyphs.
+    #[test]
+    fn an_asymmetric_node_draws_the_triangle_glyph() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path = document.create_path(
+            &[
+                NewAnchor {
+                    id: a,
+                    point: Point::new(0.0, 0.0),
+                    handle_in: Vec2::ZERO,
+                    handle_out: Vec2::ZERO,
+                    kind: AnchorKind::Asymmetric,
+                },
+                NewAnchor::corner(b, Point::new(20.0, 0.0)),
+            ],
+            false,
+        );
+        let paths = vec![document.path(path).expect("exists")];
+        let list = build(
+            &paths,
+            ViewTransform::identity(),
+            &DecorationInput::default(),
+        );
+        // A's own glyph is one outline triangle + one fill triangle (2
+        // total); B's is a Corner square (2 quads = 4 triangles) — 6 in
+        // all.
+        assert_eq!(list.triangle_count(), 6);
+    }
+
     #[test]
     fn a_selected_node_with_pulled_handles_draws_handle_geometry_too() {
         let document = Document::new(1);
@@ -221,7 +255,7 @@ mod tests {
                     point: Point::new(0.0, 0.0),
                     handle_in: Vec2::ZERO,
                     handle_out: Vec2::new(5.0, 0.0),
-                    kind: AnchorKind::Smooth,
+                    kind: AnchorKind::Symmetric,
                 },
                 NewAnchor::corner(b, Point::new(20.0, 0.0)),
             ],
@@ -262,7 +296,7 @@ mod tests {
                     point: Point::new(0.0, 0.0),
                     handle_in: Vec2::ZERO,
                     handle_out: Vec2::new(5.0, 0.0),
-                    kind: AnchorKind::Smooth,
+                    kind: AnchorKind::Symmetric,
                 },
                 NewAnchor::corner(b, Point::new(20.0, 0.0)),
             ],

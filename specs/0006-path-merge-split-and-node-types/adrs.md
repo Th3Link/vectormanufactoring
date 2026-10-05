@@ -6,13 +6,15 @@ model and a file format we write, so the wire tags and the reading rule are
 written out below. Join and Split are anchor-list surgery on the existing
 schema: no new register, no curve evaluation.
 **No new crate, no new external dependency, no new `vecmanf-geometry-core`
-function, no ADR amendment. `format_version` goes to 5.**
+function, no ADR amendment. `format_version` goes to 4** (was 5; see the
+architect's 2026-10-05 resolution below).
 
 **Build order:** this slice touches `vecmanf-document-core`,
 `vecmanf-ui-core`, `vecmanf-render-core` and `vecmanf-editor-wasm`, the same
-crates as `object-transform`. It starts after that branch merges
-(`CLAUDE.md` §4), and it relies on that slice's `rotation` register (Split
-copies it, Join keeps the survivor's).
+crates as `object-transform`. It was planned to start after that branch
+merged; it was built first instead, so `object-transform` now starts after
+this branch merges and threads its `rotation` register through Split
+(Join keeps the survivor's registers without any change).
 
 ## Depends on
 
@@ -43,7 +45,8 @@ copies it, Join keeps the survivor's).
 - [`specs/0004-canvas-navigation-and-selection/adrs.md`](../0004-canvas-navigation-and-selection/adrs.md):
   `ObjectSelection` is the input to AC 6.
 - [`specs/0005-object-transform/adrs.md`](../0005-object-transform/adrs.md):
-  `rotation` on every object, and `format_version` 4.
+  sequenced after this slice; it adds `rotation` and takes
+  `format_version` 5.
 
 ## Deliberately not in scope for this slice
 
@@ -90,7 +93,7 @@ copies it, Join keeps the survivor's).
 
   ```text
   anchor.kind : "corner" | "symmetric" | "asymmetric"   LWW register
-                read also: "smooth" → Symmetric (format_version ≤ 4)
+                read also: "smooth" → Symmetric (format_version ≤ 3)
                 any other value → Corner (slice 2's lenient read, unchanged)
   ```
 
@@ -203,7 +206,9 @@ copies it, Join keeps the survivor's).
     the loop, first copy.
   - Returns both copies' `(NodeId, AnchorId)` for AC 15's selection.
 
-- **2026-10-05: `format_version` goes to 5.** Migration from version 4 is
+- **2026-10-05: `format_version` goes to 5** (superseded: the number is 4,
+  see the architect's resolution below; the reasoning holds unchanged
+  with "version 4" read as "version 3"). Migration from version 4 is
   the `"smooth"` read alias above and nothing else. The bump is needed for
   the reader: a version-4 reader maps any unknown `kind` string to Corner,
   so it would open a file with Asymmetric nodes and silently turn them into
@@ -212,11 +217,77 @@ copies it, Join keeps the survivor's).
   **`stroke-and-fill-styling` moves to 6** (dated note in its `adrs.md`),
   because this slice is now sequenced before it.
 
+- **2026-10-05 (implementer): taken as `format_version` 4, not 5, on
+  `main` as actually branched.** The note above assumed `object-
+  transform` (slice 5, claiming 4) had already merged. This slice was
+  instead built in parallel with `canvas-navigation-and-selection`
+  (slice 4) directly off `main`, before either slice 4 or slice 5 had
+  merged — `main`'s `CURRENT_FORMAT_VERSION` was still 3 at the time,
+  with no `rotation` register at all. Taking 4 (the next free version on
+  the branch this was actually built from) rather than pre-claiming 5
+  for a predecessor that does not exist here. Consequence: Join and
+  Split do not copy or carry a `rotation` field today, because none
+  exists yet to copy — whichever of this slice and `object-transform`
+  merges second needs its `format_version` (and, for `object-
+  transform`, Join/Split's handling of `rotation`) reconciled against
+  the other. Flagged as expected integration work in both slices' PRs,
+  not a defect in either one considered alone.
+
+- **2026-10-05 (architect): resolution. This slice keeps 4.**
+  `object-transform` has no branch yet, so this slice merges first.
+  Final assignment: **this slice 4, `object-transform` 5,
+  `stroke-and-fill-styling` 6** (dated notes in both `adrs.md`). The
+  `"smooth"` alias therefore applies to `format_version` ≤ 3; a version-4
+  writer never writes it. Rule from now on: a version number in an
+  `adrs.md` is provisional. The PR that merges takes `main`'s
+  `CURRENT_FORMAT_VERSION + 1`; a later PR rebases and renumbers itself,
+  its fixtures and its notes. Nothing has been released, so no two merged
+  versions can mean different things.
+  `object-transform` must add `rotation` to `PathSnapshot` and pass it
+  through `split_open_path`'s new object, with a test. Join needs no
+  change, because the surviving path keeps its meta map.
+
+- **2026-10-05 (architect): interim `SplitPair` instead of the
+  `(NodeId, AnchorId)` selection.** The lead deferred AC 6 and AC 7 until
+  `canvas-navigation-and-selection` merges. Without them, the only
+  two-path node selection is Split's result, so the implementer added a
+  narrow `SelectionKind::SplitPair`. That is accepted as interim UI state
+  (ephemeral, not persisted). The follow-up that delivers AC 6 and AC 7
+  replaces `SplitPair` with the ordered `(NodeId, AnchorId)` list decided
+  above. It does not keep both.
+
+- **2026-10-05 (architect, review of the AC 6/7 follow-up): what the
+  multi-path session decision above means in the code as built.**
+  - **No editing set.** The Node tool hit-tests and draws every path
+    (`Session::paths()`, no selection filter), so every path selected
+    per AC 6 is already shown and editable. The `ObjectSelection`-derived
+    editing set above is not built; slice 4's AC 22 handoff relies on the
+    same behaviour. If a later story limits node display to selected
+    paths, it adds the set then.
+  - **Drag stays multi-path, as decided above.** AC 7 adopts
+    `path-node-editing` AC 10 "exactly" across paths, and AC 10 is the
+    group-drag rule: pressing any selected node drags every selected
+    node, on every path, as one commit. `move_anchors` takes
+    `(NodeId, AnchorId, Point)` triples across paths and commits once; a
+    plain press on any contained node keeps the selection, whether it
+    spans one path or several. Rejected: collapsing a cross-path selection
+    on a plain press. It breaks AC 10 across paths, and it only appeared
+    to serve AC 15 because `path()` is `None` there. The closed-path Split
+    (AC 14) leaves both copies on one path, and that case already
+    group-drags them.
+  - **Convert and delete stay single-path.** They are disabled for a
+    selection that spans paths. No criterion converts or deletes across
+    paths, so `convert_anchor_kind` keeps its one-path signature (this
+    narrows the boundary line below).
+  - **AC 15's "immediately drag them apart"** conflicts with AC 10 for any
+    two coincident selected nodes, because one offset never separates
+    them. AC 10 wins. Flagged for the PO to reword (item 8 below).
+
 - **2026-10-05: the crate boundary.**
   - `vecmanf-document-core`: the three-variant `AnchorKind`, the codec tags
     and read alias, the per-kind handle rule, the conversion table,
     `join_endpoints`, `split_at_anchor`, multi-path `move_anchors` and
-    `convert_anchor_kind`, `CURRENT_FORMAT_VERSION = 5`.
+    `convert_anchor_kind`, `CURRENT_FORMAT_VERSION = 4`.
   - `vecmanf-ui-core`: the multi-path `NodeSelection` and editing set,
     toolbar state (`can_convert_to_symmetric`, `can_convert_to_asymmetric`,
     `can_join`, `can_split`, computed from the selection with the same
@@ -230,9 +301,9 @@ copies it, Join keeps the survivor's).
 
 ## Flagged to the lead
 
-1. **`format_version` collision, resolved by sequence.** `stroke-and-fill-styling`'s
-   `adrs.md` claimed 5. This slice ships first and takes 5; styling goes to 6
-   (dated note added there). If the order changes again, swap.
+1. **`format_version` collision, resolved.** This slice 4,
+   `object-transform` 5, `stroke-and-fill-styling` 6 (architect
+   resolution above).
 2. **AC 9's traversal sentence holds for one of four endpoint combinations.**
    "The first path's nodes in their original order, then the second's"
    is only true when `a` is the first path's last anchor and `b` the second
@@ -255,3 +326,11 @@ copies it, Join keeps the survivor's).
    `paths_v2.vmf` with `"smooth"` and check it reads as Symmetric; a
    multi-path node drag is one commit.
 7. **No new crate, no new dependency, no ADR amendment.**
+8. **AC 15 vs `path-node-editing` AC 10.** Two coincident selected nodes
+   cannot be dragged apart while AC 10 moves every selected node by the
+   same offset. Default: AC 10 holds. AC 15 keeps "both selected" and
+   drops "immediately drag them apart". To separate them, the maker
+   clicks empty canvas, then clicks and drags one node. Optional, for the
+   `ux-engineer`: Inkscape's rule that a click without movement on a
+   selected node collapses the selection to that node. That needs no
+   document write, but it changes accepted slice-2 behaviour.

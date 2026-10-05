@@ -1,10 +1,10 @@
 //! The Loro value shapes and keys for the path/anchor schema
 //! (`specs/0002-path-node-editing/adrs.md`, "the anchor schema, and the three
-//! merge choices inside it"). [`crate::paths`] is the only caller: this
-//! module owns the on-disk/in-CRDT shape and every read/write against it,
-//! so [`crate::paths`]'s `Document` methods stay command-shaped logic with
-//! no Loro value-shape details of their own (`CLAUDE.md` §5, "one
-//! responsibility per module").
+//! merge choices inside it"). [`crate::paths`] and [`crate::path_topology`]
+//! are the only callers: this module owns the on-disk/in-CRDT shape and
+//! every read/write against it, so those two modules' `Document` methods
+//! stay command-shaped logic with no Loro value-shape details of their
+//! own (`CLAUDE.md` §5, "one responsibility per module").
 //!
 //! On-disk/in-CRDT shape, one Loro tree node per path (ADR 0002 §5):
 //!
@@ -18,7 +18,11 @@
 //!     point      : [x, y] (f64)              ONE LWW register
 //!     handle_in  : [x, y] (f64), relative     ONE LWW register
 //!     handle_out : [x, y] (f64), relative     ONE LWW register
-//!     kind       : "corner" | "smooth"        LWW register
+//!     kind       : "corner" | "symmetric" | "asymmetric"   LWW register
+//!                  (read also: legacy "smooth" → Symmetric, `format_version`
+//!                  ≤ 3 — `specs/0006-path-merge-split-and-node-types/adrs.md`,
+//!                  the architect's resolution: a version-4 writer never
+//!                  writes "smooth")
 //! ```
 //!
 //! `fill` is not stored: this slice's fill is always `None` (acceptance
@@ -45,7 +49,13 @@ pub(crate) const KEY_HANDLE_OUT: &str = "handle_out";
 pub(crate) const KEY_KIND: &str = "kind";
 
 const KIND_CORNER: &str = "corner";
-const KIND_SMOOTH: &str = "smooth";
+const KIND_SYMMETRIC: &str = "symmetric";
+const KIND_ASYMMETRIC: &str = "asymmetric";
+/// The pre-slice-6 on-disk tag for [`AnchorKind::Symmetric`]
+/// (`specs/0006-path-merge-split-and-node-types/adrs.md`, "the stored tag
+/// of the renamed one changes": still read, as an alias, but never
+/// written again — see [`read_kind`]).
+const KIND_SMOOTH_LEGACY: &str = "smooth";
 
 /// This slice's one placeholder stroke width (acceptance criterion 6).
 pub(crate) const DEFAULT_STROKE_WIDTH_MM: f64 = 0.25;
@@ -62,16 +72,22 @@ pub(crate) fn node_exists(tree: &LoroTree, id: loro::TreeID) -> bool {
     tree.contains(id) && matches!(tree.is_node_deleted(&id), Ok(false))
 }
 
-pub(crate) fn write_path_fields(meta: &LoroMap, closed: bool) {
+/// Writes a brand-new path's `closed`/`stroke_width`/`stroke` fields.
+/// Takes the style explicitly (rather than always writing this slice's
+/// placeholder black/0.25mm default) so `Document::split_at_anchor`'s new
+/// object can copy the split path's own style instead of resetting it
+/// (`specs/0006-path-merge-split-and-node-types/adrs.md`, "written from
+/// the original's `PathSnapshot`... copies every register the snapshot
+/// carries"); `Document::create_path` passes this slice's own default
+/// explicitly at its one call site.
+pub(crate) fn write_path_style(meta: &LoroMap, closed: bool, stroke_width_mm: f64, stroke: Color) {
     // invariant: inserting known-valid keys into a freshly created, empty
     // meta map cannot fail.
     #[allow(clippy::unwrap_used)]
     {
         meta.insert(KEY_CLOSED, closed).unwrap();
-        meta.insert(KEY_STROKE_WIDTH, DEFAULT_STROKE_WIDTH_MM)
-            .unwrap();
-        meta.insert(KEY_STROKE, color_to_value(Color::BLACK))
-            .unwrap();
+        meta.insert(KEY_STROKE_WIDTH, stroke_width_mm).unwrap();
+        meta.insert(KEY_STROKE, color_to_value(stroke)).unwrap();
     }
 }
 
@@ -283,9 +299,19 @@ pub(crate) fn write_vec2(map: &LoroMap, key: &str, v: Vec2) {
     map.insert(key, vec![v.x, v.y]).unwrap();
 }
 
+/// Reads an anchor's `kind` tag (`specs/0006-path-merge-split-and-node-types/
+/// adrs.md`, feature-local decision "the stored tag of the renamed one
+/// changes", option (B)): `"symmetric"` and `"asymmetric"` round-trip as
+/// themselves; the legacy `"smooth"` tag a `format_version` ≤ 3 document
+/// may still carry reads as [`AnchorKind::Symmetric`] **and is never
+/// rewritten in place** — this is the whole migration, not a destructive
+/// read-then-write. Any other value (including absent) reads as
+/// [`AnchorKind::Corner`], slice 2's existing lenient-read rule, unchanged.
 pub(crate) fn read_kind(map: &LoroMap) -> AnchorKind {
     match map.get(KEY_KIND).map(|v| v.get_deep_value()) {
-        Some(LoroValue::String(s)) if s.as_str() == KIND_SMOOTH => AnchorKind::Smooth,
+        Some(LoroValue::String(s)) if s.as_str() == KIND_SYMMETRIC => AnchorKind::Symmetric,
+        Some(LoroValue::String(s)) if s.as_str() == KIND_SMOOTH_LEGACY => AnchorKind::Symmetric,
+        Some(LoroValue::String(s)) if s.as_str() == KIND_ASYMMETRIC => AnchorKind::Asymmetric,
         _ => AnchorKind::Corner,
     }
 }
@@ -299,8 +325,20 @@ pub(crate) fn write_kind(map: &LoroMap, kind: AnchorKind) {
 const fn kind_to_str(kind: AnchorKind) -> &'static str {
     match kind {
         AnchorKind::Corner => KIND_CORNER,
-        AnchorKind::Smooth => KIND_SMOOTH,
+        AnchorKind::Symmetric => KIND_SYMMETRIC,
+        AnchorKind::Asymmetric => KIND_ASYMMETRIC,
     }
+}
+
+/// Sets a path's `closed` flag after creation
+/// (`specs/0006-path-merge-split-and-node-types/adrs.md`: Join closes an
+/// open path (AC 10) and Split opens a closed one (AC 14), neither of
+/// which `write_path_style` — called only at creation time, by
+/// `create_path`/`create_path_uncommitted` — covers.
+pub(crate) fn write_closed(meta: &LoroMap, closed: bool) {
+    // invariant: see `write_point`.
+    #[allow(clippy::unwrap_used)]
+    meta.insert(KEY_CLOSED, closed).unwrap();
 }
 
 fn read_anchor_snapshot(map: &LoroMap) -> AnchorSnapshot {

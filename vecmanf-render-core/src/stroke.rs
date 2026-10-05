@@ -200,14 +200,14 @@ mod tests {
                 point: Point::new(0.0, 0.0),
                 handle_in: Vec2::ZERO,
                 handle_out: Vec2::new(0.0, 20.0),
-                kind: AnchorKind::Smooth,
+                kind: AnchorKind::Symmetric,
             },
             NewAnchor {
                 id: AnchorId::new(1, 2),
                 point: Point::new(40.0, 0.0),
                 handle_in: Vec2::new(0.0, 20.0),
                 handle_out: Vec2::ZERO,
-                kind: AnchorKind::Smooth,
+                kind: AnchorKind::Symmetric,
             },
         ];
         let coarse = path_stroke(&anchors, false, 0.25, RgbaColor::BLACK, 5.0);
@@ -223,7 +223,7 @@ mod tests {
                 point: Point::new(0.0, 0.0),
                 handle_in: Vec2::ZERO,
                 handle_out: Vec2::new(0.0, 5.0),
-                kind: AnchorKind::Smooth,
+                kind: AnchorKind::Symmetric,
             },
             corner(2, 10.0, 0.0),
         ];

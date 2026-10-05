@@ -39,12 +39,17 @@ pub struct HitTolerances {
 /// nothing selected/applicable"). Computed fresh from the current
 /// selection by [`NodeTool::toolbar_state`], never stored.
 ///
-/// Six independent `bool`s rather than an enum: these map 1:1 to the six
-/// toolbar buttons `specification.md` names, each disabled on its own
-/// condition (e.g. make-line and make-curve are each other's negation
-/// *given* a segment is selected, but become simultaneously `false`
-/// together when it isn't) — collapsing them into one flags enum would
-/// just re-derive the same six booleans at every call site.
+/// Independent `bool`s rather than an enum: these map 1:1 to the toolbar
+/// buttons `specification.md` names, each disabled on its own condition
+/// (e.g. make-line and make-curve are each other's negation *given* a
+/// segment is selected, but become simultaneously `false` together when
+/// it isn't) — collapsing them into one flags enum would just re-derive
+/// the same booleans at every call site.
+///
+/// `can_convert_to_smooth` is renamed `can_convert_to_symmetric`, and
+/// `can_convert_to_asymmetric`/`can_join`/`can_split` are new
+/// (`specs/0006-path-merge-split-and-node-types/adrs.md`; acceptance
+/// criteria 1, 2, 8, 12).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct NodeToolbarState {
@@ -54,19 +59,30 @@ pub struct NodeToolbarState {
     pub can_insert: bool,
     /// Delete: at least one node is selected.
     pub can_delete: bool,
-    /// Make corner / make smooth: at least one node is selected. Both
-    /// buttons stay enabled regardless of the selected node(s)' current
-    /// kind — a multi-selection can mix kinds, and converting a node to
-    /// the kind it already has is a harmless no-op, not a state to guard
-    /// against.
+    /// Make corner: at least one node is selected. Stays enabled
+    /// regardless of the selected node(s)' current kind — a multi-
+    /// selection can mix kinds, and converting a node to the kind it
+    /// already has is a no-op (acceptance criterion 16), not a state to
+    /// guard against.
     pub can_convert_to_corner: bool,
-    /// See `can_convert_to_corner`.
-    pub can_convert_to_smooth: bool,
+    /// Make symmetric: see `can_convert_to_corner`. Renamed from
+    /// `can_convert_to_smooth` (criterion 1's label-only rename).
+    pub can_convert_to_symmetric: bool,
+    /// Make asymmetric: see `can_convert_to_corner` (criterion 2).
+    pub can_convert_to_asymmetric: bool,
     /// Make line: a segment is selected and it is not already a line
     /// (acceptance criterion 14's explicit disable example).
     pub can_make_line: bool,
     /// Make curve: a segment is selected and it is already a line.
     pub can_make_curve: bool,
+    /// Join: the current selection is exactly two endpoint nodes of
+    /// open paths (same path or two different objects), not the two
+    /// ends of a 2-anchor open path (acceptance criterion 8).
+    pub can_join: bool,
+    /// Split: the current selection is exactly one node, either an
+    /// interior node of an open path or any node of a closed path
+    /// (acceptance criterion 12).
+    pub can_split: bool,
 }
 
 /// The node tool's state: its persistent [`NodeSelection`] plus whatever
@@ -81,11 +97,14 @@ pub struct NodeTool {
 enum Drag {
     #[default]
     None,
-    /// Dragging one or more selected nodes (acceptance criteria 8, 10).
+    /// Dragging one or more selected nodes, possibly across several path
+    /// objects at once (acceptance criteria 8, 10;
+    /// `specs/0006-path-merge-split-and-node-types/adrs.md`'s architect
+    /// review: "Drag stays multi-path... a plain press on any contained
+    /// node keeps the selection, whether it spans one path or several").
     Nodes {
-        path: NodeId,
         down_at: Point,
-        starts: Vec<(vecmanf_document_core::AnchorId, Point)>,
+        starts: Vec<(NodeId, vecmanf_document_core::AnchorId, Point)>,
     },
     /// Dragging one handle (acceptance criterion 9). `down_at` and
     /// `start_value` (the dragged slot's own value at press time) are
@@ -125,16 +144,15 @@ enum Drag {
 #[derive(Debug, Clone, PartialEq)]
 pub enum LiveNodeDrag {
     /// One or more selected nodes, each at its live (not yet committed)
-    /// position — acceptance criteria 8, 10. Handles are not listed:
-    /// they are stored relative to their own anchor
-    /// (`specs/0002-path-node-editing/adrs.md` decision 2), so moving the
-    /// anchor's `point` alone already keeps them correct, with no
-    /// separate value to resolve.
+    /// position — acceptance criteria 8, 10, possibly spanning several
+    /// path objects at once (`specs/0006-.../adrs.md`'s architect
+    /// review). Handles are not listed: they are stored relative to
+    /// their own anchor (`specs/0002-path-node-editing/adrs.md` decision
+    /// 2), so moving the anchor's `point` alone already keeps them
+    /// correct, with no separate value to resolve.
     Nodes {
-        /// The dragged nodes' own path.
-        path: NodeId,
-        /// Each selected node's id and live position.
-        positions: Vec<(vecmanf_document_core::AnchorId, Point)>,
+        /// Each selected node's path, id and live position.
+        positions: Vec<(NodeId, vecmanf_document_core::AnchorId, Point)>,
     },
     /// One anchor's live (not yet committed) `(handle_in, handle_out)`
     /// pair — acceptance criterion 9. Already fully resolved by
@@ -227,6 +245,19 @@ impl NodeTool {
 
     /// Acceptance criteria 7, 8, 9, 10, 14: the maker pressed the mouse
     /// button down at `point`. Updates selection and/or begins a drag.
+    ///
+    /// `specs/0006-path-merge-split-and-node-types/specification.md`
+    /// acceptance criterion 7: shift-clicking a node on a different path
+    /// than the ones already selected adds it (`toggle_node` no longer
+    /// restricts this to one path). A *plain* click keeps the current
+    /// selection whenever the clicked node is already part of it —
+    /// regardless of which path it belongs to — rather than collapsing a
+    /// cross-path selection down to just the clicked node
+    /// (`specs/0006-.../adrs.md`'s architect review: "Rejected: collapsing
+    /// a cross-path selection on a plain press. It breaks AC 10 across
+    /// paths"). Only a click on a node that is *not* already selected
+    /// replaces the selection with that one node; a click that hits
+    /// nothing clears the selection unless `shift` is held.
     pub fn pointer_down(
         &mut self,
         paths: &[PathSnapshot],
@@ -249,12 +280,10 @@ impl NodeTool {
             Some(Hit::Node { path, anchor }) => {
                 if shift {
                     self.selection.toggle_node(path, anchor);
-                } else if self.selection.path() != Some(path)
-                    || !self.selection.contains_node(anchor)
-                {
+                } else if !self.selection.contains_node(anchor) {
                     self.selection.select_single_node(path, anchor);
                 }
-                self.begin_node_drag(paths, path, point);
+                self.begin_node_drag(paths, point);
                 PointerDownOutcome::Node
             }
             Some(Hit::Segment { path, start, end }) => {
@@ -270,27 +299,28 @@ impl NodeTool {
         }
     }
 
-    fn begin_node_drag(&mut self, paths: &[PathSnapshot], path: NodeId, down_at: Point) {
-        let Some(snapshot) = paths.iter().find(|p| p.id == path) else {
-            return;
-        };
+    /// Begins a drag of every currently selected node, resolved against
+    /// whichever of `paths`' snapshots each one belongs to — the drag can
+    /// span several path objects at once, exactly like the resulting
+    /// commit (`specs/0006-.../adrs.md`'s architect review: "Drag stays
+    /// multi-path, as decided above... a plain press on any contained
+    /// node keeps the selection, whether it spans one path or several").
+    /// A selected node that no longer resolves (deleted since selection,
+    /// `ADR 0009 §2`) is silently excluded from `starts`, not dragged.
+    fn begin_node_drag(&mut self, paths: &[PathSnapshot], down_at: Point) {
         let starts = self
             .selection
-            .nodes()
+            .node_pairs()
             .iter()
-            .filter_map(|&id| {
-                snapshot
-                    .anchors
+            .filter_map(|&(path, anchor_id)| {
+                paths
                     .iter()
-                    .find(|a| a.id == id)
-                    .map(|a| (id, a.point))
+                    .find(|p| p.id == path)
+                    .and_then(|snapshot| snapshot.anchors.iter().find(|a| a.id == anchor_id))
+                    .map(|a| (path, anchor_id, a.point))
             })
             .collect();
-        self.drag = Drag::Nodes {
-            path,
-            down_at,
-            starts,
-        };
+        self.drag = Drag::Nodes { down_at, starts };
     }
 
     /// Records the handle's current value (and its anchor's kind, for
@@ -341,13 +371,13 @@ impl NodeTool {
     /// independently drift apart.
     fn resolve_node_positions(
         down_at: Point,
-        starts: &[(vecmanf_document_core::AnchorId, Point)],
+        starts: &[(NodeId, vecmanf_document_core::AnchorId, Point)],
         release: Point,
-    ) -> Vec<(vecmanf_document_core::AnchorId, Point)> {
+    ) -> Vec<(NodeId, vecmanf_document_core::AnchorId, Point)> {
         let delta = down_at.vector_to(release);
         starts
             .iter()
-            .map(|&(id, p)| (id, p.translated(delta)))
+            .map(|&(path, id, p)| (path, id, p.translated(delta)))
             .collect()
     }
 
@@ -372,12 +402,7 @@ impl NodeTool {
     pub fn live_drag(&self, cursor: Point) -> Option<LiveNodeDrag> {
         match &self.drag {
             Drag::None => None,
-            Drag::Nodes {
-                path,
-                down_at,
-                starts,
-            } => Some(LiveNodeDrag::Nodes {
-                path: *path,
+            Drag::Nodes { down_at, starts } => Some(LiveNodeDrag::Nodes {
                 positions: Self::resolve_node_positions(*down_at, starts, cursor),
             }),
             Drag::Handle {
@@ -412,11 +437,7 @@ impl NodeTool {
     pub fn pointer_up(&mut self, document: &Document, point: Point) -> PointerUpOutcome {
         match std::mem::take(&mut self.drag) {
             Drag::None => PointerUpOutcome::NoOp,
-            Drag::Nodes {
-                path,
-                down_at,
-                starts,
-            } => {
+            Drag::Nodes { down_at, starts } => {
                 // A press and release at the exact same point writes
                 // nothing (`specs/0002-path-node-editing/adrs.md`'s dated
                 // architect-review note): under ADR 0009 §3, `point` is
@@ -432,7 +453,7 @@ impl NodeTool {
                     return PointerUpOutcome::NoOp;
                 }
                 let moves = Self::resolve_node_positions(down_at, &starts, point);
-                let _ = document.move_anchors(path, &moves);
+                let _ = document.move_anchors(&moves);
                 PointerUpOutcome::NodesMoved
             }
             Drag::Handle {
@@ -468,7 +489,7 @@ impl NodeTool {
         if ids.is_empty() {
             return;
         }
-        let _ = document.convert_anchor_kind(path, ids, kind);
+        let _ = document.convert_anchor_kind(path, &ids, kind);
     }
 
     /// Acceptance criterion 13: deletes every currently selected node,
@@ -478,7 +499,7 @@ impl NodeTool {
         let Some(path) = self.selection.path() else {
             return;
         };
-        let ids = self.selection.nodes().to_vec();
+        let ids = self.selection.nodes();
         if ids.is_empty() {
             return;
         }
@@ -517,7 +538,7 @@ impl NodeTool {
     /// Which contextual-toolbar actions apply right now, computed from
     /// this tool's current selection against `document`'s live state —
     /// the facade (`vecmanf-editor-wasm`'s `Session`) just calls this
-    /// rather than re-deriving the same six booleans itself.
+    /// rather than re-deriving the same booleans itself.
     #[must_use]
     pub fn toolbar_state(&self, document: &Document) -> NodeToolbarState {
         let has_nodes = !self.selection.nodes().is_empty();
@@ -535,10 +556,79 @@ impl NodeTool {
             can_insert: segment_is_line.is_some(),
             can_delete: has_nodes,
             can_convert_to_corner: has_nodes,
-            can_convert_to_smooth: has_nodes,
+            can_convert_to_symmetric: has_nodes,
+            can_convert_to_asymmetric: has_nodes,
             can_make_line: segment_is_line == Some(false),
             can_make_curve: segment_is_line == Some(true),
+            can_join: self.can_join(document),
+            can_split: self.can_split(document),
         }
+    }
+
+    /// Acceptance criteria 8-11: Join. A no-op (no commit) when the
+    /// current selection does not qualify — [`NodeTool::can_join`]'s own
+    /// condition, which `Document::join_endpoints` independently refuses
+    /// on too. On success, selects only the merged node (criterion 11),
+    /// so the maker can immediately continue working at the junction.
+    pub fn join_selected(&mut self, document: &Document) {
+        let Some((a, b)) = self.selection.join_pairs() else {
+            return;
+        };
+        let Ok((path, anchor)) = document.join_endpoints(a.0, a.1, b.0, b.1) else {
+            return;
+        };
+        self.selection.select_single_node(path, anchor);
+    }
+
+    /// Whether [`NodeTool::join_selected`] would do anything right now
+    /// (acceptance criterion 8): the current selection names exactly two
+    /// `(path, anchor)` pairs (same-path AC 10, or Split's own two-
+    /// object result AC 15 — see [`NodeSelection::join_pairs`] for why
+    /// those are the only two sources), and `document.check_join` — the
+    /// same refusal rule `Document::join_endpoints` itself runs,
+    /// checked here rather than re-derived independently (architect
+    /// review: the same "one rule, one place" principle
+    /// `resolve_handle_pair` already follows) — accepts them.
+    #[must_use]
+    pub fn can_join(&self, document: &Document) -> bool {
+        self.selection
+            .join_pairs()
+            .is_some_and(|(a, b)| document.check_join(a.0, a.1, b.0, b.1))
+    }
+
+    /// Acceptance criteria 12-15: Split. A no-op (no commit, and
+    /// `minter` is not advanced) when the current selection is not
+    /// exactly one node, or [`Document::split_at_anchor`] itself refuses.
+    /// On success, selects both resulting coincident nodes (criterion
+    /// 15) via [`NodeSelection::select_nodes`] — on one path (criterion
+    /// 14's closed-path case) or two (criterion 13's open-path case);
+    /// either way it is now just an ordinary, possibly multi-path, node
+    /// selection, the same representation an interactive cross-path
+    /// shift-click builds.
+    pub fn split_selected(&mut self, minter: &mut AnchorIdMinter, document: &Document) {
+        let [(path, anchor)] = self.selection.node_pairs() else {
+            return;
+        };
+        let (path, anchor) = (*path, *anchor);
+        let new_id = minter.mint();
+        let Ok((first, second)) = document.split_at_anchor(path, anchor, new_id) else {
+            return;
+        };
+        self.selection.select_nodes(vec![first, second]);
+    }
+
+    /// Whether [`NodeTool::split_selected`] would do anything right now
+    /// (acceptance criterion 12): the current selection is exactly one
+    /// node, and `document.check_split` — the same refusal rule
+    /// `Document::split_at_anchor` itself runs — accepts it (see
+    /// [`NodeTool::can_join`]'s own doc comment for why this checks the
+    /// document-core rule rather than a local copy of it).
+    #[must_use]
+    pub fn can_split(&self, document: &Document) -> bool {
+        let [(path, anchor)] = self.selection.node_pairs() else {
+            return false;
+        };
+        document.check_split(*path, *anchor)
     }
 
     /// Acceptance criterion 12: double-clicking a point on a segment
@@ -723,7 +813,7 @@ mod tests {
                     point: Point::new(0.0, 0.0),
                     handle_in: Vec2::new(-3.0, 0.0),
                     handle_out: Vec2::new(3.0, 0.0),
-                    kind: AnchorKind::Smooth,
+                    kind: AnchorKind::Symmetric,
                 },
                 NewAnchor::corner(b, Point::new(20.0, 0.0)),
             ],
@@ -765,8 +855,7 @@ mod tests {
         assert_eq!(
             tool.live_drag(Point::new(5.0, 7.0)),
             Some(LiveNodeDrag::Nodes {
-                path,
-                positions: vec![(a, Point::new(5.0, 7.0))],
+                positions: vec![(path, a, Point::new(5.0, 7.0))],
             }),
             "mid-drag, before release"
         );
@@ -796,7 +885,7 @@ mod tests {
                     point: Point::new(0.0, 0.0),
                     handle_in: Vec2::new(-5.0, 0.0),
                     handle_out: Vec2::new(5.0, 0.0),
-                    kind: AnchorKind::Smooth,
+                    kind: AnchorKind::Symmetric,
                 },
                 NewAnchor::corner(b, Point::new(20.0, 0.0)),
             ],
@@ -867,7 +956,7 @@ mod tests {
                     point: Point::new(0.0, 0.0),
                     handle_in: Vec2::new(-5.0, 0.0),
                     handle_out: Vec2::new(5.0, 0.0),
-                    kind: AnchorKind::Smooth,
+                    kind: AnchorKind::Symmetric,
                 },
                 NewAnchor::corner(b, Point::new(20.0, 0.0)),
             ],
@@ -992,10 +1081,10 @@ mod tests {
         let mut tool = NodeTool::new();
         tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, false);
 
-        tool.convert_selected(&document, AnchorKind::Smooth);
+        tool.convert_selected(&document, AnchorKind::Symmetric);
         let snapshot = document.path(path).expect("exists");
         let middle = &snapshot.anchors[1];
-        assert_eq!(middle.kind, AnchorKind::Smooth);
+        assert_eq!(middle.kind, AnchorKind::Symmetric);
         assert_eq!(middle.handle_in, middle.handle_out.negated());
 
         tool.convert_selected(&document, AnchorKind::Corner);
@@ -1171,14 +1260,14 @@ mod tests {
                     point: Point::new(0.0, 0.0),
                     handle_in: Vec2::ZERO,
                     handle_out: Vec2::new(5.0, 0.0),
-                    kind: AnchorKind::Smooth,
+                    kind: AnchorKind::Symmetric,
                 },
                 NewAnchor {
                     id: b,
                     point: Point::new(20.0, 0.0),
                     handle_in: Vec2::new(-5.0, 0.0),
                     handle_out: Vec2::ZERO,
-                    kind: AnchorKind::Smooth,
+                    kind: AnchorKind::Symmetric,
                 },
             ],
             false,
@@ -1278,5 +1367,284 @@ mod tests {
             tool.selection().is_empty(),
             "clicking empty space clears the selection"
         );
+    }
+
+    /// Acceptance criterion 1: the existing two-kind toggle is renamed
+    /// at the toolbar-state surface (`can_convert_to_smooth` →
+    /// `can_convert_to_symmetric`), with the identical enablement rule.
+    #[test]
+    fn toolbar_state_exposes_symmetric_and_asymmetric_and_join_split() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path = open_two_node_path(&document, a, b);
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+
+        let state = tool.toolbar_state(&document);
+        assert!(state.can_convert_to_corner);
+        assert!(state.can_convert_to_symmetric);
+        assert!(state.can_convert_to_asymmetric);
+        // A 2-anchor open path's one endpoint: Join is disabled (would
+        // need the *other* endpoint too), Split is disabled (an
+        // endpoint, not an interior/closed node).
+        assert!(!state.can_join);
+        assert!(!state.can_split);
+    }
+
+    /// AC8/AC10/AC11: selecting the two ends of one open path enables
+    /// Join; triggering it closes the path and selects only the merged
+    /// node.
+    #[test]
+    fn join_selected_closes_one_open_path_and_selects_the_merged_node() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let c = AnchorId::new(1, 3);
+        let path = document.create_path(
+            &[
+                NewAnchor::corner(a, Point::new(0.0, 0.0)),
+                NewAnchor::corner(b, Point::new(10.0, 0.0)),
+                NewAnchor::corner(c, Point::new(5.0, 10.0)),
+            ],
+            false,
+        );
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+        let paths = vec![document.path(path).expect("exists")];
+        tool.pointer_down(&paths, Point::new(5.0, 10.0), TOLERANCES, true);
+        assert_eq!(tool.selection().nodes(), &[a, c]);
+        assert!(tool.toolbar_state(&document).can_join);
+
+        tool.join_selected(&document);
+
+        let snapshot = document.path(path).expect("exists");
+        assert!(snapshot.closed);
+        assert_eq!(snapshot.anchors.len(), 2);
+        assert_eq!(tool.selection().nodes().len(), 1, "only the merged node");
+        let merged_id = tool.selection().nodes()[0];
+        assert!(snapshot.anchors.iter().any(|anchor| anchor.id == merged_id));
+    }
+
+    /// `specs/0006-path-merge-split-and-node-types/specification.md`
+    /// acceptance criterion 7: clicking a node on one path, then shift-
+    /// clicking a node on a *different* visible path, selects both
+    /// together — the behaviour `NodeSelection::toggle_node` now
+    /// supports directly (it used to reset to a fresh single-node
+    /// selection on any path change). Both paths are "visible" in the
+    /// sense criterion 6 means: `NodeTool` hit-tests and renders every
+    /// path handed to it, regardless of any outer object selection
+    /// (unchanged, pre-existing behaviour this slice's own `adrs.md`
+    /// relies on rather than re-implementing).
+    #[test]
+    fn ac7_shift_click_a_node_on_a_different_path_selects_both_together() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path_one = open_two_node_path(&document, a, b);
+        let c = AnchorId::new(2, 1);
+        let d = AnchorId::new(2, 2);
+        let path_two = document.create_path(
+            &[
+                NewAnchor::corner(c, Point::new(0.0, 50.0)),
+                NewAnchor::corner(d, Point::new(20.0, 50.0)),
+            ],
+            false,
+        );
+
+        let mut tool = NodeTool::new();
+        let paths = vec![
+            document.path(path_one).expect("exists"),
+            document.path(path_two).expect("exists"),
+        ];
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+        tool.pointer_down(&paths, Point::new(0.0, 50.0), TOLERANCES, true);
+
+        assert_eq!(
+            tool.selection().node_pairs(),
+            &[(path_one, a), (path_two, c)],
+            "both nodes selected together, across the two different paths (AC 7)"
+        );
+        assert_eq!(
+            tool.selection().path(),
+            None,
+            "no single common path — a genuine cross-path selection"
+        );
+
+        // AC 9 (via AC 8's shared rule): both are endpoint nodes of open
+        // paths, so Join applies to this selection too.
+        assert!(tool.toolbar_state(&document).can_join);
+    }
+
+    /// Architect review of the AC 6/7 follow-up
+    /// (`specs/0006-path-merge-split-and-node-types/adrs.md`): "Rejected:
+    /// collapsing a cross-path selection on a plain press. It breaks
+    /// AC 10 across paths." A plain (non-shift) click on a node that is
+    /// already part of a cross-path selection must keep the whole
+    /// selection — not reset it to just the clicked node — so a
+    /// following drag moves every selected node, on every path it spans,
+    /// as one `Document::move_anchors` commit.
+    #[test]
+    fn plain_click_on_a_cross_path_selected_node_keeps_the_whole_selection_and_drags_it_as_one_commit()
+     {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path_one = open_two_node_path(&document, a, b);
+        let c = AnchorId::new(2, 1);
+        let d = AnchorId::new(2, 2);
+        let path_two = document.create_path(
+            &[
+                NewAnchor::corner(c, Point::new(0.0, 50.0)),
+                NewAnchor::corner(d, Point::new(20.0, 50.0)),
+            ],
+            false,
+        );
+
+        let mut tool = NodeTool::new();
+        let paths = vec![
+            document.path(path_one).expect("exists"),
+            document.path(path_two).expect("exists"),
+        ];
+        // Build a cross-path selection the same way AC 7's own test does.
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+        tool.pointer_down(&paths, Point::new(0.0, 50.0), TOLERANCES, true);
+        assert_eq!(
+            tool.selection().node_pairs(),
+            &[(path_one, a), (path_two, c)],
+            "cross-path selection built as in AC 7"
+        );
+
+        // A *plain* click (no shift) back on one of the two already-
+        // selected nodes must not collapse the selection to just that
+        // node.
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+        assert_eq!(
+            tool.selection().node_pairs(),
+            &[(path_one, a), (path_two, c)],
+            "a plain press on an already-contained node keeps the whole \
+             cross-path selection, whether it spans one path or several"
+        );
+
+        // Dragging from there moves both selected nodes, on both paths,
+        // as one commit.
+        let outcome = tool.pointer_up(&document, Point::new(3.0, 4.0));
+        assert_eq!(outcome, PointerUpOutcome::NodesMoved);
+
+        let moved_one = document.path(path_one).expect("exists");
+        let moved_two = document.path(path_two).expect("exists");
+        assert_eq!(
+            moved_one.anchors[0].point,
+            Point::new(3.0, 4.0),
+            "path one's selected node moved by the drag offset"
+        );
+        assert_eq!(
+            moved_two.anchors[0].point,
+            Point::new(3.0, 54.0),
+            "path two's selected node moved by the same offset, even \
+             though the press landed on path one's node"
+        );
+    }
+
+    /// AC12/AC13/AC15: splitting an interior node of an open path
+    /// produces two objects, both resulting nodes selected across them.
+    #[test]
+    fn split_selected_on_an_interior_node_selects_both_new_objects_nodes() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let middle = AnchorId::new(1, 2);
+        let c = AnchorId::new(1, 3);
+        let path = document.create_path(
+            &[
+                NewAnchor::corner(a, Point::new(0.0, 0.0)),
+                NewAnchor::corner(middle, Point::new(10.0, 0.0)),
+                NewAnchor::corner(c, Point::new(20.0, 0.0)),
+            ],
+            false,
+        );
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        let mut minter = AnchorIdMinter::new(9);
+        tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, false);
+        assert!(tool.toolbar_state(&document).can_split);
+
+        tool.split_selected(&mut minter, &document);
+
+        assert_eq!(document.object_ids().len(), 2, "two separate objects now");
+        let selected = tool.selection().join_pairs().expect(
+            "AC15: Split's own two-object result selects both coincident nodes, reachable \
+             via NodeSelection::join_pairs for an immediate re-Join",
+        );
+        assert_ne!(selected.0.0, selected.1.0, "on two different path objects");
+    }
+
+    /// AC14: splitting a node of a closed path opens it, selecting both
+    /// resulting nodes as an ordinary same-path multi-selection.
+    #[test]
+    fn split_selected_on_a_closed_path_node_opens_it_selecting_both_ends() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let c = AnchorId::new(1, 3);
+        let path = document.create_path(
+            &[
+                NewAnchor::corner(a, Point::new(0.0, 0.0)),
+                NewAnchor::corner(b, Point::new(10.0, 0.0)),
+                NewAnchor::corner(c, Point::new(5.0, 10.0)),
+            ],
+            true,
+        );
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        let mut minter = AnchorIdMinter::new(9);
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+        assert!(
+            tool.toolbar_state(&document).can_split,
+            "any closed-path node splits"
+        );
+
+        tool.split_selected(&mut minter, &document);
+
+        let snapshot = document.path(path).expect("exists");
+        assert!(!snapshot.closed);
+        assert_eq!(snapshot.anchors.len(), 4);
+        assert_eq!(
+            tool.selection().nodes().len(),
+            2,
+            "both ends of one open path"
+        );
+    }
+
+    /// Split then immediately re-Join (AC15's own stated reason for
+    /// selecting both resulting nodes) round-trips back to one object.
+    #[test]
+    fn split_then_rejoin_restores_one_object() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let middle = AnchorId::new(1, 2);
+        let c = AnchorId::new(1, 3);
+        let path = document.create_path(
+            &[
+                NewAnchor::corner(a, Point::new(0.0, 0.0)),
+                NewAnchor::corner(middle, Point::new(10.0, 0.0)),
+                NewAnchor::corner(c, Point::new(20.0, 0.0)),
+            ],
+            false,
+        );
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        let mut minter = AnchorIdMinter::new(9);
+        tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, false);
+        tool.split_selected(&mut minter, &document);
+        assert_eq!(document.object_ids().len(), 2);
+        assert!(
+            tool.toolbar_state(&document).can_join,
+            "AC15: immediately re-joinable"
+        );
+
+        tool.join_selected(&document);
+        assert_eq!(document.object_ids().len(), 1, "back to one object");
     }
 }

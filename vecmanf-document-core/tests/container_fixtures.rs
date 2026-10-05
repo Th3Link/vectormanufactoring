@@ -56,6 +56,15 @@ fn future_format_version_vmf_is_refused_as_too_new() {
 /// `format_version = 2` document with two paths — one open with only
 /// corner anchors, one closed with a mix of corner and smooth anchors and
 /// real (non-zero) handles — round-trips through the container exactly.
+///
+/// Doubles as `specs/0006-path-merge-split-and-node-types/adrs.md`'s own
+/// migration test (chosen there over a new fixture, since this one
+/// already stores the legacy `"smooth"` tag and already asserts the
+/// kind): `closed.anchors[1]` is the fixture's one `"smooth"`-tagged
+/// anchor, and the assertion below now reads [`AnchorKind::Symmetric`]
+/// — proving the legacy tag is read as an alias, not left as `Corner`
+/// (the lenient-read fallback) and not rewritten on disk (this fixture's
+/// own bytes are untouched since `path-node-editing` wrote them).
 #[test]
 fn paths_v2_vmf_round_trips_both_anchor_kinds_open_and_closed() {
     let bytes = fixture("paths_v2.vmf");
@@ -73,7 +82,7 @@ fn paths_v2_vmf_round_trips_both_anchor_kinds_open_and_closed() {
     assert!(closed.closed);
     assert_eq!(closed.anchors.len(), 3);
     assert_eq!(closed.anchors[0].kind, AnchorKind::Corner);
-    assert_eq!(closed.anchors[1].kind, AnchorKind::Smooth);
+    assert_eq!(closed.anchors[1].kind, AnchorKind::Symmetric);
     assert_ne!(
         closed.anchors[1].handle_out,
         vecmanf_document_core::Vec2::ZERO

@@ -14,17 +14,31 @@ use crate::document::{Document, OBJECTS_TREE};
 use crate::path_codec::{
     self, KEY_HANDLE_IN, KEY_HANDLE_OUT, KEY_POINT, adjacent_segment_indices, anchor_index,
     anchor_map_at, anchors_container, insert_anchor_at, insert_anchors_container,
-    neighbour_tangent, node_exists, push_anchor, read_closed, read_kind, read_point, write_kind,
-    write_path_fields, write_point, write_vec2,
+    neighbour_tangent, node_exists, push_anchor, read_closed, read_kind, read_point, read_vec2,
+    write_kind, write_point, write_vec2,
 };
 use crate::path_model::{
-    AnchorId, AnchorKind, HandleSlot, NewAnchor, NodeId, PathEditError, PathSnapshot,
+    AnchorId, AnchorKind, Color, HandleSlot, NewAnchor, NodeId, PathEditError, PathSnapshot,
 };
 use crate::units::{Point, Vec2};
 
-/// Default handle length a corner→smooth conversion pulls out
-/// (acceptance criterion 11; no acceptance criterion pins an exact value).
-const DEFAULT_SMOOTH_HANDLE_LENGTH_MM: f64 = 10.0;
+/// Default handle length a corner→symmetric/asymmetric conversion pulls
+/// out (`specs/0002-path-node-editing/specification.md` acceptance
+/// criterion 11; no acceptance criterion pins an exact value). Renamed
+/// from `DEFAULT_SMOOTH_HANDLE_LENGTH_MM`
+/// (`specs/0006-path-merge-split-and-node-types/adrs.md`: "the wasm
+/// binding string... is not persisted and is renamed outright.
+/// `DEFAULT_SMOOTH_HANDLE_LENGTH_MM` becomes `DEFAULT_HANDLE_LENGTH_MM`").
+const DEFAULT_HANDLE_LENGTH_MM: f64 = 10.0;
+
+/// Below this length, a handle counts as "no existing length to keep" for
+/// acceptance criterion 2's "its own current length, if that side already
+/// had a non-zero handle; otherwise the slice's existing default handle
+/// length" — not a geometric [`crate::units::Tolerance`] (`CLAUDE.md` §5):
+/// this is a plain zero/non-zero classification of a stored value, the
+/// same kind of exact check `specs/0002-path-node-editing/adrs.md` already
+/// uses for "a retracted handle is the exact zero vector".
+const ZERO_HANDLE_EPSILON: f64 = f64::EPSILON;
 
 /// Default fraction of the segment chord a "make curve" extends its two
 /// adjoining handles by (acceptance criterion 14; a standard Bézier
@@ -33,7 +47,7 @@ const DEFAULT_CURVE_HANDLE_FRACTION: f64 = 1.0 / 3.0;
 
 /// Resolves what an anchor's whole `(handle_in, handle_out)` pair becomes
 /// when `slot`'s handle is set to `value` — acceptance criterion 9's one
-/// rule (mirror for [`AnchorKind::Smooth`], touch only the named handle
+/// rule (mirror for [`AnchorKind::Symmetric`], touch only the named handle
 /// for [`AnchorKind::Corner`]), as a single pure function rather than
 /// logic duplicated at each of its two callers. [`Document::set_handle`]
 /// calls this to build what it writes; `vecmanf-ui-core`'s live handle-
@@ -56,10 +70,49 @@ pub fn resolve_handle_pair(
     handle_out: Vec2,
 ) -> (Vec2, Vec2) {
     match (slot, kind) {
-        (HandleSlot::In, AnchorKind::Smooth) => (value, value.negated()),
-        (HandleSlot::Out, AnchorKind::Smooth) => (value.negated(), value),
+        (HandleSlot::In, AnchorKind::Symmetric) => (value, value.negated()),
+        (HandleSlot::Out, AnchorKind::Symmetric) => (value.negated(), value),
         (HandleSlot::In, AnchorKind::Corner) => (value, handle_out),
         (HandleSlot::Out, AnchorKind::Corner) => (handle_in, value),
+        // `specs/0006-path-merge-split-and-node-types/adrs.md`'s rule
+        // table: the opposite handle rotates to stay collinear through
+        // the anchor at the dragged handle's new angle, but its own
+        // distance from the anchor does not change — only the dragged
+        // handle's own length changes (acceptance criterion 3).
+        (HandleSlot::In, AnchorKind::Asymmetric) => (value, asymmetric_opposite(value, handle_out)),
+        (HandleSlot::Out, AnchorKind::Asymmetric) => (asymmetric_opposite(value, handle_in), value),
+    }
+}
+
+/// The opposite handle's new value when the dragged handle (on an
+/// [`AnchorKind::Asymmetric`] anchor) is set to `dragged`: collinear with
+/// `dragged` through the anchor, at `opposite`'s own (unchanged) length.
+///
+/// Edge cases (`specs/0006-path-merge-split-and-node-types/adrs.md`):
+/// `dragged` = zero leaves `opposite` unchanged — there is no direction to
+/// follow, and [`Vec2::normalized_to`] would otherwise collapse it to zero
+/// instead of leaving it alone. An `opposite` of length zero stays zero
+/// either way, since [`Vec2::normalized_to`] with a zero target length
+/// always returns [`Vec2::ZERO`] regardless of direction.
+#[must_use]
+fn asymmetric_opposite(dragged: Vec2, opposite: Vec2) -> Vec2 {
+    if dragged == Vec2::ZERO {
+        opposite
+    } else {
+        dragged.normalized_to(opposite.length()).negated()
+    }
+}
+
+/// Acceptance criterion 2's "its own current length, if that side already
+/// had a non-zero handle; otherwise the slice's existing default handle
+/// length" — one side of a Corner→Asymmetric conversion.
+#[must_use]
+fn kept_length_or_default(existing_handle: Vec2) -> f64 {
+    let length = existing_handle.length();
+    if length > ZERO_HANDLE_EPSILON {
+        length
+    } else {
+        DEFAULT_HANDLE_LENGTH_MM
     }
 }
 
@@ -74,22 +127,14 @@ impl Document {
     /// meta map and movable list, none of which Loro's API can reject.
     #[must_use]
     pub fn create_path(&self, anchors: &[NewAnchor], closed: bool) -> NodeId {
-        let tree = self.loro().get_tree(OBJECTS_TREE);
-        // invariant: creating a root-level node on a freshly obtained tree
-        // handle cannot fail.
-        #[allow(clippy::unwrap_used)]
-        let tree_id = tree.create(TreeParentId::Root).unwrap();
-        // invariant: reading the meta map of a node this call just created
-        // cannot fail.
-        #[allow(clippy::unwrap_used)]
-        let meta = tree.get_meta(tree_id).unwrap();
-        write_path_fields(&meta, closed);
-        let anchor_list = insert_anchors_container(&meta);
-        for anchor in anchors {
-            push_anchor(&anchor_list, anchor);
-        }
+        let id = self.create_path_uncommitted(
+            anchors,
+            closed,
+            path_codec::DEFAULT_STROKE_WIDTH_MM,
+            Color::BLACK,
+        );
         self.commit_with_label("create_path");
-        NodeId::from_parts(tree_id.peer, tree_id.counter)
+        id
     }
 
     /// Every object's identity (path or primitive alike), in sibling
@@ -130,42 +175,49 @@ impl Document {
     }
 
     /// Moves every named anchor to its new absolute position, one commit
-    /// for the whole drag — handles are untouched because they are stored
-    /// relative to their own anchor (`specs/0002-path-node-editing/adrs.md`
-    /// decision 2; acceptance criteria 8, 10).
+    /// for the whole drag, whether every anchor shares one path or `moves`
+    /// spans several — a multi-path node drag is one commit, exactly like
+    /// a single-path one (`specs/0006-path-merge-split-and-node-types/
+    /// adrs.md`'s "one Node-tool session over several paths": "a
+    /// multi-path node drag is one commit") — handles are untouched
+    /// because they are stored relative to their own anchor
+    /// (`specs/0002-path-node-editing/adrs.md` decision 2; acceptance
+    /// criteria 8, 10).
     ///
-    /// Resolves every id to an index *before* writing any of them, so a
-    /// refused move (one stale id anywhere in `moves`) never leaves the
+    /// Resolves every `(path, anchor)` pair to its container and index
+    /// *before* writing any of them, so a refused move (one stale id
+    /// anywhere in `moves`, on any of the paths involved) never leaves any
     /// path half-moved.
     ///
     /// # Errors
-    /// [`PathEditError::NoSuchPath`] if `path` no longer exists;
+    /// [`PathEditError::NoSuchPath`] if any named path no longer exists;
     /// [`PathEditError::NoSuchAnchor`] if any named anchor no longer
     /// exists.
-    pub fn move_anchors(
-        &self,
-        path: NodeId,
-        moves: &[(AnchorId, Point)],
-    ) -> Result<(), PathEditError> {
-        let (_, anchors) = self.path_parts(path)?;
-        let resolved: Vec<(usize, Point)> = moves
+    pub fn move_anchors(&self, moves: &[(NodeId, AnchorId, Point)]) -> Result<(), PathEditError> {
+        let resolved: Vec<(LoroMovableList, usize, Point)> = moves
             .iter()
-            .map(|&(anchor_id, point)| {
-                anchor_index(&anchors, anchor_id).map(|index| (index, point))
+            .map(|&(path, anchor_id, point)| {
+                let (_, anchors) = self.path_parts(path)?;
+                let index = anchor_index(&anchors, anchor_id)?;
+                Ok((anchors, index, point))
             })
-            .collect::<Result<_, _>>()?;
-        for (index, point) in resolved {
-            write_point(&anchor_map_at(&anchors, index), KEY_POINT, point);
+            .collect::<Result<_, PathEditError>>()?;
+        for (anchors, index, point) in &resolved {
+            write_point(&anchor_map_at(anchors, *index), KEY_POINT, *point);
         }
         self.commit_with_label("move_anchors");
         Ok(())
     }
 
     /// Sets one anchor's handle, mirroring the opposite handle when the
-    /// anchor is [`AnchorKind::Smooth`] (`handle_in = -handle_out`) and
-    /// touching only the named handle when it is
-    /// [`AnchorKind::Corner`] (`specs/0002-path-node-editing/adrs.md`
-    /// decision 1; acceptance criterion 9).
+    /// anchor is [`AnchorKind::Symmetric`] (`handle_in = -handle_out`),
+    /// rotating the opposite handle to stay collinear *without* changing
+    /// its own length when the anchor is [`AnchorKind::Asymmetric`]
+    /// (`specs/0006-path-merge-split-and-node-types/adrs.md`'s rule
+    /// table; acceptance criterion 3), and touching only the named
+    /// handle when it is [`AnchorKind::Corner`]
+    /// (`specs/0002-path-node-editing/adrs.md` decision 1; acceptance
+    /// criterion 9).
     ///
     /// # Errors
     /// [`PathEditError::NoSuchPath`] / [`PathEditError::NoSuchAnchor`] if
@@ -185,24 +237,31 @@ impl Document {
             HandleSlot::In => (KEY_HANDLE_IN, KEY_HANDLE_OUT),
             HandleSlot::Out => (KEY_HANDLE_OUT, KEY_HANDLE_IN),
         };
-        // `resolve_handle_pair` is the one place this rule lives; the
-        // placeholder `Vec2::ZERO` pair below is never actually read by
-        // it for either of `slot`'s own two branches, only by the
-        // opposite anchor kind's — the real current values are not read
-        // from storage at all here, since a `Corner` anchor's untouched
-        // side must stay unwritten (not merely rewritten to its current
-        // value), the same LWW-register hazard this slice's own "a press
-        // and release with no pointer movement writes nothing" rule
-        // guards against (`specs/0002-path-node-editing/adrs.md`) — a
-        // redundant write with a newer clock can still beat a
-        // collaborator's concurrent edit to that same field.
-        let (new_in, new_out) = resolve_handle_pair(kind, slot, value, Vec2::ZERO, Vec2::ZERO);
+        // `resolve_handle_pair` is the one place this rule lives. Reading
+        // the current `handle_in`/`handle_out` here is just a read, not
+        // a write — it is needed for `AnchorKind::Asymmetric`'s opposite
+        // (which must rotate while keeping *its own* current length,
+        // `specs/0006-path-merge-split-and-node-types/adrs.md`), and is
+        // harmless for `AnchorKind::Corner`, whose own two
+        // `resolve_handle_pair` branches echo them back unused — this
+        // method still never *writes* a `Corner` anchor's untouched
+        // side, only the mirror write below is skipped for it, which is
+        // what actually matters for the LWW-register hazard this
+        // slice's own "a press and release with no pointer movement
+        // writes nothing" rule guards against
+        // (`specs/0002-path-node-editing/adrs.md`): a redundant write
+        // with a newer clock can still beat a collaborator's concurrent
+        // edit to that same field.
+        let current_handle_in = read_vec2(&map, KEY_HANDLE_IN);
+        let current_handle_out = read_vec2(&map, KEY_HANDLE_OUT);
+        let (new_in, new_out) =
+            resolve_handle_pair(kind, slot, value, current_handle_in, current_handle_out);
         let own_value = match slot {
             HandleSlot::In => new_in,
             HandleSlot::Out => new_out,
         };
         write_vec2(&map, own_key, own_value);
-        if kind == AnchorKind::Smooth {
+        if kind == AnchorKind::Symmetric || kind == AnchorKind::Asymmetric {
             let mirror_value = match slot {
                 HandleSlot::In => new_out,
                 HandleSlot::Out => new_in,
@@ -213,21 +272,43 @@ impl Document {
         Ok(())
     }
 
-    /// Converts every named anchor between [`AnchorKind::Corner`] and
-    /// [`AnchorKind::Smooth`] as one commit — a multi-node selection's
-    /// convert is one interaction, not `anchors.len()` of them
-    /// (acceptance criterion 11).
+    /// Converts every named anchor to `kind` as one commit — a multi-node
+    /// selection's convert is one interaction, not `anchors.len()` of them
+    /// (`specs/0002-path-node-editing/specification.md` acceptance
+    /// criterion 11).
     ///
     /// Every id is resolved to an index before any of them is written, so
     /// one stale id anywhere in `anchors` refuses the whole call rather
     /// than converting a prefix of it.
     ///
-    /// Corner → smooth pulls out two handles of equal default length,
-    /// collinear through the anchor along the chord between its
-    /// neighbours. Smooth → corner leaves both handles exactly where they
-    /// are and only flips `kind` — geometry cannot tell the two apart,
-    /// which is exactly why `kind` is a stored field
-    /// (`specs/0002-path-node-editing/adrs.md` decision 3).
+    /// Per-anchor rule (`specs/0006-path-merge-split-and-node-types/
+    /// adrs.md`'s conversion table):
+    /// - **to the kind the anchor already has: no write at all**
+    ///   (acceptance criterion 16 — this amends
+    ///   `specs/0002-path-node-editing/specification.md` AC 11, under
+    ///   which re-applying "make smooth" to an already-smooth node used
+    ///   to reset its handles every time).
+    /// - **to [`AnchorKind::Symmetric`]** (from any other kind): both
+    ///   handles reset to `DEFAULT_HANDLE_LENGTH_MM`, collinear through
+    ///   the anchor along the chord between its neighbours — any existing
+    ///   independent lengths are discarded, not averaged (acceptance
+    ///   criteria 5 and `path-node-editing`'s own AC 11).
+    /// - **[`AnchorKind::Corner`] → [`AnchorKind::Asymmetric`]**: same
+    ///   tangent direction, but each side keeps its own current length if
+    ///   it was already non-zero, otherwise the default (acceptance
+    ///   criterion 2).
+    /// - **every other conversion** (`Symmetric`→`Corner`, `Asymmetric`→
+    ///   `Corner`, `Symmetric`→`Asymmetric`): both handles stay exactly
+    ///   where they are, shape-preserving — geometry cannot tell the
+    ///   kinds apart, which is exactly why `kind` is a stored field
+    ///   (`specs/0002-path-node-editing/adrs.md` decision 3; acceptance
+    ///   criterion 4).
+    ///
+    /// If every named anchor already has `kind`, nothing is written and
+    /// no commit happens at all — not even an empty one — matching
+    /// `specs/0002-path-node-editing/adrs.md`'s "a click must not be able
+    /// to [win against a collaborator's concurrent edit]" rule, now
+    /// extended from a pure no-move click to a pure no-op convert.
     ///
     /// # Errors
     /// [`PathEditError::NoSuchPath`] if `path` no longer exists;
@@ -245,18 +326,43 @@ impl Document {
             .iter()
             .map(|&id| anchor_index(&anchors, id))
             .collect::<Result<_, _>>()?;
+        let mut changed = false;
         for index in indices {
             let map = anchor_map_at(&anchors, index);
-            if kind == AnchorKind::Smooth {
-                let point = read_point(&map, KEY_POINT);
-                let tangent = neighbour_tangent(&anchors, closed, index, point)
-                    .normalized_to(DEFAULT_SMOOTH_HANDLE_LENGTH_MM);
-                write_vec2(&map, KEY_HANDLE_OUT, tangent);
-                write_vec2(&map, KEY_HANDLE_IN, tangent.negated());
+            let current = read_kind(&map);
+            if current == kind {
+                // Acceptance criterion 16: converting to the kind the
+                // anchor already has is a no-op, not a reset.
+                continue;
+            }
+            changed = true;
+            match kind {
+                AnchorKind::Symmetric => {
+                    let point = read_point(&map, KEY_POINT);
+                    let tangent = neighbour_tangent(&anchors, closed, index, point)
+                        .normalized_to(DEFAULT_HANDLE_LENGTH_MM);
+                    write_vec2(&map, KEY_HANDLE_OUT, tangent);
+                    write_vec2(&map, KEY_HANDLE_IN, tangent.negated());
+                }
+                AnchorKind::Asymmetric if current == AnchorKind::Corner => {
+                    let point = read_point(&map, KEY_POINT);
+                    let handle_in = read_vec2(&map, KEY_HANDLE_IN);
+                    let handle_out = read_vec2(&map, KEY_HANDLE_OUT);
+                    let unit = neighbour_tangent(&anchors, closed, index, point).normalized_to(1.0);
+                    let out_len = kept_length_or_default(handle_out);
+                    let in_len = kept_length_or_default(handle_in);
+                    write_vec2(&map, KEY_HANDLE_OUT, unit.scaled(out_len));
+                    write_vec2(&map, KEY_HANDLE_IN, unit.negated().scaled(in_len));
+                }
+                // `Symmetric`→`Corner`, `Asymmetric`→`Corner`,
+                // `Symmetric`→`Asymmetric`: shape-preserving, kind only.
+                AnchorKind::Corner | AnchorKind::Asymmetric => {}
             }
             write_kind(&map, kind);
         }
-        self.commit_with_label("convert_anchor_kind");
+        if changed {
+            self.commit_with_label("convert_anchor_kind");
+        }
         Ok(())
     }
 
@@ -417,10 +523,51 @@ impl Document {
         Ok(())
     }
 
+    /// [`Document::create_path`]'s own body, minus the commit — shared
+    /// with `crate::path_topology`'s Split (`split_open_path` there),
+    /// which needs the new object's creation folded into Split's own
+    /// single commit (`specs/0002-path-node-editing/adrs.md`'s "each
+    /// mutating method ends in exactly one Loro commit") rather than a
+    /// second, separate one. Also takes an explicit stroke width/color
+    /// rather than always writing the placeholder default, so Split can
+    /// copy the original path's own style instead of resetting it.
+    /// `pub(crate)` for `path_topology` to call.
+    ///
+    /// # Panics
+    /// Does not panic in practice — see [`Document::create_path`]'s own
+    /// doc comment.
+    pub(crate) fn create_path_uncommitted(
+        &self,
+        anchors: &[NewAnchor],
+        closed: bool,
+        stroke_width_mm: f64,
+        stroke: Color,
+    ) -> NodeId {
+        let tree = self.loro().get_tree(OBJECTS_TREE);
+        // invariant: creating a root-level node on a freshly obtained
+        // tree handle cannot fail.
+        #[allow(clippy::unwrap_used)]
+        let tree_id = tree.create(TreeParentId::Root).unwrap();
+        // invariant: reading the meta map of a node this call just
+        // created cannot fail.
+        #[allow(clippy::unwrap_used)]
+        let meta = tree.get_meta(tree_id).unwrap();
+        path_codec::write_path_style(&meta, closed, stroke_width_mm, stroke);
+        let anchor_list = insert_anchors_container(&meta);
+        for anchor in anchors {
+            push_anchor(&anchor_list, anchor);
+        }
+        NodeId::from_parts(tree_id.peer, tree_id.counter)
+    }
+
     /// Looks up one path's meta map and anchors movable list together, so
     /// callers that need both (e.g. the `closed` flag for wraparound) read
-    /// them from the same lookup.
-    fn path_parts(&self, path: NodeId) -> Result<(LoroMap, LoroMovableList), PathEditError> {
+    /// them from the same lookup. `pub(crate)` for `crate::path_topology`
+    /// (Join/Split) to call too.
+    pub(crate) fn path_parts(
+        &self,
+        path: NodeId,
+    ) -> Result<(LoroMap, LoroMovableList), PathEditError> {
         let tree = self.loro().get_tree(OBJECTS_TREE);
         let tree_id = tree_id_of(path);
         if !node_exists(&tree, tree_id) {
@@ -434,14 +581,14 @@ impl Document {
     }
 }
 
-fn tree_id_of(id: NodeId) -> TreeID {
+/// `pub(crate)` for `crate::path_topology` (Join/Split) to call too.
+pub(crate) fn tree_id_of(id: NodeId) -> TreeID {
     TreeID::new(id.peer, id.counter)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::path_model::Color;
 
     fn anchor(id: u64, x: f64, y: f64) -> NewAnchor {
         NewAnchor::corner(AnchorId::new(1, id), Point::new(x, y))
@@ -453,7 +600,7 @@ mod tests {
             point: Point::new(x, y),
             handle_in: handle_out.negated(),
             handle_out,
-            kind: AnchorKind::Smooth,
+            kind: AnchorKind::Symmetric,
         }
     }
 
@@ -508,7 +655,7 @@ mod tests {
             false,
         );
         document
-            .move_anchors(id, &[(AnchorId::new(1, 1), Point::new(3.0, 4.0))])
+            .move_anchors(&[(id, AnchorId::new(1, 1), Point::new(3.0, 4.0))])
             .expect("move");
         let snapshot = document.path(id).expect("path exists");
         assert_eq!(snapshot.anchors[0].point, Point::new(3.0, 4.0));
@@ -519,7 +666,7 @@ mod tests {
     fn move_anchors_on_a_stale_anchor_is_refused() {
         let document = Document::new(1);
         let id = document.create_path(&[anchor(1, 0.0, 0.0), anchor(2, 1.0, 0.0)], false);
-        let result = document.move_anchors(id, &[(AnchorId::new(9, 9), Point::new(0.0, 0.0))]);
+        let result = document.move_anchors(&[(id, AnchorId::new(9, 9), Point::new(0.0, 0.0))]);
         assert_eq!(result, Err(PathEditError::NoSuchAnchor));
     }
 
@@ -530,13 +677,10 @@ mod tests {
     fn move_anchors_refuses_the_whole_batch_on_one_stale_id() {
         let document = Document::new(1);
         let id = document.create_path(&[anchor(1, 0.0, 0.0), anchor(2, 10.0, 0.0)], false);
-        let result = document.move_anchors(
-            id,
-            &[
-                (AnchorId::new(1, 1), Point::new(99.0, 99.0)),
-                (AnchorId::new(9, 9), Point::new(0.0, 0.0)),
-            ],
-        );
+        let result = document.move_anchors(&[
+            (id, AnchorId::new(1, 1), Point::new(99.0, 99.0)),
+            (id, AnchorId::new(9, 9), Point::new(0.0, 0.0)),
+        ]);
         assert_eq!(result, Err(PathEditError::NoSuchAnchor));
         let snapshot = document.path(id).expect("path exists");
         assert_eq!(
@@ -546,13 +690,64 @@ mod tests {
         );
     }
 
+    /// The generalization this slice's architect review requires: `moves`
+    /// can span two different path objects and still lands as one commit
+    /// (`specs/0006-path-merge-split-and-node-types/adrs.md`'s "a
+    /// multi-path node drag is one commit").
+    #[test]
+    fn move_anchors_moves_anchors_across_two_paths_in_one_commit() {
+        let document = Document::new(1);
+        let first = document.create_path(&[anchor(1, 0.0, 0.0), anchor(2, 10.0, 0.0)], false);
+        let second = document.create_path(&[anchor(3, 0.0, 5.0), anchor(4, 10.0, 5.0)], false);
+        let before = document.loro().len_changes();
+        document
+            .move_anchors(&[
+                (first, AnchorId::new(1, 1), Point::new(1.0, 1.0)),
+                (second, AnchorId::new(1, 3), Point::new(2.0, 2.0)),
+            ])
+            .expect("cross-path move");
+        let after = document.loro().len_changes();
+        assert_eq!(
+            after - before,
+            1,
+            "one commit for the whole cross-path drag"
+        );
+        assert_eq!(
+            document.path(first).expect("first path exists").anchors[0].point,
+            Point::new(1.0, 1.0)
+        );
+        assert_eq!(
+            document.path(second).expect("second path exists").anchors[0].point,
+            Point::new(2.0, 2.0)
+        );
+    }
+
+    /// Same half-applied guarantee as the single-path case above, but with
+    /// the stale id on a *different* path than the valid one.
+    #[test]
+    fn move_anchors_refuses_the_whole_cross_path_batch_on_one_stale_id() {
+        let document = Document::new(1);
+        let first = document.create_path(&[anchor(1, 0.0, 0.0), anchor(2, 10.0, 0.0)], false);
+        let second = document.create_path(&[anchor(3, 0.0, 5.0), anchor(4, 10.0, 5.0)], false);
+        let result = document.move_anchors(&[
+            (first, AnchorId::new(1, 1), Point::new(99.0, 99.0)),
+            (second, AnchorId::new(9, 9), Point::new(0.0, 0.0)),
+        ]);
+        assert_eq!(result, Err(PathEditError::NoSuchAnchor));
+        assert_eq!(
+            document.path(first).expect("first path exists").anchors[0].point,
+            Point::new(0.0, 0.0),
+            "the valid id on the first path must not have moved either"
+        );
+    }
+
     /// The shared rule itself, independent of any document: a `Smooth`
     /// anchor mirrors, regardless of which slot was set.
     #[test]
     fn resolve_handle_pair_mirrors_for_a_smooth_anchor_either_slot() {
         assert_eq!(
             resolve_handle_pair(
-                AnchorKind::Smooth,
+                AnchorKind::Symmetric,
                 HandleSlot::Out,
                 Vec2::new(3.0, 4.0),
                 Vec2::ZERO,
@@ -562,7 +757,7 @@ mod tests {
         );
         assert_eq!(
             resolve_handle_pair(
-                AnchorKind::Smooth,
+                AnchorKind::Symmetric,
                 HandleSlot::In,
                 Vec2::new(3.0, 4.0),
                 Vec2::ZERO,
@@ -654,13 +849,13 @@ mod tests {
             false,
         );
         document
-            .convert_anchor_kind(id, &[AnchorId::new(1, 2)], AnchorKind::Smooth)
+            .convert_anchor_kind(id, &[AnchorId::new(1, 2)], AnchorKind::Symmetric)
             .expect("convert");
         let snapshot = document.path(id).expect("path exists");
         let middle = &snapshot.anchors[1];
-        assert_eq!(middle.kind, AnchorKind::Smooth);
+        assert_eq!(middle.kind, AnchorKind::Symmetric);
         assert_eq!(middle.handle_in, middle.handle_out.negated());
-        assert!((middle.handle_out.length() - DEFAULT_SMOOTH_HANDLE_LENGTH_MM).abs() < 1e-9);
+        assert!((middle.handle_out.length() - DEFAULT_HANDLE_LENGTH_MM).abs() < 1e-9);
         // Tangent points toward the next neighbour (+X here).
         assert!(middle.handle_out.x > 0.0);
     }
@@ -712,12 +907,12 @@ mod tests {
             .convert_anchor_kind(
                 id,
                 &[AnchorId::new(1, 1), AnchorId::new(1, 3)],
-                AnchorKind::Smooth,
+                AnchorKind::Symmetric,
             )
             .expect("convert");
         let snapshot = document.path(id).expect("path exists");
-        assert_eq!(snapshot.anchors[0].kind, AnchorKind::Smooth);
-        assert_eq!(snapshot.anchors[2].kind, AnchorKind::Smooth);
+        assert_eq!(snapshot.anchors[0].kind, AnchorKind::Symmetric);
+        assert_eq!(snapshot.anchors[2].kind, AnchorKind::Symmetric);
         assert_eq!(
             snapshot.anchors[1].kind,
             AnchorKind::Corner,
@@ -739,7 +934,7 @@ mod tests {
         let result = document.convert_anchor_kind(
             id,
             &[AnchorId::new(1, 1), AnchorId::new(9, 9)],
-            AnchorKind::Smooth,
+            AnchorKind::Symmetric,
         );
         assert_eq!(result, Err(PathEditError::NoSuchAnchor));
         let snapshot = document.path(id).expect("path exists");
@@ -748,6 +943,237 @@ mod tests {
             AnchorKind::Corner,
             "the valid id in the batch must not have been converted either"
         );
+    }
+
+    /// Acceptance criterion 16: re-applying "make symmetric" to an
+    /// already-symmetric node is a no-op — no handle change, and (unlike
+    /// slice 2's old behaviour) no commit at all.
+    #[test]
+    fn convert_symmetric_to_symmetric_is_a_no_op_and_commits_nothing() {
+        let document = Document::new(1);
+        let id = document.create_path(
+            &[
+                smooth_anchor(1, 0.0, 0.0, Vec2::new(5.0, 0.0)),
+                anchor(2, 10.0, 0.0),
+            ],
+            false,
+        );
+        let before = document.path(id).expect("exists");
+        document
+            .convert_anchor_kind(id, &[AnchorId::new(1, 1)], AnchorKind::Symmetric)
+            .expect("convert");
+        let after = document.path(id).expect("exists");
+        assert_eq!(before, after, "no-op: nothing changed, not even a reset");
+    }
+
+    /// The same no-op rule for `Corner`→`Corner` and `Asymmetric`→
+    /// `Asymmetric`.
+    #[test]
+    fn convert_corner_to_corner_and_asymmetric_to_asymmetric_are_no_ops() {
+        let document = Document::new(1);
+        let id = document.create_path(
+            &[
+                anchor(1, 0.0, 0.0),
+                anchor(2, 10.0, 0.0),
+                anchor(3, 20.0, 0.0),
+            ],
+            false,
+        );
+        document
+            .convert_anchor_kind(id, &[AnchorId::new(1, 2)], AnchorKind::Asymmetric)
+            .expect("convert to asymmetric");
+        let after_first = document.path(id).expect("exists");
+
+        document
+            .convert_anchor_kind(id, &[AnchorId::new(1, 2)], AnchorKind::Asymmetric)
+            .expect("re-convert to asymmetric is a no-op");
+        assert_eq!(document.path(id).expect("exists"), after_first);
+
+        document
+            .convert_anchor_kind(id, &[AnchorId::new(1, 1)], AnchorKind::Corner)
+            .expect("corner to corner is a no-op");
+        assert_eq!(
+            document.path(id).expect("exists").anchors[0].kind,
+            AnchorKind::Corner
+        );
+    }
+
+    /// Acceptance criterion 2: Corner → Asymmetric sets both handles
+    /// collinear through the anchor along the tangent, keeping each
+    /// side's own current length when it was already non-zero.
+    #[test]
+    fn convert_corner_to_asymmetric_keeps_each_sides_own_nonzero_length() {
+        let document = Document::new(1);
+        let id = document.create_path(
+            &[
+                anchor(1, 0.0, 0.0),
+                NewAnchor {
+                    id: AnchorId::new(1, 2),
+                    point: Point::new(10.0, 0.0),
+                    handle_in: Vec2::new(-2.0, 0.0),
+                    handle_out: Vec2::new(4.0, 0.0),
+                    kind: AnchorKind::Corner,
+                },
+                anchor(3, 20.0, 0.0),
+            ],
+            false,
+        );
+        document
+            .convert_anchor_kind(id, &[AnchorId::new(1, 2)], AnchorKind::Asymmetric)
+            .expect("convert");
+        let snapshot = document.path(id).expect("exists");
+        let middle = &snapshot.anchors[1];
+        assert_eq!(middle.kind, AnchorKind::Asymmetric);
+        // Collinear through the anchor.
+        assert_eq!(
+            middle.handle_in,
+            middle
+                .handle_out
+                .negated()
+                .normalized_to(middle.handle_in.length())
+        );
+        // Each side keeps its own original (different) length.
+        assert!((middle.handle_out.length() - 4.0).abs() < 1e-9);
+        assert!((middle.handle_in.length() - 2.0).abs() < 1e-9);
+    }
+
+    /// Same conversion, but a side that started at zero length gets the
+    /// slice's default length instead of staying zero.
+    #[test]
+    fn convert_corner_to_asymmetric_defaults_a_zero_length_side() {
+        let document = Document::new(1);
+        let id = document.create_path(
+            &[
+                anchor(1, 0.0, 0.0),
+                anchor(2, 10.0, 0.0),
+                anchor(3, 20.0, 0.0),
+            ],
+            false,
+        );
+        document
+            .convert_anchor_kind(id, &[AnchorId::new(1, 2)], AnchorKind::Asymmetric)
+            .expect("convert");
+        let middle = &document.path(id).expect("exists").anchors[1];
+        assert!((middle.handle_out.length() - DEFAULT_HANDLE_LENGTH_MM).abs() < 1e-9);
+        assert!((middle.handle_in.length() - DEFAULT_HANDLE_LENGTH_MM).abs() < 1e-9);
+    }
+
+    /// Acceptance criterion 4: Symmetric → Asymmetric and Asymmetric →
+    /// Corner both leave the handles exactly where they are — shape-
+    /// preserving, kind-only.
+    #[test]
+    fn convert_symmetric_to_asymmetric_and_asymmetric_to_corner_preserve_handles() {
+        let document = Document::new(1);
+        let id = document.create_path(
+            &[
+                smooth_anchor(1, 0.0, 0.0, Vec2::new(5.0, 0.0)),
+                anchor(2, 10.0, 0.0),
+            ],
+            false,
+        );
+        document
+            .convert_anchor_kind(id, &[AnchorId::new(1, 1)], AnchorKind::Asymmetric)
+            .expect("convert to asymmetric");
+        let snapshot = document.path(id).expect("exists");
+        assert_eq!(snapshot.anchors[0].kind, AnchorKind::Asymmetric);
+        assert_eq!(snapshot.anchors[0].handle_out, Vec2::new(5.0, 0.0));
+        assert_eq!(snapshot.anchors[0].handle_in, Vec2::new(-5.0, 0.0));
+
+        document
+            .convert_anchor_kind(id, &[AnchorId::new(1, 1)], AnchorKind::Corner)
+            .expect("convert to corner");
+        let snapshot = document.path(id).expect("exists");
+        assert_eq!(snapshot.anchors[0].kind, AnchorKind::Corner);
+        assert_eq!(snapshot.anchors[0].handle_out, Vec2::new(5.0, 0.0));
+        assert_eq!(snapshot.anchors[0].handle_in, Vec2::new(-5.0, 0.0));
+    }
+
+    /// Acceptance criterion 5: Asymmetric → Symmetric discards any
+    /// independent lengths and resets both handles to the default
+    /// length, collinear through the tangent.
+    #[test]
+    fn convert_asymmetric_to_symmetric_resets_to_default_length() {
+        let document = Document::new(1);
+        let id = document.create_path(
+            &[
+                anchor(1, 0.0, 0.0),
+                NewAnchor {
+                    id: AnchorId::new(1, 2),
+                    point: Point::new(10.0, 0.0),
+                    handle_in: Vec2::new(-2.0, 0.0),
+                    handle_out: Vec2::new(4.0, 0.0),
+                    kind: AnchorKind::Asymmetric,
+                },
+                anchor(3, 20.0, 0.0),
+            ],
+            false,
+        );
+        document
+            .convert_anchor_kind(id, &[AnchorId::new(1, 2)], AnchorKind::Symmetric)
+            .expect("convert");
+        let middle = &document.path(id).expect("exists").anchors[1];
+        assert_eq!(middle.kind, AnchorKind::Symmetric);
+        assert_eq!(middle.handle_in, middle.handle_out.negated());
+        assert!((middle.handle_out.length() - DEFAULT_HANDLE_LENGTH_MM).abs() < 1e-9);
+    }
+
+    /// Acceptance criterion 3: dragging one handle of an Asymmetric
+    /// anchor rotates the opposite handle to stay collinear, without
+    /// changing the opposite's own length.
+    #[test]
+    fn asymmetric_opposite_rotates_without_changing_its_own_length() {
+        assert_eq!(
+            asymmetric_opposite(Vec2::new(0.0, 3.0), Vec2::new(5.0, 0.0)),
+            Vec2::new(0.0, -5.0),
+            "rotated to the dragged handle's new angle, opposite's own length (5) kept"
+        );
+    }
+
+    /// Edge case: dragging to the zero vector leaves the opposite handle
+    /// unchanged — there is no direction to follow.
+    #[test]
+    fn asymmetric_opposite_of_a_zero_drag_leaves_the_opposite_handle_unchanged() {
+        let opposite = Vec2::new(3.0, 4.0);
+        assert_eq!(asymmetric_opposite(Vec2::ZERO, opposite), opposite);
+    }
+
+    /// Edge case: an opposite handle that was already zero stays zero
+    /// regardless of the dragged handle's new angle.
+    #[test]
+    fn asymmetric_opposite_of_a_zero_length_opposite_stays_zero() {
+        assert_eq!(
+            asymmetric_opposite(Vec2::new(1.0, 1.0), Vec2::ZERO),
+            Vec2::ZERO
+        );
+    }
+
+    #[test]
+    fn set_handle_on_an_asymmetric_anchor_rotates_but_does_not_rescale_the_opposite() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let id = document.create_path(
+            &[
+                NewAnchor {
+                    id: a,
+                    point: Point::new(0.0, 0.0),
+                    handle_in: Vec2::new(-2.0, 0.0),
+                    handle_out: Vec2::new(5.0, 0.0),
+                    kind: AnchorKind::Asymmetric,
+                },
+                anchor(2, 20.0, 0.0),
+            ],
+            false,
+        );
+        let _ = b;
+        document
+            .set_handle(id, a, HandleSlot::Out, Vec2::new(0.0, 7.0))
+            .expect("set handle");
+        let snapshot = document.path(id).expect("exists");
+        assert_eq!(snapshot.anchors[0].handle_out, Vec2::new(0.0, 7.0));
+        // Opposite rotated to stay collinear (opposite direction from the
+        // dragged handle), but kept its own length (2).
+        assert_eq!(snapshot.anchors[0].handle_in, Vec2::new(0.0, -2.0));
     }
 
     #[test]
@@ -921,7 +1347,7 @@ mod tests {
             .expect("delete");
         let unknown = other;
         assert_eq!(
-            document.move_anchors(unknown, &[]),
+            document.move_anchors(&[(unknown, AnchorId::new(1, 1), Point::new(0.0, 0.0))]),
             Err(PathEditError::NoSuchPath)
         );
     }

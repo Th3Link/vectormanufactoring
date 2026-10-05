@@ -6,7 +6,8 @@ every reader that must honour it are written out below. Everything else
 (scale, the stroke and corner-radius scaling, the oriented box, the handles)
 rewrites registers that already exist or is ephemeral UI state.
 **No new crate, no new external dependency, no new `vecmanf-geometry-core`
-function, no ADR amendment. `format_version` goes to 4.**
+function, no ADR amendment. `format_version` goes to 5** (was 4; see the
+2026-10-05 architect note below).
 
 One acceptance criterion conflicts with another (AC 18 against AC 20's last
 sentence), and three are underdetermined. They are under "Flagged to the
@@ -217,6 +218,19 @@ lead", each with the default this file builds against.
   finite value is accepted and normalized on read. **`stroke-and-fill-styling`
   therefore goes to 5** (dated note in its `adrs.md`), because this slice
   ships first.
+
+- **2026-10-05 (architect): `format_version` is 5, not 4.**
+  `path-merge-split-and-node-types` was built and merges before this
+  slice and takes 4 (`specs/0006-path-merge-split-and-node-types/adrs.md`,
+  architect resolution). Everything in the decision above holds with
+  "version 3" read as "version 4". `stroke-and-fill-styling` stays at 6.
+  This slice starts after that branch merges. Two additions to its plan:
+  `PathSnapshot` gains `rotation`, and `Document::split_at_anchor`'s new
+  object (open path) copies the original's rotation, with a test; Join
+  needs no change, because the surviving path keeps its own meta map and
+  the other path is deleted. A version number in an `adrs.md` is
+  provisional: the PR that merges takes `main`'s
+  `CURRENT_FORMAT_VERSION + 1`.
 
 - **2026-10-05: the crate boundary.**
   - `vecmanf-document-core`: the `rotation` field on primitive and path

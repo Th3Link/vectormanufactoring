@@ -376,6 +376,14 @@ work only on disjoint crates).
   with fresh `StopId`s, never the original's; Join keeps the surviving
   path's style and discards the other's. Each needs a test.
 
+- **2026-10-05 (architect): the two predecessors swapped order; this
+  slice stays at 6.** `path-merge-split-and-node-types` merges first with
+  version 4 and `object-transform` follows with 5
+  (`specs/0006-path-merge-split-and-node-types/adrs.md`, architect
+  resolution). Read "version 3" above as "version 5". A version number in
+  an `adrs.md` is provisional: the PR that merges takes `main`'s
+  `CURRENT_FORMAT_VERSION + 1`.
+
 ## Flagged to the lead
 
 1. **Resolved 2026-10-04 in `specification.md`.** AC 9 now stores dash
