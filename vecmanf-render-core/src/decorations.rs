@@ -277,17 +277,32 @@ mod tests {
         // The handle endpoint sits at document (5.0, 0.0) (anchor at
         // (0,0) + handle_out (5,0)); the glyph's own radius at identity
         // view scale is theme::HANDLE_DIAMETER_PX / 2 document mm.
+        //
+        // Filtered to the ring's own color (`theme::ACCENT_HOVER`) —
+        // architect review: the unfiltered whole-draw-list version of
+        // this test passed even with the ring branch disabled entirely,
+        // satisfied instead by unrelated geometry already farther than
+        // the glyph radius (node A's own selected glyph/handle line,
+        // and node B 15mm away) — nothing in that version actually
+        // exercised the ring. No other glyph `build` draws uses this
+        // color (every other handle/node glyph uses `theme::ACCENT`,
+        // `theme::NODE_STROKE`, or white), so a vertex of this color
+        // existing at all already proves the ring was drawn; requiring
+        // one farther than the glyph radius additionally proves it is
+        // not nested entirely inside (or behind) the glyph.
         let endpoint = Point::new(5.0, 0.0);
         let glyph_radius = theme::HANDLE_DIAMETER_PX / 2.0;
-        let max_vertex_distance = list
+        let max_ring_vertex_distance = list
             .triangles
             .iter()
+            .filter(|v| v.color == theme::ACCENT_HOVER)
             .map(|v| v.position.vector_to(endpoint).length())
             .fold(0.0_f64, f64::max);
         assert!(
-            max_vertex_distance > glyph_radius,
-            "no vertex drawn farther than the glyph's own radius ({glyph_radius}mm) from the \
-             handle endpoint (farthest found: {max_vertex_distance}mm) — the hover ring must \
+            max_ring_vertex_distance > glyph_radius,
+            "no ACCENT_HOVER-colored vertex drawn farther than the glyph's own radius \
+             ({glyph_radius}mm) from the handle endpoint (farthest ring vertex found: \
+             {max_ring_vertex_distance}mm, 0.0 if none at all) — the hover ring must exist and \
              extend past the glyph, not nest entirely inside (or behind) it"
         );
     }
