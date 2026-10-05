@@ -1,6 +1,6 @@
 # Canvas navigation and a general Select tool
 
-Status: Ready
+Status: Done
 Priority: Must
 Origin: Customer
 
@@ -402,4 +402,4 @@ same no-layout-shift rule already established 2026-10-05).
 
 ## Links
 Requirements: R-EDIT-010, R-EDIT-011 (`docs/requirements.md`)
-PR:
+PR: https://github.com/Th3Link/vectormanufactoring/pull/25
