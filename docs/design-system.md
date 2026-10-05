@@ -163,7 +163,7 @@ values, not an implementation site, for those four rows.
 | Left tool panel width | 48px | Floating vertical icon panel (2026-10-05: floats over the canvas, inset 12px from the left edge; no longer a docked rail claiming layout width) |
 | Left tool panel inset | 12px | Distance from the canvas's left and top edges to the floating panel |
 | Tool icon size | 24px | Icon glyph inside a 48×48 button |
-| Node glyph | 14×14px screen-space | Corner (square) and smooth (diamond) node markers (2026-10-05: doubled from 7px — customer feedback: "you can click on the nodes too — the node squares and diamonds need to be bigger too," the same complaint and fix already applied to the handle endpoint earlier the same round) |
+| Node glyph | 14×14px screen-space | Corner (square), Symmetric (diamond) and Asymmetric (triangle) node markers. Doubled from 7px (2026-10-05, customer feedback: "you can click on the nodes too — the node squares and diamonds need to be bigger too," the same complaint and fix already applied to the handle endpoint earlier the same round). `path-merge-split-and-node-types` separately renamed "smooth" to "Symmetric" and added the Asymmetric triangle — a genuinely different-sided polygon, not a further rotation of the square/diamond pair, so it stays distinct from both at a glance, sized against the doubled 14px box. |
 | Handle endpoint | 12px diameter screen-space | Circle (2026-10-05: doubled from 6px — customer feedback called the handles "hard to hit... and very delicate/thin"; node glyphs followed with the same doubling later the same round, see above) |
 | Handle line weight | 1px screen-space | Node-to-handle connector |
 | Node hover ring | 18px diameter screen-space | Faint outer ring on a hovered node, or the pen tool's own placed-node/close-target rings — all rings drawn around a *node* (2026-10-05: grew from 10px, now computed as the node glyph's own 14px plus a 4px margin — once the node glyph doubled it exceeded the old fixed 10px ring, which would have hidden the ring fully behind the glyph's own opaque fill, the same bug class the handle hover ring split off to fix earlier the same round) |
@@ -256,7 +256,11 @@ values, not an implementation site, for those four rows.
   its own `aria-label`. Reuse this instead of a `Select` dropdown whenever
   the choice set is small (≤4) and icons read faster than words — Join/Cap/
   Fill-mode all qualify, a longer list (e.g. the dash preset, 4 options but
-  pattern samples read better in a list) uses `Select` instead.
+  pattern samples read better in a list) uses `Select` instead. Also used
+  for the node-tool's kind control (`path-merge-split-and-node-types`):
+  Make corner / Make symmetric / Make asymmetric, icons being the node
+  glyphs themselves (square/diamond/triangle), replacing the two flat
+  "Make corner"/"Make smooth" buttons `path-node-editing` shipped.
 - **`ColorAlphaPicker`**: the one shared color-with-alpha control
   (swatch + popover: saturation/hue area, hex input, alpha or opacity
   slider), introduced in `stroke-and-fill-styling` for stroke color, solid
