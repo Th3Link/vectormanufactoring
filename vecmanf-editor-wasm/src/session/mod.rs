@@ -20,12 +20,13 @@
 //! methods join this type's `impl Session` the same way any other
 //! `impl` block in the same crate would.
 
+mod navigation;
 mod select;
 mod shapes;
 
 use vecmanf_document_core::{
     AnchorKind, Document, Length, NodeId, ObjectSnapshot, OpenError, Point, SaveError, Tolerance,
-    Vec2, ViewTransform,
+    Vec2,
 };
 use vecmanf_render_core::{
     DecorationInput, DrawList, Hovered as RenderHovered, build_draw_list, build_pen_preview,
@@ -66,24 +67,6 @@ const SEGMENT_TOLERANCE_PX: f64 = 4.0;
 /// itself a named design-system token; a small, deliberately generous
 /// value so an imprecise click is never misread as a drag.
 const PEN_DRAG_THRESHOLD_PX: f64 = 3.0;
-
-/// How many wheel-delta pixels correspond to one "doubling" of zoom
-/// (Ctrl+scroll, acceptance criterion 6) — not itself pinned by any
-/// acceptance criterion (only the resulting range and the cursor-fixed
-/// point are, criteria 6-8), chosen so an ordinary mouse-wheel notch
-/// (~100px after the host's `deltaMode` normalization) feels like a
-/// deliberate, moderate zoom step rather than a jump.
-const ZOOM_WHEEL_SENSITIVITY_PX: f64 = 400.0;
-
-/// Converts a wheel event's vertical delta (screen pixels, already
-/// normalized by the host from whichever `deltaMode` the browser used)
-/// into a multiplicative zoom factor for [`vecmanf_ui_core::Viewport::
-/// zoom_about`]: scrolling up (negative `delta_y`) zooms in (`factor >
-/// 1`), scrolling down zooms out (`factor < 1`), continuously rather than
-/// in fixed steps.
-fn zoom_factor_from_wheel_delta(delta_y: f64) -> f64 {
-    (-delta_y / ZOOM_WHEEL_SENSITIVITY_PX).exp2()
-}
 
 /// Which tool is active. Exactly one at a time — `specification.md`'s
 /// tool rail has six buttons (Select, Pen, Node, Rectangle, Ellipse,
@@ -235,93 +218,6 @@ impl Session {
         // commits it against whatever is selected *then* instead).
         self.commit_poly_star_ratio();
         self.tool = tool;
-    }
-
-    /// The current view transform, for the host's GPU layer to build
-    /// this frame's screen transform from.
-    #[must_use]
-    pub fn view(&self) -> ViewTransform {
-        self.viewport.view()
-    }
-
-    /// Converts canvas-relative CSS pixels to a document point via the
-    /// current viewport (`specs/0004-canvas-navigation-and-selection/
-    /// adrs.md`: "all screen↔document conversion happens in Rust") — the
-    /// wasm pointer methods call this before dispatching to this
-    /// module's own document-space entry points.
-    #[must_use]
-    pub fn screen_to_document(&self, screen_x: f64, screen_y: f64) -> Point {
-        self.viewport.screen_to_document(screen_x, screen_y)
-    }
-
-    /// The current zoom level's integer percentage read-out (acceptance
-    /// criterion 9).
-    #[must_use]
-    pub fn zoom_percent(&self) -> i64 {
-        self.viewport.zoom_percent()
-    }
-
-    /// A wheel event at canvas-relative CSS pixel `(screen_x, screen_y)`:
-    /// Ctrl (Cmd) held zooms about that point (acceptance criterion 6);
-    /// otherwise pans — Shift swaps a vertical-only wheel's `delta_y`
-    /// onto the horizontal axis (acceptance criterion 2), while any
-    /// native `delta_x` (a two-finger trackpad scroll) still applies on
-    /// top, so a diagonal trackpad scroll pans diagonally either way.
-    /// Never forwarded to the active tool (acceptance criteria 5, 24:
-    /// "navigation input is offered to the viewport before the active
-    /// tool").
-    pub fn wheel(
-        &mut self,
-        delta_x: f64,
-        delta_y: f64,
-        screen_x: f64,
-        screen_y: f64,
-        shift: bool,
-        ctrl: bool,
-    ) {
-        if ctrl {
-            let factor = zoom_factor_from_wheel_delta(delta_y);
-            self.viewport.zoom_about(screen_x, screen_y, factor);
-        } else if shift {
-            self.viewport.pan_by_screen_delta(delta_x + delta_y, 0.0);
-        } else {
-            self.viewport.pan_by_screen_delta(delta_x, delta_y);
-        }
-    }
-
-    /// Starts a drag-pan gesture (middle-mouse or Space+primary,
-    /// acceptance criteria 3, 4) at canvas-relative CSS pixel
-    /// `(screen_x, screen_y)`. Never forwarded to the active tool — the
-    /// host calls this instead of [`Session::pointer_down`] for exactly
-    /// these two gestures, so the active tool's own in-progress state is
-    /// untouched by construction (acceptance criterion 5).
-    pub fn begin_pan(&mut self, screen_x: f64, screen_y: f64) {
-        self.viewport.begin_drag_pan(screen_x, screen_y);
-    }
-
-    /// Continues the drag-pan gesture [`Session::begin_pan`] started,
-    /// keeping its anchor document point exactly under the live cursor.
-    pub fn pan_to(&mut self, screen_x: f64, screen_y: f64) {
-        self.viewport.continue_drag_pan(screen_x, screen_y);
-    }
-
-    /// Ends the drag-pan gesture, if one is in flight.
-    pub fn end_pan(&mut self) {
-        self.viewport.end_drag_pan();
-    }
-
-    /// Whether a drag-pan gesture is currently in flight — the host's
-    /// grab/grabbing cursor convention (`docs/design-system.md`'s "Pan
-    /// cursor").
-    #[must_use]
-    pub fn is_panning(&self) -> bool {
-        self.viewport.is_drag_panning()
-    }
-
-    /// Resizes the canvas, keeping the zoom and the document point at
-    /// the viewport's own center fixed (acceptance criterion 10).
-    pub fn resize_viewport(&mut self, width: f64, height: f64) {
-        self.viewport.resize(width, height);
     }
 
     fn point_tolerance(&self) -> Tolerance {
@@ -587,9 +483,11 @@ impl Session {
     /// Select or Node tool is active. A no-op for every other tool.
     pub fn delete_selected(&mut self) {
         match self.tool {
-            Tool::Select => self
-                .select
-                .delete_selected(&self.document, &mut self.selection),
+            Tool::Select => {
+                let objects = self.objects();
+                self.select
+                    .delete_selected(&self.document, &objects, &mut self.selection);
+            }
             Tool::Node => self.node.delete_selected(&self.document),
             Tool::Pen | Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {}
         }

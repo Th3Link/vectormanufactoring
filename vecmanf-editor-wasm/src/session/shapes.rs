@@ -292,15 +292,21 @@ impl Session {
     ///
     /// When exactly one primitive was selected, every one of its new
     /// anchors is selected in the node tool afterward, so it reads as
-    /// "immediately editable" (acceptance criterion 17). A multi-object
-    /// conversion (acceptance criterion 22) selects the first converted
-    /// path's anchors the same way — `vecmanf-ui-core`'s
-    /// [`vecmanf_ui_core::NodeSelection`] has no representation for
-    /// "these anchors across several different paths are selected
-    /// together", so a multi-object conversion's node-tool selection
-    /// after the fact is an approximation of AC22's "remain selected
-    /// together" wording, not a literal one — a known, narrowed scope
-    /// (see this crate's own report).
+    /// "immediately editable" (acceptance criterion 17). The converted
+    /// ids stay in `self.selection` — unlike the pre-`canvas-navigation-
+    /// and-selection` behaviour, which cleared them — because "object to
+    /// path" keeps the `NodeId` (`specs/0003-primitive-shapes/adrs.md`):
+    /// they are still the same objects, now sharing their id space with
+    /// the Select tool's own selection
+    /// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "a multi-
+    /// object conversion therefore stays selected together at object
+    /// level"). A multi-object conversion (acceptance criterion 22)
+    /// additionally selects the first converted path's anchors the same
+    /// way — `vecmanf-ui-core`'s [`vecmanf_ui_core::NodeSelection`] has no
+    /// representation for "these anchors across several different paths
+    /// are selected together", so that part remains an approximation of
+    /// AC22's "remain selected together" wording, not a literal one — a
+    /// known, narrowed scope (see this crate's own report).
     pub fn convert_selected_to_paths(&mut self) {
         let ids = self.selection.ids().to_vec();
         if ids.is_empty() {
@@ -312,7 +318,6 @@ impl Session {
         }
         let first_converted = conversions[0].0;
         if self.document.convert_to_paths(&conversions).is_ok() {
-            self.selection.remove_all(&ids);
             self.tool = Tool::Node;
             if let Some(path) = self.document.path(first_converted) {
                 self.node.select_all_anchors(&path);

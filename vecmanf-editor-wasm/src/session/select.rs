@@ -49,8 +49,9 @@ impl Session {
     /// Acceptance criterion 20: commits whatever move-drag
     /// [`Session::select_pointer_down`] began.
     pub(super) fn select_pointer_up(&mut self, point: Point) {
+        let objects = self.objects();
         self.select
-            .pointer_up(&self.document, &self.selection, point);
+            .pointer_up(&self.document, &objects, &mut self.selection, point);
     }
 
     /// Updates the Select tool's own hover state (UX notes: "Hover, tool
