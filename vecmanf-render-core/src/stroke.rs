@@ -191,7 +191,7 @@ mod tests {
                 point: Point::new(0.0, 0.0),
                 handle_in: Vec2::ZERO,
                 handle_out: Vec2::new(0.0, 5.0),
-                kind: AnchorKind::Smooth,
+                kind: AnchorKind::Symmetric,
             },
             corner(2, 10.0, 0.0),
         ];

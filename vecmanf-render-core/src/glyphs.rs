@@ -98,6 +98,30 @@ pub fn diamond(center: Point, size_mm: f64, color: RgbaColor) -> DrawList {
     list
 }
 
+/// An equilateral triangle, point-up, centered at `center`, with its
+/// three corners inscribed on a circle of radius `size_mm / 2` — the
+/// same circumradius `diamond`'s own four corners sit on, so the two
+/// glyphs read as comparably sized — an asymmetric node glyph
+/// (`docs/design-system.md`). Three corners vs. `square`/`diamond`'s
+/// four is a genuine silhouette difference, not a third rotation of the
+/// same polygon (`specs/0006-path-merge-split-and-node-types/
+/// specification.md`'s UX notes).
+#[must_use]
+pub fn triangle(center: Point, size_mm: f64, color: RgbaColor) -> DrawList {
+    let radius = size_mm / 2.0;
+    // The other two corners sit 120°/240° around from the top one;
+    // `cos(30°) = √3/2` is this triangle's own half-width at that radius.
+    let half_width = radius * 3.0_f64.sqrt() / 2.0;
+    let mut list = DrawList::default();
+    list.push_triangle(
+        center.translated(Vec2::new(0.0, -radius)),
+        center.translated(Vec2::new(half_width, radius * 0.5)),
+        center.translated(Vec2::new(-half_width, radius * 0.5)),
+        color,
+    );
+    list
+}
+
 /// A thin rectangle running from `a` to `b`, `width_mm` wide — a handle
 /// line. Empty when `a` and `b` coincide (nothing to draw, not a
 /// division by zero).
@@ -179,6 +203,24 @@ mod tests {
             assert!(vertex.position.x.abs() <= 1.0 + 1e-9);
             assert!(vertex.position.y.abs() <= 1.0 + 1e-9);
         }
+    }
+
+    #[test]
+    fn triangle_is_one_triangle_point_up_inscribed_in_the_box() {
+        let list = triangle(Point::new(0.0, 0.0), 14.0, RgbaColor::BLACK);
+        assert_eq!(list.triangle_count(), 1);
+        for vertex in &list.triangles {
+            assert!(vertex.position.x.abs() <= 7.0 + 1e-9);
+            assert!(vertex.position.y.abs() <= 7.0 + 1e-9);
+        }
+        // Exactly one vertex sits at the top point (0, -radius); the
+        // other two sit lower (point-up, not point-down or sideways).
+        let top_count = list
+            .triangles
+            .iter()
+            .filter(|v| v.position.y < -6.9)
+            .count();
+        assert_eq!(top_count, 1);
     }
 
     #[test]
