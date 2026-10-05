@@ -61,14 +61,14 @@ work only on disjoint crates).
 
 ## Deliberately not in scope for this slice
 
-- **SVG mapping** (slice 10). The schema is chosen so the mapping is direct:
+- **SVG mapping** (slice 11). The schema is chosen so the mapping is direct:
   keys mirror `stroke`, `stroke-opacity`, `stroke-width`, `stroke-linejoin`,
   `stroke-linecap`, `fill`, `fill-opacity`, and gradient geometry is in
   `objectBoundingBox` units. Two things the exporter must do: multiply the
   dash ratios by the width, and write `stroke`/`fill` explicitly on every
   element, because our absent defaults (stroke on, fill off) are not SVG's
   initial values.
-- **Manufacturing meaning of style** (slice 13). Nothing here is read by
+- **Manufacturing meaning of style** (slice 14). Nothing here is read by
   job generation. A dashed stroke stays a display effect. If a story ever
   needs dashed *cut* geometry (perforation), `geometry-core` gets its own
   dasher at manufacturing tolerance. ADR 0003 §7 says display and
@@ -365,6 +365,16 @@ work only on disjoint crates).
   (`specs/object-transform/adrs.md`). Everything in the decision above holds
   with "version 3" read as "version 4". If the two slices ship in the other
   order, swap the numbers back.
+
+- **2026-10-05: `format_version` is 6, not 5.** `path-merge-split-and-node-types`
+  is inserted before this slice and takes version 5 for its third anchor
+  kind (`specs/path-merge-split-and-node-types/adrs.md`). Everything above
+  holds with "version 3" read as "version 5". Two consequences for this
+  slice's plan: Split writes its new object from the original's
+  `PathSnapshot`, so once `PathSnapshot` carries `style: Style`, the new
+  piece must get the original's style, and `fill_stops` must be copied
+  with fresh `StopId`s, never the original's; Join keeps the surviving
+  path's style and discards the other's. Each needs a test.
 
 ## Flagged to the lead
 

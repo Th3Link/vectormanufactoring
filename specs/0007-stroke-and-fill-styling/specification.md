@@ -219,10 +219,10 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
 
 ## Out of scope
 
-- Undo/redo of any operation in this slice — `undo-redo` (slice 7). Every
+- Undo/redo of any operation in this slice — `undo-redo` (slice 8). Every
   edit here is still one well-formed commit per interaction (one style-field
   change, one stop add/remove/edit, one multi-object batch), the same
-  discipline every prior slice has kept, so slice 7 has a clean, single
+  discipline every prior slice has kept, so slice 8 has a clean, single
   commit per action to attach undo to — it just isn't reachable yet.
 - Boolean operations, grouping, layers — slices 8 and 9.
 - How stroke/fill maps to a laser job (which color means cut vs. engrave,
@@ -238,7 +238,7 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
 - Fill-rule toggle (nonzero vs. even-odd). Nonzero only (criterion 14) —
   even-odd mainly matters for self-intersecting or multi-subpath geometry,
   and this product has no multi-subpath paths until boolean operations
-  (slice 8) can produce them.
+  (slice 9) can produce them.
 - Pattern fill and swatch/texture fill (Inkscape's other two fill types
   beyond flat color and the two gradients). Not needed for a laser-cutting
   MVP; revisit if a maker workflow asks for it.
@@ -259,7 +259,7 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
 - Styling text. No text tool exists yet (same deferral `primitive-shapes`
   stated for "object to path").
 - Stroke/fill behavior under SVG export/import — `svg-import-export`
-  (slice 10) is where this slice's properties first need to round-trip
+  (slice 11) is where this slice's properties first need to round-trip
   through actual SVG markup; this slice's persistence criterion (25) is
   about the project's own `.vmf` file only.
 
