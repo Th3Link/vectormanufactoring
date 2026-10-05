@@ -19,5 +19,5 @@
 
 mod segment;
 
-pub use segment::{Subdivision, nearest_point_on_segment, subdivide_at_parameter};
+pub use segment::{Subdivision, nearest_point_on_segment, segment_bounds, subdivide_at_parameter};
 pub use vecmanf_document_core::Tolerance;

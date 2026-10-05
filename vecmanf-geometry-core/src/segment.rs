@@ -19,7 +19,7 @@
 //! [`vecmanf_document_core::AnchorSnapshot`] pair's fields straight
 //! through without converting anything itself.
 
-use kurbo::{CubicBez, ParamCurve, ParamCurveNearest, Point as KurboPoint};
+use kurbo::{CubicBez, ParamCurve, ParamCurveExtrema, ParamCurveNearest, Point as KurboPoint};
 use vecmanf_document_core::{Length, Point, Tolerance, Vec2};
 
 fn to_kurbo(point: Point) -> KurboPoint {
@@ -64,6 +64,25 @@ pub fn nearest_point_on_segment(
         Length::from_mm(nearest.distance_sq.sqrt()),
         point,
     )
+}
+
+/// The exact axis-aligned bounding box of one cubic Bézier segment — its
+/// curve extrema, not its (looser) control-point hull
+/// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "a path's box must
+/// be tight... and tight means curve extrema"). Returns `(min, max)`
+/// corners. `vecmanf-ui-core::object_bounds` unions this over every segment
+/// of a path to get the whole path's selection-box bounds (acceptance
+/// criterion 14).
+#[must_use]
+pub fn segment_bounds(
+    start: Point,
+    start_handle_out: Vec2,
+    end_handle_in: Vec2,
+    end: Point,
+) -> (Point, Point) {
+    let cubic = cubic_bez(start, start_handle_out, end_handle_in, end);
+    let bbox = cubic.bounding_box();
+    (Point::new(bbox.x0, bbox.y0), Point::new(bbox.x1, bbox.y1))
 }
 
 /// The caller-resolved geometry of splitting one segment at a parameter —
@@ -167,6 +186,36 @@ mod tests {
         assert!(t.abs() < 1e-6);
         assert!(distance.as_mm() < 1e-6);
         assert_eq!(point, Point::new(0.0, 0.0));
+    }
+
+    #[test]
+    fn segment_bounds_of_a_straight_horizontal_segment_is_its_own_extent() {
+        let (min, max) = segment_bounds(
+            Point::new(0.0, 0.0),
+            Vec2::ZERO,
+            Vec2::ZERO,
+            Point::new(10.0, 0.0),
+        );
+        assert_eq!(min, Point::new(0.0, 0.0));
+        assert_eq!(max, Point::new(10.0, 0.0));
+    }
+
+    /// The tight-bounds case the control-point hull would get wrong: a
+    /// curve whose handles bulge well outside the straight line between
+    /// its two endpoints must report the *curve's* own extent, not just
+    /// the two endpoints.
+    #[test]
+    fn segment_bounds_of_a_curved_segment_includes_its_bulge() {
+        let (min, max) = segment_bounds(
+            Point::new(0.0, 0.0),
+            Vec2::new(0.0, 20.0),
+            Vec2::new(0.0, 20.0),
+            Point::new(10.0, 0.0),
+        );
+        // Both endpoints sit at y=0, but the curve bulges downward
+        // (Y-down document space) well past y=0 toward the handles.
+        assert!(max.y > 5.0, "the curve's bulge must be included: {max:?}");
+        assert!(min.x <= 0.0 && max.x >= 10.0);
     }
 
     #[test]
