@@ -16,18 +16,7 @@
 use vecmanf_document_core::{NodeId, ObjectSnapshot, Point, Tolerance, Vec2, outline_of};
 use vecmanf_geometry_core::nearest_point_on_segment;
 
-/// Every adjacent pair of indices into a run of `len` anchors, in
-/// traversal order, including the wraparound closing pair when `closed`
-/// and there are more than two — the same shape
-/// [`crate::hit_test`]'s own private `segments` function computes for a
-/// [`vecmanf_document_core::PathSnapshot`], generalized to any anchor-like
-/// run (a path's own anchors, or a primitive's outline) by taking just the
-/// length and the closed flag.
-fn segment_pairs(len: usize, closed: bool) -> impl Iterator<Item = (usize, usize)> {
-    let adjacent = (0..len.saturating_sub(1)).map(|i| (i, i + 1));
-    let wraparound = (closed && len > 2).then_some((len - 1, 0));
-    adjacent.chain(wraparound)
-}
+use crate::hit_test::segment_pairs;
 
 /// The distance from `point` to the nearest point on any segment of an
 /// anchor run of `len` anchors (`closed` or not), within `tolerance` — the

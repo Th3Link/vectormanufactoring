@@ -12,14 +12,7 @@
 use vecmanf_document_core::{ObjectSnapshot, PathSnapshot, Point, shape_frame_bounds};
 use vecmanf_geometry_core::segment_bounds;
 
-/// Every adjacent anchor-index pair of a path, in traversal order,
-/// including the wraparound closing segment — the same shape
-/// `vecmanf-document-core`'s own hit-testing uses elsewhere in this crate.
-fn segment_pairs(len: usize, closed: bool) -> impl Iterator<Item = (usize, usize)> {
-    let adjacent = (0..len.saturating_sub(1)).map(|i| (i, i + 1));
-    let wraparound = (closed && len > 2).then_some((len - 1, 0));
-    adjacent.chain(wraparound)
-}
+use crate::hit_test::segment_pairs;
 
 fn path_bounds(path: &PathSnapshot) -> (Point, Point) {
     let mut min = Point::new(f64::INFINITY, f64::INFINITY);

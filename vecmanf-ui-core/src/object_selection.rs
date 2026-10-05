@@ -21,7 +21,7 @@
 //! (path or which primitive) comes from `Document::object(id)` at the
 //! point of use — no stored kind here.
 
-use vecmanf_document_core::NodeId;
+use vecmanf_document_core::{NodeId, ObjectSnapshot};
 
 /// The current set of selected objects, any kind (acceptance criteria 17,
 /// 22: two or more, possibly of different kinds, can be selected
@@ -78,12 +78,18 @@ impl ObjectSelection {
         self.ids.clear();
     }
 
-    /// Drops every id in `converted` — called once "object to path" has
-    /// replaced them, since a primitive selection has nothing left to
-    /// name once its object is a path (`specification.md`'s "handles
-    /// don't coexist").
-    pub fn remove_all(&mut self, converted: &[NodeId]) {
-        self.ids.retain(|id| !converted.contains(id));
+    /// Drops every id that no longer names a live object in `objects`
+    /// (ADR 0009 §2: a selection resolves lazily, dropping ids a
+    /// collaborator — or this same peer's own earlier action, e.g.
+    /// deleting a path's anchors down to nothing with the Node tool —
+    /// has since removed). `adrs.md`: "`ui-core` filters the selection
+    /// against the current snapshot first", so a single stale id can
+    /// never refuse an otherwise-valid `translate_objects`/
+    /// `delete_objects` batch for every *other* still-live id alongside
+    /// it.
+    pub fn retain_existing(&mut self, objects: &[ObjectSnapshot]) {
+        self.ids
+            .retain(|&id| objects.iter().any(|object| object.id() == id));
     }
 }
 
@@ -128,12 +134,35 @@ mod tests {
     }
 
     #[test]
-    fn remove_all_drops_only_the_named_ids() {
-        let (a, b) = two_ids();
+    fn retain_existing_drops_only_ids_no_longer_in_the_object_list() {
+        let document = Document::new(1);
+        let a = document.create_rect(vecmanf_document_core::RectBounds {
+            origin: vecmanf_document_core::Point::new(0.0, 0.0),
+            width: vecmanf_document_core::Length::from_mm(1.0),
+            height: vecmanf_document_core::Length::from_mm(1.0),
+        });
+        let b = document.create_rect(vecmanf_document_core::RectBounds {
+            origin: vecmanf_document_core::Point::new(5.0, 5.0),
+            width: vecmanf_document_core::Length::from_mm(1.0),
+            height: vecmanf_document_core::Length::from_mm(1.0),
+        });
         let mut selection = ObjectSelection::new();
         selection.toggle(a);
         selection.toggle(b);
-        selection.remove_all(&[a]);
-        assert_eq!(selection.ids(), &[b]);
+
+        // `a` deleted; only `b` remains in the current object list.
+        document.delete_objects(&[a]).expect("delete a");
+        let objects: Vec<ObjectSnapshot> = document
+            .object_ids()
+            .into_iter()
+            .filter_map(|id| document.object(id))
+            .collect();
+
+        selection.retain_existing(&objects);
+        assert_eq!(
+            selection.ids(),
+            &[b],
+            "the stale id must be dropped, the live one kept"
+        );
     }
 }

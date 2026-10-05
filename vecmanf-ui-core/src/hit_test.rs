@@ -156,14 +156,24 @@ fn hit_test_node(paths: &[PathSnapshot], point: Point, tolerance: Tolerance) -> 
     best
 }
 
+/// Every adjacent pair of indices into a run of `len` anchors, in
+/// traversal order, including the wraparound closing pair when `closed`
+/// and there are more than two — the one shared definition of this rule
+/// (architect review: it was implemented identically three times, here,
+/// in `hit_test_object.rs` and in `object_bounds.rs`). `len`/`closed`
+/// rather than a `&PathSnapshot` so it works equally for a path's own
+/// anchors or a primitive's outline.
+pub(crate) fn segment_pairs(len: usize, closed: bool) -> impl Iterator<Item = (usize, usize)> {
+    let adjacent = (0..len.saturating_sub(1)).map(|i| (i, i + 1));
+    let wraparound = (closed && len > 2).then_some((len - 1, 0));
+    adjacent.chain(wraparound)
+}
+
 /// Every path-adjacent pair of anchors in traversal order, including the
 /// wraparound closing segment when the path is closed and has more than
 /// two anchors.
-fn segments(snapshot: &PathSnapshot) -> impl Iterator<Item = (usize, usize)> + '_ {
-    let len = snapshot.anchors.len();
-    let adjacent = (0..len.saturating_sub(1)).map(|i| (i, i + 1));
-    let wraparound = (snapshot.closed && len > 2).then_some((len - 1, 0));
-    adjacent.chain(wraparound)
+fn segments(snapshot: &PathSnapshot) -> impl Iterator<Item = (usize, usize)> {
+    segment_pairs(snapshot.anchors.len(), snapshot.closed)
 }
 
 fn hit_test_segment(paths: &[PathSnapshot], point: Point, tolerance: Tolerance) -> Option<Hit> {

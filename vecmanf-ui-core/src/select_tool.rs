@@ -75,6 +75,11 @@ impl SelectTool {
         tolerance: Tolerance,
         shift: bool,
     ) -> SelectPointerDownOutcome {
+        // `adrs.md`: "ui-core filters the selection against the current
+        // snapshot first" — drops any id a prior action (this peer's own
+        // edit in a different tool, or a collaborator) has since removed,
+        // before this click can act on it.
+        selection.retain_existing(objects);
         let Some(hit) = hit_test_object(objects, point, tolerance) else {
             if !shift {
                 selection.clear();
@@ -122,19 +127,30 @@ impl SelectTool {
     /// Commits whatever move-drag is in flight as one
     /// [`vecmanf_document_core::Document::translate_objects`] call for the
     /// whole selection (acceptance criteria 18, 20) — a no-op (writes
-    /// nothing) if no drag was in flight, or it moved nowhere.
-    pub fn pointer_up(&mut self, document: &Document, selection: &ObjectSelection, point: Point) {
+    /// nothing) if no drag was in flight, or it moved nowhere. `objects`
+    /// is the current object list, used to drop any id `selection` still
+    /// names that no longer exists (`adrs.md`: "ui-core filters the
+    /// selection against the current snapshot first") *before* calling
+    /// `translate_objects`, so one stale id (e.g. a path a Node-tool
+    /// Delete removed down to nothing after this drag started) cannot
+    /// refuse the whole move for every other, still-live selected object.
+    pub fn pointer_up(
+        &mut self,
+        document: &Document,
+        objects: &[ObjectSnapshot],
+        selection: &mut ObjectSelection,
+        point: Point,
+    ) {
         let offset = self.live_offset(point);
         self.drag = SelectDrag::None;
-        if let Some(offset) = offset {
-            // A stale id in `selection` (deleted by this same drag's own
-            // Delete, or by a collaborator) is refused as a whole-batch
-            // error by `translate_objects`; ADR 0009 §2 treats that as
-            // "nothing to do" here rather than a surfaced error — the
-            // next lazy resolve already drops stale ids from the
-            // selection itself.
-            let _ = document.translate_objects(selection.ids(), offset);
+        let Some(offset) = offset else {
+            return;
+        };
+        selection.retain_existing(objects);
+        if selection.is_empty() {
+            return;
         }
+        let _ = document.translate_objects(selection.ids(), offset);
     }
 
     /// Cancels whichever move-drag is in flight, writing nothing.
@@ -144,9 +160,16 @@ impl SelectTool {
 
     /// Acceptance criteria 19, 21: deletes every selected object as one
     /// commit, then clears the selection (every id it named no longer
-    /// exists).
-    pub fn delete_selected(&mut self, document: &Document, selection: &mut ObjectSelection) {
+    /// exists). `objects` filters out any already-stale id first, the
+    /// same way [`SelectTool::pointer_up`] does.
+    pub fn delete_selected(
+        &mut self,
+        document: &Document,
+        objects: &[ObjectSnapshot],
+        selection: &mut ObjectSelection,
+    ) {
         self.drag = SelectDrag::None;
+        selection.retain_existing(objects);
         if selection.is_empty() {
             return;
         }
@@ -330,7 +353,7 @@ mod tests {
             "clicking a selected member keeps the group selected"
         );
 
-        tool.pointer_up(&document, &selection, Point::new(8.0, 3.0));
+        tool.pointer_up(&document, &objects, &mut selection, Point::new(8.0, 3.0));
 
         let shape_a = document.primitive(a).expect("exists").shape;
         let vecmanf_document_core::Shape::Rect { bounds, .. } = shape_a else {
@@ -354,12 +377,16 @@ mod tests {
         let document = Document::new(1);
         let a = rect(&document, 0.0);
         let b = path(&document, 50.0);
+        let objects = vec![
+            document.object(a).expect("exists"),
+            document.object(b).expect("exists"),
+        ];
         let mut selection = ObjectSelection::new();
         selection.toggle(a);
         selection.toggle(b);
 
         let mut tool = SelectTool::new();
-        tool.delete_selected(&document, &mut selection);
+        tool.delete_selected(&document, &objects, &mut selection);
 
         assert!(selection.is_empty());
         assert_eq!(document.object_ids(), Vec::new());
@@ -395,7 +422,7 @@ mod tests {
         };
         assert_eq!(bounds.origin, Point::new(0.0, 0.0));
 
-        tool.pointer_up(&document, &selection, Point::new(5.0, 9.0));
+        tool.pointer_up(&document, &objects, &mut selection, Point::new(5.0, 9.0));
         let vecmanf_document_core::Shape::Rect { bounds, .. } =
             document.primitive(id).expect("exists").shape
         else {
@@ -423,7 +450,7 @@ mod tests {
             &[id],
             "sanity check: the press did hit and select it"
         );
-        tool.pointer_up(&document, &selection, Point::new(0.0, 5.0));
+        tool.pointer_up(&document, &objects, &mut selection, Point::new(0.0, 5.0));
         let vecmanf_document_core::Shape::Rect { bounds, .. } =
             document.primitive(id).expect("exists").shape
         else {
@@ -433,6 +460,105 @@ mod tests {
             bounds.origin,
             Point::new(0.0, 0.0),
             "no movement must write nothing"
+        );
+    }
+
+    /// Architect review: a stale id (e.g. a path the Node tool deleted
+    /// down to nothing, or any other action that removed an object the
+    /// Select tool once selected) must not block committing the move of
+    /// every other, still-live selected object. The stale id enters the
+    /// selection *after* the drag's own `pointer_down` already ran (the
+    /// same shape as the real repro: select A with Select, switch tools,
+    /// delete A, switch back to Select, shift-click B, then drag B —
+    /// `pointer_down` for the drag only ever sees the object it hit, not
+    /// the already-stale A still sitting in `selection`), so this test
+    /// exercises `pointer_up`'s own independent `retain_existing` call,
+    /// not `pointer_down`'s.
+    #[test]
+    fn pointer_up_drops_a_stale_id_so_it_cannot_block_moving_the_rest() {
+        let document = Document::new(1);
+        let live = rect(&document, 0.0);
+        let doomed = rect(&document, 50.0);
+        let objects_at_press = vec![
+            document.object(live).expect("exists"),
+            document.object(doomed).expect("exists"),
+        ];
+
+        let mut selection = ObjectSelection::new();
+        let mut tool = SelectTool::new();
+        tool.pointer_down(
+            &objects_at_press,
+            &mut selection,
+            Point::new(0.0, 5.0),
+            TOLERANCE,
+            false,
+        );
+        assert_eq!(selection.ids(), &[live]);
+
+        // `doomed` joins the selection, then is removed from the
+        // document entirely — both after `pointer_down` already ran, so
+        // nothing has pruned it from `selection` yet.
+        selection.toggle(doomed);
+        document.delete_objects(&[doomed]).expect("delete doomed");
+        let objects_at_release: Vec<ObjectSnapshot> = document
+            .object_ids()
+            .into_iter()
+            .filter_map(|id| document.object(id))
+            .collect();
+
+        tool.pointer_up(
+            &document,
+            &objects_at_release,
+            &mut selection,
+            Point::new(5.0, 9.0),
+        );
+
+        assert_eq!(
+            selection.ids(),
+            &[live],
+            "the stale id must be dropped by pointer_up itself"
+        );
+        let vecmanf_document_core::Shape::Rect { bounds, .. } =
+            document.primitive(live).expect("exists").shape
+        else {
+            panic!("expected rect");
+        };
+        assert_eq!(
+            bounds.origin,
+            Point::new(5.0, 4.0),
+            "the live object must still move even though a stale id shared its batch"
+        );
+    }
+
+    /// Same defense, for `delete_selected` (architect review): a stale id
+    /// sitting alongside a live one must not stop the live object from
+    /// being deleted.
+    #[test]
+    fn delete_selected_drops_a_stale_id_so_it_cannot_block_deleting_the_rest() {
+        let document = Document::new(1);
+        let live = rect(&document, 0.0);
+        let doomed = rect(&document, 50.0);
+        let mut selection = ObjectSelection::new();
+        selection.toggle(live);
+        selection.toggle(doomed);
+
+        document
+            .delete_objects(&[doomed])
+            .expect("delete doomed early");
+        let objects: Vec<ObjectSnapshot> = document
+            .object_ids()
+            .into_iter()
+            .filter_map(|id| document.object(id))
+            .collect();
+
+        let mut tool = SelectTool::new();
+        tool.delete_selected(&document, &objects, &mut selection);
+
+        assert!(selection.is_empty());
+        assert_eq!(
+            document.object_ids(),
+            Vec::new(),
+            "the live object must still be deleted despite the stale id"
         );
     }
 
