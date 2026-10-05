@@ -33,8 +33,8 @@ pub use ellipse_tool::{EllipsePointerDownOutcome, EllipsePointerUpOutcome, Ellip
 pub use handle_layout::{HandleKind, ResizeDirection, ShapeHandle, handles_for};
 pub use hit_test::{Hit, hit_test};
 pub use node_tool::{
-    HitTolerances, NodeTool, NodeToolbarState, PointerDownOutcome as NodePointerDownOutcome,
-    PointerUpOutcome as NodePointerUpOutcome,
+    HitTolerances, LiveNodeDrag, NodeTool, NodeToolbarState,
+    PointerDownOutcome as NodePointerDownOutcome, PointerUpOutcome as NodePointerUpOutcome,
 };
 pub use pen_tool::{PenTool, PointerUpOutcome as PenPointerUpOutcome};
 pub use poly_star_tool::{

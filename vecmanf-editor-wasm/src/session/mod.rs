@@ -39,8 +39,13 @@ use vecmanf_ui_core::{
 #[cfg(target_arch = "wasm32")]
 pub use shapes::LiveReadout;
 
-/// 8px node/handle hit-test radius (`docs/design-system.md`).
+/// 8px node hit-test radius (`docs/design-system.md`).
 const POINT_TOLERANCE_PX: f64 = 8.0;
+/// 16px handle hit-test radius (`docs/design-system.md`; 2026-10-05:
+/// doubled from the node's own 8px alongside the handle glyph's doubled
+/// visual size, `vecmanf-render-core::theme::HANDLE_DIAMETER_PX`'s own
+/// doc comment).
+const HANDLE_TOLERANCE_PX: f64 = 16.0;
 /// 4px segment hit-test tolerance (`docs/design-system.md`).
 const SEGMENT_TOLERANCE_PX: f64 = 4.0;
 /// How far (screen pixels) a pen-tool press must move before it counts
@@ -198,6 +203,10 @@ impl Session {
         Tolerance::from_mm(POINT_TOLERANCE_PX / self.view.scale())
     }
 
+    fn handle_tolerance(&self) -> Tolerance {
+        Tolerance::from_mm(HANDLE_TOLERANCE_PX / self.view.scale())
+    }
+
     fn segment_tolerance(&self) -> Tolerance {
         Tolerance::from_mm(SEGMENT_TOLERANCE_PX / self.view.scale())
     }
@@ -205,6 +214,7 @@ impl Session {
     fn hit_tolerances(&self) -> HitTolerances {
         HitTolerances {
             point: self.point_tolerance(),
+            handle: self.handle_tolerance(),
             segment: self.segment_tolerance(),
         }
     }
@@ -215,6 +225,63 @@ impl Session {
             .into_iter()
             .filter_map(|id| self.document.path(id))
             .collect()
+    }
+
+    /// [`Session::paths`], with the node tool's in-flight drag (if any)
+    /// substituted into the relevant anchor's live, not-yet-committed
+    /// position/handle values — resolved by [`NodeTool::live_drag`]
+    /// itself (the same helpers [`NodeTool::pointer_up`] uses to commit),
+    /// so this is a pure "apply already-resolved data" step with no
+    /// geometry of its own. Falls back to the committed snapshot
+    /// unmodified outside the node tool, with no drag in flight, or with
+    /// the pointer off the canvas (`self.pointer_position` is `None`).
+    fn live_node_drag_paths(&self) -> Vec<vecmanf_document_core::PathSnapshot> {
+        let mut paths = self.paths();
+        if self.tool != Tool::Node {
+            return paths;
+        }
+        let Some(cursor) = self.pointer_position else {
+            return paths;
+        };
+        let Some(live) = self.node.live_drag(cursor) else {
+            return paths;
+        };
+        match live {
+            vecmanf_ui_core::LiveNodeDrag::Nodes { path, positions } => {
+                if let Some(snapshot) = paths.iter_mut().find(|p| p.id == path) {
+                    for (id, point) in positions {
+                        if let Some(anchor) = snapshot.anchors.iter_mut().find(|a| a.id == id) {
+                            anchor.point = point;
+                        }
+                    }
+                }
+            }
+            vecmanf_ui_core::LiveNodeDrag::Handle {
+                path,
+                anchor,
+                slot,
+                value,
+                mirror,
+            } => {
+                if let Some(snapshot) = paths.iter_mut().find(|p| p.id == path)
+                    && let Some(anchor) = snapshot.anchors.iter_mut().find(|a| a.id == anchor)
+                {
+                    let (own, other) = match slot {
+                        vecmanf_document_core::HandleSlot::In => {
+                            (&mut anchor.handle_in, &mut anchor.handle_out)
+                        }
+                        vecmanf_document_core::HandleSlot::Out => {
+                            (&mut anchor.handle_out, &mut anchor.handle_in)
+                        }
+                    };
+                    *own = value;
+                    if let Some(mirror) = mirror {
+                        *other = mirror;
+                    }
+                }
+            }
+        }
+        paths
     }
 
     /// The pointer went down at `point` (document space).
@@ -269,6 +336,7 @@ impl Session {
                     self.node.selection(),
                     point,
                     self.point_tolerance(),
+                    self.handle_tolerance(),
                     self.segment_tolerance(),
                 );
             }
@@ -464,9 +532,20 @@ impl Session {
     /// shape-tool drag is in flight) its own live preview outline
     /// (`specs/0003-primitive-shapes/specification.md`, "Live creation
     /// feedback").
+    ///
+    /// When the node tool has a node/handle drag in flight
+    /// (acceptance criteria 8, 9, 10's "update live during the drag"),
+    /// `live_node_drag_paths` (private: this module's own internal step,
+    /// not part of its public surface) substitutes that drag's live,
+    /// not-yet-committed position/handle values into the snapshot before
+    /// anything downstream ever sees it — `vecmanf-render-core` needs no
+    /// drag-specific code of its own for this: it already draws whatever
+    /// `PathSnapshot` it is handed, so a locally live-overridden one
+    /// reshapes the stroke and every decoration exactly as if it had
+    /// already committed.
     #[must_use]
     pub fn draw_list(&self) -> DrawList {
-        let paths = self.paths();
+        let paths = self.live_node_drag_paths();
         let mut list = build_draw_list(&paths, self.view, &self.decoration_input());
         let primitives = self.primitives_for_render();
         list.extend(vecmanf_render_core::build_shape_draw_list(
@@ -564,7 +643,7 @@ mod map_open_error_tests {
 
 #[cfg(test)]
 mod tests {
-    use vecmanf_document_core::AnchorKind;
+    use vecmanf_document_core::{AnchorKind, Vec2};
 
     use super::*;
 
@@ -702,6 +781,80 @@ mod tests {
             mid_drag > press_with_no_movement_yet,
             "the live curve segment and C's growing handle lines/endpoints must add geometry \
              as the drag moves, not just a static rubber-band line"
+        );
+    }
+
+    /// The bug this run fixes: acceptance criteria 8/10's "the two
+    /// adjoining segments update live during the drag" — dragging a
+    /// selected node with the node tool (mouse held down, not yet
+    /// released) must already draw the node at its live position,
+    /// through the actual `Session::draw_list` path, not only after
+    /// `pointer_up` commits it.
+    #[test]
+    fn draw_list_shows_the_live_node_position_during_a_node_drag() {
+        let mut session = Session::new(1);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_down(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.finish_pen();
+
+        session.set_tool(Tool::Node);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_hover(Point::new(0.0, 0.0), false);
+        let press_with_no_movement_yet = session.draw_list();
+
+        session.pointer_hover(Point::new(40.0, 40.0), false);
+        let mid_drag = session.draw_list();
+
+        // The committed document must not have moved yet — this is a
+        // rendering-only preview (ADR 0009 §2: ephemeral, not written).
+        assert_eq!(session.paths()[0].anchors[0].point, Point::new(0.0, 0.0));
+        assert_ne!(
+            mid_drag, press_with_no_movement_yet,
+            "the dragged node (and the segment reshaping with it) must draw at its live \
+             position mid-drag, not the stale committed one"
+        );
+
+        // On release, the commit matches what was just being previewed.
+        session.pointer_up(Point::new(40.0, 40.0), false);
+        assert_eq!(session.paths()[0].anchors[0].point, Point::new(40.0, 40.0));
+    }
+
+    /// Same bug, the handle-drag half (acceptance criterion 9): dragging
+    /// a selected node's handle must show it (and, for a smooth node, its
+    /// mirrored opposite) at the live value mid-drag.
+    #[test]
+    fn draw_list_shows_the_live_handle_value_during_a_handle_drag() {
+        let mut session = Session::new(1);
+        // AC2: a click-drag places a smooth node with symmetric handles.
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_down(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(13.0, 4.0), false);
+        session.finish_pen();
+
+        session.set_tool(Tool::Node);
+        // Select the node first — handles are only hittable once selected.
+        session.pointer_down(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false);
+        let selected_not_dragging = session.draw_list();
+
+        // Press on the handle endpoint (anchor + handle_out, (13, 4)) and
+        // drag it without releasing.
+        session.pointer_down(Point::new(13.0, 4.0), false);
+        session.pointer_hover(Point::new(20.0, 8.0), false);
+        let mid_drag = session.draw_list();
+
+        assert_eq!(
+            session.paths()[0].anchors[1].handle_out,
+            Vec2::new(3.0, 4.0),
+            "not committed yet"
+        );
+        assert_ne!(
+            mid_drag, selected_not_dragging,
+            "the dragged handle (and its mirrored opposite) must draw at its live value \
+             mid-drag"
         );
     }
 

@@ -29,8 +29,15 @@ pub const NODE_SIZE_PX: f64 = 7.0;
 /// 1px is this crate's own reasonable minimum for a visible outline.
 pub const NODE_OUTLINE_PX: f64 = 1.0;
 
-/// Handle endpoint circle diameter, screen-space pixels.
-pub const HANDLE_DIAMETER_PX: f64 = 6.0;
+/// Handle endpoint circle diameter, screen-space pixels (`docs/design-
+/// system.md`; 2026-10-05: doubled from 6px — customer feedback called
+/// the handles "hard to hit... and very delicate/thin". Node glyphs
+/// ([`NODE_SIZE_PX`]) are deliberately untouched — the customer called
+/// out handles specifically, not nodes. The hit-test radius around a
+/// handle doubles alongside this in `vecmanf-ui-core::hit_test` — a
+/// visual-only change here would look right but still feel exactly as
+/// hard to hit.
+pub const HANDLE_DIAMETER_PX: f64 = 12.0;
 
 /// Handle line weight, screen-space pixels.
 pub const HANDLE_LINE_WIDTH_PX: f64 = 1.0;

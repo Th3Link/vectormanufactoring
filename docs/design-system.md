@@ -164,12 +164,13 @@ values, not an implementation site, for those four rows.
 | Left tool panel inset | 12px | Distance from the canvas's left and top edges to the floating panel |
 | Tool icon size | 24px | Icon glyph inside a 48×48 button |
 | Node glyph | 7×7px screen-space | Corner (square) and smooth (diamond) node markers |
-| Handle endpoint | 6px diameter screen-space | Circle |
+| Handle endpoint | 12px diameter screen-space | Circle (2026-10-05: doubled from 6px — customer feedback called the handles "hard to hit... and very delicate/thin"; node glyphs are unchanged, this is handles only) |
 | Handle line weight | 1px screen-space | Node-to-handle connector |
 | Segment selection overlay | +2px screen-space over the geometry's own stroke | Drawn on top, doesn't replace the real stroke |
-| Point hit-test radius | 8px screen-space | Minimum clickable radius around any node/handle, even though the visual glyph is smaller (Fitts's-law margin for mouse precision) |
+| Node hit-test radius | 8px screen-space | Minimum clickable radius around a node, even though the visual glyph is smaller (Fitts's-law margin for mouse precision) |
+| Handle hit-test radius | 16px screen-space | Same margin rule as the node radius, doubled alongside the handle's own doubled visual size (2026-10-05) — a visual-only size change would look right but still feel exactly as hard to hit, which is the opposite of the request |
 | Segment hit-test tolerance | 4px screen-space perpendicular distance | Clicking "on" a curve/line segment |
-| Shape handle | 8×8px screen-space | Hollow square, `primitive-shapes`: bounding-box resize, rectangle corner-radius, polygon/star inner-radius — deliberately square and larger than the 7px/6px node-tool glyphs so the two vocabularies never read as the same control |
+| Shape handle | 8×8px screen-space | Hollow square, `primitive-shapes`: bounding-box resize, rectangle corner-radius, polygon/star inner-radius — deliberately square (never circular or diamond) so the two vocabularies never read as the same control, regardless of either one's size; it is no longer the larger of the two since the handle endpoint's own 2026-10-05 doubling (12px), which this token's own size was not revisited for |
 | Shape handle hit-test radius | 8px screen-space | Same margin rule as node/handle hit-testing, reused rather than invented fresh |
 | Bounding-box selection outline | 1px screen-space `--accent` (selected) / `--accent-hover` (hover) | Drawn around a selected/hovered primitive when its own matching tool is active (`primitive-shapes`) — **and, as of `canvas-navigation-and-selection`, around any selected/hovered object of any type (path or primitive) when the Select tool is active, with no shape handles or path nodes added on top.** Same token, two contexts: Select-tool selection is deliberately plain; the type-specific handles/nodes layer in only after double-click handoff into the object's own tool. |
 | `PropertiesPanel` width | 280px, fixed | Right-docked panel (`stroke-and-fill-styling`'s `StylePanel` is its first section); canvas fills the remaining width |

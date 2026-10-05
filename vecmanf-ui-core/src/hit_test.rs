@@ -50,20 +50,25 @@ fn distance(a: Point, b: Point) -> f64 {
 
 /// Hit-tests `point` against every path in `paths`.
 ///
-/// `point_tolerance` bounds both node and handle hits; `segment_tolerance`
-/// bounds segment hits — kept as two parameters rather than one, per
-/// `docs/design-system.md`'s own distinct 8px/4px values, converted to
-/// document millimetres by the caller before this is called.
+/// `node_tolerance` bounds node hits; `handle_tolerance` bounds handle
+/// hits (wider than `node_tolerance` since 2026-10-05: the handle
+/// endpoint's own doubled visual size needs a doubled clickable radius
+/// to match, or it would look bigger without actually being easier to
+/// hit); `segment_tolerance` bounds segment hits — kept as separate
+/// parameters per `docs/design-system.md`'s own distinct values,
+/// converted to document millimetres by the caller before this is
+/// called.
 #[must_use]
 pub fn hit_test(
     paths: &[PathSnapshot],
     selection: &NodeSelection,
     point: Point,
-    point_tolerance: Tolerance,
+    node_tolerance: Tolerance,
+    handle_tolerance: Tolerance,
     segment_tolerance: Tolerance,
 ) -> Option<Hit> {
-    hit_test_handle(paths, selection, point, point_tolerance)
-        .or_else(|| hit_test_node(paths, point, point_tolerance))
+    hit_test_handle(paths, selection, point, handle_tolerance)
+        .or_else(|| hit_test_node(paths, point, node_tolerance))
         .or_else(|| hit_test_segment(paths, point, segment_tolerance))
 }
 
@@ -169,6 +174,7 @@ mod tests {
     use super::*;
 
     const POINT_TOLERANCE: Tolerance = Tolerance::from_mm(2.0);
+    const HANDLE_TOLERANCE: Tolerance = Tolerance::from_mm(4.0);
     const SEGMENT_TOLERANCE: Tolerance = Tolerance::from_mm(1.0);
 
     /// A closed triangle, returned together with the `Document` that owns
@@ -217,6 +223,7 @@ mod tests {
             &selection,
             Point::new(0.5, 0.2),
             POINT_TOLERANCE,
+            HANDLE_TOLERANCE,
             SEGMENT_TOLERANCE,
         );
         assert_eq!(
@@ -238,6 +245,7 @@ mod tests {
             &selection,
             Point::new(1000.0, 1000.0),
             POINT_TOLERANCE,
+            HANDLE_TOLERANCE,
             SEGMENT_TOLERANCE,
         );
         assert_eq!(hit, None);
@@ -255,6 +263,7 @@ mod tests {
             &selection,
             Point::new(10.0, 0.3),
             POINT_TOLERANCE,
+            HANDLE_TOLERANCE,
             SEGMENT_TOLERANCE,
         );
         assert_eq!(
@@ -295,6 +304,7 @@ mod tests {
                 &unselected,
                 handle_point,
                 POINT_TOLERANCE,
+                HANDLE_TOLERANCE,
                 SEGMENT_TOLERANCE
             ),
             None,
@@ -309,6 +319,7 @@ mod tests {
                 &selected,
                 handle_point,
                 POINT_TOLERANCE,
+                HANDLE_TOLERANCE,
                 SEGMENT_TOLERANCE
             ),
             Some(Hit::Handle {
@@ -316,6 +327,68 @@ mod tests {
                 anchor: a,
                 slot: HandleSlot::Out
             })
+        );
+    }
+
+    /// The bug this run fixes: the handle's own hit-test radius must be
+    /// independently wider than the node radius (2026-10-05, matching
+    /// the handle glyph's own doubled visual size) — a click that lands
+    /// outside `POINT_TOLERANCE` but within `HANDLE_TOLERANCE` of a
+    /// selected node's handle must still hit it. `HANDLE_TOLERANCE` is
+    /// double `POINT_TOLERANCE` in this test module, same ratio as
+    /// `docs/design-system.md`'s real 8px/16px tokens.
+    #[test]
+    fn handle_tolerance_is_wider_than_point_tolerance() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path = document.create_path(
+            &[
+                NewAnchor {
+                    id: a,
+                    point: Point::new(0.0, 0.0),
+                    handle_in: Vec2::ZERO,
+                    handle_out: Vec2::new(5.0, 0.0),
+                    kind: AnchorKind::Smooth,
+                },
+                NewAnchor::corner(b, Point::new(20.0, 0.0)),
+            ],
+            false,
+        );
+        let paths = vec![document.path(path).expect("exists")];
+        let mut selected = NodeSelection::new();
+        selected.select_single_node(path, a);
+
+        // 3mm off the handle endpoint (5.0, 0.0): outside POINT_TOLERANCE
+        // (2mm) but within HANDLE_TOLERANCE (4mm).
+        let just_past_point_tolerance = Point::new(8.0, 0.0);
+        assert_eq!(
+            hit_test(
+                &paths,
+                &selected,
+                just_past_point_tolerance,
+                POINT_TOLERANCE,
+                POINT_TOLERANCE,
+                SEGMENT_TOLERANCE
+            ),
+            None,
+            "sanity check: using the node radius for handles too would miss this click"
+        );
+        assert_eq!(
+            hit_test(
+                &paths,
+                &selected,
+                just_past_point_tolerance,
+                POINT_TOLERANCE,
+                HANDLE_TOLERANCE,
+                SEGMENT_TOLERANCE
+            ),
+            Some(Hit::Handle {
+                path,
+                anchor: a,
+                slot: HandleSlot::Out
+            }),
+            "the real, wider handle tolerance must hit"
         );
     }
 
@@ -334,6 +407,7 @@ mod tests {
             &selection,
             Point::new(0.0, 0.0),
             POINT_TOLERANCE,
+            HANDLE_TOLERANCE,
             SEGMENT_TOLERANCE,
         );
         assert_eq!(hit, Some(Hit::Node { path, anchor: a }));
@@ -350,6 +424,7 @@ mod tests {
             &selection,
             midpoint,
             POINT_TOLERANCE,
+            HANDLE_TOLERANCE,
             SEGMENT_TOLERANCE,
         );
         assert_eq!(

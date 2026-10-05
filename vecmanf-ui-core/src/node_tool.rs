@@ -13,15 +13,22 @@ use vecmanf_geometry_core::{nearest_point_on_segment, subdivide_at_parameter};
 use crate::hit_test::{Hit, hit_test};
 use crate::{AnchorIdMinter, NodeSelection};
 
-/// The two hit-test tolerances the node tool needs — 8px node/handle,
-/// 4px segment per `docs/design-system.md`, converted to document
-/// millimetres by the caller before any of these methods are called
-/// (ADR 0002 §3: every geometric comparison takes an explicit
-/// `Tolerance`; this crate never reads a screen pixel itself).
+/// The three hit-test tolerances the node tool needs — 8px node, 16px
+/// handle, 4px segment per `docs/design-system.md` (the handle radius
+/// doubled from the node's own 2026-10-05, alongside the handle glyph's
+/// doubled visual size — matching the customer's "hard to hit" report:
+/// a visual-only size change would look right but still feel exactly as
+/// hard to hit), converted to document millimetres by the caller before
+/// any of these methods are called (ADR 0002 §3: every geometric
+/// comparison takes an explicit `Tolerance`; this crate never reads a
+/// screen pixel itself).
 #[derive(Debug, Clone, Copy)]
 pub struct HitTolerances {
-    /// Bounds node and handle hits.
+    /// Bounds node hits.
     pub point: Tolerance,
+    /// Bounds handle hits — wider than `point`, see this type's own doc
+    /// comment.
+    pub handle: Tolerance,
     /// Bounds segment hits.
     pub segment: Tolerance,
 }
@@ -85,13 +92,61 @@ enum Drag {
     /// never the absolute pointer position (architect review: a press
     /// within hit tolerance but off the handle's exact tip would
     /// otherwise relocate it to wherever the click landed, even with no
-    /// drag at all).
+    /// drag at all). `kind` is the anchor's kind at press time (an anchor
+    /// cannot change kind while one continuous drag gesture holds it, so
+    /// caching it here is exact, not stale) — needed only by
+    /// [`NodeTool::live_drag`]'s mirror preview, since
+    /// [`vecmanf_document_core::Document::set_handle`] re-reads it itself
+    /// on commit.
     Handle {
         path: NodeId,
         anchor: vecmanf_document_core::AnchorId,
         slot: HandleSlot,
         down_at: Point,
         start_value: Vec2,
+        kind: AnchorKind,
+    },
+}
+
+/// What [`NodeTool::live_drag`] resolves a drag in flight to — mirrors
+/// the two shapes [`NodeTool::pointer_up`] can commit (acceptance
+/// criteria 8, 9, 10), built by the exact same resolution helpers
+/// (`NodeTool::resolve_node_positions`/`resolve_handle_value`) so a live
+/// preview and the eventual commit can never disagree — the same
+/// discipline `vecmanf_ui_core::PenTool::pending_anchor` uses for the pen
+/// tool's own live preview.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LiveNodeDrag {
+    /// One or more selected nodes, each at its live (not yet committed)
+    /// position — acceptance criteria 8, 10. Handles are not listed:
+    /// they are stored relative to their own anchor
+    /// (`specs/0002-path-node-editing/adrs.md` decision 2), so moving the
+    /// anchor's `point` alone already keeps them correct, with no
+    /// separate value to resolve.
+    Nodes {
+        /// The dragged nodes' own path.
+        path: NodeId,
+        /// Each selected node's id and live position.
+        positions: Vec<(vecmanf_document_core::AnchorId, Point)>,
+    },
+    /// One handle, at its live (not yet committed) value — acceptance
+    /// criterion 9.
+    Handle {
+        /// The handle's path.
+        path: NodeId,
+        /// The handle's own anchor.
+        anchor: vecmanf_document_core::AnchorId,
+        /// Which of the anchor's two handles is being dragged.
+        slot: HandleSlot,
+        /// The dragged handle's own live value.
+        value: Vec2,
+        /// The *opposite* handle's live value, when the anchor is
+        /// [`AnchorKind::Smooth`] — mirroring `Document::set_handle`'s
+        /// own "the opposite handle moves to stay collinear" rule
+        /// (acceptance criterion 9) for the preview. `None` for a
+        /// [`AnchorKind::Corner`] anchor: the other handle is untouched,
+        /// exactly as it already renders.
+        mirror: Option<Vec2>,
     },
 }
 
@@ -180,6 +235,7 @@ impl NodeTool {
             &self.selection,
             point,
             tolerances.point,
+            tolerances.handle,
             tolerances.segment,
         ) {
             Some(Hit::Handle { path, anchor, slot }) => {
@@ -233,13 +289,15 @@ impl NodeTool {
         };
     }
 
-    /// Records the handle's current value at press time, so the commit
-    /// on release can move it *relative to that starting value* rather
-    /// than writing wherever the pointer happens to end up (see
+    /// Records the handle's current value (and its anchor's kind, for
+    /// [`NodeTool::live_drag`]'s mirror preview) at press time, so the
+    /// commit on release can move it *relative to that starting value*
+    /// rather than writing wherever the pointer happens to end up (see
     /// [`Drag::Handle`]'s own doc comment for why that distinction
-    /// matters). Falls back to [`Vec2::ZERO`] if `path`/`anchor` cannot
-    /// be resolved in `paths` — the subsequent `set_handle` call on
-    /// release will refuse against the live document anyway.
+    /// matters). Falls back to [`Vec2::ZERO`]/[`AnchorKind::Corner`] if
+    /// `path`/`anchor` cannot be resolved in `paths` — the subsequent
+    /// `set_handle` call on release will refuse against the live document
+    /// anyway.
     fn begin_handle_drag(
         &mut self,
         paths: &[PathSnapshot],
@@ -248,21 +306,95 @@ impl NodeTool {
         slot: HandleSlot,
         down_at: Point,
     ) {
-        let start_value = paths
+        let found = paths
             .iter()
             .find(|p| p.id == path)
-            .and_then(|snapshot| snapshot.anchors.iter().find(|a| a.id == anchor))
-            .map_or(Vec2::ZERO, |a| match slot {
-                HandleSlot::In => a.handle_in,
-                HandleSlot::Out => a.handle_out,
-            });
+            .and_then(|snapshot| snapshot.anchors.iter().find(|a| a.id == anchor));
+        let start_value = found.map_or(Vec2::ZERO, |a| match slot {
+            HandleSlot::In => a.handle_in,
+            HandleSlot::Out => a.handle_out,
+        });
+        let kind = found.map_or(AnchorKind::Corner, |a| a.kind);
         self.drag = Drag::Handle {
             path,
             anchor,
             slot,
             down_at,
             start_value,
+            kind,
         };
+    }
+
+    /// Acceptance criteria 8, 10's shared resolution: `starts` (each
+    /// selected node's id and position at press time), moved by the
+    /// press→`release` displacement. The one place this formula lives —
+    /// both [`NodeTool::pointer_up`] (the commit) and
+    /// [`NodeTool::live_drag`] (the preview) call it, so they cannot
+    /// independently drift apart.
+    fn resolve_node_positions(
+        down_at: Point,
+        starts: &[(vecmanf_document_core::AnchorId, Point)],
+        release: Point,
+    ) -> Vec<(vecmanf_document_core::AnchorId, Point)> {
+        let delta = down_at.vector_to(release);
+        starts
+            .iter()
+            .map(|&(id, p)| (id, p.translated(delta)))
+            .collect()
+    }
+
+    /// Acceptance criterion 9's shared resolution: `start_value` (the
+    /// handle's value at press time), moved by the press→`release`
+    /// displacement. The one place this formula lives — both
+    /// [`NodeTool::pointer_up`] and [`NodeTool::live_drag`] call it.
+    fn resolve_handle_value(down_at: Point, start_value: Vec2, release: Point) -> Vec2 {
+        let delta = down_at.vector_to(release);
+        Vec2::new(start_value.x + delta.x, start_value.y + delta.y)
+    }
+
+    /// What the node tool's drag in flight (if any) would commit if
+    /// released at `cursor` right now — for the renderer's live preview
+    /// (acceptance criteria 8, 9, 10's "update live during the drag").
+    /// Resolved by the exact same helpers [`NodeTool::pointer_up`] itself
+    /// calls (`resolve_node_positions`/`resolve_handle_value`, both
+    /// private: this crate's own internal resolution, not part of its
+    /// public surface), so the preview and the eventual commit can never
+    /// disagree. `None` when no drag is in flight.
+    #[must_use]
+    pub fn live_drag(&self, cursor: Point) -> Option<LiveNodeDrag> {
+        match &self.drag {
+            Drag::None => None,
+            Drag::Nodes {
+                path,
+                down_at,
+                starts,
+            } => Some(LiveNodeDrag::Nodes {
+                path: *path,
+                positions: Self::resolve_node_positions(*down_at, starts, cursor),
+            }),
+            Drag::Handle {
+                path,
+                anchor,
+                slot,
+                down_at,
+                start_value,
+                kind,
+            } => {
+                let value = Self::resolve_handle_value(*down_at, *start_value, cursor);
+                // Mirrors `Document::set_handle`'s own rule exactly
+                // (`vecmanf-document-core/src/paths.rs`): a Smooth
+                // anchor's opposite handle is always the negation of the
+                // one just written; a Corner anchor's is untouched.
+                let mirror = (*kind == AnchorKind::Smooth).then(|| value.negated());
+                Some(LiveNodeDrag::Handle {
+                    path: *path,
+                    anchor: *anchor,
+                    slot: *slot,
+                    value,
+                    mirror,
+                })
+            }
+        }
     }
 
     /// The maker released the mouse button at `point`, ending whatever
@@ -290,11 +422,7 @@ impl NodeTool {
                 if point == down_at {
                     return PointerUpOutcome::NoOp;
                 }
-                let delta = down_at.vector_to(point);
-                let moves: Vec<_> = starts
-                    .iter()
-                    .map(|&(id, p)| (id, p.translated(delta)))
-                    .collect();
+                let moves = Self::resolve_node_positions(down_at, &starts, point);
                 let _ = document.move_anchors(path, &moves);
                 PointerUpOutcome::NodesMoved
             }
@@ -304,14 +432,14 @@ impl NodeTool {
                 slot,
                 down_at,
                 start_value,
+                kind: _,
             } => {
                 // Same zero-movement rule as the node-drag branch above,
                 // and for the same reason.
                 if point == down_at {
                     return PointerUpOutcome::NoOp;
                 }
-                let delta = down_at.vector_to(point);
-                let value = Vec2::new(start_value.x + delta.x, start_value.y + delta.y);
+                let value = Self::resolve_handle_value(down_at, start_value, point);
                 let _ = document.set_handle(path, anchor, slot, value);
                 PointerUpOutcome::HandleMoved
             }
@@ -431,6 +559,7 @@ impl NodeTool {
             &NodeSelection::new(),
             point,
             tolerances.point,
+            tolerances.handle,
             tolerances.segment,
         )?
         else {
@@ -540,6 +669,7 @@ mod tests {
 
     const TOLERANCES: HitTolerances = HitTolerances {
         point: Tolerance::from_mm(2.0),
+        handle: Tolerance::from_mm(4.0),
         segment: Tolerance::from_mm(1.0),
     };
 
@@ -599,6 +729,46 @@ mod tests {
         assert_eq!(moved.point, Point::new(5.0, 7.0));
         assert_eq!(moved.handle_in, Vec2::new(-3.0, 0.0));
         assert_eq!(moved.handle_out, Vec2::new(3.0, 0.0));
+    }
+
+    /// The bug this run fixes: AC8/10's "update live during the drag"
+    /// had no accessor at all — `live_drag` is `None` with nothing
+    /// pressed, and resolves to the live (not yet committed) position
+    /// while a node drag is in flight, matching exactly what
+    /// `pointer_up` would commit at the same release point.
+    #[test]
+    fn live_drag_reports_the_live_node_position_mid_drag() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path = open_two_node_path(&document, a, b);
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        assert_eq!(
+            tool.live_drag(Point::new(0.0, 0.0)),
+            None,
+            "nothing pressed"
+        );
+
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+        assert_eq!(
+            tool.live_drag(Point::new(5.0, 7.0)),
+            Some(LiveNodeDrag::Nodes {
+                path,
+                positions: vec![(a, Point::new(5.0, 7.0))],
+            }),
+            "mid-drag, before release"
+        );
+
+        // The commit, at the same release point, must match.
+        tool.pointer_up(&document, Point::new(5.0, 7.0));
+        let snapshot = document.path(path).expect("exists");
+        assert_eq!(snapshot.anchors[0].point, Point::new(5.0, 7.0));
+        assert_eq!(
+            tool.live_drag(Point::new(5.0, 7.0)),
+            None,
+            "released: no drag in flight any more"
+        );
     }
 
     /// AC9: dragging one handle of a smooth node mirrors the opposite
@@ -669,6 +839,92 @@ mod tests {
         let anchor = &snapshot.anchors[0];
         assert_eq!(anchor.handle_out, Vec2::new(3.0, 4.0));
         assert_eq!(anchor.handle_in, Vec2::new(-5.0, 0.0), "untouched");
+    }
+
+    /// The bug this run fixes, for AC9's handle drag: a smooth anchor's
+    /// live preview mirrors the opposite handle, matching
+    /// `Document::set_handle`'s own rule — not just the eventual commit.
+    #[test]
+    fn live_drag_mirrors_a_smooth_anchors_opposite_handle() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path = document.create_path(
+            &[
+                NewAnchor {
+                    id: a,
+                    point: Point::new(0.0, 0.0),
+                    handle_in: Vec2::new(-5.0, 0.0),
+                    handle_out: Vec2::new(5.0, 0.0),
+                    kind: AnchorKind::Smooth,
+                },
+                NewAnchor::corner(b, Point::new(20.0, 0.0)),
+            ],
+            false,
+        );
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+        tool.pointer_up(&document, Point::new(0.0, 0.0));
+
+        let paths = vec![document.path(path).expect("exists")];
+        tool.pointer_down(&paths, Point::new(5.0, 0.0), TOLERANCES, false);
+        assert_eq!(
+            tool.live_drag(Point::new(3.0, 4.0)),
+            Some(LiveNodeDrag::Handle {
+                path,
+                anchor: a,
+                slot: HandleSlot::Out,
+                value: Vec2::new(3.0, 4.0),
+                mirror: Some(Vec2::new(-3.0, -4.0)),
+            }),
+            "mid-drag: the opposite handle's live mirror must already show, not just on release"
+        );
+
+        // The commit, at the same release point, must match.
+        tool.pointer_up(&document, Point::new(3.0, 4.0));
+        let snapshot = document.path(path).expect("exists");
+        assert_eq!(snapshot.anchors[0].handle_out, Vec2::new(3.0, 4.0));
+        assert_eq!(snapshot.anchors[0].handle_in, Vec2::new(-3.0, -4.0));
+    }
+
+    /// Same bug, the corner-node half: no mirror is previewed either,
+    /// matching `pointer_up`'s own "untouched" commit.
+    #[test]
+    fn live_drag_does_not_mirror_a_corner_anchors_handle() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path = document.create_path(
+            &[
+                NewAnchor {
+                    id: a,
+                    point: Point::new(0.0, 0.0),
+                    handle_in: Vec2::new(-5.0, 0.0),
+                    handle_out: Vec2::new(5.0, 0.0),
+                    kind: AnchorKind::Corner,
+                },
+                NewAnchor::corner(b, Point::new(20.0, 0.0)),
+            ],
+            false,
+        );
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+        tool.pointer_up(&document, Point::new(0.0, 0.0));
+
+        let paths = vec![document.path(path).expect("exists")];
+        tool.pointer_down(&paths, Point::new(5.0, 0.0), TOLERANCES, false);
+        assert_eq!(
+            tool.live_drag(Point::new(3.0, 4.0)),
+            Some(LiveNodeDrag::Handle {
+                path,
+                anchor: a,
+                slot: HandleSlot::Out,
+                value: Vec2::new(3.0, 4.0),
+                mirror: None,
+            }),
+        );
     }
 
     /// AC10: shift-click adds to the selection; dragging any one of the
