@@ -483,10 +483,19 @@ impl Session {
         if self.tool == Tool::Pen
             && let Some(nodes) = self.pen.in_progress_nodes()
         {
+            // The id this pending anchor would actually get if the
+            // gesture ended right now — `peek`, never `mint`: a preview
+            // must not advance the minter's own counter out of step with
+            // what might still be escaped or turn into a close gesture
+            // instead (`AnchorIdMinter::peek`'s own doc comment).
+            let pending = self.pointer_position.and_then(|cursor| {
+                self.pen
+                    .pending_anchor(self.minter.peek(), cursor, self.drag_threshold())
+            });
             list.extend(build_pen_preview(
                 nodes,
                 self.pointer_position,
-                self.pen.pending_drag_origin(),
+                pending.as_ref(),
                 self.view,
                 self.is_hovering_pen_close_target(),
             ));

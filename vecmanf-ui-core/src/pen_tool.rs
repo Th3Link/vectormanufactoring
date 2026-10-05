@@ -14,7 +14,7 @@
 //! is a direct action the caller invokes, not something this state
 //! machine infers from two `pointer_up` calls.
 
-use vecmanf_document_core::{AnchorKind, Document, Length, NewAnchor, NodeId, Point};
+use vecmanf_document_core::{AnchorId, AnchorKind, Document, Length, NewAnchor, NodeId, Point};
 
 use crate::AnchorIdMinter;
 
@@ -88,30 +88,85 @@ impl PenTool {
         }
     }
 
-    /// The point `C` of a press currently held down and not yet
-    /// released, for the renderer's live drag-to-curve preview
+    /// What [`PenTool::pointer_up`] would commit right now if the maker
+    /// released at `cursor` — for the renderer's live drag preview
     /// (acceptance criterion 2: "show both symmetric handle lines/
     /// endpoints growing from C in real time, and reshape the B→C
     /// segment live as a curve"). `None` when idle, between gestures (the
     /// mouse is up), or the pending press is a close-path gesture
-    /// (acceptance criterion 5 closes on a plain click; closing has no
-    /// handle-drag preview of its own to show).
+    /// (acceptance criterion 5 closes on a plain click; closing commits
+    /// no new node to preview).
+    ///
+    /// Built by `PenTool::resolve_anchor` (private: this crate's own
+    /// internal helper, not part of its public surface) — the exact same
+    /// resolution rule [`PenTool::pointer_up`] itself calls — so the preview and the
+    /// eventual commit are structurally guaranteed to agree (`specs/0002-
+    /// path-node-editing/adrs.md`: "commands carry resolved geometry,
+    /// never geometric intent", applied here to the preview too). A
+    /// separate re-implementation of this rule in `vecmanf-render-core`
+    /// previously ignored `drag_threshold` entirely, so a drag just under
+    /// it previewed a smooth node with handles that then committed, on
+    /// release, as a corner node with none — this method is what closes
+    /// that gap.
+    ///
+    /// `id` should be [`crate::AnchorIdMinter::peek`]'s result, not a
+    /// minted one: a preview that advanced the minter's own counter would
+    /// desync it from what the gesture might still turn into (Escape
+    /// discards it, a press turning out to be a close-path gesture mints
+    /// nothing) — the same reason [`PenTool::pointer_up`] only mints once
+    /// it has committed to actually placing a node.
     ///
     /// This is a *different* point from the last entry of
-    /// [`PenTool::in_progress_nodes`]: that list only gains `C` once the
-    /// press *releases* ([`PenTool::pointer_up`] is what actually pushes
-    /// it), so a renderer asking only `in_progress_nodes` has no way to
-    /// know a drag is even in flight, let alone where it started — which
-    /// is exactly why the live drag preview needs this method and not
-    /// just the existing one.
+    /// [`PenTool::in_progress_nodes`]: that list only gains the resolved
+    /// anchor once the press *releases* ([`PenTool::pointer_up`] is what
+    /// actually pushes it), so a renderer asking only `in_progress_nodes`
+    /// has no way to know a drag is even in flight, let alone what it
+    /// would resolve to — which is exactly why the live drag preview
+    /// needs this method and not just the existing one.
     #[must_use]
-    pub fn pending_drag_origin(&self) -> Option<Point> {
-        match &self.state {
-            State::Idle => None,
-            State::Placing { down, .. } => down
-                .as_ref()
-                .filter(|down| !down.closing)
-                .map(|down| down.point),
+    pub fn pending_anchor(
+        &self,
+        id: AnchorId,
+        cursor: Point,
+        drag_threshold: Length,
+    ) -> Option<NewAnchor> {
+        let State::Placing { down, .. } = &self.state else {
+            return None;
+        };
+        let down = down.as_ref()?;
+        if down.closing {
+            return None;
+        }
+        Some(Self::resolve_anchor(id, down.point, cursor, drag_threshold))
+    }
+
+    /// The one rule for what anchor a press/release pair resolves to —
+    /// acceptance criteria 1 and 2's shared decision, shared verbatim
+    /// between the actual commit ([`PenTool::pointer_up`]) and the live
+    /// preview ([`PenTool::pending_anchor`]) so the two can never
+    /// independently drift apart. `down`/`release` are document-space
+    /// points; the new node always sits at `down` ("a new node is added
+    /// at C", acceptance criterion 2, where C is where the press started,
+    /// not where it ended) with a drag-derived handle pair when the
+    /// press→release distance exceeds `drag_threshold`, or a plain corner
+    /// node (no handles) otherwise.
+    fn resolve_anchor(
+        id: AnchorId,
+        down: Point,
+        release: Point,
+        drag_threshold: Length,
+    ) -> NewAnchor {
+        let drag = down.vector_to(release);
+        if drag.length() > drag_threshold.as_mm() {
+            NewAnchor {
+                id,
+                point: down,
+                handle_in: drag.negated(),
+                handle_out: drag,
+                kind: AnchorKind::Smooth,
+            }
+        } else {
+            NewAnchor::corner(id, down)
         }
     }
 
@@ -201,19 +256,8 @@ impl PenTool {
             return PointerUpOutcome::Closed(path_id);
         }
 
-        let drag = down.point.vector_to(point);
         let id = minter.mint();
-        let anchor = if drag.length() > drag_threshold.as_mm() {
-            NewAnchor {
-                id,
-                point: down.point,
-                handle_in: drag.negated(),
-                handle_out: drag,
-                kind: AnchorKind::Smooth,
-            }
-        } else {
-            NewAnchor::corner(id, down.point)
-        };
+        let anchor = Self::resolve_anchor(id, down.point, point, drag_threshold);
         nodes.push(anchor);
         PointerUpOutcome::Placed
     }
@@ -505,61 +549,116 @@ mod tests {
     }
 
     /// Acceptance criterion 2's live drag preview needs to know a press
-    /// is currently held down and where it started — idle (nothing
-    /// pressed), and a press that has already released (consumed by
-    /// `pointer_up`), both report `None`.
+    /// is currently held down and what it would resolve to — idle
+    /// (nothing pressed), and a press that has already released (consumed
+    /// by `pointer_up`), both report `None`.
     #[test]
-    fn pending_drag_origin_is_none_when_idle_or_between_gestures() {
+    fn pending_anchor_is_none_when_idle_or_between_gestures() {
         let document = Document::new(1);
         let mut minter = minter();
         let mut pen = PenTool::new();
-        assert_eq!(pen.pending_drag_origin(), None, "idle");
+        let id = AnchorId::new(1, 0);
+        assert_eq!(
+            pen.pending_anchor(id, Point::new(0.0, 0.0), DRAG_THRESHOLD),
+            None,
+            "idle"
+        );
 
         pen.pointer_down(Point::new(0.0, 0.0), CLOSE_TOLERANCE);
         pen.pointer_up(&mut minter, &document, Point::new(0.0, 0.0), DRAG_THRESHOLD);
         assert_eq!(
-            pen.pending_drag_origin(),
+            pen.pending_anchor(id, Point::new(0.0, 0.0), DRAG_THRESHOLD),
             None,
             "released: the drag already committed"
         );
     }
 
-    /// While a press is held down (not yet released), `pending_drag_origin`
-    /// reports exactly the point it started at — point C, which stays
-    /// fixed at the press position even as the live cursor moves
-    /// elsewhere (acceptance criterion 2: "a new node is added at C",
-    /// the pointer-down point, not wherever the drag ends).
+    /// While a press is held down (not yet released) and the live cursor
+    /// has moved past `drag_threshold`, `pending_anchor` previews exactly
+    /// what `pointer_up` would commit at that same cursor position: a
+    /// smooth node at C (the press position, not the cursor) with
+    /// symmetric handles along the drag.
     #[test]
-    fn pending_drag_origin_reports_the_held_press_point() {
+    fn pending_anchor_matches_what_pointer_up_would_commit_past_the_threshold() {
         let mut pen = PenTool::new();
-        // Even the very first press of a brand-new path reports its own
-        // origin: dragging while placing the first node pulls out that
+        let id = AnchorId::new(1, 0);
+        // Even the very first press of a brand-new path previews its own
+        // anchor: dragging while placing the first node pulls out that
         // node's own handles, with no B→C segment yet (nothing precedes
         // it) — the renderer is the one that decides there is no segment
         // to draw, not this method.
         pen.pointer_down(Point::new(0.0, 0.0), CLOSE_TOLERANCE);
-        assert_eq!(pen.pending_drag_origin(), Some(Point::new(0.0, 0.0)));
+        assert_eq!(
+            pen.pending_anchor(id, Point::new(3.0, 4.0), DRAG_THRESHOLD),
+            Some(NewAnchor {
+                id,
+                point: Point::new(0.0, 0.0),
+                handle_in: vecmanf_document_core::Vec2::new(-3.0, -4.0),
+                handle_out: vecmanf_document_core::Vec2::new(3.0, 4.0),
+                kind: AnchorKind::Smooth,
+            })
+        );
 
         let mut minter = minter();
         let document = Document::new(1);
-        pen.pointer_up(&mut minter, &document, Point::new(0.0, 0.0), DRAG_THRESHOLD);
+        pen.pointer_up(&mut minter, &document, Point::new(3.0, 4.0), DRAG_THRESHOLD);
 
         pen.pointer_down(Point::new(10.0, 0.0), CLOSE_TOLERANCE);
         assert_eq!(
-            pen.pending_drag_origin(),
-            Some(Point::new(10.0, 0.0)),
-            "held at C, the press position"
+            pen.pending_anchor(id, Point::new(13.0, 4.0), DRAG_THRESHOLD),
+            Some(NewAnchor {
+                id,
+                point: Point::new(10.0, 0.0),
+                handle_in: vecmanf_document_core::Vec2::new(-3.0, -4.0),
+                handle_out: vecmanf_document_core::Vec2::new(3.0, 4.0),
+                kind: AnchorKind::Smooth,
+            }),
+            "held at C, the press position — not wherever the cursor ended up"
         );
+    }
+
+    /// The bug this test guards against: a drag just under
+    /// `drag_threshold` must preview the exact same corner node (no
+    /// handles) that `pointer_up` would actually commit at that cursor
+    /// position — not a smooth node with handles that then disagrees with
+    /// the commit on release. Before `pending_anchor` shared
+    /// `resolve_anchor` with `pointer_up`, `vecmanf-render-core`'s own
+    /// re-implementation of this rule ignored `drag_threshold` entirely
+    /// and always previewed a smooth node.
+    #[test]
+    fn pending_anchor_under_the_threshold_previews_a_corner_node_with_no_handles() {
+        let mut pen = PenTool::new();
+        let id = AnchorId::new(1, 0);
+        pen.pointer_down(Point::new(0.0, 0.0), CLOSE_TOLERANCE);
+
+        // A tiny, sub-threshold movement — DRAG_THRESHOLD is 1.0mm here.
+        let cursor = Point::new(0.3, 0.0);
+        assert_eq!(
+            pen.pending_anchor(id, cursor, DRAG_THRESHOLD),
+            Some(NewAnchor::corner(id, Point::new(0.0, 0.0))),
+            "must match pointer_up's own corner-node resolution for the same sub-threshold \
+             release point, not a smooth node with handles"
+        );
+
+        // Confirm it actually does match what pointer_up commits.
+        let mut minter = minter();
+        let document = Document::new(1);
+        pen.pointer_up(&mut minter, &document, cursor, DRAG_THRESHOLD);
+        let committed = pen.in_progress_nodes().expect("still placing")[0];
+        assert_eq!(committed.kind, AnchorKind::Corner);
+        assert_eq!(committed.handle_in, vecmanf_document_core::Vec2::ZERO);
+        assert_eq!(committed.handle_out, vecmanf_document_core::Vec2::ZERO);
     }
 
     /// A press held down over the close target (acceptance criterion 5)
     /// is a plain-click gesture, not a drag-to-curve one — no live curve
     /// preview applies to it.
     #[test]
-    fn pending_drag_origin_is_none_while_closing() {
+    fn pending_anchor_is_none_while_closing() {
         let mut minter = minter();
         let document = Document::new(1);
         let mut pen = PenTool::new();
+        let id = AnchorId::new(1, 0);
         pen.pointer_down(Point::new(0.0, 0.0), CLOSE_TOLERANCE);
         pen.pointer_up(&mut minter, &document, Point::new(0.0, 0.0), DRAG_THRESHOLD);
         pen.pointer_down(Point::new(10.0, 0.0), CLOSE_TOLERANCE);
@@ -579,6 +678,10 @@ mod tests {
 
         // Press back down near the first node: a close-path gesture.
         pen.pointer_down(Point::new(0.1, 0.1), CLOSE_TOLERANCE);
-        assert_eq!(pen.pending_drag_origin(), None, "closing, not dragging");
+        assert_eq!(
+            pen.pending_anchor(id, Point::new(0.1, 0.1), DRAG_THRESHOLD),
+            None,
+            "closing, not dragging"
+        );
     }
 }

@@ -28,25 +28,33 @@ fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
 
 /// Builds the pen tool's in-progress preview. `nodes` is whatever
 /// `vecmanf_ui_core::PenTool::in_progress_nodes` currently holds (empty
-/// or absent, with no drag in flight either: nothing to preview, returns
+/// or absent, with no pending anchor either: nothing to preview, returns
 /// an empty list); `cursor` is the live pointer position in document
 /// space for the rubber-band line (acceptance criterion 1: "showing
 /// where a plain click would land") — `None` suppresses it (e.g. the
 /// pointer has left the canvas).
 ///
-/// `drag_origin` is `vecmanf_ui_core::PenTool::pending_drag_origin` —
-/// `Some(C)` while the maker is holding the mouse button down over the
-/// new point C, `None` otherwise. When `Some`, this is acceptance
-/// criterion 2's live drag-to-curve preview: both symmetric handle
-/// lines/endpoints growing from C, and (when there is a previously
-/// placed node B to connect from) the B→C segment reshaped live as a
-/// curve using C's still-uncommitted handle — in place of the plain
-/// straight rubber-band line `cursor` alone would otherwise draw. This
-/// is a genuinely different case from just having `cursor`: a hover
-/// between gestures (button up) only ever warrants the straight
-/// placement preview: acceptance criterion 1's "where a plain click
-/// would land" is a straight line precisely because releasing now
-/// places a corner node, not a curved one.
+/// `pending` is `vecmanf_ui_core::PenTool::pending_anchor`'s result —
+/// `Some` while the maker is holding the mouse button down, already
+/// resolved (by that same method, the one place this rule is decided)
+/// into exactly the anchor `vecmanf_ui_core::PenTool::pointer_up` would
+/// commit if released right now: a corner node with no handles for a
+/// press that hasn't moved past the drag threshold yet, a smooth node
+/// with symmetric handles once it has. This function draws `pending`
+/// exactly as given — the segment from the last placed node to it, its
+/// own handle lines/endpoints where non-zero, and its own glyph by its
+/// own `kind` — and performs no geometry of its own (no vector
+/// arithmetic here duplicating what `pending_anchor` already resolved,
+/// which is what let the preview and the actual commit disagree before:
+/// a sub-threshold drag could preview a smooth node with handles that
+/// then committed, on release, as a corner node with none).
+///
+/// This is a genuinely different case from just having `cursor`: a hover
+/// between gestures (button up, nothing held down, so `pending` is
+/// `None`) only ever warrants the straight placement preview —
+/// acceptance criterion 1's "where a plain click would land" is a
+/// straight line precisely because releasing now places a corner node,
+/// not a curved one.
 ///
 /// `is_hovering_close_target` is the host's own
 /// `is_hovering_pen_close_target()` (acceptance criterion 5's "Cursors"
@@ -59,12 +67,12 @@ fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
 pub fn build_pen_preview(
     nodes: &[AnchorSnapshot],
     cursor: Option<Point>,
-    drag_origin: Option<Point>,
+    pending: Option<&AnchorSnapshot>,
     view: ViewTransform,
     is_hovering_close_target: bool,
 ) -> DrawList {
     let mut list = DrawList::default();
-    if nodes.is_empty() && drag_origin.is_none() {
+    if nodes.is_empty() && pending.is_none() {
         return list;
     }
 
@@ -134,42 +142,47 @@ pub fn build_pen_preview(
         ));
     }
 
-    if let (Some(origin), Some(cursor)) = (drag_origin, cursor) {
-        // Acceptance criterion 2's live curve preview. `handle_out` is
-        // exactly what `PenTool::pointer_up` will commit if the maker
-        // released right now (the press→cursor displacement); mirroring
-        // it for `handle_in` previews the same symmetric-handle node
-        // `pointer_up` creates.
-        let handle_out = origin.vector_to(cursor);
-        let handle_in = handle_out.negated();
+    if let Some(pending) = pending {
+        // Acceptance criterion 2's live curve preview, and acceptance
+        // criterion 1's plain-click preview while a press is held down —
+        // `pending` is already resolved to exactly one or the other
+        // (`PenTool::pending_anchor`/`resolve_anchor`), so this is purely
+        // reading its fields, never deriving them.
 
-        // Reshape the B→C segment live as a curve — only when a B
-        // exists to connect from; dragging while placing the very first
-        // node of a brand-new path has no prior node yet, so there is
-        // nothing to reshape (C's own handles below still preview).
+        // Reshape the B→pending segment live — only when a B exists to
+        // connect from; dragging while placing the very first node of a
+        // brand-new path has no prior node yet, so there is nothing to
+        // reshape (pending's own handles below still preview). A
+        // sub-threshold press previews a straight segment the same way,
+        // since `pending.handle_in` is then `Vec2::ZERO`.
         if let Some(last) = nodes.last() {
             list.extend(stroke::segment_stroke(
                 last.point,
                 last.handle_out,
-                handle_in,
-                origin,
+                pending.handle_in,
+                pending.point,
                 STROKE_WIDTH_MM,
                 theme::ACCENT,
             ));
         }
 
         // Both symmetric handle lines/endpoints growing from C in real
-        // time. Filled accent endpoints, matching `docs/design-
-        // system.md`'s "being dragged: filled accent" handle convention
-        // — this drag is live, the same visual a node tool handle drag
-        // already uses.
-        for handle in [handle_out, handle_in] {
+        // time — only drawn once the press has moved past the drag
+        // threshold (`pending.handle_in`/`handle_out` are both
+        // `Vec2::ZERO` below it, matching the corner node that would
+        // actually commit; a zero handle has no line/endpoint to show,
+        // same rule `vecmanf-ui-core::hit_test` already uses for a
+        // committed corner node's handles). Filled accent endpoints,
+        // matching `docs/design-system.md`'s "being dragged: filled
+        // accent" handle convention — this drag is live, the same visual
+        // a node tool handle drag already uses.
+        for handle in [pending.handle_out, pending.handle_in] {
             if handle == Vec2::ZERO {
                 continue;
             }
-            let endpoint = origin.translated(handle);
+            let endpoint = pending.point.translated(handle);
             list.extend(glyphs::thick_line(
-                origin,
+                pending.point,
                 endpoint,
                 line_width,
                 theme::ACCENT,
@@ -177,13 +190,17 @@ pub fn build_pen_preview(
             list.extend(glyphs::circle(endpoint, handle_diameter, theme::ACCENT));
         }
 
-        // C's own node glyph, in the same hollow style as every other
-        // placed node above — a drag always produces a Smooth node
-        // (acceptance criterion 2), so the diamond glyph previews the
-        // kind it is about to commit as, not just its position.
-        list.extend(glyphs::diamond(origin, node_size, theme::ACCENT));
-        list.extend(glyphs::diamond(
-            origin,
+        // Pending's own node glyph, in the same hollow style as every
+        // other placed node above, by its own resolved `kind` — a corner
+        // node below the drag threshold, a smooth node past it, matching
+        // exactly what would commit.
+        let glyph = match pending.kind {
+            AnchorKind::Corner => glyphs::square,
+            AnchorKind::Smooth => glyphs::diamond,
+        };
+        list.extend(glyph(pending.point, node_size, theme::ACCENT));
+        list.extend(glyph(
+            pending.point,
             (node_size - 2.0 * node_outline).max(0.0),
             theme::CANVAS_BG,
         ));
@@ -297,23 +314,32 @@ mod tests {
     }
 
     /// Acceptance criterion 2's live drag-to-curve preview, the bug this
-    /// slice fixes: dragging while placing a new node C (one node B
-    /// already placed) must draw strictly more geometry than the same
-    /// moment with no drag in flight — the B→C curve segment plus C's
-    /// own symmetric handle lines/endpoints, not just the plain
-    /// rubber-band line to the cursor.
+    /// slice fixes: a held press resolved to a smooth node with handles
+    /// (what `vecmanf_ui_core::PenTool::pending_anchor` hands this
+    /// function — constructed here directly, the same shape that method
+    /// would resolve to, since this crate's own job is just drawing it)
+    /// must draw strictly more geometry than the same moment with no
+    /// press held — the B→C curve segment plus C's own symmetric handle
+    /// lines/endpoints, not just the plain rubber-band line to the
+    /// cursor.
     #[test]
     fn dragging_while_placing_previews_the_live_curve_and_handles() {
         let nodes = [NewAnchor::corner(AnchorId::new(1, 1), Point::new(0.0, 0.0))];
         let cursor = Some(Point::new(13.0, 4.0));
-        let origin = Point::new(10.0, 0.0);
+        let pending = NewAnchor {
+            id: AnchorId::new(1, 2),
+            point: Point::new(10.0, 0.0),
+            handle_in: Vec2::new(-3.0, -4.0),
+            handle_out: Vec2::new(3.0, 4.0),
+            kind: AnchorKind::Smooth,
+        };
 
         let hovering_only =
             build_pen_preview(&nodes, cursor, None, ViewTransform::identity(), false);
         let dragging = build_pen_preview(
             &nodes,
             cursor,
-            Some(origin),
+            Some(&pending),
             ViewTransform::identity(),
             false,
         );
@@ -329,10 +355,21 @@ mod tests {
     /// handles — there just is no segment to reshape.
     #[test]
     fn dragging_the_very_first_node_previews_its_own_handles_with_no_segment() {
-        let origin = Point::new(0.0, 0.0);
         let cursor = Some(Point::new(5.0, 5.0));
-        let dragging =
-            build_pen_preview(&[], cursor, Some(origin), ViewTransform::identity(), false);
+        let pending = NewAnchor {
+            id: AnchorId::new(1, 1),
+            point: Point::new(0.0, 0.0),
+            handle_in: Vec2::new(-5.0, -5.0),
+            handle_out: Vec2::new(5.0, 5.0),
+            kind: AnchorKind::Smooth,
+        };
+        let dragging = build_pen_preview(
+            &[],
+            cursor,
+            Some(&pending),
+            ViewTransform::identity(),
+            false,
+        );
         assert!(
             !dragging.triangles.is_empty(),
             "C's own handle lines/endpoints and node glyph must still draw"
@@ -340,19 +377,68 @@ mod tests {
     }
 
     /// A zero-length drag (the cursor hasn't moved off the press point
-    /// yet) must not draw degenerate zero-length handle lines.
+    /// yet) resolves to a corner node with no handles
+    /// (`vecmanf_ui_core::PenTool::resolve_anchor`'s own rule) — this
+    /// must not draw degenerate zero-length handle lines, and must draw
+    /// the square corner glyph, not the diamond smooth one.
     #[test]
     fn a_zero_length_drag_draws_no_handle_geometry() {
         let origin = Point::new(5.0, 5.0);
+        let pending = NewAnchor::corner(AnchorId::new(1, 1), origin);
         let dragging = build_pen_preview(
             &[],
             Some(origin),
-            Some(origin),
+            Some(&pending),
             ViewTransform::identity(),
             false,
         );
-        // Only C's own node glyph (hollow diamond: outline + fill, 2
+        // Only C's own node glyph (hollow square: outline + fill, 2
         // quads each) should draw — no handle lines, no handle endpoints.
         assert_eq!(dragging.triangle_count(), 4);
+    }
+
+    /// The bug this run fixes, pinned directly at this crate's own
+    /// boundary: a `pending` resolved below the drag threshold (a corner
+    /// node, `handle_in`/`handle_out` both zero) must render the corner
+    /// glyph and no handle geometry, exactly like the zero-length case —
+    /// `build_pen_preview` must never re-derive "is this a drag" from
+    /// `cursor` distance itself, only ever read `pending.kind`/handles as
+    /// given.
+    #[test]
+    fn a_sub_threshold_pending_anchor_previews_a_corner_not_a_smooth_node() {
+        let origin = Point::new(0.0, 0.0);
+        // A small but nonzero cursor offset — if this function still did
+        // its own distance math, it could mistake this for a drag.
+        let cursor = Some(Point::new(0.3, 0.0));
+        let pending = NewAnchor::corner(AnchorId::new(1, 1), origin);
+        let corner_preview = build_pen_preview(
+            &[],
+            cursor,
+            Some(&pending),
+            ViewTransform::identity(),
+            false,
+        );
+
+        let smooth_pending = NewAnchor {
+            id: AnchorId::new(1, 1),
+            point: origin,
+            handle_in: Vec2::new(-0.3, 0.0),
+            handle_out: Vec2::new(0.3, 0.0),
+            kind: AnchorKind::Smooth,
+        };
+        let smooth_preview = build_pen_preview(
+            &[],
+            cursor,
+            Some(&smooth_pending),
+            ViewTransform::identity(),
+            false,
+        );
+
+        assert!(
+            corner_preview.triangle_count() < smooth_preview.triangle_count(),
+            "a corner `pending` (no handles) must draw strictly less geometry than a smooth \
+             one at the same cursor position — proving the handle lines/endpoints come from \
+             `pending`'s own fields, not from re-deriving drag distance in this crate"
+        );
     }
 }
