@@ -42,6 +42,12 @@ pub(crate) const KEY_CLOSED: &str = "closed";
 pub(crate) const KEY_STROKE_WIDTH: &str = "stroke_width";
 pub(crate) const KEY_STROKE: &str = "stroke";
 pub(crate) const KEY_ANCHORS: &str = "anchors";
+/// `specs/0005-object-transform/adrs.md`: "one key, one meaning" — shared
+/// by both a path's and a primitive's meta map, which is exactly why
+/// "object to path" carries it over for free (it is never in
+/// `shape_codec::ALL_PRIMITIVE_KEYS`, so `strip_primitive_keys` never
+/// deletes it).
+pub(crate) const KEY_ROTATION: &str = "rotation";
 pub(crate) const KEY_ID: &str = "id";
 pub(crate) const KEY_POINT: &str = "point";
 pub(crate) const KEY_HANDLE_IN: &str = "handle_in";
@@ -107,6 +113,17 @@ pub(crate) fn read_stroke_width(meta: &LoroMap) -> Length {
         Some(LoroValue::Double(mm)) => Length::from_mm(mm),
         _ => Length::from_mm(DEFAULT_STROKE_WIDTH_MM),
     }
+}
+
+/// Writes a new stroke width, overwriting whatever this node had before —
+/// `object-transform`'s resize commands are the first callers that ever
+/// need to *write* this register (`stroke-and-fill-styling` is a later
+/// slice; `write_path_style`/`write_primitive_style_fields` only ever
+/// write the slice-2/3 placeholder default at creation time).
+pub(crate) fn write_stroke_width(meta: &LoroMap, width_mm: f64) {
+    // invariant: see `write_point`.
+    #[allow(clippy::unwrap_used)]
+    meta.insert(KEY_STROKE_WIDTH, width_mm).unwrap();
 }
 
 pub(crate) fn read_stroke(meta: &LoroMap) -> Color {
@@ -330,6 +347,43 @@ const fn kind_to_str(kind: AnchorKind) -> &'static str {
     }
 }
 
+/// Reads an object's `rotation` register — absent reads as `0`
+/// (`specs/0005-object-transform/adrs.md`: "absent = 0"). A present but
+/// non-finite value also reads as `0` here (the lenient, forward-
+/// compatible read every other register in this module already uses);
+/// [`rotation_is_valid`] is the strict open-file check that refuses that
+/// case as `Damaged` instead of silently defaulting.
+pub(crate) fn read_rotation(meta: &LoroMap) -> crate::units::Angle {
+    match meta.get(KEY_ROTATION).map(|v| v.get_deep_value()) {
+        Some(LoroValue::Double(radians)) if radians.is_finite() => {
+            crate::units::Angle::from_radians(radians)
+        }
+        _ => crate::units::Angle::from_radians(0.0),
+    }
+}
+
+/// Writes an object's `rotation` register, normalized to `(-π, π]`
+/// (`specs/0005-object-transform/adrs.md`: "written normalized").
+pub(crate) fn write_rotation(meta: &LoroMap, angle: crate::units::Angle) {
+    // invariant: see `write_point`.
+    #[allow(clippy::unwrap_used)]
+    meta.insert(KEY_ROTATION, angle.normalized().as_radians())
+        .unwrap();
+}
+
+/// Whether this node's `rotation` key, if present at all, holds a finite
+/// number (`specs/0005-object-transform/adrs.md`: "Open-file validation
+/// refuses with `OpenError::Damaged` a present `rotation` that is not a
+/// finite number"). Absent is valid (reads as 0); any finite value is
+/// valid.
+pub(crate) fn rotation_is_valid(meta: &LoroMap) -> bool {
+    match meta.get(KEY_ROTATION).map(|v| v.get_deep_value()) {
+        Some(LoroValue::Double(radians)) => radians.is_finite(),
+        None | Some(LoroValue::I64(_)) => true,
+        Some(_) => false,
+    }
+}
+
 /// Sets a path's `closed` flag after creation
 /// (`specs/0006-path-merge-split-and-node-types/adrs.md`: Join closes an
 /// open path (AC 10) and Split opens a closed one (AC 14), neither of
@@ -397,6 +451,7 @@ pub(crate) fn read_path_snapshot(id: NodeId, meta: &LoroMap) -> PathSnapshot {
         stroke: read_stroke(meta),
         fill: None,
         anchors,
+        rotation: read_rotation(meta),
     }
 }
 
@@ -453,7 +508,7 @@ fn validate_path_node(meta: &LoroMap) -> bool {
     else {
         return false;
     };
-    (0..anchors.len()).all(|index| validate_anchor(&anchors, index))
+    rotation_is_valid(meta) && (0..anchors.len()).all(|index| validate_anchor(&anchors, index))
 }
 
 fn validate_anchor(anchors: &LoroMovableList, index: usize) -> bool {

@@ -38,7 +38,19 @@ use crate::units::{DocumentSize, Length};
 /// read alias in `path_codec::read_kind` and nothing else: no anchor's
 /// stored shape changes, only the kind tag's legacy spelling is now
 /// also understood.
-pub const CURRENT_FORMAT_VERSION: u32 = 4;
+///
+/// Bumped to 5 in `object-transform`, exactly as this comment's own
+/// previous paragraph already anticipated: it is the first slice to
+/// merge after this one, so it takes `CURRENT_FORMAT_VERSION + 1`
+/// outright, no renumbering needed. `document.json` and the Loro root
+/// gain a `rotation` key on each object (`specs/0005-object-transform/
+/// adrs.md`). A version-4 reader has no `rotation` key at all, so it
+/// would open a rotated object and draw it unrotated — the silent
+/// partial read ADR 0004 §9 forbids. Migration from version 4 is empty
+/// by construction: absent `rotation` reads as `0`
+/// (`path_codec::read_rotation`), so every version-4 object opens with
+/// zero rotation, unchanged.
+pub const CURRENT_FORMAT_VERSION: u32 = 5;
 
 const ROOT_MAP: &str = "root";
 const KEY_FORMAT_VERSION: &str = "format_version";
@@ -252,6 +264,10 @@ enum ObjectJson {
         stroke: crate::path_model::Color,
         fill: Option<crate::path_model::Color>,
         anchors: Vec<crate::path_model::AnchorSnapshot>,
+        /// The path's own `rotation` register (`specs/0005-object-
+        /// transform/adrs.md`): orientation only, never consulted to
+        /// reconstruct geometry — see [`crate::path_model::PathSnapshot::rotation`].
+        rotation: crate::units::Angle,
     },
     Rect {
         id: crate::path_model::NodeId,
@@ -260,6 +276,7 @@ enum ObjectJson {
         stroke_width: Length,
         stroke: crate::path_model::Color,
         fill: Option<crate::path_model::Color>,
+        rotation: crate::units::Angle,
     },
     Ellipse {
         id: crate::path_model::NodeId,
@@ -267,6 +284,7 @@ enum ObjectJson {
         stroke_width: Length,
         stroke: crate::path_model::Color,
         fill: Option<crate::path_model::Color>,
+        rotation: crate::units::Angle,
     },
     Polygon {
         id: crate::path_model::NodeId,
@@ -275,6 +293,7 @@ enum ObjectJson {
         stroke_width: Length,
         stroke: crate::path_model::Color,
         fill: Option<crate::path_model::Color>,
+        rotation: crate::units::Angle,
     },
     Star {
         id: crate::path_model::NodeId,
@@ -284,6 +303,7 @@ enum ObjectJson {
         stroke_width: Length,
         stroke: crate::path_model::Color,
         fill: Option<crate::path_model::Color>,
+        rotation: crate::units::Angle,
     },
 }
 
@@ -298,12 +318,14 @@ impl From<crate::primitive_model::ObjectSnapshot> for ObjectJson {
                 stroke: path.stroke,
                 fill: path.fill,
                 anchors: path.anchors,
+                rotation: path.rotation,
             },
             ObjectSnapshot::Primitive(primitive) => {
                 let id = primitive.id;
                 let stroke_width = primitive.stroke_width;
                 let stroke = primitive.stroke;
                 let fill = primitive.fill;
+                let rotation = primitive.rotation;
                 match primitive.shape {
                     Shape::Rect {
                         bounds,
@@ -315,6 +337,7 @@ impl From<crate::primitive_model::ObjectSnapshot> for ObjectJson {
                         stroke_width,
                         stroke,
                         fill,
+                        rotation,
                     },
                     Shape::Ellipse { frame } => Self::Ellipse {
                         id,
@@ -322,6 +345,7 @@ impl From<crate::primitive_model::ObjectSnapshot> for ObjectJson {
                         stroke_width,
                         stroke,
                         fill,
+                        rotation,
                     },
                     Shape::Polygon { frame, point_count } => Self::Polygon {
                         id,
@@ -330,6 +354,7 @@ impl From<crate::primitive_model::ObjectSnapshot> for ObjectJson {
                         stroke_width,
                         stroke,
                         fill,
+                        rotation,
                     },
                     Shape::Star {
                         frame,
@@ -343,6 +368,7 @@ impl From<crate::primitive_model::ObjectSnapshot> for ObjectJson {
                         stroke_width,
                         stroke,
                         fill,
+                        rotation,
                     },
                 }
             }

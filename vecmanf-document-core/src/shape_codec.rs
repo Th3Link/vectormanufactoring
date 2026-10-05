@@ -284,6 +284,7 @@ pub(crate) fn read_primitive_snapshot(
         stroke_width: path_codec::read_stroke_width(meta),
         stroke: path_codec::read_stroke(meta),
         fill: None,
+        rotation: path_codec::read_rotation(meta),
     }
 }
 
@@ -316,6 +317,9 @@ pub(crate) fn read_shape(meta: &LoroMap, shape_tag: &str) -> Option<Shape> {
 /// `inner_ratio` outside `(0, 1)`. Reuses each parameter's own validated
 /// newtype for its range check rather than duplicating the bound.
 pub(crate) fn validate_primitive_node(meta: &LoroMap, shape: &str) -> bool {
+    if !path_codec::rotation_is_valid(meta) {
+        return false;
+    }
     match shape {
         SHAPE_RECT => validate_rect(meta),
         SHAPE_ELLIPSE => validate_ellipse(meta),

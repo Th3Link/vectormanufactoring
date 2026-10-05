@@ -252,6 +252,73 @@ impl Document {
         Ok(())
     }
 
+    /// Resizes a rectangle's bounding box, corner radius and stroke
+    /// width together as **one commit** (`specs/0005-object-transform/
+    /// adrs.md`'s resize-writes table: "frame, `corner_radius` (rect),
+    /// `stroke_width`" — a Select-tool resize-handle drag, acceptance
+    /// criteria 8, 9). `vecmanf-ui-core` computes all three values
+    /// (including the local-frame mapping for a rotated object and the
+    /// √(sx·sy) stroke/radius factor) before calling this — this method
+    /// is purely "write what was computed", the same split
+    /// [`Document::set_rect_bounds`] already follows for a plain resize.
+    ///
+    /// # Errors
+    /// [`ShapeEditError::NoSuchObject`] / [`ShapeEditError::NotAPrimitive`]
+    /// / [`ShapeEditError::WrongShape`] if `id` is not a rectangle.
+    pub fn resize_rect(
+        &self,
+        id: NodeId,
+        bounds: RectBounds,
+        corner_radius: Length,
+        stroke_width: Length,
+    ) -> Result<(), ShapeEditError> {
+        let meta = self.require_shape(id, SHAPE_RECT)?;
+        shape_codec::write_rect_bounds(&meta, bounds);
+        shape_codec::write_corner_radius(&meta, corner_radius);
+        crate::path_codec::write_stroke_width(&meta, stroke_width.as_mm());
+        self.commit_with_label("resize_rect");
+        Ok(())
+    }
+
+    /// Resizes an ellipse's frame and stroke width together as one
+    /// commit (acceptance criterion 8).
+    ///
+    /// # Errors
+    /// [`ShapeEditError::NoSuchObject`] / [`ShapeEditError::NotAPrimitive`]
+    /// / [`ShapeEditError::WrongShape`] if `id` is not an ellipse.
+    pub fn resize_ellipse(
+        &self,
+        id: NodeId,
+        frame: EllipseFrame,
+        stroke_width: Length,
+    ) -> Result<(), ShapeEditError> {
+        let meta = self.require_shape(id, SHAPE_ELLIPSE)?;
+        shape_codec::write_ellipse_frame(&meta, frame);
+        crate::path_codec::write_stroke_width(&meta, stroke_width.as_mm());
+        self.commit_with_label("resize_ellipse");
+        Ok(())
+    }
+
+    /// Resizes a polygon/star's frame (its uniform outer-radius scale,
+    /// acceptance criterion 11) and stroke width together as one commit.
+    /// `point_count`/`inner_ratio` are untouched.
+    ///
+    /// # Errors
+    /// [`ShapeEditError::NoSuchObject`] / [`ShapeEditError::NotAPrimitive`]
+    /// if `id` is neither a polygon nor a star.
+    pub fn resize_star_frame(
+        &self,
+        id: NodeId,
+        frame: StarFrame,
+        stroke_width: Length,
+    ) -> Result<(), ShapeEditError> {
+        let meta = self.require_polygon_or_star(id)?;
+        shape_codec::write_star_frame(&meta, frame);
+        crate::path_codec::write_stroke_width(&meta, stroke_width.as_mm());
+        self.commit_with_label("resize_star_frame");
+        Ok(())
+    }
+
     /// Sets a point count as one commit for the **whole batch**
     /// (architect review, same reasoning as [`Document::set_corner_
     /// radius`]: the tool-options bar's point-count stepper can apply
@@ -453,6 +520,114 @@ mod tests {
         };
         assert_eq!(bounds, rect_bounds(5.0, 5.0, 20.0, 20.0));
         assert!((corner_radius.as_mm() - 3.0).abs() < f64::EPSILON);
+    }
+
+    /// Acceptance criteria 8, 9: `resize_rect` writes bounds, corner
+    /// radius and stroke width all together, in one commit.
+    #[test]
+    fn resize_rect_writes_bounds_radius_and_stroke_width_in_one_commit() {
+        let document = Document::new(1);
+        let id = document.create_rect(rect_bounds(0.0, 0.0, 10.0, 10.0));
+        let before = document.loro().len_changes();
+        document
+            .resize_rect(
+                id,
+                rect_bounds(0.0, 0.0, 20.0, 20.0),
+                Length::from_mm(2.0),
+                Length::from_mm(0.5),
+            )
+            .expect("resize");
+        let after = document.loro().len_changes();
+        assert_eq!(after - before, 1, "one commit");
+        let snapshot = document.primitive(id).expect("exists");
+        let Shape::Rect {
+            bounds,
+            corner_radius,
+        } = snapshot.shape
+        else {
+            panic!("expected rect");
+        };
+        assert!((bounds.width.as_mm() - 20.0).abs() < 1e-9);
+        assert!((corner_radius.as_mm() - 2.0).abs() < 1e-9);
+        assert!((snapshot.stroke_width.as_mm() - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn resize_ellipse_writes_frame_and_stroke_width() {
+        let document = Document::new(1);
+        let id = document.create_ellipse(EllipseFrame {
+            center: Point::new(0.0, 0.0),
+            rx: Length::from_mm(5.0),
+            ry: Length::from_mm(5.0),
+        });
+        document
+            .resize_ellipse(
+                id,
+                EllipseFrame {
+                    center: Point::new(0.0, 0.0),
+                    rx: Length::from_mm(10.0),
+                    ry: Length::from_mm(8.0),
+                },
+                Length::from_mm(0.6),
+            )
+            .expect("resize");
+        let snapshot = document.primitive(id).expect("exists");
+        let Shape::Ellipse { frame } = snapshot.shape else {
+            panic!("expected ellipse");
+        };
+        assert!((frame.rx.as_mm() - 10.0).abs() < 1e-9);
+        assert!((snapshot.stroke_width.as_mm() - 0.6).abs() < 1e-9);
+    }
+
+    #[test]
+    fn resize_star_frame_writes_frame_and_stroke_width_keeps_ratio() {
+        let document = Document::new(1);
+        let frame = StarFrame {
+            center: Point::new(0.0, 0.0),
+            radius: Length::from_mm(10.0),
+            angle: Angle::from_radians(0.0),
+        };
+        let id = document.create_star(
+            frame,
+            PointCount::new(5).unwrap(),
+            InnerRatio::new(0.5).unwrap(),
+        );
+        let new_frame = StarFrame {
+            radius: Length::from_mm(15.0),
+            ..frame
+        };
+        document
+            .resize_star_frame(id, new_frame, Length::from_mm(0.4))
+            .expect("resize");
+        let snapshot = document.primitive(id).expect("exists");
+        let Shape::Star {
+            frame: resized_frame,
+            inner_ratio,
+            ..
+        } = snapshot.shape
+        else {
+            panic!("expected star");
+        };
+        assert!((resized_frame.radius.as_mm() - 15.0).abs() < 1e-9);
+        assert!((inner_ratio.get() - 0.5).abs() < 1e-9, "ratio untouched");
+        assert!((snapshot.stroke_width.as_mm() - 0.4).abs() < 1e-9);
+    }
+
+    #[test]
+    fn resize_rect_on_an_ellipse_is_refused() {
+        let document = Document::new(1);
+        let id = document.create_ellipse(EllipseFrame {
+            center: Point::new(0.0, 0.0),
+            rx: Length::from_mm(5.0),
+            ry: Length::from_mm(5.0),
+        });
+        let result = document.resize_rect(
+            id,
+            rect_bounds(0.0, 0.0, 1.0, 1.0),
+            Length::from_mm(0.0),
+            Length::from_mm(0.25),
+        );
+        assert_eq!(result, Err(ShapeEditError::WrongShape));
     }
 
     #[test]

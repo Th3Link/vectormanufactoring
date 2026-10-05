@@ -43,11 +43,11 @@ pub use path_model::{
 pub use paths::resolve_handle_pair;
 pub use primitive_model::{
     EllipseFrame, InnerRatio, ObjectSnapshot, PointCount, PrimitiveSnapshot, RectBounds, Shape,
-    ShapeParamError, StarFrame, shape_frame_bounds,
+    ShapeParamError, StarFrame, shape_center, shape_frame_bounds,
 };
 pub use primitive_outline::{
-    KAPPA, OutlineAnchor, effective_corner_radius, ellipse_outline, outline_of, polygon_outline,
-    rect_outline, star_outline,
+    KAPPA, OutlineAnchor, effective_corner_radius, ellipse_outline, outline_of, outline_of_rotated,
+    polygon_outline, rect_outline, star_outline,
 };
 pub use shapes::ShapeEditError;
 pub use units::{Angle, DocumentSize, Length, Point, Tolerance, Vec2, ViewTransform};
