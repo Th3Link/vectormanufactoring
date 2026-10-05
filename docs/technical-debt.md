@@ -437,16 +437,50 @@ that a pan only rewrites the view uniform. A draw list depends on scale and
 never on origin (slice 4 rule). Do this when a real document is measured to
 stutter, not before.
 
-## The canvas ignores devicePixelRatio
+## The canvas does not react to a `devicePixelRatio` change with no resize event
 
-The canvas backing store equals its CSS size (`useEditorSession.ts`), so on
-a HiDPI display every frame is rendered at CSS resolution and upscaled.
-Strokes and glyphs look soft. Zoom does not change this.
+The fix below sizes the backing store once, at attach and on every
+`ResizeObserver` callback — both read `window.devicePixelRatio` fresh each
+time. What neither one catches: the ratio itself changing with the canvas's
+CSS size unchanged, e.g. dragging the window from a 1x monitor to a 2x one.
+`ResizeObserver` does not fire for that (the element's own box did not
+change), so the backing store stays sized for the old ratio until the next
+real resize — soft again, same symptom as before the fix, just narrower.
+Not observed today: the sandbox this was verified in reports
+`devicePixelRatio` 1 throughout, so this is a code-reading gap, not a
+reproduced one.
 
-**Resolution:** size the backing store as CSS size × `devicePixelRatio`,
-reconfigure the surface to match, and fold the ratio into the screen
-transform. Pointer coordinates stay in CSS px. One change in `editor-wasm`
-and the hook, and no change to any `*-core` crate.
+**Resolution:** a `window.matchMedia('(resolution: ' + dpr + 'dppx)')`
+listener (re-subscribed each time it fires, since the query string itself
+encodes the old ratio) or, where supported, reading
+`ResizeObserverEntry.devicePixelContentBoxSize` directly instead of
+recomputing `css_size * devicePixelRatio` by hand. Low priority until a
+multi-monitor mixed-DPI report comes in.
+
+## MSAA × HiDPI memory and fill-rate cost is untested at scale
+
+The fix below adds a 4x multisampled offscreen color target sized to the
+canvas's physical (DPR-scaled) backing buffer, recreated on every resize.
+On a HiDPI display the backing buffer is already up to 4x the pixel count
+of the equivalent 1x canvas (`devicePixelRatio` 2 → 2x width × 2x height);
+4x MSAA on top of that is a further 4x the color-attachment memory and
+fill-rate cost at the GPU level, on exactly the weakest of the three engines
+this product targets
+([ADR 0001](adr/0001-ui-framework-and-canvas-rendering.md), canvas
+section). The canvas-perf spike's 50 000-node measurement
+(`specs/0002-path-node-editing/adrs.md`) predates both this slice's MSAA and
+its `devicePixelRatio` fix, so it says nothing about this combination —
+untested on real WebKitGTK hardware at any DPR above 1, and today's
+pan/zoom is not yet interactive enough for a live stress test to mean much
+either way.
+
+**Resolution:** re-run the 50 000-node canvas-perf spike on WebKitGTK at
+`devicePixelRatio` 2 once `canvas-navigation-and-selection` (slice 4) makes
+pan/zoom interactive — the same spike shape, two more input dimensions
+(DPR, MSAA). If it fails, the fallback lever is `vecmanf-editor-wasm::
+gpu::MSAA_SAMPLE_COUNT`: drop it to 2x (still anti-aliased, half the cost)
+or make it DPR-conditional (e.g. no MSAA once the backing buffer is already
+oversampled past some ratio) before reaching for anything more invasive.
 
 ## The quality gate covers only half the product
 
