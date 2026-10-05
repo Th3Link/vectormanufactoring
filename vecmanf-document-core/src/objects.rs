@@ -7,6 +7,8 @@
 //! never reads geometry at all — so they live in their own module rather
 //! than being added as a third kind-specific method set.
 
+use std::collections::HashSet;
+
 use loro::TreeID;
 
 use crate::document::{Document, OBJECTS_TREE};
@@ -32,6 +34,20 @@ fn tree_id_of(id: NodeId) -> TreeID {
     TreeID::new(id.peer, id.counter)
 }
 
+/// Deduplicates `ids`, keeping each one's first occurrence's position.
+/// Both [`Document::translate_objects`] and [`Document::delete_objects`]
+/// are public APIs on this crate's own `Document` — not reachable with a
+/// duplicate id via the shipped UI today (`vecmanf-ui-core`'s own
+/// `ObjectSelection::select_single`/`toggle` can't produce one), but
+/// nothing in either function's own signature forbids a caller from
+/// passing one, and without this a duplicate would double-apply an
+/// offset in `translate_objects`, or panic on a second delete of an
+/// already-deleted tree node in `delete_objects`.
+fn dedup_ids(ids: &[NodeId]) -> Vec<NodeId> {
+    let mut seen = HashSet::with_capacity(ids.len());
+    ids.iter().copied().filter(|id| seen.insert(*id)).collect()
+}
+
 impl Document {
     /// Moves every named object by `offset`, in **one commit** for the
     /// whole batch (acceptance criteria 18, 20) — a path's anchor `point`s
@@ -48,6 +64,7 @@ impl Document {
     /// # Errors
     /// [`ObjectEditError::NoSuchObject`] if any named id no longer exists.
     pub fn translate_objects(&self, ids: &[NodeId], offset: Vec2) -> Result<(), ObjectEditError> {
+        let ids = dedup_ids(ids);
         let tree = self.loro().get_tree(OBJECTS_TREE);
         let metas: Vec<_> = ids
             .iter()
@@ -88,6 +105,7 @@ impl Document {
     /// Does not panic in practice: every tree id deleted below was just
     /// confirmed present in the same tree handle.
     pub fn delete_objects(&self, ids: &[NodeId]) -> Result<(), ObjectEditError> {
+        let ids = dedup_ids(ids);
         let tree = self.loro().get_tree(OBJECTS_TREE);
         let tree_ids: Vec<TreeID> = ids
             .iter()
