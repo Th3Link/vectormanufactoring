@@ -44,6 +44,7 @@ to it instead of restating it.
 | R-EDIT-009 | Grouping, layers, and per-layer visibility/lock, matching what a maker needs to separate "cut", "engrave" and "reference" geometry in one file. | Must | Proposal |
 | R-EDIT-010 | Pan and zoom the canvas (scroll, drag, pinch), zooming toward the cursor, with the document's apparent scale and position staying stable when the window/viewport is resized. | Must | Customer |
 | R-EDIT-011 | A general Select tool: click any existing object, regardless of which tool created it, to select it, then move or delete it without re-entering that object's own creation tool. | Must | Customer |
+| R-EDIT-012 | Scale and rotate any selected object (path or primitive) via on-canvas transform handles, matching the resize/rotate handle convention makers already know from Inkscape, Illustrator or Figma — not just the plain move R-EDIT-011 already covers. | Must | Customer |
 
 ## 3. Vectorization (raster-to-vector)
 

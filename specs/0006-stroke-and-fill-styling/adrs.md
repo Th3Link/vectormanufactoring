@@ -61,14 +61,14 @@ work only on disjoint crates).
 
 ## Deliberately not in scope for this slice
 
-- **SVG mapping** (slice 8). The schema is chosen so the mapping is direct:
+- **SVG mapping** (slice 10). The schema is chosen so the mapping is direct:
   keys mirror `stroke`, `stroke-opacity`, `stroke-width`, `stroke-linejoin`,
   `stroke-linecap`, `fill`, `fill-opacity`, and gradient geometry is in
   `objectBoundingBox` units. Two things the exporter must do: multiply the
   dash ratios by the width, and write `stroke`/`fill` explicitly on every
   element, because our absent defaults (stroke on, fill off) are not SVG's
   initial values.
-- **Manufacturing meaning of style** (slice 12). Nothing here is read by
+- **Manufacturing meaning of style** (slice 13). Nothing here is read by
   job generation. A dashed stroke stays a display effect. If a story ever
   needs dashed *cut* geometry (perforation), `geometry-core` gets its own
   dasher at manufacturing tolerance. ADR 0003 §7 says display and
@@ -359,6 +359,12 @@ work only on disjoint crates).
   - a stop missing `id`, `position`, `color` or `opacity`.
 
   It does **not** refuse on stop count (see the stop model above).
+
+- **2026-10-05: `format_version` is 5, not 4.** `object-transform` is
+  inserted before this slice and takes version 4 for its `rotation` field
+  (`specs/object-transform/adrs.md`). Everything in the decision above holds
+  with "version 3" read as "version 4". If the two slices ship in the other
+  order, swap the numbers back.
 
 ## Flagged to the lead
 
