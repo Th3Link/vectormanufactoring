@@ -171,6 +171,12 @@ values, not an implementation site, for those four rows.
 | Segment hit-test tolerance | 4px screen-space perpendicular distance | Clicking "on" a curve/line segment |
 | Shape handle | 8×8px screen-space | Hollow square, `primitive-shapes`: bounding-box resize, rectangle corner-radius, polygon/star inner-radius — deliberately square and larger than the 7px/6px node-tool glyphs so the two vocabularies never read as the same control |
 | Shape handle hit-test radius | 8px screen-space | Same margin rule as node/handle hit-testing, reused rather than invented fresh |
+| Transform resize handle | 8×8px screen-space, 2px corner radius ("squircle") | Hollow `--accent` stroke / white fill idle, solid `--accent` fill while dragging — `object-transform`'s 8 Select-tool scale handles (4 corner + 4 edge-midpoint). Same footprint as the `primitive-shapes` shape handle on purpose (criterion 1 of that spec pins the hit size); the rounded corner is the one deliberate silhouette difference, since the two can never be on screen at once (different tools) but shouldn't read as pixel-identical regardless |
+| Transform resize handle hit-test radius | 8px screen-space | Pinned explicitly by `object-transform` criterion 1, equal to the shape handle's own hit radius |
+| Transform rotate handle | 12×12px screen-space, circular-arrow icon glyph (not a dot) | `--accent` stroke / transparent fill idle, `--accent-hover` fill on hover, solid `--accent` fill with white glyph while dragging (`object-transform`). Deliberately an icon rather than a plain circle, and not connected to the bounding box by a stalk line, so it never reads as a reuse of the Bézier handle's line-plus-circle composition (`path-node-editing`) |
+| Transform rotate handle offset | 20px screen-space, center to center | Distance from the top-edge resize handle to the rotate handle, measured along the bounding box's own local "up" axis (rotates with the box) — clears both handles' hit radii with room to spare |
+| Transform rotate handle hit-test radius | 12px screen-space | Scaled to its own larger glyph, same margin-rule instinct as every other handle above |
+| Transform pivot marker | 6px diameter screen-space, `--accent` at 60% opacity | Shown at the active scale/rotate pivot point for the duration of a drag only (`object-transform`) — its position is the feedback for Shift's pivot-swap modifier; see that spec's UX notes |
 | Bounding-box selection outline | 1px screen-space `--accent` (selected) / `--accent-hover` (hover) | Drawn around a selected/hovered primitive when its own matching tool is active (`primitive-shapes`) — **and, as of `canvas-navigation-and-selection`, around any selected/hovered object of any type (path or primitive) when the Select tool is active, with no shape handles or path nodes added on top.** Same token, two contexts: Select-tool selection is deliberately plain; the type-specific handles/nodes layer in only after double-click handoff into the object's own tool. |
 | `PropertiesPanel` width | 280px, fixed | Right-docked panel (`stroke-and-fill-styling`'s `StylePanel` is its first section); canvas fills the remaining width |
 | Contextual mini-toolbar padding | 6px | Floating per-selection toolbar (`NodeToolbar`'s actions, 2026-10-05), anchored near the current canvas selection rather than docked |
@@ -270,6 +276,18 @@ values, not an implementation site, for those four rows.
   than collapsing it), applied to the one UI where it costs nothing extra,
   since every selected object already draws the same plain Select-tool box
   regardless of its type (see "Bounding-box selection outline" above).
+- **Transform-handle cursors** (`object-transform`, new): each of the 8
+  resize handles shows a custom, rotated double-headed-arrow cursor, not one
+  of the browser's four fixed resize cursors — the oriented bounding box
+  means a handle's screen-space direction is `object rotation + handle's
+  own base angle`, almost never one of those four fixed angles once the
+  object is rotated, so the cursor image is rotated live to match. The
+  rotate handle shows a separate, non-rotating circular-arrow rotate cursor
+  (rotate has no single axis to align to, so it stays static regardless of
+  handle angle). Both apply only within the handle's own hit radius;
+  elsewhere inside the bounding box the cursor is the Select tool's normal
+  move/arrow cursor (object-body drag, unchanged from
+  `canvas-navigation-and-selection` criterion 20).
 - **Pan cursor** (`canvas-navigation-and-selection`): standard grab/grabbing
   convention for the drag-initiated pans only — open-hand cursor from the
   moment Space is held or the middle mouse button is pressed, closed-hand/

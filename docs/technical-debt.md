@@ -113,6 +113,21 @@ log growth proportional to the selection.
 stays rejected — it would also put a shared parent register in the path of
 every concurrent style edit.
 
+## Rotation is a stored angle, and the per-node affine is still not built
+
+Every object stores a `rotation` angle (`specs/object-transform/adrs.md`):
+a primitive's frame is its local geometry, rotated about the frame centre,
+and a path's anchors are baked with the angle kept only as its box
+orientation. [ADR 0002](adr/0002-document-model-units-and-svg-round-trip.md)
+§5's per-node affine transform is still not built. Nothing can be sheared,
+and a skewed or non-uniformly scaled rotated primitive is not representable.
+
+**Resolution:** the first story that needs shear or a group transform
+(`layers-and-grouping`, or SVG import of a skewed `<rect>`) builds the affine.
+It composes on top of `rotation` with no migration. That story's `adrs.md`
+decides whether the affine also absorbs `rotation` (a format bump with a
+non-empty migration) or stays on group nodes only.
+
 ## Undo cannot reach a collaborator's change
 
 Undo and redo are scoped to the local peer
