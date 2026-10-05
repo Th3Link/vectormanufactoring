@@ -22,14 +22,47 @@ const CANVAS_BACKGROUND: wgpu::Color = wgpu::Color {
     a: 1.0,
 };
 
-/// Multisample count for every draw-list triangle (node glyphs, handle
+/// The multisample count every draw-list triangle (node glyphs, handle
 /// lines and every `lyon`-tessellated stroke are flat-colored polygon
-/// edges with no AA of their own). 4x is the common WebGL2/downlevel
-/// baseline and is what fixes the jagged/"pixelated" edges a real
-/// display showed on this slice's thin (often sub-1px at this view
-/// scale) strokes — `wgpu::MultisampleState::default()`'s implicit
-/// `count: 1` was the bug: no multisampling at all.
-const MSAA_SAMPLE_COUNT: u32 = 4;
+/// edges with no AA of their own) is rendered at, in descending order of
+/// preference — [`choose_sample_count`] picks the first one the
+/// adapter's own surface format actually supports
+/// (`TextureFormatFeatureFlags::supported_sample_counts`), rather than
+/// assuming one. WebGL2 itself guarantees at least 4x (the spec's
+/// `MAX_SAMPLES` floor), but 8x is backend/driver-dependent — some
+/// downlevel GL stacks cap lower. `1` (no MSAA) is the last resort and
+/// is handled as a genuinely different code path ([`Gpu::render`] skips
+/// the offscreen multisampled target entirely when `sample_count == 1`,
+/// since `wgpu` refuses a multisampled texture with `sample_count: 1`).
+///
+/// 4x was this slice's first fix (a real improvement over the previous
+/// `count: 1` bug — no multisampling at all — which is what made some
+/// axis-aligned strokes outright invisible). 8x is this one's: a real,
+/// if smaller, further improvement when the adapter supports it, because
+/// MSAA only resolves *edge coverage* at a fixed number of sample
+/// positions per pixel — it has a ceiling this crate's technique cannot
+/// cross no matter the count. Inkscape's Cairo backend uses an
+/// analytic/coverage-based software rasterizer (exact fractional pixel
+/// coverage, not a fixed sample grid), which is why it stays visibly
+/// crisper even at the same logical line width; matching that exactly
+/// would mean a different rendering technique (e.g. supersampling the
+/// whole frame at a higher resolution and downsampling, `docs/
+/// technical-debt.md`), which is a follow-up, not this fix.
+const PREFERRED_SAMPLE_COUNTS: [u32; 2] = [8, 4];
+
+/// Picks the first of [`PREFERRED_SAMPLE_COUNTS`] `flags` (the surface
+/// format's own [`wgpu::TextureFormatFeatureFlags`], from
+/// `adapter.get_texture_format_features`) actually supports, or `1` (no
+/// MSAA) if none of them are — the genuinely-unsupported-anywhere case,
+/// kept as a real fallback rather than an assumed-unreachable default,
+/// since a downlevel/software GL stack is exactly the kind of adapter
+/// this product's `WebKitGTK` target can hand back.
+fn choose_sample_count(flags: wgpu::TextureFormatFeatureFlags) -> u32 {
+    PREFERRED_SAMPLE_COUNTS
+        .into_iter()
+        .find(|&count| flags.sample_count_supported(count))
+        .unwrap_or(1)
+}
 
 const SHADER_SOURCE: &str = r"
 struct ScreenTransform {
@@ -153,12 +186,19 @@ pub struct Gpu {
     transform_buffer: wgpu::Buffer,
     transform_bind_group: wgpu::BindGroup,
     /// The offscreen multisampled color target every frame actually
-    /// renders into; [`Gpu::render`] resolves it down into the surface's
-    /// own (single-sampled) texture. Recreated whenever the surface's
-    /// size changes ([`Gpu::resize`]) — it must always match
-    /// `config.width`/`height` exactly, or `wgpu` refuses the render
-    /// pass.
-    msaa_view: wgpu::TextureView,
+    /// renders into when `sample_count > 1`; [`Gpu::render`] resolves it
+    /// down into the surface's own (single-sampled) texture. Recreated
+    /// whenever the surface's size changes ([`Gpu::resize`]) — it must
+    /// always match `config.width`/`height` exactly, or `wgpu` refuses
+    /// the render pass. `None` when [`choose_sample_count`] found no
+    /// multisampling support at all (see that function's own doc
+    /// comment); [`Gpu::render`] then renders directly into the surface
+    /// texture.
+    msaa_view: Option<wgpu::TextureView>,
+    /// The multisample count [`choose_sample_count`] chose for this
+    /// adapter at attach time — fixed for the life of this `Gpu` (a
+    /// resize keeps it; only the surface/`msaa_view` sizes change).
+    sample_count: u32,
     /// `window.devicePixelRatio` at the last `attach`/`resize` — the
     /// surface's backing buffer is sized `css_size * device_pixel_ratio`
     /// (the host's job, see `useEditorSession.ts`'s attach effect and
@@ -224,6 +264,7 @@ fn create_pipeline(
     device: &wgpu::Device,
     transform_bind_group_layout: &wgpu::BindGroupLayout,
     surface_format: wgpu::TextureFormat,
+    sample_count: u32,
 ) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("vecmanf draw-list shader"),
@@ -275,7 +316,7 @@ fn create_pipeline(
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState {
-            count: MSAA_SAMPLE_COUNT,
+            count: sample_count,
             mask: !0,
             alpha_to_coverage_enabled: false,
         },
@@ -285,13 +326,21 @@ fn create_pipeline(
 }
 
 /// (Re)creates the offscreen multisampled color target
-/// [`Gpu::render`] draws into — must be called after every
-/// [`wgpu::Surface::configure`] that changes `config.width`/`height`,
-/// since the two textures must match size exactly.
+/// [`Gpu::render`] draws into when `sample_count > 1` — must be called
+/// after every [`wgpu::Surface::configure`] that changes `config.width`/
+/// `height`, since the two textures must match size exactly. `None` when
+/// `sample_count` is `1`: `wgpu` refuses a "multisampled" texture with a
+/// sample count of `1`, and there is nothing to resolve from in that
+/// case anyway — [`Gpu::render`] renders directly into the surface
+/// texture instead (see [`choose_sample_count`]'s own doc comment).
 fn create_msaa_view(
     device: &wgpu::Device,
     config: &wgpu::SurfaceConfiguration,
-) -> wgpu::TextureView {
+    sample_count: u32,
+) -> Option<wgpu::TextureView> {
+    if sample_count <= 1 {
+        return None;
+    }
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("vecmanf msaa color target"),
         size: wgpu::Extent3d {
@@ -300,24 +349,26 @@ fn create_msaa_view(
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
-        sample_count: MSAA_SAMPLE_COUNT,
+        sample_count,
         dimension: wgpu::TextureDimension::D2,
         format: config.format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
     });
-    texture.create_view(&wgpu::TextureViewDescriptor::default())
+    Some(texture.create_view(&wgpu::TextureViewDescriptor::default()))
 }
 
-/// The surface, its backing adapter-derived device/queue, and the
-/// configuration currently applied to the surface. Split out of
-/// [`Gpu::attach`] for the same `clippy::too_many_lines` reason as
-/// [`create_transform_resources`].
+/// The surface, its backing adapter-derived device/queue, the
+/// configuration currently applied to the surface, and the multisample
+/// count this specific adapter/format combination actually supports.
+/// Split out of [`Gpu::attach`] for the same `clippy::too_many_lines`
+/// reason as [`create_transform_resources`].
 struct SurfaceAndDevice {
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
+    sample_count: u32,
 }
 
 async fn create_surface_and_device(
@@ -362,11 +413,20 @@ async fn create_surface_and_device(
     config.alpha_mode = wgpu::CompositeAlphaMode::Opaque;
     surface.configure(&device, &config);
 
+    // Queried from the real adapter rather than assumed: WebGL2
+    // guarantees 4x but 8x is backend/driver-dependent, and this product
+    // targets WebKitGTK on Linux, one of the weaker GL stacks among the
+    // three engines ADR 0001 covers (`docs/technical-debt.md`'s canvas-
+    // performance entry).
+    let sample_count =
+        choose_sample_count(adapter.get_texture_format_features(config.format).flags);
+
     Ok(SurfaceAndDevice {
         surface,
         device,
         queue,
         config,
+        sample_count,
     })
 }
 
@@ -397,6 +457,7 @@ impl Gpu {
             device,
             queue,
             config,
+            sample_count,
         } = create_surface_and_device(canvas, width, height).await?;
 
         let TransformResources {
@@ -405,8 +466,13 @@ impl Gpu {
             bind_group: transform_bind_group,
         } = create_transform_resources(&device);
 
-        let pipeline = create_pipeline(&device, &transform_bind_group_layout, config.format);
-        let msaa_view = create_msaa_view(&device, &config);
+        let pipeline = create_pipeline(
+            &device,
+            &transform_bind_group_layout,
+            config.format,
+            sample_count,
+        );
+        let msaa_view = create_msaa_view(&device, &config, sample_count);
 
         Ok(Self {
             surface,
@@ -417,6 +483,7 @@ impl Gpu {
             transform_buffer,
             transform_bind_group,
             msaa_view,
+            sample_count,
             device_pixel_ratio: if device_pixel_ratio > 0.0 {
                 device_pixel_ratio
             } else {
@@ -451,17 +518,20 @@ impl Gpu {
         self.config.width = width;
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
-        self.msaa_view = create_msaa_view(&self.device, &self.config);
+        self.msaa_view = create_msaa_view(&self.device, &self.config, self.sample_count);
     }
 
     /// Uploads `draw_list` and submits one frame, using `view` to build
     /// this frame's screen transform against the canvas's current *CSS*
     /// pixel size (`self.config.width`/`height`, the physical
     /// backing-buffer size kept in sync by [`Gpu::resize`], divided back
-    /// down by `self.device_pixel_ratio`). Draws into an offscreen 4x
-    /// multisampled target and resolves it into the surface's own
-    /// texture, which is what actually anti-aliases every stroke/glyph
-    /// edge — see [`MSAA_SAMPLE_COUNT`].
+    /// down by `self.device_pixel_ratio`). Draws into the offscreen
+    /// multisampled target (`self.sample_count`) and resolves it into
+    /// the surface's own texture, which is what actually anti-aliases
+    /// every stroke/glyph edge — see [`choose_sample_count`]. Renders
+    /// directly into the surface texture instead, with no resolve step,
+    /// on the (practically unreachable, but handled) adapter that
+    /// supports no multisampling at all.
     ///
     /// # Errors
     /// Returns a `JsValue` error if the surface's current texture could
@@ -517,23 +587,38 @@ impl Gpu {
             )
         });
 
+        // Multisampled: draw into `msaa_view`, resolved into the surface's
+        // own (single-sampled) `view_texture` at the end of the pass —
+        // that resolve is the actual anti-aliasing step. `Discard`:
+        // nothing downstream ever reads the multisampled texture itself,
+        // only its resolved result. No multisampling support at all
+        // (`msaa_view` is `None`, see `choose_sample_count`): draw
+        // straight into `view_texture`, no resolve.
+        let color_attachment = self.msaa_view.as_ref().map_or(
+            wgpu::RenderPassColorAttachment {
+                view: &view_texture,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(CANVAS_BACKGROUND),
+                    store: wgpu::StoreOp::Store,
+                },
+            },
+            |msaa_view| wgpu::RenderPassColorAttachment {
+                view: msaa_view,
+                depth_slice: None,
+                resolve_target: Some(&view_texture),
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(CANVAS_BACKGROUND),
+                    store: wgpu::StoreOp::Discard,
+                },
+            },
+        );
+
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("vecmanf draw-list pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.msaa_view,
-                    depth_slice: None,
-                    // Resolved into the surface's own (single-sampled)
-                    // texture at the end of the pass — this is the actual
-                    // anti-aliasing step. `Discard`: nothing downstream
-                    // ever reads the multisampled texture itself, only
-                    // its resolved result.
-                    resolve_target: Some(&view_texture),
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(CANVAS_BACKGROUND),
-                        store: wgpu::StoreOp::Discard,
-                    },
-                })],
+                color_attachments: &[Some(color_attachment)],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,

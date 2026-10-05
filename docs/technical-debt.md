@@ -459,28 +459,58 @@ multi-monitor mixed-DPI report comes in.
 
 ## MSAA × HiDPI memory and fill-rate cost is untested at scale
 
-The fix below adds a 4x multisampled offscreen color target sized to the
-canvas's physical (DPR-scaled) backing buffer, recreated on every resize.
-On a HiDPI display the backing buffer is already up to 4x the pixel count
-of the equivalent 1x canvas (`devicePixelRatio` 2 → 2x width × 2x height);
-4x MSAA on top of that is a further 4x the color-attachment memory and
-fill-rate cost at the GPU level, on exactly the weakest of the three engines
-this product targets
+The fix below adds a multisampled offscreen color target sized to the
+canvas's physical (DPR-scaled) backing buffer, recreated on every resize,
+at the highest sample count the adapter's own surface format reports
+supporting (`vecmanf-editor-wasm::gpu::choose_sample_count`, preferring 8x
+and falling back to WebGL2's guaranteed 4x floor). On a HiDPI display the
+backing buffer is already up to 4x the pixel count of the equivalent 1x
+canvas (`devicePixelRatio` 2 → 2x width × 2x height); 8x MSAA on top of
+that is a further 8x the color-attachment memory and fill-rate cost at the
+GPU level, on exactly the weakest of the three engines this product targets
 ([ADR 0001](adr/0001-ui-framework-and-canvas-rendering.md), canvas
 section). The canvas-perf spike's 50 000-node measurement
 (`specs/0002-path-node-editing/adrs.md`) predates both this slice's MSAA and
 its `devicePixelRatio` fix, so it says nothing about this combination —
-untested on real WebKitGTK hardware at any DPR above 1, and today's
+untested on real WebKitGTK hardware at any DPR above 1 or at 8x specifically
+(which `WebKitGTK`'s own GL stack may or may not expose — unverified; the
+capability query means the code degrades gracefully either way, but the
+*cost* of whichever count it picks is what is unmeasured), and today's
 pan/zoom is not yet interactive enough for a live stress test to mean much
 either way.
 
 **Resolution:** re-run the 50 000-node canvas-perf spike on WebKitGTK at
 `devicePixelRatio` 2 once `canvas-navigation-and-selection` (slice 4) makes
 pan/zoom interactive — the same spike shape, two more input dimensions
-(DPR, MSAA). If it fails, the fallback lever is `vecmanf-editor-wasm::
-gpu::MSAA_SAMPLE_COUNT`: drop it to 2x (still anti-aliased, half the cost)
-or make it DPR-conditional (e.g. no MSAA once the backing buffer is already
-oversampled past some ratio) before reaching for anything more invasive.
+(DPR, MSAA, and now whichever sample count `choose_sample_count` actually
+picks on that hardware). If it fails, the fallback lever is
+`vecmanf-editor-wasm::gpu::PREFERRED_SAMPLE_COUNTS`: drop the 8 from the
+list (falls back to the 4x floor, still anti-aliased, a fraction of the
+cost) or make the choice DPR-conditional (e.g. no MSAA once the backing
+buffer is already oversampled past some ratio) before reaching for anything
+more invasive.
+
+## MSAA has a sharpness ceiling Inkscape's Cairo backend does not
+
+The customer compared this slice's lines directly against Inkscape's and
+found them "noticeably" less crisp even after the 4x-then-8x MSAA fixes
+above (`gpu::choose_sample_count`). This is expected, not a bug still to
+find: MSAA resolves edge anti-aliasing at a fixed number of sample
+positions per pixel, however high; Inkscape's Cairo backend rasterizes
+with analytic/coverage-based anti-aliasing — exact fractional pixel
+coverage, computed directly, not sampled — which has no such ceiling.
+Raising the sample count (8x, the max this fix reaches) narrows the gap but
+cannot close it.
+
+**Resolution:** the next real lever is supersampling — render the whole
+frame at a higher resolution (e.g. 2x the backing buffer in each
+dimension) and downsample to the display size, which approximates analytic
+coverage far more closely than a fixed MSAA sample grid, at the cost of
+the same multiplied fill-rate/memory concern the entry above already
+flags, now squared with MSAA stacked on top. A separate story: it changes
+the render pipeline's output-texture handling, not a one-constant tweak,
+and should be scoped and measured on its own rather than folded into a
+bug-fix PR.
 
 ## The quality gate covers only half the product
 
