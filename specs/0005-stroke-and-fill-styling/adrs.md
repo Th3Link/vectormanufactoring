@@ -68,7 +68,7 @@ work only on disjoint crates).
   dash ratios by the width, and write `stroke`/`fill` explicitly on every
   element, because our absent defaults (stroke on, fill off) are not SVG's
   initial values.
-- **Manufacturing meaning of style** (slice 11). Nothing here is read by
+- **Manufacturing meaning of style** (slice 12). Nothing here is read by
   job generation. A dashed stroke stays a display effect. If a story ever
   needs dashed *cut* geometry (perforation), `geometry-core` gets its own
   dasher at manufacturing tolerance. ADR 0003 §7 says display and

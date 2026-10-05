@@ -42,6 +42,8 @@ to it instead of restating it.
 | R-EDIT-007 | Outline/offset operation: produce an outset or inset copy of a path at a given distance, needed for kiss-cut borders, engrave-vs-cut separation, and seam allowances. | Should | Proposal |
 | R-EDIT-008 | Undo/redo covers every editing operation above with no silent data loss. | Must | Proposal |
 | R-EDIT-009 | Grouping, layers, and per-layer visibility/lock, matching what a maker needs to separate "cut", "engrave" and "reference" geometry in one file. | Must | Proposal |
+| R-EDIT-010 | Pan and zoom the canvas (scroll, drag, pinch), zooming toward the cursor, with the document's apparent scale and position staying stable when the window/viewport is resized. | Must | Customer |
+| R-EDIT-011 | A general Select tool: click any existing object, regardless of which tool created it, to select it, then move or delete it without re-entering that object's own creation tool. | Must | Customer |
 
 ## 3. Vectorization (raster-to-vector)
 
@@ -188,8 +190,9 @@ controller dialect, cutting plotter not pulled into the first slice.
 
 - R-SYS-001, R-SYS-002, R-SYS-006, R-SYS-007, R-SYS-008 (desktop, offline,
   SVG interop with Inkscape, no telemetry, explicit machine/material gate)
-- R-EDIT-001 – R-EDIT-006, R-EDIT-008, R-EDIT-009 (drawing: paths,
-  primitives, booleans, object-to-path, stroke/fill, undo, layers)
+- R-EDIT-001 – R-EDIT-006, R-EDIT-008 – R-EDIT-011 (drawing: paths,
+  primitives, booleans, object-to-path, stroke/fill, undo, layers, canvas
+  navigation, general selection)
 - R-VEC-001 (basic raster trace, parity with Inkscape's current feature)
 - R-MFG-001, R-MFG-002, R-MFG-003 (machine profile, cut/engrave roles, job
   preview)

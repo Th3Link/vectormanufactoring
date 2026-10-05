@@ -11,6 +11,119 @@ inline in a spec once they exist here.
 Only one theme exists (light). Dark mode is undecided (no ADR yet) — token
 *names* are chosen so a future dark theme is a value swap, not a rename.
 
+## 2026-10-05: chrome architecture change (Blender/Affinity direction)
+
+The customer tested slices 1–3 on a real display and asked for a direction
+change, in their own words: tools on the side as over-canvas buttons, the
+right side fixed and holding everything configurable, no menu bar at the
+top, and the tool-specific contextual row floating over the canvas
+(Affinity's convention) instead of shifting layout on tool switch. This
+section is the decision, replacing the per-slice chrome choices below where
+they conflict (the `project-file-foundation`, `path-node-editing` and
+`primitive-shapes` UX notes still describe what shipped; this is what it
+changes to).
+
+**Native OS menu: unchanged, stays native.** "No menu bar at top" is read
+here as targeting the in-canvas contextual tool-options bars
+(`NodeToolbar`, `ShapeToolbar`) — the things a maker actually watched
+appear, disappear and shift the canvas — not the native OS File menu. The
+native menu lives in OS chrome (the title bar on Windows/Linux, the screen
+top on macOS), claims no canvas layout space, and never shifts anything; it
+isn't what "the tools shift position" was describing, and the customer's
+Blender reference itself keeps a persistent top application menu bar
+(File/Edit/Render/Window/Help) separate from per-tool floating controls. If
+this reading is wrong, it's a one-line follow-up (move File into the right
+panel as a menu button) — but nothing observed points at the native menu,
+so it is not touched here.
+
+**Left side: floating icon buttons, not a docked rail.** The tool rail
+(`ToolRail.tsx`: Pen, Node, Rectangle, Ellipse, Polygon/Star) stops claiming
+permanent layout width next to the canvas and becomes a floating panel
+*positioned over* the canvas — inset 12px from the left edge, vertically
+centered or inset from the top (match Blender/Affinity's left-edge-flush
+toolbar, not a free-floating palette the maker can drag around; this one
+stays pinned). Same 48×48px buttons, same icons, same order, same
+`--toolbar-bg`/`--toolbar-icon*` colors, but now on a rounded card with a
+drop shadow (`--panel-elevation-shadow`, new token below) so it reads as
+"floating over" rather than "framing" the canvas. This is CSS positioning
+only (`position: absolute`/`fixed` within the canvas's own stacking
+context) — DOM order, focusability, `aria-label`s, tooltips and the `B`/
+`N`/`R`/`E`/`*` shortcuts are all unchanged, so the keyboard-access and
+discoverability properties `path-node-editing` and `primitive-shapes`
+already established still hold without modification. One new requirement
+this introduces: `--toolbar-bg` must stay fully opaque (not a translucent
+overlay), so the floating panel's own contrast and its buttons' focus rings
+are guaranteed regardless of whatever canvas content sits behind it.
+
+**Right side: a persistent, fixed "Properties" panel — generalized, not
+`StylePanel`-only.** What `stroke-and-fill-styling` designed as a
+dedicated, dockable `StylePanel` becomes the first occupant of a
+general-purpose properties-panel architecture that every later slice's
+object properties (dimensions, future transform/align, machine/material
+role) also plugs into. Decided now, concretely:
+
+- **One scrolling panel of stacked, named sections, not tabs.** Blender's
+  actual Properties editor is tabbed because it holds 15+ categories
+  (Object, Modifiers, Material, Physics, ...); this product has exactly one
+  category today (style). Building a tab strip for one tab is the kind of
+  speculative abstraction `CLAUDE.md` §5 rules out ("no generic parameter
+  unless at least two concrete types use it now" — the same instinct
+  applies to a tab strip with one tab). Each section is a labeled
+  card/divider (first: "Style", covering stroke + fill exactly as
+  `stroke-and-fill-styling` specified); add tabs only once a second section
+  makes a single scroll genuinely unwieldy — revisit then, not speculatively
+  now.
+- **Empty/placeholder state, generalized from `stroke-and-fill-styling`'s
+  own rule:** when nothing selected, or when a section has nothing relevant
+  to the current selection, that section's controls show disabled/blank
+  (per-control mixed-state rules already specified), never collapse or
+  disappear. This keeps the panel's own shape stable across every selection
+  change — required by the no-layout-shift rule below, not just a style
+  preference.
+- Placement, width (280px), collapsibility and the `Shift+Ctrl+F` shortcut
+  from `stroke-and-fill-styling`'s UX notes all carry over unchanged; see
+  that spec's amended UX notes for the renamed `PropertiesPanel` framing.
+
+**Tool-specific contextual controls: split by what they actually are, not
+one bucket.** The customer's ask ("the tool-specific row... floating over
+the canvas, like Affinity") and the "everything configurable on the right"
+rule point at two different kinds of control that today's `NodeToolbar` and
+`ShapeToolbar` conflate:
+
+- **Transient per-action controls** — `NodeToolbar`'s Insert node, Delete
+  node, Make corner, Make smooth, Make line, Make curve. These only mean
+  anything relative to a current node/handle/segment selection and have
+  nothing to show when nothing applicable is selected. These move to a
+  **small floating mini-toolbar anchored near the current selection**
+  (Affinity's own convention, exactly as asked for) — canvas-space anchored
+  like the existing rubber-band preview, appears beside the selected
+  node/segment, disappears with the selection. Still also reachable via the
+  existing right-click context menu (belt-and-suspenders, unchanged from
+  `path-node-editing`'s UX notes) and the Delete/Backspace shortcut.
+- **Persistent tool configuration** — `ShapeToolbar`'s mode toggle
+  (Polygon/Star), point-count stepper and ratio field. Acceptance criterion
+  10 requires point count to persist "not reset between shapes," which is
+  exactly what a fixed properties panel is for and exactly what a
+  per-selection floating bar cannot do (there's nothing selected yet while
+  choosing a point count before the first drag). These move into the
+  **right Properties panel**, as a contextual "Shape tool options" section
+  visible while a shape-creation tool is active, syncing live with the
+  on-canvas ratio handle exactly as `primitive-shapes` already specified.
+
+**Hard rule: no layout shift on tool switch.** The canvas viewport's own
+size and position never change when the maker switches tools. Every piece
+of contextual chrome this section describes — the floating left tool panel,
+the floating per-selection mini-toolbar, the right panel's *section*
+contents changing — is an overlay or an in-place content swap, never a
+layout participant that resizes the canvas. (The right panel's own
+collapse/expand, user-triggered via its chevron tab or `Shift+Ctrl+F`, is a
+deliberate width change the maker asked for — not a tool-switch side
+effect, and not what this rule forbids.) Concretely for implementation:
+`App.tsx`'s current `<NodeToolbar>`/`<ShapeToolbar>` siblings stacked above
+the `flex min-h-0 flex-1` row containing `<ToolRail>`/`<Canvas>` are exactly
+the mechanism that violates this rule today — see the punch list reported
+alongside this change.
+
 **2026-10-03, frontend wiring note:** `--accent`/`--accent-hover` below are
 implemented in `frontend/src/index.css` as `--editor-accent`/
 `--editor-accent-hover`, same values. This project's shadcn setup already
@@ -40,13 +153,15 @@ values, not an implementation site, for those four rows.
 | `--shape-handle-fill` | `#FFFFFF` (idle) / `--accent` (being dragged) | Shape handle fill (`primitive-shapes`) |
 | `--shape-handle-stroke` | `--accent` | Shape handle outline, and the primitive bounding-box selection outline |
 | `--shape-handle-guide` | `--accent-hover`, dashed | Corner-radius connecting guide — dashed, to read as distinct from the solid Bézier handle line above |
-| `--panel-bg` | `--toolbar-bg` (`#DCDCE0`) | `StylePanel` and any later docked property panel's background — reuses the one chrome color rather than adding a second (`stroke-and-fill-styling`) |
+| `--panel-bg` | `--toolbar-bg` (`#DCDCE0`) | `PropertiesPanel` (formerly `StylePanel`) and any later section it hosts — reuses the one chrome color rather than adding a second (`stroke-and-fill-styling`) |
+| `--panel-elevation-shadow` | `0 2px 8px rgba(0,0,0,0.24)` | Drop shadow on every floating chrome surface introduced 2026-10-05: the left tool panel and the per-selection contextual mini-toolbar — what makes them read as "floating over" the canvas rather than framing it. The right Properties panel is docked, not floating, and does not use this token. |
 
 ## Spacing and sizing
 
 | Token | Value | Used for |
 |---|---|---|
-| Tool rail width | 48px | Left-docked vertical toolbar |
+| Left tool panel width | 48px | Floating vertical icon panel (2026-10-05: floats over the canvas, inset 12px from the left edge; no longer a docked rail claiming layout width) |
+| Left tool panel inset | 12px | Distance from the canvas's left and top edges to the floating panel |
 | Tool icon size | 24px | Icon glyph inside a 48×48 button |
 | Node glyph | 7×7px screen-space | Corner (square) and smooth (diamond) node markers |
 | Handle endpoint | 6px diameter screen-space | Circle |
@@ -57,7 +172,8 @@ values, not an implementation site, for those four rows.
 | Shape handle | 8×8px screen-space | Hollow square, `primitive-shapes`: bounding-box resize, rectangle corner-radius, polygon/star inner-radius — deliberately square and larger than the 7px/6px node-tool glyphs so the two vocabularies never read as the same control |
 | Shape handle hit-test radius | 8px screen-space | Same margin rule as node/handle hit-testing, reused rather than invented fresh |
 | Bounding-box selection outline | 1px screen-space `--accent` (selected) / `--accent-hover` (hover) | Drawn around a selected/hovered primitive — the primitive equivalent of slice 2's node/segment selection, scoped to the primitive's own matching tool being active |
-| `StylePanel` width | 280px, fixed | Right-docked property panel (`stroke-and-fill-styling`), mirrors the left tool rail; canvas fills the remaining width |
+| `PropertiesPanel` width | 280px, fixed | Right-docked panel (`stroke-and-fill-styling`'s `StylePanel` is its first section); canvas fills the remaining width |
+| Contextual mini-toolbar padding | 6px | Floating per-selection toolbar (`NodeToolbar`'s actions, 2026-10-05), anchored near the current canvas selection rather than docked |
 
 ## Interaction conventions (apply to every later tool, not just this one)
 
@@ -73,20 +189,46 @@ values, not an implementation site, for those four rows.
   selected/active; `--accent` at `--accent-hover`'s 20% means hovered/
   hoverable. Don't add a third selection color for a new widget — reuse this
   rule.
-- **Tool rail**: docks to the left, between the native menu bar and the
-  status bar, fixed 48px width, canvas fills the remaining width
-  edge-to-edge (the `project-file-foundation` "chrome never frames the
-  canvas" precedent — the rail is chrome beside the canvas, not a border
-  around it). New tools are appended to the rail top-to-bottom in the order
-  they ship; existing icons don't get reordered for a later feature's
-  convenience.
-- **Docked property panels** (`StylePanel`, first instance in
-  `stroke-and-fill-styling`): dock to the right edge, same span as the tool
-  rail (native menu bar to status bar), same "chrome beside the canvas, not
-  framing it" rule, mirrored to the opposite side. Collapsible via a chevron
-  tab on the canvas-facing edge; collapsed width is 0, not a narrower icon
-  strip. This is ordinary DOM app chrome, not canvas editing UI — it does
-  not go through the WebGL draw list rule above.
+- **Left tool panel** (2026-10-05, supersedes the earlier docked-rail
+  convention): floats *over* the canvas, inset 12px from the left and top
+  edges, elevated with `--panel-elevation-shadow`, fixed 48px icon-column
+  width. The canvas is never resized or repositioned to make room for it —
+  it is an overlay, not a layout participant, which is what makes the
+  no-layout-shift rule hold by construction. DOM order (hence tab order)
+  stays the same as when it was a docked rail; only its CSS positioning
+  changed. New tools are still appended top-to-bottom in ship order;
+  existing icons don't get reordered for a later feature's convenience.
+- **Floating contextual mini-toolbar** (2026-10-05, new): the pattern for
+  *transient*, selection-dependent tool actions — today, `NodeToolbar`'s
+  Insert/Delete/Make-corner/Make-smooth/Make-line/Make-curve. Anchored in
+  canvas space next to the current node/handle/segment selection (same
+  anchoring idea as the rubber-band preview), elevated with
+  `--panel-elevation-shadow`, appears only while a relevant selection
+  exists and disappears with it — never a fixed-position, always-present
+  bar, and never a layout participant either. Actions here remain
+  additionally reachable via the right-click context menu and their own
+  keyboard shortcuts where one exists (e.g. Delete/Backspace), unchanged
+  from `path-node-editing`. Use this pattern for a control only when it is
+  truly transient and tied to "what's selected right now" — a control that
+  should persist across selections or across newly created objects belongs
+  in the Properties panel below instead (see `primitive-shapes`' point
+  count, moved there 2026-10-05).
+- **`PropertiesPanel`** (2026-10-05, generalizes the `StylePanel` dock):
+  docks to the right edge, native-menu-bar to status-bar span, fixed 280px
+  width, canvas fills the remaining width edge-to-edge — this one *is*
+  docked, not floating, because its whole point is to stay put regardless
+  of selection or tool (the customer's "right side, fixed" ask). Collapsible
+  via a chevron tab on its canvas-facing edge and `Shift+Ctrl+F`; collapsed
+  width is 0. Structured as one scrolling column of named, stacked sections
+  (not tabs — see the 2026-10-05 section above for why), each independently
+  showing a disabled/placeholder state when nothing relevant is selected,
+  rather than collapsing or disappearing — so the panel's own shape never
+  changes as selection or active tool changes, keeping with the
+  no-layout-shift rule. `stroke-and-fill-styling`'s stroke/fill controls are
+  its first section; a shape tool's persistent configuration (point count,
+  ratio) is a second, tool-contextual section. This is ordinary DOM app
+  chrome, not canvas editing UI — it does not go through the WebGL draw
+  list rule above.
 - **Segmented icon control (`ToggleGroup`)**: the pattern for any small set
   of mutually-exclusive icon choices — started as a two-state toggle
   (`primitive-shapes`' Polygon/Star mode), generalized here to n states
