@@ -31,9 +31,13 @@ reading, under "Flagged to the lead".
   and its flag 2 (a one-axis drag creating a zero-height rectangle is kept as
   specified).
 - [`specs/object-transform-refinements/adrs.md`](../object-transform-refinements/adrs.md):
-  `Session::modifiers_changed(shift, ctrl)` re-runs the hover at the cached
-  pointer position, which is how criterion 8 reaches the shape tools; the
-  `session/mod.rs` split.
+  `Session::modifiers_changed(shift, ctrl)` from window-level key events,
+  followed by the frontend re-sending `pointer_hover` at the last pointer
+  position, which is how criterion 8 reaches the shape tools; the
+  `session/mod.rs` split. *2026-10-06 (architect):* as built (PR #35),
+  `modifiers_changed` only caches the state and does not re-run the hover
+  itself, so a `Session`-level test of criterion 8 calls `pointer_hover`
+  with the new modifiers.
 - [`specs/advanced-selection/adrs.md`](../advanced-selection/adrs.md):
   its planned `Modifiers { shift, ctrl, alt }` in `vecmanf-ui-core`, which
   this feature introduces first (below).
