@@ -76,6 +76,9 @@ pub enum TransformGlyphKind {
     },
     /// The centre move handle: a rounded square with a four-way arrow.
     Move,
+    /// A parameter handle's knob: a circle with a ring and a centre dot
+    /// (the corner radius of a rectangle, a star's inner radius).
+    Parameter,
 }
 
 /// One of the Select tool's transform handles — this crate's own minimal
@@ -117,6 +120,10 @@ pub struct TransformDecorationInput {
     /// The two end points of the dashed guide along the skew's fixed line,
     /// during a skew drag only.
     pub skew_guide: Option<(Point, Point)>,
+    /// Dashed guides from a rectangle corner to its hovered or dragged
+    /// radius handle (`docs/design-system.md`, "Parameter handle guide"):
+    /// corner first, handle second.
+    pub param_guides: Vec<(Point, Point)>,
 }
 
 /// A hollow resize-handle glyph: `--accent` outline on a rounded square
@@ -234,6 +241,36 @@ fn move_handle_glyph(
     list
 }
 
+/// The parameter handle's knob: a `--accent` ring around a white ground, an
+/// `--accent` centre dot; `--accent-hover` ground on hover (and on the
+/// followers of a radius drag), solid `--accent` ground with a white dot
+/// while dragging (`docs/design-system.md`, "Parameter handle"). Round with a
+/// centre dot is the one silhouette no other canvas glyph has.
+fn parameter_handle_glyph(
+    view: ViewTransform,
+    center: Point,
+    dragging: bool,
+    hovered: bool,
+) -> DrawList {
+    let size = screen_px_to_mm(view, theme::PARAM_KNOB_DIAMETER_PX);
+    let ring = screen_px_to_mm(view, theme::PARAM_KNOB_RING_PX);
+    let dot = screen_px_to_mm(view, theme::PARAM_KNOB_DOT_PX);
+    let ground_size = (size - 2.0 * ring).max(0.0);
+    let mut list = glyphs::circle(center, size, theme::SHAPE_HANDLE_STROKE);
+    list.extend(glyphs::circle(center, ground_size, RgbaColor::WHITE));
+    let dot_color = if dragging {
+        list.extend(glyphs::circle(center, ground_size, theme::ACCENT));
+        RgbaColor::WHITE
+    } else {
+        if hovered {
+            list.extend(glyphs::circle(center, ground_size, theme::ACCENT_HOVER));
+        }
+        theme::ACCENT
+    };
+    list.extend(glyphs::circle(center, dot, dot_color));
+    list
+}
+
 /// The skew handle's glyph: two opposed parallel arrows along `direction`
 /// (the "shear" picture, never a single double arrow, so it cannot read as
 /// a resize handle) — `--accent` strokes on a transparent ground idle,
@@ -303,13 +340,20 @@ pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationI
     // dot replaces it, so it never reads as a pressed handle with a dot
     // on top. "At" is within one screen pixel.
     let at_pivot_mm = screen_px_to_mm(view, 1.0);
-    for handle in &input.handles {
+    // Parameter handles sit above every other handle (`docs/design-system.md`):
+    // their guides and knobs are drawn after the loop below.
+    let transform_handles = input
+        .handles
+        .iter()
+        .filter(|handle| handle.kind != TransformGlyphKind::Parameter);
+    for handle in transform_handles {
         if let Some(pivot) = input.pivot_marker
             && handle.position.vector_to(pivot).length() <= at_pivot_mm
         {
             continue;
         }
         list.extend(match handle.kind {
+            TransformGlyphKind::Parameter => continue,
             TransformGlyphKind::Resize => {
                 resize_handle_glyph(view, handle.position, handle.dragging)
             }
@@ -327,6 +371,28 @@ pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationI
                 move_handle_glyph(view, handle.position, handle.dragging, handle.hovered)
             }
         });
+    }
+    for &(corner, handle) in &input.param_guides {
+        list.extend(shape_preview::dashed_guide(
+            corner,
+            handle,
+            screen_px_to_mm(view, 1.0),
+            theme::ACCENT_HOVER,
+            screen_px_to_mm(view, theme::GUIDE_DASH_PX),
+            screen_px_to_mm(view, theme::GUIDE_GAP_PX),
+        ));
+    }
+    for handle in input
+        .handles
+        .iter()
+        .filter(|handle| handle.kind == TransformGlyphKind::Parameter)
+    {
+        list.extend(parameter_handle_glyph(
+            view,
+            handle.position,
+            handle.dragging,
+            handle.hovered,
+        ));
     }
     if let Some((from, to)) = input.skew_guide {
         list.extend(shape_preview::dashed_guide(
@@ -483,6 +549,7 @@ mod tests {
             ],
             pivot_marker: None,
             skew_guide: None,
+            param_guides: Vec::new(),
         };
         let list = build_transform_handles(ViewTransform::identity(), &input);
         assert_ne!(list.triangles.len(), 0);
@@ -503,6 +570,7 @@ mod tests {
                 }],
                 pivot_marker: None,
                 skew_guide: None,
+                param_guides: Vec::new(),
             };
             build_transform_handles(ViewTransform::identity(), &input)
         };
@@ -531,11 +599,13 @@ mod tests {
             handles: vec![handle(0.0, 0.0), handle(10.0, 10.0)],
             pivot_marker: Some(Point::new(50.0, 50.0)),
             skew_guide: None,
+            param_guides: Vec::new(),
         };
         let at_handle = TransformDecorationInput {
             handles: vec![handle(0.0, 0.0), handle(10.0, 10.0)],
             pivot_marker: Some(Point::new(0.0, 0.0)),
             skew_guide: None,
+            param_guides: Vec::new(),
         };
         let view = ViewTransform::identity();
         let elsewhere = build_transform_handles(view, &with_pivot_elsewhere);
@@ -550,6 +620,7 @@ mod tests {
                 handles: vec![handle(0.0, 0.0)],
                 pivot_marker: None,
                 skew_guide: None,
+                param_guides: Vec::new(),
             },
         );
         assert_eq!(
@@ -565,6 +636,7 @@ mod tests {
             handles: vec![],
             pivot_marker: Some(Point::new(5.0, 5.0)),
             skew_guide: None,
+            param_guides: Vec::new(),
         };
         let list = build_transform_handles(ViewTransform::identity(), &input);
         assert_ne!(list.triangles.len(), 0);
@@ -585,6 +657,7 @@ mod tests {
                 handles: vec![g],
                 pivot_marker: None,
                 skew_guide: None,
+                param_guides: Vec::new(),
             },
         )
     }
@@ -662,9 +735,136 @@ mod tests {
             handles: vec![],
             pivot_marker: None,
             skew_guide: Some((Point::new(0.0, 0.0), Point::new(70.0, 0.0))),
+            param_guides: Vec::new(),
         };
         let list = build_transform_handles(ViewTransform::identity(), &input);
         // 70 px at 4 on / 3 off: ten dashes of two triangles each.
         assert_eq!(list.triangle_count(), 20);
+    }
+
+    fn glyph_list(kind: TransformGlyphKind, dragging: bool, hovered: bool) -> DrawList {
+        build_transform_handles(
+            ViewTransform::identity(),
+            &TransformDecorationInput {
+                handles: vec![TransformHandleGlyph {
+                    position: Point::new(0.0, 0.0),
+                    kind,
+                    dragging,
+                    hovered,
+                }],
+                ..TransformDecorationInput::default()
+            },
+        )
+    }
+
+    fn extent(list: &DrawList) -> f64 {
+        list.triangles
+            .iter()
+            .map(|v| v.position.vector_to(Point::new(0.0, 0.0)).length())
+            .fold(0.0, f64::max)
+    }
+
+    /// `vecmanf-ui-core`'s 4 px clearance property is derived from these
+    /// numbers (`param_handles.rs`: 8 px resize squircle, 12 px rotate glyph,
+    /// 16 px centre glyph, 10 px knob). The two crates share no code, so the
+    /// duplicated numbers are guarded here too: no glyph is drawn larger than
+    /// its circumscribed radius there.
+    #[test]
+    fn no_glyph_is_drawn_larger_than_the_size_the_clearance_property_assumes() {
+        let half_diagonal = |side: f64| side * std::f64::consts::FRAC_1_SQRT_2;
+        let cases = [
+            (TransformGlyphKind::Resize, half_diagonal(8.0)),
+            (TransformGlyphKind::Rotate, 6.0),
+            (TransformGlyphKind::Move, half_diagonal(16.0)),
+            (TransformGlyphKind::Parameter, 5.0),
+        ];
+        for (kind, bound) in cases {
+            for (dragging, hovered) in [(false, false), (false, true), (true, false)] {
+                let list = glyph_list(kind, dragging, hovered);
+                assert_ne!(list.triangle_count(), 0, "{kind:?}");
+                assert!(
+                    extent(&list) <= bound + 1e-9,
+                    "{kind:?} reaches {} px, over {bound}",
+                    extent(&list)
+                );
+            }
+        }
+    }
+
+    /// Criterion 8: the knob is round with a centre dot, in both the idle
+    /// and the dragging state; no other glyph is.
+    #[test]
+    fn the_parameter_knob_is_a_ring_with_a_centre_dot_whose_states_differ_by_ground() {
+        let idle = glyph_list(TransformGlyphKind::Parameter, false, false);
+        let hover = glyph_list(TransformGlyphKind::Parameter, false, true);
+        let drag = glyph_list(TransformGlyphKind::Parameter, true, false);
+        let has =
+            |list: &DrawList, color: RgbaColor| list.triangles.iter().any(|v| v.color == color);
+        assert!(has(&idle, RgbaColor::WHITE) && has(&idle, theme::ACCENT));
+        assert!(!has(&idle, theme::ACCENT_HOVER));
+        assert!(has(&hover, theme::ACCENT_HOVER), "hover ground");
+        assert!(!has(&drag, RgbaColor::WHITE) || has(&drag, theme::ACCENT));
+        // A centre dot: a vertex at the 2 px dot radius exists in every state.
+        for list in [&idle, &hover, &drag] {
+            assert!(list.triangles.iter().any(|v| {
+                let r = v.position.vector_to(Point::new(0.0, 0.0)).length();
+                (r - theme::PARAM_KNOB_DOT_PX / 2.0).abs() < 1e-6
+            }));
+        }
+        // The dragging dot is white on a solid accent ground.
+        let dot_color = drag
+            .triangles
+            .iter()
+            .rev()
+            .find(|v| {
+                let r = v.position.vector_to(Point::new(0.0, 0.0)).length();
+                (r - theme::PARAM_KNOB_DOT_PX / 2.0).abs() < 1e-6
+            })
+            .map(|v| v.color);
+        assert_eq!(dot_color, Some(RgbaColor::WHITE));
+    }
+
+    /// `docs/design-system.md`: the parameter handle is drawn above every
+    /// other handle, so its triangles come last in the list.
+    #[test]
+    fn parameter_handles_are_drawn_after_every_other_handle() {
+        let input = TransformDecorationInput {
+            handles: vec![
+                TransformHandleGlyph {
+                    position: Point::new(0.0, 0.0),
+                    kind: TransformGlyphKind::Parameter,
+                    dragging: false,
+                    hovered: false,
+                },
+                TransformHandleGlyph {
+                    position: Point::new(50.0, 0.0),
+                    kind: TransformGlyphKind::Resize,
+                    dragging: false,
+                    hovered: false,
+                },
+            ],
+            ..TransformDecorationInput::default()
+        };
+        let list = build_transform_handles(ViewTransform::identity(), &input);
+        let final_vertex = list.triangles.last().expect("geometry").position;
+        assert!(
+            final_vertex.vector_to(Point::new(0.0, 0.0)).length() < 6.0,
+            "the knob, listed first, is drawn last"
+        );
+    }
+
+    #[test]
+    fn a_guide_joins_the_corner_to_a_radius_handle() {
+        let input = TransformDecorationInput {
+            param_guides: vec![(Point::new(0.0, 0.0), Point::new(30.0, 30.0))],
+            ..TransformDecorationInput::default()
+        };
+        let list = build_transform_handles(ViewTransform::identity(), &input);
+        assert_ne!(list.triangle_count(), 0);
+        assert!(
+            list.triangles
+                .iter()
+                .all(|v| v.color == theme::ACCENT_HOVER)
+        );
     }
 }

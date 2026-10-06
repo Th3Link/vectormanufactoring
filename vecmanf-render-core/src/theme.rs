@@ -235,3 +235,22 @@ pub const MIN_DISPLAY_STROKE_WIDTH_PX: f64 = 1.0;
 /// distinct from the committed placeholder stroke's document-mm
 /// weight (acceptance criterion 16), since nothing has committed yet.
 pub const LIVE_PREVIEW_STROKE_PX: f64 = 1.5;
+
+/// `--preview-new` (`docs/design-system.md`): the "new" half of blue-new,
+/// black-old, the hollow outline of the geometry a release would commit. An
+/// alias of [`ACCENT`], named so the preview can be re-coloured without
+/// touching the selection colour. The "old" half has no token: it is the
+/// committed object in its own style.
+pub const PREVIEW_NEW: RgbaColor = ACCENT;
+
+/// A parameter handle's knob, screen-space pixels: a 10 px circle
+/// (`docs/design-system.md`, "Parameter handle"). `vecmanf-ui-core`'s own
+/// `KNOB_DIAMETER_PX` is the same number, which its 4 px clearance property
+/// is derived from; a test here guards that no glyph grows past it.
+pub const PARAM_KNOB_DIAMETER_PX: f64 = 10.0;
+
+/// The knob's `--shape-handle-stroke` ring, screen-space pixels.
+pub const PARAM_KNOB_RING_PX: f64 = 1.5;
+
+/// The knob's centre dot, screen-space pixels.
+pub const PARAM_KNOB_DOT_PX: f64 = 4.0;

@@ -16,6 +16,7 @@
 mod color;
 mod decorations;
 mod glyphs;
+mod live_preview;
 mod pen_preview;
 mod select_decoration;
 mod shape_preview;
@@ -25,6 +26,7 @@ mod theme;
 pub use color::RgbaColor;
 pub use decorations::{DecorationInput, Hovered};
 pub use glyphs::{DrawList, Vertex};
+pub use live_preview::build_live_edit_preview;
 pub use pen_preview::build_pen_preview;
 pub use select_decoration::{
     SelectDecorationInput, SelectionBox, TransformDecorationInput, TransformGlyphKind,

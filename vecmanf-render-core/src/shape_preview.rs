@@ -81,7 +81,7 @@ fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
 const UNUSED_ANCHOR_ID: vecmanf_document_core::AnchorId =
     vecmanf_document_core::AnchorId::new(0, 0);
 
-fn outline_to_anchors(
+pub(crate) fn outline_to_anchors(
     outline: &[vecmanf_document_core::OutlineAnchor],
 ) -> Vec<vecmanf_document_core::AnchorSnapshot> {
     outline
