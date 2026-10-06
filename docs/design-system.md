@@ -317,6 +317,56 @@ values, not an implementation site, for those four rows.
   not a held "mode," so the view (or the status-bar zoom readout) moving is
   feedback enough; don't add a transient on-canvas zoom popup.
 
+- **Switch (`ScaleStrokeSwitch`)** (2026-10-06, `object-transform`
+  criteria 8, 26-31, new): the pattern for one persistent on/off setting
+  that is tool state, not an object property. First use: "Scale stroke
+  width". Spec of the control, which is identical wherever it is hosted:
+  - **Semantics:** Radix `Switch` (`radix-ui` is already a dependency),
+    `role="switch"`, `aria-checked`, wrapped in a `<label>` so the whole
+    row (text and track) is the click target. One Tab stop; Space toggles
+    (Enter does not, native switch behaviour). Never disabled, whatever is
+    selected, including nothing (criterion 30). No keyboard shortcut is
+    assigned now; Tab + Space is the keyboard path.
+  - **Label:** "Scale stroke width", sentence case, `text-sm` (14px),
+    `--toolbar-icon`, to the *left* of the track, 8px gap. The label is the
+    accessible name; do not add "On/Off" text, state is shown by the track.
+  - **Track:** 32 x 18px, fully rounded. **Off:** transparent fill, 1.5px
+    `--toolbar-icon` border, 12px `--toolbar-icon` thumb at the left, 2px
+    inset. **On:** `--toolbar-icon-active-bg` fill and border, 12px
+    `--toolbar-icon-active-fg` thumb at the right. State is carried by thumb
+    position and fill, never by color alone. Off border is 8:1 and on fill
+    is 3.3:1 against `--toolbar-bg`, both above the 3:1 non-text minimum.
+    Thumb moves 100ms ease-out; no motion under `prefers-reduced-motion`.
+  - **Row:** 28px high, 8px horizontal padding, `rounded-md`. Hover:
+    `--editor-accent-hover` behind the whole row. Focus-visible: 2px
+    `--editor-accent` ring with 1px `--toolbar-bg` offset (the grey `--ring`
+    the other toolbar buttons use is only 2.4:1 on `--toolbar-bg`; bring
+    those up to this ring when next touched).
+  - **Tooltip** (Radix `Tooltip`, 400ms delay, same styling as the tool
+    rail's, `side="bottom"`): "Scale stroke width with the object. Off: a
+    resize keeps the stroke thickness." Also on the focus ring's element
+    for keyboard users (Radix shows it on focus).
+  - **State** lives in `useEditorSession` (`scaleStrokeWidth`,
+    `setScaleStrokeWidth`), not in the component, defaults to off, and is
+    reset to off by `newProject()` and `openProject()` (criterion 27). It is
+    never persisted. The press handler reads it once at pointer-down
+    (criterion 28).
+  - **Hosts.** *Interim (slice 5):* `SelectToolbar`, a contextual bar shown
+    whenever `editor.tool === "select"`, whether or not anything is
+    selected. It uses the same slot, container and look as `NodeToolbar`/
+    `ShapeToolbar` (the `pointer-events-none` overlay row at `top-3`, left
+    of which sits the tool rail: pill `h-9`, `rounded-lg`, `px-2`,
+    `--toolbar-bg`, `--panel-elevation-shadow`, `pointer-events-auto`), so
+    no canvas resize and the same tab order: tool rail, canvas, bar. It
+    holds this one control. The key handler for Space-to-pan must not
+    `preventDefault` when focus is inside the bar. *Final (slice 7,
+    `stroke-and-fill-styling`):* the "Transform" section of
+    `PropertiesPanel`, below "Style": one full-width row, label left,
+    same switch right-aligned, optional 12px `--toolbar-icon` hint line
+    below ("Off: a resize keeps stroke thickness."). The same component and
+    the same session state, so no behaviour change; `SelectToolbar` is
+    deleted in that slice, never shown alongside the panel row.
+
 ## Keyboard shortcuts established so far
 
 | Action | Shortcut | Notes |
@@ -331,6 +381,7 @@ values, not an implementation site, for those four rows.
 | Finish path | Enter (or double-click) | Matches Inkscape |
 | Cancel in-progress path | Escape | |
 | Delete selected node(s) | Delete or Backspace | Both bound; macOS keyboards label the backspace key "delete" |
+| Toggle "Scale stroke width" | none; Tab to the switch, Space | `object-transform`; tool state, off per session, never saved; no letter shortcut until usage shows one is needed |
 | Open/focus the style panel | Shift+Ctrl+F | Matches Inkscape's Fill & Stroke binding; app-global, not canvas-focus-scoped (`stroke-and-fill-styling`) — see note below |
 
 Single-letter tool shortcuts are a different category from the File menu's
