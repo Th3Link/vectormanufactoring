@@ -8,9 +8,9 @@ which crate a decision is about (see
 
 **Once an ADR is accepted, its decision text is not edited.** Changed
 circumstances get a new ADR that supersedes the old one, and the old one's
-Status line is updated to point at it. All eleven ADRs below are accepted, so
+Status line is updated to point at it. ADRs 0001–0011 below are accepted, so
 this rule is now live: every further change to any of these decisions is a new
-ADR.
+ADR. ADR 0012 was rejected before acceptance, so that rule never applied to it.
 (0001–0010 were accepted by customer sign-off; 0011 is downstream assembly of
 them and was accepted by the architect — see its own preamble for why
 `CLAUDE.md` §3 does not require a customer round for it.)
@@ -31,6 +31,7 @@ A decision too small for a full ADR gets a short dated note in that feature's
 | [0009](0009-concurrent-editing-semantics.md) | Concurrent editing semantics — undo, ephemeral state and merge granularity | workspace | Accepted |
 | [0010](0010-document-keyring-admins-and-revocation.md) | Document keyring — participants, admins and key revocation | workspace | Accepted |
 | [0011](0011-workspace-and-crate-layout.md) | Workspace and crate layout | workspace | Accepted |
+| [0012](0012-pages-in-the-document-model.md) | Pages in the document model | workspace | Rejected (2026-10-05, dropped from MVP) |
 
 ## Customer sign-off, 2026-10-02
 

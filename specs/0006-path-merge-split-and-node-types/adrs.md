@@ -283,6 +283,19 @@ this branch merges and threads its `rotation` register through Split
     two coincident selected nodes, because one offset never separates
     them. AC 10 wins. Flagged for the PO to reword (item 8 below).
 
+- **2026-10-05 (PO): AC 15's reproduction steps reworded, intent unchanged.**
+  Resolves item 8 below. The architect's review above found AC 15's
+  original "immediately drag them apart" wording only held up because of
+  the plain-click-collapse bug; the fix keeps a cross-path group selection
+  intact on a plain click, so a single click+drag on one member now drags
+  the whole group rather than separating it. AC 15 is reworded: click empty
+  canvas first (clearing the selection) before clicking and dragging one of
+  the two coincident nodes; what the criterion tests — that Split's two
+  coincident nodes can be separated again by dragging, and re-joined
+  without re-selecting — is unchanged. Slice 2's click-without-movement
+  behaviour (`path-node-editing`) is left as already accepted; not touched
+  here.
+
 - **2026-10-05: the crate boundary.**
   - `vecmanf-document-core`: the three-variant `AnchorKind`, the codec tags
     and read alias, the per-kind handle rule, the conversion table,
@@ -326,11 +339,7 @@ this branch merges and threads its `rotation` register through Split
    `paths_v2.vmf` with `"smooth"` and check it reads as Symmetric; a
    multi-path node drag is one commit.
 7. **No new crate, no new dependency, no ADR amendment.**
-8. **AC 15 vs `path-node-editing` AC 10.** Two coincident selected nodes
-   cannot be dragged apart while AC 10 moves every selected node by the
-   same offset. Default: AC 10 holds. AC 15 keeps "both selected" and
-   drops "immediately drag them apart". To separate them, the maker
-   clicks empty canvas, then clicks and drags one node. Optional, for the
-   `ux-engineer`: Inkscape's rule that a click without movement on a
-   selected node collapses the selection to that node. That needs no
-   document write, but it changes accepted slice-2 behaviour.
+8. **AC 15 vs `path-node-editing` AC 10 — resolved.** The PO reworded AC 15
+   per the default above (dated note in "Feature-local decisions"); the
+   optional Inkscape-style collapse-on-click-without-movement was not
+   taken, so slice 2's accepted behaviour is untouched.

@@ -14,9 +14,15 @@ its two open points (AC 16's stop count, interior selection) were resolved
 in the specification on 2026-10-04; see "Flagged to the lead".
 
 **Build order:** this slice touches `vecmanf-document-core`,
-`vecmanf-render-core` and `vecmanf-ui-core`, which `story/primitive-shapes`
-also changes. It starts after that branch merges (`CLAUDE.md` §4, parallel
-work only on disjoint crates).
+`vecmanf-render-core` and `vecmanf-ui-core`. `primitive-shapes` and
+`path-merge-split-and-node-types` are both merged. **2026-10-05 (architect):
+`object-transform` (slice 5) also touches these same crates and this
+slice's `style: Style` replaces the `stroke_width` field slice 5's resize
+(AC 8) writes directly — a real collision, not just a shared-crate caution.
+This slice starts after `object-transform` merges** (`CLAUDE.md` §4). Once
+that lands, `path_topology.rs`'s `split_at_anchor` must copy `style` with
+fresh `StopId`s for its new object, alongside slice 5's `rotation` copy
+already there.
 
 ## Depends on
 
@@ -383,6 +389,46 @@ work only on disjoint crates).
   resolution). Read "version 3" above as "version 5". A version number in
   an `adrs.md` is provisional: the PR that merges takes `main`'s
   `CURRENT_FORMAT_VERSION + 1`.
+
+- **2026-10-05 (architect): gradient box orientation vs. rotation — open,
+  decide once `object-transform` merges.** This slice computes the linear/
+  radial gradient box from the object's outline in `vecmanf-render-core`.
+  Once `object-transform` ships rotation, that outline is already rotated,
+  so the question is whether the gradient box is derived from the object's
+  own (oriented) local frame — so the gradient turns with the object, like
+  SVG's own `rotate()` transform on a gradient-filled shape — or from the
+  rotated outline's axis-aligned bounding box, which would keep the
+  gradient's screen-space direction fixed while the object turns under it.
+  **Recommendation: the object's own oriented frame** (matches SVG and
+  every reference tool's intuition that a gradient is part of the object,
+  not the viewport). Not decided now because no rotation exists yet to
+  test against; whoever builds this slice after `object-transform` merges
+  should confirm this default and add a test, not silently inherit it.
+
+- **2026-10-06 (architect): gradient box decided; resize-path writes
+  re-pointed.** Resolves the note above, after reviewing PR #29.
+  - **The gradient box is the object's oriented box**, the same one the
+    Select tool draws: `vecmanf-ui-core::oriented_bounds` (local-frame
+    `min`/`max`, `angle`, `pivot`; geometry only, stroke excluded). A
+    rotated object's gradient turns with it, for paths and primitives
+    alike. `render-core` does not recompute it: `editor-wasm` passes the
+    `OrientedBox` values in the fill draw command (commands carry resolved
+    geometry). It has no `ui-core` dependency, so it takes plain points and
+    an `Angle`, not the type. SVG export (slice 10): a primitive uses
+    `objectBoundingBox` under its `rotate()`; a path, whose anchors are
+    baked, uses `userSpaceOnUse` with a `gradientTransform` built from the
+    box. Test: rotate a linear-gradient rectangle 90° and the gradient runs
+    top to bottom on screen.
+  - **Slice 5 writes `stroke_width` directly** in `Document::resize_rect`,
+    `resize_ellipse`, `resize_star_frame` and `resize_path`, through
+    `path_codec::write_stroke_width`, and `ui-core::select_tool` scales the
+    snapshot's `stroke_width` field. When `style: Style` replaces that
+    field, those four commands take the scaled width through the style
+    codec, and `select_tool` scales `style.stroke_width` only. Dash lengths
+    are stored as multiples of the width (AC 9), so they follow the resize
+    with no extra write. The `> 0` refusal on open makes the document-core
+    resize commands refuse a width that is `≤ 0` or not finite; today only
+    `ui-core` floors it (`MIN_STROKE_WIDTH_MM`).
 
 ## Flagged to the lead
 

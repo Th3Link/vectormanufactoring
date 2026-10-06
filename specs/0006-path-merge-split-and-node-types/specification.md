@@ -197,8 +197,11 @@ them that way: Split's handle/kind rule is Join's rule run backwards.
 15. Given a successful Split (criterion 13 or 14), then the two resulting
     coincident nodes are both selected afterward — on two separate path
     objects for criterion 13, on the two ends of one open path for criterion
-    14 — so the maker can immediately drag them apart, or re-Join them,
-    without re-selecting.
+    14 — so the maker can immediately re-Join them without re-selecting; to
+    instead separate the pair, the maker clicks empty canvas first (clearing
+    the two-node selection), then clicks and drags just one of the two
+    coincident nodes, which moves only that node away from its still-
+    stationary twin.
 16. Given a selected node, when the maker chooses the conversion action for
     the kind that node already has (e.g. "Make asymmetric" on a node already
     Asymmetric, "Make symmetric" on a node already Symmetric, "Make corner"
