@@ -131,6 +131,10 @@ this one is accepted (this spec does not edit them).
    criterion 25 below. Its Shift and Ctrl creation rules stay as they are.
 4. After a create-drag the Select tool becomes active (criterion 28), unless
    the customer chooses otherwise (question 2).
+5. Amendments after the customer tested PR #38 (2026-10-06, both bugs, not new
+   scope): choosing a creation tool clears the selection and draws no selection
+   box under it (criterion 27 reversed); no hover highlight of other objects
+   during any Select-tool drag (criterion 15a).
 
 ## Acceptance criteria
 
@@ -264,6 +268,17 @@ the parameter-handle threshold).
     saved file never contains preview data.
     Not in this spec: the Node tool keeps its own node-drag preview
     (question 6).
+15a. Given any Select-tool drag in progress (move, resize, rotate, skew, a
+    parameter-handle drag, and also a marquee or lasso drag), then for the
+    whole drag no object shows a hover highlight, hover box, hint chip or
+    hover cursor, other than the object and the handle being edited, which
+    keep the look their drag gives them (the dragged handle its "dragging"
+    ground). The hover state is recomputed from the pointer position at the
+    release, so an object under the pointer after the release is highlighted
+    from the next frame. A press on empty canvas and a press-and-release inside
+    the dead zone also show no hover change between the press and the release.
+    (Added 2026-10-06 after the customer tested PR #38, numbered 15a so the
+    numbering of the other criteria stays stable.)
 
 ### The refinements features for primitives
 
@@ -393,12 +408,18 @@ the parameter-handle threshold).
     crosshair cursor everywhere, including over existing objects, and no hover
     highlight, hint chip or hit state on existing objects.
 26. Given a creation tool is active, when the maker presses and releases without
-    moving, then nothing is created and the selection is unchanged (today the
-    press clears it).
-27. Given objects are selected when a creation tool becomes active, then the
-    selection stays and each selected object keeps only its plain selection box
-    (no handles, no hover, no hit-testing), so the maker still sees what the
-    Properties panel would act on.
+    moving, then nothing is created and the selection is unchanged (it is empty
+    by criterion 27).
+27. Given a creation tool (Rectangle, Ellipse or Polygon/Star) becomes active by
+    any route (tool rail, `R`, `E`, `*`), then the selection is cleared in the
+    same step: nothing is selected, and no selection box, handle, hover
+    highlight, hint chip or hit state is drawn for any object for as long as
+    that tool is active. Switching back to the Select tool does not restore the
+    earlier selection. (Amended 2026-10-06 after the customer tested PR #38:
+    this reverses the earlier rule that the selection stayed, with a plain box,
+    under a creation tool. The Pen and Node tools are not creation tools in
+    this sense and are unchanged.) Given a create-drag commits, then the new
+    shape is selected by criterion 28, as before.
 28. Given a create-drag commits (default of question 2), then the Select tool
     becomes active in the same step with the new shape as the only selected
     object and its full handle set drawn (`0003` criterion 1, "it becomes the
@@ -793,8 +814,8 @@ not be a hotkey. Revisit with the undo slice.
   hint.
 - **Creation tools over an existing object:** the tool's crosshair everywhere, no
   hover highlight of existing objects, no hint chip, no handle, no hit state.
-  A press creates (criterion 25). A selected object keeps only its plain 1 px
-  selection box (criterion 27).
+  A press creates (criterion 25). Choosing a creation tool clears the selection,
+  so no selection box is drawn under it (criterion 27, amended 2026-10-06).
 - **After a create-drag** the tool switches silently (criterion 28): the rail
   highlights Select, the Select bar replaces the shape bar in place, the new
   shape shows its handles. No toast; the handles appearing is the signal. `R`,
