@@ -10,6 +10,7 @@ use vecmanf_document_core::{
 
 use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;
+use crate::transform_drag::CornerRadiusScaling;
 use crate::transform_math::{
     polygon_star_resize_factor, resize_anchor_local_position, resize_local_box, scaled_and_floored,
     stroke_or_radius_factor,
@@ -17,16 +18,18 @@ use crate::transform_math::{
 
 /// A primitive's resized frame and the stroke/radius factor that goes
 /// with it. Rectangles and ellipses resize their local box (the corner
-/// radius scales with the factor, acceptance criterion 9); a polygon or
+/// radius scales with the factor only under [`CornerRadiusScaling::Proportional`],
+/// acceptance criterion 9 of slice 5, criterion 23 of `unified-object-editing`); a polygon or
 /// star is always a uniform outer-radius scale (criterion 11).
 pub(crate) fn resize_primitive(
     primitive: &PrimitiveSnapshot,
     start_box: &OrientedBox,
     direction: ResizeDirection,
     local_delta: Vec2,
-    shift: bool,
-    ctrl: bool,
+    modifiers: (bool, bool),
+    radius_scaling: CornerRadiusScaling,
 ) -> (PrimitiveSnapshot, f64) {
+    let (shift, ctrl) = modifiers;
     let box_resize = || {
         resize_local_box(
             start_box.min,
@@ -41,13 +44,21 @@ pub(crate) fn resize_primitive(
         Shape::Rect { corner_radius, .. } => {
             let resized = box_resize();
             let factor = stroke_or_radius_factor(resized.sx, resized.sy);
+            // `Keep` hands the stored radius back untouched, so the register
+            // is not rewritten and a concurrent radius edit is not beaten.
+            let radius = match radius_scaling {
+                CornerRadiusScaling::Keep => corner_radius,
+                CornerRadiusScaling::Proportional => {
+                    scaled_and_floored(corner_radius, factor, Length::from_mm(0.0))
+                }
+            };
             let shape = Shape::Rect {
                 bounds: RectBounds {
                     origin: resized.min,
                     width: Length::from_mm(resized.max.x - resized.min.x),
                     height: Length::from_mm(resized.max.y - resized.min.y),
                 },
-                corner_radius: scaled_and_floored(corner_radius, factor, Length::from_mm(0.0)),
+                corner_radius: radius,
             };
             (shape, factor)
         }

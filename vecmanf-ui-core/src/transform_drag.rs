@@ -14,6 +14,7 @@ use vecmanf_document_core::{
 
 use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;
+use crate::param_edit::{apply_param, value_from_pointer};
 use crate::skew_math::{skew_angle, skew_factor, skew_frame};
 use crate::transform_commit::{commit_gesture, sane_or};
 use crate::transform_handle_layout::{EditHandle, Side};
@@ -47,14 +48,40 @@ pub enum StrokeScaling {
     Proportional,
 }
 
-/// The modifiers and mode a resize drag runs with: Shift (center pivot,
-/// AC 7), Ctrl (proportional, AC 5) and the [`StrokeScaling`] captured at
-/// the press (AC 28).
+/// Whether a resize of a rectangle also scales its corner radius, the
+/// "Scale corner radius" switch (`specs/unified-object-editing/`, criterion
+/// 23; customer decision 2026-10-06). An enum, not a `bool`, for the same
+/// reason as [`StrokeScaling`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CornerRadiusScaling {
+    /// The default: a resize keeps the radius's absolute size, and the stored
+    /// register is not rewritten.
+    #[default]
+    Keep,
+    /// The radius scales with the resize, √(sx·sy) like the stroke width
+    /// (`0005` criterion 9).
+    Proportional,
+}
+
+/// The two Select-tool switches that decide what else a resize scales. Tool
+/// state, never written to the document (criteria 23, 28 of slice 5 and 23
+/// here): a drag captures it at the press, a typed size when the entry opens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ScaleModes {
+    /// "Scale stroke width".
+    pub stroke: StrokeScaling,
+    /// "Scale corner radius".
+    pub radius: CornerRadiusScaling,
+}
+
+/// The modifiers and modes a resize drag runs with: Shift (center pivot,
+/// AC 7), Ctrl (proportional, AC 5) and the [`ScaleModes`] captured at the
+/// press (AC 28).
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ResizeOptions {
     pub(crate) shift: bool,
     pub(crate) ctrl: bool,
-    pub(crate) stroke_scaling: StrokeScaling,
+    pub(crate) modes: ScaleModes,
 }
 
 /// The press point of a Select-tool drag, its dead zone and the handle
@@ -113,10 +140,15 @@ pub(crate) struct TransformDrag {
     pub(crate) start: ObjectSnapshot,
     pub(crate) start_box: OrientedBox,
     pub(crate) handle: EditHandle,
-    /// The tool's [`StrokeScaling`] as of the press: a drag uses it for
+    /// The tool's [`ScaleModes`] as of the press: a drag uses them for
     /// its whole duration, so a toggle mid-drag applies from the next drag
-    /// (AC 28 of slice 5).
-    pub(crate) stroke_scaling: StrokeScaling,
+    /// (AC 28 of slice 5, criterion 23 here).
+    pub(crate) modes: ScaleModes,
+    /// The radius gain ([`crate::radius_gain`]) of a corner-radius drag,
+    /// frozen at the press: it depends on the screen scale, so a wheel zoom
+    /// during the drag cannot change the mapping between frames and release
+    /// equals preview. `1` for every other handle.
+    pub(crate) param_gain: f64,
 }
 
 impl TransformDrag {
@@ -143,7 +175,7 @@ impl TransformDrag {
                     ResizeOptions {
                         shift,
                         ctrl,
-                        stroke_scaling: self.stroke_scaling,
+                        modes: self.modes,
                     },
                 )
             }
@@ -162,6 +194,13 @@ impl TransformDrag {
                 shift,
                 skew_angle(start_box, side, down_at, current, shift, ctrl),
             ),
+            EditHandle::Param(handle) => {
+                let local_delta = local_delta_of(start_box, down_at, current);
+                value_from_pointer(start, handle, local_delta, self.param_gain).map_or_else(
+                    || start.clone(),
+                    |value| sane_or(start, apply_param(start, value)),
+                )
+            }
             EditHandle::Move => start.clone(),
         }
     }
@@ -188,7 +227,7 @@ impl TransformDrag {
     /// rotate through `rotate_object`, a skew through `commit_resize` with
     /// no stroke width (anchors only).
     pub(crate) fn commit(&self, document: &Document, result: &ObjectSnapshot) {
-        commit_gesture(document, self.handle, result, self.stroke_scaling);
+        commit_gesture(document, self.handle, result, self.modes);
     }
 }
 
@@ -215,7 +254,7 @@ pub(crate) fn pivot_for(
         }
         EditHandle::Rotate(direction) => Some(rotate_pivot(box_, direction, shift)),
         EditHandle::Skew(side) => Some(skew_frame(box_, side, shift).fixed_point),
-        EditHandle::Move => None,
+        EditHandle::Move | EditHandle::Param(_) => None,
     }
 }
 
@@ -244,8 +283,9 @@ pub(crate) fn local_delta_of(start_box: &OrientedBox, down_at: Point, current: P
 /// 4-13 of slice 5): the one resize rule, called with the pointer's delta by
 /// a drag and with a typed size's delta by the entry. `start` unchanged if
 /// the result would not be finite and sane. The stroke width scales only
-/// for [`StrokeScaling::Proportional`]; the corner radius scales either way
-/// (AC 9, 31).
+/// for [`StrokeScaling::Proportional`], the corner radius only for
+/// [`CornerRadiusScaling::Proportional`] (AC 9, 31 of slice 5; criterion 23
+/// of `unified-object-editing`).
 pub(crate) fn resize_by_local_delta(
     start: &ObjectSnapshot,
     start_box: &OrientedBox,
@@ -253,15 +293,17 @@ pub(crate) fn resize_by_local_delta(
     local_delta: Vec2,
     options: ResizeOptions,
 ) -> ObjectSnapshot {
-    let ResizeOptions {
-        shift,
-        ctrl,
-        stroke_scaling,
-    } = options;
+    let ResizeOptions { shift, ctrl, modes } = options;
     let (mut resized, factor) = match start {
         ObjectSnapshot::Primitive(primitive) => {
-            let (resized, factor) =
-                resize_primitive(primitive, start_box, direction, local_delta, shift, ctrl);
+            let (resized, factor) = resize_primitive(
+                primitive,
+                start_box,
+                direction,
+                local_delta,
+                (shift, ctrl),
+                modes.radius,
+            );
             (ObjectSnapshot::Primitive(resized), factor)
         }
         ObjectSnapshot::Path(path) => {
@@ -282,7 +324,7 @@ pub(crate) fn resize_by_local_delta(
             )
         }
     };
-    if stroke_scaling == StrokeScaling::Proportional {
+    if modes.stroke == StrokeScaling::Proportional {
         scale_stroke(&mut resized, factor);
     }
     sane_or(start, resized)

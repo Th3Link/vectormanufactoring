@@ -7,13 +7,73 @@
 use vecmanf_document_core::{Angle, ObjectSnapshot, Point, Vec2};
 
 use super::{SelectDrag, SelectTool};
+use crate::object_selection::ObjectSelection;
 use crate::oriented_box::OrientedBox;
 use crate::skew_math::skew_frame;
+use crate::transform_commit::same_within_tolerance;
 use crate::transform_drag::pivot_for;
 use crate::transform_entry::TransformEntry;
 use crate::transform_handle_layout::EditHandle;
 
+/// The geometry a release would commit right now, for the blue half of
+/// blue-new, black-old (`specs/unified-object-editing/`, criteria 10 to 14):
+/// the resolved objects of a move (every selected one), a resize, rotate,
+/// skew or parameter drag (the one object). The same resolved snapshots
+/// [`SelectTool::pointer_up`] commits, so preview and release cannot
+/// disagree.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LiveEdit {
+    /// The resolved objects, uncommitted.
+    pub objects: Vec<ObjectSnapshot>,
+}
+
 impl SelectTool {
+    /// The live edit of the drag in flight with the pointer at `pointer` and
+    /// the modifiers as given, re-evaluated from the press every call so a
+    /// Shift or Ctrl change with no pointer movement reaches it (criterion
+    /// 14). `None` when idle, inside the 3 px dead zone, and when the
+    /// resolved objects equal the committed ones within 1e-9 mm and 1e-12 rad
+    /// (a drag back to its start shows nothing, criterion 12).
+    #[must_use]
+    pub fn live_edit(
+        &self,
+        objects: &[ObjectSnapshot],
+        selection: &ObjectSelection,
+        pointer: Point,
+        shift: bool,
+        ctrl: bool,
+    ) -> Option<LiveEdit> {
+        let resolved: Vec<ObjectSnapshot> = if let Some(offset) = self.live_offset(pointer) {
+            objects
+                .iter()
+                .filter(|object| selection.contains(object.id()))
+                .map(|object| object.translated(offset))
+                .collect()
+        } else {
+            vec![self.live_transform(pointer, shift, ctrl)?]
+        };
+        let changed = resolved.iter().any(|new| {
+            objects
+                .iter()
+                .find(|old| old.id() == new.id())
+                .is_none_or(|old| !same_within_tolerance(old, new))
+        });
+        changed.then_some(LiveEdit { objects: resolved })
+    }
+
+    /// Whether the parameter handles are drawn right now: not while the same
+    /// object is moved, resized, rotated or skewed by drag (the box can cross
+    /// the 72 px threshold mid-drag and they are no part of that gesture), but
+    /// yes while idle and during a parameter drag (criterion 7).
+    #[must_use]
+    pub fn param_handles_visible(&self) -> bool {
+        match &self.drag {
+            SelectDrag::None => true,
+            SelectDrag::Transforming(drag) => matches!(drag.handle, EditHandle::Param(_)),
+            SelectDrag::Moving { .. } => false,
+        }
+    }
+
     /// Which handle is currently being dragged, for the renderer's "solid
     /// fill while dragging" state and the cursor (`docs/design-system.md`).
     /// The centre handle counts while a move that started on it runs.

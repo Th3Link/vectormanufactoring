@@ -20,6 +20,13 @@ impl SelectTool {
         self.entry.as_ref()
     }
 
+    /// The handle the open entry belongs to: it keeps its dragging look while
+    /// the chip is open.
+    #[must_use]
+    pub fn entry_handle(&self) -> Option<EditHandle> {
+        self.entry.as_ref().map(TransformEntry::handle)
+    }
+
     /// Closes the numeric entry without writing (criterion 20): idempotent.
     pub fn cancel_entry(&mut self) {
         self.entry = None;
@@ -81,9 +88,9 @@ impl SelectTool {
                     &box_,
                     direction,
                     (shift, ctrl),
-                    self.stroke_scaling,
+                    self.modes,
                 )),
-                EditHandle::Skew(_) | EditHandle::Move => None,
+                EditHandle::Skew(_) | EditHandle::Move | EditHandle::Param(_) => None,
             };
             return match entry {
                 Some(entry) => {

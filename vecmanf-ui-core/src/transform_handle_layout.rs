@@ -14,6 +14,9 @@ use vecmanf_document_core::{Angle, Point, Tolerance};
 
 use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;
+use crate::param_handles::{
+    CENTRE_YIELD_PX, KNOB_INSET_PX, KNOB_PITCH_PX, PARAM_HIT_PX, PARAM_MIN_SIDE_PX, ParamHandle,
+};
 
 /// The 8 resize handles a rectangle, ellipse or path shows (acceptance
 /// criterion 1).
@@ -96,6 +99,9 @@ pub enum EditHandle {
     /// The centre move handle: hover feedback only, never a press target
     /// of its own (a press on it is a body press).
     Move,
+    /// A parameter handle of a primitive: the corner radius of a rectangle
+    /// or a star's inner radius (`specs/unified-object-editing/`).
+    Param(ParamHandle),
 }
 
 /// Which handle kinds an object's box shows: derived from the object's
@@ -142,6 +148,19 @@ pub struct TransformHandleTolerances {
     pub center_min_side_mm: f64,
     /// The dead zone radius of every drag on the selected object (3 px).
     pub drag_threshold_mm: f64,
+    /// Bounds a hit against a parameter handle (12 px, criterion 5).
+    pub param_hit: Tolerance,
+    /// A radius handle's distance from its corner at radius 0 (15 px).
+    pub param_inset_mm: f64,
+    /// The centre distance of two radius handles at the largest radius
+    /// (14 px: the knob diameter plus 4).
+    pub param_pitch_mm: f64,
+    /// A box's shorter side from which the parameter handles are drawn
+    /// (72 px, criterion 7).
+    pub param_min_side_mm: f64,
+    /// The centre handle is not drawn while a parameter handle is within
+    /// this distance of the box centre (20 px, criterion 8).
+    pub param_centre_yield_mm: f64,
 }
 
 /// The dead zone radius of every Select-tool drag on the selected object, and
@@ -165,6 +184,11 @@ impl TransformHandleTolerances {
             skew_min_side_mm: mm(24.0),
             center_min_side_mm: mm(48.0),
             drag_threshold_mm: mm(DRAG_THRESHOLD_PX),
+            param_hit: Tolerance::from_mm(mm(PARAM_HIT_PX)),
+            param_inset_mm: mm(KNOB_INSET_PX),
+            param_pitch_mm: mm(KNOB_PITCH_PX),
+            param_min_side_mm: mm(PARAM_MIN_SIDE_PX),
+            param_centre_yield_mm: mm(CENTRE_YIELD_PX),
         }
     }
 }
@@ -177,7 +201,7 @@ const THRESHOLD_SLACK: f64 = 1e-3;
 
 /// Whether `value` reaches `threshold` (both millimetres), within
 /// [`THRESHOLD_SLACK`].
-fn at_least(value: f64, threshold: f64) -> bool {
+pub(crate) fn at_least(value: f64, threshold: f64) -> bool {
     value >= threshold * (1.0 - THRESHOLD_SLACK)
 }
 
@@ -329,7 +353,11 @@ pub fn is_drawn_handle(
                     tolerances.edge_handle_min_side_mm,
                 )
         }
-        EditHandle::Rotate(_) | EditHandle::Skew(_) | EditHandle::Move => true,
+        // A parameter handle is only ever in the set when it is drawn
+        // (`param_handles`): below 72 px there is none.
+        EditHandle::Rotate(_) | EditHandle::Skew(_) | EditHandle::Move | EditHandle::Param(_) => {
+            true
+        }
     }
 }
 
@@ -360,8 +388,8 @@ fn depth_inside(box_: &OrientedBox, point: Point) -> Option<f64> {
 
 /// The one hit rule for press, hover, cursor and hint (criterion 9): every
 /// handle whose centre is within its own radius of `point` is a candidate;
-/// the nearest centre wins, and on an exact tie resize beats skew beats
-/// rotate. The centre handle is not a candidate; with `include_move` it is
+/// the nearest centre wins, and on an exact tie a parameter handle beats
+/// resize beats skew beats rotate. The centre handle is not a candidate; with `include_move` it is
 /// the fallback within its own hover radius (`min(12 px, s/4)`), for hover
 /// feedback only.
 ///
@@ -369,7 +397,9 @@ fn depth_inside(box_: &OrientedBox, point: Point) -> Option<f64> {
 /// reachable: its radius shrinks to a third of the box's smaller side
 /// (never below a quarter of the full radius), and a point *inside* the box
 /// only grabs one within the inner hit band (6 of 16 px of the resize radius) from the edge.
-/// Outside the box a handle always wins.
+/// Outside the box a handle always wins. A parameter handle has its own
+/// radius (12 px) and no inner band: it is the one handle family that sits
+/// inside the box, and `handles` only holds the handles that are drawn.
 #[must_use]
 pub fn hit_transform_handle(
     handles: &[(EditHandle, Point)],
@@ -380,13 +410,14 @@ pub fn hit_transform_handle(
 ) -> Option<EditHandle> {
     let resize_radius = resize_radius(box_, tolerances);
     let inside_depth = depth_inside(box_, point);
-    // (distance, rank, handle): rank 0 resize, 1 skew, 2 rotate.
+    // (distance, rank, handle): rank 0 parameter, 1 resize, 2 skew, 3 rotate.
     let mut best: Option<(f64, u8, EditHandle)> = None;
     for &(handle, position) in handles {
         let (radius, rank) = match handle {
-            EditHandle::Resize(_) => (resize_radius, 0),
-            EditHandle::Skew(_) => (tolerances.skew.as_mm(), 1),
-            EditHandle::Rotate(_) => (tolerances.rotate.as_mm(), 2),
+            EditHandle::Param(_) => (tolerances.param_hit.as_mm(), 0),
+            EditHandle::Resize(_) => (resize_radius, 1),
+            EditHandle::Skew(_) => (tolerances.skew.as_mm(), 2),
+            EditHandle::Rotate(_) => (tolerances.rotate.as_mm(), 3),
             EditHandle::Move => continue,
         };
         let distance = position.vector_to(point).length();
@@ -833,6 +864,7 @@ mod tests {
             EditHandle::Skew(side) if side.skews_along_u() => (9.0, 6.0),
             EditHandle::Skew(_) => (6.0, 9.0),
             EditHandle::Move => (8.0, 8.0),
+            EditHandle::Param(_) => (5.0, 5.0),
         };
         for (w, h) in [
             (24.0, 24.0),

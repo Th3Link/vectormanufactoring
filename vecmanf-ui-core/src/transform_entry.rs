@@ -12,7 +12,7 @@ use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;
 use crate::transform_commit::{MAX_COORDINATE_MM, commit_gesture};
 use crate::transform_drag::{
-    ResizeOptions, StrokeScaling, is_polygon_or_star, pivot_for, resize_by_local_delta, rotate_by,
+    ResizeOptions, ScaleModes, is_polygon_or_star, pivot_for, resize_by_local_delta, rotate_by,
 };
 use crate::transform_handle_layout::{EditHandle, is_corner};
 use crate::transform_math::{local_delta_for_radius, local_delta_for_size};
@@ -106,7 +106,7 @@ pub struct TransformEntry {
     /// Width and height are linked (Ctrl at the second press on a corner
     /// of a rectangle, ellipse or path).
     linked: bool,
-    stroke_scaling: StrokeScaling,
+    modes: ScaleModes,
     side_rotate_revealed: bool,
     pivot: Point,
     fields: Vec<EntryField>,
@@ -180,7 +180,7 @@ impl TransformEntry {
             handle,
             shift,
             linked: false,
-            stroke_scaling: StrokeScaling::Keep,
+            modes: ScaleModes::default(),
             side_rotate_revealed: !is_corner(direction),
             pivot: pivot_for(handle, object, box_, shift)
                 .unwrap_or_else(|| box_.to_document(box_.local_center())),
@@ -199,14 +199,14 @@ impl TransformEntry {
     /// A size entry for resize handle `direction` (criteria 25-29):
     /// `modifiers` are Shift (fixed point = box center) and Ctrl (linked
     /// width/height on a corner of a rectangle, ellipse or path) at the
-    /// second press; `stroke_scaling` is the switch's value now.
+    /// second press; `modes` are the two switches' values now.
     #[must_use]
     pub fn for_resize(
         object: &ObjectSnapshot,
         box_: &OrientedBox,
         direction: ResizeDirection,
         modifiers: (bool, bool),
-        stroke_scaling: StrokeScaling,
+        modes: ScaleModes,
     ) -> Self {
         let (shift, ctrl) = modifiers;
         let handle = EditHandle::Resize(direction);
@@ -256,7 +256,7 @@ impl TransformEntry {
             handle,
             shift,
             linked,
-            stroke_scaling,
+            modes,
             side_rotate_revealed: false,
             pivot: pivot_for(handle, object, box_, shift)
                 .unwrap_or_else(|| box_.to_document(box_.local_center())),
@@ -445,11 +445,11 @@ impl TransformEntry {
                     ResizeOptions {
                         shift: self.shift,
                         ctrl: self.linked,
-                        stroke_scaling: self.stroke_scaling,
+                        modes: self.modes,
                     },
                 )
             }
-            EditHandle::Skew(_) | EditHandle::Move => self.start.clone(),
+            EditHandle::Skew(_) | EditHandle::Move | EditHandle::Param(_) => self.start.clone(),
         }
     }
 
@@ -471,7 +471,7 @@ impl TransformEntry {
             Err((field, reason)) => EntryOutcome::Invalid { field, reason },
             Ok(None) => EntryOutcome::Unchanged,
             Ok(Some(result)) => {
-                commit_gesture(document, self.handle, &result, self.stroke_scaling);
+                commit_gesture(document, self.handle, &result, self.modes);
                 EntryOutcome::Committed
             }
         }

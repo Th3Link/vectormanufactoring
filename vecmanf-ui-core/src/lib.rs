@@ -24,6 +24,8 @@ mod node_tool;
 mod object_bounds;
 mod object_selection;
 mod oriented_box;
+mod param_edit;
+mod param_handles;
 mod pen_tool;
 mod poly_star_tool;
 mod rectangle_tool;
@@ -54,20 +56,29 @@ pub use node_tool::{
 pub use object_bounds::object_bounds;
 pub use object_selection::ObjectSelection;
 pub use oriented_box::{OrientedBox, oriented_bounds};
+pub use param_edit::{
+    MAX_INNER_RATIO, MIN_INNER_RATIO, ParamValue, apply_param, clamped_ratio, commit_param_batch,
+    value_from_pointer,
+};
+pub use param_handles::{
+    CENTRE_YIELD_PX, Corner, HandleTiers, KNOB_DIAMETER_PX, KNOB_INSET_PX, KNOB_PITCH_PX,
+    MIN_GLYPH_GAP_PX, PARAM_HIT_PX, PARAM_MIN_SIDE_PX, ParamHandle, centre_drawn, handle_tiers,
+    param_handles, radius_gain, radius_travel, star_inner_vertex,
+};
 pub use pen_tool::{PenTool, PointerUpOutcome as PenPointerUpOutcome};
 pub use poly_star_tool::{
     PolyStarMode, PolyStarPointerDownOutcome, PolyStarPointerUpOutcome, PolygonStarTool,
 };
 pub use rectangle_tool::{RectPointerDownOutcome, RectPointerUpOutcome, RectangleTool};
 pub use select_tool::{
-    SelectDoubleClickOutcome, SelectPointerDownOutcome, SelectTool, TransformHandleTolerances,
-    double_click,
+    LiveEdit, SelectDoubleClickOutcome, SelectPointerDownOutcome, SelectTool,
+    TransformHandleTolerances, double_click,
 };
 pub use selection::NodeSelection;
 pub use shape_hit_test::{hit_test_handle, hit_test_primitive};
 pub use shape_tool_common::{LiveShape, ShapeHitTolerances};
 pub use skew_math::{SkewFrame, skew_angle, skew_factor, skew_frame};
-pub use transform_drag::StrokeScaling;
+pub use transform_drag::{CornerRadiusScaling, ScaleModes, StrokeScaling};
 pub use transform_entry::{
     EntryField, EntryKind, EntryOutcome, InvalidReason, TransformEntry, format_degrees,
     parse_entry_number,

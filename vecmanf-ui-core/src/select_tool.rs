@@ -18,7 +18,11 @@ use vecmanf_document_core::{Document, ObjectSnapshot, Point, Tolerance};
 use crate::hit_test_object::hit_test_object;
 use crate::object_selection::ObjectSelection;
 use crate::oriented_box::{OrientedBox, oriented_bounds};
-use crate::transform_drag::{DragOrigin, StrokeScaling, TransformDrag, is_polygon_or_star};
+use crate::param_handles::{ParamHandle, centre_drawn, handle_tiers, param_handles, radius_gain};
+use crate::transform_commit::same_within_tolerance;
+use crate::transform_drag::{
+    CornerRadiusScaling, DragOrigin, ScaleModes, StrokeScaling, TransformDrag, is_polygon_or_star,
+};
 use crate::transform_entry::TransformEntry;
 pub use crate::transform_handle_layout::TransformHandleTolerances;
 use crate::transform_handle_layout::{
@@ -29,6 +33,10 @@ mod entry;
 mod preview;
 
 pub use entry::double_click;
+pub use preview::LiveEdit;
+
+/// A move offset within this (millimetres) of zero is no move.
+const MOVE_EQUAL_EPSILON_MM: f64 = 1e-9;
 
 #[derive(Debug, Clone, Default)]
 enum SelectDrag {
@@ -92,7 +100,7 @@ pub enum SelectDoubleClickOutcome {
 #[derive(Debug, Default)]
 pub struct SelectTool {
     drag: SelectDrag,
-    stroke_scaling: StrokeScaling,
+    modes: ScaleModes,
     entry: Option<TransformEntry>,
     /// The handle the most recent press landed on (`None` for a press
     /// anywhere else): a double-click only acts on a handle the *first*
@@ -115,6 +123,34 @@ fn handle_spec_for(object: &ObjectSnapshot, side_rotate: bool) -> HandleSpec {
         skew: matches!(object, ObjectSnapshot::Path(_)),
         side_rotate,
     }
+}
+
+/// Every handle of `object` the hit rule sees right now, in document space:
+/// the transform handles (an edge resize handle of a box under 24 px stays
+/// hit-testable although it is not drawn, slice 5's rule; see
+/// [`crate::is_drawn_handle`]), the centre handle only where it is drawn,
+/// and the parameter handles from 72 px. A parameter handle that is not drawn
+/// is not in the list and so has no hit area (criteria 6, 7, 8 of
+/// `specs/unified-object-editing/`).
+fn drawn_edit_handles(
+    object: &ObjectSnapshot,
+    box_: &OrientedBox,
+    tolerances: &TransformHandleTolerances,
+    side_rotate: bool,
+) -> Vec<(EditHandle, Point)> {
+    let mut handles = transform_handles(box_, handle_spec_for(object, side_rotate), tolerances);
+    let params = param_handles(object, box_, tolerances);
+    let tiers = handle_tiers(box_.width().min(box_.height()), tolerances);
+    let centre = box_.to_document(box_.local_center());
+    if !centre_drawn(tiers, &params, centre, tolerances, false) {
+        handles.retain(|(handle, _)| *handle != EditHandle::Move);
+    }
+    handles.extend(
+        params
+            .into_iter()
+            .map(|(param, at)| (EditHandle::Param(param), at)),
+    );
+    handles
 }
 
 /// The sole selected object in `objects`, if the selection is exactly one.
@@ -141,13 +177,29 @@ impl SelectTool {
     /// session) starts there (AC 27).
     #[must_use]
     pub const fn stroke_scaling(&self) -> StrokeScaling {
-        self.stroke_scaling
+        self.modes.stroke
+    }
+
+    /// Whether resizes scale a rectangle's corner radius — the "Scale corner
+    /// radius" switch (`specs/unified-object-editing/`, criterion 23). Tool
+    /// state, never written to the document; the default is
+    /// [`CornerRadiusScaling::Keep`] and every new session starts there.
+    #[must_use]
+    pub const fn corner_radius_scaling(&self) -> CornerRadiusScaling {
+        self.modes.radius
     }
 
     /// Sets the stroke-scaling mode for the *next* resize drag: a drag
     /// already in flight keeps the value it was pressed with (AC 28).
     pub fn set_stroke_scaling(&mut self, stroke_scaling: StrokeScaling) {
-        self.stroke_scaling = stroke_scaling;
+        self.modes.stroke = stroke_scaling;
+    }
+
+    /// Sets the corner-radius mode for the *next* resize drag or typed size:
+    /// a drag already in flight and an open entry keep the value they
+    /// started with (criterion 23).
+    pub fn set_corner_radius_scaling(&mut self, radius_scaling: CornerRadiusScaling) {
+        self.modes.radius = radius_scaling;
     }
 
     /// Whether the four side rotate handles show right now (criterion 6):
@@ -182,11 +234,7 @@ impl SelectTool {
         let Some(object) = sole_selected(objects, selection) else {
             return Vec::new();
         };
-        transform_handles(
-            &oriented_bounds(object),
-            handle_spec_for(object, side_rotate),
-            &tolerances,
-        )
+        drawn_edit_handles(object, &oriented_bounds(object), &tolerances, side_rotate)
     }
 
     /// The transform handle of the current single-object selection under
@@ -232,7 +280,7 @@ impl SelectTool {
     ) -> Option<(&'a ObjectSnapshot, OrientedBox, EditHandle)> {
         let object = sole_selected(objects, selection)?;
         let box_ = oriented_bounds(object);
-        let handles = transform_handles(&box_, handle_spec_for(object, shift), &tolerances);
+        let handles = drawn_edit_handles(object, &box_, &tolerances, shift);
         let hit = hit_transform_handle(&handles, &box_, point, &tolerances, include_move)?;
         Some((object, box_, hit))
     }
@@ -287,7 +335,13 @@ impl SelectTool {
                 start: object.clone(),
                 start_box: box_,
                 handle,
-                stroke_scaling: self.stroke_scaling,
+                modes: self.modes,
+                param_gain: match handle {
+                    EditHandle::Param(ParamHandle::CornerRadius(_)) => {
+                        radius_gain(box_.width().min(box_.height()), &handle_tolerances)
+                    }
+                    _ => 1.0,
+                },
             });
             self.last_press_handle = Some(handle);
             return SelectPointerDownOutcome::Handle;
@@ -296,6 +350,24 @@ impl SelectTool {
             Self::hover_handle_at(objects, selection, point, handle_tolerances, shift),
             Some((_, _, EditHandle::Move))
         );
+
+        // Criterion 35 of `unified-object-editing`: with one primitive
+        // selected, a press inside its box that is on no handle is a move,
+        // before any outline hit (an outline of another object inside the
+        // box does not take the press). Shift keeps the toggle and a sole
+        // selected path keeps the outline-first order (its box often
+        // overlaps other objects).
+        if !shift
+            && sole_selected(objects, selection)
+                .is_some_and(|object| matches!(object, ObjectSnapshot::Primitive(_)))
+            && Self::is_inside_selected_box(objects, selection, point)
+        {
+            self.drag = SelectDrag::Moving {
+                origin,
+                from_center,
+            };
+            return SelectPointerDownOutcome::Selected;
+        }
 
         let Some(hit) = hit_test_object(objects, point, tolerance) else {
             // A press inside the sole selected object's own (oriented) box
@@ -370,6 +442,12 @@ impl SelectTool {
                     return;
                 }
                 let offset = origin.down_at.vector_to(point);
+                // A move dragged back to its start writes nothing: a
+                // zero-offset commit would rewrite every frame or anchor
+                // register with its own value (criterion 12).
+                if offset.length() <= MOVE_EQUAL_EPSILON_MM {
+                    return;
+                }
                 selection.retain_existing(objects);
                 if selection.is_empty() {
                     return;
@@ -381,7 +459,7 @@ impl SelectTool {
                     return;
                 }
                 let result = drag.resolve(point, shift, ctrl);
-                if result != drag.start {
+                if !same_within_tolerance(&result, &drag.start) {
                     drag.commit(document, &result);
                 }
             }
@@ -468,6 +546,13 @@ mod tests {
         // the refinements' own tests set them.
         center_min_side_mm: 1e9,
         drag_threshold_mm: 0.0,
+        // No parameter handles in these unit-scale tests; `param_handles.rs`
+        // and the unified-editing acceptance tests set them.
+        param_hit: Tolerance::from_mm(1.0),
+        param_inset_mm: 1.5,
+        param_pitch_mm: 1.4,
+        param_min_side_mm: 1e9,
+        param_centre_yield_mm: 2.0,
     };
 
     #[test]
@@ -1234,9 +1319,10 @@ mod tests {
         assert_eq!(document.export_loro_snapshot().unwrap(), before);
     }
 
-    /// AC 31: the corner radius scales identically in both modes.
+    /// AC 31: with "Scale corner radius" on, the radius scales identically
+    /// whatever the stroke switch says (the stroke switch does not affect it).
     #[test]
-    fn ac31_the_switch_does_not_affect_the_corner_radius() {
+    fn ac31_the_stroke_switch_does_not_affect_the_scaled_corner_radius() {
         let radius_after = |mode: StrokeScaling| {
             let document = Document::new(1);
             let id = rect(&document, 0.0);
@@ -1248,7 +1334,10 @@ mod tests {
                 id,
                 EditHandle::Resize(ResizeDirection::Se),
                 Point::new(20.0, 20.0),
-                |t| t.set_stroke_scaling(mode),
+                |t| {
+                    t.set_corner_radius_scaling(CornerRadiusScaling::Proportional);
+                    t.set_stroke_scaling(mode);
+                },
             );
             let Shape::Rect { corner_radius, .. } = document.primitive(id).unwrap().shape else {
                 panic!("rect");
@@ -1259,8 +1348,82 @@ mod tests {
         assert!((radius_after(StrokeScaling::Proportional) - 4.0).abs() < 1e-9);
     }
 
-    /// Acceptance criterion 9: a rectangle's corner radius scales by the
-    /// same factor as a proportional resize.
+    /// Criterion 23 of `unified-object-editing`: the default is off, a resize
+    /// keeps the radius's absolute size (the register-level check is in `vecmanf-editor-wasm`).
+    #[test]
+    fn a_resize_keeps_the_corner_radius_by_default() {
+        assert_eq!(
+            SelectTool::new().corner_radius_scaling(),
+            CornerRadiusScaling::Keep
+        );
+        let document = Document::new(1);
+        let id = rect(&document, 0.0);
+        document
+            .set_corner_radius(&[id], Length::from_mm(2.0))
+            .unwrap();
+        // A radius larger than the box allows stays stored as it was.
+        document
+            .set_corner_radius(&[id], Length::from_mm(200.0))
+            .unwrap();
+        resize_drag(
+            &document,
+            id,
+            EditHandle::Resize(ResizeDirection::Se),
+            Point::new(20.0, 20.0),
+            |_| {},
+        );
+        let Shape::Rect {
+            bounds,
+            corner_radius,
+        } = document.primitive(id).unwrap().shape
+        else {
+            panic!("rect");
+        };
+        assert_eq!(corner_radius.as_mm(), 200.0, "the stored radius is raw");
+        assert!((bounds.width.as_mm() - 20.0).abs() < 1e-9);
+    }
+
+    /// The switch is read at the press: toggling it mid-drag changes the next
+    /// drag, not the one in flight.
+    #[test]
+    fn the_corner_radius_switch_is_read_at_the_press() {
+        let document = Document::new(1);
+        let id = rect(&document, 0.0);
+        document
+            .set_corner_radius(&[id], Length::from_mm(2.0))
+            .unwrap();
+        let objects = vec![document.object(id).expect("exists")];
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let mut tool = SelectTool::new();
+        tool.pointer_down(
+            &objects,
+            &mut selection,
+            Point::new(10.0, 10.0),
+            TOLERANCE,
+            HANDLE_TOLERANCES,
+            false,
+        );
+        tool.set_corner_radius_scaling(CornerRadiusScaling::Proportional); // mid-drag
+        tool.pointer_up(
+            &document,
+            &objects,
+            &mut selection,
+            Point::new(20.0, 20.0),
+            false,
+            true,
+        );
+        let Shape::Rect { corner_radius, .. } = document.primitive(id).unwrap().shape else {
+            panic!("rect");
+        };
+        assert!(
+            (corner_radius.as_mm() - 2.0).abs() < 1e-9,
+            "kept: pressed with off"
+        );
+    }
+
+    /// Acceptance criterion 9, with "Scale corner radius" on: a rectangle's
+    /// corner radius scales by the same factor as a proportional resize.
     #[test]
     fn ac9_proportional_resize_scales_corner_radius() {
         let document = Document::new(1);
@@ -1272,6 +1435,7 @@ mod tests {
         let mut selection = ObjectSelection::new();
         selection.select_single(id);
         let mut tool = SelectTool::new();
+        tool.set_corner_radius_scaling(CornerRadiusScaling::Proportional);
         tool.pointer_down(
             &objects,
             &mut selection,
