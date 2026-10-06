@@ -320,7 +320,7 @@ values, not an implementation site, for those four rows.
 - **Switch (`ScaleStrokeSwitch`)** (2026-10-06, `object-transform`
   criteria 8, 26-31, new): the pattern for one persistent on/off setting
   that is tool state, not an object property. First use: "Scale stroke
-  width". Spec of the control, which is identical wherever it is hosted:
+  width". Spec of the control:
   - **Semantics:** Radix `Switch` (`radix-ui` is already a dependency),
     `role="switch"`, `aria-checked`, wrapped in a `<label>` so the whole
     row (text and track) is the click target. One Tab stop; Space toggles
@@ -351,21 +351,32 @@ values, not an implementation site, for those four rows.
     reset to off by `newProject()` and `openProject()` (criterion 27). It is
     never persisted. The press handler reads it once at pointer-down
     (criterion 28).
-  - **Hosts.** *Interim (slice 5):* `SelectToolbar`, a contextual bar shown
-    whenever `editor.tool === "select"`, whether or not anything is
-    selected. It uses the same slot, container and look as `NodeToolbar`/
-    `ShapeToolbar` (the `pointer-events-none` overlay row at `top-3`, left
-    of which sits the tool rail: pill `h-9`, `rounded-lg`, `px-2`,
-    `--toolbar-bg`, `--panel-elevation-shadow`, `pointer-events-auto`), so
-    no canvas resize and the same tab order: tool rail, canvas, bar. It
-    holds this one control. The key handler for Space-to-pan must not
-    `preventDefault` when focus is inside the bar. *Final (slice 7,
-    `stroke-and-fill-styling`):* the "Transform" section of
-    `PropertiesPanel`, below "Style": one full-width row, label left,
-    same switch right-aligned, optional 12px `--toolbar-icon` hint line
-    below ("Off: a resize keeps stroke thickness."). The same component and
-    the same session state, so no behaviour change; `SelectToolbar` is
-    deleted in that slice, never shown alongside the panel row.
+  - **Host and bar layout** (customer decision 2026-10-06: the switch
+    belongs to the tool, so it lives in the top contextual bar and does not
+    move into the Properties panel). `SelectToolbar` is the Select tool's
+    own bar, shown whenever `editor.tool === "select"`, with or without a
+    selection (criterion 30). It is the third bar after `NodeToolbar` and
+    `ShapeToolbar` and looks identical: it lives in the same
+    `pointer-events-none` overlay row in `App.tsx` (`absolute top-3 right-3
+    left-[72px] z-20`, centred, right of the tool rail), pill `h-9`,
+    `rounded-lg`, `px-2`, `--toolbar-bg`, `--panel-elevation-shadow`,
+    `pointer-events-auto`. It floats over the canvas, so the canvas never
+    resizes. It holds this one control, with room to append later Select-
+    tool options after it at 12px gaps (a vertical 1px `--toolbar-icon` at
+    25% opacity divider between items, 20px high, once there are two).
+  - **One bar at a time.** The three bars are the same slot, rendered by
+    mutually exclusive conditions on the active tool (select, node,
+    rectangle/ellipse/polygon-star); Pen shows none. Switching tools swaps
+    the bar in place, at the same position, with no animation. A bar is
+    never stacked or shown next to another one. Because the overlay row
+    is `flex justify-center`, the bar's width differs per tool but its top
+    edge does not.
+  - **Focus and keys.** Tab order: tool rail, canvas, bar, same as the
+    other bars. The Space-to-pan key handler and the single-letter tool
+    shortcuts must ignore key events whose target is inside the bar
+    (no `preventDefault`), or Space could not toggle the switch. Switching
+    tools while the switch has focus unmounts it; focus falls back to the
+    canvas as it does for the other bars.
 
 ## Keyboard shortcuts established so far
 
@@ -381,7 +392,7 @@ values, not an implementation site, for those four rows.
 | Finish path | Enter (or double-click) | Matches Inkscape |
 | Cancel in-progress path | Escape | |
 | Delete selected node(s) | Delete or Backspace | Both bound; macOS keyboards label the backspace key "delete" |
-| Toggle "Scale stroke width" | none; Tab to the switch, Space | `object-transform`; tool state, off per session, never saved; no letter shortcut until usage shows one is needed |
+| Toggle "Scale stroke width" | none; Tab to the switch, Space | `object-transform`; Select tool's bar, tool state, off per session, never saved; no letter shortcut until usage shows one is needed |
 | Open/focus the style panel | Shift+Ctrl+F | Matches Inkscape's Fill & Stroke binding; app-global, not canvas-focus-scoped (`stroke-and-fill-styling`) — see note below |
 
 Single-letter tool shortcuts are a different category from the File menu's
