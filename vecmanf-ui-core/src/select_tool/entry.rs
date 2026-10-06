@@ -144,15 +144,15 @@ impl SelectTool {
         if Self::is_inside_selected_box(objects, selection, point)
             && let Some(object) = sole_selected(objects, selection)
         {
-            return SelectDoubleClickOutcome::Hit(object.clone());
+            return hit_outcome(object);
         }
         double_click(objects, point, tolerance)
     }
 }
 
-/// Acceptance criteria 22, 23 of slice 4: what a double-click on an
-/// object's outline hit, for `Session` to map to the object's own tool
-/// (`tool_for`) and hand off to.
+/// What a double-click on an object's outline hit: a path for `Session` to
+/// hand off to the Node tool (criterion 22 of slice 4), or the edit hint for a
+/// primitive (criterion 32 of `unified-object-editing`).
 #[must_use]
 pub fn double_click(
     objects: &[ObjectSnapshot],
@@ -165,9 +165,14 @@ pub fn double_click(
     objects
         .iter()
         .find(|object| object.id() == hit)
-        .cloned()
-        .map_or(
-            SelectDoubleClickOutcome::Miss,
-            SelectDoubleClickOutcome::Hit,
-        )
+        .map_or(SelectDoubleClickOutcome::Miss, hit_outcome)
+}
+
+/// A path is handed off to the Node tool; a primitive only earns the edit
+/// hint (criteria 31, 32).
+fn hit_outcome(object: &ObjectSnapshot) -> SelectDoubleClickOutcome {
+    match object {
+        ObjectSnapshot::Path(_) => SelectDoubleClickOutcome::Hit(object.clone()),
+        ObjectSnapshot::Primitive(_) => SelectDoubleClickOutcome::EditHint,
+    }
 }

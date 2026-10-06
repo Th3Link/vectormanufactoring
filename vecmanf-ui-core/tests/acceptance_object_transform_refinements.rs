@@ -581,7 +581,9 @@ fn the_centre_handle_needs_a_forty_eight_pixel_box_and_never_covers_a_resize_han
 
 #[test]
 fn a_double_click_dispatches_by_what_is_under_the_second_press() {
-    // Inside the box, centre handle included, and not on a handle: handoff.
+    // Inside the box, centre handle included, and not on a handle: a path hands
+    // off to the Node tool; a primitive only asks for the edit hint
+    // (`unified-object-editing` criteria 31, 32).
     for kind in ALL_KINDS {
         let mut rig = Rig::new(kind);
         let before = rig.object();
@@ -589,11 +591,12 @@ fn a_double_click_dispatches_by_what_is_under_the_second_press() {
         let centre = b.to_document(b.local_center());
         for at in [centre, centre.translated(Vec2::new(8.0, 5.0))] {
             let outcome = rig.double_click(at, false, false);
-            assert_eq!(
-                outcome,
-                SelectDoubleClickOutcome::Hit(before.clone()),
-                "{kind:?}"
-            );
+            let expected = if is_path(kind) {
+                SelectDoubleClickOutcome::Hit(before.clone())
+            } else {
+                SelectDoubleClickOutcome::EditHint
+            };
+            assert_eq!(outcome, expected, "{kind:?}");
         }
         assert!(rig.tool.entry().is_none());
 
@@ -629,14 +632,14 @@ fn a_double_click_dispatches_by_what_is_under_the_second_press() {
 
 /// The real flow: double-clicking the outline of an object that is not
 /// selected yet. The handles only appear after the first click, so the second
-/// press must hand off even though it lands on the N-edge handle.
+/// press must not open the N-edge handle's entry: a path hands off, a
+/// primitive only asks for the edit hint.
 #[test]
-fn double_clicking_the_outline_of_an_unselected_object_at_a_handle_spot_hands_off() {
+fn double_clicking_the_outline_of_an_unselected_object_at_a_handle_spot_opens_no_entry() {
     let mut rig = Rig::new(Kind::Rect);
     rig.selection.clear();
-    let before = rig.object();
     let outcome = rig.double_click(pt(60.0, 20.0), false, false);
-    assert_eq!(outcome, SelectDoubleClickOutcome::Hit(before));
+    assert_eq!(outcome, SelectDoubleClickOutcome::EditHint);
     assert!(rig.tool.entry().is_none(), "no size entry opened");
 }
 

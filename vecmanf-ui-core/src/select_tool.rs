@@ -78,11 +78,15 @@ pub enum SelectPointerDownOutcome {
 pub enum SelectDoubleClickOutcome {
     /// Nothing was hit; no handoff.
     Miss,
-    /// This object was hit — the caller (`Session`) selects it and maps
-    /// its kind to the tool to hand off to (acceptance criteria 22, 23 of
-    /// slice 4; criterion 3 of `object-transform-refinements` for the
-    /// inside of the selected box).
+    /// This path was hit (its outline, or inside its selected box): the
+    /// caller (`Session`) selects it and hands off to the Node tool
+    /// (`specs/unified-object-editing/` criterion 31; criterion 22 of slice
+    /// 4, criterion 3 of `object-transform-refinements`).
     Hit(ObjectSnapshot),
+    /// A primitive was hit (its outline, its body or the centre handle): no
+    /// handoff and nothing changes; the caller shows the edit hint chip
+    /// (criterion 32, which replaces criterion 23 of slice 4).
+    EditHint,
     /// A rotate or resize handle was double-clicked: the numeric entry is
     /// open (criteria 18, 25, 26), and there is no handoff (criteria 23,
     /// 32).
@@ -609,8 +613,8 @@ mod tests {
         let mut tool = SelectTool::new();
         let mut selection = ObjectSelection::new();
         // (0.0, 5.0) sits on the rect's left edge — the interior is
-        // unfilled and so not hittable (same rule `hit_test_primitive`
-        // already has), the edge is.
+        // unfilled and so not hittable (the `hit_test_object` rule), the
+        // edge is.
         tool.pointer_down(
             &objects,
             &mut selection,
@@ -784,16 +788,15 @@ mod tests {
         );
     }
 
+    /// Criterion 32 (replaces slice 4's AC23): a double-click on a primitive's
+    /// outline asks for the edit hint and hands off to no tool.
     #[test]
-    fn ac23_double_click_on_a_primitive_reports_that_primitive() {
+    fn ac32_double_click_on_a_primitive_asks_for_the_hint_not_a_handoff() {
         let document = Document::new(1);
         let id = rect(&document, 0.0);
         let objects = vec![document.object(id).expect("exists")];
         let outcome = double_click(&objects, Point::new(5.0, 0.0), TOLERANCE);
-        assert_eq!(
-            outcome,
-            SelectDoubleClickOutcome::Hit(document.object(id).expect("exists"))
-        );
+        assert_eq!(outcome, SelectDoubleClickOutcome::EditHint);
     }
 
     #[test]

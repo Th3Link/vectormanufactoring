@@ -761,3 +761,239 @@ fn ac12_inside_the_dead_zone_there_is_no_live_edit() {
             .is_none()
     );
 }
+
+// ---------------------------------------------------------------------
+// Ported from the shape tools' own editing tests (deleted with them, PR 2):
+// the same numbers, driven through the Select tool.
+// ---------------------------------------------------------------------
+
+/// A rig whose shape is selected, at a zoom where a 10 mm shape is wide enough
+/// for its parameter handles (8 px per millimetre).
+struct Zoomed {
+    document: Document,
+    id: NodeId,
+    selection: ObjectSelection,
+    tool: SelectTool,
+}
+
+fn zoomed_tolerances() -> TransformHandleTolerances {
+    TransformHandleTolerances::at_scale(8.0)
+}
+
+impl Zoomed {
+    fn new(document: Document, id: NodeId) -> Self {
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        Self {
+            document,
+            id,
+            selection,
+            tool: SelectTool::new(),
+        }
+    }
+
+    fn objects(&self) -> Vec<ObjectSnapshot> {
+        vec![self.document.object(self.id).unwrap()]
+    }
+
+    fn handle(&self, wanted: EditHandle) -> Point {
+        SelectTool::transform_handles(&self.objects(), &self.selection, zoomed_tolerances(), false)
+            .into_iter()
+            .find(|(h, _)| *h == wanted)
+            .unwrap_or_else(|| panic!("{wanted:?} is not drawn"))
+            .1
+    }
+
+    fn drag(&mut self, from: Point, delta: Vec2) -> SelectPointerDownOutcome {
+        let objects = self.objects();
+        let outcome = self.tool.pointer_down(
+            &objects,
+            &mut self.selection,
+            from,
+            Tolerance::from_mm(0.5),
+            zoomed_tolerances(),
+            false,
+        );
+        self.tool.pointer_up(
+            &self.document,
+            &objects,
+            &mut self.selection,
+            from.translated(delta),
+            false,
+            false,
+        );
+        outcome
+    }
+
+    fn shape(&self) -> Shape {
+        let ObjectSnapshot::Primitive(p) = self.document.object(self.id).unwrap() else {
+            panic!("a primitive");
+        };
+        p.shape
+    }
+}
+
+/// Was `RectangleTool` AC3: a resize through the SE handle changes the bounds
+/// and, with "Scale corner radius" off (the default), keeps the radius's
+/// absolute length.
+#[test]
+fn ported_ac3_a_resize_handle_changes_the_bounds_and_keeps_the_radius() {
+    let document = Document::new(1);
+    let id = document.create_rect(RectBounds::from_corners(pt(0.0, 0.0), pt(40.0, 40.0)));
+    document
+        .set_corner_radius(&[id], Length::from_mm(5.0))
+        .unwrap();
+    let mut rig = Zoomed::new(document, id);
+    let se = rig.handle(EditHandle::Resize(ResizeDirection::Se));
+    assert_eq!(
+        rig.drag(se, Vec2::new(20.0, 0.0)),
+        SelectPointerDownOutcome::Handle
+    );
+    let Shape::Rect {
+        bounds,
+        corner_radius,
+    } = rig.shape()
+    else {
+        panic!("still a rectangle");
+    };
+    assert!((bounds.width.as_mm() - 60.0).abs() < 1e-6);
+    assert!((corner_radius.as_mm() - 5.0).abs() < 1e-9);
+}
+
+/// Was `EllipseTool` AC9: the E handle moves only the east edge, so a resize
+/// breaks rx == ry: bounding box [-10, 25], rx 17.5, centre x 7.5.
+#[test]
+fn ported_ac9_resizing_an_ellipse_can_break_rx_eq_ry() {
+    let document = Document::new(1);
+    let id = document.create_ellipse(EllipseFrame {
+        center: pt(0.0, 0.0),
+        rx: Length::from_mm(10.0),
+        ry: Length::from_mm(10.0),
+    });
+    let mut rig = Zoomed::new(document, id);
+    let e = rig.handle(EditHandle::Resize(ResizeDirection::E));
+    rig.drag(e, Vec2::new(15.0, 0.0));
+    let Shape::Ellipse { frame } = rig.shape() else {
+        panic!("an ellipse");
+    };
+    assert!((frame.rx.as_mm() - 17.5).abs() < 1e-6);
+    assert!((frame.ry.as_mm() - 10.0).abs() < 1e-9);
+    assert!((frame.center.x - 7.5).abs() < 1e-6);
+}
+
+/// Was `PolygonStarTool` AC13: a corner handle scales a star uniformly about
+/// its centre, keeping point count and ratio (outer radius 10 becomes 20).
+#[test]
+fn ported_ac13_a_corner_handle_scales_a_star_uniformly_keeping_count_and_ratio() {
+    let document = Document::new(1);
+    let id = document.create_star(
+        StarFrame::from_center_and_vertex(pt(0.0, 0.0), pt(10.0, 0.0)),
+        PointCount::new(5).unwrap(),
+        InnerRatio::new(0.5).unwrap(),
+    );
+    let mut rig = Zoomed::new(document, id);
+    let corner = rig.handle(EditHandle::Resize(ResizeDirection::Se));
+    // Along the corner's diagonal by sqrt(2) times the radius change.
+    let d = 10.0;
+    rig.drag(corner, Vec2::new(d, d));
+    let Shape::Star {
+        frame,
+        point_count,
+        inner_ratio,
+    } = rig.shape()
+    else {
+        panic!("a star");
+    };
+    assert!(
+        (frame.radius.as_mm() - 20.0).abs() < 1e-6,
+        "{}",
+        frame.radius.as_mm()
+    );
+    assert_eq!(point_count.get(), 5);
+    assert!((inner_ratio.get() - 0.5).abs() < 1e-9);
+}
+
+/// Was `PolygonStarTool` AC14: the inner-radius handle changes the ratio and
+/// keeps the outer radius (a 1 mm push outward raises the ratio).
+#[test]
+fn ported_ac14_the_inner_radius_handle_changes_the_ratio_and_keeps_the_outer_radius() {
+    let document = Document::new(1);
+    let id = document.create_star(
+        StarFrame::from_center_and_vertex(pt(0.0, 0.0), pt(10.0, 0.0)),
+        PointCount::new(5).unwrap(),
+        InnerRatio::new(0.5).unwrap(),
+    );
+    let mut rig = Zoomed::new(document, id);
+    let knob = rig.handle(EditHandle::Param(ParamHandle::InnerRadius));
+    let outward = pt(0.0, 0.0).vector_to(knob).normalized_to(1.0);
+    assert_eq!(rig.drag(knob, outward), SelectPointerDownOutcome::Handle);
+    let Shape::Star {
+        frame, inner_ratio, ..
+    } = rig.shape()
+    else {
+        panic!("a star");
+    };
+    assert!((frame.radius.as_mm() - 10.0).abs() < 1e-9);
+    assert!(inner_ratio.get() > 0.5);
+}
+
+/// Was `PolygonStarTool` AC15: a point-count change from the bar updates the
+/// selected star and keeps its size and ratio.
+#[test]
+fn ported_ac15_a_point_count_change_keeps_size_and_ratio() {
+    let document = Document::new(1);
+    let id = document.create_star(
+        StarFrame::from_center_and_vertex(pt(0.0, 0.0), pt(10.0, 0.0)),
+        PointCount::new(5).unwrap(),
+        InnerRatio::new(0.4).unwrap(),
+    );
+    let mut rig = Zoomed::new(document, id);
+    let objects = rig.objects();
+    rig.tool
+        .commit_bar_value(
+            &rig.document,
+            &objects,
+            &rig.selection,
+            vecmanf_ui_core::ParamValue::PointCount(PointCount::new(12).unwrap()),
+        )
+        .unwrap();
+    let Shape::Star {
+        frame,
+        point_count,
+        inner_ratio,
+    } = rig.shape()
+    else {
+        panic!("a star");
+    };
+    assert_eq!(point_count.get(), 12);
+    assert!((frame.radius.as_mm() - 10.0).abs() < 1e-9);
+    assert!((inner_ratio.get() - 0.4).abs() < 1e-9);
+}
+
+/// Replaces `hit_test_handle_ignores_non_draggable_echo_handles`: on a rounded
+/// rectangle all four radius handles are real, draggable handles.
+#[test]
+fn ported_all_four_radius_handles_of_a_rounded_rectangle_are_draggable() {
+    for corner in Corner::ALL {
+        let document = Document::new(1);
+        let id = document.create_rect(RectBounds::from_corners(pt(0.0, 0.0), pt(40.0, 40.0)));
+        document
+            .set_corner_radius(&[id], Length::from_mm(8.0))
+            .unwrap();
+        let mut rig = Zoomed::new(document, id);
+        let knob = rig.handle(EditHandle::Param(ParamHandle::CornerRadius(corner)));
+        let inward = knob.vector_to(pt(20.0, 20.0)).normalized_to(1.0);
+        assert_eq!(
+            rig.drag(knob, inward.scaled(0.5)),
+            SelectPointerDownOutcome::Handle,
+            "{corner:?}"
+        );
+        let Shape::Rect { corner_radius, .. } = rig.shape() else {
+            panic!("a rectangle");
+        };
+        assert!(
+            corner_radius.as_mm() > 8.0,
+            "{corner:?}: dragging inward grows it"
+        );
+    }
+}

@@ -126,8 +126,7 @@ pub(crate) fn scaled_star_frame(frame: StarFrame, factor: f64) -> StarFrame {
 /// coordinates (unchanged by the resize); the whole frame is translated
 /// by however far the anchor moved. A no-op at zero rotation, where the
 /// local and document frames agree, and for a polygon/star, whose center
-/// does not move. The Select tool and the rectangle and ellipse tools'
-/// own resizes all call this, so they cannot disagree.
+/// does not move. The Select tool's resize and typed size both call this.
 pub(crate) fn pin_resize_anchor(
     after: Shape,
     before_pivot: Point,
@@ -137,61 +136,4 @@ pub(crate) fn pin_resize_anchor(
     let before = anchor_local.rotated_around(before_pivot, rotation);
     let after_anchor = anchor_local.rotated_around(shape_center(&after), rotation);
     translate_shape(after, after_anchor.vector_to(before))
-}
-
-/// [`pin_resize_anchor`] for the rectangle tool's own resize: the
-/// opposite corner/edge of `start` stays put on screen.
-pub(crate) fn pin_rect_resize(
-    start: RectBounds,
-    resized: RectBounds,
-    direction: ResizeDirection,
-    rotation: Angle,
-) -> RectBounds {
-    let (min, max) = (
-        start.origin,
-        Point::new(
-            start.origin.x + start.width.as_mm(),
-            start.origin.y + start.height.as_mm(),
-        ),
-    );
-    let anchor = resize_anchor_local_position(min, max, direction, false);
-    let center = Point::new(f64::midpoint(min.x, max.x), f64::midpoint(min.y, max.y));
-    let shape = Shape::Rect {
-        bounds: resized,
-        corner_radius: Length::from_mm(0.0),
-    };
-    match pin_resize_anchor(shape, center, rotation, anchor) {
-        Shape::Rect { bounds, .. } => bounds,
-        // invariant: `pin_resize_anchor` only translates; it never changes
-        // the kind.
-        _ => resized,
-    }
-}
-
-/// [`pin_resize_anchor`] for the ellipse tool's own resize.
-pub(crate) fn pin_ellipse_resize(
-    start: EllipseFrame,
-    resized: EllipseFrame,
-    direction: ResizeDirection,
-    rotation: Angle,
-) -> EllipseFrame {
-    let min = Point::new(
-        start.center.x - start.rx.as_mm(),
-        start.center.y - start.ry.as_mm(),
-    );
-    let max = Point::new(
-        start.center.x + start.rx.as_mm(),
-        start.center.y + start.ry.as_mm(),
-    );
-    let anchor = resize_anchor_local_position(min, max, direction, false);
-    match pin_resize_anchor(
-        Shape::Ellipse { frame: resized },
-        start.center,
-        rotation,
-        anchor,
-    ) {
-        Shape::Ellipse { frame } => frame,
-        // invariant: see `pin_rect_resize`.
-        _ => resized,
-    }
 }

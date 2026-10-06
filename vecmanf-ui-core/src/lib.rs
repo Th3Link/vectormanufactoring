@@ -17,7 +17,6 @@ mod anchor_id_minter;
 mod angle_snap;
 mod conversion;
 mod ellipse_tool;
-mod handle_layout;
 mod hit_test;
 mod hit_test_object;
 mod node_tool;
@@ -30,10 +29,10 @@ mod param_handles;
 mod pen_tool;
 mod poly_star_tool;
 mod rectangle_tool;
+mod resize_direction;
 mod select_bar;
 mod select_tool;
 mod selection;
-mod shape_hit_test;
 mod shape_tool_common;
 mod skew_math;
 mod transform_commit;
@@ -47,8 +46,7 @@ mod viewport;
 pub use anchor_id_minter::AnchorIdMinter;
 pub use angle_snap::{MAX_SKEW_SNAP_DEG, snap_angle, snap_skew_angle};
 pub use conversion::build_primitive_conversions;
-pub use ellipse_tool::{EllipsePointerDownOutcome, EllipsePointerUpOutcome, EllipseTool};
-pub use handle_layout::{HandleKind, ResizeDirection, ShapeHandle, handles_for};
+pub use ellipse_tool::EllipseTool;
 pub use hit_test::{Hit, hit_test};
 pub use hit_test_object::hit_test_object;
 pub use node_tool::{
@@ -69,10 +67,9 @@ pub use param_handles::{
     param_handles, radius_gain, radius_travel, star_inner_vertex,
 };
 pub use pen_tool::{PenTool, PointerUpOutcome as PenPointerUpOutcome};
-pub use poly_star_tool::{
-    PolyStarMode, PolyStarPointerDownOutcome, PolyStarPointerUpOutcome, PolygonStarTool,
-};
-pub use rectangle_tool::{RectPointerDownOutcome, RectPointerUpOutcome, RectangleTool};
+pub use poly_star_tool::{PolyStarMode, PolygonStarTool};
+pub use rectangle_tool::RectangleTool;
+pub use resize_direction::ResizeDirection;
 pub use select_bar::{
     BarPreview, BarValue, ObjectKind, SelectBarState, ids_of_kind, select_bar_state,
 };
@@ -81,8 +78,7 @@ pub use select_tool::{
     TransformHandleTolerances, double_click,
 };
 pub use selection::NodeSelection;
-pub use shape_hit_test::{hit_test_handle, hit_test_primitive};
-pub use shape_tool_common::{LiveShape, ShapeHitTolerances};
+pub use shape_tool_common::{CreateOutcome, CreatePreview};
 pub use skew_math::{SkewFrame, skew_angle, skew_factor, skew_frame};
 pub use transform_drag::{CornerRadiusScaling, ScaleModes, StrokeScaling};
 pub use transform_entry::{
