@@ -259,11 +259,7 @@ mod tests {
             false,
         );
         let paths = vec![document.path(path).expect("exists")];
-        let list = build(
-            &paths,
-            ViewTransform::identity(),
-            &nodes_on(),
-        );
+        let list = build(&paths, ViewTransform::identity(), &nodes_on());
         // A's own glyph is one outline triangle + one fill triangle (2
         // total); B's is a Corner square (2 quads = 4 triangles) — 6 in
         // all.
@@ -375,11 +371,7 @@ mod tests {
     fn a_selected_segment_adds_overlay_geometry() {
         let (document, path, a, b) = two_node_path();
         let paths = vec![document.path(path).expect("exists")];
-        let without = build(
-            &paths,
-            ViewTransform::identity(),
-            &nodes_on(),
-        );
+        let without = build(&paths, ViewTransform::identity(), &nodes_on());
         let input = DecorationInput {
             selected_segment: Some((path, a, b)),
             ..nodes_on()
