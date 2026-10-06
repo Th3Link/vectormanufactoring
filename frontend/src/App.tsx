@@ -197,9 +197,7 @@ function App() {
               }}
             />
           ) : null}
-          {editor.tool === "rectangle" ||
-          editor.tool === "ellipse" ||
-          editor.tool === "polygon-star" ? (
+          {editor.tool === "polygon-star" ? (
             <ShapeToolbar
               tool={editor.tool}
               polyStarMode={editor.polyStarMode}
@@ -207,10 +205,7 @@ function App() {
               polyStarRatio={editor.polyStarRatio}
               onSetPolyStarMode={editor.setPolyStarMode}
               onSetPolyStarPointCount={editor.setPolyStarPointCount}
-              onPreviewPolyStarRatio={editor.previewPolyStarRatio}
-              onCommitPolyStarRatio={editor.commitPolyStarRatio}
-              onRemoveCornerRounding={editor.removeCornerRounding}
-              onConvertSelectedToPaths={editor.convertSelectedToPaths}
+              onSetPolyStarRatio={editor.setPolyStarRatio}
             />
           ) : null}
         </div>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { createSession, openSession } from "@/lib/editorSession";
 import type { WasmSession } from "@/lib/editorSession";
+import type { EditHint } from "@/components/EditHintChip";
 
 /** The canvas's backing-buffer (physical pixel) size for a given CSS
  * (layout) size, plus the `devicePixelRatio` that relates the two —
@@ -359,6 +360,10 @@ export interface EditorSession {
   /** The live numeric readout for an in-progress create-drag, or `null`
    * outside one (ux-engineer review item 2). */
   liveReadout: LiveReadout | null;
+  /** The edit hint after a double-click on a primitive, or `null`. */
+  editHint: EditHint | null;
+  /** Closes the edit hint (3 s, a press, a key, the pointer leaving). */
+  dismissEditHint: () => void;
   /** `vecmanf-editor-wasm`'s `cursor_hint()` — `"default"`, `"rotate"`
    * or `"resize:<degrees>"` (`object-transform`'s transform-handle
    * cursors); `Canvas` turns it into a CSS cursor via `lib/cursors`. */
@@ -433,21 +438,11 @@ export interface EditorSession {
   commitSelectedRatio: () => void;
   /** The mode toggle (acceptance criteria 11 vs. 12). */
   setPolyStarMode: (mode: PolyStarMode) => void;
-  /** The point-count stepper (acceptance criteria 10, 15). */
+  /** The point-count setting for the next shape (acceptance criterion 10). */
   setPolyStarPointCount: (count: number) => void;
-  /** The ratio field's instantaneous commit (acceptance criteria 12,
-   * 14) — one commit immediately. For a continuously-dragged slider,
-   * use `previewPolyStarRatio` on every tick and `commitPolyStarRatio`
-   * once instead (architect review: one commit per tick is the bug
-   * this pair exists to avoid). */
+  /** The ratio setting for the next star (it never changes a selected
+   * star: that is the Select bar's Ratio). */
   setPolyStarRatio: (ratio: number) => void;
-  /** The ratio slider's live, uncommitted preview — call on every
-   * slider tick. Writes nothing to the document. */
-  previewPolyStarRatio: (ratio: number) => void;
-  /** Commits whatever `previewPolyStarRatio` has accumulated, as one
-   * commit for the whole selection — call once, when the slider drag
-   * ends. */
-  commitPolyStarRatio: () => void;
   /** "Object to path" (acceptance criteria 17, 21, 22). */
   convertSelectedToPaths: () => void;
   onPointerDown: (event: React.PointerEvent<HTMLCanvasElement>) => void;
@@ -534,6 +529,8 @@ export function useEditorSession(
   const [scaleCornerRadius, setScaleCornerRadiusState] = useState(false);
   const [selectBar, setSelectBar] = useState<SelectBarState>(EMPTY_SELECT_BAR_STATE);
   const [cursorHint, setCursorHint] = useState("default");
+  const [editHint, setEditHint] = useState<EditHint | null>(null);
+  const editHintCounter = useRef(0);
   const [handleHint, setHandleHint] = useState("");
   const [transformEntry, setTransformEntry] = useState<TransformEntryState | null>(null);
   const entryOpenRef = useRef(false);
@@ -867,16 +864,6 @@ export function useEditorSession(
     [syncFromSession],
   );
 
-  const previewPolyStarRatio = useCallback((ratio: number) => {
-    sessionRef.current?.preview_poly_star_ratio(ratio);
-    setPolyStarRatioState(ratio);
-  }, []);
-
-  const commitPolyStarRatio = useCallback(() => {
-    sessionRef.current?.commit_poly_star_ratio();
-    syncFromSession();
-  }, [syncFromSession]);
-
   const convertSelectedToPaths = useCallback(() => {
     sessionRef.current?.convert_selected_to_paths();
     syncFromSession();
@@ -1028,7 +1015,12 @@ export function useEditorSession(
           ctrl: event.ctrlKey || event.metaKey,
         };
         doubleClickPressRef.current = null;
-        session.double_click(press.x, press.y, press.shift, press.ctrl);
+        if (session.double_click(press.x, press.y, press.shift, press.ctrl)) {
+          // A double-click on a primitive changes nothing; the hint says how
+          // to edit it (criterion 32), on every such double-click.
+          editHintCounter.current += 1;
+          setEditHint({ x: press.x, y: press.y, id: editHintCounter.current });
+        }
         // Re-run the hover so the cursor describes the handle under the
         // pointer right away (a skew double-click changes nothing else).
         session.pointer_hover(x, y, event.shiftKey, event.ctrlKey || event.metaKey);
@@ -1048,6 +1040,8 @@ export function useEditorSession(
     setCursorHint("default");
     syncFromSession();
   }, [syncFromSession]);
+
+  const dismissEditHint = useCallback(() => setEditHint(null), []);
 
   const onPointerLeave = useCallback(() => {
     sessionRef.current?.pointer_leave();
@@ -1220,6 +1214,8 @@ export function useEditorSession(
     polyStarRatio,
     liveReadout,
     cursorHint,
+    editHint,
+    dismissEditHint,
     handleHint,
     transformEntry,
     commitTransformEntry,
@@ -1253,8 +1249,6 @@ export function useEditorSession(
     setPolyStarMode,
     setPolyStarPointCount,
     setPolyStarRatio,
-    previewPolyStarRatio,
-    commitPolyStarRatio,
     convertSelectedToPaths,
     onPointerDown,
     onPointerMove,
