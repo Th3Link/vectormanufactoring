@@ -14,10 +14,11 @@
 //! `vecmanf-editor-wasm` — the same way `primitive-shapes` already passes
 //! shape-handle positions.
 
-use vecmanf_document_core::{NodeId, Point, ViewTransform};
+use vecmanf_document_core::{NodeId, Point, Vec2, ViewTransform};
 
 use crate::color::RgbaColor;
 use crate::glyphs::{self, DrawList, quad_outline};
+use crate::shape_preview;
 use crate::theme;
 
 /// One object's selection box: its four corners in document space, in
@@ -60,40 +61,62 @@ pub fn build(view: ViewTransform, input: &SelectDecorationInput) -> DrawList {
     list
 }
 
-/// One of `object-transform`'s own transform handles — this crate's own
-/// minimal shape (ADR 0011 §3: it cannot read `vecmanf-ui-core`'s
+/// Which glyph a transform handle draws.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TransformGlyphKind {
+    /// A hollow rounded square ("squircle"): resize.
+    Resize,
+    /// The circular-arrow icon, never turned: rotate (corner or side).
+    Rotate,
+    /// Two opposed parallel arrows along `direction` (a unit vector in
+    /// document space, the side's own axis): skew.
+    Skew {
+        /// The unit vector the arrows point along.
+        direction: Vec2,
+    },
+    /// The centre move handle: a rounded square with a four-way arrow.
+    Move,
+}
+
+/// One of the Select tool's transform handles — this crate's own minimal
+/// shape (ADR 0011 §3: it cannot read `vecmanf-ui-core`'s
 /// `TransformHandle` directly), carrying only what drawing needs: where
-/// it is, which of the two glyph vocabularies it uses, and whether it is
-/// the one currently being dragged (solid `--accent` fill instead of the
-/// idle hollow/transparent state, `docs/design-system.md`).
+/// it is, which glyph vocabulary it uses, and whether it is the one
+/// currently being dragged (solid `--accent` fill instead of the idle
+/// hollow/transparent state, `docs/design-system.md`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TransformHandleGlyph {
     /// Document-space position.
     pub position: Point,
-    /// A resize handle (hollow rounded square, "squircle") or the
-    /// rotate handle (circular-arrow icon).
-    pub is_rotate: bool,
-    /// Whether this exact handle is the one currently being dragged.
+    /// Which glyph to draw.
+    pub kind: TransformGlyphKind,
+    /// Whether this exact handle is the one currently being dragged (or
+    /// whose numeric entry is open).
     pub dragging: bool,
     /// Whether the pointer is over this handle (and no drag is in
-    /// flight) — only the rotate handle has a hover look
-    /// (`--accent-hover` fill, `docs/design-system.md`).
+    /// flight) — the rotate, skew and move glyphs have a hover look
+    /// (`--accent-hover`, `docs/design-system.md`); the resize glyph has
+    /// none.
     pub hovered: bool,
 }
 
 /// What the Select tool's transform-handle overlay decorates this frame
 /// (acceptance criteria 1, 14-17, 22 of `specs/0005-object-transform/
-/// specification.md`) — every handle of the single selected object
-/// currently showing them, plus the pivot marker shown for the duration
-/// of a scale/rotate drag only.
+/// specification.md`; 1, 5, 6, 37, 55, 56 of `object-transform-
+/// refinements`) — every handle of the single selected object currently
+/// showing them, the pivot marker, and the skew fixed-line guide.
 #[derive(Debug, Clone, Default)]
 pub struct TransformDecorationInput {
     /// Every transform handle currently shown (empty when zero or two-
     /// plus objects are selected, acceptance criterion 2).
     pub handles: Vec<TransformHandleGlyph>,
-    /// The active scale/rotate pivot, shown only while a drag is in
-    /// flight (`docs/design-system.md`'s "Transform pivot marker").
+    /// The active scale/rotate/skew pivot (during a drag or while an entry
+    /// is open), or the preview of the pivot the hovered handle would use
+    /// (`docs/design-system.md`'s "Transform pivot marker").
     pub pivot_marker: Option<Point>,
+    /// The two end points of the dashed guide along the skew's fixed line,
+    /// during a skew drag only.
+    pub skew_guide: Option<(Point, Point)>,
 }
 
 /// A hollow resize-handle glyph: `--accent` outline on a rounded square
@@ -155,6 +178,122 @@ fn rotate_handle_glyph(
     list
 }
 
+/// The centre move handle's glyph: a white rounded square with an
+/// `--accent` outline and a four-way arrow; `--accent-hover` ground on
+/// hover, solid `--accent` with a white arrow while its own move runs
+/// (`docs/design-system.md`, "Transform center move handle"). Does not turn
+/// with the box: a move runs along the screen axes.
+fn move_handle_glyph(
+    view: ViewTransform,
+    center: Point,
+    dragging: bool,
+    hovered: bool,
+) -> DrawList {
+    let size = screen_px_to_mm(view, theme::TRANSFORM_MOVE_HANDLE_SIZE_PX);
+    let outline = screen_px_to_mm(view, theme::TRANSFORM_MOVE_HANDLE_OUTLINE_PX);
+    let radius = screen_px_to_mm(view, theme::TRANSFORM_MOVE_HANDLE_CORNER_RADIUS_PX);
+    let (ground, arrow_color) = if dragging {
+        (theme::ACCENT, RgbaColor::WHITE)
+    } else if hovered {
+        (theme::ACCENT_HOVER, theme::ACCENT)
+    } else {
+        (RgbaColor::WHITE, theme::ACCENT)
+    };
+    let mut list = glyphs::rounded_square(center, size, radius, theme::ACCENT);
+    list.extend(glyphs::rounded_square(
+        center,
+        (size - 2.0 * outline).max(0.0),
+        (radius - outline).max(0.0),
+        RgbaColor::WHITE,
+    ));
+    if ground != RgbaColor::WHITE {
+        list.extend(glyphs::rounded_square(
+            center,
+            (size - 2.0 * outline).max(0.0),
+            (radius - outline).max(0.0),
+            ground,
+        ));
+    }
+    let reach = screen_px_to_mm(view, theme::TRANSFORM_MOVE_ARROW_SIZE_PX) / 2.0;
+    let stroke = screen_px_to_mm(view, theme::TRANSFORM_ARROW_STROKE_PX);
+    let head = screen_px_to_mm(view, theme::TRANSFORM_ARROW_HEAD_PX);
+    for direction in [
+        Vec2::new(1.0, 0.0),
+        Vec2::new(-1.0, 0.0),
+        Vec2::new(0.0, 1.0),
+        Vec2::new(0.0, -1.0),
+    ] {
+        list.extend(glyphs::arrow(
+            center,
+            center.translated(direction.scaled(reach)),
+            stroke,
+            head,
+            arrow_color,
+        ));
+    }
+    list
+}
+
+/// The skew handle's glyph: two opposed parallel arrows along `direction`
+/// (the "shear" picture, never a single double arrow, so it cannot read as
+/// a resize handle) — `--accent` strokes on a transparent ground idle,
+/// `--accent-hover` rounded-rect ground on hover, solid `--accent` ground
+/// with white arrows while dragging (`docs/design-system.md`, "Transform
+/// skew handle").
+fn skew_handle_glyph(
+    view: ViewTransform,
+    center: Point,
+    direction: Vec2,
+    dragging: bool,
+    hovered: bool,
+) -> DrawList {
+    let length = screen_px_to_mm(view, theme::TRANSFORM_SKEW_HANDLE_LENGTH_PX);
+    let width = screen_px_to_mm(view, theme::TRANSFORM_SKEW_HANDLE_WIDTH_PX);
+    let stroke = screen_px_to_mm(view, theme::TRANSFORM_ARROW_STROKE_PX);
+    let head = screen_px_to_mm(view, theme::TRANSFORM_ARROW_HEAD_PX);
+    let radius = screen_px_to_mm(view, theme::TRANSFORM_SKEW_HANDLE_CORNER_RADIUS_PX);
+    let unit = direction.normalized_to(1.0);
+    let mut list = DrawList::default();
+    let arrow_color = if dragging {
+        list.extend(glyphs::rounded_rect(
+            center,
+            (length, width),
+            radius,
+            unit.y.atan2(unit.x),
+            theme::ACCENT,
+        ));
+        RgbaColor::WHITE
+    } else {
+        if hovered {
+            list.extend(glyphs::rounded_rect(
+                center,
+                (length, width),
+                radius,
+                unit.y.atan2(unit.x),
+                theme::ACCENT_HOVER,
+            ));
+        }
+        theme::ACCENT
+    };
+    // Two arrows, half the head's width off the axis on either side, one
+    // pointing each way: the footprint is `length` by `width`.
+    let across = Vec2::new(-unit.y, unit.x).scaled(width / 2.0 - head);
+    let half = unit.scaled(length / 2.0);
+    for (offset, from, to) in [
+        (across, half.negated(), half),
+        (across.negated(), half, half.negated()),
+    ] {
+        list.extend(glyphs::arrow(
+            center.translated(offset).translated(from),
+            center.translated(offset).translated(to),
+            stroke,
+            head,
+            arrow_color,
+        ));
+    }
+    list
+}
+
 /// Builds the Select tool's transform-handle overlay for this frame.
 #[must_use]
 pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationInput) -> DrawList {
@@ -170,16 +309,34 @@ pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationI
         {
             continue;
         }
-        if handle.is_rotate {
-            list.extend(rotate_handle_glyph(
+        list.extend(match handle.kind {
+            TransformGlyphKind::Resize => {
+                resize_handle_glyph(view, handle.position, handle.dragging)
+            }
+            TransformGlyphKind::Rotate => {
+                rotate_handle_glyph(view, handle.position, handle.dragging, handle.hovered)
+            }
+            TransformGlyphKind::Skew { direction } => skew_handle_glyph(
                 view,
                 handle.position,
+                direction,
                 handle.dragging,
                 handle.hovered,
-            ));
-        } else {
-            list.extend(resize_handle_glyph(view, handle.position, handle.dragging));
-        }
+            ),
+            TransformGlyphKind::Move => {
+                move_handle_glyph(view, handle.position, handle.dragging, handle.hovered)
+            }
+        });
+    }
+    if let Some((from, to)) = input.skew_guide {
+        list.extend(shape_preview::dashed_guide(
+            from,
+            to,
+            screen_px_to_mm(view, theme::TRANSFORM_SKEW_GUIDE_WIDTH_PX),
+            theme::ACCENT_HOVER,
+            screen_px_to_mm(view, theme::GUIDE_DASH_PX),
+            screen_px_to_mm(view, theme::GUIDE_GAP_PX),
+        ));
     }
     if let Some(pivot) = input.pivot_marker {
         list.extend(glyphs::circle(
@@ -313,18 +470,19 @@ mod tests {
             handles: vec![
                 TransformHandleGlyph {
                     position: Point::new(10.0, 10.0),
-                    is_rotate: false,
+                    kind: TransformGlyphKind::Resize,
                     dragging: false,
                     hovered: false,
                 },
                 TransformHandleGlyph {
                     position: Point::new(5.0, -10.0),
-                    is_rotate: true,
+                    kind: TransformGlyphKind::Rotate,
                     dragging: false,
                     hovered: false,
                 },
             ],
             pivot_marker: None,
+            skew_guide: None,
         };
         let list = build_transform_handles(ViewTransform::identity(), &input);
         assert_ne!(list.triangles.len(), 0);
@@ -339,11 +497,12 @@ mod tests {
             let input = TransformDecorationInput {
                 handles: vec![TransformHandleGlyph {
                     position: Point::new(0.0, 0.0),
-                    is_rotate: true,
+                    kind: TransformGlyphKind::Rotate,
                     dragging,
                     hovered,
                 }],
                 pivot_marker: None,
+                skew_guide: None,
             };
             build_transform_handles(ViewTransform::identity(), &input)
         };
@@ -364,17 +523,19 @@ mod tests {
     fn a_handle_at_the_pivot_is_replaced_by_the_pivot_dot() {
         let handle = |x: f64, y: f64| TransformHandleGlyph {
             position: Point::new(x, y),
-            is_rotate: false,
+            kind: TransformGlyphKind::Resize,
             dragging: false,
             hovered: false,
         };
         let with_pivot_elsewhere = TransformDecorationInput {
             handles: vec![handle(0.0, 0.0), handle(10.0, 10.0)],
             pivot_marker: Some(Point::new(50.0, 50.0)),
+            skew_guide: None,
         };
         let at_handle = TransformDecorationInput {
             handles: vec![handle(0.0, 0.0), handle(10.0, 10.0)],
             pivot_marker: Some(Point::new(0.0, 0.0)),
+            skew_guide: None,
         };
         let view = ViewTransform::identity();
         let elsewhere = build_transform_handles(view, &with_pivot_elsewhere);
@@ -388,6 +549,7 @@ mod tests {
             &TransformDecorationInput {
                 handles: vec![handle(0.0, 0.0)],
                 pivot_marker: None,
+                skew_guide: None,
             },
         );
         assert_eq!(
@@ -402,8 +564,107 @@ mod tests {
         let input = TransformDecorationInput {
             handles: vec![],
             pivot_marker: Some(Point::new(5.0, 5.0)),
+            skew_guide: None,
         };
         let list = build_transform_handles(ViewTransform::identity(), &input);
         assert_ne!(list.triangles.len(), 0);
+    }
+    fn glyph(kind: TransformGlyphKind, dragging: bool, hovered: bool) -> TransformHandleGlyph {
+        TransformHandleGlyph {
+            position: Point::new(0.0, 0.0),
+            kind,
+            dragging,
+            hovered,
+        }
+    }
+
+    fn build_one(g: TransformHandleGlyph) -> DrawList {
+        build_transform_handles(
+            ViewTransform::identity(),
+            &TransformDecorationInput {
+                handles: vec![g],
+                pivot_marker: None,
+                skew_guide: None,
+            },
+        )
+    }
+
+    /// The centre move handle fits its 16 px footprint and has idle, hover
+    /// and dragging looks; dragging turns the arrow white on a solid ground.
+    #[test]
+    fn the_centre_move_handle_has_its_footprint_and_three_looks() {
+        let idle = build_one(glyph(TransformGlyphKind::Move, false, false));
+        let hover = build_one(glyph(TransformGlyphKind::Move, false, true));
+        let drag = build_one(glyph(TransformGlyphKind::Move, true, false));
+        assert_ne!(idle.triangle_count(), 0);
+        for v in &idle.triangles {
+            assert!(v.position.x.abs() <= 8.0 + 1e-9 && v.position.y.abs() <= 8.0 + 1e-9);
+        }
+        assert!(
+            hover
+                .triangles
+                .iter()
+                .any(|v| v.color == theme::ACCENT_HOVER)
+        );
+        assert!(
+            !idle
+                .triangles
+                .iter()
+                .any(|v| v.color == theme::ACCENT_HOVER)
+        );
+        assert!(drag.triangles.iter().any(|v| v.color == RgbaColor::WHITE));
+        assert!(drag.triangles.iter().any(|v| v.color == theme::ACCENT));
+    }
+
+    /// The skew glyph stays inside its 18 x 12 footprint, follows its
+    /// direction, and has idle, hover and dragging looks.
+    #[test]
+    fn the_skew_handle_follows_its_axis_and_keeps_its_footprint() {
+        let along_x = build_one(glyph(
+            TransformGlyphKind::Skew {
+                direction: Vec2::new(1.0, 0.0),
+            },
+            false,
+            false,
+        ));
+        let along_y = build_one(glyph(
+            TransformGlyphKind::Skew {
+                direction: Vec2::new(0.0, 1.0),
+            },
+            false,
+            false,
+        ));
+        let extent = |list: &DrawList| {
+            let xs = list.triangles.iter().map(|v| v.position.x);
+            let ys = list.triangles.iter().map(|v| v.position.y);
+            (
+                xs.clone().fold(f64::MIN, f64::max) - xs.fold(f64::MAX, f64::min),
+                ys.clone().fold(f64::MIN, f64::max) - ys.fold(f64::MAX, f64::min),
+            )
+        };
+        let (w, h) = extent(&along_x);
+        assert!(w <= 18.0 + 1e-9 && w > 15.0, "{w}");
+        assert!(h <= 12.0 + 1e-9 && h > 6.0, "{h}");
+        let (w, h) = extent(&along_y);
+        assert!(h <= 18.0 + 1e-9 && h > 15.0, "turned: {h}");
+        assert!(w <= 12.0 + 1e-9);
+        let direction = Vec2::new(1.0, 0.0);
+        let hover = build_one(glyph(TransformGlyphKind::Skew { direction }, false, true));
+        let drag = build_one(glyph(TransformGlyphKind::Skew { direction }, true, false));
+        assert!(hover.triangle_count() > along_x.triangle_count());
+        assert!(drag.triangles.iter().any(|v| v.color == RgbaColor::WHITE));
+    }
+
+    /// The fixed-line guide is dashed: several separate pieces over its length.
+    #[test]
+    fn the_skew_guide_draws_as_dashes() {
+        let input = TransformDecorationInput {
+            handles: vec![],
+            pivot_marker: None,
+            skew_guide: Some((Point::new(0.0, 0.0), Point::new(70.0, 0.0))),
+        };
+        let list = build_transform_handles(ViewTransform::identity(), &input);
+        // 70 px at 4 on / 3 off: ten dashes of two triangles each.
+        assert_eq!(list.triangle_count(), 20);
     }
 }

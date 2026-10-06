@@ -27,7 +27,8 @@ pub use decorations::{DecorationInput, Hovered};
 pub use glyphs::{DrawList, Vertex};
 pub use pen_preview::build_pen_preview;
 pub use select_decoration::{
-    SelectDecorationInput, SelectionBox, TransformDecorationInput, TransformHandleGlyph,
+    SelectDecorationInput, SelectionBox, TransformDecorationInput, TransformGlyphKind,
+    TransformHandleGlyph,
 };
 pub use shape_preview::{
     RenderShapeHandle, ShapeDecorationInput, ShapeHandleKind, build_shape_live_preview,
