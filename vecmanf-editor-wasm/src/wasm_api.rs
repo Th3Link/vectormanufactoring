@@ -156,7 +156,8 @@ pub struct TransformEntryView {
 
 #[wasm_bindgen]
 impl TransformEntryView {
-    /// `"angle"`, `"size"` or `"radius"`.
+    /// `"angle"`, `"size"`, `"radius"` (a polygon or star's outer radius),
+    /// `"corner-radius"` or `"inner-ratio"`.
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn kind(&self) -> String {
@@ -240,7 +241,7 @@ pub struct DocumentPoint {
 /// frame.
 #[wasm_bindgen]
 pub struct WasmSession {
-    session: Session,
+    pub(crate) session: Session,
     gpu: Option<Gpu>,
 }
 
@@ -399,7 +400,8 @@ impl WasmSession {
 
     /// Which hint the handle under the pointer earns (`""`, `"resize-edge"`,
     /// `"resize-corner"`, `"resize-corner-uniform"`, `"rotate-corner"`,
-    /// `"rotate-side"`, `"skew"` or `"move"`) — for the host's 600 ms hover
+    /// `"rotate-side"`, `"skew"`, `"move"`, `"param-radius"` or
+    /// `"param-inner"`) — for the host's 600 ms hover
     /// chip. Call after every [`WasmSession::pointer_hover`].
     #[must_use]
     pub fn handle_hint(&self) -> String {
@@ -426,8 +428,9 @@ impl WasmSession {
     }
 
     /// Enter in the entry chip: `"committed"`, `"unchanged"` (both close the
-    /// chip), or `"invalid:<field>:number"` / `"invalid:<field>:positive"`
-    /// (the chip stays open; criteria 19, 21, 27, 30, 31). `last_edited` is
+    /// chip), or `"invalid:<field>:<reason>"` with the reason `number`,
+    /// `positive`, `negative` or `ratio-range` (the chip stays open; criteria
+    /// 19, 21, 27, 30, 31; 18, 19 of `unified-object-editing`). `last_edited` is
     /// the index of the field edited last.
     pub fn commit_transform_entry(
         &mut self,
@@ -444,6 +447,8 @@ impl WasmSession {
                 match reason {
                     vecmanf_ui_core::InvalidReason::NotANumber => "number",
                     vecmanf_ui_core::InvalidReason::NotPositive => "positive",
+                    vecmanf_ui_core::InvalidReason::Negative => "negative",
+                    vecmanf_ui_core::InvalidReason::RatioRange => "ratio-range",
                 }
             ),
         }

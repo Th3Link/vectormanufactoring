@@ -32,14 +32,13 @@ impl Session {
     /// dead zone, before the pointer has ever moved over the canvas, and
     /// where the result equals the committed objects. The cached
     /// `select_shift_held`/`select_ctrl_held` let this be read at render time.
-    pub(super) fn select_live_edit(&self) -> Option<LiveEdit> {
+    pub(super) fn select_live_edit_in(&self, objects: &[ObjectSnapshot]) -> Option<LiveEdit> {
         if self.tool != Tool::Select {
             return None;
         }
         let cursor = self.pointer_position?;
-        let objects = self.objects();
         self.select.live_edit(
-            &objects,
+            objects,
             &self.selection,
             cursor,
             self.select_shift_held,
@@ -47,17 +46,20 @@ impl Session {
         )
     }
 
-    /// The document's objects with the Select tool's live edit substituted:
-    /// the one place live geometry enters, and only for the decorations (the
-    /// boxes, handles, pivot marker and readout follow the new geometry). The
-    /// objects themselves are always drawn as committed, so the old geometry
-    /// stays on screen under the blue outline.
-    fn live_objects(&self) -> Vec<ObjectSnapshot> {
-        let mut objects = self.objects();
-        if let Some(live) = self.select_live_edit() {
-            for new in live.objects {
+    /// The document's objects with `live` substituted: the one place live
+    /// geometry enters, and only for the decorations (the boxes, handles,
+    /// pivot marker and readout follow the new geometry). The objects
+    /// themselves are always drawn as committed, so the old geometry stays on
+    /// screen under the blue outline. Takes the committed objects by value:
+    /// the caller has read them for this one use.
+    pub(super) fn live_objects_in(
+        mut objects: Vec<ObjectSnapshot>,
+        live: Option<&LiveEdit>,
+    ) -> Vec<ObjectSnapshot> {
+        if let Some(live) = live {
+            for new in &live.objects {
                 if let Some(slot) = objects.iter_mut().find(|o| o.id() == new.id()) {
-                    *slot = new;
+                    *slot = new.clone();
                 }
             }
         }
@@ -72,11 +74,22 @@ impl Session {
     /// (`object-transform` acceptance criterion 18; the hover outline uses
     /// the same rule), and a skewed path's box is the tight oriented
     /// rectangle around the skewed preview (criterion 45).
+    #[cfg(test)]
     pub(super) fn select_decoration_input(&self) -> SelectDecorationInput {
+        let objects = self.objects();
+        let live = self.select_live_edit_in(&objects);
+        self.select_decoration_input_in(&Self::live_objects_in(objects, live.as_ref()))
+    }
+
+    /// [`Session::select_decoration_input`] over the live objects the caller
+    /// already built, so a frame reads and substitutes once.
+    pub(super) fn select_decoration_input_in(
+        &self,
+        objects: &[ObjectSnapshot],
+    ) -> SelectDecorationInput {
         if self.tool != Tool::Select {
             return SelectDecorationInput::default();
         }
-        let objects = self.live_objects();
         let selected = self
             .selection
             .ids()
@@ -108,7 +121,7 @@ impl Session {
         &self,
         objects: &[ObjectSnapshot],
     ) -> Option<(ObjectSnapshot, vecmanf_ui_core::OrientedBox, EditHandle)> {
-        if self.select.dragging_handle().is_some() || self.select.entry().is_some() {
+        if self.select.dragging_handle().is_some() || self.select.has_entry() {
             return None;
         }
         let point = self.pointer_position?;
@@ -132,16 +145,27 @@ impl Session {
     /// would use), the skew guide and the radius guides. Parameter handles
     /// are left out while the same object is moved, resized, rotated or
     /// skewed by drag (criterion 7).
+    #[cfg(test)]
     pub(super) fn select_transform_decoration_input(&self) -> TransformDecorationInput {
+        let objects = self.objects();
+        let live = self.select_live_edit_in(&objects);
+        self.select_transform_decoration_input_in(&Self::live_objects_in(objects, live.as_ref()))
+    }
+
+    /// [`Session::select_transform_decoration_input`] over the live objects
+    /// the caller already built, so a frame reads and substitutes once.
+    pub(super) fn select_transform_decoration_input_in(
+        &self,
+        objects: &[ObjectSnapshot],
+    ) -> TransformDecorationInput {
         if self.tool != Tool::Select {
             return TransformDecorationInput::default();
         }
-        let objects = self.live_objects();
         let tolerances = self.transform_handle_tolerances();
         let dragging = self.select.dragging_handle();
         let entry_handle = self.select.entry_handle();
         let highlighted = dragging.or(entry_handle);
-        let hover = self.select_hovered_handle(&objects);
+        let hover = self.select_hovered_handle(objects);
         let hovered = hover.as_ref().map(|(_, _, handle)| *handle);
         let side_rotate = self.select.side_rotate_revealed(self.select_shift_held);
         let [only] = self.selection.ids() else {
@@ -162,7 +186,7 @@ impl Session {
         );
         let (sin, cos) = box_.angle.as_radians().sin_cos();
         let drawn: Vec<(EditHandle, vecmanf_document_core::Point)> =
-            SelectTool::transform_handles(&objects, &self.selection, tolerances, side_rotate)
+            SelectTool::transform_handles(objects, &self.selection, tolerances, side_rotate)
                 .into_iter()
                 .filter(|(handle, _)| {
                     is_drawn_handle(*handle, &box_, &tolerances)

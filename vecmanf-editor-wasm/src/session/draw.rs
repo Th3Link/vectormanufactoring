@@ -21,7 +21,7 @@ impl Session {
     ///
     /// When the node tool has a node/handle drag in flight
     /// (acceptance criteria 8, 9, 10's "update live during the drag"),
-    /// `live_node_drag_paths` (private: this module's own internal step,
+    /// `live_node_drag_paths_in` (private: this module's own internal step,
     /// not part of its public surface) substitutes that drag's live,
     /// not-yet-committed position/handle values into the snapshot before
     /// anything downstream ever sees it — `vecmanf-render-core` needs no
@@ -32,9 +32,14 @@ impl Session {
     #[must_use]
     pub fn draw_list(&self) -> DrawList {
         let view = self.view();
-        let paths = self.live_node_drag_paths();
+        // The document is read once per frame and every step below works on
+        // that read: reading the objects out of the document is by far the
+        // largest cost of a frame with many objects.
+        let objects = self.objects();
+        let live = self.select_live_edit_in(&objects);
+        let paths = self.live_node_drag_paths_in(&objects);
         let mut list = build_draw_list(&paths, view, &self.decoration_input());
-        let primitives = self.primitives_for_render();
+        let primitives = self.primitives_for_render_in(&objects);
         list.extend(vecmanf_render_core::build_shape_draw_list(
             &primitives,
             view,
@@ -43,19 +48,20 @@ impl Session {
         // The blue half of blue-new, black-old: the geometry a release would
         // commit, over the committed objects drawn above and under the boxes
         // and handles below (`specs/unified-object-editing` criterion 10).
-        if let Some(live) = self.select_live_edit() {
+        if let Some(live) = &live {
             list.extend(vecmanf_render_core::build_live_edit_preview(
                 &live.objects,
                 view,
             ));
         }
+        let live_objects = Self::live_objects_in(objects, live.as_ref());
         list.extend(build_select_draw_list(
             view,
-            &self.select_decoration_input(),
+            &self.select_decoration_input_in(&live_objects),
         ));
         list.extend(build_transform_draw_list(
             view,
-            &self.select_transform_decoration_input(),
+            &self.select_transform_decoration_input_in(&live_objects),
         ));
         if let Some((live_shape, rotation)) = self.live_preview_shape() {
             list.extend(vecmanf_render_core::build_shape_live_preview(

@@ -26,6 +26,7 @@ mod node;
 mod open_error;
 mod pen;
 mod select;
+mod select_bar;
 mod select_view;
 mod shapes;
 mod transform_entry;
@@ -154,6 +155,13 @@ pub struct Session {
     /// The Ctrl modifier's live state, same reasoning as
     /// `select_shift_held` (acceptance criteria 5, 17).
     select_ctrl_held: bool,
+    /// The objects as the document held them when a Select-tool drag began,
+    /// kept for the drag's life: a drag writes nothing until its release, so
+    /// the document cannot change under it, and reading every object out of
+    /// the document costs more than the rest of a frame with many objects
+    /// (`specs/unified-object-editing` criterion 15). Cleared by the first
+    /// [`Session::objects`] after the drag ends.
+    drag_objects: std::cell::RefCell<Option<Vec<ObjectSnapshot>>>,
 }
 
 impl Session {
@@ -185,6 +193,7 @@ impl Session {
             pointer_position: None,
             select_shift_held: false,
             select_ctrl_held: false,
+            drag_objects: std::cell::RefCell::new(None),
         }
     }
 
@@ -213,6 +222,7 @@ impl Session {
             pointer_position: None,
             select_shift_held: false,
             select_ctrl_held: false,
+            drag_objects: std::cell::RefCell::new(None),
         })
     }
 
@@ -250,6 +260,7 @@ impl Session {
         // preview would otherwise sit unflushed until some later event
         // commits it against whatever is selected *then* instead).
         self.commit_poly_star_ratio();
+        self.flush_select_bar_preview();
         self.select.cancel_entry();
         self.select.forget_press();
         self.tool = tool;
@@ -288,6 +299,19 @@ impl Session {
     /// primitives`]: both a path and a primitive are "any object" to
     /// `hit_test_object`/`object_bounds`.
     fn objects(&self) -> Vec<ObjectSnapshot> {
+        if self.tool == Tool::Select && self.select.drag_in_flight() {
+            return self
+                .drag_objects
+                .borrow_mut()
+                .get_or_insert_with(|| self.read_objects())
+                .clone();
+        }
+        *self.drag_objects.borrow_mut() = None;
+        self.read_objects()
+    }
+
+    /// Reads every object out of the document, in z-order.
+    fn read_objects(&self) -> Vec<ObjectSnapshot> {
         self.document
             .object_ids()
             .into_iter()
@@ -306,6 +330,7 @@ impl Session {
         // chance to commit against the selection it was previewed
         // against, if the mouse was released outside the slider itself.
         self.commit_poly_star_ratio();
+        self.flush_select_bar_preview();
         match self.tool {
             Tool::Select => {
                 self.select_pointer_down(point, shift);
@@ -445,6 +470,7 @@ impl Session {
     /// toolbar's Delete button): removes every selected object when the
     /// Select or Node tool is active. A no-op for every other tool.
     pub fn delete_selected(&mut self) {
+        self.flush_select_bar_preview();
         match self.tool {
             Tool::Select => {
                 let objects = self.objects();

@@ -67,7 +67,22 @@ impl Session {
     /// never by hit-testing or any other read of the document's real
     /// state.
     pub(super) fn primitives_for_render(&self) -> Vec<PrimitiveSnapshot> {
-        let mut primitives = self.primitives();
+        self.primitives_for_render_in(&self.objects())
+    }
+
+    /// [`Session::primitives_for_render`] over objects the caller already
+    /// read, so a frame reads the document once.
+    pub(super) fn primitives_for_render_in(
+        &self,
+        objects: &[vecmanf_document_core::ObjectSnapshot],
+    ) -> Vec<PrimitiveSnapshot> {
+        let mut primitives: Vec<PrimitiveSnapshot> = objects
+            .iter()
+            .filter_map(|object| match object {
+                vecmanf_document_core::ObjectSnapshot::Primitive(primitive) => Some(*primitive),
+                vecmanf_document_core::ObjectSnapshot::Path(_) => None,
+            })
+            .collect();
         if let Tool::PolygonStar = self.tool
             && let Some(preview_ratio) = self.poly_star.ratio_preview()
         {
@@ -205,12 +220,16 @@ impl Session {
     }
 
     /// Acceptance criterion 6's "remove rounding" action: zeroes the
-    /// corner radius of every currently selected rectangle. A no-op
-    /// outside the rectangle tool.
+    /// corner radius of every currently selected rectangle, from the Select
+    /// bar (`unified-object-editing` criterion 21) or the Rectangle tool's.
+    /// A no-op in every other tool.
     pub fn remove_corner_rounding(&mut self) {
-        if self.tool == Tool::Rectangle {
-            self.rectangle
-                .remove_rounding(&self.document, &self.selection);
+        match self.tool {
+            Tool::Select => self.select_remove_rounding(),
+            Tool::Rectangle => self
+                .rectangle
+                .remove_rounding(&self.document, &self.selection),
+            Tool::Pen | Tool::Node | Tool::Ellipse | Tool::PolygonStar => {}
         }
     }
 
@@ -302,6 +321,7 @@ impl Session {
     /// AC22's "remain selected together" wording, not a literal one — a
     /// known, narrowed scope (see this crate's own report).
     pub fn convert_selected_to_paths(&mut self) {
+        self.flush_select_bar_preview();
         self.select.cancel_entry();
         let ids = self.selection.ids().to_vec();
         if ids.is_empty() {

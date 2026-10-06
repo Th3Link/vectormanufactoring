@@ -6,7 +6,7 @@
 //! are (`docs/technical-debt.md`, "`Session` is one module past the size
 //! limit").
 
-use vecmanf_document_core::{AnchorKind, Point};
+use vecmanf_document_core::{AnchorKind, ObjectSnapshot, Point};
 use vecmanf_render_core::{DecorationInput, Hovered as RenderHovered};
 use vecmanf_ui_core::{Hit, NodeToolbarState};
 
@@ -23,8 +23,17 @@ impl Session {
     /// the pointer off the canvas (`self.pointer_position` is `None`). The
     /// Select tool's live edit is not substituted here: its blue outline is
     /// drawn over the committed paths (`specs/unified-object-editing`).
-    pub(super) fn live_node_drag_paths(&self) -> Vec<vecmanf_document_core::PathSnapshot> {
-        let mut paths = self.paths();
+    pub(super) fn live_node_drag_paths_in(
+        &self,
+        objects: &[ObjectSnapshot],
+    ) -> Vec<vecmanf_document_core::PathSnapshot> {
+        let mut paths: Vec<vecmanf_document_core::PathSnapshot> = objects
+            .iter()
+            .filter_map(|object| match object {
+                ObjectSnapshot::Path(path) => Some(path.clone()),
+                ObjectSnapshot::Primitive(_) => None,
+            })
+            .collect();
         if self.tool == Tool::Node {
             self.apply_live_node_drag(&mut paths);
         }
