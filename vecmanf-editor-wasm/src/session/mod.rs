@@ -637,6 +637,7 @@ impl Session {
             Hit::Segment { .. } => None,
         });
         DecorationInput {
+            show_nodes: true,
             selected_nodes,
             selected_segment,
             hovered,
@@ -1341,6 +1342,29 @@ mod tests {
             "2 + 2 anchors, minus the merged pair"
         );
         assert!(!paths[0].closed);
+    }
+
+    /// `docs/design-system.md`: path nodes are drawn by the Node tool
+    /// only — not in Select (or any other) tool, where they used to
+    /// appear as grey squares on every path.
+    #[test]
+    fn path_nodes_are_drawn_only_while_the_node_tool_is_active() {
+        let mut session = Session::new(1);
+        session.set_tool(Tool::Pen);
+        session.pointer_down(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_down(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 0.0), false);
+        session.finish_pen();
+
+        session.set_tool(Tool::Select);
+        assert!(!session.decoration_input().show_nodes);
+        let select_triangles = session.draw_list().triangle_count();
+
+        session.set_tool(Tool::Node);
+        assert!(session.decoration_input().show_nodes);
+        // Two nodes, each outline + fill quad (4 triangles per node).
+        assert_eq!(session.draw_list().triangle_count(), select_triangles + 8);
     }
 
     /// The bug this round fixes: `decoration_input()` used to zip
