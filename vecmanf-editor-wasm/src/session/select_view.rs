@@ -87,7 +87,14 @@ impl Session {
         &self,
         objects: &[ObjectSnapshot],
     ) -> SelectDecorationInput {
-        if self.tool != Tool::Select {
+        // A creation tool keeps each selected object's plain selection box
+        // (no handles, no hover), so the maker still sees what a Properties
+        // panel would act on (`unified-object-editing` criterion 27); the Pen
+        // and Node tools draw their own.
+        if !matches!(
+            self.tool,
+            Tool::Select | Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar
+        ) {
             return SelectDecorationInput::default();
         }
         let selected = self

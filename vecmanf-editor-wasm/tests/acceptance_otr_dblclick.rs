@@ -93,13 +93,14 @@ fn path_doc() -> Document {
 
 /// The browser's double-click: press and release at `first`, the second press
 /// at `second` withheld, `double_click` at it, then the re-hover.
-fn dbl(s: &mut Session, first: Point, second: Point, shift: bool, ctrl: bool) {
+fn dbl(s: &mut Session, first: Point, second: Point, shift: bool, ctrl: bool) -> bool {
     s.pointer_hover(first, shift, ctrl);
     s.pointer_down(first, shift);
     s.pointer_up(first, shift, ctrl);
     s.pointer_hover(second, shift, ctrl);
-    s.double_click(second, shift, ctrl);
+    let hint = s.double_click(second, shift, ctrl);
     s.pointer_hover(second, shift, ctrl);
+    hint
 }
 
 fn click(s: &mut Session, p: Point) {
@@ -116,14 +117,18 @@ fn px(s: &Session, pixels: f64) -> f64 {
 fn unselected_handoff(doc: &Document, at: Point, want: Tool, label: &str) {
     let mut s = open(doc);
     let before = bytes(&s);
-    dbl(&mut s, at, at, false, false);
+    let hint = dbl(&mut s, at, at, false, false);
+    // `unified-object-editing` criteria 31, 32: a path hands off to the Node
+    // tool; a primitive changes no tool and asks for the edit hint.
     assert_eq!(s.tool(), want, "{label}: handoff at {at:?}");
+    assert_eq!(hint, want == Tool::Select, "{label}: edit hint at {at:?}");
     assert!(s.transform_entry().is_none(), "{label}: no entry");
     assert_eq!(bytes(&s), before, "{label}: nothing written");
 }
 
 #[test]
-fn double_click_on_the_outline_of_an_unselected_object_hands_off_at_every_handle_spot() {
+fn double_click_on_the_outline_of_an_unselected_object_hands_off_a_path_and_only_hints_for_a_primitive_at_every_handle_spot()
+ {
     // Rectangle: four corners and four edge midpoints (resize handle spots).
     let r = rect_doc();
     for at in [
@@ -136,7 +141,7 @@ fn double_click_on_the_outline_of_an_unselected_object_hands_off_at_every_handle
         pt(70.0, 100.0),
         pt(10.0, 60.0),
     ] {
-        unselected_handoff(&r, at, Tool::Rectangle, "rect");
+        unselected_handoff(&r, at, Tool::Select, "rect");
     }
     // Ellipse: the four extreme points are its edge handle spots.
     let e = ellipse_doc();
@@ -146,11 +151,11 @@ fn double_click_on_the_outline_of_an_unselected_object_hands_off_at_every_handle
         pt(70.0, 100.0),
         pt(10.0, 60.0),
     ] {
-        unselected_handoff(&e, at, Tool::Ellipse, "ellipse");
+        unselected_handoff(&e, at, Tool::Select, "ellipse");
     }
     // Polygon and star: the top vertex is on the outline and at the N spot.
-    unselected_handoff(&polygon_doc(), pt(70.0, 20.0), Tool::PolygonStar, "polygon");
-    unselected_handoff(&star_doc(), pt(70.0, 20.0), Tool::PolygonStar, "star");
+    unselected_handoff(&polygon_doc(), pt(70.0, 20.0), Tool::Select, "polygon");
+    unselected_handoff(&star_doc(), pt(70.0, 20.0), Tool::Select, "star");
     // Path: the top-edge midpoint and an anchor.
     let p = path_doc();
     for at in [
@@ -164,12 +169,12 @@ fn double_click_on_the_outline_of_an_unselected_object_hands_off_at_every_handle
 }
 
 #[test]
-fn a_second_press_a_few_pixels_off_still_hands_off_for_an_unselected_object() {
+fn a_second_press_a_few_pixels_off_still_only_hints_for_an_unselected_primitive() {
     let mut s = open(&rect_doc());
     let first = pt(70.0, 20.0);
     let second = pt(70.0 + px(&s, 4.0), 20.0 + px(&s, 2.0));
-    dbl(&mut s, first, second, false, false);
-    assert_eq!(s.tool(), Tool::Rectangle);
+    assert!(dbl(&mut s, first, second, false, false), "the edit hint");
+    assert_eq!(s.tool(), Tool::Select, "no handoff");
     assert!(s.transform_entry().is_none());
 }
 
@@ -250,7 +255,7 @@ fn a_double_click_on_the_centre_handle_and_inside_the_box_still_hands_off() {
         let mut s = open(&rect_doc());
         click(&mut s, pt(70.0, 20.0));
         dbl(&mut s, at, at, false, false);
-        assert_eq!(s.tool(), Tool::Rectangle, "{at:?}");
+        assert_eq!(s.tool(), Tool::Select, "{at:?}");
         assert!(s.transform_entry().is_none());
     }
 }
@@ -352,7 +357,7 @@ fn rapid_triple_click_on_a_handle_keeps_one_entry_and_the_select_tool() {
 }
 
 #[test]
-fn handle_double_click_then_a_normal_press_elsewhere_closes_the_entry_and_the_next_pair_hands_off()
+fn handle_double_click_then_a_normal_press_elsewhere_closes_the_entry_and_the_next_pair_only_hints()
 {
     let mut s = open(&rect_doc());
     click(&mut s, pt(70.0, 20.0));
@@ -360,8 +365,8 @@ fn handle_double_click_then_a_normal_press_elsewhere_closes_the_entry_and_the_ne
     assert!(s.transform_entry().is_some());
     click(&mut s, pt(70.0, 60.0));
     assert!(s.transform_entry().is_none());
-    dbl(&mut s, pt(70.0, 60.0), pt(70.0, 60.0), false, false);
-    assert_eq!(s.tool(), Tool::Rectangle);
+    assert!(dbl(&mut s, pt(70.0, 60.0), pt(70.0, 60.0), false, false));
+    assert_eq!(s.tool(), Tool::Select);
 }
 
 #[test]

@@ -131,12 +131,9 @@ pub struct Session {
     /// the document, resets on `New`/`Open`).
     viewport: Viewport,
     hovered: Option<Hit>,
-    /// The primitive currently hovered while a shape tool is active —
-    /// the shape-tool counterpart to `hovered` above.
-    hovered_primitive: Option<NodeId>,
     /// The object currently hovered while the Select tool is active —
-    /// the Select-tool counterpart to `hovered`/`hovered_primitive`
-    /// above (acceptance criteria 14, 15's hover box).
+    /// the Select-tool counterpart to `hovered` above (acceptance criteria
+    /// 14, 15's hover box). A creation tool has no hover highlight.
     hovered_object: Option<NodeId>,
     /// The live pointer position in document space, tracked regardless
     /// of the active tool — the pen tool's rubber-band preview
@@ -188,7 +185,6 @@ impl Session {
             tool: Tool::Select,
             viewport: Viewport::new(),
             hovered: None,
-            hovered_primitive: None,
             hovered_object: None,
             pointer_position: None,
             select_shift_held: false,
@@ -217,7 +213,6 @@ impl Session {
             tool: Tool::Select,
             viewport: Viewport::new(),
             hovered: None,
-            hovered_primitive: None,
             hovered_object: None,
             pointer_position: None,
             select_shift_held: false,
@@ -259,7 +254,6 @@ impl Session {
         // the slider's own `pointerup`/`blur`, so without this the
         // preview would otherwise sit unflushed until some later event
         // commits it against whatever is selected *then* instead).
-        self.commit_poly_star_ratio();
         self.flush_select_bar_preview();
         self.select.cancel_entry();
         self.select.forget_press();
@@ -329,7 +323,6 @@ impl Session {
         // star) before a pending ratio-slider preview ever gets a
         // chance to commit against the selection it was previewed
         // against, if the mouse was released outside the slider itself.
-        self.commit_poly_star_ratio();
         self.flush_select_bar_preview();
         match self.tool {
             Tool::Select => {
@@ -345,7 +338,7 @@ impl Session {
                 self.node.pointer_down(&paths, point, tolerances, shift);
             }
             Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
-                self.shape_pointer_down(point, shift);
+                self.shape_pointer_down(point);
             }
         }
     }
@@ -359,10 +352,9 @@ impl Session {
     /// preview needs it (`specification.md`'s UX notes) even though the
     /// pen tool keeps no hit-test hover state of its own. For the node
     /// tool, additionally updates hover state for the hover ring (same
-    /// UX notes); for a shape tool, updates the hovered primitive for
-    /// its bounding-box hover outline, *and* feeds whatever drag is in
-    /// flight for the live preview (ux-engineer review: acceptance
-    /// criteria 3, 4, 5, 9, 13, 14, 15's "updates live" wording).
+    /// UX notes); for a creation tool, feeds the create-drag in flight
+    /// for the live preview (ux-engineer review) and nothing else: no
+    /// hover state (`unified-object-editing` criterion 25).
     /// `constrain` is the Ctrl modifier's current state, consulted only
     /// by the rectangle/ellipse tools' create-drag preview (acceptance
     /// criteria 2, 8) and — since `object-transform` — by the Select
@@ -376,7 +368,6 @@ impl Session {
         };
         self.pointer_position = Some(point);
         self.hovered = None;
-        self.hovered_primitive = None;
         self.hovered_object = None;
         self.select_shift_held = shift;
         self.select_ctrl_held = constrain;
@@ -397,7 +388,6 @@ impl Session {
             }
             Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
                 self.shape_pointer_move(point, constrain);
-                self.update_hovered_primitive(point);
             }
             Tool::Pen => {}
         }
@@ -409,7 +399,6 @@ impl Session {
     pub fn pointer_leave(&mut self) {
         self.pointer_position = None;
         self.hovered = None;
-        self.hovered_primitive = None;
     }
 
     /// The pointer released at `point`, ending whatever gesture
@@ -487,24 +476,24 @@ impl Session {
     /// detects a double-click... and calls `double_click(x, y)`.
     /// `Session` dispatches it"): the pen tool finishes its in-progress
     /// path (acceptance criterion 3), the node tool inserts a node on the
-    /// hit segment (acceptance criterion 12, via
-    /// [`Session::insert_at`]), the Select tool hands off to the hit
-    /// object's own tool (acceptance criteria 22, 23), and every shape
-    /// tool treats it exactly like an ordinary release (unchanged from
-    /// before this slice — the first click of a double-click is an
-    /// ordinary press with no movement, which already writes nothing).
-    pub fn double_click(&mut self, point: Point, shift: bool, ctrl: bool) {
+    /// hit segment (acceptance criterion 12, via [`Session::insert_at`]),
+    /// the Select tool opens a handle's typed entry, hands a path off to
+    /// the Node tool or, on a primitive, changes nothing
+    /// (`specs/unified-object-editing/` criteria 31 to 34), and the
+    /// creation tools ignore it (the first click of a double-click was an
+    /// ordinary press with no movement, which writes nothing). Returns
+    /// whether the host should show the edit hint chip (criterion 32).
+    pub fn double_click(&mut self, point: Point, shift: bool, ctrl: bool) -> bool {
         let Some(point) = sanitized_point(point) else {
-            return;
+            return false;
         };
         match self.tool {
             Tool::Pen => self.finish_pen(),
             Tool::Node => self.insert_at(point),
-            Tool::Select => self.select_double_click(point, shift, ctrl),
-            Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
-                self.shape_pointer_up(point, false);
-            }
+            Tool::Select => return self.select_double_click(point, shift, ctrl),
+            Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {}
         }
+        false
     }
 }
 

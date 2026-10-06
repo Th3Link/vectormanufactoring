@@ -579,43 +579,52 @@ fn ac03_dead_zone_is_sticky_once_left() {
 }
 
 #[test]
-fn ac03_double_click_inside_the_box_hands_off_to_the_objects_own_tool() {
-    // rectangle
-    let mut s = selected_rect();
+fn ac03_double_click_inside_the_box_hands_a_path_off_and_only_hints_for_a_primitive() {
+    // `unified-object-editing` criteria 31, 32: a primitive has no tool of its
+    // own to hand off to; the double-click changes nothing and asks for the
+    // edit hint. A path still hands off to the Node tool.
     for p in [pt(20.0, 10.0), pt(10.0, 12.0), pt(30.0, 6.0)] {
         let mut s2 = selected_rect();
         click(&mut s2, p);
-        s2.double_click(p, false, false);
-        assert_eq!(s2.tool(), Tool::Rectangle, "double-click at {p:?}");
+        let before = snapshot_bytes(&s2);
+        assert!(s2.double_click(p, false, false), "hint at {p:?}");
+        assert_eq!(s2.tool(), Tool::Select, "double-click at {p:?}");
+        assert_eq!(snapshot_bytes(&s2), before);
     }
-    // not at a handle: a double-click on the centre handle also hands off
-    s.double_click(pt(20.0, 10.0), false, false);
-    assert_eq!(s.tool(), Tool::Rectangle);
+    // the centre handle too
+    let mut s = selected_rect();
+    assert!(s.double_click(pt(20.0, 10.0), false, false));
+    assert_eq!(s.tool(), Tool::Select);
 
     let mut e = open_in_session(&ellipse_doc(20.0, 10.0, 20.0, 10.0));
     click(&mut e, pt(20.0 + 20.0 * 0.7071, 10.0 + 10.0 * 0.7071));
     click(&mut e, pt(20.0, 10.0));
-    e.double_click(pt(20.0, 10.0), false, false);
-    assert_eq!(e.tool(), Tool::Ellipse);
+    assert!(e.double_click(pt(20.0, 10.0), false, false));
+    assert_eq!(e.tool(), Tool::Select);
 
     let mut p = open_in_session(&polygon_doc(30.0, 30.0, 20.0, 5));
     // select by the outline: first vertex (top) is at (30, 10)
     click(&mut p, pt(30.0, 10.0));
     click(&mut p, pt(30.0, 32.0));
-    p.double_click(pt(30.0, 32.0), false, false);
-    assert_eq!(p.tool(), Tool::PolygonStar);
+    assert!(p.double_click(pt(30.0, 32.0), false, false));
+    assert_eq!(p.tool(), Tool::Select);
 
     let (mut t, b) = selected_triangle();
     click(&mut t, b.at(5.0, 2.0));
-    t.double_click(b.at(5.0, 2.0), false, false);
+    assert!(
+        !t.double_click(b.at(5.0, 2.0), false, false),
+        "no hint for a path"
+    );
     assert_eq!(t.tool(), Tool::Node);
 }
 
 #[test]
-fn ac03_double_click_on_the_outline_of_an_unselected_object_still_hands_off() {
+fn ac03_double_click_on_the_outline_of_an_unselected_primitive_only_hints() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0));
-    s.double_click(pt(20.0, 0.0), false, false);
-    assert_eq!(s.tool(), Tool::Rectangle);
+    let before = snapshot_bytes(&s);
+    assert!(s.double_click(pt(20.0, 0.0), false, false));
+    assert_eq!(s.tool(), Tool::Select);
+    assert_eq!(snapshot_bytes(&s), before);
 }
 
 #[test]
@@ -626,16 +635,16 @@ fn ac03_double_click_inside_an_unselected_unfilled_object_does_nothing() {
 }
 
 #[test]
-fn ac03_a_slightly_unsteady_double_click_does_not_edit_before_the_handoff() {
+fn ac03_a_slightly_unsteady_double_click_does_not_edit_and_only_hints() {
     let mut s = selected_rect();
     let before = snapshot_bytes(&s);
     let kk = k(&s);
     let p = pt(20.0, 10.0);
     // press, 2 px wobble, release, second press suppressed, double_click
     drag(&mut s, p, pt(p.x + 2.0 / kk, p.y + 1.0 / kk));
-    s.double_click(p, false, false);
+    assert!(s.double_click(p, false, false));
     assert_eq!(snapshot_bytes(&s), before);
-    assert_eq!(s.tool(), Tool::Rectangle);
+    assert_eq!(s.tool(), Tool::Select);
 }
 
 // ---------------------------------------------------------------------

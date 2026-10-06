@@ -9,36 +9,12 @@
 //! shares `Session`'s privacy boundary and its methods join the same type's
 //! `impl Session`.
 
-use vecmanf_document_core::{ObjectSnapshot, Point, Shape};
+use vecmanf_document_core::Point;
 use vecmanf_ui_core::{
     CornerRadiusScaling, SelectDoubleClickOutcome, StrokeScaling, TransformHandleTolerances,
 };
 
 use super::{Session, Tool};
-
-/// Which tool a primitive of this shape is created/edited with — the one
-/// mapping both directions funnel through
-/// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "`Session` maps
-/// kind to `Tool` with **one** function, `tool_for`... The existing
-/// `shape_matches_active_tool` is then derived from it, so the two
-/// directions of the mapping cannot drift apart").
-pub(super) fn tool_for_shape(shape: &Shape) -> Tool {
-    match shape {
-        Shape::Rect { .. } => Tool::Rectangle,
-        Shape::Ellipse { .. } => Tool::Ellipse,
-        Shape::Polygon { .. } | Shape::Star { .. } => Tool::PolygonStar,
-    }
-}
-
-/// Which tool a double-clicked object hands off to (acceptance criteria
-/// 22, 23): a path to the Node tool, a primitive to its own creation
-/// tool via [`tool_for_shape`].
-pub(super) fn tool_for(object: &ObjectSnapshot) -> Tool {
-    match object {
-        ObjectSnapshot::Path(_) => Tool::Node,
-        ObjectSnapshot::Primitive(primitive) => tool_for_shape(&primitive.shape),
-    }
-}
 
 impl Session {
     /// The "Scale stroke width" switch (`specs/0005-object-transform/
@@ -148,16 +124,17 @@ impl Session {
         self.hovered_object = vecmanf_ui_core::hit_test_object(&objects, point, tolerance);
     }
 
-    /// Acceptance criteria 3, 18, 22, 23, 25-32, 49 and slice 4's 22, 23:
-    /// a double-click while the Select tool is active, at the second press's
-    /// position with its modifiers. On a rotate or resize handle it opens
-    /// the typed entry; on a skew handle it does nothing; elsewhere inside
-    /// the sole selected object's box (the centre handle included) or on an
-    /// outline it hands off to the object's own tool — clearing the node
-    /// tool's selection for a path (so it is "ready for node editing with
-    /// no nodes selected", `adrs.md`), or selecting the primitive (so its
-    /// own shape tool shows its handles at once).
-    pub(super) fn select_double_click(&mut self, point: Point, shift: bool, ctrl: bool) {
+    /// `unified-object-editing` criteria 31 to 34, and 3, 18, 25-32, 49 of the
+    /// refinements: a double-click while the Select tool is active, at the
+    /// second press's position with its modifiers. On a handle with a typed
+    /// entry it opens the entry; on a skew handle and on empty canvas
+    /// nothing happens; on a path (outline, or inside its selected box, the
+    /// centre handle included) the Node tool is activated with the path
+    /// selected, "ready for node editing with no nodes selected"
+    /// (`adrs.md`); on a primitive nothing changes and the host is asked to
+    /// show the edit hint (the returned `true`). No double-click switches
+    /// to a primitive's own tool: there is none.
+    pub(super) fn select_double_click(&mut self, point: Point, shift: bool, ctrl: bool) -> bool {
         let objects = self.objects();
         let tolerance = self.segment_tolerance();
         let handle_tolerances = self.transform_handle_tolerances();
@@ -169,18 +146,16 @@ impl Session {
             handle_tolerances,
             (shift, ctrl),
         );
-        let SelectDoubleClickOutcome::Hit(object) = outcome else {
-            return;
-        };
-        let target = tool_for(&object);
-        match &object {
-            ObjectSnapshot::Path(_) => {
+        match outcome {
+            SelectDoubleClickOutcome::Hit(_) => {
                 self.node.escape();
+                self.tool = Tool::Node;
+                false
             }
-            ObjectSnapshot::Primitive(primitive) => {
-                self.selection.select_single(primitive.id);
-            }
+            SelectDoubleClickOutcome::EditHint => true,
+            SelectDoubleClickOutcome::Miss
+            | SelectDoubleClickOutcome::EntryOpened
+            | SelectDoubleClickOutcome::Ignored => false,
         }
-        self.tool = target;
     }
 }

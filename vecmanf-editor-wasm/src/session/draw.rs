@@ -7,6 +7,8 @@ use vecmanf_render_core::{
     DrawList, build_draw_list, build_pen_preview, build_select_draw_list, build_transform_draw_list,
 };
 
+use vecmanf_document_core::{ObjectSnapshot, PrimitiveSnapshot};
+
 use super::{Session, Tool};
 
 impl Session {
@@ -14,8 +16,8 @@ impl Session {
     /// the active view transform, and the node tool's selection/hover —
     /// plus the pen tool's in-progress preview
     /// (`specification.md`'s UX notes) when it is active, every
-    /// primitive's own stroke/selection/handle decorations, and (when a
-    /// shape-tool drag is in flight) its own live preview outline
+    /// primitive's own stroke, the Select tool's boxes and handles, and (when a
+    /// creation-tool drag is in flight) its live preview outline
     /// (`specs/0003-primitive-shapes/specification.md`, "Live creation
     /// feedback").
     ///
@@ -39,11 +41,10 @@ impl Session {
         let live = self.select_live_edit_in(&objects);
         let paths = self.live_node_drag_paths_in(&objects);
         let mut list = build_draw_list(&paths, view, &self.decoration_input());
-        let primitives = self.primitives_for_render_in(&objects);
-        list.extend(vecmanf_render_core::build_shape_draw_list(
+        let primitives = Self::primitives_in(&objects);
+        list.extend(vecmanf_render_core::build_primitive_strokes(
             &primitives,
             view,
-            &self.shape_decoration_input(),
         ));
         // The blue half of blue-new, black-old: the geometry a release would
         // commit, over the committed objects drawn above and under the boxes
@@ -63,10 +64,10 @@ impl Session {
             view,
             &self.select_transform_decoration_input_in(&live_objects),
         ));
-        if let Some((live_shape, rotation)) = self.live_preview_shape() {
+        if let Some(preview) = self.live_preview() {
             list.extend(vecmanf_render_core::build_shape_live_preview(
-                &live_shape,
-                rotation,
+                &preview.shape,
+                vecmanf_document_core::Angle::from_radians(0.0),
                 view,
             ));
         }
@@ -91,5 +92,16 @@ impl Session {
             ));
         }
         list
+    }
+
+    /// The primitives among `objects`, in z-order.
+    fn primitives_in(objects: &[ObjectSnapshot]) -> Vec<PrimitiveSnapshot> {
+        objects
+            .iter()
+            .filter_map(|object| match object {
+                ObjectSnapshot::Primitive(primitive) => Some(*primitive),
+                ObjectSnapshot::Path(_) => None,
+            })
+            .collect()
     }
 }

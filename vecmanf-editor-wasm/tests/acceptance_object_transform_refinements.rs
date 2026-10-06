@@ -320,14 +320,23 @@ fn the_skew_handle_cursor_turns_with_a_rotated_path() {
 // ---------------------------------------------------------------------
 
 #[test]
-fn a_double_click_inside_the_box_hands_off_and_on_a_handle_does_not() {
+fn a_double_click_inside_the_box_only_hints_and_on_a_handle_opens_the_entry() {
+    // `unified-object-editing` criteria 32, 33: a primitive has no tool of its
+    // own to hand off to, so the centre handle and the inside of the box change
+    // nothing (the hint is asked for); a handle opens its entry.
     let mut session = selected(&rect_document());
+    let before = session.pack("0.1.0").expect("pack");
     dbl(&mut session, pt(60.0, 50.0), false, false);
-    assert_eq!(session.tool(), Tool::Rectangle, "centre handle: handoff");
+    assert_eq!(session.tool(), Tool::Select, "centre handle: no handoff");
 
     let mut session = selected(&rect_document());
     dbl(&mut session, pt(40.0, 60.0), false, false);
-    assert_eq!(session.tool(), Tool::Rectangle, "anywhere inside the box");
+    assert_eq!(session.tool(), Tool::Select, "anywhere inside the box");
+    assert_eq!(
+        session.pack("0.1.0").expect("pack"),
+        before,
+        "nothing written"
+    );
 
     for at in [ne_rotate(), se_resize()] {
         let mut session = selected(&rect_document());
@@ -593,7 +602,7 @@ fn a_primitive_never_skews() {
 }
 
 #[test]
-fn double_clicking_the_n_edge_of_an_unselected_rectangle_hands_off_to_the_rectangle_tool() {
+fn double_clicking_the_n_edge_of_an_unselected_rectangle_only_hints() {
     let bytes = pack(&rect_document(), "0.1.0").expect("pack");
     let mut session = Session::open(2, &bytes).expect("open");
     session.set_tool(Tool::Select);
@@ -603,7 +612,7 @@ fn double_clicking_the_n_edge_of_an_unselected_rectangle_hands_off_to_the_rectan
     session.pointer_hover(on_edge, false, false);
     session.pointer_down(on_edge, false);
     session.pointer_up(on_edge, false, false);
-    session.double_click(on_edge, false, false);
-    assert_eq!(session.tool(), Tool::Rectangle);
+    assert!(session.double_click(on_edge, false, false), "the edit hint");
+    assert_eq!(session.tool(), Tool::Select);
     assert!(session.transform_entry().is_none());
 }
