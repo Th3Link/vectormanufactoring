@@ -249,7 +249,6 @@ fn non_finite_or_mistyped_rotation_is_refused_as_damaged_for_paths() {
 }
 
 #[test]
-#[ignore = "FINDING (low): adrs.md says any finite rotation is normalized on read; 1e6 reads back as 1e6"]
 fn a_huge_but_finite_rotation_is_accepted_and_normalized_on_read() {
     for raw in [1.0e6_f64, -1.0e6, 7.0 * PI, 1.0e300] {
         let document = Document::new(1);
@@ -282,9 +281,15 @@ fn rotate_object_refuses_an_unknown_id_and_writes_nothing() {
     let document = Document::new(1);
     let id = rect(&document);
     let before = document.export_loro_snapshot().unwrap();
+    // The resolved rotation is taken while the object still exists; the
+    // object then goes away before the command is applied (a stale id).
+    let rotated = document
+        .object(id)
+        .expect("object exists")
+        .rotated(pt(0.0, 0.0), Angle::from_radians(1.0));
     document.delete_objects(&[id]).unwrap();
     let after_delete = document.export_loro_snapshot().unwrap();
-    let result = document.rotate_object(id, pt(0.0, 0.0), Angle::from_radians(1.0));
+    let result = document.rotate_object(&rotated);
     assert!(result.is_err());
     assert_eq!(
         document.export_loro_snapshot().unwrap(),
@@ -300,7 +305,12 @@ fn rotating_a_primitive_about_the_center_writes_only_rotation_not_the_frame() {
     let id = rect(&document);
     let before = document.primitive(id).unwrap();
     document
-        .rotate_object(id, pt(5.0, 2.0), Angle::from_radians(0.7))
+        .rotate_object(
+            &document
+                .object(id)
+                .expect("object exists")
+                .rotated(pt(5.0, 2.0), Angle::from_radians(0.7)),
+        )
         .unwrap();
     let after = document.primitive(id).unwrap();
     assert_eq!(
@@ -316,7 +326,12 @@ fn rotating_a_primitive_about_an_outside_pivot_moves_its_frame_centre_and_adds_r
     let id = rect(&document);
     // centre (5,2) about (5,6) by +90 deg clockwise (y down): vec (0,-4) -> (4,0): (9,6).
     document
-        .rotate_object(id, pt(5.0, 6.0), Angle::from_radians(PI / 2.0))
+        .rotate_object(
+            &document
+                .object(id)
+                .expect("object exists")
+                .rotated(pt(5.0, 6.0), Angle::from_radians(PI / 2.0)),
+        )
         .unwrap();
     let p = document.primitive(id).unwrap();
     let Shape::Rect { bounds, .. } = p.shape else {
@@ -353,7 +368,12 @@ fn rotating_a_path_bakes_anchor_points_and_relative_handles() {
         false,
     );
     document
-        .rotate_object(id, pt(0.0, 0.0), Angle::from_radians(PI / 2.0))
+        .rotate_object(
+            &document
+                .object(id)
+                .expect("object exists")
+                .rotated(pt(0.0, 0.0), Angle::from_radians(PI / 2.0)),
+        )
         .unwrap();
     let p = document.path(id).unwrap();
     // (10,0) -> (0,10); handle_out (3,0) -> (0,3); handle_in (0,-2) -> (2,0).
@@ -372,7 +392,12 @@ fn rotation_accumulates_and_wraps_into_the_half_open_interval() {
     // 0.8 * 6 = 4.8 rad -> 4.8 - 2 pi
     for _ in 0..6 {
         document
-            .rotate_object(id, pt(5.0, 2.0), Angle::from_radians(0.8))
+            .rotate_object(
+                &document
+                    .object(id)
+                    .expect("object exists")
+                    .rotated(pt(5.0, 2.0), Angle::from_radians(0.8)),
+            )
             .unwrap();
     }
     let r = document.primitive(id).unwrap().rotation.as_radians();
@@ -380,7 +405,12 @@ fn rotation_accumulates_and_wraps_into_the_half_open_interval() {
     // Exactly pi stays pi, and -pi never appears.
     let id2 = rect(&document);
     document
-        .rotate_object(id2, pt(5.0, 2.0), Angle::from_radians(PI))
+        .rotate_object(
+            &document
+                .object(id2)
+                .expect("object exists")
+                .rotated(pt(5.0, 2.0), Angle::from_radians(PI)),
+        )
         .unwrap();
     let r = document.primitive(id2).unwrap().rotation.as_radians();
     assert!(
@@ -388,7 +418,12 @@ fn rotation_accumulates_and_wraps_into_the_half_open_interval() {
         "pi must be written as +pi: {r}"
     );
     document
-        .rotate_object(id2, pt(5.0, 2.0), Angle::from_radians(-2.0 * PI))
+        .rotate_object(
+            &document
+                .object(id2)
+                .expect("object exists")
+                .rotated(pt(5.0, 2.0), Angle::from_radians(-2.0 * PI)),
+        )
         .unwrap();
     let r = document.primitive(id2).unwrap().rotation.as_radians();
     assert!(
@@ -406,7 +441,12 @@ fn split_of_a_rotated_open_path_copies_rotation_to_the_new_path() {
     let document = Document::new(1);
     let id = open_path(&document, 1);
     document
-        .rotate_object(id, pt(5.0, 5.0), Angle::from_radians(0.9))
+        .rotate_object(
+            &document
+                .object(id)
+                .expect("object exists")
+                .rotated(pt(5.0, 5.0), Angle::from_radians(0.9)),
+        )
         .unwrap();
     let rotation = document.path(id).unwrap().rotation.as_radians();
     let before_ids = document.object_ids();
@@ -437,7 +477,12 @@ fn split_of_a_rotated_closed_path_keeps_its_rotation() {
         true,
     );
     document
-        .rotate_object(id, pt(5.0, 5.0), Angle::from_radians(-0.4))
+        .rotate_object(
+            &document
+                .object(id)
+                .expect("object exists")
+                .rotated(pt(5.0, 5.0), Angle::from_radians(-0.4)),
+        )
         .unwrap();
     let anchor = document.path(id).unwrap().anchors[0].id;
     document
@@ -454,7 +499,12 @@ fn split_rotation_survives_save_and_reopen() {
     let document = Document::new(1);
     let id = open_path(&document, 1);
     document
-        .rotate_object(id, pt(5.0, 5.0), Angle::from_radians(1.1))
+        .rotate_object(
+            &document
+                .object(id)
+                .expect("object exists")
+                .rotated(pt(5.0, 5.0), Angle::from_radians(1.1)),
+        )
         .unwrap();
     let mid = document.path(id).unwrap().anchors[1].id;
     document
@@ -484,10 +534,20 @@ fn join_of_two_rotated_paths_keeps_the_survivors_own_rotation() {
         false,
     );
     document
-        .rotate_object(a, pt(5.0, 0.0), Angle::from_radians(0.3))
+        .rotate_object(
+            &document
+                .object(a)
+                .expect("object exists")
+                .rotated(pt(5.0, 0.0), Angle::from_radians(0.3)),
+        )
         .unwrap();
     document
-        .rotate_object(b, pt(25.0, 0.0), Angle::from_radians(0.7))
+        .rotate_object(
+            &document
+                .object(b)
+                .expect("object exists")
+                .rotated(pt(25.0, 0.0), Angle::from_radians(0.7)),
+        )
         .unwrap();
     let a_rotation = document.path(a).unwrap().rotation.as_radians();
     let b_rotation = document.path(b).unwrap().rotation.as_radians();

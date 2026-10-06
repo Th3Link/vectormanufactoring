@@ -354,12 +354,17 @@ const fn kind_to_str(kind: AnchorKind) -> &'static str {
 /// [`rotation_is_valid`] is the strict open-file check that refuses that
 /// case as `Damaged` instead of silently defaulting.
 pub(crate) fn read_rotation(meta: &LoroMap) -> crate::units::Angle {
-    match meta.get(KEY_ROTATION).map(|v| v.get_deep_value()) {
-        Some(LoroValue::Double(radians)) if radians.is_finite() => {
-            crate::units::Angle::from_radians(radians)
-        }
-        _ => crate::units::Angle::from_radians(0.0),
-    }
+    // `as_f64` maps a stored integer to its float too, matching how
+    // `rotation_is_valid` accepts one; any finite value is normalized to
+    // `(-π, π]` on read (`specs/0005-object-transform/adrs.md`: "Any
+    // finite value is accepted and normalized on read").
+    meta.get(KEY_ROTATION)
+        .and_then(|v| as_f64(&v.get_deep_value()))
+        .filter(|radians| radians.is_finite())
+        .map_or_else(
+            || crate::units::Angle::from_radians(0.0),
+            |radians| crate::units::Angle::from_radians(radians).normalized(),
+        )
 }
 
 /// Writes an object's `rotation` register, normalized to `(-π, π]`

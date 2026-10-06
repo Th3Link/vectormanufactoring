@@ -1004,11 +1004,10 @@ mod tests {
             false,
         );
         document
-            .rotate_object(
-                id,
+            .rotate_object(&document.object(id).expect("object exists").rotated(
                 crate::units::Point::new(0.0, 0.0),
                 crate::units::Angle::from_radians(0.4),
-            )
+            ))
             .expect("rotate");
 
         let (_, (second_path, _)) = document

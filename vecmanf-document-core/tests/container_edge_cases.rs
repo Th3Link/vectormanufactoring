@@ -444,6 +444,36 @@ fn a_path_with_a_non_finite_rotation_is_damaged() {
     assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
 }
 
+/// `rotation` read-back (adrs.md: any finite value is accepted and
+/// normalized on read): a stored integer is that many radians, not zero,
+/// and 7.0 reads as 7 - 2π.
+#[test]
+fn a_stored_rotation_is_read_as_a_number_and_normalized() {
+    let read = |value: loro::LoroValue| {
+        let bytes = primitive_fixture(|meta| {
+            meta.insert("shape", "ellipse").expect("insert shape");
+            meta.insert("ellipse_frame", vec![0.0, 0.0, 5.0, 5.0])
+                .expect("insert frame");
+            meta.insert("rotation", value).expect("insert rotation");
+        });
+        let document = unpack(2, &bytes).expect("opens");
+        let id = document.object_ids()[0];
+        document
+            .primitive(id)
+            .expect("primitive")
+            .rotation
+            .as_radians()
+    };
+    assert!(
+        (read(loro::LoroValue::I64(1)) - 1.0).abs() < 1e-12,
+        "integer 1 is 1 rad"
+    );
+    assert!(
+        (read(loro::LoroValue::Double(7.0)) - (7.0 - std::f64::consts::TAU)).abs() < 1e-12,
+        "7.0 is normalized"
+    );
+}
+
 /// Builds a one-node `.vmf` container whose single `paths`-tree node is
 /// shaped by `build_meta` directly through `loro`, bypassing
 /// `vecmanf_document_core::Document`'s public API entirely (which has no

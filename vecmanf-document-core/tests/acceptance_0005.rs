@@ -56,7 +56,12 @@ fn ac19_rotation_round_trips_for_every_primitive_kind_and_none_becomes_a_path() 
             Shape::Polygon { frame, .. } | Shape::Star { frame, .. } => frame.center,
         };
         document
-            .rotate_object(id, center, Angle::from_radians(radians))
+            .rotate_object(
+                &document
+                    .object(id)
+                    .expect("object exists")
+                    .rotated(center, Angle::from_radians(radians)),
+            )
             .expect("rotate");
     }
     let before: Vec<_> = [rect, ellipse, polygon, star]
@@ -90,7 +95,12 @@ fn ac20_ac24_a_rotated_path_keeps_baked_anchors_and_its_rotation_register() {
         false,
     );
     document
-        .rotate_object(id, Point::new(0.0, 0.0), quarter_turn())
+        .rotate_object(
+            &document
+                .object(id)
+                .expect("object exists")
+                .rotated(Point::new(0.0, 0.0), quarter_turn()),
+        )
         .expect("rotate");
     let before = document.path(id).unwrap();
     assert!((before.rotation.as_radians() - quarter_turn().as_radians()).abs() < 1e-12);
@@ -174,7 +184,12 @@ fn rotation_is_written_normalized() {
     });
     for _ in 0..5 {
         document
-            .rotate_object(id, Point::new(1.0, 1.0), Angle::from_radians(2.0))
+            .rotate_object(
+                &document
+                    .object(id)
+                    .expect("object exists")
+                    .rotated(Point::new(1.0, 1.0), Angle::from_radians(2.0)),
+            )
             .expect("rotate");
     }
     let radians = document.primitive(id).unwrap().rotation.as_radians();

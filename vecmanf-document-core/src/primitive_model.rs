@@ -12,7 +12,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::path_model::{Color, NodeId, PathSnapshot};
-use crate::units::{Angle, Length, Point, Vec2};
+use crate::units::{Angle, Length, Point, Tolerance, Vec2};
 
 /// A rectangle's bounding box, normalized so `origin` is always the
 /// top-left (minimum) corner and `width`/`height` are always
@@ -368,7 +368,7 @@ impl ObjectSnapshot {
 /// so a moved primitive's live preview and its committed result can never
 /// independently drift apart.
 #[must_use]
-pub(crate) fn translate_shape(shape: Shape, offset: Vec2) -> Shape {
+pub fn translate_shape(shape: Shape, offset: Vec2) -> Shape {
     match shape {
         Shape::Rect {
             bounds,
@@ -425,17 +425,28 @@ pub fn shape_center(shape: &Shape) -> Point {
     }
 }
 
+/// How close a rotation pivot must be to a primitive's own center for
+/// [`rotate_shape`] to treat it as *the* center: nanometre-scale, far
+/// below anything a pointer can express, but far above the one-ulp
+/// difference between a rectangle's derived `shape_center` and the box
+/// center `vecmanf-ui-core` computes for the same shape.
+const PIVOT_AT_CENTER_TOLERANCE: Tolerance = Tolerance::from_mm(1e-6);
+
 /// Rotates a primitive's own frame center about `pivot` by `angle`,
 /// leaving every other frame parameter untouched (`specs/0005-object-
 /// transform/adrs.md`'s rotation table: "rotate about centre: `rotation`"
-/// only; "rotate, Shift pivot: `rotation`, frame" — this is the frame
-/// half of either case, since rotating the center about itself is the
-/// identity). [`ObjectSnapshot::rotated`]'s primitive arm and
-/// `crate::Document::rotate_object`'s primitive write both call this one
-/// rule.
+/// only; "rotate, Shift pivot: `rotation`, frame"). When `pivot` is
+/// within [`PIVOT_AT_CENTER_TOLERANCE`] of the center the shape is
+/// returned exactly as it is, so a centre rotate rewrites no frame
+/// value at all (a rewrite would race a concurrent resize and could
+/// win it). [`ObjectSnapshot::rotated`]'s primitive arm is the one
+/// caller.
 #[must_use]
 pub(crate) fn rotate_shape(shape: Shape, pivot: Point, angle: Angle) -> Shape {
     let center = shape_center(&shape);
+    if pivot.vector_to(center).length() <= PIVOT_AT_CENTER_TOLERANCE.as_mm() {
+        return shape;
+    }
     let new_center = center.rotated_around(pivot, angle);
     let offset = Vec2::new(new_center.x - center.x, new_center.y - center.y);
     translate_shape(shape, offset)
