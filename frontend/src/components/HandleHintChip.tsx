@@ -34,6 +34,8 @@ const HINT_LINES: Record<string, string[]> = {
   ],
   skew: ["Skew", "Shift: from the center line", "Ctrl: snap"],
   move: ["Move"],
+  "param-radius": ["Corner radius", "Double-click: type a value"],
+  "param-inner": ["Inner radius", "Double-click: type a ratio"],
 };
 
 interface HandleHintChipProps {

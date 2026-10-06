@@ -181,3 +181,13 @@
 .canvas-cursor-pen-close {
   cursor: url("/cursors/pen-close.svg") 2 2, crosshair;
 }
+/* unified-object-editing (docs/design-system.md, "Select bar"): the Ratio
+   slider of a selection whose stars differ shows no thumb until touched.
+   Touching it previews a value, the stars then agree and the class goes. */
+input[type="range"].select-bar-slider-mixed::-webkit-slider-thumb {
+    opacity: 0;
+}
+
+input[type="range"].select-bar-slider-mixed::-moz-range-thumb {
+    opacity: 0;
+}

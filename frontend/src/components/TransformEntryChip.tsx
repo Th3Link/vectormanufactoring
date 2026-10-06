@@ -12,7 +12,15 @@ const MESSAGE_CARD_PX = 28;
 const MESSAGES = {
   number: "Enter a number",
   positive: "Must be above 0",
+  negative: "Must be 0 or more",
+  "ratio-range": "Must be 0.01 to 0.99",
 } as const;
+
+type Reason = keyof typeof MESSAGES;
+
+function asReason(text: string | undefined): Reason {
+  return text !== undefined && text in MESSAGES ? (text as Reason) : "number";
+}
 
 interface TransformEntryChipProps {
   entry: TransformEntryState;
@@ -49,9 +57,7 @@ export function TransformEntryChip({
   const messageId = useId();
   const [texts, setTexts] = useState<string[]>(() => entry.fields.map((f) => f.prefill));
   const [lastEdited, setLastEdited] = useState(0);
-  const [invalid, setInvalid] = useState<{ field: number; reason: "number" | "positive" } | null>(
-    null,
-  );
+  const [invalid, setInvalid] = useState<{ field: number; reason: Reason } | null>(null);
   const [sizes, setSizes] = useState({
     chip: { width: 0, height: 0 },
     canvas: { width: Number.POSITIVE_INFINITY, height: Number.POSITIVE_INFINITY },
@@ -114,10 +120,7 @@ export function TransformEntryChip({
     const outcome = onCommit(texts[0] ?? "", texts[1] ?? "", lastEdited);
     if (outcome.startsWith("invalid:")) {
       const [, field, reason] = outcome.split(":");
-      setInvalid({
-        field: Number(field),
-        reason: reason === "positive" ? "positive" : "number",
-      });
+      setInvalid({ field: Number(field), reason: asReason(reason) });
       selectField(Number(field));
       return;
     }
@@ -171,13 +174,22 @@ export function TransformEntryChip({
   };
 
   const isAngle = entry.kind === "angle";
-  const fieldWidth = isAngle ? 80 : 100;
+  const isRatio = entry.kind === "inner-ratio";
+  const fieldWidth = isAngle ? 80 : isRatio ? 84 : 100;
+  const groupName =
+    entry.kind === "angle"
+      ? "Rotation"
+      : entry.kind === "corner-radius"
+        ? "Corner radius"
+        : isRatio
+          ? "Inner ratio"
+          : "Size";
 
   return (
     <div
       ref={chipRef}
       role="group"
-      aria-label={isAngle ? "Rotation" : "Size"}
+      aria-label={groupName}
       tabIndex={-1}
       data-transform-entry
       className="absolute z-30 rounded-[8px] p-1.5 outline-none"
@@ -234,7 +246,7 @@ export function TransformEntryChip({
                   className="pointer-events-none absolute top-1/2 right-1.5 -translate-y-1/2 text-xs"
                   style={{ opacity: 0.7 }}
                 >
-                  {isAngle ? "°" : "mm"}
+                  {isAngle ? "°" : isRatio ? "" : "mm"}
                 </span>
               </div>
             </div>
