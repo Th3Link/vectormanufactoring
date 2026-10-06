@@ -60,18 +60,17 @@ UX notes, not follow-ups).
 - [x] 18. Shape tools' own handles follow rotation: `handles_for` rotated, drag deltas mapped into local axes, live preview rotated (25)
 - [x] 19. Frontend builds (`npm install`, `npm run build`: `tsc -b` + `vite build`), `vecmanf-app` builds and is in the gate
 
-## Known limitations (not hidden)
+## Review round (2026-10-06)
 
-- The shape tools' *own* resize of a rotated primitive keeps the opposite
-  edge fixed in the local frame, so on screen the opposite corner drifts
-  (the Select tool's resize pins it; the shape tools' arithmetic is
-  unchanged per `adrs.md`). Criterion 25 asks only for handle position and
-  axes, which are covered.
-- The glyphs (squircle, circular arrow) and the cursor images are simple
-  first versions for the ux-engineer to review; no criterion tests their
-  exact shape.
-- The readout offset is now 12 px for every tool (it was 8 px for the shape
-  tools' create readout), per this slice's UX notes.
+- [x] Rotate preview and commit share `compute_rotate` (`transform_drag.rs`); `Document::rotate_object` takes the resolved `&ObjectSnapshot`; a centre rotate writes `rotation` alone (concurrent resize + rotate merge test)
+- [x] `read_rotation` maps an integer to radians and normalizes
+- [x] `transform_drag.rs` holds resize/rotate resolution; `pin_resize_anchor` shared by the Select, rectangle and ellipse tools
+- [x] Handle hit priority for small objects; rotate hit radius 16 px / offset 32 px
+- [x] Readout chip flips/clamps inside the canvas; pointer capture for every tool; pivot dot replaces a handle at the pivot; larger rotate glyph
+- [x] Non-finite or absurd pointer values resolve to "no change" (ui-core) and are dropped at the `Session` boundary
+- [x] Polygon/star corner handle follows the pointer (radius from the box-corner factor)
+
+Remaining, by design: the glyph and cursor art is a first version for the ux-engineer.
 
 ## Validation
 

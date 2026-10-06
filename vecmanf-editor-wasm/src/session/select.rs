@@ -336,7 +336,13 @@ mod tests {
         let (session, id) = session_with_selected_rect();
         session
             .document
-            .rotate_object(id, Point::new(5.0, 5.0), Angle::from_radians(0.5))
+            .rotate_object(
+                &session
+                    .document
+                    .object(id)
+                    .expect("object exists")
+                    .rotated(Point::new(5.0, 5.0), Angle::from_radians(0.5)),
+            )
             .expect("rotate");
         let input = session.select_decoration_input();
         let (_, corners) = input.selected.first().expect("selected");
@@ -355,7 +361,13 @@ mod tests {
         let (mut session, id) = session_with_selected_rect();
         session
             .document
-            .rotate_object(id, Point::new(5.0, 5.0), Angle::from_radians(0.5))
+            .rotate_object(
+                &session
+                    .document
+                    .object(id)
+                    .expect("object exists")
+                    .rotated(Point::new(5.0, 5.0), Angle::from_radians(0.5)),
+            )
             .expect("rotate");
         // Deselect, then hover the rotated outline's turned top-left edge.
         session.pointer_down(Point::new(500.0, 500.0), false);
@@ -429,9 +441,10 @@ mod tests {
         session
             .document
             .rotate_object(
-                id,
-                Point::new(5.0, 5.0),
-                Angle::from_radians(std::f64::consts::FRAC_PI_4),
+                &session.document.object(id).expect("object exists").rotated(
+                    Point::new(5.0, 5.0),
+                    Angle::from_radians(std::f64::consts::FRAC_PI_4),
+                ),
             )
             .expect("rotate");
         let n_handle = SelectTool::transform_handles(

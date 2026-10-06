@@ -68,16 +68,28 @@ const SEGMENT_TOLERANCE_PX: f64 = 4.0;
 /// [`HANDLE_TOLERANCE_PX`], not an independent value.
 const TRANSFORM_RESIZE_HANDLE_TOLERANCE_PX: f64 = HANDLE_TOLERANCE_PX;
 /// The rotate handle's own hit-test radius (`docs/design-system.md`'s
-/// "Transform rotate handle hit-test radius").
-const TRANSFORM_ROTATE_HANDLE_TOLERANCE_PX: f64 = 12.0;
+/// "Transform rotate handle hit-test radius"): equal to the resize
+/// radius, with [`TRANSFORM_ROTATE_HANDLE_OFFSET_PX`] at least the sum of
+/// the two radii so the rotate and top-edge hit areas cannot overlap.
+const TRANSFORM_ROTATE_HANDLE_TOLERANCE_PX: f64 = 16.0;
 /// The rotate handle's screen-space offset above the top-edge resize
-/// handle (`docs/design-system.md`'s "Transform rotate handle offset").
-const TRANSFORM_ROTATE_HANDLE_OFFSET_PX: f64 = 20.0;
+/// handle (`docs/design-system.md`'s "Transform rotate handle offset"):
+/// 16 + 16 px, the two hit radii.
+const TRANSFORM_ROTATE_HANDLE_OFFSET_PX: f64 = 32.0;
 /// How far (screen pixels) a pen-tool press must move before it counts
 /// as a drag rather than a plain click (acceptance criteria 1 vs 2). Not
 /// itself a named design-system token; a small, deliberately generous
 /// value so an imprecise click is never misread as a drag.
 const PEN_DRAG_THRESHOLD_PX: f64 = 3.0;
+
+/// Whether both coordinates are finite. Pointer events come from the
+/// host; NaN or infinite values must never reach a tool, where they could
+/// turn into a NaN `rotation` or an infinite size in a saved file
+/// (`specs/0005-object-transform/adrs.md`: "a drag must never make a file
+/// unopenable").
+fn is_finite_point(point: Point) -> bool {
+    point.x.is_finite() && point.y.is_finite()
+}
 
 /// Which tool is active. Exactly one at a time — `specification.md`'s
 /// tool rail has six buttons (Select, Pen, Node, Rectangle, Ellipse,
@@ -401,6 +413,9 @@ impl Session {
 
     /// The pointer went down at `point` (document space).
     pub fn pointer_down(&mut self, point: Point, shift: bool) {
+        if !is_finite_point(point) {
+            return;
+        }
         // Same flush as `set_tool`'s own doc comment explains: a canvas
         // click can change the selection (e.g. selecting a different
         // star) before a pending ratio-slider preview ever gets a
@@ -447,6 +462,9 @@ impl Session {
     /// (`select_shift_held`/`select_ctrl_held`) so [`Session::draw_list`]
     /// can read their current state with no event of its own.
     pub fn pointer_hover(&mut self, point: Point, shift: bool, constrain: bool) {
+        if !is_finite_point(point) {
+            return;
+        }
         self.pointer_position = Some(point);
         self.hovered = None;
         self.hovered_primitive = None;
@@ -492,6 +510,12 @@ impl Session {
     /// `object-transform`, by the Select tool's own resize/rotate commit
     /// alongside `shift` (acceptance criteria 5, 7, 16, 17).
     pub fn pointer_up(&mut self, point: Point, shift: bool, constrain: bool) {
+        if !is_finite_point(point) {
+            // A release at a non-finite position cannot be committed to
+            // anything; cancel the gesture rather than write NaN.
+            self.escape();
+            return;
+        }
         match self.tool {
             Tool::Select => {
                 self.select_pointer_up(point, shift, constrain);

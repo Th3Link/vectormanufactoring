@@ -249,6 +249,9 @@ export interface EditorSession {
   onPointerMove: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerUp: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerLeave: () => void;
+  /** The browser took the pointer away (a system gesture, an alert):
+   * cancel any in-flight drag instead of leaving it half-done. */
+  onPointerCancel: () => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void;
   onKeyUp: (event: React.KeyboardEvent<HTMLDivElement>) => void;
   /** File → New: swaps in a brand-new, empty session. */
@@ -635,6 +638,18 @@ export function useEditorSession(
       if (isDoubleClick) {
         return;
       }
+      // Capture the pointer for every tool, not only for panning: a
+      // transform drag (a rotate swings the pointer in a wide arc) must
+      // keep receiving moves and the release when the pointer leaves the
+      // canvas, instead of losing the release and clearing its readout.
+      if (event.button === 0) {
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+          // Not capturable (e.g. a synthetic event) — the gesture still
+          // works while the pointer stays over the canvas.
+        }
+      }
       session.pointer_down(x, y, event.shiftKey);
       setCursorHint(session.cursor_hint());
       syncFromSession();
@@ -690,6 +705,12 @@ export function useEditorSession(
         return;
       }
 
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {
+        // Not captured (e.g. a non-primary button) — nothing to release.
+      }
+
       if (suppressedPressRef.current) {
         suppressedPressRef.current = false;
         // One dispatch point for every tool (acceptance criteria 3, 12,
@@ -704,6 +725,13 @@ export function useEditorSession(
     },
     [canvasPoint, syncFromSession],
   );
+
+  const onPointerCancel = useCallback(() => {
+    sessionRef.current?.escape();
+    setLiveReadout(null);
+    setCursorHint("default");
+    syncFromSession();
+  }, [syncFromSession]);
 
   const onPointerLeave = useCallback(() => {
     sessionRef.current?.pointer_leave();
@@ -847,6 +875,7 @@ export function useEditorSession(
     onPointerMove,
     onPointerUp,
     onPointerLeave,
+    onPointerCancel,
     onKeyDown,
     onKeyUp,
     newProject,

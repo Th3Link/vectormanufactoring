@@ -250,7 +250,9 @@ fn eight(x0: f64, y0: f64, x1: f64, y1: f64, c: Point, a: f64) -> [(&'static str
 /// along the box's own local up direction.
 fn rotate_handle(session: &Session, x0: f64, y0: f64, x1: f64, c: Point, a: f64) -> Point {
     let top_mid = pt(f64::midpoint(x0, x1), y0);
-    rot(pt(top_mid.x, top_mid.y - px(session, 20.0)), c, a)
+    // The rotate handle sits 32 px above the top edge (UX review: 16 + 16 px
+    // hit radii must not overlap; was 20 px).
+    rot(pt(top_mid.x, top_mid.y - px(session, 32.0)), c, a)
 }
 
 /// Selects the single object by pressing on a point on its outline, then
@@ -2348,7 +2350,12 @@ fn rotate_rect_via_document(deg: f64, radius: f64) -> (Session, Point, f64) {
     let id = document.object_ids()[0];
     let c = pt(20.0, 10.0);
     document
-        .rotate_object(id, c, Angle::from_radians(deg.to_radians()))
+        .rotate_object(
+            &document
+                .object(id)
+                .expect("object exists")
+                .rotated(c, Angle::from_radians(deg.to_radians())),
+        )
         .expect("rotate");
     (open_in_session(&document), c, deg.to_radians())
 }
@@ -2465,7 +2472,12 @@ fn ac25_rotated_star_inner_ratio_and_outer_handles_follow_the_rotation() {
     let c = pt(30.0, 30.0);
     let rotation = 100.0_f64.to_radians();
     document
-        .rotate_object(id, c, Angle::from_radians(rotation))
+        .rotate_object(
+            &document
+                .object(id)
+                .expect("object exists")
+                .rotated(c, Angle::from_radians(rotation)),
+        )
         .unwrap();
     let mut s = open_in_session(&document);
     let p = prim(&s);
@@ -2511,7 +2523,12 @@ fn ac25_rotated_polygon_outer_radius_handle_follows_rotation() {
     let c = pt(30.0, 30.0);
     let rotation = 90.0_f64.to_radians();
     document
-        .rotate_object(id, c, Angle::from_radians(rotation))
+        .rotate_object(
+            &document
+                .object(id)
+                .expect("object exists")
+                .rotated(c, Angle::from_radians(rotation)),
+        )
         .unwrap();
     let mut s = open_in_session(&document);
     let p = prim(&s);
@@ -2541,7 +2558,12 @@ fn ac25_rotated_ellipse_handles_follow_rotation_in_the_ellipse_tool() {
     let id = document.object_ids()[0];
     let c = pt(20.0, 10.0);
     document
-        .rotate_object(id, c, Angle::from_radians(FRAC_PI_2))
+        .rotate_object(
+            &document
+                .object(id)
+                .expect("object exists")
+                .rotated(c, Angle::from_radians(FRAC_PI_2)),
+        )
         .unwrap();
     let mut s = open_in_session(&document);
     // The rotated ellipse is 20 wide and 40 tall; point on its outline: local
@@ -2573,7 +2595,12 @@ fn opening_a_session_from_a_file_with_rotation_selects_oriented_handles() {
     let id = document.object_ids()[0];
     let c = pt(20.0, 10.0);
     document
-        .rotate_object(id, c, Angle::from_radians(0.9))
+        .rotate_object(
+            &document
+                .object(id)
+                .expect("object exists")
+                .rotated(c, Angle::from_radians(0.9)),
+        )
         .unwrap();
     let mut s = open_in_session(&document);
     click(&mut s, rot(pt(20.0, 0.0), c, 0.9));
@@ -2767,7 +2794,6 @@ fn extreme_finite_pointer_values_never_make_the_file_unopenable() {
 }
 
 #[test]
-#[ignore = "FINDING (medium): a NaN/inf pointer coordinate writes NaN rotation / inf size or stroke; the saved file then fails to reopen (OpenError::Damaged)"]
 fn hostile_pointer_values_never_write_non_finite_geometry() {
     let hostile = [
         pt(f64::NAN, f64::NAN),

@@ -128,6 +128,8 @@ lead", each with the default this file builds against.
     gives a correct enclosing box. A merge of a rotate with a concurrent node
     drag (slice 2's floor) still gives a valid box.
 
+- **2026-10-06 (verification): `document.json` always writes `"rotation": 0.0`.** The decision above says `document.json` omits `rotation` when 0; the implementation writes it for every object, zero or not. Accepted: `document.json` is the non-authoritative view (ADR 0004 §1) and nothing reads it back, so an always-present number is simpler for a non-Rust reader than a key that appears and disappears. The authoritative `document.loro` register stays absent-until-set (absent = 0). The other reading rule from the same decision — any finite `rotation` is normalized to (−π, π] *on read* — is implemented (`path_codec::read_rotation`, which also reads a stored integer as that many radians).
+
 - **2026-10-05: merge granularity. `rotation` is its own register.** Slice 3
   rule 2 applies: every combination of a frame and an angle is a shape
   someone could have asked for, so this is not a blend. The common rotate
