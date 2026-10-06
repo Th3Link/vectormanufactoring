@@ -58,90 +58,48 @@ fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
     px / view.scale()
 }
 
+/// The screen-pixel sizes of the node decorations at one zoom, in millimetres.
+struct Sizes {
+    node: f64,
+    node_outline: f64,
+    handle_diameter: f64,
+    handle_line_width: f64,
+    hover_ring_diameter: f64,
+    handle_hover_ring_diameter: f64,
+    ring_thickness: f64,
+}
+
+impl Sizes {
+    fn at(view: ViewTransform) -> Self {
+        Self {
+            node: screen_px_to_mm(view, theme::NODE_SIZE_PX),
+            node_outline: screen_px_to_mm(view, theme::NODE_OUTLINE_PX),
+            handle_diameter: screen_px_to_mm(view, theme::HANDLE_DIAMETER_PX),
+            handle_line_width: screen_px_to_mm(view, theme::HANDLE_LINE_WIDTH_PX),
+            hover_ring_diameter: screen_px_to_mm(view, theme::HOVER_RING_DIAMETER_PX),
+            handle_hover_ring_diameter: screen_px_to_mm(view, theme::HANDLE_HOVER_RING_DIAMETER_PX),
+            ring_thickness: screen_px_to_mm(view, 1.0),
+        }
+    }
+}
+
 /// Builds every node/handle decoration across every path.
 #[must_use]
 pub fn build(paths: &[PathSnapshot], view: ViewTransform, input: &DecorationInput) -> DrawList {
-    let node_size = screen_px_to_mm(view, theme::NODE_SIZE_PX);
-    let node_outline = screen_px_to_mm(view, theme::NODE_OUTLINE_PX);
-    let handle_diameter = screen_px_to_mm(view, theme::HANDLE_DIAMETER_PX);
-    let handle_line_width = screen_px_to_mm(view, theme::HANDLE_LINE_WIDTH_PX);
-    let hover_ring_diameter = screen_px_to_mm(view, theme::HOVER_RING_DIAMETER_PX);
-    let handle_hover_ring_diameter = screen_px_to_mm(view, theme::HANDLE_HOVER_RING_DIAMETER_PX);
-    let hover_ring_thickness = screen_px_to_mm(view, 1.0);
-
+    let sizes = Sizes::at(view);
     let mut list = DrawList::default();
     let drawn_paths = if input.show_nodes { paths } else { &[] };
-    for snapshot in drawn_paths {
-        for anchor in &snapshot.anchors {
-            let selected = input.is_node_selected(snapshot.id, anchor.id);
-
-            if selected {
-                for (slot, handle) in [
-                    (HandleSlot::Out, anchor.handle_out),
-                    (HandleSlot::In, anchor.handle_in),
-                ] {
-                    if handle == Vec2::ZERO {
-                        continue;
-                    }
-                    let endpoint = anchor.point.translated(handle);
-                    list.extend(glyphs::thick_line(
-                        anchor.point,
-                        endpoint,
-                        handle_line_width,
-                        theme::ACCENT,
-                    ));
-                    // Idle handle style: accent outline, white fill
-                    // (`docs/design-system.md`).
-                    list.extend(glyphs::circle(endpoint, handle_diameter, theme::ACCENT));
-                    list.extend(glyphs::circle(
-                        endpoint,
-                        (handle_diameter - 2.0 * hover_ring_thickness).max(0.0),
-                        RgbaColor::WHITE,
-                    ));
-                    // Drawn *after* the handle's own glyph, and sized
-                    // from it (`theme::HANDLE_HOVER_RING_DIAMETER_PX`),
-                    // not the shared node-ring token — either alone would
-                    // keep the ring visible once `HANDLE_DIAMETER_PX`
-                    // doubled past the old shared ring size, but a
-                    // smaller glyph drawn on top of a wider ring is the
-                    // only ordering that reads as "a ring around a
-                    // glyph" regardless of their relative sizes, so both
-                    // are kept (`theme::HANDLE_HOVER_RING_DIAMETER_PX`'s
-                    // own doc comment).
-                    if input.hovered == Some(Hovered::Handle(snapshot.id, anchor.id, slot)) {
-                        list.extend(glyphs::ring(
-                            endpoint,
-                            handle_hover_ring_diameter,
-                            hover_ring_thickness,
-                            theme::ACCENT_HOVER,
-                        ));
-                    }
+    // Unselected nodes first, then selected ones: where two nodes lie on the
+    // same spot (after a Split) the selected glyph is drawn above the other
+    // and its accent fill stays visible (`specs/edit-interaction-polish/`
+    // criterion 50).
+    for draw_selected in [false, true] {
+        for path in drawn_paths {
+            for anchor in &path.anchors {
+                let selected = input.is_node_selected(path.id, anchor.id);
+                if selected == draw_selected {
+                    push_node(&mut list, &sizes, input, path.id, anchor, selected);
                 }
-            }
-
-            let glyph = match anchor.kind {
-                AnchorKind::Corner => glyphs::square,
-                AnchorKind::Symmetric => glyphs::diamond,
-                AnchorKind::Asymmetric => glyphs::triangle,
-            };
-            if selected {
-                list.extend(glyph(anchor.point, node_size, theme::ACCENT));
-            } else {
-                list.extend(glyph(anchor.point, node_size, theme::NODE_STROKE));
-                list.extend(glyph(
-                    anchor.point,
-                    (node_size - 2.0 * node_outline).max(0.0),
-                    RgbaColor::WHITE,
-                ));
-            }
-
-            if input.hovered == Some(Hovered::Node(snapshot.id, anchor.id)) {
-                list.extend(glyphs::ring(
-                    anchor.point,
-                    hover_ring_diameter,
-                    hover_ring_thickness,
-                    theme::ACCENT_HOVER,
-                ));
             }
         }
     }
@@ -151,6 +109,90 @@ pub fn build(paths: &[PathSnapshot], view: ViewTransform, input: &DecorationInpu
     }
 
     list
+}
+
+/// One node: for a selected one its handles first, then its glyph, then the
+/// hover ring.
+fn push_node(
+    list: &mut DrawList,
+    sizes: &Sizes,
+    input: &DecorationInput,
+    path: NodeId,
+    anchor: &vecmanf_document_core::AnchorSnapshot,
+    selected: bool,
+) {
+    if selected {
+        for (slot, handle) in [
+            (HandleSlot::Out, anchor.handle_out),
+            (HandleSlot::In, anchor.handle_in),
+        ] {
+            if handle == Vec2::ZERO {
+                continue;
+            }
+            let endpoint = anchor.point.translated(handle);
+            list.extend(glyphs::thick_line(
+                anchor.point,
+                endpoint,
+                sizes.handle_line_width,
+                theme::ACCENT,
+            ));
+            // Idle handle style: accent outline, white fill
+            // (`docs/design-system.md`).
+            list.extend(glyphs::circle(
+                endpoint,
+                sizes.handle_diameter,
+                theme::ACCENT,
+            ));
+            list.extend(glyphs::circle(
+                endpoint,
+                (sizes.handle_diameter - 2.0 * sizes.ring_thickness).max(0.0),
+                RgbaColor::WHITE,
+            ));
+            // Drawn *after* the handle's own glyph, and sized
+            // from it (`theme::HANDLE_HOVER_RING_DIAMETER_PX`),
+            // not the shared node-ring token — either alone would
+            // keep the ring visible once `HANDLE_DIAMETER_PX`
+            // doubled past the old shared ring size, but a
+            // smaller glyph drawn on top of a wider ring is the
+            // only ordering that reads as "a ring around a
+            // glyph" regardless of their relative sizes, so both
+            // are kept (`theme::HANDLE_HOVER_RING_DIAMETER_PX`'s
+            // own doc comment).
+            if input.hovered == Some(Hovered::Handle(path, anchor.id, slot)) {
+                list.extend(glyphs::ring(
+                    endpoint,
+                    sizes.handle_hover_ring_diameter,
+                    sizes.ring_thickness,
+                    theme::ACCENT_HOVER,
+                ));
+            }
+        }
+    }
+
+    let glyph = match anchor.kind {
+        AnchorKind::Corner => glyphs::square,
+        AnchorKind::Symmetric => glyphs::diamond,
+        AnchorKind::Asymmetric => glyphs::triangle,
+    };
+    if selected {
+        list.extend(glyph(anchor.point, sizes.node, theme::ACCENT));
+    } else {
+        list.extend(glyph(anchor.point, sizes.node, theme::NODE_STROKE));
+        list.extend(glyph(
+            anchor.point,
+            (sizes.node - 2.0 * sizes.node_outline).max(0.0),
+            RgbaColor::WHITE,
+        ));
+    }
+
+    if input.hovered == Some(Hovered::Node(path, anchor.id)) {
+        list.extend(glyphs::ring(
+            anchor.point,
+            sizes.hover_ring_diameter,
+            sizes.ring_thickness,
+            theme::ACCENT_HOVER,
+        ));
+    }
 }
 
 /// The selected-segment overlay (acceptance criterion 14), or `None`
@@ -407,5 +449,61 @@ mod tests {
             extent(&zoomed_in) < extent(&zoomed_out),
             "higher zoom means a smaller document-space glyph"
         );
+    }
+
+    /// Two coincident end nodes on two paths, as a Split leaves them.
+    fn coincident_ends() -> (Document, [(NodeId, AnchorId); 2]) {
+        let document = Document::new(1);
+        let (a, b) = (AnchorId::new(1, 1), AnchorId::new(1, 2));
+        let first = document.create_path(
+            &[
+                NewAnchor::corner(AnchorId::new(1, 10), Point::new(-20.0, 0.0)),
+                NewAnchor::corner(a, Point::new(0.0, 0.0)),
+            ],
+            false,
+        );
+        let second = document.create_path(
+            &[
+                NewAnchor::corner(b, Point::new(0.0, 0.0)),
+                NewAnchor::corner(AnchorId::new(1, 11), Point::new(20.0, 0.0)),
+            ],
+            false,
+        );
+        (document, [(first, a), (second, b)])
+    }
+
+    /// `edit-interaction-polish` criterion 50: where two nodes lie on the same
+    /// spot the selected one is drawn above the unselected one, whichever
+    /// comes first in document order, so its accent fill is not hidden by the
+    /// other glyph's white fill.
+    #[test]
+    fn a_selected_node_glyph_is_drawn_above_a_coincident_unselected_one() {
+        let (document, ends) = coincident_ends();
+        let paths: Vec<_> = document
+            .object_ids()
+            .into_iter()
+            .filter_map(|id| document.path(id))
+            .collect();
+        for selected in ends {
+            let input = DecorationInput {
+                selected_nodes: vec![selected],
+                ..nodes_on()
+            };
+            let list = build(&paths, ViewTransform::identity(), &input);
+            let last_white = list
+                .triangles
+                .iter()
+                .rposition(|v| v.color == RgbaColor::WHITE)
+                .expect("an unselected glyph's white fill");
+            let first_accent = list
+                .triangles
+                .iter()
+                .position(|v| v.color == theme::ACCENT)
+                .expect("the selected glyph");
+            assert!(
+                first_accent > last_white,
+                "the selected node ({selected:?}) must be drawn after every unselected glyph"
+            );
+        }
     }
 }

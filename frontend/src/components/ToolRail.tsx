@@ -12,7 +12,15 @@ import type { Tool } from "@/hooks/useEditorSession";
 
 interface ToolRailProps {
   tool: Tool;
+  /** How many objects are selected; with the Select tool active and one or
+   * more selected the plain letters R and S act on the selection, so the
+   * Rectangle tool is reached by "Esc, R" (`specs/edit-interaction-polish/`
+   * criterion 62). */
+  selectionCount: number;
   onSelect: (tool: Tool) => void;
+  /** Called after a mouse click on a button, so the tool letters keep working
+   * (keyboard activation keeps focus on the rail for Tab navigation). */
+  onReturnFocus: () => void;
 }
 
 interface ToolButtonProps {
@@ -22,6 +30,7 @@ interface ToolButtonProps {
   shortcut: string;
   icon: React.ReactNode;
   onSelect: (tool: Tool) => void;
+  onReturnFocus: () => void;
 }
 
 /**
@@ -29,7 +38,15 @@ interface ToolButtonProps {
  * an `aria-label` and a hover tooltip naming the shortcut
  * (`specification.md`'s UX notes, "Tool rail and tool switching").
  */
-function ToolButton({ tool, active, label, shortcut, icon, onSelect }: ToolButtonProps) {
+function ToolButton({
+  tool,
+  active,
+  label,
+  shortcut,
+  icon,
+  onSelect,
+  onReturnFocus,
+}: ToolButtonProps) {
   return (
     <Tooltip.Root delayDuration={400}>
       <Tooltip.Trigger asChild>
@@ -37,7 +54,13 @@ function ToolButton({ tool, active, label, shortcut, icon, onSelect }: ToolButto
           type="button"
           aria-label={`${label} (${shortcut})`}
           aria-pressed={active}
-          onClick={() => onSelect(tool)}
+          onClick={(event) => {
+            onSelect(tool);
+            // `detail` is 0 for keyboard activation, 1 or more for a mouse click.
+            if (event.detail > 0) {
+              onReturnFocus();
+            }
+          }}
           className="flex size-10 items-center justify-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
           style={{
             background: active ? "var(--toolbar-icon-active-bg)" : "transparent",
@@ -71,7 +94,9 @@ function ToolButton({ tool, active, label, shortcut, icon, onSelect }: ToolButto
  * Ellipse, Polygon-star, each shifted down one slot but otherwise in
  * their own established order.
  */
-export function ToolRail({ tool, onSelect }: ToolRailProps) {
+export function ToolRail({ tool, selectionCount, onSelect, onReturnFocus }: ToolRailProps) {
+  // The one state that changes a letter: the Select tool with a selection.
+  const letterActsOnSelection = tool === "select" && selectionCount > 0;
   return (
     <Tooltip.Provider>
       <div
@@ -85,9 +110,10 @@ export function ToolRail({ tool, onSelect }: ToolRailProps) {
           tool="select"
           active={tool === "select"}
           label="Select tool"
-          shortcut="S"
+          shortcut="S or Esc"
           icon={<SelectIcon size={20} />}
           onSelect={onSelect}
+          onReturnFocus={onReturnFocus}
         />
         <ToolButton
           tool="pen"
@@ -96,6 +122,7 @@ export function ToolRail({ tool, onSelect }: ToolRailProps) {
           shortcut="B"
           icon={<PenToolIcon size={20} />}
           onSelect={onSelect}
+          onReturnFocus={onReturnFocus}
         />
         <ToolButton
           tool="node"
@@ -104,14 +131,16 @@ export function ToolRail({ tool, onSelect }: ToolRailProps) {
           shortcut="N"
           icon={<MousePointer2 size={20} />}
           onSelect={onSelect}
+          onReturnFocus={onReturnFocus}
         />
         <ToolButton
           tool="rectangle"
           active={tool === "rectangle"}
           label="Rectangle tool"
-          shortcut="R"
+          shortcut={letterActsOnSelection ? "Esc, R" : "R"}
           icon={<Square size={20} />}
           onSelect={onSelect}
+          onReturnFocus={onReturnFocus}
         />
         <ToolButton
           tool="ellipse"
@@ -120,6 +149,7 @@ export function ToolRail({ tool, onSelect }: ToolRailProps) {
           shortcut="E"
           icon={<CircleIcon size={20} />}
           onSelect={onSelect}
+          onReturnFocus={onReturnFocus}
         />
         <ToolButton
           tool="polygon-star"
@@ -128,6 +158,7 @@ export function ToolRail({ tool, onSelect }: ToolRailProps) {
           shortcut="*"
           icon={<Star size={20} />}
           onSelect={onSelect}
+          onReturnFocus={onReturnFocus}
         />
       </div>
     </Tooltip.Provider>

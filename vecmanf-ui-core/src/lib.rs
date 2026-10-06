@@ -19,6 +19,7 @@ mod conversion;
 mod ellipse_tool;
 mod hit_test;
 mod hit_test_object;
+mod modifiers;
 mod node_tool;
 mod object_bounds;
 mod object_selection;
@@ -49,6 +50,7 @@ pub use conversion::build_primitive_conversions;
 pub use ellipse_tool::EllipseTool;
 pub use hit_test::{Hit, hit_test};
 pub use hit_test_object::hit_test_object;
+pub use modifiers::Modifiers;
 pub use node_tool::{
     HitTolerances, LiveNodeDrag, NodeTool, NodeToolbarState,
     PointerDownOutcome as NodePointerDownOutcome, PointerUpOutcome as NodePointerUpOutcome,
@@ -74,8 +76,8 @@ pub use select_bar::{
     BarPreview, BarValue, ObjectKind, SelectBarState, ids_of_kind, select_bar_state,
 };
 pub use select_tool::{
-    LiveEdit, SelectDoubleClickOutcome, SelectPointerDownOutcome, SelectTool,
-    TransformHandleTolerances, double_click,
+    EntryKey, KeyEntryRefusal, LiveEdit, SelectDoubleClickOutcome, SelectPointerDownOutcome,
+    SelectTool, TransformHandleTolerances, double_click,
 };
 pub use selection::NodeSelection;
 pub use shape_tool_common::{CreateOutcome, CreatePreview};
@@ -92,7 +94,7 @@ pub use transform_handle_layout::{
 };
 pub use transform_math::{
     ResizedBox, opposite_direction, polygon_star_resize_factor, resize_anchor_local_position,
-    resize_local_box, rotate_delta_angle, rotate_pivot, scaled_and_floored,
+    resize_local_box, rotate_delta_angle, rotate_delta_for, rotate_pivot, scaled_and_floored,
     stroke_or_radius_factor,
 };
 pub use viewport::{PX_PER_MM_AT_100, Viewport, Zoom};

@@ -153,7 +153,8 @@ impl Session {
         );
         match outcome {
             SelectDoubleClickOutcome::Hit(_) => {
-                self.node.escape();
+                self.node.cancel_drag();
+                self.node.clear_selection();
                 self.tool = Tool::Node;
                 false
             }
