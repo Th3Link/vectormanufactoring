@@ -82,13 +82,23 @@ const TRANSFORM_ROTATE_HANDLE_OFFSET_PX: f64 = 32.0;
 /// value so an imprecise click is never misread as a drag.
 const PEN_DRAG_THRESHOLD_PX: f64 = 3.0;
 
-/// Whether both coordinates are finite. Pointer events come from the
-/// host; NaN or infinite values must never reach a tool, where they could
-/// turn into a NaN `rotation` or an infinite size in a saved file
+/// The largest pointer coordinate (document millimetres) a tool ever sees.
+/// A finite value beyond it — one past `f32` range panics the draw-list
+/// tessellator — is clamped to it; real pointer events are nowhere near.
+const MAX_POINTER_COORDINATE_MM: f64 = 1e9;
+
+/// `point` with both coordinates clamped to ±[`MAX_POINTER_COORDINATE_MM`],
+/// or `None` if either is NaN or infinite. Pointer events come from the
+/// host; non-finite values must never reach a tool, where they could turn
+/// into a NaN `rotation` or an infinite size in a saved file
 /// (`specs/0005-object-transform/adrs.md`: "a drag must never make a file
-/// unopenable").
-fn is_finite_point(point: Point) -> bool {
-    point.x.is_finite() && point.y.is_finite()
+/// unopenable"), and absurd finite ones must not reach the renderer.
+fn sanitized_point(point: Point) -> Option<Point> {
+    if !(point.x.is_finite() && point.y.is_finite()) {
+        return None;
+    }
+    let clamp = |v: f64| v.clamp(-MAX_POINTER_COORDINATE_MM, MAX_POINTER_COORDINATE_MM);
+    Some(Point::new(clamp(point.x), clamp(point.y)))
 }
 
 /// Which tool is active. Exactly one at a time — `specification.md`'s
@@ -413,9 +423,9 @@ impl Session {
 
     /// The pointer went down at `point` (document space).
     pub fn pointer_down(&mut self, point: Point, shift: bool) {
-        if !is_finite_point(point) {
+        let Some(point) = sanitized_point(point) else {
             return;
-        }
+        };
         // Same flush as `set_tool`'s own doc comment explains: a canvas
         // click can change the selection (e.g. selecting a different
         // star) before a pending ratio-slider preview ever gets a
@@ -462,9 +472,9 @@ impl Session {
     /// (`select_shift_held`/`select_ctrl_held`) so [`Session::draw_list`]
     /// can read their current state with no event of its own.
     pub fn pointer_hover(&mut self, point: Point, shift: bool, constrain: bool) {
-        if !is_finite_point(point) {
+        let Some(point) = sanitized_point(point) else {
             return;
-        }
+        };
         self.pointer_position = Some(point);
         self.hovered = None;
         self.hovered_primitive = None;
@@ -510,12 +520,12 @@ impl Session {
     /// `object-transform`, by the Select tool's own resize/rotate commit
     /// alongside `shift` (acceptance criteria 5, 7, 16, 17).
     pub fn pointer_up(&mut self, point: Point, shift: bool, constrain: bool) {
-        if !is_finite_point(point) {
+        let Some(point) = sanitized_point(point) else {
             // A release at a non-finite position cannot be committed to
             // anything; cancel the gesture rather than write NaN.
             self.escape();
             return;
-        }
+        };
         match self.tool {
             Tool::Select => {
                 self.select_pointer_up(point, shift, constrain);

@@ -166,7 +166,7 @@ function ReadoutChip({ text, x, y, containerRef }: ReadoutChipProps) {
   return (
     <div
       ref={chipRef}
-      className="pointer-events-none absolute z-10 rounded-md px-1.5 py-0.5 text-xs"
+      className="pointer-events-none absolute z-10 whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs"
       style={{
         left: placement.left,
         top: placement.top,

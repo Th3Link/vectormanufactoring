@@ -229,6 +229,27 @@ impl SelectTool {
         Some((object, box_, hit))
     }
 
+    /// Whether `point` lies inside the oriented box of the sole selected
+    /// object (edges included). `false` for no selection or several.
+    fn is_inside_selected_box(
+        objects: &[ObjectSnapshot],
+        selection: &ObjectSelection,
+        point: Point,
+    ) -> bool {
+        let [only_id] = selection.ids() else {
+            return false;
+        };
+        let Some(object) = objects.iter().find(|o| o.id() == *only_id) else {
+            return false;
+        };
+        let box_ = oriented_bounds(object);
+        let local = box_.to_local(point);
+        local.x >= box_.min.x
+            && local.x <= box_.max.x
+            && local.y >= box_.min.y
+            && local.y <= box_.max.y
+    }
+
     /// Acceptance criteria 1, 4-18: hit-tests `point` first against the
     /// current single-object selection's own transform handles, then
     /// (same as before `object-transform`) against every object's own
@@ -269,6 +290,17 @@ impl SelectTool {
         }
 
         let Some(hit) = hit_test_object(objects, point, tolerance) else {
+            // A press inside the sole selected object's own (oriented) box
+            // that is not on a handle is a grab of that object — its body
+            // (acceptance criterion 23). Without it a small unfilled
+            // object could not be moved at all: the handle radii tile its
+            // whole outline and its interior hits nothing. Unselected
+            // objects still hit only on their outline (see `adrs.md`'s
+            // 2026-10-06 note).
+            if !shift && Self::is_inside_selected_box(objects, selection, point) {
+                self.drag = SelectDrag::Moving { down_at: point };
+                return SelectPointerDownOutcome::Selected;
+            }
             if !shift {
                 selection.clear();
             }
@@ -1718,65 +1750,135 @@ mod tests {
         );
     }
 
-    /// UX review item 1, through the tool itself, at the real 40 × 22 px
-    /// size with 16 px hit radii (this needed the `nearest_point_on_segment`
-    /// fix to be testable): a press on the top outline away from any
-    /// handle is a *move* (the object follows the drag), and a press at
-    /// the centre is not a resize. An unfilled object's centre is not a
-    /// body hit either (slice 4: outline only), so it just deselects.
+    /// A selected unfilled object of any small size can be moved by
+    /// pressing inside its box (its body, acceptance criterion 23): the
+    /// handle radii tile a small box's outline, so without this nothing
+    /// could move it. Squares of 10, 22, 40 and 60 units with 16-unit
+    /// radii, unrotated and rotated: a press at the centre starts a move
+    /// that changes neither size nor rotation; the rotate handle and a
+    /// resize handle still win where they are; an empty-canvas press
+    /// still deselects.
     #[test]
-    fn a_40_by_22_rectangle_moves_from_its_outline_and_is_not_resized_from_its_centre() {
-        let document = Document::new(1);
-        let id = document.create_rect(RectBounds {
-            origin: Point::new(0.0, 0.0),
-            width: Length::from_mm(40.0),
-            height: Length::from_mm(22.0),
-        });
-        let objects = vec![document.object(id).expect("exists")];
+    fn a_selected_small_square_moves_from_inside_its_box_rotated_or_not() {
+        use vecmanf_document_core::Angle;
         let wide = TransformHandleTolerances {
             resize: Tolerance::from_mm(16.0),
             rotate: Tolerance::from_mm(16.0),
             rotate_offset_mm: 32.0,
         };
+        for (size, height) in [
+            (10.0, 10.0),
+            (22.0, 22.0),
+            (40.0, 40.0),
+            (60.0, 60.0),
+            (40.0, 22.0),
+        ] {
+            for turn in [0.0, 0.6] {
+                let document = Document::new(1);
+                let id = document.create_rect(RectBounds {
+                    origin: Point::new(0.0, 0.0),
+                    width: Length::from_mm(size),
+                    height: Length::from_mm(height),
+                });
+                let centre = Point::new(size / 2.0, height / 2.0);
+                if turn != 0.0 {
+                    document
+                        .rotate_object(
+                            &document
+                                .object(id)
+                                .expect("exists")
+                                .rotated(centre, Angle::from_radians(turn)),
+                        )
+                        .expect("rotate");
+                }
+                let objects = vec![document.object(id).expect("exists")];
+                let mut selection = ObjectSelection::new();
+                selection.select_single(id);
+
+                // Inside press: a move, not a handle drag.
+                let mut tool = SelectTool::new();
+                let outcome =
+                    tool.pointer_down(&objects, &mut selection, centre, TOLERANCE, wide, false);
+                assert_eq!(outcome, SelectPointerDownOutcome::Selected, "{size} {turn}");
+                assert!(tool.dragging_handle().is_none(), "{size} {turn}");
+                assert_eq!(selection.ids(), &[id], "still selected");
+                tool.pointer_up(
+                    &document,
+                    &objects,
+                    &mut selection,
+                    centre.translated(Vec2::new(7.0, 3.0)),
+                    false,
+                    false,
+                );
+                let moved = document.primitive(id).expect("exists");
+                assert!((moved.rotation.as_radians() - turn).abs() < 1e-9);
+                let Shape::Rect { bounds, .. } = moved.shape else {
+                    panic!("rect");
+                };
+                assert!((bounds.width.as_mm() - size).abs() < 1e-9, "size kept");
+                assert!((bounds.origin.x - 7.0).abs() < 1e-9, "{size} {turn}: moved");
+                assert!((bounds.origin.y - 3.0).abs() < 1e-9);
+
+                // The handles still win where they are.
+                let objects = vec![document.object(id).expect("exists")];
+                let at = |wanted: TransformHandle| {
+                    SelectTool::transform_handles(&objects, &selection, wide)
+                        .into_iter()
+                        .find(|(h, _)| *h == wanted)
+                        .expect("handle exists")
+                        .1
+                };
+                let rotate = at(TransformHandle::Rotate);
+                let se = at(TransformHandle::Resize(ResizeDirection::Se));
+                let mut tool = SelectTool::new();
+                assert_eq!(
+                    tool.pointer_down(&objects, &mut selection, rotate, TOLERANCE, wide, false),
+                    SelectPointerDownOutcome::Handle
+                );
+                tool.escape();
+                assert_eq!(
+                    tool.pointer_down(&objects, &mut selection, se, TOLERANCE, wide, false),
+                    SelectPointerDownOutcome::Handle
+                );
+                tool.escape();
+
+                // Far outside the box: deselects.
+                assert_eq!(
+                    tool.pointer_down(
+                        &objects,
+                        &mut selection,
+                        Point::new(900.0, 900.0),
+                        TOLERANCE,
+                        wide,
+                        false
+                    ),
+                    SelectPointerDownOutcome::Cleared
+                );
+                assert!(selection.is_empty());
+            }
+        }
+    }
+
+    /// An *unselected* object still hits only on its outline: its centre
+    /// is empty canvas.
+    #[test]
+    fn an_unselected_objects_centre_is_still_empty_canvas() {
+        let document = Document::new(1);
+        let id = rect(&document, 0.0);
+        let objects = vec![document.object(id).expect("exists")];
         let mut selection = ObjectSelection::new();
-        selection.select_single(id);
-
         let mut tool = SelectTool::new();
-        let centre = tool.pointer_down(
-            &objects,
-            &mut selection,
-            Point::new(20.0, 11.0),
-            TOLERANCE,
-            wide,
-            false,
-        );
-        assert_ne!(centre, SelectPointerDownOutcome::Handle);
-        assert!(tool.dragging_handle().is_none());
-
-        selection.select_single(id);
-        let on_outline = Point::new(10.0, 0.0);
         assert_eq!(
-            tool.pointer_down(&objects, &mut selection, on_outline, TOLERANCE, wide, false),
-            SelectPointerDownOutcome::Selected,
-            "an outline press away from every handle starts a move"
+            tool.pointer_down(
+                &objects,
+                &mut selection,
+                Point::new(5.0, 5.0),
+                TOLERANCE,
+                HANDLE_TOLERANCES,
+                false
+            ),
+            SelectPointerDownOutcome::Cleared
         );
-        assert!(
-            tool.dragging_handle().is_none(),
-            "a move, not a handle drag"
-        );
-        tool.pointer_up(
-            &document,
-            &objects,
-            &mut selection,
-            on_outline.translated(Vec2::new(5.0, 3.0)),
-            false,
-            false,
-        );
-        let Shape::Rect { bounds, .. } = document.primitive(id).expect("exists").shape else {
-            panic!("rect");
-        };
-        assert_eq!(bounds.origin, Point::new(5.0, 3.0), "moved by the drag");
-        assert!((bounds.width.as_mm() - 40.0).abs() < 1e-9, "not resized");
     }
 
     /// A zero-height path (a line) keeps grabbable handles: the radius

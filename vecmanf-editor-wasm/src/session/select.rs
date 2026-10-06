@@ -11,13 +11,18 @@ use vecmanf_document_core::{ObjectSnapshot, Point, Shape};
 use vecmanf_render_core::{SelectDecorationInput, TransformDecorationInput, TransformHandleGlyph};
 use vecmanf_ui_core::{
     SelectDoubleClickOutcome, SelectTool, TransformHandle, TransformHandleTolerances, double_click,
-    hit_test_object, oriented_bounds, resize_cursor_angle_degrees,
+    hit_test_object, is_corner, oriented_bounds, resize_cursor_angle_degrees,
 };
 
 use super::{
     Session, TRANSFORM_RESIZE_HANDLE_TOLERANCE_PX, TRANSFORM_ROTATE_HANDLE_OFFSET_PX,
     TRANSFORM_ROTATE_HANDLE_TOLERANCE_PX, Tool,
 };
+
+/// A box side (screen px) under which only the four corner handles are
+/// drawn: three times the 8 px resize-handle glyph, so the glyphs never
+/// touch (`docs/design-system.md`, "Transform handle hit priority").
+const MIN_SIDE_FOR_ALL_HANDLES_PX: f64 = 24.0;
 
 /// Which tool a primitive of this shape is created/edited with — the one
 /// mapping both directions funnel through
@@ -201,8 +206,23 @@ impl Session {
         } else {
             None
         };
+        // Below ~24 px (3 × the 8 px glyph) a box side is too short for eight
+        // handle glyphs — they merge into a blob — so only the four
+        // corners are drawn. Hit-testing is unchanged: every handle still
+        // works where it is.
+        let corners_only = match self.selection.ids() {
+            [only] => objects.iter().find(|o| o.id() == *only).is_some_and(|o| {
+                let b = oriented_bounds(o);
+                b.width().min(b.height()) * self.view().scale() < MIN_SIDE_FOR_ALL_HANDLES_PX
+            }),
+            _ => false,
+        };
         let handles = SelectTool::transform_handles(&objects, &self.selection, tolerances)
             .into_iter()
+            .filter(|(handle, _)| match handle {
+                TransformHandle::Resize(direction) => !corners_only || is_corner(*direction),
+                TransformHandle::Rotate => true,
+            })
             .map(|(handle, position)| TransformHandleGlyph {
                 position,
                 is_rotate: matches!(handle, TransformHandle::Rotate),
@@ -479,5 +499,26 @@ mod tests {
         .1;
         session.pointer_hover(rotate_handle, false, false);
         assert_eq!(session.cursor_hint(), "rotate");
+    }
+
+    /// UX review item 3: below ~24 px a box side only the four corner
+    /// handles (plus rotate) are drawn; a normal-sized box shows all nine.
+    /// Hit-testing is unaffected (it works from `transform_handles`).
+    #[test]
+    fn a_tiny_box_draws_only_its_corner_handles() {
+        let draw_count = |size_mm: f64| {
+            let mut session = Session::new(1);
+            let id = session.document.create_rect(RectBounds {
+                origin: Point::new(0.0, 0.0),
+                width: Length::from_mm(size_mm),
+                height: Length::from_mm(size_mm),
+            });
+            session.set_tool(Tool::Select);
+            session.selection.select_single(id);
+            session.select_transform_decoration_input().handles.len()
+        };
+        // The default 96 dpi view is ~3.8 px per mm: 5 mm is ~19 px, 10 mm ~38 px.
+        assert_eq!(draw_count(5.0), 5, "4 corners + rotate");
+        assert_eq!(draw_count(10.0), 9, "8 resize + rotate");
     }
 }
