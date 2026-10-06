@@ -206,6 +206,41 @@ pub const GUIDE_DASH_PX: f64 = 4.0;
 /// The gap between two dashes, screen-space pixels.
 pub const GUIDE_GAP_PX: f64 = 3.0;
 
+/// One dash's length of the skew fixed-line guide, screen-space pixels
+/// (`edit-interaction-polish` criterion 68: 2 on / 2 off, so the guide does
+/// not look like the 4 / 3 selection box it runs along).
+pub const SKEW_GUIDE_DASH_PX: f64 = 2.0;
+
+/// The gap between two dashes of the skew fixed-line guide, screen-space
+/// pixels.
+pub const SKEW_GUIDE_GAP_PX: f64 = 2.0;
+
+/// The selection box's nominal dash length, screen-space pixels
+/// (`edit-interaction-polish` criterion 63, the customer's V1). A dash is
+/// never longer than this.
+pub const SELECTION_BOX_DASH_PX: f64 = 4.0;
+
+/// The selection box's nominal gap, screen-space pixels. The fit picks the
+/// gap nearest this within [`SELECTION_BOX_GAP_MIN_PX`] and
+/// [`SELECTION_BOX_GAP_MAX_PX`].
+pub const SELECTION_BOX_GAP_PX: f64 = 3.0;
+
+/// The smallest gap of a fitted selection-box edge, screen-space pixels.
+/// Where no exact fit exists the gap is this and the dash flexes
+/// (`edit-interaction-polish` criterion 64).
+pub const SELECTION_BOX_GAP_MIN_PX: f64 = 2.0;
+
+/// The largest gap of a fitted selection-box edge, screen-space pixels.
+pub const SELECTION_BOX_GAP_MAX_PX: f64 = 4.0;
+
+/// An edge shorter than this has room for no two dashes and a gap and is
+/// drawn solid, screen-space pixels (`edit-interaction-polish` criterion 64).
+pub const SELECTION_BOX_MIN_DASHED_EDGE_PX: f64 = 10.0;
+
+/// An edge longer than this is drawn solid, screen-space pixels: it bounds
+/// the draw list at an absurd zoom, where the edge is far off screen anyway.
+pub const SELECTION_BOX_MAX_DASHED_EDGE_PX: f64 = 50_000.0;
+
 /// The curve-approximation display tolerance for stroking, in screen
 /// pixels (`specs/0004-canvas-navigation-and-selection/adrs.md`: "Display
 /// tolerance becomes screen-space... Use 0.25 px / scale. ADR 0003 §7's

@@ -351,8 +351,8 @@ pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationI
             to,
             screen_px_to_mm(view, theme::TRANSFORM_SKEW_GUIDE_WIDTH_PX),
             theme::TRANSFORM_SKEW_GUIDE_COLOR,
-            screen_px_to_mm(view, theme::GUIDE_DASH_PX),
-            screen_px_to_mm(view, theme::GUIDE_GAP_PX),
+            screen_px_to_mm(view, theme::SKEW_GUIDE_DASH_PX),
+            screen_px_to_mm(view, theme::SKEW_GUIDE_GAP_PX),
         ));
     }
     if let Some(pivot) = input.pivot_marker {
@@ -590,8 +590,8 @@ mod tests {
             param_guides: Vec::new(),
         };
         let list = build_transform_handles(ViewTransform::identity(), &input);
-        // 70 px at 4 on / 3 off: ten dashes of two triangles each.
-        assert_eq!(list.triangle_count(), 20);
+        // 70 px at 2 on / 2 off (criterion 68): eighteen dashes of two triangles each.
+        assert_eq!(list.triangle_count(), 36);
     }
 
     fn glyph_list(kind: TransformGlyphKind, dragging: bool, hovered: bool) -> DrawList {

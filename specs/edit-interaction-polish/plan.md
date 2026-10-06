@@ -26,20 +26,20 @@ and read where the select decoration input is built, `session/select_view.rs`).
 - [x] 1. Pure move: the box drawing (`SelectionBox`, `SelectDecorationInput`,
   `build`) from `select_decoration.rs` to `select_box.rs`. No behaviour change
   (fulfils nothing; prepares AC 63 to 66 and keeps both files under 500 lines).
-- [ ] 2. `fit_dashes(edge_px) -> Option<DashFit>` with its table tests first:
+- [x] 2. `fit_dashes(edge_px) -> Option<DashFit>` with its table tests first:
   every length 10 to 400 px in 0.25 steps (dash at both ends, symmetric, gap 2
   to 4 except in the two flex bands, dash at most 4 and at least 2.5), edges
   under 10 px solid, the two bands 12 to 16 and 20 to 22 (AC 64).
-- [ ] 3. The dashed selection box: each edge laid out from its first corner in
+- [x] 3. The dashed selection box: each edge laid out from its first corner in
   the box's own frame, corners closed, solid hover box, marquee untouched
   (AC 63, 64, 66, 67). Tests: rigid under translation and zoom, rotated boxes
   follow their edges, multi-selection has one box each, equal inputs give equal
   draw lists.
-- [ ] 4. The pixel snap and `SelectDecorationInput::device_pixel_ratio` for
+- [x] 4. The pixel snap and `SelectDecorationInput::device_pixel_ratio` for
   axis-aligned selection and hover boxes (AC 65, 66). Tests: at most 0.5 device
   pixels of displacement; one whole device row or column of coverage at ratios
   1, 1.25, 1.5, 2 and 3; a rotated box is not snapped.
-- [ ] 5. Skew guide constants 2 on / 2 off; `the_skew_guide_draws_as_dashes`
+- [x] 5. Skew guide constants 2 on / 2 off; `the_skew_guide_draws_as_dashes`
   rewritten to the exact count of eighteen dashes at 70 px (AC 68).
 - [ ] 6. `Session::set_device_pixel_ratio`, called from `attach_canvas` and
   `resize` (AC 65). Session test: the input carries the ratio.
