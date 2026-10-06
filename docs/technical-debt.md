@@ -696,6 +696,15 @@ decoration input there. Per-tool files already exist (`session/select.rs`,
 the decoration-input assembly into their own submodules. Not done in a
 feature PR because it touches every tool's binding at once.
 
+The same PR splits `vecmanf-ui-core/src/transform_handle_layout.rs` (about
+550 lines of non-test code after `object-transform`). It holds two
+responsibilities: transform-handle layout and hit test, and the resize/
+rotate drag arithmetic (`ResizedBox`, `resize_local_box` and its helpers,
+`resize_anchor_local_position`, the stroke/radius and polygon/star factors,
+`rotate_pivot`, `rotate_delta_angle`, `scaled_and_floored`). Move the
+arithmetic into a sibling module used by `transform_drag.rs`; a pure move,
+no behaviour change.
+
 **Resolution:** a `chore/` PR after `object-transform` merges and before
 the next slice that adds a tool. Revisit if a slice needs `mod.rs` above
 900 lines first.

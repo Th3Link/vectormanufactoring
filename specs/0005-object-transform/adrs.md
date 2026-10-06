@@ -206,9 +206,13 @@ lead", each with the default this file builds against.
   The corner radius uses the same factor on its **raw** stored value; the
   clamp still happens on read (slice 3), so AC 9's "clamped after scaling"
   holds with no new rule. A factor of 0 (AC 13 clamp) never writes a stroke
-  width ≤ 0: the width keeps its drag-start value, because
+  width ≤ 0: the width is floored at 0.01 mm, because
   `stroke-and-fill-styling` refuses `stroke_width ≤ 0` on open and a file
-  must never become unopenable from a drag.
+  must never become unopenable from a drag. *2026-10-06 (architect,
+  review):* this sentence first said the width keeps its drag-start value;
+  AC 8 was reworded to "the smallest value still above zero", and the code
+  (`transform_drag::MIN_STROKE_WIDTH_MM` = 0.01 mm) follows AC 8. Floored
+  at 0.01 mm, never ≤ 0.
 
 - **2026-10-05: `format_version` goes to 4.** Migration from version 3 is
   empty: absent `rotation` reads as 0. The bump is needed for the reader. A
@@ -268,8 +272,9 @@ lead", each with the default this file builds against.
    (a): one rule for every object, one cheap register. Default: (a); the PO
    deletes AC 20's last sentence.**
 2. **AC 8/9 do not say which factor applies when sx ≠ sy.** Default above:
-   √(sx·sy), and a zero factor leaves the stroke width unchanged. The PO may
-   fold that into the wording.
+   √(sx·sy), and a zero factor floors the stroke width at 0.01 mm, never
+   ≤ 0 (2026-10-06: was "leaves the stroke width unchanged"; AC 8 now says
+   so).
 3. **Gap: a rotated primitive handed to its own tool (slice 4 AC 23).** No
    criterion says its handles follow the rotation. Decided above that they
    do. The PO should add a criterion so the tester covers it.
