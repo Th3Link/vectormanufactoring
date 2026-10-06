@@ -121,7 +121,12 @@ impl Session {
         self.select.pointer_moved(point);
         let objects = self.objects();
         let tolerance = self.segment_tolerance();
-        self.hovered_object = vecmanf_ui_core::hit_test_object(&objects, point, tolerance);
+        // Nothing lights up while a drag runs; hover returns after release.
+        self.hovered_object = if self.select.drag_in_flight() {
+            None
+        } else {
+            vecmanf_ui_core::hit_test_object(&objects, point, tolerance)
+        };
     }
 
     /// `unified-object-editing` criteria 31 to 34, and 3, 18, 25-32, 49 of the

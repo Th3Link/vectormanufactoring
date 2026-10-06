@@ -87,14 +87,10 @@ impl Session {
         &self,
         objects: &[ObjectSnapshot],
     ) -> SelectDecorationInput {
-        // A creation tool keeps each selected object's plain selection box
-        // (no handles, no hover), so the maker still sees what a Properties
-        // panel would act on (`unified-object-editing` criterion 27); the Pen
-        // and Node tools draw their own.
-        if !matches!(
-            self.tool,
-            Tool::Select | Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar
-        ) {
+        // A creation tool draws no selection box at all (choosing one clears
+        // the selection, customer decision 2026-10-06 reversing criterion 27);
+        // the Pen and Node tools draw their own.
+        if self.tool != Tool::Select {
             return SelectDecorationInput::default();
         }
         let selected = self
@@ -108,9 +104,12 @@ impl Session {
                     .map(|object| (id, oriented_bounds(object).document_corners()))
             })
             .collect();
+        // No hover highlight of other objects while any Select-tool drag or
+        // bar slider edit is in flight.
+        let hovering = !self.select.drag_in_flight() && self.select.bar_preview().is_none();
         let hovered = self
             .hovered_object
-            .filter(|&id| !self.selection.contains(id))
+            .filter(|&id| hovering && !self.selection.contains(id))
             .and_then(|id| {
                 objects
                     .iter()
@@ -128,7 +127,7 @@ impl Session {
         &self,
         objects: &[ObjectSnapshot],
     ) -> Option<(ObjectSnapshot, vecmanf_ui_core::OrientedBox, EditHandle)> {
-        if self.select.dragging_handle().is_some() || self.select.has_entry() {
+        if self.select.drag_in_flight() || self.select.has_entry() {
             return None;
         }
         let point = self.pointer_position?;
@@ -463,6 +462,72 @@ mod tests {
         session.pointer_down(Point::new(0.0, 5.0), false);
         session.pointer_up(Point::new(0.0, 5.0), false, false);
         (session, id)
+    }
+
+    /// Customer decision 2026-10-06 (reverses criterion 27): choosing a
+    /// creation tool, by any route, clears the selection and draws no
+    /// selection box; the Node and Pen tools keep the selection.
+    #[test]
+    fn choosing_a_creation_tool_clears_the_selection_and_draws_no_box() {
+        for tool in [Tool::Rectangle, Tool::Ellipse, Tool::PolygonStar] {
+            let (mut session, _) = session_with_selected_rect();
+            assert_eq!(session.select_decoration_input().selected.len(), 1);
+            session.set_tool(tool);
+            assert!(session.selection.ids().is_empty(), "{tool:?}: cleared");
+            let input = session.select_decoration_input();
+            assert!(input.selected.is_empty(), "{tool:?}: no selection box");
+            assert!(input.hovered.is_none(), "{tool:?}: no hover box");
+            // Creating a shape still hands over to Select with it selected.
+            session.pointer_down(Point::new(20.0, 20.0), false);
+            session.pointer_up(Point::new(40.0, 40.0), false, false);
+            assert_eq!(session.tool(), Tool::Select, "{tool:?}: hand-over");
+            assert_eq!(session.selection.ids().len(), 1, "{tool:?}: new shape");
+            assert_eq!(session.select_decoration_input().selected.len(), 1);
+        }
+        for tool in [Tool::Node, Tool::Pen] {
+            let (mut session, id) = session_with_selected_rect();
+            session.set_tool(tool);
+            assert_eq!(session.selection.ids(), &[id], "{tool:?}: selection kept");
+        }
+    }
+
+    /// Customer bug 2026-10-06: while a Select-tool drag runs, the other
+    /// objects' hover boxes are not drawn and hover does not change the
+    /// cursor; both return after the release.
+    #[test]
+    fn no_hover_highlight_or_hover_cursor_while_a_select_drag_runs() {
+        let (mut session, a) = session_with_selected_rect();
+        let b = session.document.create_rect(RectBounds {
+            origin: Point::new(50.0, 50.0),
+            width: Length::from_mm(10.0),
+            height: Length::from_mm(10.0),
+        });
+        let on_b = Point::new(55.0, 50.0);
+        session.pointer_hover(on_b, false, false);
+        assert_eq!(
+            session.select_decoration_input().hovered.map(|(id, _)| id),
+            Some(b),
+            "idle hover lights up B"
+        );
+        // A move drag of A, with the pointer passing over B's outline and
+        // over a handle spot of A.
+        session.pointer_down(Point::new(5.0, 5.0), false);
+        for over in [on_b, Point::new(10.0, 10.0), on_b] {
+            session.pointer_hover(over, false, false);
+            assert!(
+                session.select_decoration_input().hovered.is_none(),
+                "no hover box mid-drag at {over:?}"
+            );
+            assert_eq!(session.cursor_hint(), "default", "no hover cursor mid-drag");
+        }
+        session.pointer_up(Point::new(5.0, 5.0), false, false);
+        assert_eq!(session.selection.ids(), &[a]);
+        session.pointer_hover(on_b, false, false);
+        assert_eq!(
+            session.select_decoration_input().hovered.map(|(id, _)| id),
+            Some(b),
+            "hover returns after the release"
+        );
     }
 
     /// Acceptance criterion 18: a rotated object's selection outline is

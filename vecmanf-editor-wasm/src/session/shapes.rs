@@ -225,20 +225,23 @@ mod tests {
     }
 
     /// Criterion 26: a press and release without moving creates nothing,
-    /// keeps the tool, and leaves the selection as it was.
+    /// keeps the tool, and leaves the selection as it was (empty: choosing a
+    /// creation tool clears it), even on another object's outline.
     #[test]
     fn a_press_without_movement_creates_nothing_and_keeps_the_selection() {
         let mut session = Session::new(1);
         session.set_tool(Tool::Rectangle);
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(40.0, 30.0), false, false);
-        let id = session.document.object_ids()[0];
         session.set_tool(Tool::Ellipse);
-        session.pointer_down(Point::new(200.0, 200.0), false);
-        session.pointer_up(Point::new(200.0, 200.0), false, false);
+        assert_eq!(session.selection.ids(), &[]);
+        for at in [Point::new(200.0, 200.0), Point::new(0.0, 15.0)] {
+            session.pointer_down(at, false);
+            session.pointer_up(at, false, false);
+        }
         assert_eq!(session.document.object_ids().len(), 1);
         assert_eq!(session.tool(), Tool::Ellipse);
-        assert_eq!(session.selection.ids(), &[id]);
+        assert_eq!(session.selection.ids(), &[]);
     }
 
     /// ux-engineer review item 1: during a create-drag, before release,

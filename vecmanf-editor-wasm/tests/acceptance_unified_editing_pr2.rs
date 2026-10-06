@@ -454,7 +454,7 @@ fn ac25_no_hover_highlight_cursor_state_or_hint_over_existing_objects_in_a_creat
 // =====================================================================
 
 #[test]
-fn ac26_a_press_without_movement_creates_nothing_and_leaves_selection_and_tool_alone() {
+fn ac26_a_press_without_movement_creates_nothing_and_leaves_selection_empty_and_tool_alone() {
     let k = k_of(&Session::new(1));
     for tool in CREATION {
         for shift in [false, true] {
@@ -495,15 +495,16 @@ fn ac26_a_press_without_movement_creates_nothing_and_leaves_selection_and_tool_a
                 assert_eq!(change_count(&s), changes_before, "{label}: no commit");
                 assert_eq!(bytes(&s), bytes_before, "{label}: nothing written");
                 assert_eq!(s.draw_list(), draw_before, "{label}: selection unchanged");
+                // Choosing the creation tool cleared the selection (customer
+                // decision 2026-10-06), and the press did not select anything:
+                // deleting the selection removes nothing.
+                assert!(decoration(&s, tool).is_empty(), "{label}: no box drawn");
                 let survivors = delete_selection(&mut s);
-                assert_eq!(survivors.len(), 1, "{label}: only the selected A is gone");
-                match prim(&s, 0).shape {
-                    Shape::Rect { bounds: r, .. } => assert!(
-                        near(r.origin.x, 120.0, 1e-9),
-                        "{label}: B survives, so A was the selection"
-                    ),
-                    other => panic!("{other:?}"),
-                }
+                assert_eq!(
+                    survivors.len(),
+                    2,
+                    "{label}: nothing selected, nothing gone"
+                );
             }
         }
     }
@@ -533,13 +534,14 @@ fn ac26_a_press_without_movement_with_nothing_selected_keeps_it_that_way() {
 }
 
 // =====================================================================
-// Criterion 27: selected objects keep only a plain box under a creation tool
+// Criterion 27 (reversed by the customer on 2026-10-06): choosing a creation
+// tool clears the selection and no selection box is drawn under it
 // =====================================================================
 
 #[test]
-fn ac27_creation_tool_draws_only_the_plain_box_of_each_selected_object() {
+fn ac27_choosing_a_creation_tool_clears_the_selection_and_draws_no_box() {
     let k = k_of(&Session::new(1));
-    // One rectangle and one star, so the box rule is tried on two kinds.
+    // One rectangle, one star and one path, so the rule is tried on every kind.
     let d = Document::new(1);
     let _ = d.create_rect(bounds(20.0, 20.0, 200.0 / k, 140.0 / k));
     let _ = d.create_star(
@@ -551,64 +553,57 @@ fn ac27_creation_tool_draws_only_the_plain_box_of_each_selected_object() {
         PointCount::new(8).unwrap(),
         vecmanf_document_core::InnerRatio::new(0.5).unwrap(),
     );
-    for which in 0..3 {
-        // 0 = rect, 1 = star, 2 = both (shift).
+    let _ = d.create_path(
+        &[
+            anchor(1, 400.0, 30.0),
+            anchor(2, 400.0 + 160.0 / k, 30.0),
+            anchor(3, 400.0 + 160.0 / k, 30.0 + 120.0 / k),
+        ],
+        true,
+    );
+    // 0 = rect, 1 = star, 2 = rect and star (shift), 3 = path.
+    let selected = |which: usize| {
         let mut s = open_session(&d);
-        if which != 1 {
-            let p = outline_point(&s, 0);
-            click(&mut s, p, false);
-        }
-        if which != 0 {
-            let p = outline_point(&s, 1);
-            click(&mut s, p, which == 2);
+        let (first, second) = (outline_point(&s, 0), outline_point(&s, 1));
+        match which {
+            0 => click(&mut s, first, false),
+            1 => click(&mut s, second, false),
+            2 => {
+                click(&mut s, first, false);
+                click(&mut s, second, true);
+            }
+            _ => click(&mut s, pt(400.0 + 80.0 / k, 30.0), false),
         }
         s.pointer_hover(pt(900.0, 900.0), false, false);
-        let select_dec = decoration(&s, Tool::Select);
-        let mut union_box = None::<(f64, f64, f64, f64)>;
-        for i in [0usize, 1] {
-            if (which == 0 && i == 1) || (which == 1 && i == 0) {
-                continue;
-            }
-            let b = box_of(&prim(&s, i));
-            union_box = Some(union_box.map_or(b, |u| {
-                (u.0.min(b.0), u.1.min(b.1), u.2.max(b.2), u.3.max(b.3))
-            }));
-        }
-        let ub = union_box.unwrap();
-        if which != 2 {
-            assert!(
-                overshoot_px(&select_dec, ub, k) > 25.0,
-                "which {which}: the Select tool draws rotate handles outside the box"
-            );
-        }
+        s
+    };
+    for which in 0..4 {
+        let s = selected(which);
+        assert!(
+            !decoration(&s, Tool::Select).is_empty(),
+            "which {which}: the Select tool draws the selection"
+        );
         for tool in CREATION {
-            s.set_tool(tool);
-            s.pointer_hover(pt(900.0, 900.0), false, false);
-            let dec = decoration(&s, tool);
-            assert!(!dec.is_empty(), "{tool:?} which {which}: a box is drawn");
-            let over = overshoot_px(&dec, ub, k);
+            let mut c = selected(which);
+            c.set_tool(tool);
+            c.pointer_hover(pt(900.0, 900.0), false, false);
             assert!(
-                over < 4.0,
-                "{tool:?} which {which}: box only, nothing drawn {over:.1} px outside it"
+                decoration(&c, tool).is_empty(),
+                "{tool:?} which {which}: no selection box under a creation tool"
             );
-            let (tri_sel, tri_dec) = (select_dec.len(), dec.len());
-            if which != 2 {
-                assert!(
-                    tri_dec < tri_sel,
-                    "{tool:?} which {which}: fewer decoration vertices than the Select tool \
-                     ({tri_dec} vs {tri_sel})"
-                );
-            }
+            c.set_tool(Tool::Select);
+            c.delete_selected();
+            assert_eq!(
+                n_objects(&c),
+                n_objects(&s),
+                "{tool:?} which {which}: the selection was cleared, nothing is deleted"
+            );
         }
-        // Back to Select: the very same selection is there with its handles.
-        s.set_tool(Tool::Select);
-        s.pointer_hover(pt(900.0, 900.0), false, false);
-        assert_eq!(decoration(&s, Tool::Select).len(), select_dec.len());
     }
 }
 
 #[test]
-fn ac27_a_selected_path_keeps_a_plain_box_under_a_creation_tool_too() {
+fn ac27_the_node_and_pen_tools_keep_the_selection() {
     let k = k_of(&Session::new(1));
     let d = Document::new(1);
     let _ = d.create_path(
@@ -619,19 +614,13 @@ fn ac27_a_selected_path_keeps_a_plain_box_under_a_creation_tool_too() {
         ],
         true,
     );
-    let mut s = open_session(&d);
-    click(&mut s, pt(40.0 + 80.0 / k, 30.0), false);
-    let sel = decoration(&s, Tool::Select);
-    let b = (40.0, 30.0, 40.0 + 160.0 / k, 30.0 + 120.0 / k);
-    assert!(overshoot_px(&sel, b, k) > 25.0);
-    for tool in CREATION {
+    for tool in [Tool::Node, Tool::Pen] {
+        let mut s = open_session(&d);
+        click(&mut s, pt(40.0 + 80.0 / k, 30.0), false);
         s.set_tool(tool);
-        s.pointer_hover(pt(900.0, 900.0), false, false);
-        let dec = decoration(&s, tool);
-        assert!(
-            !dec.is_empty() && overshoot_px(&dec, b, k) < 4.0,
-            "{tool:?}"
-        );
+        s.set_tool(Tool::Select);
+        s.delete_selected();
+        assert_eq!(n_objects(&s), 0, "{tool:?}: the path was still selected");
     }
 }
 

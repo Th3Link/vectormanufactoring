@@ -150,6 +150,19 @@ stop and ask the lead.
       settings with the "New:" prefix; `EditHintChip` (three lines); crosshair
       for every creation tool; no hover highlight (AC 29, 30, 32, 34)
 
+#### Customer test round (2026-10-06)
+
+Criterion 27 is reversed by the customer (the PO amends the spec): choosing a
+creation tool (`Session::set_tool`, the one entry for rail, shortcuts and `*`)
+clears the selection and no selection box is drawn under it; the Pen and Node
+tools keep the selection. Creating a shape still hands over to Select with it
+selected. During any Select-tool drag or bar slider edit no hover box of other
+objects is drawn and hover does not change the cursor. Tests: `select_view.rs`
+`choosing_a_creation_tool_clears_the_selection_and_draws_no_box` and
+`no_hover_highlight_or_hover_cursor_while_a_select_drag_runs`; the tester's
+`ac26_*` and `ac27_*` tests in `acceptance_unified_editing_pr2.rs` and the
+`shapes.rs` press-without-movement test were rewritten for the empty selection.
+
 #### What replaced each deleted test
 
 | Deleted | Replaced by |

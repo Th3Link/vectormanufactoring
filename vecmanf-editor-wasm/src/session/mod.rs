@@ -257,6 +257,13 @@ impl Session {
         self.flush_select_bar_preview();
         self.select.cancel_entry();
         self.select.forget_press();
+        // A creation tool starts from an empty selection: no selection box
+        // stays behind from the Select tool. Creating a shape then selects
+        // the new one (`shape_pointer_up`).
+        if matches!(tool, Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar) {
+            self.selection.clear();
+            self.hovered_object = None;
+        }
         self.tool = tool;
     }
 
