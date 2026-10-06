@@ -12,7 +12,8 @@
 use vecmanf_document_core::{InnerRatio, NodeId, Point, PointCount, PrimitiveSnapshot, Shape};
 use vecmanf_render_core::{RenderShapeHandle, ShapeDecorationInput, ShapeHandleKind};
 use vecmanf_ui_core::{
-    HandleKind, LiveShape, PolyStarMode, ShapeHitTolerances, build_primitive_conversions,
+    EllipsePointerUpOutcome, HandleKind, LiveShape, PolyStarMode, PolyStarPointerUpOutcome,
+    RectPointerUpOutcome, ShapeHitTolerances, build_primitive_conversions,
 };
 
 use super::{Session, Tool};
@@ -192,17 +193,26 @@ impl Session {
     /// (polygon/star): commits whatever gesture `shape_pointer_down`
     /// began.
     pub(super) fn shape_pointer_up(&mut self, point: Point, constrain: bool) {
-        match self.tool {
-            Tool::Rectangle => {
-                self.rectangle.pointer_up(&self.document, point, constrain);
-            }
-            Tool::Ellipse => {
-                self.ellipse.pointer_up(&self.document, point, constrain);
-            }
-            Tool::PolygonStar => {
-                self.poly_star.pointer_up(&self.document, point);
-            }
-            Tool::Select | Tool::Pen | Tool::Node => {}
+        // A create-drag leaves the new shape as the one selected object
+        // (`specs/0003-primitive-shapes/specification.md`, acceptance
+        // criteria 1, 7, 11); every other outcome leaves the selection alone.
+        let created = match self.tool {
+            Tool::Rectangle => match self.rectangle.pointer_up(&self.document, point, constrain) {
+                RectPointerUpOutcome::Created(id) => Some(id),
+                _ => None,
+            },
+            Tool::Ellipse => match self.ellipse.pointer_up(&self.document, point, constrain) {
+                EllipsePointerUpOutcome::Created(id) => Some(id),
+                _ => None,
+            },
+            Tool::PolygonStar => match self.poly_star.pointer_up(&self.document, point) {
+                PolyStarPointerUpOutcome::Created(id) => Some(id),
+                _ => None,
+            },
+            Tool::Select | Tool::Pen | Tool::Node => None,
+        };
+        if let Some(id) = created {
+            self.selection.select_single(id);
         }
     }
 
