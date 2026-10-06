@@ -80,7 +80,7 @@ pub enum TransformGlyphKind {
 
 /// One of the Select tool's transform handles — this crate's own minimal
 /// shape (ADR 0011 §3: it cannot read `vecmanf-ui-core`'s
-/// `TransformHandle` directly), carrying only what drawing needs: where
+/// `EditHandle` directly), carrying only what drawing needs: where
 /// it is, which glyph vocabulary it uses, and whether it is the one
 /// currently being dragged (solid `--accent` fill instead of the idle
 /// hollow/transparent state, `docs/design-system.md`).

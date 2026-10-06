@@ -14,7 +14,7 @@ use crate::transform_commit::{MAX_COORDINATE_MM, commit_gesture};
 use crate::transform_drag::{
     ResizeOptions, StrokeScaling, is_polygon_or_star, pivot_for, resize_by_local_delta, rotate_by,
 };
-use crate::transform_handle_layout::{TransformHandle, is_corner};
+use crate::transform_handle_layout::{EditHandle, is_corner};
 use crate::transform_math::{local_delta_for_radius, local_delta_for_size};
 use vecmanf_document_core::PrimitiveSnapshot;
 
@@ -36,7 +36,7 @@ pub enum EntryKind {
     Size,
     /// One field: a polygon or star's outer radius, in millimetres
     /// (criterion 26).
-    Radius,
+    OuterRadius,
 }
 
 /// What a field edits.
@@ -54,7 +54,7 @@ pub struct EntryField {
     /// The visible label ("W", "H", "r"; empty for the angle, whose "°" is
     /// a fixed suffix).
     pub label: &'static str,
-    /// The accessible name ("Width", "Height", "Radius", "Angle").
+    /// The accessible name ("Width", "Height", "Outer radius", "Angle").
     pub accessible_name: &'static str,
     /// The text the field opens with: the live readout's rounded value.
     pub prefill: String,
@@ -100,7 +100,7 @@ pub struct TransformEntry {
     kind: EntryKind,
     start: ObjectSnapshot,
     start_box: OrientedBox,
-    handle: TransformHandle,
+    handle: EditHandle,
     /// Shift at the second press: the fixed point and the rotate pivot.
     shift: bool,
     /// Width and height are linked (Ctrl at the second press on a corner
@@ -172,7 +172,7 @@ impl TransformEntry {
         direction: ResizeDirection,
         shift: bool,
     ) -> Self {
-        let handle = TransformHandle::Rotate(direction);
+        let handle = EditHandle::Rotate(direction);
         Self {
             kind: EntryKind::Angle,
             start: object.clone(),
@@ -209,15 +209,15 @@ impl TransformEntry {
         stroke_scaling: StrokeScaling,
     ) -> Self {
         let (shift, ctrl) = modifiers;
-        let handle = TransformHandle::Resize(direction);
+        let handle = EditHandle::Resize(direction);
         let radius_entry = is_polygon_or_star(object);
         let editable = |extent: f64| extent > SIZE_EQUAL_EPSILON_MM;
         let (kind, fields) = if let Some(radius) = outer_radius(object).filter(|_| radius_entry) {
             (
-                EntryKind::Radius,
+                EntryKind::OuterRadius,
                 vec![EntryField {
                     label: "r",
-                    accessible_name: "Radius",
+                    accessible_name: "Outer radius",
                     prefill: format_mm(radius),
                     editable: editable(radius),
                     axis: FieldAxis::Radius,
@@ -273,7 +273,7 @@ impl TransformEntry {
     /// The handle the entry belongs to (it keeps its dragging look while
     /// the chip is open).
     #[must_use]
-    pub const fn handle(&self) -> TransformHandle {
+    pub const fn handle(&self) -> EditHandle {
         self.handle
     }
 
@@ -414,7 +414,7 @@ impl TransformEntry {
                 .map(|(_, value)| *value)
         };
         match self.handle {
-            TransformHandle::Rotate(_) => {
+            EditHandle::Rotate(_) => {
                 let Some(degrees) = target(FieldAxis::Angle) else {
                     return self.start.clone();
                 };
@@ -425,7 +425,7 @@ impl TransformEntry {
                     Angle::from_radians(change).normalized(),
                 )
             }
-            TransformHandle::Resize(direction) => {
+            EditHandle::Resize(direction) => {
                 let delta = if let Some(radius) = target(FieldAxis::Radius) {
                     local_delta_for_radius(self.start_value(FieldAxis::Radius), direction, radius)
                 } else {
@@ -449,7 +449,7 @@ impl TransformEntry {
                     },
                 )
             }
-            TransformHandle::Skew(_) | TransformHandle::Move => self.start.clone(),
+            EditHandle::Skew(_) | EditHandle::Move => self.start.clone(),
         }
     }
 

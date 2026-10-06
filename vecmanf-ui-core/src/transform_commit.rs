@@ -9,7 +9,7 @@ use vecmanf_document_core::{
 };
 
 use crate::transform_drag::StrokeScaling;
-use crate::transform_handle_layout::TransformHandle;
+use crate::transform_handle_layout::EditHandle;
 
 /// The largest coordinate or size (millimetres, 10 km) a drag may write.
 /// A pointer value beyond it — or NaN/infinite — is hostile or broken
@@ -22,19 +22,19 @@ pub(crate) const MAX_COORDINATE_MM: f64 = 1e7;
 /// typed entry's Enter).
 pub(crate) fn commit_gesture(
     document: &Document,
-    handle: TransformHandle,
+    handle: EditHandle,
     result: &ObjectSnapshot,
     stroke_scaling: StrokeScaling,
 ) {
     match handle {
-        TransformHandle::Resize(_) => commit_resize(document, result.id(), result, stroke_scaling),
-        TransformHandle::Rotate(_) => {
+        EditHandle::Resize(_) => commit_resize(document, result.id(), result, stroke_scaling),
+        EditHandle::Rotate(_) => {
             let _ = document.rotate_object(result);
         }
-        TransformHandle::Skew(_) => {
+        EditHandle::Skew(_) => {
             commit_resize(document, result.id(), result, StrokeScaling::Keep);
         }
-        TransformHandle::Move => {}
+        EditHandle::Move => {}
     }
 }
 

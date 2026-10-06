@@ -188,7 +188,7 @@ export interface LiveReadout {
 export interface TransformEntryField {
   /** Visible label ("W", "H", "r"; empty for the angle). */
   label: string;
-  /** Accessible name ("Width", "Height", "Radius", "Angle"). */
+  /** Accessible name ("Width", "Height", "Outer radius", "Angle"). */
   name: string;
   /** The text the field opens with. */
   prefill: string;

@@ -22,7 +22,7 @@ use crate::transform_drag::{DragOrigin, StrokeScaling, TransformDrag, is_polygon
 use crate::transform_entry::TransformEntry;
 pub use crate::transform_handle_layout::TransformHandleTolerances;
 use crate::transform_handle_layout::{
-    ALL_EIGHT, CORNERS_FOUR, HandleSpec, TransformHandle, hit_transform_handle, transform_handles,
+    ALL_EIGHT, CORNERS_FOUR, EditHandle, HandleSpec, hit_transform_handle, transform_handles,
 };
 
 mod entry;
@@ -99,7 +99,7 @@ pub struct SelectTool {
     /// press already grabbed, so double-clicking the outline of an object
     /// that is not selected yet (whose handles appear after the first click)
     /// still hands off.
-    last_press_handle: Option<TransformHandle>,
+    last_press_handle: Option<EditHandle>,
 }
 
 /// The handle kinds `object` shows (criteria 11, 37, 50): corner resize
@@ -158,8 +158,8 @@ impl SelectTool {
     #[must_use]
     pub fn side_rotate_revealed(&self, live_shift: bool) -> bool {
         match &self.drag {
-            SelectDrag::Moving { origin, .. } => origin.side_rotate_revealed,
-            SelectDrag::Transforming(drag) => drag.origin.side_rotate_revealed,
+            SelectDrag::Moving { origin, .. } => origin.shift_at_press,
+            SelectDrag::Transforming(drag) => drag.origin.shift_at_press,
             SelectDrag::None => self
                 .entry
                 .as_ref()
@@ -178,7 +178,7 @@ impl SelectTool {
         selection: &ObjectSelection,
         tolerances: TransformHandleTolerances,
         side_rotate: bool,
-    ) -> Vec<(TransformHandle, Point)> {
+    ) -> Vec<(EditHandle, Point)> {
         let Some(object) = sole_selected(objects, selection) else {
             return Vec::new();
         };
@@ -205,7 +205,7 @@ impl SelectTool {
         point: Point,
         tolerances: TransformHandleTolerances,
         shift: bool,
-    ) -> Option<(&'a ObjectSnapshot, OrientedBox, TransformHandle)> {
+    ) -> Option<(&'a ObjectSnapshot, OrientedBox, EditHandle)> {
         Self::query_handle(objects, selection, point, tolerances, shift, false)
     }
 
@@ -218,7 +218,7 @@ impl SelectTool {
         point: Point,
         tolerances: TransformHandleTolerances,
         shift: bool,
-    ) -> Option<(&'a ObjectSnapshot, OrientedBox, TransformHandle)> {
+    ) -> Option<(&'a ObjectSnapshot, OrientedBox, EditHandle)> {
         Self::query_handle(objects, selection, point, tolerances, shift, true)
     }
 
@@ -229,7 +229,7 @@ impl SelectTool {
         tolerances: TransformHandleTolerances,
         shift: bool,
         include_move: bool,
-    ) -> Option<(&'a ObjectSnapshot, OrientedBox, TransformHandle)> {
+    ) -> Option<(&'a ObjectSnapshot, OrientedBox, EditHandle)> {
         let object = sole_selected(objects, selection)?;
         let box_ = oriented_bounds(object);
         let handles = transform_handles(&box_, handle_spec_for(object, shift), &tolerances);
@@ -294,7 +294,7 @@ impl SelectTool {
         }
         let from_center = matches!(
             Self::hover_handle_at(objects, selection, point, handle_tolerances, shift),
-            Some((_, _, TransformHandle::Move))
+            Some((_, _, EditHandle::Move))
         );
 
         let Some(hit) = hit_test_object(objects, point, tolerance) else {
@@ -1040,7 +1040,7 @@ mod tests {
     fn resize_drag(
         document: &Document,
         id: NodeId,
-        wanted: TransformHandle,
+        wanted: EditHandle,
         to: Point,
         configure: impl FnOnce(&mut SelectTool),
     ) {
@@ -1088,12 +1088,12 @@ mod tests {
                     let objects = vec![before.clone()];
                     let mut selection = ObjectSelection::new();
                     selection.select_single(id);
-                    handle_pos(&objects, &selection, TransformHandle::Resize(direction))
+                    handle_pos(&objects, &selection, EditHandle::Resize(direction))
                 };
                 resize_drag(
                     &document,
                     id,
-                    TransformHandle::Resize(direction),
+                    EditHandle::Resize(direction),
                     at.translated(Vec2::new(6.0, 4.0)),
                     |_| {},
                 );
@@ -1120,7 +1120,7 @@ mod tests {
         resize_drag(
             &document,
             star,
-            TransformHandle::Resize(ResizeDirection::Ne),
+            EditHandle::Resize(ResizeDirection::Ne),
             Point::new(20.0, -20.0),
             |_| {},
         );
@@ -1137,7 +1137,7 @@ mod tests {
         resize_drag(
             &document,
             id,
-            TransformHandle::Resize(ResizeDirection::E),
+            EditHandle::Resize(ResizeDirection::E),
             Point::new(40.0, 5.0),
             on,
         );
@@ -1150,7 +1150,7 @@ mod tests {
         resize_drag(
             &document,
             id,
-            TransformHandle::Resize(ResizeDirection::E),
+            EditHandle::Resize(ResizeDirection::E),
             Point::new(-80.0, 5.0),
             on,
         );
@@ -1172,7 +1172,7 @@ mod tests {
         let se = handle_pos(
             &objects,
             &selection,
-            TransformHandle::Resize(ResizeDirection::Se),
+            EditHandle::Resize(ResizeDirection::Se),
         );
         tool.pointer_down(
             &objects,
@@ -1200,7 +1200,7 @@ mod tests {
         let se = handle_pos(
             &objects,
             &selection,
-            TransformHandle::Resize(ResizeDirection::Se),
+            EditHandle::Resize(ResizeDirection::Se),
         );
         tool.pointer_down(
             &objects,
@@ -1246,7 +1246,7 @@ mod tests {
             resize_drag(
                 &document,
                 id,
-                TransformHandle::Resize(ResizeDirection::Se),
+                EditHandle::Resize(ResizeDirection::Se),
                 Point::new(20.0, 20.0),
                 |t| t.set_stroke_scaling(mode),
             );
@@ -1320,7 +1320,7 @@ mod tests {
         assert_eq!(handles.len(), 8, "4 corners + 4 corner rotate, no edges");
         let (_, ne_position) = handles
             .iter()
-            .find(|(h, _)| matches!(h, TransformHandle::Resize(ResizeDirection::Ne)))
+            .find(|(h, _)| matches!(h, EditHandle::Resize(ResizeDirection::Ne)))
             .expect("Ne handle exists");
         tool.pointer_down(
             &objects,
@@ -1435,7 +1435,7 @@ mod tests {
         let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES, false);
         let (_, rotate_position) = handles
             .iter()
-            .find(|(h, _)| matches!(h, TransformHandle::Rotate(_)))
+            .find(|(h, _)| matches!(h, EditHandle::Rotate(_)))
             .expect("rotate handle exists");
         let outcome = tool.pointer_down(
             &objects,
@@ -1479,7 +1479,7 @@ mod tests {
         let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES, false);
         let (_, rotate_position) = handles
             .iter()
-            .find(|(h, _)| matches!(h, TransformHandle::Rotate(_)))
+            .find(|(h, _)| matches!(h, EditHandle::Rotate(_)))
             .expect("rotate handle exists");
         tool.pointer_down(
             &objects,
@@ -1541,7 +1541,7 @@ mod tests {
         let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES, false);
         let se = handles
             .iter()
-            .find(|(h, _)| matches!(h, TransformHandle::Resize(ResizeDirection::Se)))
+            .find(|(h, _)| matches!(h, EditHandle::Resize(ResizeDirection::Se)))
             .expect("Se handle")
             .1;
         let mut tool = SelectTool::new();
@@ -1577,7 +1577,7 @@ mod tests {
     fn handle_pos(
         objects: &[ObjectSnapshot],
         selection: &ObjectSelection,
-        wanted: TransformHandle,
+        wanted: EditHandle,
     ) -> Point {
         SelectTool::transform_handles(objects, selection, HANDLE_TOLERANCES, false)
             .into_iter()
@@ -1597,9 +1597,9 @@ mod tests {
         selection.select_single(id);
         let before = document.object(id);
         for wanted in [
-            TransformHandle::Rotate(ResizeDirection::Ne),
-            TransformHandle::Resize(ResizeDirection::Se),
-            TransformHandle::Resize(ResizeDirection::N),
+            EditHandle::Rotate(ResizeDirection::Ne),
+            EditHandle::Resize(ResizeDirection::Se),
+            EditHandle::Resize(ResizeDirection::N),
         ] {
             let at = handle_pos(&objects, &selection, wanted);
             let mut tool = SelectTool::new();
@@ -1627,11 +1627,7 @@ mod tests {
         let mut selection = ObjectSelection::new();
         selection.select_single(id);
         let mut tool = SelectTool::new();
-        let n = handle_pos(
-            &objects,
-            &selection,
-            TransformHandle::Resize(ResizeDirection::N),
-        );
+        let n = handle_pos(&objects, &selection, EditHandle::Resize(ResizeDirection::N));
         tool.pointer_down(
             &objects,
             &mut selection,
@@ -1673,11 +1669,7 @@ mod tests {
         selection.select_single(id);
         let mut tool = SelectTool::new();
         tool.set_stroke_scaling(StrokeScaling::Proportional);
-        let e = handle_pos(
-            &objects,
-            &selection,
-            TransformHandle::Resize(ResizeDirection::E),
-        );
+        let e = handle_pos(&objects, &selection, EditHandle::Resize(ResizeDirection::E));
         tool.pointer_down(
             &objects,
             &mut selection,
@@ -1712,11 +1704,7 @@ mod tests {
         selection.select_single(id);
         let mut tool = SelectTool::new();
         tool.set_stroke_scaling(StrokeScaling::Proportional);
-        let e = handle_pos(
-            &objects,
-            &selection,
-            TransformHandle::Resize(ResizeDirection::E),
-        );
+        let e = handle_pos(&objects, &selection, EditHandle::Resize(ResizeDirection::E));
         tool.pointer_down(
             &objects,
             &mut selection,
@@ -1758,7 +1746,7 @@ mod tests {
         let se = handle_pos(
             &objects,
             &selection,
-            TransformHandle::Resize(ResizeDirection::Se),
+            EditHandle::Resize(ResizeDirection::Se),
         );
         tool.pointer_down(
             &objects,
@@ -1800,7 +1788,7 @@ mod tests {
         let r = handle_pos(
             &objects,
             &selection,
-            TransformHandle::Rotate(ResizeDirection::Ne),
+            EditHandle::Rotate(ResizeDirection::Ne),
         );
         tool.pointer_down(
             &objects,
@@ -1856,7 +1844,7 @@ mod tests {
             let r = handle_pos(
                 &objects,
                 &selection,
-                TransformHandle::Rotate(ResizeDirection::Ne),
+                EditHandle::Rotate(ResizeDirection::Ne),
             );
             tool.pointer_down(
                 &objects,
@@ -1924,16 +1912,16 @@ mod tests {
         // The handles still work, from just outside as well.
         assert_eq!(
             handle_at(Point::new(10.0, 5.5)),
-            Some(TransformHandle::Resize(ResizeDirection::Se))
+            Some(EditHandle::Resize(ResizeDirection::Se))
         );
         assert_eq!(
             handle_at(Point::new(11.0, 6.5)),
-            Some(TransformHandle::Resize(ResizeDirection::Se))
+            Some(EditHandle::Resize(ResizeDirection::Se))
         );
         // And just inside a handle, within the thin inner band, too.
         assert_eq!(
             handle_at(Point::new(9.5, 5.0)),
-            Some(TransformHandle::Resize(ResizeDirection::Se))
+            Some(EditHandle::Resize(ResizeDirection::Se))
         );
     }
 
@@ -2009,15 +1997,15 @@ mod tests {
 
                 // The handles still win where they are.
                 let objects = vec![document.object(id).expect("exists")];
-                let at = |wanted: TransformHandle| {
+                let at = |wanted: EditHandle| {
                     SelectTool::transform_handles(&objects, &selection, wide, false)
                         .into_iter()
                         .find(|(h, _)| *h == wanted)
                         .expect("handle exists")
                         .1
                 };
-                let rotate = at(TransformHandle::Rotate(ResizeDirection::Ne));
-                let se = at(TransformHandle::Resize(ResizeDirection::Se));
+                let rotate = at(EditHandle::Rotate(ResizeDirection::Ne));
+                let se = at(EditHandle::Resize(ResizeDirection::Se));
                 let mut tool = SelectTool::new();
                 assert_eq!(
                     tool.pointer_down(&objects, &mut selection, rotate, TOLERANCE, wide, false),
@@ -2112,7 +2100,7 @@ mod tests {
         let ne = handle_pos(
             &objects,
             &selection,
-            TransformHandle::Resize(ResizeDirection::Ne),
+            EditHandle::Resize(ResizeDirection::Ne),
         );
         assert_eq!(ne, Point::new(10.0, -10.0));
         let mut tool = SelectTool::new();
@@ -2160,11 +2148,11 @@ mod tests {
         ];
         for (bad, include_rotate) in cases {
             for wanted in [
-                TransformHandle::Rotate(ResizeDirection::Ne),
-                TransformHandle::Resize(ResizeDirection::Se),
-                TransformHandle::Resize(ResizeDirection::E),
+                EditHandle::Rotate(ResizeDirection::Ne),
+                EditHandle::Resize(ResizeDirection::Se),
+                EditHandle::Resize(ResizeDirection::E),
             ] {
-                if matches!(wanted, TransformHandle::Rotate(_)) && !include_rotate {
+                if matches!(wanted, EditHandle::Rotate(_)) && !include_rotate {
                     continue;
                 }
                 let mut selection = ObjectSelection::new();
@@ -2198,7 +2186,7 @@ mod tests {
         let r = handle_pos(
             &objects,
             &selection,
-            TransformHandle::Rotate(ResizeDirection::Ne),
+            EditHandle::Rotate(ResizeDirection::Ne),
         );
         tool.pointer_down(
             &objects,

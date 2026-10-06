@@ -16,8 +16,8 @@ use vecmanf_document_core::{
     Vec2,
 };
 use vecmanf_ui_core::{
-    ALL_EIGHT, CORNERS_FOUR, HandleSpec, ResizeDirection, TransformHandle,
-    TransformHandleTolerances, hit_transform_handle, oriented_bounds, polygon_star_resize_factor,
+    ALL_EIGHT, CORNERS_FOUR, EditHandle, HandleSpec, ResizeDirection, TransformHandleTolerances,
+    hit_transform_handle, oriented_bounds, polygon_star_resize_factor,
     resize_anchor_local_position, resize_cursor_angle_degrees, resize_local_box,
     rotate_delta_angle, rotate_pivot, scaled_and_floored, stroke_or_radius_factor,
     transform_handles,
@@ -272,7 +272,7 @@ fn eight_resize_plus_corner_rotate_handles_at_the_corners_and_edge_midpoints() {
     };
     let handles = transform_handles(&b, spec, &tolerances(32.0, 1.0));
     assert_eq!(handles.len(), 12);
-    let at = |h: TransformHandle| handles.iter().find(|(k, _)| *k == h).unwrap().1;
+    let at = |h: EditHandle| handles.iter().find(|(k, _)| *k == h).unwrap().1;
     let expect = [
         (ResizeDirection::Nw, pt(0.0, 0.0)),
         (ResizeDirection::N, pt(20.0, 0.0)),
@@ -284,7 +284,7 @@ fn eight_resize_plus_corner_rotate_handles_at_the_corners_and_edge_midpoints() {
         (ResizeDirection::W, pt(0.0, 10.0)),
     ];
     for (d, want) in expect {
-        let got = at(TransformHandle::Resize(d));
+        let got = at(EditHandle::Resize(d));
         assert!(
             close(got.x, want.x) && close(got.y, want.y),
             "{d:?}: {got:?}"
@@ -292,7 +292,7 @@ fn eight_resize_plus_corner_rotate_handles_at_the_corners_and_edge_midpoints() {
     }
     // A corner rotate handle sits 32 away on the outward diagonal.
     let offset = 32.0 / 2.0_f64.sqrt();
-    let rotate = at(TransformHandle::Rotate(ResizeDirection::Se));
+    let rotate = at(EditHandle::Rotate(ResizeDirection::Se));
     assert!(
         close(rotate.x, 40.0 + offset) && close(rotate.y, 20.0 + offset),
         "corner rotate handle outside the Se corner: {rotate:?}"
@@ -314,7 +314,7 @@ fn polygon_star_handle_set_has_four_corners_and_the_corner_rotate_handles_only()
         "four corners and four corner rotate handles"
     );
     for (kind, _) in &handles {
-        if let TransformHandle::Resize(d) = kind {
+        if let EditHandle::Resize(d) = kind {
             assert!(
                 matches!(
                     d,
@@ -347,8 +347,8 @@ proptest! {
             prop_assert!((want.x - pb.x).abs() < 1e-6 && (want.y - pb.y).abs() < 1e-6);
         }
         // The top side rotate handle sits `offset` from the (rotated) top-edge handle along local up.
-        let top = b.iter().find(|(k, _)| *k == TransformHandle::Resize(ResizeDirection::N)).unwrap().1;
-        let rotate = b.iter().find(|(k, _)| *k == TransformHandle::Rotate(ResizeDirection::N)).unwrap().1;
+        let top = b.iter().find(|(k, _)| *k == EditHandle::Resize(ResizeDirection::N)).unwrap().1;
+        let rotate = b.iter().find(|(k, _)| *k == EditHandle::Rotate(ResizeDirection::N)).unwrap().1;
         let dist = (top.x - rotate.x).hypot(top.y - rotate.y);
         prop_assert!((dist - offset).abs() < 1e-6, "offset {dist} vs {offset}");
         // direction = local up = (sin a, -cos a)
@@ -365,12 +365,12 @@ fn hit_test_picks_the_nearest_handle_within_tolerance_and_none_outside() {
     let hit = |x: f64, y: f64| hit_transform_handle(&handles, &b, pt(x, y), &tol, false);
     assert_eq!(
         hit(40.5, 20.5),
-        Some(TransformHandle::Resize(ResizeDirection::Se))
+        Some(EditHandle::Resize(ResizeDirection::Se))
     );
     // The top side rotate handle (revealed by Shift) sits 5 above the top edge.
     assert_eq!(
         hit(20.0, -4.6),
-        Some(TransformHandle::Rotate(ResizeDirection::N))
+        Some(EditHandle::Rotate(ResizeDirection::N))
     );
     assert_eq!(hit(25.0, 5.0), None);
     assert_eq!(
@@ -389,14 +389,8 @@ fn rotate_and_top_edge_hit_areas_at_the_documented_radii_do_not_overlap() {
     let tol = tolerances(32.0, 16.0);
     let handles = transform_handles(&b, all_handles_spec(), &tol);
     let hit = |y: f64| hit_transform_handle(&handles, &b, pt(50.0, y), &tol, false);
-    assert_eq!(
-        hit(-15.0),
-        Some(TransformHandle::Resize(ResizeDirection::N))
-    );
-    assert_eq!(
-        hit(-17.0),
-        Some(TransformHandle::Rotate(ResizeDirection::N))
-    );
+    assert_eq!(hit(-15.0), Some(EditHandle::Resize(ResizeDirection::N)));
+    assert_eq!(hit(-17.0), Some(EditHandle::Rotate(ResizeDirection::N)));
 }
 
 // ---------------------------------------------------------------------

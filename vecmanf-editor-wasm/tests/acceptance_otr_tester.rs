@@ -2359,7 +2359,7 @@ fn ac26_polygon_and_star_open_a_single_radius_field_and_scale_about_the_centre()
             assert_eq!(e.fields.len(), 1);
             assert_eq!(
                 (e.fields[0].label, e.fields[0].accessible_name),
-                ("r", "Radius")
+                ("r", "Outer radius")
             );
             assert!(near(num(&e.fields[0].prefill), 20.0, 0.051));
             assert!(!e.linked);

@@ -178,7 +178,7 @@ impl TransformEntryView {
             .unwrap_or_default()
     }
 
-    /// Field `index`'s accessible name ("Width", "Height", "Radius", "Angle").
+    /// Field `index`'s accessible name ("Width", "Height", "Outer radius", "Angle").
     #[must_use]
     pub fn field_name(&self, index: u32) -> String {
         self.field(index)

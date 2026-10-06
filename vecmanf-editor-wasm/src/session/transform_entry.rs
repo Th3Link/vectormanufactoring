@@ -9,7 +9,7 @@
 //! and `SelectTool::pointer_down`.
 
 use vecmanf_document_core::Point;
-use vecmanf_ui_core::{EntryKind, EntryOutcome, SelectTool, TransformEntry, TransformHandle};
+use vecmanf_ui_core::{EditHandle, EntryKind, EntryOutcome, SelectTool, TransformEntry};
 
 use super::{Session, Tool};
 
@@ -76,9 +76,9 @@ impl Session {
         // sits 16 px out and is 12 px deep, so the glyphs reach 22 px.
         let skew_beyond = matches!(
             entry.handle(),
-            TransformHandle::Resize(direction)
+            EditHandle::Resize(direction)
                 if handles.iter().any(|(h, _)| matches!(
-                    h, TransformHandle::Skew(side) if side.direction() == direction
+                    h, EditHandle::Skew(side) if side.direction() == direction
                 ))
         );
         let box_ = entry.start_box();
@@ -86,7 +86,7 @@ impl Session {
             kind: match entry.kind() {
                 EntryKind::Angle => "angle",
                 EntryKind::Size => "size",
-                EntryKind::Radius => "radius",
+                EntryKind::OuterRadius => "radius",
             },
             fields: entry
                 .fields()

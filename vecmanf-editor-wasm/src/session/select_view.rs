@@ -10,7 +10,7 @@ use vecmanf_render_core::{
     SelectDecorationInput, TransformDecorationInput, TransformGlyphKind, TransformHandleGlyph,
 };
 use vecmanf_ui_core::{
-    SelectTool, Side, TransformHandle, format_degrees, is_corner, is_drawn_handle, oriented_bounds,
+    EditHandle, SelectTool, Side, format_degrees, is_corner, is_drawn_handle, oriented_bounds,
     resize_cursor_angle_degrees, skew_cursor_angle_degrees,
 };
 
@@ -81,11 +81,7 @@ impl Session {
     fn select_hovered_handle(
         &self,
         objects: &[ObjectSnapshot],
-    ) -> Option<(
-        ObjectSnapshot,
-        vecmanf_ui_core::OrientedBox,
-        TransformHandle,
-    )> {
+    ) -> Option<(ObjectSnapshot, vecmanf_ui_core::OrientedBox, EditHandle)> {
         if self.select.dragging_handle().is_some() || self.select.entry().is_some() {
             return None;
         }
@@ -131,28 +127,28 @@ impl Session {
         let box_ = oriented_bounds(object);
         // The centre handle hides while a resize, rotate or skew drag runs
         // or an entry is open: the pivot marker may live there.
-        let hide_center = highlighted.is_some_and(|handle| handle != TransformHandle::Move);
+        let hide_center = highlighted.is_some_and(|handle| handle != EditHandle::Move);
         let (sin, cos) = box_.angle.as_radians().sin_cos();
         let handles =
             SelectTool::transform_handles(&objects, &self.selection, tolerances, side_rotate)
                 .into_iter()
                 .filter(|(handle, _)| {
                     is_drawn_handle(*handle, &box_, &tolerances)
-                        && !(hide_center && *handle == TransformHandle::Move)
+                        && !(hide_center && *handle == EditHandle::Move)
                 })
                 .map(|(handle, position)| TransformHandleGlyph {
                     position,
                     kind: match handle {
-                        TransformHandle::Resize(_) => TransformGlyphKind::Resize,
-                        TransformHandle::Rotate(_) => TransformGlyphKind::Rotate,
-                        TransformHandle::Skew(side) => TransformGlyphKind::Skew {
+                        EditHandle::Resize(_) => TransformGlyphKind::Resize,
+                        EditHandle::Rotate(_) => TransformGlyphKind::Rotate,
+                        EditHandle::Skew(side) => TransformGlyphKind::Skew {
                             direction: if side.skews_along_u() {
                                 Vec2::new(cos, sin)
                             } else {
                                 Vec2::new(-sin, cos)
                             },
                         },
-                        TransformHandle::Move => TransformGlyphKind::Move,
+                        EditHandle::Move => TransformGlyphKind::Move,
                     },
                     dragging: highlighted == Some(handle),
                     hovered: hovered == Some(handle),
@@ -181,7 +177,7 @@ impl Session {
 
     /// The handle the cursor and hint describe: the one being dragged, else
     /// the one under the pointer.
-    fn select_cursor_handle(&self, objects: &[ObjectSnapshot]) -> Option<TransformHandle> {
+    fn select_cursor_handle(&self, objects: &[ObjectSnapshot]) -> Option<EditHandle> {
         self.select.dragging_handle().or_else(|| {
             self.select_hovered_handle(objects)
                 .map(|(_, _, handle)| handle)
@@ -212,17 +208,17 @@ impl Session {
             _ => Angle::from_radians(0.0),
         };
         match self.select_cursor_handle(&objects) {
-            Some(TransformHandle::Rotate(_)) => "rotate".to_string(),
-            Some(TransformHandle::Resize(direction)) => {
+            Some(EditHandle::Rotate(_)) => "rotate".to_string(),
+            Some(EditHandle::Resize(direction)) => {
                 format!(
                     "resize:{:.1}",
                     resize_cursor_angle_degrees(direction, rotation)
                 )
             }
-            Some(TransformHandle::Skew(side)) => {
+            Some(EditHandle::Skew(side)) => {
                 format!("skew:{:.1}", skew_cursor_angle_degrees(side, rotation))
             }
-            Some(TransformHandle::Move) => "move".to_string(),
+            Some(EditHandle::Move) => "move".to_string(),
             None => "default".to_string(),
         }
     }
@@ -247,13 +243,13 @@ impl Session {
                 if matches!(p.shape, Shape::Polygon { .. } | Shape::Star { .. })
         );
         match handle {
-            TransformHandle::Resize(direction) if !is_corner(direction) => "resize-edge",
-            TransformHandle::Resize(_) if uniform => "resize-corner-uniform",
-            TransformHandle::Resize(_) => "resize-corner",
-            TransformHandle::Rotate(direction) if is_corner(direction) => "rotate-corner",
-            TransformHandle::Rotate(_) => "rotate-side",
-            TransformHandle::Skew(_) => "skew",
-            TransformHandle::Move => "move",
+            EditHandle::Resize(direction) if !is_corner(direction) => "resize-edge",
+            EditHandle::Resize(_) if uniform => "resize-corner-uniform",
+            EditHandle::Resize(_) => "resize-corner",
+            EditHandle::Rotate(direction) if is_corner(direction) => "rotate-corner",
+            EditHandle::Rotate(_) => "rotate-side",
+            EditHandle::Skew(_) => "skew",
+            EditHandle::Move => "move",
         }
         .to_string()
     }
@@ -272,7 +268,7 @@ impl Session {
         let anchor = self.pointer_position?;
         let handle = self.select.dragging_handle()?;
         let text = match handle {
-            TransformHandle::Skew(side) => {
+            EditHandle::Skew(side) => {
                 let angle = self.select.live_skew_angle(
                     anchor,
                     self.select_shift_held,
@@ -280,11 +276,11 @@ impl Session {
                 )?;
                 skew_readout(side, angle.as_radians().to_degrees())
             }
-            TransformHandle::Rotate(_) => {
+            EditHandle::Rotate(_) => {
                 let live = self.select_live_transform()?;
                 format_degrees(live.rotation().as_radians().to_degrees())
             }
-            TransformHandle::Resize(_) => match &self.select_live_transform()? {
+            EditHandle::Resize(_) => match &self.select_live_transform()? {
                 ObjectSnapshot::Primitive(p)
                     if matches!(p.shape, Shape::Polygon { .. } | Shape::Star { .. }) =>
                 {
@@ -298,7 +294,7 @@ impl Session {
                     format!("{:.1} × {:.1} mm", b.width(), b.height())
                 }
             },
-            TransformHandle::Move => return None,
+            EditHandle::Move => return None,
         };
         Some(super::shapes::LiveReadout { text, anchor })
     }
@@ -417,7 +413,7 @@ mod tests {
             false,
         )
         .into_iter()
-        .find(|(h, _)| matches!(h, TransformHandle::Rotate(_)))
+        .find(|(h, _)| matches!(h, EditHandle::Rotate(_)))
         .expect("rotate handle")
         .1;
         session.pointer_down(handle, false);
@@ -465,12 +461,7 @@ mod tests {
             false,
         )
         .into_iter()
-        .find(|(h, _)| {
-            matches!(
-                h,
-                TransformHandle::Resize(vecmanf_ui_core::ResizeDirection::N)
-            )
-        })
+        .find(|(h, _)| matches!(h, EditHandle::Resize(vecmanf_ui_core::ResizeDirection::N)))
         .expect("N handle")
         .1;
         session.pointer_hover(n_handle, false, false);
@@ -487,7 +478,7 @@ mod tests {
             false,
         )
         .into_iter()
-        .find(|(h, _)| matches!(h, TransformHandle::Rotate(_)))
+        .find(|(h, _)| matches!(h, EditHandle::Rotate(_)))
         .expect("rotate handle")
         .1;
         session.pointer_hover(rotate_handle, false, false);

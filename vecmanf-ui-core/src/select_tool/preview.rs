@@ -11,19 +11,19 @@ use crate::oriented_box::OrientedBox;
 use crate::skew_math::skew_frame;
 use crate::transform_drag::pivot_for;
 use crate::transform_entry::TransformEntry;
-use crate::transform_handle_layout::TransformHandle;
+use crate::transform_handle_layout::EditHandle;
 
 impl SelectTool {
     /// Which handle is currently being dragged, for the renderer's "solid
     /// fill while dragging" state and the cursor (`docs/design-system.md`).
     /// The centre handle counts while a move that started on it runs.
     #[must_use]
-    pub fn dragging_handle(&self) -> Option<TransformHandle> {
+    pub fn dragging_handle(&self) -> Option<EditHandle> {
         match &self.drag {
             SelectDrag::Transforming(drag) => Some(drag.handle),
             SelectDrag::Moving {
                 from_center: true, ..
-            } => Some(TransformHandle::Move),
+            } => Some(EditHandle::Move),
             SelectDrag::Moving { .. } | SelectDrag::None => None,
         }
     }
@@ -52,7 +52,7 @@ impl SelectTool {
     pub fn hover_pivot(
         object: &ObjectSnapshot,
         box_: &OrientedBox,
-        handle: TransformHandle,
+        handle: EditHandle,
         shift: bool,
     ) -> Option<Point> {
         pivot_for(handle, object, box_, shift)
@@ -113,7 +113,7 @@ impl SelectTool {
         let SelectDrag::Transforming(drag) = &self.drag else {
             return None;
         };
-        let TransformHandle::Skew(side) = drag.handle else {
+        let EditHandle::Skew(side) = drag.handle else {
             return None;
         };
         let frame = skew_frame(&drag.start_box, side, shift);

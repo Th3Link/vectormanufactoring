@@ -11,7 +11,7 @@ use super::{SelectDoubleClickOutcome, SelectDrag, SelectTool, sole_selected};
 use crate::hit_test_object::hit_test_object;
 use crate::object_selection::ObjectSelection;
 use crate::transform_entry::{EntryOutcome, TransformEntry};
-use crate::transform_handle_layout::{TransformHandle, TransformHandleTolerances};
+use crate::transform_handle_layout::{EditHandle, TransformHandleTolerances};
 
 impl SelectTool {
     /// The open numeric entry, if any.
@@ -73,17 +73,17 @@ impl SelectTool {
                 .filter(|(_, _, handle)| first_press_handle == Some(*handle))
         {
             let entry = match handle {
-                TransformHandle::Rotate(direction) => {
+                EditHandle::Rotate(direction) => {
                     Some(TransformEntry::for_rotate(object, &box_, direction, shift))
                 }
-                TransformHandle::Resize(direction) => Some(TransformEntry::for_resize(
+                EditHandle::Resize(direction) => Some(TransformEntry::for_resize(
                     object,
                     &box_,
                     direction,
                     (shift, ctrl),
                     self.stroke_scaling,
                 )),
-                TransformHandle::Skew(_) | TransformHandle::Move => None,
+                EditHandle::Skew(_) | EditHandle::Move => None,
             };
             return match entry {
                 Some(entry) => {

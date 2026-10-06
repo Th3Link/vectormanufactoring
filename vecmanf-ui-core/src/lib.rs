@@ -73,7 +73,7 @@ pub use transform_entry::{
     parse_entry_number,
 };
 pub use transform_handle_layout::{
-    ALL_EIGHT, CORNERS_FOUR, HandleSpec, Side, TransformHandle, hit_transform_handle, is_corner,
+    ALL_EIGHT, CORNERS_FOUR, EditHandle, HandleSpec, Side, hit_transform_handle, is_corner,
     is_drawn_handle, resize_cursor_angle_degrees, resize_handle_local_position,
     skew_cursor_angle_degrees, transform_handles,
 };

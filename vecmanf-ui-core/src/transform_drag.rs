@@ -16,7 +16,7 @@ use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;
 use crate::skew_math::{skew_angle, skew_factor, skew_frame};
 use crate::transform_commit::{commit_gesture, sane_or};
-use crate::transform_handle_layout::{Side, TransformHandle};
+use crate::transform_handle_layout::{EditHandle, Side};
 use crate::transform_math::{
     resize_anchor_local_position, resize_local_box, rotate_delta_angle, rotate_pivot,
     scaled_and_floored, stroke_or_radius_factor,
@@ -69,18 +69,19 @@ pub(crate) struct DragOrigin {
     pub(crate) down_at: Point,
     dead_zone_mm: f64,
     passed: bool,
-    /// Whether the four side rotate handles were showing at the press: the
-    /// handle set is frozen for the whole drag (criterion 6).
-    pub(crate) side_rotate_revealed: bool,
+    /// Whether Shift was held at the press. It reveals the four side rotate
+    /// handles, a set frozen for the whole drag (criterion 6), and later
+    /// inverts a corner-radius link (`specs/rectangle-corner-radii/`).
+    pub(crate) shift_at_press: bool,
 }
 
 impl DragOrigin {
-    pub(crate) const fn new(down_at: Point, dead_zone_mm: f64, side_rotate_revealed: bool) -> Self {
+    pub(crate) const fn new(down_at: Point, dead_zone_mm: f64, shift_at_press: bool) -> Self {
         Self {
             down_at,
             dead_zone_mm,
             passed: false,
-            side_rotate_revealed,
+            shift_at_press,
         }
     }
 
@@ -111,7 +112,7 @@ pub(crate) struct TransformDrag {
     pub(crate) origin: DragOrigin,
     pub(crate) start: ObjectSnapshot,
     pub(crate) start_box: OrientedBox,
-    pub(crate) handle: TransformHandle,
+    pub(crate) handle: EditHandle,
     /// The tool's [`StrokeScaling`] as of the press: a drag uses it for
     /// its whole duration, so a toggle mid-drag applies from the next drag
     /// (AC 28 of slice 5).
@@ -127,7 +128,7 @@ impl TransformDrag {
     pub(crate) fn resolve(&self, current: Point, shift: bool, ctrl: bool) -> ObjectSnapshot {
         let (start, start_box, down_at) = (&self.start, &self.start_box, self.origin.down_at);
         match self.handle {
-            TransformHandle::Resize(direction) => {
+            EditHandle::Resize(direction) => {
                 // `f64::max`/`clamp` swallow a NaN (turning it into 0 or an
                 // edge), so a non-finite pointer must be refused first.
                 let local_delta = local_delta_of(start_box, down_at, current);
@@ -146,7 +147,7 @@ impl TransformDrag {
                     },
                 )
             }
-            TransformHandle::Rotate(direction) => {
+            EditHandle::Rotate(direction) => {
                 let pivot = rotate_pivot(start_box, direction, shift);
                 rotate_by(
                     start,
@@ -154,21 +155,21 @@ impl TransformDrag {
                     rotate_delta_angle(pivot, down_at, current, ctrl),
                 )
             }
-            TransformHandle::Skew(side) => skew_by_angle(
+            EditHandle::Skew(side) => skew_by_angle(
                 start,
                 start_box,
                 side,
                 shift,
                 skew_angle(start_box, side, down_at, current, shift, ctrl),
             ),
-            TransformHandle::Move => start.clone(),
+            EditHandle::Move => start.clone(),
         }
     }
 
     /// The skew angle of the drag at `current` (the readout's value), for a
     /// skew drag.
     pub(crate) fn skew_angle_at(&self, current: Point, shift: bool, ctrl: bool) -> Option<Angle> {
-        let TransformHandle::Skew(side) = self.handle else {
+        let EditHandle::Skew(side) = self.handle else {
             return None;
         };
         Some(skew_angle(
@@ -198,13 +199,13 @@ impl TransformDrag {
 /// [`rotate_pivot`]; a skew about the fixed edge's midpoint or, under Shift,
 /// the center. `None` for the centre move handle.
 pub(crate) fn pivot_for(
-    handle: TransformHandle,
+    handle: EditHandle,
     object: &ObjectSnapshot,
     box_: &OrientedBox,
     shift: bool,
 ) -> Option<Point> {
     match handle {
-        TransformHandle::Resize(direction) => {
+        EditHandle::Resize(direction) => {
             let local = if is_polygon_or_star(object) {
                 box_.local_center()
             } else {
@@ -212,9 +213,9 @@ pub(crate) fn pivot_for(
             };
             Some(box_.to_document(local))
         }
-        TransformHandle::Rotate(direction) => Some(rotate_pivot(box_, direction, shift)),
-        TransformHandle::Skew(side) => Some(skew_frame(box_, side, shift).fixed_point),
-        TransformHandle::Move => None,
+        EditHandle::Rotate(direction) => Some(rotate_pivot(box_, direction, shift)),
+        EditHandle::Skew(side) => Some(skew_frame(box_, side, shift).fixed_point),
+        EditHandle::Move => None,
     }
 }
 
