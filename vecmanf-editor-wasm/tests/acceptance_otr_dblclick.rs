@@ -10,7 +10,7 @@
 
 use vecmanf_document_core::{
     AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, Point, PointCount,
-    RectBounds, StarFrame, pack,
+    RectBounds, StarFrame, pack, unpack,
 };
 use vecmanf_editor_wasm::{Session, Tool};
 
@@ -401,4 +401,49 @@ fn a_drag_then_a_press_at_the_old_spot_does_not_open_an_entry() {
         s.transform_entry().is_none(),
         "entry opened after a completed drag"
     );
+}
+
+/// `unified-object-editing` criterion 31 ("as before"): double-clicking a
+/// polygon that was converted to a path, on a segment, hands off to the Node
+/// tool from the Select tool and writes nothing: the hand-off does not insert a node, neither on
+/// the first press nor on the withheld second one. The same holds on
+/// `origin/main`, where `select_double_click` only switched the tool.
+#[test]
+fn double_click_on_a_converted_polygons_segment_hands_off_without_inserting_a_node() {
+    let mut s = open(&polygon_doc());
+    // Select the polygon at its top vertex, then convert it.
+    click(&mut s, pt(70.0, 20.0));
+    s.convert_selected_to_paths();
+    let after_conversion = bytes(&s);
+    let nodes = |s: &Session| {
+        let d = unpack(3, &bytes(s)).unwrap();
+        d.object_ids()
+            .iter()
+            .filter_map(|id| d.object(*id))
+            .map(|o| match o {
+                vecmanf_document_core::ObjectSnapshot::Path(p) => p.anchors.len(),
+                vecmanf_document_core::ObjectSnapshot::Primitive(_) => 0,
+            })
+            .sum::<usize>()
+    };
+    assert_eq!(nodes(&s), 5, "a five-point polygon becomes five anchors");
+
+    // The midpoint of the segment between the first two anchors.
+    let d = unpack(3, &after_conversion).unwrap();
+    let vecmanf_document_core::ObjectSnapshot::Path(path) = d.object(d.object_ids()[0]).unwrap()
+    else {
+        panic!("converted to a path");
+    };
+    let (a, b) = (path.anchors[0].point, path.anchors[1].point);
+    let mid = pt(f64::midpoint(a.x, b.x), f64::midpoint(a.y, b.y));
+
+    // The conversion leaves the Node tool active; back in the Select tool the
+    // double-click is the hand-off under test.
+    assert_eq!(s.tool(), Tool::Node, "conversion activates the Node tool");
+    s.set_tool(Tool::Select);
+    let hint = dbl(&mut s, mid, mid, false, false);
+    assert!(!hint, "a path gives no edit hint");
+    assert_eq!(s.tool(), Tool::Node, "the Node tool is active");
+    assert_eq!(nodes(&s), 5, "no node was inserted");
+    assert_eq!(bytes(&s), after_conversion, "nothing was written");
 }
