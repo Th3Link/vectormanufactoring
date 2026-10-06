@@ -252,14 +252,15 @@ impl Document {
         Ok(())
     }
 
-    /// Resizes a rectangle's bounding box, corner radius and stroke
-    /// width together as **one commit** (`specs/0005-object-transform/
+    /// Resizes a rectangle's bounding box, corner radius and (optionally)
+    /// stroke width together as **one commit** (`specs/0005-object-transform/
     /// adrs.md`'s resize-writes table: "frame, `corner_radius` (rect),
     /// `stroke_width`" — a Select-tool resize-handle drag, acceptance
     /// criteria 8, 9). `vecmanf-ui-core` computes all three values
     /// (including the local-frame mapping for a rotated object and the
     /// √(sx·sy) stroke/radius factor) before calling this — this method
-    /// is purely "write what was computed", the same split
+    /// `stroke_width: None` leaves the stored stroke width untouched.
+    /// This method is purely "write what was computed", the same split
     /// [`Document::set_rect_bounds`] already follows for a plain resize.
     ///
     /// # Errors
@@ -270,12 +271,17 @@ impl Document {
         id: NodeId,
         bounds: RectBounds,
         corner_radius: Length,
-        stroke_width: Length,
+        stroke_width: Option<Length>,
     ) -> Result<(), ShapeEditError> {
         let meta = self.require_shape(id, SHAPE_RECT)?;
         shape_codec::write_rect_bounds(&meta, bounds);
-        shape_codec::write_corner_radius(&meta, corner_radius);
-        crate::path_codec::write_stroke_width(&meta, stroke_width.as_mm());
+        // An unchanged radius is not rewritten (a radius of 0 scales to
+        // 0): an LWW rewrite of an unchanged value would be a new
+        // operation that could beat a concurrent radius edit.
+        if shape_codec::read_corner_radius(&meta) != Some(corner_radius) {
+            shape_codec::write_corner_radius(&meta, corner_radius);
+        }
+        write_stroke_width_if_changed(&meta, stroke_width);
         self.commit_with_label("resize_rect");
         Ok(())
     }
@@ -290,11 +296,11 @@ impl Document {
         &self,
         id: NodeId,
         frame: EllipseFrame,
-        stroke_width: Length,
+        stroke_width: Option<Length>,
     ) -> Result<(), ShapeEditError> {
         let meta = self.require_shape(id, SHAPE_ELLIPSE)?;
         shape_codec::write_ellipse_frame(&meta, frame);
-        crate::path_codec::write_stroke_width(&meta, stroke_width.as_mm());
+        write_stroke_width_if_changed(&meta, stroke_width);
         self.commit_with_label("resize_ellipse");
         Ok(())
     }
@@ -310,11 +316,11 @@ impl Document {
         &self,
         id: NodeId,
         frame: StarFrame,
-        stroke_width: Length,
+        stroke_width: Option<Length>,
     ) -> Result<(), ShapeEditError> {
         let meta = self.require_polygon_or_star(id)?;
         shape_codec::write_star_frame(&meta, frame);
-        crate::path_codec::write_stroke_width(&meta, stroke_width.as_mm());
+        write_stroke_width_if_changed(&meta, stroke_width);
         self.commit_with_label("resize_star_frame");
         Ok(())
     }
@@ -454,6 +460,20 @@ impl Document {
     }
 }
 
+/// Writes `stroke_width` only if it is `Some` and differs from the stored
+/// value. `None` leaves the key untouched (a resize with "Scale stroke
+/// width" off: `specs/0005-object-transform/adrs.md`, 2026-10-06 — a
+/// peer's concurrent stroke edit must survive); an equal `Some` is not
+/// rewritten either (an LWW rewrite of an unchanged value is a new
+/// operation).
+pub(crate) fn write_stroke_width_if_changed(meta: &loro::LoroMap, stroke_width: Option<Length>) {
+    if let Some(width) = stroke_width
+        && crate::path_codec::read_stroke_width(meta) != width
+    {
+        crate::path_codec::write_stroke_width(meta, width.as_mm());
+    }
+}
+
 fn tree_id_of(id: NodeId) -> loro::TreeID {
     loro::TreeID::new(id.peer, id.counter)
 }
@@ -534,7 +554,7 @@ mod tests {
                 id,
                 rect_bounds(0.0, 0.0, 20.0, 20.0),
                 Length::from_mm(2.0),
-                Length::from_mm(0.5),
+                Some(Length::from_mm(0.5)),
             )
             .expect("resize");
         let after = document.loro().len_changes();
@@ -568,7 +588,7 @@ mod tests {
                     rx: Length::from_mm(10.0),
                     ry: Length::from_mm(8.0),
                 },
-                Length::from_mm(0.6),
+                Some(Length::from_mm(0.6)),
             )
             .expect("resize");
         let snapshot = document.primitive(id).expect("exists");
@@ -597,7 +617,7 @@ mod tests {
             ..frame
         };
         document
-            .resize_star_frame(id, new_frame, Length::from_mm(0.4))
+            .resize_star_frame(id, new_frame, Some(Length::from_mm(0.4)))
             .expect("resize");
         let snapshot = document.primitive(id).expect("exists");
         let Shape::Star {
@@ -613,6 +633,102 @@ mod tests {
         assert!((snapshot.stroke_width.as_mm() - 0.4).abs() < 1e-9);
     }
 
+    /// Two peers open the same one-rectangle document; returns them and
+    /// the rectangle's id.
+    fn two_peers() -> (Document, Document, NodeId) {
+        let a = Document::new(1);
+        let id = a.create_rect(rect_bounds(0.0, 0.0, 10.0, 10.0));
+        let b = Document::from_loro_snapshot(2, &a.export_loro_snapshot().expect("snapshot"))
+            .expect("peer B opens it");
+        (a, b, id)
+    }
+
+    fn merge(a: &Document, b: &Document) {
+        let from_b = b.loro().export(loro::ExportMode::all_updates()).expect("B");
+        let from_a = a.loro().export(loro::ExportMode::all_updates()).expect("A");
+        a.loro().import(&from_b).expect("A merges B");
+        b.loro().import(&from_a).expect("B merges A");
+    }
+
+    fn set_stroke_directly(doc: &Document, id: NodeId, mm: f64) {
+        let tree = doc.loro().get_tree(OBJECTS_TREE);
+        let meta = tree.get_meta(tree_id_of(id)).expect("meta");
+        meta.insert(crate::path_codec::KEY_STROKE_WIDTH, mm)
+            .expect("insert");
+        doc.commit_with_label("test: peer stroke edit");
+    }
+
+    /// AC 8/29 + adrs.md: a resize with the stroke width `None` does not
+    /// write the key at all, so a peer's concurrent stroke edit survives
+    /// — also when the peer's value differs from the drag-start snapshot.
+    #[test]
+    fn resize_with_no_stroke_width_leaves_a_peers_concurrent_stroke_edit_alone() {
+        let (a, b, id) = two_peers();
+        a.resize_rect(
+            id,
+            rect_bounds(0.0, 0.0, 30.0, 10.0),
+            Length::from_mm(0.0),
+            None,
+        )
+        .expect("A resizes, switch off");
+        set_stroke_directly(&b, id, 2.0);
+        merge(&a, &b);
+        for peer in [&a, &b] {
+            let p = peer.primitive(id).expect("exists");
+            assert!(
+                (p.stroke_width.as_mm() - 2.0).abs() < 1e-12,
+                "peer edit kept"
+            );
+            let Shape::Rect { bounds, .. } = p.shape else {
+                panic!("rect");
+            };
+            assert!((bounds.width.as_mm() - 30.0).abs() < 1e-12, "resize kept");
+        }
+    }
+
+    /// With the switch on, a `Some` equal to the stored width (a stroke the
+    /// resize did not change) and a radius equal to the stored one are not
+    /// rewritten either — so peers' concurrent edits to them survive.
+    #[test]
+    fn resize_does_not_rewrite_an_unchanged_stroke_width_or_corner_radius() {
+        let (a, b, id) = two_peers();
+        a.resize_rect(
+            id,
+            rect_bounds(0.0, 0.0, 30.0, 10.0),
+            Length::from_mm(0.0),
+            Some(Length::from_mm(crate::path_codec::DEFAULT_STROKE_WIDTH_MM)),
+        )
+        .expect("A resizes");
+        set_stroke_directly(&b, id, 2.0);
+        b.set_corner_radius(&[id], Length::from_mm(3.0))
+            .expect("B radius");
+        merge(&a, &b);
+        for peer in [&a, &b] {
+            let p = peer.primitive(id).expect("exists");
+            assert!((p.stroke_width.as_mm() - 2.0).abs() < 1e-12);
+            let Shape::Rect { corner_radius, .. } = p.shape else {
+                panic!("rect");
+            };
+            assert!((corner_radius.as_mm() - 3.0).abs() < 1e-12);
+        }
+    }
+
+    /// A changed width is written (switch on).
+    #[test]
+    fn resize_with_a_new_stroke_width_writes_it() {
+        let document = Document::new(1);
+        let id = document.create_rect(rect_bounds(0.0, 0.0, 10.0, 10.0));
+        document
+            .resize_rect(
+                id,
+                rect_bounds(0.0, 0.0, 20.0, 20.0),
+                Length::from_mm(0.0),
+                Some(Length::from_mm(0.5)),
+            )
+            .expect("resize");
+        assert!((document.primitive(id).unwrap().stroke_width.as_mm() - 0.5).abs() < 1e-12);
+    }
+
     #[test]
     fn resize_rect_on_an_ellipse_is_refused() {
         let document = Document::new(1);
@@ -625,7 +741,7 @@ mod tests {
             id,
             rect_bounds(0.0, 0.0, 1.0, 1.0),
             Length::from_mm(0.0),
-            Length::from_mm(0.25),
+            Some(Length::from_mm(0.25)),
         );
         assert_eq!(result, Err(ShapeEditError::WrongShape));
     }

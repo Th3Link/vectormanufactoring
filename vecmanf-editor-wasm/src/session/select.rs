@@ -10,8 +10,9 @@
 use vecmanf_document_core::{ObjectSnapshot, Point, Shape};
 use vecmanf_render_core::{SelectDecorationInput, TransformDecorationInput, TransformHandleGlyph};
 use vecmanf_ui_core::{
-    SelectDoubleClickOutcome, SelectTool, TransformHandle, TransformHandleTolerances, double_click,
-    hit_test_object, is_corner, oriented_bounds, resize_cursor_angle_degrees,
+    SelectDoubleClickOutcome, SelectTool, StrokeScaling, TransformHandle,
+    TransformHandleTolerances, double_click, hit_test_object, is_corner, oriented_bounds,
+    resize_cursor_angle_degrees,
 };
 
 use super::{
@@ -49,6 +50,25 @@ pub(super) fn tool_for(object: &ObjectSnapshot) -> Tool {
 }
 
 impl Session {
+    /// The "Scale stroke width" switch (`specs/0005-object-transform/
+    /// specification.md` AC 26-31): whether a Select-tool resize scales the
+    /// stroke width. Off in every new session (`Session::new`/`open` build a
+    /// fresh `SelectTool`); never written to the document.
+    #[must_use]
+    pub fn scale_stroke_width(&self) -> bool {
+        self.select.stroke_scaling() == StrokeScaling::Proportional
+    }
+
+    /// Sets the switch for the *next* resize drag (AC 28: a drag in flight
+    /// keeps the value it started with).
+    pub fn set_scale_stroke_width(&mut self, on: bool) {
+        self.select.set_stroke_scaling(if on {
+            StrokeScaling::Proportional
+        } else {
+            StrokeScaling::Keep
+        });
+    }
+
     /// The three tolerances the Select tool's own transform handles need
     /// (`specs/0005-object-transform/specification.md`, acceptance
     /// criterion 1), converted from screen pixels to document

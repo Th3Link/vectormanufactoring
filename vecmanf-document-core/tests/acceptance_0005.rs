@@ -132,7 +132,7 @@ fn ac24_a_resized_rect_and_path_persist_exactly() {
                 height: Length::from_mm(12.5),
             },
             Length::from_mm(3.0),
-            Length::from_mm(0.375),
+            Some(Length::from_mm(0.375)),
         )
         .expect("resize");
     let path = document.create_path(
@@ -159,7 +159,7 @@ fn ac24_a_resized_rect_and_path_persist_exactly() {
                     Vec2::ZERO,
                 ),
             ],
-            Length::from_mm(0.5),
+            Some(Length::from_mm(0.5)),
         )
         .expect("resize path");
 

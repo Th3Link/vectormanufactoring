@@ -21,7 +21,9 @@ use crate::ResizeDirection;
 use crate::hit_test_object::hit_test_object;
 use crate::object_selection::ObjectSelection;
 use crate::oriented_box::{OrientedBox, oriented_bounds};
-use crate::transform_drag::{commit_resize, compute_resize, compute_rotate};
+use crate::transform_drag::{
+    ResizeOptions, StrokeScaling, commit_resize, compute_resize, compute_rotate,
+};
 use crate::transform_handle_layout::{
     ALL_EIGHT, CORNERS_FOUR, TransformHandle, hit_test_transform_handle,
     resize_anchor_local_position, resize_handle_hit, rotate_pivot, transform_handles,
@@ -55,6 +57,10 @@ enum SelectDrag {
         start_box: OrientedBox,
         direction: ResizeDirection,
         down_at: Point,
+        /// The tool's [`StrokeScaling`] as of the press: a drag uses it
+        /// for its whole duration, so a toggle mid-drag applies from the
+        /// next drag (AC 28).
+        stroke_scaling: StrokeScaling,
     },
     /// A rotate-handle drag in progress.
     Rotating {
@@ -102,6 +108,7 @@ pub enum SelectDoubleClickOutcome {
 #[derive(Debug, Default)]
 pub struct SelectTool {
     drag: SelectDrag,
+    stroke_scaling: StrokeScaling,
 }
 
 /// Whether `object` is a polygon or a star — the one kind whose
@@ -132,6 +139,21 @@ impl SelectTool {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Whether resizes scale the stroke width — the "Scale stroke width"
+    /// switch (AC 26-31). Tool state, never written to the document; the
+    /// default is [`StrokeScaling::Keep`] and a new tool (every new
+    /// session) starts there (AC 27).
+    #[must_use]
+    pub const fn stroke_scaling(&self) -> StrokeScaling {
+        self.stroke_scaling
+    }
+
+    /// Sets the stroke-scaling mode for the *next* resize drag: a drag
+    /// already in flight keeps the value it was pressed with (AC 28).
+    pub fn set_stroke_scaling(&mut self, stroke_scaling: StrokeScaling) {
+        self.stroke_scaling = stroke_scaling;
     }
 
     /// Every transform handle the current single-object selection shows
@@ -284,6 +306,7 @@ impl SelectTool {
                     start_box: box_,
                     direction,
                     down_at: point,
+                    stroke_scaling: self.stroke_scaling,
                 },
             };
             return SelectPointerDownOutcome::Handle;
@@ -356,9 +379,19 @@ impl SelectTool {
                 start_box,
                 direction,
                 down_at,
+                stroke_scaling,
                 ..
             } => Some(compute_resize(
-                start, start_box, *direction, *down_at, current, shift, ctrl,
+                start,
+                start_box,
+                *direction,
+                *down_at,
+                current,
+                ResizeOptions {
+                    shift,
+                    ctrl,
+                    stroke_scaling: *stroke_scaling,
+                },
             )),
             SelectDrag::None | SelectDrag::Moving { .. } | SelectDrag::Rotating { .. } => None,
         }
@@ -416,14 +449,25 @@ impl SelectTool {
                 start_box,
                 direction,
                 down_at,
+                stroke_scaling,
             } => {
                 if down_at == point {
                     return;
                 }
-                let resized =
-                    compute_resize(&start, &start_box, direction, down_at, point, shift, ctrl);
+                let resized = compute_resize(
+                    &start,
+                    &start_box,
+                    direction,
+                    down_at,
+                    point,
+                    ResizeOptions {
+                        shift,
+                        ctrl,
+                        stroke_scaling,
+                    },
+                );
                 if resized != start {
-                    commit_resize(document, id, &resized);
+                    commit_resize(document, id, &resized, stroke_scaling);
                 }
             }
             SelectDrag::Rotating {
@@ -1064,6 +1108,7 @@ mod tests {
         let mut selection = ObjectSelection::new();
         selection.select_single(id);
         let mut tool = SelectTool::new();
+        tool.set_stroke_scaling(StrokeScaling::Proportional);
         tool.pointer_down(
             &objects,
             &mut selection,
@@ -1083,6 +1128,231 @@ mod tests {
         let snapshot = document.primitive(id).expect("exists");
         // 1.5x proportional resize -> stroke width also 1.5x (0.25 -> 0.375).
         assert!((snapshot.stroke_width.as_mm() - 0.375).abs() < 1e-9);
+    }
+
+    // --- "Scale stroke width" switch (AC 8, 26-31) ---
+
+    /// Presses `wanted` on a fresh single selection of `id`, drags to `to`
+    /// and releases; the tool is configured by `configure`.
+    fn resize_drag(
+        document: &Document,
+        id: NodeId,
+        wanted: TransformHandle,
+        to: Point,
+        configure: impl FnOnce(&mut SelectTool),
+    ) {
+        let objects = vec![document.object(id).expect("exists")];
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let mut tool = SelectTool::new();
+        configure(&mut tool);
+        let at = handle_pos(&objects, &selection, wanted);
+        tool.pointer_down(
+            &objects,
+            &mut selection,
+            at,
+            TOLERANCE,
+            HANDLE_TOLERANCES,
+            false,
+        );
+        tool.pointer_up(document, &objects, &mut selection, to, false, false);
+    }
+
+    /// AC 8 + 27: a new tool keeps the stroke width, for every resize
+    /// handle, on a rectangle, an ellipse, a star and a path (anchors).
+    #[test]
+    fn ac8_ac27_default_keeps_the_stroke_width_for_every_handle_and_kind() {
+        use vecmanf_document_core::{InnerRatio, PointCount};
+        assert_eq!(SelectTool::new().stroke_scaling(), StrokeScaling::Keep);
+        for direction in ResizeDirection::ALL_EIGHT {
+            let document = Document::new(1);
+            let rect_id = rect(&document, 0.0);
+            let ellipse_id = document.create_ellipse(EllipseFrame {
+                center: Point::new(30.0, 5.0),
+                rx: Length::from_mm(5.0),
+                ry: Length::from_mm(3.0),
+            });
+            let path_id = document.create_path(
+                &[
+                    NewAnchor::corner(AnchorId::new(1, 1), Point::new(60.0, 0.0)),
+                    NewAnchor::corner(AnchorId::new(1, 2), Point::new(70.0, 8.0)),
+                ],
+                false,
+            );
+            for id in [rect_id, ellipse_id, path_id] {
+                let before = document.object(id).expect("exists");
+                let at = {
+                    let objects = vec![before.clone()];
+                    let mut selection = ObjectSelection::new();
+                    selection.select_single(id);
+                    handle_pos(&objects, &selection, TransformHandle::Resize(direction))
+                };
+                resize_drag(
+                    &document,
+                    id,
+                    TransformHandle::Resize(direction),
+                    at.translated(Vec2::new(6.0, 4.0)),
+                    |_| {},
+                );
+                let after = document.object(id).expect("exists");
+                assert_ne!(after, before, "{direction:?}: the resize happened");
+                let width = |o: &ObjectSnapshot| match o {
+                    ObjectSnapshot::Primitive(p) => p.stroke_width,
+                    ObjectSnapshot::Path(p) => p.stroke_width,
+                };
+                assert_eq!(width(&after), width(&before), "{direction:?} on {id:?}");
+            }
+        }
+        // A star's corner handles (uniform scale) keep it too.
+        let document = Document::new(1);
+        let star = document.create_star(
+            StarFrame {
+                center: Point::new(0.0, 0.0),
+                radius: Length::from_mm(10.0),
+                angle: vecmanf_document_core::Angle::from_radians(0.0),
+            },
+            PointCount::new(5).unwrap(),
+            InnerRatio::new(0.5).unwrap(),
+        );
+        resize_drag(
+            &document,
+            star,
+            TransformHandle::Resize(ResizeDirection::Ne),
+            Point::new(20.0, -20.0),
+            |_| {},
+        );
+        assert!((document.primitive(star).unwrap().stroke_width.as_mm() - 0.25).abs() < 1e-12);
+    }
+
+    /// AC 26: with the switch on a proportional resize scales the width by
+    /// the factor, a single-axis one by √(sx·sy), floored at 0.01 mm.
+    #[test]
+    fn ac26_proportional_mode_scales_by_the_geometric_mean_with_the_floor() {
+        let on = |t: &mut SelectTool| t.set_stroke_scaling(StrokeScaling::Proportional);
+        let document = Document::new(1);
+        let id = rect(&document, 0.0);
+        resize_drag(
+            &document,
+            id,
+            TransformHandle::Resize(ResizeDirection::E),
+            Point::new(40.0, 5.0),
+            on,
+        );
+        assert!(
+            (document.primitive(id).unwrap().stroke_width.as_mm() - 0.5).abs() < 1e-9,
+            "0.25 × √4"
+        );
+        let document = Document::new(1);
+        let id = rect(&document, 0.0);
+        resize_drag(
+            &document,
+            id,
+            TransformHandle::Resize(ResizeDirection::E),
+            Point::new(-80.0, 5.0),
+            on,
+        );
+        let w = document.primitive(id).unwrap().stroke_width.as_mm();
+        assert!((w - 0.01).abs() < 1e-12, "floored at 0.01 mm, got {w}");
+    }
+
+    /// AC 28: a drag uses the mode it was pressed with; a toggle during
+    /// the drag changes neither its live preview nor its commit, and
+    /// applies to the next drag.
+    #[test]
+    fn ac28_a_toggle_mid_drag_applies_to_the_next_drag_only() {
+        let document = Document::new(1);
+        let id = rect(&document, 0.0);
+        let objects = vec![document.object(id).expect("exists")];
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let mut tool = SelectTool::new();
+        let se = handle_pos(
+            &objects,
+            &selection,
+            TransformHandle::Resize(ResizeDirection::Se),
+        );
+        tool.pointer_down(
+            &objects,
+            &mut selection,
+            se,
+            TOLERANCE,
+            HANDLE_TOLERANCES,
+            false,
+        );
+        tool.set_stroke_scaling(StrokeScaling::Proportional); // mid-drag
+        let to = Point::new(20.0, 20.0);
+        let ObjectSnapshot::Primitive(preview) = tool.live_resize(to, false, false).unwrap() else {
+            panic!("primitive");
+        };
+        assert!(
+            (preview.stroke_width.as_mm() - 0.25).abs() < 1e-12,
+            "preview unchanged"
+        );
+        tool.pointer_up(&document, &objects, &mut selection, to, false, false);
+        assert!((document.primitive(id).unwrap().stroke_width.as_mm() - 0.25).abs() < 1e-12);
+
+        // The next drag picks up the new mode: 2x -> stroke 0.5.
+        let objects = vec![document.object(id).expect("exists")];
+        let se = handle_pos(
+            &objects,
+            &selection,
+            TransformHandle::Resize(ResizeDirection::Se),
+        );
+        tool.pointer_down(
+            &objects,
+            &mut selection,
+            se,
+            TOLERANCE,
+            HANDLE_TOLERANCES,
+            false,
+        );
+        tool.pointer_up(
+            &document,
+            &objects,
+            &mut selection,
+            Point::new(40.0, 40.0),
+            false,
+            true,
+        );
+        assert!((document.primitive(id).unwrap().stroke_width.as_mm() - 0.5).abs() < 1e-9);
+    }
+
+    /// AC 29: toggling writes nothing — the saved bytes are identical.
+    #[test]
+    fn ac29_toggling_the_switch_writes_nothing() {
+        let document = Document::new(1);
+        let _ = rect(&document, 0.0);
+        let before = document.export_loro_snapshot().unwrap();
+        let mut tool = SelectTool::new();
+        tool.set_stroke_scaling(StrokeScaling::Proportional);
+        tool.set_stroke_scaling(StrokeScaling::Keep);
+        tool.set_stroke_scaling(StrokeScaling::Proportional);
+        assert_eq!(document.export_loro_snapshot().unwrap(), before);
+    }
+
+    /// AC 31: the corner radius scales identically in both modes.
+    #[test]
+    fn ac31_the_switch_does_not_affect_the_corner_radius() {
+        let radius_after = |mode: StrokeScaling| {
+            let document = Document::new(1);
+            let id = rect(&document, 0.0);
+            document
+                .set_corner_radius(&[id], Length::from_mm(2.0))
+                .unwrap();
+            resize_drag(
+                &document,
+                id,
+                TransformHandle::Resize(ResizeDirection::Se),
+                Point::new(20.0, 20.0),
+                |t| t.set_stroke_scaling(mode),
+            );
+            let Shape::Rect { corner_radius, .. } = document.primitive(id).unwrap().shape else {
+                panic!("rect");
+            };
+            corner_radius.as_mm()
+        };
+        assert!((radius_after(StrokeScaling::Keep) - 4.0).abs() < 1e-9);
+        assert!((radius_after(StrokeScaling::Proportional) - 4.0).abs() < 1e-9);
     }
 
     /// Acceptance criterion 9: a rectangle's corner radius scales by the
@@ -1498,6 +1768,7 @@ mod tests {
         let mut selection = ObjectSelection::new();
         selection.select_single(id);
         let mut tool = SelectTool::new();
+        tool.set_stroke_scaling(StrokeScaling::Proportional);
         let e = handle_pos(
             &objects,
             &selection,
@@ -1536,6 +1807,7 @@ mod tests {
         let mut selection = ObjectSelection::new();
         selection.select_single(id);
         let mut tool = SelectTool::new();
+        tool.set_stroke_scaling(StrokeScaling::Proportional);
         let e = handle_pos(
             &objects,
             &selection,

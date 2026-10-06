@@ -491,7 +491,7 @@ mod tests {
                 height: Length::from_mm(10.0),
             },
             Length::from_mm(0.0),
-            Length::from_mm(0.25),
+            Some(Length::from_mm(0.25)),
         )
         .expect("A resizes");
         // B rotates about the centre it sees (the old 10 x 10 frame).

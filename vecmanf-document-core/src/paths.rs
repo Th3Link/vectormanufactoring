@@ -228,7 +228,7 @@ impl Document {
         &self,
         path: NodeId,
         anchors: &[(AnchorId, Point, Vec2, Vec2)],
-        stroke_width: Length,
+        stroke_width: Option<Length>,
     ) -> Result<(), PathEditError> {
         let (meta, anchor_list) = self.path_parts(path)?;
         let resolved: Vec<(usize, Point, Vec2, Vec2)> = anchors
@@ -244,7 +244,7 @@ impl Document {
             write_vec2(&map, KEY_HANDLE_IN, handle_in);
             write_vec2(&map, KEY_HANDLE_OUT, handle_out);
         }
-        path_codec::write_stroke_width(&meta, stroke_width.as_mm());
+        crate::shapes::write_stroke_width_if_changed(&meta, stroke_width);
         self.commit_with_label("resize_path");
         Ok(())
     }
@@ -863,7 +863,7 @@ mod tests {
                     (a, Point::new(0.0, 0.0), Vec2::ZERO, Vec2::new(1.0, 0.0)),
                     (b, Point::new(20.0, 0.0), Vec2::new(-1.0, 0.0), Vec2::ZERO),
                 ],
-                Length::from_mm(0.5),
+                Some(Length::from_mm(0.5)),
             )
             .expect("resize");
         let after = document.loro().len_changes();
@@ -892,7 +892,7 @@ mod tests {
                     Vec2::ZERO,
                 ),
             ],
-            Length::from_mm(1.0),
+            Some(Length::from_mm(1.0)),
         );
         assert_eq!(result, Err(PathEditError::NoSuchAnchor));
         let snapshot = document.path(id).expect("exists");

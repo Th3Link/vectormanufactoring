@@ -729,6 +729,7 @@ fn ac7_shift_on_an_ellipse_and_a_path_pivots_on_the_box_center() {
 #[test]
 fn ac8_proportional_resize_scales_stroke_by_the_same_factor() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 0.0));
+    s.set_scale_stroke_width(true);
     let start = prim(&s).stroke_width.as_mm();
     select_at(&mut s, pt(20.0, 0.0));
     drag(&mut s, pt(40.0, 20.0), pt(60.0, 30.0), false, false); // sx = sy = 1.5
@@ -739,6 +740,7 @@ fn ac8_proportional_resize_scales_stroke_by_the_same_factor() {
 #[test]
 fn ac8_ctrl_proportional_resize_scales_stroke_by_the_factor() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 0.0));
+    s.set_scale_stroke_width(true);
     let start = prim(&s).stroke_width.as_mm();
     select_at(&mut s, pt(20.0, 0.0));
     drag(&mut s, pt(40.0, 20.0), pt(60.0, 21.0), false, true); // factor 1.5
@@ -749,6 +751,7 @@ fn ac8_ctrl_proportional_resize_scales_stroke_by_the_factor() {
 #[test]
 fn ac8_non_uniform_resize_uses_the_geometric_mean() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 0.0));
+    s.set_scale_stroke_width(true);
     let start = prim(&s).stroke_width.as_mm();
     select_at(&mut s, pt(20.0, 0.0));
     drag(&mut s, pt(40.0, 20.0), pt(60.0, 50.0), false, false); // sx 1.5, sy 2.5
@@ -759,6 +762,7 @@ fn ac8_non_uniform_resize_uses_the_geometric_mean() {
 #[test]
 fn ac8_edge_handle_resize_uses_the_geometric_mean_with_one_axis_unscaled() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 0.0));
+    s.set_scale_stroke_width(true);
     let start = prim(&s).stroke_width.as_mm();
     select_at(&mut s, pt(20.0, 0.0));
     drag(&mut s, pt(40.0, 10.0), pt(80.0, 10.0), false, false); // sx 2, sy 1
@@ -770,6 +774,7 @@ fn ac8_edge_handle_resize_uses_the_geometric_mean_with_one_axis_unscaled() {
 fn ac8_stroke_scales_for_ellipse_path_polygon_and_star_too() {
     // ellipse, sx = sy = 1.5
     let mut s = open_in_session(&ellipse_doc(20.0, 10.0, 20.0, 10.0));
+    s.set_scale_stroke_width(true);
     let start = prim(&s).stroke_width.as_mm();
     select_at(&mut s, ell());
     drag(&mut s, pt(40.0, 20.0), pt(60.0, 30.0), false, false);
@@ -777,6 +782,7 @@ fn ac8_stroke_scales_for_ellipse_path_polygon_and_star_too() {
 
     // path, sx 1.5 sy 1.5
     let mut s = open_in_session(&s_curve_doc());
+    s.set_scale_stroke_width(true);
     let start = path_of(&s).stroke_width.as_mm();
     select_at(&mut s, pt(20.0, 10.0));
     drag(&mut s, pt(40.0, 20.0), pt(60.0, 30.0), false, false);
@@ -784,6 +790,7 @@ fn ac8_stroke_scales_for_ellipse_path_polygon_and_star_too() {
 
     // path, one axis: sqrt
     let mut s = open_in_session(&s_curve_doc());
+    s.set_scale_stroke_width(true);
     let start = path_of(&s).stroke_width.as_mm();
     select_at(&mut s, pt(20.0, 10.0));
     drag(&mut s, pt(40.0, 10.0), pt(80.0, 10.0), false, false);
@@ -802,6 +809,7 @@ fn ac8_stroke_never_becomes_zero_or_negative_when_collapsing_a_resize() {
         (pt(20.0, 20.0), pt(20.0, -9.0)),   // edge past
     ] {
         let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 0.0));
+        s.set_scale_stroke_width(true);
         let start = prim(&s).stroke_width.as_mm();
         select_at(&mut s, pt(20.0, 0.0));
         drag(&mut s, grab, to, false, false);
@@ -834,6 +842,7 @@ fn ac8_stroke_stays_positive_for_every_object_kind_when_collapsed() {
     ];
     for (doc, click_at) in docs {
         let mut s = open_in_session(&doc);
+        s.set_scale_stroke_width(true);
         select_at(&mut s, click_at);
         drag(&mut s, pt(40.0, 20.0), pt(-80.0, -80.0), false, false);
         let id = only_id(&s);
@@ -981,6 +990,7 @@ fn ac11_polygon_and_star_corner_drag_is_a_uniform_scale_regardless_of_ctrl() {
         let mut results = Vec::new();
         for ctrl in [false, true] {
             let mut s = open_in_session(&doc);
+            s.set_scale_stroke_width(true);
             let before = star_like(&s);
             let sel = poly_select_point(&s);
             select_at(&mut s, sel);
@@ -2936,6 +2946,7 @@ fn a_single_anchor_path_has_a_point_box_and_never_produces_nan() {
 #[test]
 fn a_huge_object_resizes_exactly_enough() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 1.0e6, 5.0e5, 0.0));
+    s.set_scale_stroke_width(true);
     select_at(&mut s, pt(5.0e5, 0.0));
     drag(&mut s, pt(1.0e6, 5.0e5), pt(2.0e6, 1.0e6), false, false);
     let (b, _, stroke, _) = rect_of(&s);

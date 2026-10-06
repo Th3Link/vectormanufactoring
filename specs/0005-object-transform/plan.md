@@ -72,6 +72,14 @@ UX notes, not follow-ups).
 
 Remaining, by design: the glyph and cursor art is a first version for the ux-engineer.
 
+## Stroke-scale switch (2026-10-06, AC 8, 26-31)
+
+- [x] `StrokeScaling {Keep, Proportional}` on `SelectTool`, captured into `SelectDrag::Resizing` at press, passed to the single `compute_resize` (8, 26, 28)
+- [x] `Document::resize_*` take `Option<Length>` stroke; `None` leaves the key untouched, unchanged values are not rewritten (8, 27, 29)
+- [x] Corner radius scales in both modes (9, 31)
+- [x] `Session`/wasm `scale_stroke_width()`/`set_scale_stroke_width()`; off per session, never saved (26, 29)
+- [x] `SelectToolbar` + `ScaleStrokeSwitch` (Radix Switch), key handlers ignore events inside the bar (30)
+
 ## Validation
 
 - `cargo test -p vecmanf-document-core -p vecmanf-ui-core` for every task

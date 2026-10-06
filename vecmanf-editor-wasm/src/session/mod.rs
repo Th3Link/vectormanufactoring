@@ -1455,9 +1455,9 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(50.0, 0.0), false);
-        session.pointer_up(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 0.0), false, false);
         session.finish_pen();
 
         session.set_tool(Tool::Select);

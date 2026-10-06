@@ -135,6 +135,16 @@ function readToolbarState(raw: {
   return state;
 }
 
+/** Whether a keyboard event's target is an interactive control (a switch,
+ * button, input) rather than the canvas itself — canvas shortcuts must
+ * ignore those. */
+function isFormControl(target: EventTarget): boolean {
+  return (
+    target instanceof HTMLElement &&
+    target.closest('input, textarea, select, button, [role="switch"]') !== null
+  );
+}
+
 /** Reads the wasm-bindgen `LiveReadout` instance once, immediately, so
  * it can be `free()`d rather than held onto — same reasoning as
  * `readToolbarState`. */
@@ -226,6 +236,11 @@ export interface EditorSession {
   finishPen: () => void;
   /** Acceptance criterion 6's "remove rounding" action. */
   removeCornerRounding: () => void;
+  /** The Select tool's "Scale stroke width" switch
+   * (`object-transform` criteria 8, 26-31): whether a resize scales the
+   * stroke. Session state, off in every new session, never saved. */
+  scaleStrokeWidth: boolean;
+  setScaleStrokeWidth: (on: boolean) => void;
   /** The mode toggle (acceptance criteria 11 vs. 12). */
   setPolyStarMode: (mode: PolyStarMode) => void;
   /** The point-count stepper (acceptance criteria 10, 15). */
@@ -314,6 +329,7 @@ export function useEditorSession(
   const [isHoveringPenCloseTarget, setIsHoveringPenCloseTarget] =
     useState(false);
   const [liveReadout, setLiveReadout] = useState<LiveReadout | null>(null);
+  const [scaleStrokeWidth, setScaleStrokeWidthState] = useState(false);
   const [cursorHint, setCursorHint] = useState("default");
   /** The last pointer position over the canvas (CSS px) — lets a
    * modifier key press/release re-run the hover, so the Select tool's
@@ -338,6 +354,9 @@ export function useEditorSession(
     setPolyStarModeState(session.poly_star_mode() as PolyStarMode);
     setPolyStarPointCountState(session.poly_star_point_count());
     setPolyStarRatioState(session.poly_star_ratio());
+    // A new or opened project's session starts with the switch off
+    // (criterion 27); reading it back here is what resets the UI.
+    setScaleStrokeWidthState(session.scale_stroke_width());
     setZoomPercent(session.zoom_percent());
   }, []);
 
@@ -549,6 +568,14 @@ export function useEditorSession(
     sessionRef.current?.remove_corner_rounding();
     syncFromSession();
   }, [syncFromSession]);
+
+  const setScaleStrokeWidth = useCallback(
+    (on: boolean) => {
+      sessionRef.current?.set_scale_stroke_width(on);
+      syncFromSession();
+    },
+    [syncFromSession],
+  );
 
   const setPolyStarMode = useCallback(
     (mode: PolyStarMode) => {
@@ -766,6 +793,12 @@ export function useEditorSession(
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
+      // Keys typed into a control (the toolbar's switch, a field) are
+      // that control's, not canvas shortcuts: Space must toggle the
+      // switch, not start a pan, and tool letters must not switch tools.
+      if (isFormControl(event.target)) {
+        return;
+      }
       switch (event.key) {
         case "s":
         case "S":
@@ -827,6 +860,9 @@ export function useEditorSession(
 
   const onKeyUp = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (isFormControl(event.target)) {
+        return;
+      }
       if (event.key === " ") {
         setIsSpaceHeld(false);
       } else if (
@@ -865,6 +901,8 @@ export function useEditorSession(
     insertSelected,
     finishPen,
     removeCornerRounding,
+    scaleStrokeWidth,
+    setScaleStrokeWidth,
     setPolyStarMode,
     setPolyStarPointCount,
     setPolyStarRatio,

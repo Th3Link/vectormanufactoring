@@ -428,6 +428,18 @@ impl WasmSession {
         Ok(())
     }
 
+    /// The Select tool's "Scale stroke width" switch (`object-transform`
+    /// AC 26-31). Off in every new session; not persisted.
+    #[must_use]
+    pub fn scale_stroke_width(&self) -> bool {
+        self.session.scale_stroke_width()
+    }
+
+    /// Sets the "Scale stroke width" switch for the next resize drag.
+    pub fn set_scale_stroke_width(&mut self, on: bool) {
+        self.session.set_scale_stroke_width(on);
+    }
+
     /// The polygon/star tool-options bar's current point count
     /// (acceptance criterion 10).
     #[must_use]

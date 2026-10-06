@@ -65,7 +65,7 @@ fn a_peer_resize_and_a_peer_rotate_about_the_centre_both_survive_the_merge() {
                 height: Length::from_mm(9.0),
             },
             Length::from_mm(0.0),
-            Length::from_mm(2.0),
+            Some(Length::from_mm(2.0)),
         )
         .unwrap();
         b.rotate_object(

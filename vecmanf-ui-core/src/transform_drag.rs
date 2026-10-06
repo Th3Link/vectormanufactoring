@@ -32,18 +32,50 @@ const MIN_STROKE_WIDTH_MM: f64 = 0.01;
 /// become unopenable from a drag").
 const MAX_COORDINATE_MM: f64 = 1e7;
 
+/// Whether a resize also scales the object's stroke width (acceptance
+/// criteria 8, 26-31 of `specs/0005-object-transform/specification.md`,
+/// the "Scale stroke width" switch). Not a `bool`: `compute_resize` already
+/// takes two modifier bools, and a third trips
+/// `clippy::fn_params_excessive_bools`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum StrokeScaling {
+    /// The default: a resize leaves the stroke width exactly as it was,
+    /// not even rewritten (AC 8).
+    #[default]
+    Keep,
+    /// The stroke width scales with the resize, √(sx·sy), floored at
+    /// 0.01 mm (AC 26).
+    Proportional,
+}
+
+/// The modifiers and mode a resize drag runs with: Shift (center pivot,
+/// AC 7), Ctrl (proportional, AC 5) and the [`StrokeScaling`] captured at
+/// the press (AC 28).
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ResizeOptions {
+    pub(crate) shift: bool,
+    pub(crate) ctrl: bool,
+    pub(crate) stroke_scaling: StrokeScaling,
+}
+
 /// The object after resizing it by dragging `direction`'s handle from
 /// `down_at` to `current` (acceptance criteria 4-13), or `start`
-/// unchanged if the result would not be finite and sane.
+/// unchanged if the result would not be finite and sane. The stroke width
+/// scales only for [`StrokeScaling::Proportional`]; the corner radius
+/// scales either way (AC 9, 31).
 pub(crate) fn compute_resize(
     start: &ObjectSnapshot,
     start_box: &OrientedBox,
     direction: ResizeDirection,
     down_at: Point,
     current: Point,
-    shift: bool,
-    ctrl: bool,
+    options: ResizeOptions,
 ) -> ObjectSnapshot {
+    let ResizeOptions {
+        shift,
+        ctrl,
+        stroke_scaling,
+    } = options;
     let local_delta = start_box
         .to_local(down_at)
         .vector_to(start_box.to_local(current));
@@ -76,7 +108,9 @@ pub(crate) fn compute_resize(
             )
         }
     };
-    scale_stroke(&mut resized, factor);
+    if stroke_scaling == StrokeScaling::Proportional {
+        scale_stroke(&mut resized, factor);
+    }
     sane_or(start, resized)
 }
 
@@ -282,21 +316,30 @@ fn scale_stroke(object: &mut ObjectSnapshot, factor: f64) {
 }
 
 /// Writes a resize's resulting geometry, dispatching on the object's own
-/// kind to the matching one-commit `Document` method.
-pub(crate) fn commit_resize(document: &Document, id: NodeId, result: &ObjectSnapshot) {
+/// kind to the matching one-commit `Document` method. With
+/// [`StrokeScaling::Keep`] the stroke width is passed as `None`, so the
+/// stored value is never touched (AC 8: not even rewritten).
+pub(crate) fn commit_resize(
+    document: &Document,
+    id: NodeId,
+    result: &ObjectSnapshot,
+    stroke_scaling: StrokeScaling,
+) {
+    let width = |w: Length| (stroke_scaling == StrokeScaling::Proportional).then_some(w);
     match result {
         ObjectSnapshot::Primitive(primitive) => match primitive.shape {
             Shape::Rect {
                 bounds,
                 corner_radius,
             } => {
-                let _ = document.resize_rect(id, bounds, corner_radius, primitive.stroke_width);
+                let _ =
+                    document.resize_rect(id, bounds, corner_radius, width(primitive.stroke_width));
             }
             Shape::Ellipse { frame } => {
-                let _ = document.resize_ellipse(id, frame, primitive.stroke_width);
+                let _ = document.resize_ellipse(id, frame, width(primitive.stroke_width));
             }
             Shape::Polygon { frame, .. } | Shape::Star { frame, .. } => {
-                let _ = document.resize_star_frame(id, frame, primitive.stroke_width);
+                let _ = document.resize_star_frame(id, frame, width(primitive.stroke_width));
             }
         },
         ObjectSnapshot::Path(path) => {
@@ -305,7 +348,7 @@ pub(crate) fn commit_resize(document: &Document, id: NodeId, result: &ObjectSnap
                 .iter()
                 .map(|a| (a.id, a.point, a.handle_in, a.handle_out))
                 .collect();
-            let _ = document.resize_path(id, &anchors, path.stroke_width);
+            let _ = document.resize_path(id, &anchors, width(path.stroke_width));
         }
     }
 }

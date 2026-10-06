@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Canvas } from "@/components/Canvas";
 import { ErrorDialog } from "@/components/ErrorDialog";
 import { NodeToolbar } from "@/components/NodeToolbar";
+import { SelectToolbar } from "@/components/SelectToolbar";
 import { ShapeToolbar } from "@/components/ShapeToolbar";
 import { StatusBar } from "@/components/StatusBar";
 import { ToolRail } from "@/components/ToolRail";
@@ -159,6 +160,12 @@ function App() {
          * rail, so showing/hiding it never resizes the canvas
          * (`docs/design-system.md`, "no layout shift on tool switch"). */}
         <div className="pointer-events-none absolute top-3 right-3 left-[72px] z-20 flex justify-center">
+          {editor.tool === "select" ? (
+            <SelectToolbar
+              scaleStrokeWidth={editor.scaleStrokeWidth}
+              onSetScaleStrokeWidth={editor.setScaleStrokeWidth}
+            />
+          ) : null}
           {editor.tool === "node" ? (
             <NodeToolbar
               state={editor.nodeToolbarState}
