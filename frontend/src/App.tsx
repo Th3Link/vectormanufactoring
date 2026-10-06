@@ -152,39 +152,44 @@ function App() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
-      {editor.tool === "node" ? (
-        <NodeToolbar
-          state={editor.nodeToolbarState}
-          actions={{
-            insertSelected: editor.insertSelected,
-            deleteSelected: editor.deleteSelected,
-            convertSelected: editor.convertSelected,
-            makeLine: editor.makeLine,
-            makeCurve: editor.makeCurve,
-            joinSelected: editor.joinSelected,
-            splitSelected: editor.splitSelected,
-          }}
-        />
-      ) : null}
-      {editor.tool === "rectangle" ||
-      editor.tool === "ellipse" ||
-      editor.tool === "polygon-star" ? (
-        <ShapeToolbar
-          tool={editor.tool}
-          polyStarMode={editor.polyStarMode}
-          polyStarPointCount={editor.polyStarPointCount}
-          polyStarRatio={editor.polyStarRatio}
-          onSetPolyStarMode={editor.setPolyStarMode}
-          onSetPolyStarPointCount={editor.setPolyStarPointCount}
-          onPreviewPolyStarRatio={editor.previewPolyStarRatio}
-          onCommitPolyStarRatio={editor.commitPolyStarRatio}
-          onRemoveCornerRounding={editor.removeCornerRounding}
-          onConvertSelectedToPaths={editor.convertSelectedToPaths}
-        />
-      ) : null}
       <div className="relative flex min-h-0 flex-1">
         <ToolRail tool={editor.tool} onSelect={editor.setTool} />
         <Canvas editor={editor} />
+        {/* Contextual tool bar: floats over the canvas, right of the tool
+         * rail, so showing/hiding it never resizes the canvas
+         * (`docs/design-system.md`, "no layout shift on tool switch"). */}
+        <div className="pointer-events-none absolute top-3 right-3 left-[72px] z-20 flex justify-center">
+          {editor.tool === "node" ? (
+            <NodeToolbar
+              state={editor.nodeToolbarState}
+              actions={{
+                insertSelected: editor.insertSelected,
+                deleteSelected: editor.deleteSelected,
+                convertSelected: editor.convertSelected,
+                makeLine: editor.makeLine,
+                makeCurve: editor.makeCurve,
+                joinSelected: editor.joinSelected,
+                splitSelected: editor.splitSelected,
+              }}
+            />
+          ) : null}
+          {editor.tool === "rectangle" ||
+          editor.tool === "ellipse" ||
+          editor.tool === "polygon-star" ? (
+            <ShapeToolbar
+              tool={editor.tool}
+              polyStarMode={editor.polyStarMode}
+              polyStarPointCount={editor.polyStarPointCount}
+              polyStarRatio={editor.polyStarRatio}
+              onSetPolyStarMode={editor.setPolyStarMode}
+              onSetPolyStarPointCount={editor.setPolyStarPointCount}
+              onPreviewPolyStarRatio={editor.previewPolyStarRatio}
+              onCommitPolyStarRatio={editor.commitPolyStarRatio}
+              onRemoveCornerRounding={editor.removeCornerRounding}
+              onConvertSelectedToPaths={editor.convertSelectedToPaths}
+            />
+          ) : null}
+        </div>
       </div>
       <StatusBar cursorMm={cursorMm} sizeMm={sizeMm} zoomPercent={editor.zoomPercent} />
       <ErrorDialog

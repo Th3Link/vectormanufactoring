@@ -142,7 +142,7 @@ interface NodeToolbarProps {
 
 /**
  * The contextual tool-controls bar (`specification.md`'s UX notes):
- * shown directly under the main menu, full width, only while the node
+ * floating over the canvas at the top (see `App.tsx`), only while the node
  * tool is active. Buttons disable (not hide) when inapplicable. The
  * node-kind conversions are one 3-segment `ToggleGroup` (square/diamond/
  * triangle icons); Insert/Delete/Make-line/Make-curve/Join/Split are
@@ -152,8 +152,11 @@ interface NodeToolbarProps {
 export function NodeToolbar({ state, actions }: NodeToolbarProps) {
   return (
     <div
-      className="flex h-9 shrink-0 items-center gap-1 border-b border-border px-2"
-      style={{ background: "var(--toolbar-bg)" }}
+      className="flex pointer-events-auto h-9 min-w-0 items-center gap-1 rounded-lg px-2"
+      style={{
+        background: "var(--toolbar-bg)",
+        boxShadow: "var(--panel-elevation-shadow)",
+      }}
     >
       <div
         role="group"
