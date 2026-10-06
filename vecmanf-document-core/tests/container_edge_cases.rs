@@ -389,6 +389,91 @@ fn a_rect_with_a_negative_size_is_damaged_not_a_panic() {
     assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
 }
 
+/// `object-transform` (`specs/0005-object-transform/adrs.md`): a present
+/// `rotation` that is not a finite number is refused as `Damaged` —
+/// for a primitive...
+#[test]
+fn a_primitive_with_a_non_finite_rotation_is_damaged_not_silently_zero() {
+    for bad in [f64::NAN, f64::INFINITY] {
+        let bytes = primitive_fixture(|meta| {
+            meta.insert("shape", "rect").expect("insert shape");
+            meta.insert("rect_bounds", vec![0.0, 0.0, 10.0, 10.0])
+                .expect("insert bounds");
+            meta.insert("corner_radius", 0.0_f64)
+                .expect("insert radius");
+            meta.insert("rotation", bad).expect("insert rotation");
+        });
+        assert!(
+            matches!(unpack(2, &bytes), Err(OpenError::Damaged)),
+            "{bad}"
+        );
+    }
+}
+
+/// ...a mistyped one (a string) is refused too...
+#[test]
+fn a_primitive_with_a_mistyped_rotation_is_damaged() {
+    let bytes = primitive_fixture(|meta| {
+        meta.insert("shape", "ellipse").expect("insert shape");
+        meta.insert("ellipse_frame", vec![0.0, 0.0, 5.0, 5.0])
+            .expect("insert frame");
+        meta.insert("rotation", "a lot").expect("insert rotation");
+    });
+    assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
+}
+
+/// ...and for a path.
+#[test]
+fn a_path_with_a_non_finite_rotation_is_damaged() {
+    let loro = loro::LoroDoc::new();
+    loro.set_peer_id(1).expect("set peer id");
+    let tree = loro.get_tree("paths");
+    let node = tree.create(loro::TreeParentId::Root).expect("create node");
+    let meta = tree.get_meta(node).expect("meta");
+    meta.insert_container("anchors", loro::LoroMovableList::new())
+        .expect("anchors list");
+    meta.insert("rotation", f64::NAN).expect("insert rotation");
+    loro.commit();
+    let snapshot = loro.export(loro::ExportMode::Snapshot).expect("export");
+    let manifest = manifest_bytes(CURRENT_FORMAT_VERSION, CURRENT_LORO_SNAPSHOT_VERSION);
+    let bytes = zip_with_members(&[
+        ("manifest.json", &manifest),
+        ("document.loro", &snapshot),
+        ("document.json", b"{}"),
+    ]);
+    assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
+}
+
+/// `rotation` read-back (adrs.md: any finite value is accepted and
+/// normalized on read): a stored integer is that many radians, not zero,
+/// and 7.0 reads as 7 - 2π.
+#[test]
+fn a_stored_rotation_is_read_as_a_number_and_normalized() {
+    let read = |value: loro::LoroValue| {
+        let bytes = primitive_fixture(|meta| {
+            meta.insert("shape", "ellipse").expect("insert shape");
+            meta.insert("ellipse_frame", vec![0.0, 0.0, 5.0, 5.0])
+                .expect("insert frame");
+            meta.insert("rotation", value).expect("insert rotation");
+        });
+        let document = unpack(2, &bytes).expect("opens");
+        let id = document.object_ids()[0];
+        document
+            .primitive(id)
+            .expect("primitive")
+            .rotation
+            .as_radians()
+    };
+    assert!(
+        (read(loro::LoroValue::I64(1)) - 1.0).abs() < 1e-12,
+        "integer 1 is 1 rad"
+    );
+    assert!(
+        (read(loro::LoroValue::Double(7.0)) - (7.0 - std::f64::consts::TAU)).abs() < 1e-12,
+        "7.0 is normalized"
+    );
+}
+
 /// Builds a one-node `.vmf` container whose single `paths`-tree node is
 /// shaped by `build_meta` directly through `loro`, bypassing
 /// `vecmanf_document_core::Document`'s public API entirely (which has no

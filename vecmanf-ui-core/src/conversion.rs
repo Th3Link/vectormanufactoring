@@ -7,15 +7,23 @@
 //! calls [`build_primitive_conversions`] and passes the result straight
 //! to `Document::convert_to_paths`.
 
-use vecmanf_document_core::{Document, NewAnchor, NodeId, outline_of};
+use vecmanf_document_core::{Document, NewAnchor, NodeId, outline_of_rotated};
 
 use crate::AnchorIdMinter;
 
 /// For every id in `ids` that still names a live primitive, mints fresh
-/// [`vecmanf_document_core::AnchorId`]s for its outline
-/// ([`vecmanf_document_core::outline_of`]) and pairs them with that id —
-/// exactly the shape `Document::convert_to_paths` takes. An id that no
-/// longer resolves to a primitive (already deleted, or already
+/// [`vecmanf_document_core::AnchorId`]s for its own, rotation-aware
+/// outline ([`vecmanf_document_core::outline_of_rotated`]) and pairs
+/// them with that id — exactly the shape `Document::convert_to_paths`
+/// takes. A rotated primitive's anchors come out already baked into
+/// document space (`specs/0005-object-transform/adrs.md`: "a path bakes
+/// its rotation directly into its anchor points"); the primitive's own
+/// `rotation` register itself is carried over unchanged by
+/// `convert_to_paths` (it is never one of the keys "object to path"
+/// strips), so the converted path's selection box keeps the original's
+/// orientation (acceptance criterion 17 of `specs/0005-object-transform/
+/// specification.md`) without this function doing anything extra. An id
+/// that no longer resolves to a primitive (already deleted, or already
 /// converted) is silently skipped, the same lazy-resolution stance
 /// `vecmanf-ui-core`'s other multi-id operations take (ADR 0009 §2);
 /// `convert_to_paths` itself still refuses the whole call on any id it
@@ -30,7 +38,7 @@ pub fn build_primitive_conversions(
     ids.iter()
         .filter_map(|&id| {
             let primitive = document.primitive(id)?;
-            let outline = outline_of(&primitive.shape);
+            let outline = outline_of_rotated(&primitive.shape, primitive.rotation);
             let anchors: Vec<NewAnchor> = outline
                 .into_iter()
                 .map(|anchor| NewAnchor {
@@ -95,6 +103,43 @@ mod tests {
         assert_eq!(conversions.len(), 2);
         assert_eq!(conversions[0].1.len(), 4, "rect: 4 corners");
         assert_eq!(conversions[1].1.len(), 4, "ellipse: 4 smooth nodes");
+    }
+
+    /// Acceptance criterion 17/21: converting a rotated primitive bakes
+    /// the rotated outline into the new path's anchors, and the
+    /// converted path keeps the original's `rotation` register.
+    #[test]
+    fn build_primitive_conversions_bakes_rotation_and_keeps_the_register() {
+        let document = Document::new(1);
+        let id = document.create_rect(RectBounds {
+            origin: Point::new(-5.0, -5.0),
+            width: Length::from_mm(10.0),
+            height: Length::from_mm(10.0),
+        });
+        document
+            .rotate_object(&document.object(id).expect("object exists").rotated(
+                Point::new(0.0, 0.0),
+                vecmanf_document_core::Angle::from_radians(std::f64::consts::FRAC_PI_2),
+            ))
+            .expect("rotate");
+        let mut minter = AnchorIdMinter::new(1);
+        let conversions = build_primitive_conversions(&document, &mut minter, &[id]);
+        document.convert_to_paths(&conversions).expect("convert");
+
+        let path = document.path(id).expect("now a path, same id");
+        assert!(
+            (path.rotation.as_radians() - std::f64::consts::FRAC_PI_2).abs() < 1e-9,
+            "rotation register carried over"
+        );
+        // The unrotated top-left corner was (-5, -5); after a 90-degree
+        // rotation about the origin it is now (5, -5).
+        assert!(
+            path.anchors
+                .iter()
+                .any(|a| (a.point.x - 5.0).abs() < 1e-6 && (a.point.y - (-5.0)).abs() < 1e-6),
+            "anchors are baked into the rotated, absolute positions: {:?}",
+            path.anchors
+        );
     }
 
     /// A stale id (no longer a primitive) is skipped, not included.

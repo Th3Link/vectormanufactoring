@@ -13,7 +13,7 @@
 //! Select tool call `hit_test` and `hit_test_primitive` and compare
 //! results. That keeps two definitions of 'near an outline'").
 
-use vecmanf_document_core::{NodeId, ObjectSnapshot, Point, Tolerance, Vec2, outline_of};
+use vecmanf_document_core::{NodeId, ObjectSnapshot, Point, Tolerance, Vec2, outline_of_rotated};
 use vecmanf_geometry_core::nearest_point_on_segment;
 
 use crate::hit_test::segment_pairs;
@@ -64,7 +64,7 @@ fn distance_to_object(object: &ObjectSnapshot, point: Point, tolerance: Toleranc
             })
         }
         ObjectSnapshot::Primitive(primitive) => {
-            let outline = outline_of(&primitive.shape);
+            let outline = outline_of_rotated(&primitive.shape, primitive.rotation);
             nearest_distance_on_run(outline.len(), true, point, tolerance, |i| {
                 let anchor = &outline[i];
                 (anchor.point, anchor.handle_in, anchor.handle_out)
@@ -74,8 +74,9 @@ fn distance_to_object(object: &ObjectSnapshot, point: Point, tolerance: Toleranc
 }
 
 /// Hit-tests `point` against every object in `objects` — a path through
-/// its own anchors, a primitive through its outline
-/// ([`vecmanf_document_core::outline_of`]) — returning the nearest one
+/// its own anchors, a primitive through its own (rotation-aware)
+/// outline ([`vecmanf_document_core::outline_of_rotated`]) — returning
+/// the nearest one
 /// within `tolerance`. A tie goes to the topmost object in z-order:
 /// `objects` is expected in z-order (as
 /// [`vecmanf_document_core::Document::object_ids`] already returns it),
@@ -219,6 +220,32 @@ mod tests {
         ];
         let hit = hit_test_object(&objects, Point::new(10.0, 0.0), Tolerance::from_mm(10.0));
         assert_eq!(hit, Some(near_rect));
+    }
+
+    /// A rotated primitive hit-tests against its *rotated* outline, not
+    /// its unrotated local frame — a point on the original (unrotated)
+    /// right edge is now empty space once the rectangle has turned 90
+    /// degrees, while a point on what is now the rotated right edge
+    /// hits.
+    #[test]
+    fn hit_test_respects_a_primitives_rotation() {
+        let document = Document::new(1);
+        let rect = document.create_rect(RectBounds {
+            origin: Point::new(-5.0, -5.0),
+            width: Length::from_mm(10.0),
+            height: Length::from_mm(10.0),
+        });
+        document
+            .rotate_object(&document.object(rect).expect("object exists").rotated(
+                Point::new(0.0, 0.0),
+                vecmanf_document_core::Angle::from_radians(std::f64::consts::FRAC_PI_4),
+            ))
+            .expect("rotate");
+        let objects = vec![document.object(rect).expect("exists")];
+        // The unrotated top edge sat at y = -5; after a 45-degree
+        // rotation about the center, nothing is there any more.
+        let miss = hit_test_object(&objects, Point::new(0.0, -5.0), Tolerance::from_mm(0.5));
+        assert_eq!(miss, None, "the unrotated edge position is now empty");
     }
 
     /// An exact distance tie between two objects: the one listed last

@@ -12,7 +12,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::path_model::{Color, NodeId, PathSnapshot};
-use crate::units::{Angle, Length, Point, Vec2};
+use crate::units::{Angle, Length, Point, Tolerance, Vec2};
 
 /// A rectangle's bounding box, normalized so `origin` is always the
 /// top-left (minimum) corner and `width`/`height` are always
@@ -261,6 +261,15 @@ pub struct PrimitiveSnapshot {
     pub stroke: Color,
     /// Fill — always `None` in this slice, same as a path's.
     pub fill: Option<Color>,
+    /// The angle of this primitive's local x-axis in document space
+    /// (`specs/0005-object-transform/adrs.md`: "one `rotation` register
+    /// per object"). `0` for every shape this crate creates; a Select-
+    /// tool rotate drag is the only writer. The stored frame
+    /// (`RectBounds`/`EllipseFrame`/`StarFrame`) is always this
+    /// primitive's shape in its own *local* frame — [`crate::outline_of`]
+    /// draws it unrotated; [`crate::outline_of_rotated`] rotates that outline
+    /// about the frame's own center by this angle.
+    pub rotation: Angle,
 }
 
 /// One tree node's data, read generically without first knowing whether
@@ -283,6 +292,43 @@ impl ObjectSnapshot {
         match self {
             Self::Path(snapshot) => snapshot.id,
             Self::Primitive(snapshot) => snapshot.id,
+        }
+    }
+
+    /// This object's own `rotation` register — the angle of its local
+    /// x-axis in document space, whichever kind it is
+    /// (`specs/0005-object-transform/adrs.md`: "the meaning is the same
+    /// for both kinds").
+    #[must_use]
+    pub const fn rotation(&self) -> Angle {
+        match self {
+            Self::Path(snapshot) => snapshot.rotation,
+            Self::Primitive(snapshot) => snapshot.rotation,
+        }
+    }
+
+    /// This object rotated by `angle` about `pivot` (acceptance criteria
+    /// 15-18, 20 of `specs/0005-object-transform/specification.md`): a
+    /// path bakes every anchor's point about `pivot` and every handle
+    /// vector by `angle` ([`PathSnapshot::rotated`]); a primitive's frame
+    /// center rotates about `pivot` (identity when `pivot` is the
+    /// center itself — the common "rotate about the object's own
+    /// center" case, acceptance criterion 15) while every other frame
+    /// parameter (width/height/radius/point count/inner ratio) is
+    /// untouched. Either way the `rotation` register itself always
+    /// advances by `angle`, normalized.
+    #[must_use]
+    pub fn rotated(&self, pivot: Point, angle: Angle) -> Self {
+        match self {
+            Self::Path(path) => Self::Path(path.rotated(pivot, angle)),
+            Self::Primitive(primitive) => {
+                let mut primitive = *primitive;
+                primitive.shape = rotate_shape(primitive.shape, pivot, angle);
+                primitive.rotation =
+                    Angle::from_radians(primitive.rotation.as_radians() + angle.as_radians())
+                        .normalized();
+                Self::Primitive(primitive)
+            }
         }
     }
 
@@ -322,7 +368,7 @@ impl ObjectSnapshot {
 /// so a moved primitive's live preview and its committed result can never
 /// independently drift apart.
 #[must_use]
-pub(crate) fn translate_shape(shape: Shape, offset: Vec2) -> Shape {
+pub fn translate_shape(shape: Shape, offset: Vec2) -> Shape {
     match shape {
         Shape::Rect {
             bounds,
@@ -360,6 +406,50 @@ pub(crate) fn translate_shape(shape: Shape, offset: Vec2) -> Shape {
             inner_ratio,
         },
     }
+}
+
+/// This shape's own center, in its local (unrotated) frame — the pivot a
+/// primitive's rotation always turns about (`specs/0005-object-transform/
+/// adrs.md`: "the outline is rotated by `rotation` about the frame's
+/// centre"). A rectangle's center is derived from its origin/size; the
+/// other three kinds already store their center directly.
+#[must_use]
+pub fn shape_center(shape: &Shape) -> Point {
+    match *shape {
+        Shape::Rect { bounds, .. } => Point::new(
+            bounds.origin.x + bounds.width.as_mm() / 2.0,
+            bounds.origin.y + bounds.height.as_mm() / 2.0,
+        ),
+        Shape::Ellipse { frame } => frame.center,
+        Shape::Polygon { frame, .. } | Shape::Star { frame, .. } => frame.center,
+    }
+}
+
+/// How close a rotation pivot must be to a primitive's own center for
+/// [`rotate_shape`] to treat it as *the* center: nanometre-scale, far
+/// below anything a pointer can express, but far above the one-ulp
+/// difference between a rectangle's derived `shape_center` and the box
+/// center `vecmanf-ui-core` computes for the same shape.
+const PIVOT_AT_CENTER_TOLERANCE: Tolerance = Tolerance::from_mm(1e-6);
+
+/// Rotates a primitive's own frame center about `pivot` by `angle`,
+/// leaving every other frame parameter untouched (`specs/0005-object-
+/// transform/adrs.md`'s rotation table: "rotate about centre: `rotation`"
+/// only; "rotate, Shift pivot: `rotation`, frame"). When `pivot` is
+/// within [`PIVOT_AT_CENTER_TOLERANCE`] of the center the shape is
+/// returned exactly as it is, so a centre rotate rewrites no frame
+/// value at all (a rewrite would race a concurrent resize and could
+/// win it). [`ObjectSnapshot::rotated`]'s primitive arm is the one
+/// caller.
+#[must_use]
+pub(crate) fn rotate_shape(shape: Shape, pivot: Point, angle: Angle) -> Shape {
+    let center = shape_center(&shape);
+    if pivot.vector_to(center).length() <= PIVOT_AT_CENTER_TOLERANCE.as_mm() {
+        return shape;
+    }
+    let new_center = center.rotated_around(pivot, angle);
+    let offset = Vec2::new(new_center.x - center.x, new_center.y - center.y);
+    translate_shape(shape, offset)
 }
 
 /// The axis-aligned frame bounds of any primitive shape — what the
@@ -403,6 +493,116 @@ pub fn shape_frame_bounds(shape: &Shape) -> (Point, Point) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn rect_primitive(origin: Point, w: f64, h: f64) -> PrimitiveSnapshot {
+        PrimitiveSnapshot {
+            id: NodeId::from_parts(1, 1),
+            shape: Shape::Rect {
+                bounds: RectBounds {
+                    origin,
+                    width: Length::from_mm(w),
+                    height: Length::from_mm(h),
+                },
+                corner_radius: Length::from_mm(0.0),
+            },
+            stroke_width: Length::from_mm(0.25),
+            stroke: Color::BLACK,
+            fill: None,
+            rotation: Angle::from_radians(0.0),
+        }
+    }
+
+    #[test]
+    fn shape_center_of_a_rect_is_its_midpoint() {
+        let shape = Shape::Rect {
+            bounds: RectBounds {
+                origin: Point::new(0.0, 0.0),
+                width: Length::from_mm(10.0),
+                height: Length::from_mm(20.0),
+            },
+            corner_radius: Length::from_mm(0.0),
+        };
+        assert_eq!(shape_center(&shape), Point::new(5.0, 10.0));
+    }
+
+    #[test]
+    fn shape_center_of_an_ellipse_is_its_own_center() {
+        let shape = Shape::Ellipse {
+            frame: EllipseFrame {
+                center: Point::new(3.0, 4.0),
+                rx: Length::from_mm(5.0),
+                ry: Length::from_mm(5.0),
+            },
+        };
+        assert_eq!(shape_center(&shape), Point::new(3.0, 4.0));
+    }
+
+    /// Rotating about a primitive's own center (acceptance criterion 15
+    /// default pivot) leaves the frame's center exactly where it is and
+    /// only advances `rotation`.
+    #[test]
+    fn object_rotated_about_its_own_center_moves_nothing_but_rotation() {
+        let primitive = rect_primitive(Point::new(0.0, 0.0), 10.0, 10.0);
+        let center = shape_center(&primitive.shape);
+        let rotated = ObjectSnapshot::Primitive(primitive)
+            .rotated(center, Angle::from_radians(std::f64::consts::FRAC_PI_2));
+        let ObjectSnapshot::Primitive(rotated) = rotated else {
+            panic!("expected a primitive");
+        };
+        assert_eq!(shape_center(&rotated.shape), center);
+        assert!((rotated.rotation.as_radians() - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
+        let Shape::Rect { bounds, .. } = rotated.shape else {
+            panic!("expected rect");
+        };
+        assert!((bounds.width.as_mm() - 10.0).abs() < 1e-9, "size untouched");
+    }
+
+    /// A Shift-pivot rotate (acceptance criterion 16) moves the frame's
+    /// center around the given off-center pivot, and still advances
+    /// `rotation` by the same angle.
+    #[test]
+    fn object_rotated_about_an_off_center_pivot_moves_the_frame_too() {
+        let primitive = rect_primitive(Point::new(0.0, 0.0), 10.0, 10.0);
+        let pivot = Point::new(0.0, 5.0); // bottom-edge midpoint's own neighbourhood
+        let rotated = ObjectSnapshot::Primitive(primitive)
+            .rotated(pivot, Angle::from_radians(std::f64::consts::PI));
+        let ObjectSnapshot::Primitive(rotated) = rotated else {
+            panic!("expected a primitive");
+        };
+        let new_center = shape_center(&rotated.shape);
+        // 180 degrees about (0, 5): the old center (5, 5) maps to (-5, 5).
+        assert!((new_center.x - (-5.0)).abs() < 1e-9);
+        assert!((new_center.y - 5.0).abs() < 1e-9);
+    }
+
+    /// Two successive quarter-turn rotations accumulate in the
+    /// `rotation` register, normalized.
+    #[test]
+    fn object_rotation_register_accumulates_across_rotations() {
+        let primitive = rect_primitive(Point::new(0.0, 0.0), 10.0, 10.0);
+        let center = shape_center(&primitive.shape);
+        let once = ObjectSnapshot::Primitive(primitive)
+            .rotated(center, Angle::from_radians(std::f64::consts::FRAC_PI_2));
+        let twice = once.rotated(center, Angle::from_radians(std::f64::consts::FRAC_PI_2));
+        assert!((twice.rotation().as_radians() - std::f64::consts::PI).abs() < 1e-9);
+    }
+
+    /// Rotating never changes the shape's kind (acceptance criterion
+    /// 21).
+    #[test]
+    fn rotating_a_primitive_keeps_it_the_same_kind() {
+        let primitive = rect_primitive(Point::new(0.0, 0.0), 10.0, 10.0);
+        let center = shape_center(&primitive.shape);
+        let rotated =
+            ObjectSnapshot::Primitive(primitive).rotated(center, Angle::from_radians(0.3));
+        assert!(matches!(
+            rotated,
+            ObjectSnapshot::Primitive(PrimitiveSnapshot {
+                shape: Shape::Rect { .. },
+                ..
+            })
+        ));
+    }
 
     #[test]
     fn rect_bounds_from_corners_normalizes_any_drag_direction() {
@@ -473,6 +673,7 @@ mod tests {
             stroke_width: Length::from_mm(0.25),
             stroke: Color::BLACK,
             fill: None,
+            rotation: Angle::from_radians(0.0),
         };
         let moved = ObjectSnapshot::Primitive(snapshot).translated(Vec2::new(3.0, 4.0));
         let ObjectSnapshot::Primitive(moved) = moved else {
@@ -508,6 +709,7 @@ mod tests {
             stroke: Color::BLACK,
             fill: None,
             anchors: vec![anchor],
+            rotation: Angle::from_radians(0.0),
         };
         let moved = ObjectSnapshot::Path(path).translated(Vec2::new(1.0, 2.0));
         let ObjectSnapshot::Path(moved) = moved else {

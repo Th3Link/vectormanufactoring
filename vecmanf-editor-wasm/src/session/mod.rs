@@ -30,7 +30,7 @@ use vecmanf_document_core::{
 };
 use vecmanf_render_core::{
     DecorationInput, DrawList, Hovered as RenderHovered, build_draw_list, build_pen_preview,
-    build_select_draw_list,
+    build_select_draw_list, build_transform_draw_list,
 };
 use vecmanf_ui_core::{
     AnchorIdMinter, EllipseTool, Hit, HitTolerances, NodeTool, NodeToolbarState, ObjectSelection,
@@ -62,11 +62,44 @@ const POINT_TOLERANCE_PX: f64 = 16.0;
 const HANDLE_TOLERANCE_PX: f64 = 16.0;
 /// 4px segment hit-test tolerance (`docs/design-system.md`).
 const SEGMENT_TOLERANCE_PX: f64 = 4.0;
+/// The Select tool's own transform resize-handle hit-test radius
+/// (`docs/design-system.md`'s now-resolved "Transform resize handle
+/// hit-test radius" row, `object-transform`): equal to
+/// [`HANDLE_TOLERANCE_PX`], not an independent value.
+const TRANSFORM_RESIZE_HANDLE_TOLERANCE_PX: f64 = HANDLE_TOLERANCE_PX;
+/// The rotate handle's own hit-test radius (`docs/design-system.md`'s
+/// "Transform rotate handle hit-test radius"): equal to the resize
+/// radius, with [`TRANSFORM_ROTATE_HANDLE_OFFSET_PX`] at least the sum of
+/// the two radii so the rotate and top-edge hit areas cannot overlap.
+const TRANSFORM_ROTATE_HANDLE_TOLERANCE_PX: f64 = 16.0;
+/// The rotate handle's screen-space offset above the top-edge resize
+/// handle (`docs/design-system.md`'s "Transform rotate handle offset"):
+/// 16 + 16 px, the two hit radii.
+const TRANSFORM_ROTATE_HANDLE_OFFSET_PX: f64 = 32.0;
 /// How far (screen pixels) a pen-tool press must move before it counts
 /// as a drag rather than a plain click (acceptance criteria 1 vs 2). Not
 /// itself a named design-system token; a small, deliberately generous
 /// value so an imprecise click is never misread as a drag.
 const PEN_DRAG_THRESHOLD_PX: f64 = 3.0;
+
+/// The largest pointer coordinate (document millimetres) a tool ever sees.
+/// A finite value beyond it — one past `f32` range panics the draw-list
+/// tessellator — is clamped to it; real pointer events are nowhere near.
+const MAX_POINTER_COORDINATE_MM: f64 = 1e9;
+
+/// `point` with both coordinates clamped to ±[`MAX_POINTER_COORDINATE_MM`],
+/// or `None` if either is NaN or infinite. Pointer events come from the
+/// host; non-finite values must never reach a tool, where they could turn
+/// into a NaN `rotation` or an infinite size in a saved file
+/// (`specs/0005-object-transform/adrs.md`: "a drag must never make a file
+/// unopenable"), and absurd finite ones must not reach the renderer.
+fn sanitized_point(point: Point) -> Option<Point> {
+    if !(point.x.is_finite() && point.y.is_finite()) {
+        return None;
+    }
+    let clamp = |v: f64| v.clamp(-MAX_POINTER_COORDINATE_MM, MAX_POINTER_COORDINATE_MM);
+    Some(Point::new(clamp(point.x), clamp(point.y)))
+}
 
 /// Which tool is active. Exactly one at a time — `specification.md`'s
 /// tool rail has six buttons (Select, Pen, Node, Rectangle, Ellipse,
@@ -125,6 +158,16 @@ pub struct Session {
     /// `None` before the first move, or once [`Session::pointer_leave`]
     /// says the pointer is off the canvas.
     pointer_position: Option<Point>,
+    /// The Shift modifier's live state, as of the most recent
+    /// [`Session::pointer_hover`] call — the Select tool's own resize/
+    /// rotate live preview needs this at *render* time
+    /// (`specs/0005-object-transform/specification.md`'s pivot-swap
+    /// modifier), when `draw_list` has no event of its own to read it
+    /// from.
+    select_shift_held: bool,
+    /// The Ctrl modifier's live state, same reasoning as
+    /// `select_shift_held` (acceptance criteria 5, 17).
+    select_ctrl_held: bool,
 }
 
 impl Session {
@@ -154,6 +197,8 @@ impl Session {
             hovered_primitive: None,
             hovered_object: None,
             pointer_position: None,
+            select_shift_held: false,
+            select_ctrl_held: false,
         }
     }
 
@@ -180,6 +225,8 @@ impl Session {
             hovered_primitive: None,
             hovered_object: None,
             pointer_position: None,
+            select_shift_held: false,
+            select_ctrl_held: false,
         })
     }
 
@@ -272,6 +319,27 @@ impl Session {
         self.select.live_offset(cursor)
     }
 
+    /// The Select tool's own live, uncommitted resize/rotate preview
+    /// while one of those drags is in flight (`specs/0005-object-
+    /// transform/specification.md`, acceptance criteria 14, 22) —
+    /// `None` outside the Select tool, with no such drag in flight, or
+    /// before the pointer has ever moved over the canvas. The cached
+    /// `select_shift_held`/`select_ctrl_held` (set by every
+    /// [`Session::pointer_hover`] call) are what let this be read at
+    /// render time, with no event of its own.
+    pub(super) fn select_live_transform(&self) -> Option<ObjectSnapshot> {
+        if self.tool != Tool::Select {
+            return None;
+        }
+        let cursor = self.pointer_position?;
+        self.select
+            .live_resize(cursor, self.select_shift_held, self.select_ctrl_held)
+            .or_else(|| {
+                self.select
+                    .live_rotate(cursor, self.select_shift_held, self.select_ctrl_held)
+            })
+    }
+
     /// [`Session::paths`], with the node tool's in-flight drag (if any)
     /// substituted into the relevant anchor's live, not-yet-committed
     /// position/handle values — resolved by [`NodeTool::live_drag`]
@@ -298,6 +366,16 @@ impl Session {
                     if let ObjectSnapshot::Path(path) = translated {
                         *snapshot = path;
                     }
+                }
+            }
+        }
+        // The Select tool's own live resize/rotate preview
+        // (`specs/0005-object-transform/specification.md`, acceptance
+        // criteria 14, 22).
+        if let Some(ObjectSnapshot::Path(live)) = self.select_live_transform() {
+            for snapshot in &mut paths {
+                if snapshot.id == live.id {
+                    *snapshot = live.clone();
                 }
             }
         }
@@ -345,6 +423,9 @@ impl Session {
 
     /// The pointer went down at `point` (document space).
     pub fn pointer_down(&mut self, point: Point, shift: bool) {
+        let Some(point) = sanitized_point(point) else {
+            return;
+        };
         // Same flush as `set_tool`'s own doc comment explains: a canvas
         // click can change the selection (e.g. selecting a different
         // star) before a pending ratio-slider preview ever gets a
@@ -385,12 +466,21 @@ impl Session {
     /// criteria 3, 4, 5, 9, 13, 14, 15's "updates live" wording).
     /// `constrain` is the Ctrl modifier's current state, consulted only
     /// by the rectangle/ellipse tools' create-drag preview (acceptance
-    /// criteria 2, 8).
-    pub fn pointer_hover(&mut self, point: Point, constrain: bool) {
+    /// criteria 2, 8) and — since `object-transform` — by the Select
+    /// tool's own live resize/rotate preview, alongside `shift`
+    /// (acceptance criteria 5, 7, 16, 17); both are cached
+    /// (`select_shift_held`/`select_ctrl_held`) so [`Session::draw_list`]
+    /// can read their current state with no event of its own.
+    pub fn pointer_hover(&mut self, point: Point, shift: bool, constrain: bool) {
+        let Some(point) = sanitized_point(point) else {
+            return;
+        };
         self.pointer_position = Some(point);
         self.hovered = None;
         self.hovered_primitive = None;
         self.hovered_object = None;
+        self.select_shift_held = shift;
+        self.select_ctrl_held = constrain;
         match self.tool {
             Tool::Select => {
                 self.select_hover(point);
@@ -425,12 +515,20 @@ impl Session {
 
     /// The pointer released at `point`, ending whatever gesture
     /// [`Session::pointer_down`] began. `constrain` is the Ctrl
-    /// modifier's state at release — consulted only by the rectangle and
-    /// ellipse tools (acceptance criteria 2, 8).
-    pub fn pointer_up(&mut self, point: Point, constrain: bool) {
+    /// modifier's state at release — consulted by the rectangle and
+    /// ellipse tools (acceptance criteria 2, 8) and, since
+    /// `object-transform`, by the Select tool's own resize/rotate commit
+    /// alongside `shift` (acceptance criteria 5, 7, 16, 17).
+    pub fn pointer_up(&mut self, point: Point, shift: bool, constrain: bool) {
+        let Some(point) = sanitized_point(point) else {
+            // A release at a non-finite position cannot be committed to
+            // anything; cancel the gesture rather than write NaN.
+            self.escape();
+            return;
+        };
         match self.tool {
             Tool::Select => {
-                self.select_pointer_up(point);
+                self.select_pointer_up(point, shift, constrain);
             }
             Tool::Pen => {
                 let threshold = self.drag_threshold();
@@ -678,9 +776,14 @@ impl Session {
             view,
             &self.select_decoration_input(),
         ));
-        if let Some(live_shape) = self.live_preview_shape() {
+        list.extend(build_transform_draw_list(
+            view,
+            &self.select_transform_decoration_input(),
+        ));
+        if let Some((live_shape, rotation)) = self.live_preview_shape() {
             list.extend(vecmanf_render_core::build_shape_live_preview(
                 &live_shape,
+                rotation,
                 view,
             ));
         }
@@ -787,9 +890,9 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false, false);
         session.finish_pen();
 
         let paths = session.paths();
@@ -802,7 +905,7 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.escape();
         assert_eq!(session.document.object_ids(), Vec::new());
     }
@@ -812,14 +915,14 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false, false);
         session.finish_pen();
 
         session.set_tool(Tool::Node);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(5.0, 5.0), false);
+        session.pointer_up(Point::new(5.0, 5.0), false, false);
 
         let paths = session.paths();
         assert_eq!(paths[0].anchors[0].point, Point::new(5.0, 5.0));
@@ -830,9 +933,9 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false, false);
         session.finish_pen();
 
         // Pen tool is still active: these are no-ops.
@@ -857,9 +960,9 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false, false);
         session.finish_pen();
         assert_ne!(session.draw_list().triangles.len(), 0);
     }
@@ -874,11 +977,11 @@ mod tests {
         let empty = session.draw_list().triangle_count();
 
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         let one_node = session.draw_list().triangle_count();
         assert!(one_node > empty, "the placed node's glyph/hover ring draw");
 
-        session.pointer_hover(Point::new(10.0, 0.0), false);
+        session.pointer_hover(Point::new(10.0, 0.0), false, false);
         let with_rubber_band = session.draw_list().triangle_count();
         assert!(
             with_rubber_band > one_node,
@@ -902,15 +1005,15 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
 
         // Press down at C and move the cursor without releasing — a drag
         // in flight, same as `pointer_up`'s own AC2 test fixture.
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_hover(Point::new(10.0, 0.0), false);
+        session.pointer_hover(Point::new(10.0, 0.0), false, false);
         let press_with_no_movement_yet = session.draw_list().triangle_count();
 
-        session.pointer_hover(Point::new(13.0, 4.0), false);
+        session.pointer_hover(Point::new(13.0, 4.0), false, false);
         let mid_drag = session.draw_list().triangle_count();
         assert!(
             mid_drag > press_with_no_movement_yet,
@@ -930,17 +1033,17 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false, false);
         session.finish_pen();
 
         session.set_tool(Tool::Node);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_hover(Point::new(0.0, 0.0), false);
+        session.pointer_hover(Point::new(0.0, 0.0), false, false);
         let press_with_no_movement_yet = session.draw_list();
 
-        session.pointer_hover(Point::new(40.0, 40.0), false);
+        session.pointer_hover(Point::new(40.0, 40.0), false, false);
         let mid_drag = session.draw_list();
 
         // The committed document must not have moved yet — this is a
@@ -953,7 +1056,7 @@ mod tests {
         );
 
         // On release, the commit matches what was just being previewed.
-        session.pointer_up(Point::new(40.0, 40.0), false);
+        session.pointer_up(Point::new(40.0, 40.0), false, false);
         assert_eq!(session.paths()[0].anchors[0].point, Point::new(40.0, 40.0));
     }
 
@@ -966,21 +1069,21 @@ mod tests {
         session.set_tool(Tool::Pen);
         // AC2: a click-drag places a smooth node with symmetric handles.
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(13.0, 4.0), false);
+        session.pointer_up(Point::new(13.0, 4.0), false, false);
         session.finish_pen();
 
         session.set_tool(Tool::Node);
         // Select the node first — handles are only hittable once selected.
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false, false);
         let selected_not_dragging = session.draw_list();
 
         // Press on the handle endpoint (anchor + handle_out, (13, 4)) and
         // drag it without releasing.
         session.pointer_down(Point::new(13.0, 4.0), false);
-        session.pointer_hover(Point::new(20.0, 8.0), false);
+        session.pointer_hover(Point::new(20.0, 8.0), false, false);
         let mid_drag = session.draw_list();
 
         assert_eq!(
@@ -1014,21 +1117,21 @@ mod tests {
         assert!(!session.is_hovering_pen_close_target(), "idle: no path yet");
 
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(50.0, 0.0), false);
-        session.pointer_up(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 0.0), false, false);
 
-        session.pointer_hover(Point::new(0.1, 0.1), false);
+        session.pointer_hover(Point::new(0.1, 0.1), false, false);
         assert!(session.is_hovering_pen_close_target());
 
-        session.pointer_hover(Point::new(50.0, 0.0), false);
+        session.pointer_hover(Point::new(50.0, 0.0), false, false);
         assert!(
             !session.is_hovering_pen_close_target(),
             "near the last node, not the first"
         );
 
         session.set_tool(Tool::Node);
-        session.pointer_hover(Point::new(0.1, 0.1), false);
+        session.pointer_hover(Point::new(0.1, 0.1), false, false);
         assert!(
             !session.is_hovering_pen_close_target(),
             "the node tool never shows a pen cursor"
@@ -1070,17 +1173,17 @@ mod tests {
         session.set_tool(Tool::Pen);
         // A at (0, 0), a plain corner click.
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         // B at (50, 0), dragged so its handle_out lands at (50, 20) —
         // a handle endpoint 20px straight up from B.
         session.pointer_down(Point::new(50.0, 0.0), false);
-        session.pointer_up(Point::new(50.0, 20.0), false);
+        session.pointer_up(Point::new(50.0, 20.0), false, false);
         session.finish_pen();
 
         session.set_tool(Tool::Node);
         // Select B first: handles are only hittable on a selected node.
         session.pointer_down(Point::new(50.0, 0.0), false);
-        session.pointer_up(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 0.0), false, false);
 
         let b = session.paths()[0].anchors[1].id;
         assert_eq!(
@@ -1092,7 +1195,7 @@ mod tests {
         // 13px from the handle endpoint (50, 20); ~23.8px from B itself
         // and far from the A-B segment, so only the handle tolerance can
         // explain a hit here.
-        session.pointer_hover(Point::new(63.0, 20.0), false);
+        session.pointer_hover(Point::new(63.0, 20.0), false, false);
         assert_eq!(
             session.hovered,
             Some(Hit::Handle {
@@ -1118,9 +1221,9 @@ mod tests {
         reset_to_identity_view(&mut session);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(200.0, 0.0), false);
-        session.pointer_up(Point::new(200.0, 0.0), false);
+        session.pointer_up(Point::new(200.0, 0.0), false, false);
         session.finish_pen();
 
         session.set_tool(Tool::Node);
@@ -1128,7 +1231,7 @@ mod tests {
 
         // 13px from A (0, 0) — a 5-12-13 offset, well clear of the
         // 200px-long A-B segment and of B itself.
-        session.pointer_hover(Point::new(5.0, 12.0), false);
+        session.pointer_hover(Point::new(5.0, 12.0), false, false);
         assert_eq!(
             session.hovered,
             Some(Hit::Node {
@@ -1144,9 +1247,9 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false, false);
         session.finish_pen();
 
         let bytes = session.pack("0.1.0").expect("pack");
@@ -1168,14 +1271,14 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false, false);
         session.finish_pen();
 
         session.set_tool(Tool::Node);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
 
         let state = session.node_toolbar_state();
         assert!(state.can_delete);
@@ -1199,14 +1302,14 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(100.0, 0.0), false);
-        session.pointer_up(Point::new(100.0, 0.0), false);
+        session.pointer_up(Point::new(100.0, 0.0), false, false);
         session.finish_pen();
 
         session.set_tool(Tool::Node);
         session.pointer_down(Point::new(50.0, 0.0), false);
-        session.pointer_up(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 0.0), false, false);
 
         let state = session.node_toolbar_state();
         assert!(state.can_insert);
@@ -1232,18 +1335,18 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(50.0, 0.0), false);
-        session.pointer_up(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 0.0), false, false);
         session.pointer_down(Point::new(25.0, 50.0), false);
-        session.pointer_up(Point::new(25.0, 50.0), false);
+        session.pointer_up(Point::new(25.0, 50.0), false, false);
         session.finish_pen();
 
         session.set_tool(Tool::Node);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(25.0, 50.0), true);
-        session.pointer_up(Point::new(25.0, 50.0), false);
+        session.pointer_up(Point::new(25.0, 50.0), false, false);
         assert!(session.node_toolbar_state().can_join);
 
         session.join_selected();
@@ -1261,16 +1364,16 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false, false);
         session.pointer_down(Point::new(20.0, 0.0), false);
-        session.pointer_up(Point::new(20.0, 0.0), false);
+        session.pointer_up(Point::new(20.0, 0.0), false, false);
         session.finish_pen();
 
         session.set_tool(Tool::Node);
         session.pointer_down(Point::new(10.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false, false);
         assert!(session.node_toolbar_state().can_split);
 
         session.split_selected();
@@ -1292,15 +1395,15 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(50.0, 0.0), false);
-        session.pointer_up(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 0.0), false, false);
         session.finish_pen();
 
         session.pointer_down(Point::new(0.0, 100.0), false);
-        session.pointer_up(Point::new(0.0, 100.0), false);
+        session.pointer_up(Point::new(0.0, 100.0), false, false);
         session.pointer_down(Point::new(50.0, 100.0), false);
-        session.pointer_up(Point::new(50.0, 100.0), false);
+        session.pointer_up(Point::new(50.0, 100.0), false, false);
         session.finish_pen();
 
         assert_eq!(session.paths().len(), 2, "two separate, unrelated objects");
@@ -1309,9 +1412,9 @@ mod tests {
         // (acceptance criterion 17).
         session.set_tool(Tool::Select);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(0.0, 100.0), true);
-        session.pointer_up(Point::new(0.0, 100.0), false);
+        session.pointer_up(Point::new(0.0, 100.0), false, false);
 
         // Switch to the Node tool via the rail/shortcut, not a double-
         // click — acceptance criterion 6: every selected path object's
@@ -1323,9 +1426,9 @@ mod tests {
         // Click one endpoint, then shift-click an endpoint on the
         // *other* visible path (acceptance criterion 7).
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(0.0, 100.0), true);
-        session.pointer_up(Point::new(0.0, 100.0), false);
+        session.pointer_up(Point::new(0.0, 100.0), false, false);
 
         assert!(
             session.node_toolbar_state().can_join,
@@ -1352,9 +1455,9 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(50.0, 0.0), false);
-        session.pointer_up(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 0.0), false, false);
         session.finish_pen();
 
         session.set_tool(Tool::Select);
@@ -1378,14 +1481,14 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(50.0, 0.0), false);
-        session.pointer_up(Point::new(50.0, 0.0), false);
+        session.pointer_up(Point::new(50.0, 0.0), false, false);
         session.finish_pen();
         session.pointer_down(Point::new(0.0, 100.0), false);
-        session.pointer_up(Point::new(0.0, 100.0), false);
+        session.pointer_up(Point::new(0.0, 100.0), false, false);
         session.pointer_down(Point::new(50.0, 100.0), false);
-        session.pointer_up(Point::new(50.0, 100.0), false);
+        session.pointer_up(Point::new(50.0, 100.0), false, false);
         session.finish_pen();
         let (path_a, path_b) = {
             let paths = session.paths();
@@ -1394,9 +1497,9 @@ mod tests {
 
         session.set_tool(Tool::Node);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false);
+        session.pointer_up(Point::new(0.0, 0.0), false, false);
         session.pointer_down(Point::new(0.0, 100.0), true);
-        session.pointer_up(Point::new(0.0, 100.0), false);
+        session.pointer_up(Point::new(0.0, 100.0), false, false);
 
         let input = session.decoration_input();
         assert_eq!(input.selected_nodes.len(), 2);

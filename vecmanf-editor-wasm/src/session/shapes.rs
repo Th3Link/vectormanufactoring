@@ -94,6 +94,19 @@ impl Session {
                 }
             }
         }
+        // The Select tool's own live resize/rotate preview
+        // (`specs/0005-object-transform/specification.md`, acceptance
+        // criteria 14, 22) — same "preview and commit share one
+        // implementation" reasoning as the move offset above.
+        if let Some(vecmanf_document_core::ObjectSnapshot::Primitive(live)) =
+            self.select_live_transform()
+        {
+            for primitive in &mut primitives {
+                if primitive.id == live.id {
+                    *primitive = live;
+                }
+            }
+        }
         primitives
     }
 
@@ -340,8 +353,29 @@ impl Session {
     /// The shape to preview on canvas right now — `Session::draw_list`'s
     /// own hook into `live_preview` (ux-engineer review: "a maker
     /// dragging out a rectangle sees a rectangle updating live").
-    pub(super) fn live_preview_shape(&self) -> Option<Shape> {
-        self.live_preview().map(|live| *live.shape())
+    ///
+    /// Paired with the rotation to draw it at: a create-drag is always
+    /// unrotated; a resize/radius/ratio adjustment keeps the single
+    /// selected primitive's own `rotation` (a handle drag only ever
+    /// starts on a single selection), so the preview outline turns with
+    /// the shape instead of snapping unrotated for the length of the
+    /// drag (`object-transform` acceptance criterion 25).
+    pub(super) fn live_preview_shape(&self) -> Option<(Shape, vecmanf_document_core::Angle)> {
+        let live = self.live_preview()?;
+        let rotation = match live {
+            LiveShape::Creating(..) => vecmanf_document_core::Angle::from_radians(0.0),
+            LiveShape::Adjusting(_) => match self.selection.ids() {
+                [only] => self
+                    .primitives()
+                    .into_iter()
+                    .find(|p| p.id == *only)
+                    .map_or(vecmanf_document_core::Angle::from_radians(0.0), |p| {
+                        p.rotation
+                    }),
+                _ => vecmanf_document_core::Angle::from_radians(0.0),
+            },
+        };
+        Some((*live.shape(), rotation))
     }
 
     /// The numeric readout for an in-progress create-drag
@@ -351,6 +385,9 @@ impl Session {
     /// create-drag (ux-engineer review item 2).
     #[must_use]
     pub fn live_readout(&self) -> Option<LiveReadout> {
+        if self.tool == Tool::Select {
+            return self.select_live_readout();
+        }
         let LiveShape::Creating(shape, anchor) = self.live_preview()? else {
             return None;
         };
@@ -461,7 +498,7 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Rectangle);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 10.0), false);
+        session.pointer_up(Point::new(10.0, 10.0), false, false);
 
         let primitives = session.primitives();
         assert_eq!(primitives.len(), 1);
@@ -474,7 +511,7 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Ellipse);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 10.0), false);
+        session.pointer_up(Point::new(10.0, 10.0), false, false);
 
         let primitives = session.primitives();
         assert_eq!(primitives.len(), 1);
@@ -487,7 +524,7 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::PolygonStar);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 0.0), false, false);
 
         let primitives = session.primitives();
         assert_eq!(primitives.len(), 1);
@@ -507,14 +544,14 @@ mod tests {
         let still_degenerate = session.draw_list().triangle_count();
         assert_eq!(still_degenerate, empty, "no movement yet: no preview");
 
-        session.pointer_hover(Point::new(20.0, 10.0), false);
+        session.pointer_hover(Point::new(20.0, 10.0), false, false);
         let with_preview = session.draw_list().triangle_count();
         assert!(
             with_preview > empty,
             "the live rectangle preview must draw before release"
         );
 
-        session.pointer_up(Point::new(20.0, 10.0), false);
+        session.pointer_up(Point::new(20.0, 10.0), false, false);
         assert_eq!(session.primitives().len(), 1, "and it still commits once");
     }
 
@@ -531,16 +568,16 @@ mod tests {
         );
 
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_hover(Point::new(20.0, 10.0), false);
+        session.pointer_hover(Point::new(20.0, 10.0), false, false);
         let readout = session.live_readout().expect("a create-drag is in flight");
         assert_eq!(readout.anchor, Point::new(20.0, 10.0));
         assert!(readout.text.contains("20.0"));
         assert!(readout.text.contains("10.0"));
 
-        session.pointer_up(Point::new(20.0, 10.0), false);
+        session.pointer_up(Point::new(20.0, 10.0), false, false);
         let id = session.primitives()[0].id;
         session.pointer_down(Point::new(0.0, 0.0), false); // select it
-        session.pointer_hover(Point::new(0.0, 0.0), false);
+        session.pointer_hover(Point::new(0.0, 0.0), false, false);
         let _ = id;
         // A plain resize/radius drag (not a create-drag) never shows a
         // readout, even while its own live preview is visible.
@@ -559,7 +596,7 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Rectangle);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 10.0), false);
+        session.pointer_up(Point::new(10.0, 10.0), false, false);
         let id = session.primitives()[0].id;
 
         // Switching tools and back does not convert it.
@@ -593,12 +630,12 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Rectangle);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 10.0), false);
+        session.pointer_up(Point::new(10.0, 10.0), false, false);
         let rect_id = session.primitives()[0].id;
 
         session.set_tool(Tool::Ellipse);
         session.pointer_down(Point::new(50.0, 50.0), false);
-        session.pointer_up(Point::new(60.0, 60.0), false);
+        session.pointer_up(Point::new(60.0, 60.0), false, false);
         let ellipse_id = session
             .primitives()
             .into_iter()
@@ -756,7 +793,7 @@ mod tests {
         let mut session = Session::new(1);
         session.set_tool(Tool::Rectangle);
         session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(10.0, 10.0), false);
+        session.pointer_up(Point::new(10.0, 10.0), false, false);
         let id = session.primitives()[0].id;
 
         // Select it, then locate the corner-radius handle at its
@@ -774,10 +811,13 @@ mod tests {
         // live preview already exists (an "Adjusting" preview, unlike
         // a create-drag's "Creating" preview, shows up the instant the
         // handle is grabbed) and still reports the starting radius.
-        let Some(Shape::Rect {
-            corner_radius: start_radius,
-            ..
-        }) = session.live_preview_shape()
+        let Some((
+            Shape::Rect {
+                corner_radius: start_radius,
+                ..
+            },
+            _,
+        )) = session.live_preview_shape()
         else {
             panic!("expected a live rect preview as soon as the handle is grabbed");
         };
@@ -790,11 +830,14 @@ mod tests {
         // confirm the live radius increases monotonically and nothing
         // is committed to the document until release.
         let first_drag = Point::new(handle.position.x - 1.0, handle.position.y + 1.0);
-        session.pointer_hover(first_drag, false);
-        let Some(Shape::Rect {
-            corner_radius: first_radius,
-            ..
-        }) = session.live_preview_shape()
+        session.pointer_hover(first_drag, false, false);
+        let Some((
+            Shape::Rect {
+                corner_radius: first_radius,
+                ..
+            },
+            _,
+        )) = session.live_preview_shape()
         else {
             panic!("expected a live rect preview mid-drag");
         };
@@ -820,11 +863,14 @@ mod tests {
         );
 
         let second_drag = Point::new(handle.position.x - 2.0, handle.position.y + 2.0);
-        session.pointer_hover(second_drag, false);
-        let Some(Shape::Rect {
-            corner_radius: second_radius,
-            ..
-        }) = session.live_preview_shape()
+        session.pointer_hover(second_drag, false, false);
+        let Some((
+            Shape::Rect {
+                corner_radius: second_radius,
+                ..
+            },
+            _,
+        )) = session.live_preview_shape()
         else {
             panic!("expected a live rect preview mid-drag");
         };
@@ -833,7 +879,7 @@ mod tests {
             "the live radius must track the drag continuously, not jump only on release"
         );
 
-        session.pointer_up(second_drag, false);
+        session.pointer_up(second_drag, false, false);
         assert!(
             session.live_preview_shape().is_none(),
             "no live preview once the drag is committed"

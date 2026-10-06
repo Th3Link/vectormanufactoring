@@ -22,6 +22,7 @@ mod hit_test_object;
 mod node_tool;
 mod object_bounds;
 mod object_selection;
+mod oriented_box;
 mod pen_tool;
 mod poly_star_tool;
 mod rectangle_tool;
@@ -29,6 +30,8 @@ mod select_tool;
 mod selection;
 mod shape_hit_test;
 mod shape_tool_common;
+mod transform_drag;
+mod transform_handle_layout;
 mod viewport;
 
 pub use anchor_id_minter::AnchorIdMinter;
@@ -43,15 +46,25 @@ pub use node_tool::{
 };
 pub use object_bounds::object_bounds;
 pub use object_selection::ObjectSelection;
+pub use oriented_box::{OrientedBox, oriented_bounds};
 pub use pen_tool::{PenTool, PointerUpOutcome as PenPointerUpOutcome};
 pub use poly_star_tool::{
     PolyStarMode, PolyStarPointerDownOutcome, PolyStarPointerUpOutcome, PolygonStarTool,
 };
 pub use rectangle_tool::{RectPointerDownOutcome, RectPointerUpOutcome, RectangleTool};
 pub use select_tool::{
-    SelectDoubleClickOutcome, SelectPointerDownOutcome, SelectTool, double_click,
+    SelectDoubleClickOutcome, SelectPointerDownOutcome, SelectTool, TransformHandleTolerances,
+    double_click,
 };
 pub use selection::NodeSelection;
 pub use shape_hit_test::{hit_test_handle, hit_test_primitive};
 pub use shape_tool_common::{LiveShape, ShapeHitTolerances};
+pub use transform_drag::StrokeScaling;
+pub use transform_handle_layout::{
+    ALL_EIGHT, CORNERS_FOUR, ResizedBox, TransformHandle, hit_test_transform_handle, is_corner,
+    polygon_star_resize_factor, resize_anchor_local_position, resize_cursor_angle_degrees,
+    resize_handle_local_position, resize_local_box, rotate_delta_angle,
+    rotate_handle_local_position, rotate_pivot, scaled_and_floored, stroke_or_radius_factor,
+    transform_handles,
+};
 pub use viewport::{PX_PER_MM_AT_100, Viewport, Zoom};

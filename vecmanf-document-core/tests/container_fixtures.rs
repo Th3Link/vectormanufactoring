@@ -164,3 +164,38 @@ fn malformed_paths_vmf_is_refused_as_damaged_not_a_panic() {
     let bytes = fixture("malformed_paths.vmf");
     assert!(matches!(unpack(2, &bytes), Err(OpenError::Damaged)));
 }
+
+/// `object-transform` (`specs/0005-object-transform/adrs.md`): a
+/// `format_version = 5` container carrying a rotated rectangle and a
+/// rotated path round-trips its `rotation` registers (committed bytes,
+/// not rebuilt in-test), and every older fixture — which has no
+/// `rotation` key at all — opens with rotation zero (migration is empty).
+#[test]
+fn rotation_v5_vmf_opens_with_each_objects_rotation() {
+    let document = unpack(2, &fixture("rotation_v5.vmf")).expect("a golden v5 .vmf must open");
+    let ids = document.object_ids();
+    assert_eq!(ids.len(), 2);
+    let ObjectSnapshot::Primitive(rect) = document.object(ids[0]).unwrap() else {
+        panic!("first object is the rectangle");
+    };
+    assert!((rect.rotation.as_radians() - 0.5).abs() < 1e-12);
+    assert!(
+        matches!(rect.shape, Shape::Rect { .. }),
+        "still a rectangle"
+    );
+    let ObjectSnapshot::Path(path) = document.object(ids[1]).unwrap() else {
+        panic!("second object is the path");
+    };
+    assert!((path.rotation.as_radians() - (-0.75)).abs() < 1e-12);
+}
+
+#[test]
+fn pre_rotation_fixtures_open_with_zero_rotation() {
+    for name in ["paths_v2.vmf", "primitives_v3.vmf"] {
+        let document = unpack(2, &fixture(name)).expect("older fixture must still open");
+        for id in document.object_ids() {
+            let rotation = document.object(id).unwrap().rotation();
+            assert!(rotation.as_radians().abs() < f64::EPSILON, "{name}");
+        }
+    }
+}

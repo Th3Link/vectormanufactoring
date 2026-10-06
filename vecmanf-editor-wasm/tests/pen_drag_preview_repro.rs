@@ -45,7 +45,7 @@ fn pen_drag_preview_draws_curve_geometry_not_just_a_longer_straight_line() {
     let mut session = Session::new(1);
     session.set_tool(Tool::Pen);
     session.pointer_down(Point::new(0.0, 0.0), false);
-    session.pointer_up(Point::new(0.0, 0.0), false);
+    session.pointer_up(Point::new(0.0, 0.0), false, false);
 
     session.pointer_down(Point::new(100.0, 0.0), false);
     // Drag straight "up" (negative y) by 50mm, perpendicular to the
@@ -54,7 +54,7 @@ fn pen_drag_preview_draws_curve_geometry_not_just_a_longer_straight_line() {
     // be unmistakable; a plain straight B->cursor rubber band, by
     // contrast, never leaves the y in [0, 50] band (B and the cursor are
     // its only two endpoints, both at y in {0, 50}).
-    session.pointer_hover(Point::new(100.0, 50.0), false);
+    session.pointer_hover(Point::new(100.0, 50.0), false, false);
 
     let list = session.draw_list();
     assert!(
@@ -139,9 +139,9 @@ fn pen_drag_preview_matches_the_pending_anchor_some_branch_not_the_none_branch()
     let mut session = Session::new(1);
     session.set_tool(Tool::Pen);
     session.pointer_down(Point::new(0.0, 0.0), false);
-    session.pointer_up(Point::new(0.0, 0.0), false);
+    session.pointer_up(Point::new(0.0, 0.0), false, false);
     session.pointer_down(Point::new(100.0, 0.0), false);
-    session.pointer_hover(cursor, false);
+    session.pointer_hover(cursor, false, false);
     let session_list = session.draw_list();
     let view = session.view();
 

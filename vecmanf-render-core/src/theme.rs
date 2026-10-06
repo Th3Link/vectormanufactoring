@@ -119,6 +119,46 @@ pub const SHAPE_HANDLE_OUTLINE_PX: f64 = 1.0;
 /// selection outline").
 pub const BOUNDING_BOX_OUTLINE_PX: f64 = 1.0;
 
+/// The Select tool's own transform resize handle (`object-transform`),
+/// screen-space pixels (`docs/design-system.md`'s "Transform resize
+/// handle": "8×8px screen-space... Same footprint as the
+/// `primitive-shapes` shape handle on purpose").
+pub const TRANSFORM_RESIZE_HANDLE_SIZE_PX: f64 = SHAPE_HANDLE_SIZE_PX;
+
+/// The transform resize handle's own outline thickness — same
+/// reasoning as [`SHAPE_HANDLE_OUTLINE_PX`].
+pub const TRANSFORM_RESIZE_HANDLE_OUTLINE_PX: f64 = 1.0;
+
+/// The transform resize handle's corner radius, screen-space pixels
+/// (`docs/design-system.md`: "8×8px screen-space, 2px corner radius").
+pub const TRANSFORM_RESIZE_HANDLE_CORNER_RADIUS_PX: f64 = 2.0;
+
+/// The rotate handle's arc stroke thickness, screen-space pixels — this
+/// crate's own choice (the design-system row gives only the 12×12px
+/// footprint and "circular-arrow icon"), thick enough to read at 12px.
+pub const TRANSFORM_ROTATE_HANDLE_STROKE_PX: f64 = 2.0;
+
+/// The rotate handle's own glyph size, screen-space pixels (`docs/
+/// design-system.md`'s "Transform rotate handle": "12×12px... circular-
+/// arrow icon glyph").
+///
+/// The resize/rotate handles' own hit-test radii and the rotate
+/// handle's 20px screen offset (`docs/design-system.md`'s own rows) are
+/// not constants in this crate: this crate never hit-tests or lays out
+/// handles (ADR 0011 §3) — `vecmanf-ui-core::transform_handle_layout`
+/// and `vecmanf-editor-wasm`'s own wiring own those values; this crate
+/// only draws a glyph at whatever position it is handed.
+pub const TRANSFORM_ROTATE_HANDLE_SIZE_PX: f64 = 12.0;
+
+/// The pivot marker's diameter, screen-space pixels (`docs/design-
+/// system.md`'s "Transform pivot marker").
+pub const TRANSFORM_PIVOT_MARKER_SIZE_PX: f64 = 6.0;
+
+/// The pivot marker's own color — `--accent` at 60% opacity (`docs/
+/// design-system.md`), a third opacity tier alongside [`ACCENT`]'s own
+/// full-opacity and [`ACCENT_HOVER`]'s 20%.
+pub const TRANSFORM_PIVOT_MARKER_COLOR: RgbaColor = ACCENT.with_alpha(153); // 60% of 255, rounded
+
 /// One dash's length, screen-space pixels, for the corner-radius
 /// connecting guide (`docs/design-system.md`: "dashed `--accent-hover`
 /// line").

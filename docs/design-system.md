@@ -181,11 +181,13 @@ values, not an implementation site, for those four rows.
 | Shape handle | 8×8px screen-space | Hollow square, `primitive-shapes`: bounding-box resize, rectangle corner-radius, polygon/star inner-radius — deliberately square (never circular or diamond) so the two vocabularies never read as the same control, regardless of either one's size; no longer the larger of the two since the handle endpoint's 2026-10-05 doubling (12px), and now the *smaller* of the two since the node glyph's own 2026-10-05 doubling (14px) — this token's own size was not revisited either time |
 | Shape handle hit-test radius | 16px screen-space | Same margin rule as the node radius (reused rather than invented fresh — `Session::shape_tolerances()` passes `self.point_tolerance()` straight through) — doubled from 8px as a direct, automatic consequence of the node hit-test radius doubling above, not a deliberate shape-handle-specific change. Now equal to the handle hit-test radius too (same coincidence as above) |
 | Transform resize handle | 8×8px screen-space, 2px corner radius ("squircle") | Hollow `--accent` stroke / white fill idle, solid `--accent` fill while dragging — `object-transform`'s 8 Select-tool scale handles (4 corner + 4 edge-midpoint). Same footprint as the `primitive-shapes` shape handle on purpose (criterion 1 of that spec pins the hit size); the rounded corner is the one deliberate silhouette difference, since the two can never be on screen at once (different tools) but shouldn't read as pixel-identical regardless |
-| Transform resize handle hit-test radius | 8px screen-space | Pinned explicitly by `object-transform` criterion 1, equal to the shape handle's own hit radius *as that criterion states it* — `object-transform` is not yet implemented, and the shape handle's hit radius has since grown to 16px (row above, 2026-10-05), so whoever implements that story needs to resolve this conflict (re-pin to 16px to match, or give the transform handle its own independent tolerance) rather than silently inheriting a now-stale 8px; flagged, not fixed here, since it is that story's own acceptance criterion to decide, not this one's |
-| Transform rotate handle | 12×12px screen-space, circular-arrow icon glyph (not a dot) | `--accent` stroke / transparent fill idle, `--accent-hover` fill on hover, solid `--accent` fill with white glyph while dragging (`object-transform`). Deliberately an icon rather than a plain circle, and not connected to the bounding box by a stalk line, so it never reads as a reuse of the Bézier handle's line-plus-circle composition (`path-node-editing`) |
-| Transform rotate handle offset | 20px screen-space, center to center | Distance from the top-edge resize handle to the rotate handle, measured along the bounding box's own local "up" axis (rotates with the box) — clears both handles' hit radii with room to spare |
-| Transform rotate handle hit-test radius | 12px screen-space | Scaled to its own larger glyph, same margin-rule instinct as every other handle above |
-| Transform pivot marker | 6px diameter screen-space, `--accent` at 60% opacity | Shown at the active scale/rotate pivot point for the duration of a drag only (`object-transform`) — its position is the feedback for Shift's pivot-swap modifier; see that spec's UX notes |
+| Transform resize handle hit-test radius | 16px screen-space | Resolved by `object-transform`'s own implementation (this row was flagged, not fixed, until now): criterion 1 pins this to "the same hit size as `primitive-shapes`' own shape handles, whatever that is at build time" — the shape handle's hit radius doubled to 16px in the 2026-10-05 sizing round (row above), so the transform resize handle takes that same 16px, not the stale 8px this row said when the spec was first written |
+| Transform rotate handle | 12×12px screen-space, circular-arrow icon glyph (not a dot): a 270° arc at 90% of the footprint, 2px stroke, with an arrowhead | `--accent` stroke / transparent fill idle, `--accent-hover` fill on hover, solid `--accent` fill with white glyph while dragging (`object-transform`). Deliberately an icon rather than a plain circle, and not connected to the bounding box by a stalk line, so it never reads as a reuse of the Bézier handle's line-plus-circle composition (`path-node-editing`) |
+| Transform rotate handle offset | 32px screen-space, center to center | Distance from the top-edge resize handle to the rotate handle, measured along the bounding box's own local "up" axis (rotates with the box). Corrected 2026-10-06 (`object-transform` UX review): the original 20px was chosen against an 8px resize hit radius; with the resize radius now 16px (16 + 12 > 20) the two hit areas overlapped. 32px is the sum of the two 16px hit radii, so they touch but never overlap |
+| Transform rotate handle hit-test radius | 16px screen-space | Raised from 12px in the same review so the rotate handle is as easy to hit as the resize handles (its 12px glyph is the smaller target, a larger radius makes up for it); equal to the resize radius, which is what lets the 32px offset above keep the two areas apart |
+| Transform handle hit priority | — | A resize handle's hit radius shrinks to a third of the box's smaller side (never below a quarter of 16px), and a press *inside* the box only grabs a handle within 6/16 of that (scaled) radius of the box's edge — 6px at the full 16px radius, less on a small box; outside the box the handle always wins (`SelectTool::handle_at`). A press inside the sole selected object's box that is not on a handle (resize or rotate) starts a **move**, so a small unfilled object — whose outline the handle radii tile completely — can still be moved; an *unselected* object still hits only on its outline, and a press on empty canvas outside the selected box still deselects (`object-transform` `adrs.md`, 2026-10-06). Below a 24px box side (3 × the 8px glyph) only the four corner handles are drawn, so the glyphs do not merge; hit-testing is unchanged |
+| Live transform readout | Pointer-anchored chip, 12px up and to the right of the pointer, `--toolbar-bg` / `--toolbar-icon`, 12px text | `object-transform` scale ("W × H mm", polygon/star "r R mm") and rotate ("37.4°", "45°" under Ctrl) readouts. The offset is shared by every tool's live readout (rectangle/ellipse/polygon create drags moved from 8px to 12px in the same change). Stays fully inside the canvas: flips to the left of the pointer when it would cross the right edge and below it when it would cross the top edge, then clamps (`frontend/src/lib/readoutPlacement.ts`) |
+| Transform pivot marker | 6px diameter screen-space, `--accent` at 60% opacity | Shown at the active scale/rotate pivot point for the duration of a drag only (`object-transform`) — its position is the feedback for Shift's pivot-swap modifier; see that spec's UX notes. A handle sitting exactly on the pivot is not drawn while the marker is shown, so the dot never lands on a handle that then looks pressed |
 | Bounding-box selection outline | 1px screen-space `--accent` (selected) / `--accent-hover` (hover) | Drawn around a selected/hovered primitive when its own matching tool is active (`primitive-shapes`) — **and, as of `canvas-navigation-and-selection`, around any selected/hovered object of any type (path or primitive) when the Select tool is active, with no shape handles or path nodes added on top.** Same token, two contexts: Select-tool selection is deliberately plain; the type-specific handles/nodes layer in only after double-click handoff into the object's own tool. |
 | `PropertiesPanel` width | 280px, fixed | Right-docked panel (`stroke-and-fill-styling`'s `StylePanel` is its first section); canvas fills the remaining width |
 | Contextual mini-toolbar padding | 6px | Floating per-selection toolbar (`NodeToolbar`'s actions, 2026-10-05), anchored near the current canvas selection rather than docked |
@@ -315,6 +317,67 @@ values, not an implementation site, for those four rows.
   not a held "mode," so the view (or the status-bar zoom readout) moving is
   feedback enough; don't add a transient on-canvas zoom popup.
 
+- **Switch (`ScaleStrokeSwitch`)** (2026-10-06, `object-transform`
+  criteria 8, 26-31, new): the pattern for one persistent on/off setting
+  that is tool state, not an object property. First use: "Scale stroke
+  width". Spec of the control:
+  - **Semantics:** Radix `Switch` (`radix-ui` is already a dependency),
+    `role="switch"`, `aria-checked`, wrapped in a `<label>` so the whole
+    row (text and track) is the click target. One Tab stop; Space toggles
+    (Enter does not, native switch behaviour). Never disabled, whatever is
+    selected, including nothing (criterion 30). No keyboard shortcut is
+    assigned now; Tab + Space is the keyboard path.
+  - **Label:** "Scale stroke width", sentence case, `text-sm` (14px),
+    `--toolbar-icon`, to the *left* of the track, 8px gap. The label is the
+    accessible name; do not add "On/Off" text, state is shown by the track.
+  - **Track:** 32 x 18px, fully rounded. **Off:** transparent fill, 1.5px
+    `--toolbar-icon` border, 12px `--toolbar-icon` thumb at the left, 2px
+    inset. **On:** `--toolbar-icon-active-bg` fill and border, 12px
+    `--toolbar-icon-active-fg` thumb at the right. State is carried by thumb
+    position and fill, never by color alone. Off border is 8:1 and on fill
+    is 3.3:1 against `--toolbar-bg`, both above the 3:1 non-text minimum.
+    Thumb moves 100ms ease-out; no motion under `prefers-reduced-motion`.
+  - **Row:** 28px high, 8px horizontal padding, `rounded-md`. Hover:
+    `--editor-accent-hover` behind the whole row. Focus-visible: 2px
+    `--editor-accent` ring with 1px `--toolbar-bg` offset (the grey `--ring`
+    the other toolbar buttons use is only 2.4:1 on `--toolbar-bg`; bring
+    those up to this ring when next touched).
+  - **Tooltip** (Radix `Tooltip`, 400ms delay, same styling as the tool
+    rail's, `side="bottom"`): "Scale stroke width with the object. Off: a
+    resize keeps the stroke thickness." Also on the focus ring's element
+    for keyboard users (Radix shows it on focus).
+  - **State** lives in `useEditorSession` (`scaleStrokeWidth`,
+    `setScaleStrokeWidth`), not in the component, defaults to off, and is
+    reset to off by `newProject()` and `openProject()` (criterion 27). It is
+    never persisted. The press handler reads it once at pointer-down
+    (criterion 28).
+  - **Host and bar layout** (customer decision 2026-10-06: the switch is a
+    Select tool setting). `SelectToolbar` is the Select tool's own
+    permanent bar, shown whenever `editor.tool === "select"`, with or
+    without a selection (criterion 30); later transform-tool settings are
+    appended to it. It is the third bar after `NodeToolbar` and
+    `ShapeToolbar` and looks identical: it lives in the same
+    `pointer-events-none` overlay row in `App.tsx` (`absolute top-3 right-3
+    left-[72px] z-20`, centred, right of the tool rail), pill `h-9`,
+    `rounded-lg`, `px-2`, `--toolbar-bg`, `--panel-elevation-shadow`,
+    `pointer-events-auto`. It floats over the canvas, so the canvas never
+    resizes. It holds this one control, with room to append later Select-
+    tool options after it at 12px gaps (a vertical 1px `--toolbar-icon` at
+    25% opacity divider between items, 20px high, once there are two).
+  - **One bar at a time.** The three bars are the same slot, rendered by
+    mutually exclusive conditions on the active tool (select, node,
+    rectangle/ellipse/polygon-star); Pen shows none. Switching tools swaps
+    the bar in place, at the same position, with no animation. A bar is
+    never stacked or shown next to another one. Because the overlay row
+    is `flex justify-center`, the bar's width differs per tool but its top
+    edge does not.
+  - **Focus and keys.** Tab order: tool rail, canvas, bar, same as the
+    other bars. The Space-to-pan key handler and the single-letter tool
+    shortcuts must ignore key events whose target is inside the bar
+    (no `preventDefault`), or Space could not toggle the switch. Switching
+    tools while the switch has focus unmounts it; focus falls back to the
+    canvas as it does for the other bars.
+
 ## Keyboard shortcuts established so far
 
 | Action | Shortcut | Notes |
@@ -329,6 +392,7 @@ values, not an implementation site, for those four rows.
 | Finish path | Enter (or double-click) | Matches Inkscape |
 | Cancel in-progress path | Escape | |
 | Delete selected node(s) | Delete or Backspace | Both bound; macOS keyboards label the backspace key "delete" |
+| Toggle "Scale stroke width" | none; Tab to the switch, Space | `object-transform`; Select tool's bar, tool state, off per session, never saved; no letter shortcut until usage shows one is needed |
 | Open/focus the style panel | Shift+Ctrl+F | Matches Inkscape's Fill & Stroke binding; app-global, not canvas-focus-scoped (`stroke-and-fill-styling`) — see note below |
 
 Single-letter tool shortcuts are a different category from the File menu's

@@ -82,6 +82,25 @@ impl Angle {
     pub const fn as_radians(self) -> f64 {
         self.0
     }
+
+    /// This angle wrapped to `(-π, π]` — `object-transform`'s own
+    /// "written normalized" rule (`specs/0005-object-transform/adrs.md`:
+    /// "rotation... written normalized to (-π, π]"), so a `rotation`
+    /// register never drifts to an ever-growing winding count across
+    /// repeated rotate drags.
+    #[must_use]
+    pub fn normalized(self) -> Self {
+        let tau = std::f64::consts::TAU;
+        // Wrap into [0, tau), then shift the (-tau/2, 0] sliver up to
+        // (0, tau] instead so the result lands in (-π, π] rather than
+        // [-π, π).
+        let wrapped = self.0.rem_euclid(tau);
+        if wrapped > std::f64::consts::PI {
+            Self(wrapped - tau)
+        } else {
+            Self(wrapped)
+        }
+    }
 }
 
 /// A document's page size in millimetres (ADR 0002 §2; this slice's minimal
@@ -135,6 +154,14 @@ impl Point {
     #[must_use]
     pub fn translated(self, offset: Vec2) -> Self {
         Self::new(self.x + offset.x, self.y + offset.y)
+    }
+
+    /// `self` rotated by `angle` about `pivot`, in Y-down document space
+    /// (`specs/0005-object-transform/adrs.md`: "points about the pivot").
+    /// Identity when `self == pivot`, whatever `angle` is.
+    #[must_use]
+    pub fn rotated_around(self, pivot: Self, angle: Angle) -> Self {
+        pivot.translated(pivot.vector_to(self).rotated(angle))
     }
 }
 
@@ -190,6 +217,16 @@ impl Vec2 {
         } else {
             self.scaled(target_length / current)
         }
+    }
+
+    /// `self` rotated by `angle`, in Y-down document space — a plain
+    /// vector rotation, no pivot needed (`specs/0005-object-transform/
+    /// adrs.md`: "handle vectors rotate by the angle, needing no pivot
+    /// since it is already relative to its anchor").
+    #[must_use]
+    pub fn rotated(self, angle: Angle) -> Self {
+        let (sin, cos) = angle.as_radians().sin_cos();
+        Self::new(self.x * cos - self.y * sin, self.x * sin + self.y * cos)
     }
 }
 
@@ -388,5 +425,61 @@ mod tests {
         let a = Vec2::new(1.0, 2.0);
         let b = Vec2::new(3.0, -1.0);
         assert_eq!(a.add(b).sub(b), a);
+    }
+
+    #[test]
+    fn angle_normalized_wraps_into_minus_pi_to_pi_inclusive_upper() {
+        let pi = std::f64::consts::PI;
+        assert!((Angle::from_radians(pi).normalized().as_radians() - pi).abs() < 1e-9);
+        let just_over = Angle::from_radians(pi + 0.1).normalized().as_radians();
+        assert!((just_over - (-pi + 0.1)).abs() < 1e-9);
+        let two_pi_plus_half = Angle::from_radians(std::f64::consts::TAU + 0.5)
+            .normalized()
+            .as_radians();
+        assert!((two_pi_plus_half - 0.5).abs() < 1e-9);
+        let minus_two_pi = Angle::from_radians(-std::f64::consts::TAU)
+            .normalized()
+            .as_radians();
+        assert!(minus_two_pi.abs() < 1e-9);
+    }
+
+    #[test]
+    fn vec2_rotated_by_quarter_turn_swaps_axes() {
+        let v = Vec2::new(1.0, 0.0);
+        let rotated = v.rotated(Angle::from_radians(std::f64::consts::FRAC_PI_2));
+        assert!((rotated.x - 0.0).abs() < 1e-9);
+        assert!((rotated.y - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn vec2_rotated_preserves_length() {
+        let v = Vec2::new(3.0, 4.0);
+        let rotated = v.rotated(Angle::from_radians(1.23));
+        assert!((rotated.length() - v.length()).abs() < 1e-9);
+    }
+
+    #[test]
+    fn point_rotated_around_itself_is_identity() {
+        let p = Point::new(4.0, 5.0);
+        let rotated = p.rotated_around(p, Angle::from_radians(1.0));
+        assert_eq!(rotated, p);
+    }
+
+    #[test]
+    fn point_rotated_around_pivot_by_quarter_turn() {
+        let pivot = Point::new(0.0, 0.0);
+        let p = Point::new(1.0, 0.0);
+        let rotated = p.rotated_around(pivot, Angle::from_radians(std::f64::consts::FRAC_PI_2));
+        assert!((rotated.x - 0.0).abs() < 1e-9);
+        assert!((rotated.y - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn point_rotated_around_off_center_pivot() {
+        let pivot = Point::new(10.0, 10.0);
+        let p = Point::new(11.0, 10.0);
+        let rotated = p.rotated_around(pivot, Angle::from_radians(std::f64::consts::FRAC_PI_2));
+        assert!((rotated.x - 10.0).abs() < 1e-9);
+        assert!((rotated.y - 11.0).abs() < 1e-9);
     }
 }

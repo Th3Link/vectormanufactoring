@@ -249,15 +249,18 @@ impl WasmSession {
     }
 
     /// The pointer moved to canvas-relative CSS pixel `(x, y)`.
-    /// `constrain` is the Ctrl modifier's current state, consulted only
-    /// by the rectangle/ellipse tools' live create-drag preview
-    /// (acceptance criteria 2, 8). Call this on every pointer move, not
-    /// only while a button is held — it also feeds whatever shape-tool
-    /// drag is in flight for the live preview (ux-engineer review), and
-    /// the method itself is a no-op when no drag is in progress.
-    pub fn pointer_hover(&mut self, x: f64, y: f64, constrain: bool) {
+    /// `constrain` is the Ctrl modifier's current state, consulted by
+    /// the rectangle/ellipse tools' live create-drag preview (acceptance
+    /// criteria 2, 8) and, since `object-transform`, by the Select
+    /// tool's own live resize/rotate preview alongside `shift`
+    /// (acceptance criteria 5, 7, 16, 17). Call this on every pointer
+    /// move, not only while a button is held — it also feeds whatever
+    /// shape-tool drag is in flight for the live preview (ux-engineer
+    /// review), and the method itself is a no-op when no drag is in
+    /// progress.
+    pub fn pointer_hover(&mut self, x: f64, y: f64, shift: bool, constrain: bool) {
         let point = self.session.screen_to_document(x, y);
-        self.session.pointer_hover(point, constrain);
+        self.session.pointer_hover(point, shift, constrain);
     }
 
     /// The pointer left the canvas entirely (a DOM `pointerleave`).
@@ -277,10 +280,13 @@ impl WasmSession {
 
     /// The pointer released at canvas-relative CSS pixel `(x, y)`.
     /// `constrain` is the Ctrl modifier's state at release (acceptance
-    /// criteria 2, 8); ignored outside the rectangle/ellipse tools.
-    pub fn pointer_up(&mut self, x: f64, y: f64, constrain: bool) {
+    /// criteria 2, 8), consulted by the rectangle/ellipse tools and,
+    /// since `object-transform`, by the Select tool's own resize/rotate
+    /// commit alongside `shift` (acceptance criteria 5, 7, 16, 17);
+    /// both are ignored outside those tools.
+    pub fn pointer_up(&mut self, x: f64, y: f64, shift: bool, constrain: bool) {
         let point = self.session.screen_to_document(x, y);
-        self.session.pointer_up(point, constrain);
+        self.session.pointer_up(point, shift, constrain);
     }
 
     /// The one double-click dispatch point (acceptance criteria 3, 12,
@@ -422,6 +428,18 @@ impl WasmSession {
         Ok(())
     }
 
+    /// The Select tool's "Scale stroke width" switch (`object-transform`
+    /// AC 26-31). Off in every new session; not persisted.
+    #[must_use]
+    pub fn scale_stroke_width(&self) -> bool {
+        self.session.scale_stroke_width()
+    }
+
+    /// Sets the "Scale stroke width" switch for the next resize drag.
+    pub fn set_scale_stroke_width(&mut self, on: bool) {
+        self.session.set_scale_stroke_width(on);
+    }
+
     /// The polygon/star tool-options bar's current point count
     /// (acceptance criterion 10).
     #[must_use]
@@ -496,6 +514,16 @@ impl WasmSession {
         self.session
             .live_readout()
             .map(|readout| LiveReadout::from_document_space(readout, view))
+    }
+
+    /// Which cursor the canvas should show: `"default"`, `"rotate"`, or
+    /// `"resize:<degrees>"` (a double-headed arrow turned that many
+    /// degrees clockwise from horizontal) — `object-transform`'s
+    /// transform-handle cursors. Call after every
+    /// [`WasmSession::pointer_hover`].
+    #[must_use]
+    pub fn cursor_hint(&self) -> String {
+        self.session.cursor_hint()
     }
 
     /// Attaches this session to `canvas`, creating the `wgpu`

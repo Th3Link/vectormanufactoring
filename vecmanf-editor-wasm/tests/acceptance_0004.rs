@@ -28,16 +28,16 @@ fn document_of(session: &Session) -> Document {
 fn draw_rect(session: &mut Session, x: f64, y: f64, w: f64, h: f64) {
     session.set_tool(Tool::Rectangle);
     session.pointer_down(Point::new(x, y), false);
-    session.pointer_up(Point::new(x + w, y + h), false);
+    session.pointer_up(Point::new(x + w, y + h), false, false);
 }
 
 /// Draws a two-anchor open path with the Pen tool from `a` to `b`.
 fn draw_path(session: &mut Session, a: Point, b: Point) {
     session.set_tool(Tool::Pen);
     session.pointer_down(a, false);
-    session.pointer_up(a, false);
+    session.pointer_up(a, false, false);
     session.pointer_down(b, false);
-    session.pointer_up(b, false);
+    session.pointer_up(b, false, false);
     session.finish_pen();
 }
 
@@ -46,7 +46,7 @@ fn draw_path(session: &mut Session, a: Point, b: Point) {
 fn draw_ellipse(session: &mut Session, x: f64, y: f64, w: f64, h: f64) {
     session.set_tool(Tool::Ellipse);
     session.pointer_down(Point::new(x, y), false);
-    session.pointer_up(Point::new(x + w, y + h), false);
+    session.pointer_up(Point::new(x + w, y + h), false, false);
 }
 
 fn rect_origin(document: &Document, id: vecmanf_document_core::NodeId) -> Point {
@@ -146,7 +146,7 @@ fn ac5_panning_never_cancels_an_in_progress_pen_path() {
     let mut session = Session::new(1);
     session.set_tool(Tool::Pen);
     session.pointer_down(Point::new(0.0, 0.0), false);
-    session.pointer_up(Point::new(0.0, 0.0), false);
+    session.pointer_up(Point::new(0.0, 0.0), false, false);
     assert!(session.pen_in_progress().is_some());
 
     // Scroll-pan.
@@ -169,7 +169,7 @@ fn ac5_panning_never_cancels_an_in_progress_pen_path() {
 
     // The path can still be finished normally afterwards.
     session.pointer_down(Point::new(20.0, 0.0), false);
-    session.pointer_up(Point::new(20.0, 0.0), false);
+    session.pointer_up(Point::new(20.0, 0.0), false, false);
     session.finish_pen();
     let document = document_of(&session);
     assert_eq!(document.object_ids().len(), 1);
@@ -327,17 +327,17 @@ fn ac14_select_tool_selects_a_rect_a_path_and_an_ellipse() {
 
     // Click the rect's left edge.
     session.pointer_down(Point::new(0.0, 5.0), false);
-    session.pointer_up(Point::new(0.0, 5.0), false);
+    session.pointer_up(Point::new(0.0, 5.0), false, false);
     let with_rect_selected = session.draw_list().triangle_count();
     assert!(with_rect_selected > empty, "a selection box drew something");
 
     session.escape();
     session.pointer_down(Point::new(0.0, 0.0), false); // clear via nothing hit below
-    session.pointer_up(Point::new(0.0, 0.0), false);
+    session.pointer_up(Point::new(0.0, 0.0), false, false);
 
     // Click the path.
     session.pointer_down(Point::new(55.0, 0.0), false);
-    session.pointer_up(Point::new(55.0, 0.0), false);
+    session.pointer_up(Point::new(55.0, 0.0), false, false);
     let with_path_selected = session.draw_list().triangle_count();
     assert!(
         with_path_selected > empty,
@@ -352,11 +352,11 @@ fn ac15_clicking_empty_canvas_clears_the_selection() {
     session.set_tool(Tool::Select);
 
     session.pointer_down(Point::new(0.0, 5.0), false);
-    session.pointer_up(Point::new(0.0, 5.0), false);
+    session.pointer_up(Point::new(0.0, 5.0), false, false);
     let selected = session.draw_list().triangle_count();
 
     session.pointer_down(Point::new(900.0, 900.0), false);
-    session.pointer_up(Point::new(900.0, 900.0), false);
+    session.pointer_up(Point::new(900.0, 900.0), false, false);
     let cleared = session.draw_list().triangle_count();
 
     assert!(cleared < selected, "the selection box disappeared");
@@ -376,9 +376,9 @@ fn ac16_plain_click_on_a_different_object_replaces_the_selection_not_adds() {
     session.set_tool(Tool::Select);
 
     session.pointer_down(Point::new(0.0, 5.0), false);
-    session.pointer_up(Point::new(0.0, 5.0), false);
+    session.pointer_up(Point::new(0.0, 5.0), false, false);
     session.pointer_down(Point::new(50.0, 5.0), false);
-    session.pointer_up(Point::new(50.0, 5.0), false);
+    session.pointer_up(Point::new(50.0, 5.0), false, false);
 
     // Now delete: if the click were additive, both rects would be gone.
     session.delete_selected();
@@ -407,9 +407,9 @@ fn ac17_shift_click_adds_a_second_object_to_the_selection() {
     session.set_tool(Tool::Select);
 
     session.pointer_down(Point::new(0.0, 5.0), false);
-    session.pointer_up(Point::new(0.0, 5.0), false);
+    session.pointer_up(Point::new(0.0, 5.0), false, false);
     session.pointer_down(Point::new(50.0, 5.0), true);
-    session.pointer_up(Point::new(50.0, 5.0), true);
+    session.pointer_up(Point::new(50.0, 5.0), false, true);
 
     session.delete_selected();
     let document = document_of(&session);
@@ -428,13 +428,13 @@ fn ac18_dragging_any_selected_member_moves_the_whole_multi_selection() {
     session.set_tool(Tool::Select);
 
     session.pointer_down(Point::new(0.0, 5.0), false);
-    session.pointer_up(Point::new(0.0, 5.0), false);
+    session.pointer_up(Point::new(0.0, 5.0), false, false);
     session.pointer_down(Point::new(50.0, 5.0), true);
-    session.pointer_up(Point::new(50.0, 5.0), true);
+    session.pointer_up(Point::new(50.0, 5.0), false, true);
 
     // Drag starting on the second rect (already selected) by (3, 2).
     session.pointer_down(Point::new(50.0, 5.0), false);
-    session.pointer_up(Point::new(53.0, 7.0), false);
+    session.pointer_up(Point::new(53.0, 7.0), false, false);
 
     let document = document_of(&session);
     let ids = document.object_ids();
@@ -457,9 +457,9 @@ fn ac19_delete_removes_every_selected_object_as_one_commit() {
     session.set_tool(Tool::Select);
 
     session.pointer_down(Point::new(0.0, 5.0), false);
-    session.pointer_up(Point::new(0.0, 5.0), false);
+    session.pointer_up(Point::new(0.0, 5.0), false, false);
     session.pointer_down(Point::new(55.0, 0.0), true);
-    session.pointer_up(Point::new(55.0, 0.0), true);
+    session.pointer_up(Point::new(55.0, 0.0), false, true);
 
     session.delete_selected();
     let document = document_of(&session);
@@ -473,14 +473,14 @@ fn ac20_single_object_drag_moves_live_and_commits_once_on_release() {
     session.set_tool(Tool::Select);
 
     session.pointer_down(Point::new(0.0, 5.0), false);
-    session.pointer_hover(Point::new(4.0, 8.0), false);
+    session.pointer_hover(Point::new(4.0, 8.0), false, false);
 
     // Not yet committed mid-drag.
     let mid_drag = document_of(&session);
     let id = mid_drag.object_ids()[0];
     assert_eq!(rect_origin(&mid_drag, id), Point::new(0.0, 0.0));
 
-    session.pointer_up(Point::new(4.0, 8.0), false);
+    session.pointer_up(Point::new(4.0, 8.0), false, false);
     let after = document_of(&session);
     assert_eq!(rect_origin(&after, id), Point::new(4.0, 3.0));
 }
@@ -498,18 +498,80 @@ fn ac20_select_tool_shows_a_plain_box_while_its_own_tool_shows_handles_too() {
     draw_rect(&mut session, 0.0, 0.0, 10.0, 10.0);
 
     session.pointer_down(Point::new(0.0, 5.0), false);
-    session.pointer_up(Point::new(0.0, 5.0), false);
-    let with_handles = session.draw_list().triangle_count();
+    session.pointer_up(Point::new(0.0, 5.0), false, false);
+    let with_shape_handles = session.draw_list().triangle_count();
+    assert!(
+        with_shape_handles > 0,
+        "the Rectangle tool draws its own handles"
+    );
 
+    // `object-transform` (acceptance criterion 1) deliberately gives the
+    // Select tool its own 8 resize + 1 rotate handles on a single-object
+    // selection now, on top of the plain box slice 4 shipped — so "the
+    // Select tool draws strictly less than a shape tool's own handles"
+    // (this test's original assertion) is no longer true by design, and
+    // is not re-asserted here. What slice 4's own acceptance criterion
+    // 20 still requires — amended, not voided, by this slice (`adrs.md`
+    // flag 5) — is "no *shape-specific* handle", verified precisely by
+    // `ac20_select_tool_never_leaks_a_shape_specific_handle_regardless_of_kind`
+    // below, which this triangle-count proxy could never actually prove
+    // either way.
     session.set_tool(Tool::Select);
+    // The rect is still selected from the Rectangle-tool click above
+    // (selection is shared across tools) — clear it first so
+    // `nothing_selected` is a genuine empty baseline, not already
+    // showing the plain box and transform handles.
+    session.pointer_down(Point::new(500.0, 500.0), false);
+    let nothing_selected = session.draw_list().triangle_count();
     session.pointer_down(Point::new(0.0, 5.0), false);
-    session.pointer_up(Point::new(0.0, 5.0), false);
-    let with_plain_box = session.draw_list().triangle_count();
+    session.pointer_up(Point::new(0.0, 5.0), false, false);
+    let with_plain_box_and_transform_handles = session.draw_list().triangle_count();
 
     assert!(
-        with_plain_box < with_handles,
-        "the Select tool's plain bounding box must draw less than shape handles do \
-         (handles: {with_handles}, box: {with_plain_box})"
+        with_plain_box_and_transform_handles > nothing_selected,
+        "selecting the rect under the Select tool must still draw *something* on top of the \
+         empty baseline (its own plain box plus, since `object-transform`, its 8 resize + 1 \
+         rotate transform handles)"
+    );
+}
+
+/// `specs/0005-object-transform/adrs.md` flag 5: slice 4's own
+/// "no shape handles and no path nodes" rule for the Select tool must
+/// still hold — amended, not voided, by this slice's own generic
+/// transform handles. Proven without reaching into any private
+/// decoration-input type: a rectangle and an ellipse show a *different*
+/// number of shape-tool handles under their own tool (the rectangle's
+/// extra corner-radius handle), but the Select tool's own transform
+/// handles are identical in count/shape for both kinds (8 resize + 1
+/// rotate on the same generic box) — so if the Select-tool triangle
+/// delta (selected vs. nothing selected) were ever to differ between
+/// the two kinds, that would mean a shape-specific handle had leaked
+/// into the Select tool's own decoration. It does not.
+#[test]
+fn ac20_select_tool_never_leaks_a_shape_specific_handle_regardless_of_kind() {
+    let mut rect_session = Session::new(1);
+    draw_rect(&mut rect_session, 0.0, 0.0, 10.0, 10.0);
+    rect_session.set_tool(Tool::Select);
+    let rect_unselected = rect_session.draw_list().triangle_count();
+    rect_session.pointer_down(Point::new(0.0, 5.0), false);
+    rect_session.pointer_up(Point::new(0.0, 5.0), false, false);
+    let rect_selected = rect_session.draw_list().triangle_count();
+
+    let mut ellipse_session = Session::new(1);
+    draw_ellipse(&mut ellipse_session, 0.0, 0.0, 10.0, 10.0);
+    ellipse_session.set_tool(Tool::Select);
+    let ellipse_unselected = ellipse_session.draw_list().triangle_count();
+    // The ellipse's own top point, (5, 0), sits exactly on its outline.
+    ellipse_session.pointer_down(Point::new(5.0, 0.0), false);
+    ellipse_session.pointer_up(Point::new(5.0, 0.0), false, false);
+    let ellipse_selected = ellipse_session.draw_list().triangle_count();
+
+    assert_eq!(
+        rect_selected - rect_unselected,
+        ellipse_selected - ellipse_unselected,
+        "the Select tool's own decoration must add the identical amount of geometry for a \
+         rect and an ellipse — any difference would mean a shape-specific (not generic \
+         transform) handle leaked in"
     );
 }
 
@@ -525,7 +587,7 @@ fn ac21_delete_works_identically_for_a_rect_an_ellipse_and_a_path() {
         setup(&mut session);
         session.set_tool(Tool::Select);
         session.pointer_down(Point::new(5.0, 0.0), false);
-        session.pointer_up(Point::new(5.0, 0.0), false);
+        session.pointer_up(Point::new(5.0, 0.0), false, false);
         session.delete_selected();
         let document = document_of(&session);
         assert_eq!(
@@ -587,7 +649,7 @@ fn ac24_pan_and_zoom_work_while_the_rectangle_tool_is_mid_drag() {
     let mut session = Session::new(1);
     session.set_tool(Tool::Rectangle);
     session.pointer_down(Point::new(0.0, 0.0), false);
-    session.pointer_hover(Point::new(5.0, 5.0), false);
+    session.pointer_hover(Point::new(5.0, 5.0), false, false);
 
     let anchor = session.screen_to_document(200.0, 200.0);
     session.wheel(0.0, -500.0, 200.0, 200.0, false, true); // zoom
@@ -596,7 +658,7 @@ fn ac24_pan_and_zoom_work_while_the_rectangle_tool_is_mid_drag() {
     assert!((anchor.y - anchor_after.y).abs() < 1e-9);
     assert_eq!(session.tool(), Tool::Rectangle, "tool untouched by zoom");
 
-    session.pointer_up(Point::new(10.0, 10.0), false);
+    session.pointer_up(Point::new(10.0, 10.0), false, false);
     let document = document_of(&session);
     assert_eq!(
         document.object_ids().len(),
@@ -690,7 +752,7 @@ fn object_selection_hit_testing_is_unaffected_by_the_current_zoom_level() {
     session.wheel(0.0, -1500.0, 5.0, 5.0, false, true); // zoom in a lot
 
     session.pointer_down(Point::new(5.0, 0.0), false);
-    session.pointer_up(Point::new(5.0, 0.0), false);
+    session.pointer_up(Point::new(5.0, 0.0), false, false);
     session.delete_selected();
 
     let document = document_of(&session);

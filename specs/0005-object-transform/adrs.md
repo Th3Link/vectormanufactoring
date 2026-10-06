@@ -128,6 +128,10 @@ lead", each with the default this file builds against.
     gives a correct enclosing box. A merge of a rotate with a concurrent node
     drag (slice 2's floor) still gives a valid box.
 
+- **2026-10-06 (verification): `document.json` always writes `"rotation": 0.0`.** The decision above says `document.json` omits `rotation` when 0; the implementation writes it for every object, zero or not. Accepted: `document.json` is the non-authoritative view (ADR 0004 §1) and nothing reads it back, so an always-present number is simpler for a non-Rust reader than a key that appears and disappears. The authoritative `document.loro` register stays absent-until-set (absent = 0). The other reading rule from the same decision — any finite `rotation` is normalized to (−π, π] *on read* — is implemented (`path_codec::read_rotation`, which also reads a stored integer as that many radians).
+
+- **2026-10-06 (verification): a press inside the selected object's box moves it.** Slice 4 hits an unfilled object only on its outline, so an interior press deselected. With transform handles that leaves a small selected object unmovable: its 16px handle radii tile the whole outline (every outline pixel is a handle) and its interior hits nothing — dragging the top edge of a 40 × 40 square resized it to zero height. Decision: with a **single** selection, a press inside that object's oriented box (edges included) that is not on a handle (resize or rotate) starts a move (AC 23's "body"). This slightly changes slice 4 for a *selected* unfilled object (its interior press used to deselect); an *unselected* object still hits only on its outline, a multi-selection is unchanged, and a press on empty canvas outside the selected box still deselects. Another object's outline inside the selected box still wins the press (it is hit first). Handles keep priority where they are (`SelectTool::handle_at`).
+
 - **2026-10-05: merge granularity. `rotation` is its own register.** Slice 3
   rule 2 applies: every combination of a frame and an angle is a shape
   someone could have asked for, so this is not a blend. The common rotate
@@ -143,7 +147,7 @@ lead", each with the default this file builds against.
   |---|---|---|
   | rotate about centre | `rotation` | anchors, `rotation` |
   | rotate, Shift pivot | `rotation`, frame | anchors, `rotation` |
-  | resize (any handle) | frame, `corner_radius` (rect), `stroke_width` | anchors, `stroke_width` |
+  | resize (any handle) | frame, `corner_radius` (rect, only if changed), `stroke_width` (only with the switch on, AC 26) | anchors, `stroke_width` (only with the switch on) |
   | move (slice 4) | frame | anchors |
 
   A Select-tool resize now writes `corner_radius` (AC 9), where slice 3's
@@ -204,9 +208,79 @@ lead", each with the default this file builds against.
   The corner radius uses the same factor on its **raw** stored value; the
   clamp still happens on read (slice 3), so AC 9's "clamped after scaling"
   holds with no new rule. A factor of 0 (AC 13 clamp) never writes a stroke
-  width ≤ 0: the width keeps its drag-start value, because
+  width ≤ 0: the width is floored at 0.01 mm, because
   `stroke-and-fill-styling` refuses `stroke_width ≤ 0` on open and a file
-  must never become unopenable from a drag.
+  must never become unopenable from a drag. *2026-10-06 (architect,
+  review):* this sentence first said the width keeps its drag-start value;
+  AC 8 was reworded to "the smallest value still above zero", and the code
+  (`transform_drag::MIN_STROKE_WIDTH_MM` = 0.01 mm) follows AC 8. Floored
+  at 0.01 mm, never ≤ 0. *2026-10-06 (customer feedback):* stroke scaling
+  now happens only with the "Scale stroke width" switch on (AC 26); see the
+  next note. The corner-radius rule is unchanged (AC 9, 31).
+
+- **2026-10-06 (architect): the "Scale stroke width" switch (AC 8, 26-31).**
+  A resize leaves `stroke_width` alone unless the switch is on.
+  - **Where the state lives: `SelectTool`, not `Document`.** Options: (A) a
+    field on `ui-core`'s `SelectTool`, reached through `Session`. Chosen. It
+    is tool state (the customer, 2026-10-06: it belongs to the tool and sits
+    in the Select tool's contextual bar, so AC 30's Properties-panel section
+    is superseded). It is ephemeral under ADR 0009 §2, like the polygon/star
+    tool's mode and point count. `Session::new` and `Session::open` build a
+    fresh `SelectTool`, so AC 27 (off in every new session) holds by
+    construction, and AC 29 holds because nothing reaches the document.
+    (B) a document or project setting. Rejected: AC 27 and 29 forbid both.
+    (C) the frontend holds the state and passes it on every pointer event.
+    Rejected: that gives two owners, and the `ui-core` tests for AC 28 could
+    not reach it.
+  - **Type: `pub enum StrokeScaling { Keep, Proportional }` in `ui-core`,
+    default `Keep`.** It is not a `bool`, because `compute_resize` already
+    takes `shift` and `ctrl`, and a third bool trips
+    `clippy::fn_params_excessive_bools` (pedantic, `-D warnings`).
+  - **How it reaches the arithmetic (AC 28).** `SelectTool::pointer_down`
+    copies the tool's current value into `SelectDrag::Resizing {
+    stroke_scaling, .. }`. The live preview and the release commit both
+    pass that copied value to the single `compute_resize(..,
+    stroke_scaling)`. A toggle during a drag changes only the tool field,
+    so it applies from the next press. `scale_stroke` runs only for
+    `Proportional`. The √(sx·sy) factor and the 0.01 mm floor are
+    unchanged. The corner-radius factor is computed as before in both
+    states (AC 31).
+  - **Writes (AC 8: "the stored stroke width is not rewritten").** The
+    four commands `Document::resize_rect`, `resize_ellipse`,
+    `resize_star_frame` and `resize_path` take `stroke_width:
+    Option<Length>`, and `None` leaves the key untouched.
+    `commit_resize(document, id, result, stroke_scaling)` passes `None`
+    for `Keep`. Rejected: always passing the width and skipping the write
+    when it equals the stored value. With the switch off, a peer's stroke
+    edit that merged in during the drag differs from the drag-start
+    snapshot, so the comparison would write the old width back over it.
+    `None` cannot do that. With the switch on, the same command still
+    skips a write equal to the stored value. `resize_rect` also skips an
+    unchanged `corner_radius`: a radius of 0 scales to 0, and rewriting
+    it would beat a concurrent radius edit. This is slice 2's rule and
+    0007's style rule 5 (an LWW rewrite of an unchanged value is a new
+    operation). The merge table above reflects this.
+  - **wasm and frontend.** Add a getter/setter pair on `WasmSession`,
+    `scale_stroke_width() -> bool` and `set_scale_stroke_width(bool)`, the
+    same pattern as `poly_star_mode`/`set_poly_star_mode`. They forward
+    to `Session` and on to `SelectTool`. A `bool` is fine at the JS
+    boundary. The frontend reads the getter after New/Open and never
+    stores the value (no `localStorage`). No new crate, no new
+    dependency, no format change, and `format_version` is unaffected.
+  - **Tests to update** (they assert the old always-on scaling):
+    `vecmanf-editor-wasm/tests/acceptance_0005.rs` `ac8_*` (lines
+    730-826; switch them on, and add AC 8 off-state, AC 27 and AC 28
+    tests); `vecmanf-ui-core/src/select_tool.rs` unit tests
+    `ac8_proportional_resize_scales_stroke_width`,
+    `ac8_non_proportional_resize_scales_stroke_width_by_the_geometric_mean`
+    and `ac8_stroke_width_is_floored_above_zero_when_a_resize_collapses_the_object`
+    (set `Proportional`); every call site of the four resize commands
+    for the `Option` signature: `vecmanf-document-core` unit tests in
+    `shapes.rs`, `paths.rs` and `objects.rs:486`,
+    `tests/acceptance_0005.rs:127-172` and `tests/acceptance_0005_peers.rs:60-84`. The `ui-core` property tests
+    on `stroke_or_radius_factor` and the editor-wasm reverify
+    finiteness/rotate tests stay valid. No fixture file assumes stroke
+    scaling.
 
 - **2026-10-05: `format_version` goes to 4.** Migration from version 3 is
   empty: absent `rotation` reads as 0. The bump is needed for the reader. A
@@ -266,8 +340,9 @@ lead", each with the default this file builds against.
    (a): one rule for every object, one cheap register. Default: (a); the PO
    deletes AC 20's last sentence.**
 2. **AC 8/9 do not say which factor applies when sx ≠ sy.** Default above:
-   √(sx·sy), and a zero factor leaves the stroke width unchanged. The PO may
-   fold that into the wording.
+   √(sx·sy), and a zero factor floors the stroke width at 0.01 mm, never
+   ≤ 0 (2026-10-06: was "leaves the stroke width unchanged"; AC 8 now says
+   so).
 3. **Gap: a rotated primitive handed to its own tool (slice 4 AC 23).** No
    criterion says its handles follow the rotation. Decided above that they
    do. The PO should add a criterion so the tester covers it.

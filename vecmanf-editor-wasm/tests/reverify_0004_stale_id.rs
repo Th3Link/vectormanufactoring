@@ -30,14 +30,14 @@ fn stale_selected_id_from_a_node_tool_delete_no_longer_blocks_moving_the_survivo
     // A two-anchor open path (object A) and a rect elsewhere (object B).
     session.set_tool(Tool::Pen);
     session.pointer_down(Point::new(0.0, 0.0), false);
-    session.pointer_up(Point::new(0.0, 0.0), false);
+    session.pointer_up(Point::new(0.0, 0.0), false, false);
     session.pointer_down(Point::new(10.0, 0.0), false);
-    session.pointer_up(Point::new(10.0, 0.0), false);
+    session.pointer_up(Point::new(10.0, 0.0), false, false);
     session.finish_pen();
 
     session.set_tool(Tool::Rectangle);
     session.pointer_down(Point::new(100.0, 100.0), false);
-    session.pointer_up(Point::new(110.0, 110.0), false);
+    session.pointer_up(Point::new(110.0, 110.0), false, false);
 
     let document = document_of(&session);
     let ids = document.object_ids();
@@ -51,7 +51,7 @@ fn stale_selected_id_from_a_node_tool_delete_no_longer_blocks_moving_the_survivo
     // Select the path with the Select tool.
     session.set_tool(Tool::Select);
     session.pointer_down(Point::new(5.0, 0.0), false); // somewhere on the path's segment
-    session.pointer_up(Point::new(5.0, 0.0), false);
+    session.pointer_up(Point::new(5.0, 0.0), false, false);
 
     // Switch to Node, select one of the path's two anchors, delete it —
     // `delete_anchors` drops the whole object once fewer than 2 anchors
@@ -72,8 +72,8 @@ fn stale_selected_id_from_a_node_tool_delete_no_longer_blocks_moving_the_survivo
     // click the still-live rect, then drag it.
     session.set_tool(Tool::Select);
     session.pointer_down(Point::new(100.0, 100.0), true); // shift-click the rect
-    session.pointer_hover(Point::new(103.0, 104.0), false);
-    session.pointer_up(Point::new(103.0, 104.0), false);
+    session.pointer_hover(Point::new(103.0, 104.0), false, false);
+    session.pointer_up(Point::new(103.0, 104.0), false, false);
 
     let document_final = document_of(&session);
     let after = rect_origin(&document_final, rect_id);

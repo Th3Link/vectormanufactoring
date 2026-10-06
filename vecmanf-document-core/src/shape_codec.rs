@@ -211,6 +211,19 @@ pub(crate) fn read_star_frame(meta: &LoroMap) -> Option<StarFrame> {
     })
 }
 
+/// Writes whichever frame register `shape` has (`rect_bounds`,
+/// `ellipse_frame` or `star_frame`) — the one place that maps a [`Shape`]
+/// to its stored frame, shared by move and rotate commits. Parameters
+/// that are not part of the frame (corner radius, point count, inner
+/// ratio) are never rewritten here.
+pub(crate) fn write_shape_frame(meta: &LoroMap, shape: &Shape) {
+    match *shape {
+        Shape::Rect { bounds, .. } => write_rect_bounds(meta, bounds),
+        Shape::Ellipse { frame } => write_ellipse_frame(meta, frame),
+        Shape::Polygon { frame, .. } | Shape::Star { frame, .. } => write_star_frame(meta, frame),
+    }
+}
+
 pub(crate) fn write_point_count(meta: &LoroMap, point_count: PointCount) {
     // invariant: see `write_shape_tag`.
     #[allow(clippy::unwrap_used)]
@@ -284,6 +297,7 @@ pub(crate) fn read_primitive_snapshot(
         stroke_width: path_codec::read_stroke_width(meta),
         stroke: path_codec::read_stroke(meta),
         fill: None,
+        rotation: path_codec::read_rotation(meta),
     }
 }
 
@@ -316,6 +330,9 @@ pub(crate) fn read_shape(meta: &LoroMap, shape_tag: &str) -> Option<Shape> {
 /// `inner_ratio` outside `(0, 1)`. Reuses each parameter's own validated
 /// newtype for its range check rather than duplicating the bound.
 pub(crate) fn validate_primitive_node(meta: &LoroMap, shape: &str) -> bool {
+    if !path_codec::rotation_is_valid(meta) {
+        return false;
+    }
     match shape {
         SHAPE_RECT => validate_rect(meta),
         SHAPE_ELLIPSE => validate_ellipse(meta),

@@ -13,8 +13,10 @@
 //! rect/ellipse/polygon → path conversion (`adrs.md`).
 
 use crate::path_model::AnchorKind;
-use crate::primitive_model::{EllipseFrame, PointCount, RectBounds, Shape, StarFrame};
-use crate::units::{Length, Point, Vec2};
+use crate::primitive_model::{
+    EllipseFrame, PointCount, RectBounds, Shape, StarFrame, shape_center,
+};
+use crate::units::{Angle, Length, Point, Vec2};
 
 /// The standard cubic-Bézier approximation of a quarter circle:
 /// `4 * (√2 - 1) / 3`. Used for ellipse quadrants (acceptance criterion
@@ -266,10 +268,67 @@ pub fn outline_of(shape: &Shape) -> Vec<OutlineAnchor> {
     }
 }
 
+/// `shape`'s outline, rotated about its own frame center by `rotation` —
+/// the one place a primitive's rotation is ever applied
+/// (`specs/0005-object-transform/adrs.md`: "`document-core`'s outline
+/// function returns the rotated outline... Rendering, `hit_test_object`,
+/// object to path and later export all read that outline, so none of
+/// them changes."). Identical to [`outline_of`] when `rotation` is zero.
+#[must_use]
+pub fn outline_of_rotated(shape: &Shape, rotation: Angle) -> Vec<OutlineAnchor> {
+    let anchors = outline_of(shape);
+    if rotation.as_radians() == 0.0 {
+        return anchors;
+    }
+    let center = shape_center(shape);
+    anchors
+        .into_iter()
+        .map(|anchor| OutlineAnchor {
+            point: anchor.point.rotated_around(center, rotation),
+            handle_in: anchor.handle_in.rotated(rotation),
+            handle_out: anchor.handle_out.rotated(rotation),
+            kind: anchor.kind,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::primitive_model::InnerRatio;
+
+    /// Zero rotation returns exactly the plain outline.
+    #[test]
+    fn outline_of_rotated_at_zero_angle_matches_outline_of() {
+        let shape = Shape::Rect {
+            bounds: bounds(0.0, 0.0, 10.0, 10.0),
+            corner_radius: Length::from_mm(0.0),
+        };
+        assert_eq!(
+            outline_of_rotated(&shape, Angle::from_radians(0.0)),
+            outline_of(&shape)
+        );
+    }
+
+    /// A rotated rectangle's outline anchors are the unrotated outline's
+    /// anchors rotated about the frame's own center (acceptance
+    /// criterion 25's own rule, reused here for rendering/hit-testing).
+    #[test]
+    fn outline_of_rotated_rotates_every_anchor_about_the_frame_center() {
+        let shape = Shape::Rect {
+            bounds: bounds(0.0, 0.0, 10.0, 10.0),
+            corner_radius: Length::from_mm(0.0),
+        };
+        let rotation = Angle::from_radians(std::f64::consts::FRAC_PI_2);
+        let rotated = outline_of_rotated(&shape, rotation);
+        let center = shape_center(&shape);
+        let plain = outline_of(&shape);
+        for (plain_anchor, rotated_anchor) in plain.iter().zip(rotated.iter()) {
+            let expected = plain_anchor.point.rotated_around(center, rotation);
+            assert!((rotated_anchor.point.x - expected.x).abs() < 1e-9);
+            assert!((rotated_anchor.point.y - expected.y).abs() < 1e-9);
+        }
+    }
 
     fn bounds(x: f64, y: f64, w: f64, h: f64) -> RectBounds {
         RectBounds {

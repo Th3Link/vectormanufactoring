@@ -82,6 +82,100 @@ pub fn square(center: Point, size_mm: f64, color: RgbaColor) -> DrawList {
     list
 }
 
+/// An axis-aligned square with rounded corners ("squircle"),
+/// `size_mm` wide and corner radius `radius_mm`, centered at `center` —
+/// `object-transform`'s resize-handle glyph (`docs/design-system.md`:
+/// "8×8px... 2px corner radius"). `radius_mm` is clamped to half the
+/// side; `0` degenerates to [`square`].
+#[must_use]
+pub fn rounded_square(center: Point, size_mm: f64, radius_mm: f64, color: RgbaColor) -> DrawList {
+    const ARC_SEGMENTS: usize = 4;
+    let half = size_mm / 2.0;
+    let radius = radius_mm.clamp(0.0, half);
+    // Corner arc centers and the angle (in Y-down radians) each arc
+    // starts at, clockwise on screen: top-right, bottom-right,
+    // bottom-left, top-left.
+    let corners = [
+        (
+            Point::new(half - radius, -(half - radius)),
+            -std::f64::consts::FRAC_PI_2,
+        ),
+        (Point::new(half - radius, half - radius), 0.0),
+        (
+            Point::new(-(half - radius), half - radius),
+            std::f64::consts::FRAC_PI_2,
+        ),
+        (
+            Point::new(-(half - radius), -(half - radius)),
+            std::f64::consts::PI,
+        ),
+    ];
+    let mut outline: Vec<Point> = Vec::with_capacity(4 * (ARC_SEGMENTS + 1));
+    for (arc_center, start) in corners {
+        for i in 0..=ARC_SEGMENTS {
+            #[allow(clippy::cast_precision_loss)] // tiny compile-time constant
+            let t = i as f64 / ARC_SEGMENTS as f64;
+            let angle = start + t * std::f64::consts::FRAC_PI_2;
+            outline.push(center.translated(Vec2::new(
+                arc_center.x + radius * angle.cos(),
+                arc_center.y + radius * angle.sin(),
+            )));
+        }
+    }
+    let mut list = DrawList::default();
+    for i in 0..outline.len() {
+        let next = (i + 1) % outline.len();
+        list.push_triangle(center, outline[i], outline[next], color);
+    }
+    list
+}
+
+/// A circular-arrow icon: a `thickness_mm`-wide arc sweeping 270° around
+/// `center` at `diameter_mm` outer diameter, ending in a triangular
+/// arrowhead pointing clockwise — `object-transform`'s rotate-handle
+/// glyph (`docs/design-system.md`: "circular-arrow icon glyph (not a
+/// dot)").
+#[must_use]
+pub fn arc_arrow(center: Point, diameter_mm: f64, thickness_mm: f64, color: RgbaColor) -> DrawList {
+    const SEGMENTS: usize = 12;
+    let outer = diameter_mm / 2.0;
+    let mid = (outer - thickness_mm / 2.0).max(0.0);
+    let inner = (outer - thickness_mm).max(0.0);
+    // Starts at the top-right (-60° from +x, Y-down), sweeps clockwise
+    // 270° so the opening sits at the top-right, where the arrowhead
+    // points back into it.
+    let start = -std::f64::consts::FRAC_PI_3;
+    let sweep = 1.5 * std::f64::consts::PI;
+    let at = |radius: f64, t: f64| {
+        let angle = start + t * sweep;
+        center.translated(Vec2::new(radius * angle.cos(), radius * angle.sin()))
+    };
+    let mut list = DrawList::default();
+    for i in 0..SEGMENTS {
+        #[allow(clippy::cast_precision_loss)] // tiny compile-time constant
+        let (t0, t1) = (i as f64 / SEGMENTS as f64, (i + 1) as f64 / SEGMENTS as f64);
+        list.push_quad(
+            at(outer, t0),
+            at(outer, t1),
+            at(inner, t1),
+            at(inner, t0),
+            color,
+        );
+    }
+    // Arrowhead at the sweep's end, pointing along the clockwise tangent.
+    let end_angle = start + sweep;
+    let tangent = Vec2::new(-end_angle.sin(), end_angle.cos());
+    let tip = at(mid, 1.0).translated(tangent.scaled(thickness_mm * 1.6));
+    let base_half = thickness_mm;
+    list.push_triangle(
+        tip,
+        at(mid + base_half, 1.0),
+        at((mid - base_half).max(0.0), 1.0),
+        color,
+    );
+    list
+}
+
 /// A square rotated 45°, `size_mm` corner-to-corner, centered at
 /// `center` — a smooth node glyph (`docs/design-system.md`).
 #[must_use]
@@ -143,26 +237,21 @@ pub fn thick_line(a: Point, b: Point, width_mm: f64, color: RgbaColor) -> DrawLi
     list
 }
 
-/// An axis-aligned rectangle outline between `min` and `max` corners,
-/// `width_mm` thick on every edge — the Select tool's own bounding-box
-/// decoration (`select_decoration.rs`) and the shape tools' primitive
-/// bounding-box selection/hover outline (`shape_preview.rs`) both draw
-/// exactly this shape; this is their one shared implementation
-/// (architect review: the four-`thick_line` loop was duplicated between
-/// the two).
+/// A closed four-corner outline, `width_mm` thick on every edge — the
+/// selection/hover bounding-box decoration (`select_decoration.rs`,
+/// `shape_preview.rs`). Takes corners rather than `(min, max)` so a
+/// rotated object's box follows its own orientation (`object-transform`
+/// acceptance criterion 18).
 #[must_use]
-pub fn box_outline(min: Point, max: Point, width_mm: f64, color: RgbaColor) -> DrawList {
-    let corners = [
-        Point::new(min.x, min.y),
-        Point::new(max.x, min.y),
-        Point::new(max.x, max.y),
-        Point::new(min.x, max.y),
-    ];
+pub fn quad_outline(corners: [Point; 4], width_mm: f64, color: RgbaColor) -> DrawList {
     let mut list = DrawList::default();
     for i in 0..4 {
-        let a = corners[i];
-        let b = corners[(i + 1) % 4];
-        list.extend(thick_line(a, b, width_mm, color));
+        list.extend(thick_line(
+            corners[i],
+            corners[(i + 1) % 4],
+            width_mm,
+            color,
+        ));
     }
     list
 }
@@ -226,6 +315,43 @@ mod tests {
         for vertex in &list.triangles {
             assert!(vertex.position.x.abs() <= 1.0 + 1e-9);
             assert!(vertex.position.y.abs() <= 1.0 + 1e-9);
+        }
+    }
+
+    #[test]
+    fn rounded_square_stays_inside_its_square_and_cuts_the_corners() {
+        let list = rounded_square(Point::new(0.0, 0.0), 8.0, 2.0, RgbaColor::BLACK);
+        assert!(
+            list.triangle_count() > 2,
+            "more than a plain square's two triangles"
+        );
+        for vertex in &list.triangles {
+            assert!(vertex.position.x.abs() <= 4.0 + 1e-9);
+            assert!(vertex.position.y.abs() <= 4.0 + 1e-9);
+            // No vertex sits on the sharp corner (4, 4).
+            let near_corner = (vertex.position.x.abs() - 4.0).abs() < 1e-9
+                && (vertex.position.y.abs() - 4.0).abs() < 1e-9;
+            assert!(
+                !near_corner,
+                "corner must be rounded: {:?}",
+                vertex.position
+            );
+        }
+    }
+
+    #[test]
+    fn arc_arrow_is_an_open_arc_with_an_arrowhead_inside_its_diameter_budget() {
+        let list = arc_arrow(Point::new(0.0, 0.0), 12.0, 1.5, RgbaColor::BLACK);
+        assert!(list.triangle_count() > 12, "arc strip plus arrowhead");
+        // A 270° arc: fewer arc triangles than a full ring's own.
+        let full_ring = ring(Point::new(0.0, 0.0), 12.0, 1.5, RgbaColor::BLACK);
+        assert!(list.triangle_count() < full_ring.triangle_count() * 2);
+        for vertex in &list.triangles {
+            let r = vertex.position.vector_to(Point::new(0.0, 0.0)).length();
+            assert!(
+                r <= 6.0 + 2.5,
+                "arrowhead may flare outside the arc, but only slightly"
+            );
         }
     }
 

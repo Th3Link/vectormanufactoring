@@ -1,5 +1,15 @@
+import { useLayoutEffect, useRef, useState } from "react";
+
 import { NodeContextMenu } from "@/components/NodeToolbar";
 import type { EditorSession } from "@/hooks/useEditorSession";
+import { cursorForHint } from "@/lib/cursors";
+import { placeReadout } from "@/lib/readoutPlacement";
+
+/** The readout's constant screen-space offset from its anchor, up and to
+ * the right (`specs/0005-object-transform/specification.md`'s UX notes:
+ * 12px, anchored to the pointer so it stays readable while a rotate drag
+ * swings the handle through an arc). */
+const READOUT_OFFSET_PX = 12;
 
 interface CanvasProps {
   editor: EditorSession;
@@ -24,6 +34,14 @@ export function Canvas({ editor }: CanvasProps) {
       tabIndex={0}
       onKeyDown={editor.onKeyDown}
       onKeyUp={editor.onKeyUp}
+      // Transform-handle cursors (`object-transform`): only the Select
+      // tool ever reports a non-default hint, and a pan gesture (grab
+      // cursors above) always wins.
+      style={
+        editor.isPanning || editor.isSpaceHeld
+          ? undefined
+          : { cursor: cursorForHint(editor.cursorHint) }
+      }
       className={`relative flex-1 outline-none ${
         // Pan cursor convention (`docs/design-system.md`): grabbing for
         // the duration of a drag-pan, open-hand from the moment Space is
@@ -66,6 +84,7 @@ export function Canvas({ editor }: CanvasProps) {
           onPointerMove={editor.onPointerMove}
           onPointerUp={editor.onPointerUp}
           onPointerLeave={editor.onPointerLeave}
+          onPointerCancel={editor.onPointerCancel}
           onContextMenu={(event) => {
             // The pen and shape tools have no context menu of their own
             // (UX notes: the node tool's six actions are the only
@@ -80,27 +99,82 @@ export function Canvas({ editor }: CanvasProps) {
         />
       </NodeContextMenu>
       {editor.liveReadout && (
-        // On-canvas, not status-bar (`specs/0003-primitive-shapes/
-        // specification.md`'s "Live creation feedback": "direct
-        // manipulation keeps the number where the maker's eyes already
-        // are"), positioned near point B — the live drag endpoint.
-        // `editor.liveReadout.x`/`y` already arrive as canvas-relative
-        // CSS pixels (`specs/0004-canvas-navigation-and-selection/
-        // adrs.md`: "Anything the DOM positions... is returned already
-        // converted"), so this positions the overlay directly, with no
-        // conversion math here.
-        <div
-          className="pointer-events-none absolute z-10 -translate-y-full rounded-md px-1.5 py-0.5 text-xs"
-          style={{
-            left: editor.liveReadout.x + 8,
-            top: editor.liveReadout.y - 8,
-            background: "var(--toolbar-bg)",
-            color: "var(--toolbar-icon)",
-          }}
-        >
-          {editor.liveReadout.text}
-        </div>
+        <ReadoutChip
+          text={editor.liveReadout.text}
+          x={editor.liveReadout.x}
+          y={editor.liveReadout.y}
+          containerRef={editor.containerRef}
+        />
       )}
+    </div>
+  );
+}
+
+interface ReadoutChipProps {
+  text: string;
+  /** Canvas-relative CSS pixels, already converted by Rust
+   * (`specs/0004-canvas-navigation-and-selection/adrs.md`: "Anything the
+   * DOM positions... is returned already converted"). */
+  x: number;
+  y: number;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+}
+
+/**
+ * The on-canvas numeric readout (`specs/0003-primitive-shapes/
+ * specification.md`'s "Live creation feedback": "direct manipulation keeps
+ * the number where the maker's eyes already are"; the transform readouts
+ * of `specs/0005-object-transform` use the same chip). Measured after each
+ * render so it can be kept fully inside the canvas — flipped left or below
+ * the pointer near the right and top edges — instead of vanishing there.
+ */
+function ReadoutChip({ text, x, y, containerRef }: ReadoutChipProps) {
+  const chipRef = useRef<HTMLDivElement>(null);
+  const [sizes, setSizes] = useState({
+    chip: { width: 0, height: 0 },
+    canvas: {
+      width: Number.POSITIVE_INFINITY,
+      height: Number.POSITIVE_INFINITY,
+    },
+  });
+
+  // Both sizes are measured in a layout effect (never read from a ref
+  // during render), before the browser paints, so the chip is placed
+  // correctly on the frame it first shows.
+  useLayoutEffect(() => {
+    const chip = chipRef.current;
+    const container = containerRef.current;
+    if (!chip || !container) {
+      return;
+    }
+    const next = {
+      chip: { width: chip.offsetWidth, height: chip.offsetHeight },
+      canvas: { width: container.clientWidth, height: container.clientHeight },
+    };
+    setSizes((previous) =>
+      previous.chip.width === next.chip.width &&
+      previous.chip.height === next.chip.height &&
+      previous.canvas.width === next.canvas.width &&
+      previous.canvas.height === next.canvas.height
+        ? previous
+        : next,
+    );
+  }, [text, x, y, containerRef]);
+
+  const placement = placeReadout({ x, y }, sizes.chip, sizes.canvas, READOUT_OFFSET_PX);
+
+  return (
+    <div
+      ref={chipRef}
+      className="pointer-events-none absolute z-10 whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs"
+      style={{
+        left: placement.left,
+        top: placement.top,
+        background: "var(--toolbar-bg)",
+        color: "var(--toolbar-icon)",
+      }}
+    >
+      {text}
     </div>
   );
 }

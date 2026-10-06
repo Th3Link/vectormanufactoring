@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::units::{Length, Point, Vec2};
+use crate::units::{Angle, Length, Point, Vec2};
 
 /// A path's identity — one tree node (ADR 0002 §5).
 ///
@@ -250,6 +250,99 @@ pub struct PathSnapshot {
     /// Anchors in traversal order (ADR 0009 §3's movable-list order, never
     /// an array index — `specs/0002-path-node-editing/adrs.md`).
     pub anchors: Vec<AnchorSnapshot>,
+    /// This path's own cumulative rotation (`specs/0005-object-transform/
+    /// adrs.md`: "used only to keep its selection box oriented on a later
+    /// reselect... never consulted to render, hit-test, export or
+    /// otherwise reconstruct the path's geometry, which is already
+    /// correct in the baked anchors"). `0` for every path this crate
+    /// creates directly; a Select-tool rotate drag is the only writer,
+    /// and it also bakes the same rotation into `anchors` via
+    /// [`PathSnapshot::rotated`] in the same commit.
+    pub rotation: Angle,
+}
+
+impl PathSnapshot {
+    /// This path rotated by `angle` about `pivot`: every anchor's `point`
+    /// rotates about `pivot`; every `handle_in`/`handle_out` rotates by
+    /// `angle` alone (already relative to its own anchor, so it needs no
+    /// pivot) — acceptance criterion 20 of `specs/0005-object-transform/
+    /// specification.md`. `rotation` advances by `angle`, normalized, so
+    /// a later reselect still knows this path's own orientation
+    /// (criterion 18) even though the anchors themselves are now the
+    /// sole source of truth for its actual geometry.
+    #[must_use]
+    pub fn rotated(&self, pivot: Point, angle: Angle) -> Self {
+        let mut rotated = self.clone();
+        for anchor in &mut rotated.anchors {
+            anchor.point = anchor.point.rotated_around(pivot, angle);
+            anchor.handle_in = anchor.handle_in.rotated(angle);
+            anchor.handle_out = anchor.handle_out.rotated(angle);
+        }
+        rotated.rotation =
+            Angle::from_radians(self.rotation.as_radians() + angle.as_radians()).normalized();
+        rotated
+    }
+
+    /// This path resized by `(sx, sy)` about `pivot`, measured along the
+    /// path's own local axes (acceptance criterion 12): every anchor's
+    /// point and handle vectors are mapped into the path's local frame
+    /// (rotated by `-rotation` about `pivot`), scaled per axis, then
+    /// mapped back out (rotated by `+rotation`) — "into the local frame,
+    /// per-axis scale, back out" (`adrs.md`). Identical to a plain
+    /// anisotropic scale when `rotation` is zero. `rotation` itself is
+    /// untouched: a resize never changes an object's orientation
+    /// (`specification.md` acceptance criterion 23's "a move is always a
+    /// pure translation", extended here to "a resize never rotates").
+    #[must_use]
+    pub fn scaled(&self, pivot: Point, sx: f64, sy: f64) -> Self {
+        let into_local = Angle::from_radians(-self.rotation.as_radians());
+        let out_of_local = self.rotation;
+        let mut scaled = self.clone();
+        for anchor in &mut scaled.anchors {
+            anchor.point =
+                scale_point_in_local_frame(anchor.point, pivot, into_local, out_of_local, sx, sy);
+            anchor.handle_in =
+                scale_vec_in_local_frame(anchor.handle_in, into_local, out_of_local, sx, sy);
+            anchor.handle_out =
+                scale_vec_in_local_frame(anchor.handle_out, into_local, out_of_local, sx, sy);
+        }
+        scaled
+    }
+}
+
+/// `point`, mapped into the local frame about `pivot` (rotate by
+/// `into_local`), scaled per axis relative to `pivot`, then mapped back
+/// out (rotate by `out_of_local`) — [`PathSnapshot::scaled`]'s one rule
+/// for an anchor's absolute position.
+fn scale_point_in_local_frame(
+    point: Point,
+    pivot: Point,
+    into_local: Angle,
+    out_of_local: Angle,
+    sx: f64,
+    sy: f64,
+) -> Point {
+    let local = point.rotated_around(pivot, into_local);
+    let scaled_local = Point::new(
+        pivot.x + (local.x - pivot.x) * sx,
+        pivot.y + (local.y - pivot.y) * sy,
+    );
+    scaled_local.rotated_around(pivot, out_of_local)
+}
+
+/// A handle vector (relative to its own anchor, so no pivot is involved)
+/// mapped into the local frame, scaled per axis, then mapped back out —
+/// [`PathSnapshot::scaled`]'s one rule for a handle.
+fn scale_vec_in_local_frame(
+    v: Vec2,
+    into_local: Angle,
+    out_of_local: Angle,
+    sx: f64,
+    sy: f64,
+) -> Vec2 {
+    let local = v.rotated(into_local);
+    let scaled_local = Vec2::new(local.x * sx, local.y * sy);
+    scaled_local.rotated(out_of_local)
 }
 
 /// Why a path-editing [`crate::Document`] method refused to apply.
@@ -285,4 +378,102 @@ pub enum PathEditError {
     /// split off (acceptance criterion 12).
     #[error("the given anchor cannot be split")]
     NotSplittable,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn simple_path(a: Point, b: Point) -> PathSnapshot {
+        PathSnapshot {
+            id: NodeId::from_parts(1, 1),
+            closed: false,
+            stroke_width: Length::from_mm(0.25),
+            stroke: Color::BLACK,
+            fill: None,
+            anchors: vec![
+                NewAnchor::corner(AnchorId::new(1, 1), a),
+                NewAnchor {
+                    id: AnchorId::new(1, 2),
+                    point: b,
+                    handle_in: Vec2::new(-2.0, 0.0),
+                    handle_out: Vec2::new(2.0, 0.0),
+                    kind: AnchorKind::Symmetric,
+                },
+            ],
+            rotation: Angle::from_radians(0.0),
+        }
+    }
+
+    /// Acceptance criterion 20: every anchor point rotates about the
+    /// pivot; handle vectors rotate by the angle alone (no pivot); the
+    /// `rotation` register advances by the same angle.
+    #[test]
+    fn path_rotated_bakes_points_and_handles_and_advances_rotation() {
+        let path = simple_path(Point::new(0.0, 0.0), Point::new(10.0, 0.0));
+        let pivot = Point::new(0.0, 0.0);
+        let rotated = path.rotated(pivot, Angle::from_radians(std::f64::consts::FRAC_PI_2));
+        // (10, 0) rotated 90 degrees about the origin -> (0, 10).
+        assert!((rotated.anchors[1].point.x - 0.0).abs() < 1e-9);
+        assert!((rotated.anchors[1].point.y - 10.0).abs() < 1e-9);
+        // handle_out (2, 0) rotates to (0, 2), no pivot involved.
+        assert!((rotated.anchors[1].handle_out.x - 0.0).abs() < 1e-9);
+        assert!((rotated.anchors[1].handle_out.y - 2.0).abs() < 1e-9);
+        assert!(
+            (rotated.rotation.as_radians() - std::f64::consts::FRAC_PI_2).abs() < 1e-9,
+            "rotation register advances"
+        );
+    }
+
+    /// A rotate about a point other than the origin still only rotates
+    /// the points, never the (already-relative) handle vectors.
+    #[test]
+    fn path_rotated_about_an_off_origin_pivot() {
+        let path = simple_path(Point::new(0.0, 0.0), Point::new(10.0, 0.0));
+        let pivot = Point::new(5.0, 0.0);
+        let rotated = path.rotated(pivot, Angle::from_radians(std::f64::consts::PI));
+        // (0,0) rotated 180 degrees about (5,0) -> (10, 0).
+        assert!((rotated.anchors[0].point.x - 10.0).abs() < 1e-9);
+        assert!(rotated.anchors[0].point.y.abs() < 1e-9);
+        // (10,0) rotated 180 degrees about (5,0) -> (0, 0).
+        assert!(rotated.anchors[1].point.x.abs() < 1e-9);
+        assert!(rotated.anchors[1].point.y.abs() < 1e-9);
+    }
+
+    /// Acceptance criterion 12: a plain (unrotated) scale is the
+    /// ordinary per-axis scale about the pivot.
+    #[test]
+    fn path_scaled_with_zero_rotation_scales_plainly_about_the_pivot() {
+        let path = simple_path(Point::new(0.0, 0.0), Point::new(10.0, 0.0));
+        let scaled = path.scaled(Point::new(0.0, 0.0), 2.0, 3.0);
+        assert!((scaled.anchors[1].point.x - 20.0).abs() < 1e-9);
+        assert!(scaled.anchors[1].point.y.abs() < 1e-9);
+        // handle_out (2,0) scales by sx=2 -> (4, 0).
+        assert!((scaled.anchors[1].handle_out.x - 4.0).abs() < 1e-9);
+        assert!(scaled.anchors[1].handle_out.y.abs() < 1e-9);
+        // rotation register is untouched by a resize.
+        assert!(scaled.rotation.as_radians().abs() < 1e-9);
+    }
+
+    /// A rotated path's resize happens along its own local axes: scaling
+    /// a path that is already rotated 90 degrees by sx along what is now
+    /// the document's Y axis (its own local X) stretches it along Y, not
+    /// X — proving the "into local frame, scale, back out" round trip.
+    #[test]
+    fn path_scaled_respects_its_own_rotation_local_axes() {
+        let path = simple_path(Point::new(0.0, 0.0), Point::new(10.0, 0.0)).rotated(
+            Point::new(0.0, 0.0),
+            Angle::from_radians(std::f64::consts::FRAC_PI_2),
+        );
+        // After the 90-degree rotation, anchor[1] sits at (0, 10) (its
+        // local +X axis now points along document +Y).
+        assert!((path.anchors[1].point.x - 0.0).abs() < 1e-6);
+        assert!((path.anchors[1].point.y - 10.0).abs() < 1e-6);
+
+        let scaled = path.scaled(Point::new(0.0, 0.0), 2.0, 1.0);
+        // Scaling by sx=2 along the path's own local X axis (now
+        // document Y) doubles the Y extent, leaving X untouched.
+        assert!(scaled.anchors[1].point.x.abs() < 1e-6);
+        assert!((scaled.anchors[1].point.y - 20.0).abs() < 1e-6);
+    }
 }

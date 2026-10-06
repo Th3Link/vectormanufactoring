@@ -391,6 +391,7 @@ impl Document {
             false,
             snapshot.stroke_width.as_mm(),
             snapshot.stroke,
+            snapshot.rotation,
         );
 
         // `mov_after` (and every other positional tree op) needs the
@@ -986,6 +987,34 @@ mod tests {
             .expect("split");
         let second = document.path(second_path).expect("exists");
         assert!((second.stroke_width.as_mm() - 3.0).abs() < 1e-9);
+    }
+
+    /// `specs/0005-object-transform/adrs.md`'s architect note: the new
+    /// object from an open-path split copies the original's `rotation`
+    /// register.
+    #[test]
+    fn split_at_anchor_on_an_open_path_copies_rotation_to_the_new_object() {
+        let document = Document::new(1);
+        let id = document.create_path(
+            &[
+                anchor(1, 0.0, 0.0),
+                anchor(2, 10.0, 0.0),
+                anchor(3, 20.0, 0.0),
+            ],
+            false,
+        );
+        document
+            .rotate_object(&document.object(id).expect("object exists").rotated(
+                crate::units::Point::new(0.0, 0.0),
+                crate::units::Angle::from_radians(0.4),
+            ))
+            .expect("rotate");
+
+        let (_, (second_path, _)) = document
+            .split_at_anchor(id, AnchorId::new(1, 2), AnchorId::new(9, 1))
+            .expect("split");
+        let second = document.path(second_path).expect("exists");
+        assert!((second.rotation.as_radians() - 0.4).abs() < 1e-9);
     }
 
     /// Acceptance criterion 14: splitting a closed path opens it, with

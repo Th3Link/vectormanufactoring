@@ -9,18 +9,20 @@
 //! updating live" actually holds (ux-engineer review).
 
 use vecmanf_document_core::{
-    Document, Length, NodeId, Point, PrimitiveSnapshot, RectBounds, Shape, effective_corner_radius,
+    Angle, Document, Length, NodeId, Point, PrimitiveSnapshot, RectBounds, Shape,
+    effective_corner_radius,
 };
 
 use crate::ObjectSelection;
 use crate::handle_layout::{
-    self, HandleKind, ResizeDirection, corner_radius_from_drag, resize_rect_bounds,
+    self, HandleKind, ResizeDirection, corner_radius_from_drag, local_delta, resize_rect_bounds,
 };
 use crate::shape_hit_test::{hit_test_handle, hit_test_primitive};
 use crate::shape_tool_common::{
     LiveShape, ShapeHitTolerances, apply_selection_click, constrained_endpoint, is_degenerate,
     rects_only,
 };
+use crate::transform_drag::pin_rect_resize;
 
 #[derive(Debug, Default)]
 enum RectDrag {
@@ -43,11 +45,15 @@ enum RectDrag {
         /// box (acceptance criterion 3: "any existing corner radius
         /// keeps its absolute length").
         corner_radius: Length,
+        /// The primitive's own rotation, so the drag's displacement
+        /// can be mapped into its local axes (acceptance criterion 25).
+        rotation: Angle,
     },
     DraggingRadius {
         id: NodeId,
         down_at: Point,
         current: Point,
+        rotation: Angle,
         /// The *effective* radius at drag-start (architect review: the
         /// raw stored value would leave the handle's drag distance
         /// stuck below the true current radius after a shrink, since
@@ -123,7 +129,7 @@ impl RectangleTool {
                 corner_radius,
             } = snapshot.shape
         {
-            let handles = handle_layout::rect_handles(bounds, corner_radius);
+            let handles = handle_layout::handles_for(snapshot);
             if let Some(index) = hit_test_handle(&handles, point, tolerances.handle) {
                 let handle = handles[index];
                 self.drag = match handle.kind {
@@ -131,6 +137,7 @@ impl RectangleTool {
                         id: snapshot.id,
                         down_at: point,
                         current: point,
+                        rotation: snapshot.rotation,
                         start_radius: effective_corner_radius(bounds, corner_radius),
                         bounds,
                     },
@@ -141,6 +148,7 @@ impl RectangleTool {
                         current: point,
                         start_bounds: bounds,
                         corner_radius,
+                        rotation: snapshot.rotation,
                     },
                     HandleKind::CornerRadiusEcho | HandleKind::InnerRadius => {
                         // invariant: `hit_test_handle` only ever returns
@@ -226,10 +234,16 @@ impl RectangleTool {
                 current,
                 start_bounds,
                 corner_radius,
+                rotation,
                 ..
             } => {
-                let delta = down_at.vector_to(current);
-                let bounds = resize_rect_bounds(start_bounds, direction, delta);
+                let delta = local_delta(rotation, down_at, current);
+                let bounds = pin_rect_resize(
+                    start_bounds,
+                    resize_rect_bounds(start_bounds, direction, delta),
+                    direction,
+                    rotation,
+                );
                 Some(LiveShape::Adjusting(Shape::Rect {
                     bounds,
                     corner_radius,
@@ -240,9 +254,10 @@ impl RectangleTool {
                 current,
                 start_radius,
                 bounds,
+                rotation,
                 ..
             } => {
-                let delta = down_at.vector_to(current);
+                let delta = local_delta(rotation, down_at, current);
                 let radius = corner_radius_from_drag(start_radius, bounds, delta);
                 Some(LiveShape::Adjusting(Shape::Rect {
                     bounds,
@@ -280,13 +295,19 @@ impl RectangleTool {
                 direction,
                 down_at,
                 start_bounds,
+                rotation,
                 ..
             } => {
                 if point == down_at {
                     return RectPointerUpOutcome::NoOp;
                 }
-                let delta = down_at.vector_to(point);
-                let bounds = resize_rect_bounds(start_bounds, direction, delta);
+                let delta = local_delta(rotation, down_at, point);
+                let bounds = pin_rect_resize(
+                    start_bounds,
+                    resize_rect_bounds(start_bounds, direction, delta),
+                    direction,
+                    rotation,
+                );
                 let _ = document.set_rect_bounds(id, bounds);
                 RectPointerUpOutcome::Resized
             }
@@ -295,12 +316,13 @@ impl RectangleTool {
                 down_at,
                 start_radius,
                 bounds,
+                rotation,
                 ..
             } => {
                 if point == down_at {
                     return RectPointerUpOutcome::NoOp;
                 }
-                let delta = down_at.vector_to(point);
+                let delta = local_delta(rotation, down_at, point);
                 let radius = corner_radius_from_drag(start_radius, bounds, delta);
                 let _ = document.set_corner_radius(&[id], radius);
                 RectPointerUpOutcome::RadiusChanged
@@ -598,6 +620,123 @@ mod tests {
             "radius must shrink immediately from the effective 10mm, got {}",
             live_radius.as_mm()
         );
+    }
+
+    /// `object-transform` acceptance criterion 25: a rotated rectangle's
+    /// resize handle hit-tests at the rotated position and drags along
+    /// the rectangle's own axes — pulling its (rotated) E handle 5 mm
+    /// outward along the local X axis widens it by exactly 5 mm.
+    #[test]
+    fn ac25_a_rotated_rectangles_own_handles_follow_and_drag_in_local_axes() {
+        use vecmanf_document_core::{Angle, Vec2};
+        let document = Document::new(1);
+        let id = document.create_rect(RectBounds {
+            origin: Point::new(0.0, 0.0),
+            width: Length::from_mm(10.0),
+            height: Length::from_mm(10.0),
+        });
+        let angle = Angle::from_radians(30.0_f64.to_radians());
+        document
+            .rotate_object(
+                &document
+                    .object(id)
+                    .expect("object exists")
+                    .rotated(Point::new(5.0, 5.0), angle),
+            )
+            .expect("rotate");
+        let mut tool = RectangleTool::new();
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+
+        // The rotated E handle: (10, 5) turned 30° about (5, 5).
+        let e_handle = Point::new(10.0, 5.0).rotated_around(Point::new(5.0, 5.0), angle);
+        // Where the *unrotated* E handle would be is no handle at all now.
+        let unrotated_spot = Point::new(10.0, 5.0);
+        let miss = tool.pointer_down(
+            &snapshots(&document),
+            &mut selection,
+            unrotated_spot,
+            TOLERANCES,
+            false,
+        );
+        assert_ne!(
+            miss,
+            RectPointerDownOutcome::Handle,
+            "no handle at the stale spot"
+        );
+        tool.escape();
+        // A miss on empty canvas clears the selection — reselect.
+        selection.select_single(id);
+
+        let outcome = tool.pointer_down(
+            &snapshots(&document),
+            &mut selection,
+            e_handle,
+            TOLERANCES,
+            false,
+        );
+        assert_eq!(outcome, RectPointerDownOutcome::Handle);
+        let drag_to = e_handle.translated(Vec2::new(5.0, 0.0).rotated(angle));
+        tool.pointer_up(&document, drag_to, false);
+        let Shape::Rect { bounds, .. } = document.primitive(id).expect("exists").shape else {
+            panic!("expected rect");
+        };
+        assert!((bounds.width.as_mm() - 15.0).abs() < 1e-9);
+        assert!((bounds.height.as_mm() - 10.0).abs() < 1e-9);
+    }
+
+    /// Architect item 4: the rectangle tool's own resize of a *rotated*
+    /// rectangle pins the opposite corner on screen too (one rule with
+    /// the Select tool), instead of letting it drift.
+    #[test]
+    fn a_rotated_rectangles_own_se_resize_keeps_the_nw_corner_put() {
+        use vecmanf_document_core::{Angle, Vec2, outline_of_rotated};
+        let document = Document::new(1);
+        let id = document.create_rect(RectBounds {
+            origin: Point::new(0.0, 0.0),
+            width: Length::from_mm(10.0),
+            height: Length::from_mm(10.0),
+        });
+        let angle = Angle::from_radians(30.0_f64.to_radians());
+        document
+            .rotate_object(
+                &document
+                    .object(id)
+                    .expect("object exists")
+                    .rotated(Point::new(5.0, 5.0), angle),
+            )
+            .expect("rotate");
+        let nw_before = {
+            let p = document.primitive(id).expect("exists");
+            outline_of_rotated(&p.shape, p.rotation)[0].point
+        };
+        let mut tool = RectangleTool::new();
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let se = Point::new(10.0, 10.0).rotated_around(Point::new(5.0, 5.0), angle);
+        let outcome =
+            tool.pointer_down(&snapshots(&document), &mut selection, se, TOLERANCES, false);
+        assert_eq!(outcome, RectPointerDownOutcome::Handle);
+        let drag_to = se.translated(Vec2::new(6.0, 4.0).rotated(angle));
+        // The live preview and the commit agree on the pinned result.
+        tool.pointer_move(drag_to, false);
+        let Some(LiveShape::Adjusting(Shape::Rect { bounds: live, .. })) = tool.live_shape() else {
+            panic!("expected a live rect");
+        };
+        tool.pointer_up(&document, drag_to, false);
+        let p = document.primitive(id).expect("exists");
+        let Shape::Rect { bounds, .. } = p.shape else {
+            panic!("rect");
+        };
+        assert_eq!(bounds, live, "preview == commit");
+        assert!((bounds.width.as_mm() - 16.0).abs() < 1e-9);
+        assert!((bounds.height.as_mm() - 14.0).abs() < 1e-9);
+        let nw_after = outline_of_rotated(&p.shape, p.rotation)[0].point;
+        assert!(
+            (nw_after.x - nw_before.x).abs() < 1e-9,
+            "{nw_after:?} vs {nw_before:?}"
+        );
+        assert!((nw_after.y - nw_before.y).abs() < 1e-9);
     }
 
     /// AC6: "remove rounding" zeroes the radius.

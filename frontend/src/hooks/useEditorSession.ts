@@ -135,6 +135,16 @@ function readToolbarState(raw: {
   return state;
 }
 
+/** Whether a keyboard event's target is an interactive control (a switch,
+ * button, input) rather than the canvas itself — canvas shortcuts must
+ * ignore those. */
+function isFormControl(target: EventTarget): boolean {
+  return (
+    target instanceof HTMLElement &&
+    target.closest('input, textarea, select, button, [role="switch"]') !== null
+  );
+}
+
 /** Reads the wasm-bindgen `LiveReadout` instance once, immediately, so
  * it can be `free()`d rather than held onto — same reasoning as
  * `readToolbarState`. */
@@ -190,6 +200,10 @@ export interface EditorSession {
   /** The live numeric readout for an in-progress create-drag, or `null`
    * outside one (ux-engineer review item 2). */
   liveReadout: LiveReadout | null;
+  /** `vecmanf-editor-wasm`'s `cursor_hint()` — `"default"`, `"rotate"`
+   * or `"resize:<degrees>"` (`object-transform`'s transform-handle
+   * cursors); `Canvas` turns it into a CSS cursor via `lib/cursors`. */
+  cursorHint: string;
   /** Acceptance criterion 5's cursor cue: whether the live cursor is
    * over the in-progress pen path's own close target — `Canvas` swaps
    * to the "pen-with-small-circle" cursor variant while this is `true`. */
@@ -222,6 +236,11 @@ export interface EditorSession {
   finishPen: () => void;
   /** Acceptance criterion 6's "remove rounding" action. */
   removeCornerRounding: () => void;
+  /** The Select tool's "Scale stroke width" switch
+   * (`object-transform` criteria 8, 26-31): whether a resize scales the
+   * stroke. Session state, off in every new session, never saved. */
+  scaleStrokeWidth: boolean;
+  setScaleStrokeWidth: (on: boolean) => void;
   /** The mode toggle (acceptance criteria 11 vs. 12). */
   setPolyStarMode: (mode: PolyStarMode) => void;
   /** The point-count stepper (acceptance criteria 10, 15). */
@@ -245,6 +264,9 @@ export interface EditorSession {
   onPointerMove: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerUp: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerLeave: () => void;
+  /** The browser took the pointer away (a system gesture, an alert):
+   * cancel any in-flight drag instead of leaving it half-done. */
+  onPointerCancel: () => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void;
   onKeyUp: (event: React.KeyboardEvent<HTMLDivElement>) => void;
   /** File → New: swaps in a brand-new, empty session. */
@@ -307,6 +329,13 @@ export function useEditorSession(
   const [isHoveringPenCloseTarget, setIsHoveringPenCloseTarget] =
     useState(false);
   const [liveReadout, setLiveReadout] = useState<LiveReadout | null>(null);
+  const [scaleStrokeWidth, setScaleStrokeWidthState] = useState(false);
+  const [cursorHint, setCursorHint] = useState("default");
+  /** The last pointer position over the canvas (CSS px) — lets a
+   * modifier key press/release re-run the hover, so the Select tool's
+   * pivot marker and live preview react the instant Shift/Ctrl change,
+   * with no pointer motion needed. */
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
   const [zoomPercent, setZoomPercent] = useState(100);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceHeld, setIsSpaceHeld] = useState(false);
@@ -325,6 +354,9 @@ export function useEditorSession(
     setPolyStarModeState(session.poly_star_mode() as PolyStarMode);
     setPolyStarPointCountState(session.poly_star_point_count());
     setPolyStarRatioState(session.poly_star_ratio());
+    // A new or opened project's session starts with the switch off
+    // (criterion 27); reading it back here is what resets the UI.
+    setScaleStrokeWidthState(session.scale_stroke_width());
     setZoomPercent(session.zoom_percent());
   }, []);
 
@@ -537,6 +569,14 @@ export function useEditorSession(
     syncFromSession();
   }, [syncFromSession]);
 
+  const setScaleStrokeWidth = useCallback(
+    (on: boolean) => {
+      sessionRef.current?.set_scale_stroke_width(on);
+      syncFromSession();
+    },
+    [syncFromSession],
+  );
+
   const setPolyStarMode = useCallback(
     (mode: PolyStarMode) => {
       sessionRef.current?.set_poly_star_mode(mode);
@@ -625,7 +665,20 @@ export function useEditorSession(
       if (isDoubleClick) {
         return;
       }
+      // Capture the pointer for every tool, not only for panning: a
+      // transform drag (a rotate swings the pointer in a wide arc) must
+      // keep receiving moves and the release when the pointer leaves the
+      // canvas, instead of losing the release and clearing its readout.
+      if (event.button === 0) {
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+          // Not capturable (e.g. a synthetic event) — the gesture still
+          // works while the pointer stays over the canvas.
+        }
+      }
       session.pointer_down(x, y, event.shiftKey);
+      setCursorHint(session.cursor_hint());
       syncFromSession();
     },
     [canvasPoint, isSpaceHeld, syncFromSession],
@@ -635,6 +688,7 @@ export function useEditorSession(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
       const session = sessionRef.current;
       const { x, y } = canvasPoint(event);
+      lastPointerRef.current = { x, y };
       if (session) {
         onCursorMove(readDocumentPoint(session.screen_to_document(x, y)));
       }
@@ -642,11 +696,17 @@ export function useEditorSession(
         session?.pan_to(x, y);
         return;
       }
-      session?.pointer_hover(x, y, event.ctrlKey || event.metaKey);
+      session?.pointer_hover(
+        x,
+        y,
+        event.shiftKey,
+        event.ctrlKey || event.metaKey,
+      );
       setIsHoveringPenCloseTarget(
         session?.is_hovering_pen_close_target() ?? false,
       );
       setLiveReadout(readLiveReadout(session?.live_readout()));
+      setCursorHint(session?.cursor_hint() ?? "default");
     },
     [canvasPoint, onCursorMove],
   );
@@ -672,28 +732,73 @@ export function useEditorSession(
         return;
       }
 
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {
+        // Not captured (e.g. a non-primary button) — nothing to release.
+      }
+
       if (suppressedPressRef.current) {
         suppressedPressRef.current = false;
         // One dispatch point for every tool (acceptance criteria 3, 12,
         // 22, 23) — `Session` itself decides what a double-click does.
         session.double_click(x, y);
       } else {
-        session.pointer_up(x, y, event.ctrlKey || event.metaKey);
+        session.pointer_up(x, y, event.shiftKey, event.ctrlKey || event.metaKey);
       }
       setLiveReadout(null);
+      setCursorHint(session.cursor_hint());
       syncFromSession();
     },
     [canvasPoint, syncFromSession],
   );
 
+  const onPointerCancel = useCallback(() => {
+    sessionRef.current?.escape();
+    setLiveReadout(null);
+    setCursorHint("default");
+    syncFromSession();
+  }, [syncFromSession]);
+
   const onPointerLeave = useCallback(() => {
     sessionRef.current?.pointer_leave();
     setIsHoveringPenCloseTarget(false);
     setLiveReadout(null);
+    setCursorHint("default");
+    lastPointerRef.current = null;
   }, []);
+
+  /** Re-runs the hover at the last pointer position with the modifier
+   * state of `event` — Shift/Ctrl (`object-transform`'s pivot swap,
+   * proportional resize, 15° snap) must take effect live, on the key
+   * event itself, not only on the next pointer move. */
+  const refreshModifiers = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const session = sessionRef.current;
+      const last = lastPointerRef.current;
+      if (!session || !last) {
+        return;
+      }
+      session.pointer_hover(
+        last.x,
+        last.y,
+        event.shiftKey,
+        event.ctrlKey || event.metaKey,
+      );
+      setLiveReadout(readLiveReadout(session.live_readout()));
+      setCursorHint(session.cursor_hint());
+    },
+    [],
+  );
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
+      // Keys typed into a control (the toolbar's switch, a field) are
+      // that control's, not canvas shortcuts: Space must toggle the
+      // switch, not start a pan, and tool letters must not switch tools.
+      if (isFormControl(event.target)) {
+        return;
+      }
       switch (event.key) {
         case "s":
         case "S":
@@ -731,6 +836,11 @@ export function useEditorSession(
           event.preventDefault();
           deleteSelected();
           break;
+        case "Shift":
+        case "Control":
+        case "Meta":
+          refreshModifiers(event);
+          break;
         case " ":
           // Space+drag pans (acceptance criterion 4) — `preventDefault`
           // so it never activates a focused button
@@ -745,14 +855,26 @@ export function useEditorSession(
           return;
       }
     },
-    [deleteSelected, escape, finishPen, setTool, tool],
+    [deleteSelected, escape, finishPen, refreshModifiers, setTool, tool],
   );
 
-  const onKeyUp = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === " ") {
-      setIsSpaceHeld(false);
-    }
-  }, []);
+  const onKeyUp = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (isFormControl(event.target)) {
+        return;
+      }
+      if (event.key === " ") {
+        setIsSpaceHeld(false);
+      } else if (
+        event.key === "Shift" ||
+        event.key === "Control" ||
+        event.key === "Meta"
+      ) {
+        refreshModifiers(event);
+      }
+    },
+    [refreshModifiers],
+  );
 
   return {
     canvasRef,
@@ -763,6 +885,7 @@ export function useEditorSession(
     polyStarPointCount,
     polyStarRatio,
     liveReadout,
+    cursorHint,
     isHoveringPenCloseTarget,
     zoomPercent,
     isPanning,
@@ -778,6 +901,8 @@ export function useEditorSession(
     insertSelected,
     finishPen,
     removeCornerRounding,
+    scaleStrokeWidth,
+    setScaleStrokeWidth,
     setPolyStarMode,
     setPolyStarPointCount,
     setPolyStarRatio,
@@ -788,6 +913,7 @@ export function useEditorSession(
     onPointerMove,
     onPointerUp,
     onPointerLeave,
+    onPointerCancel,
     onKeyDown,
     onKeyUp,
     newProject,

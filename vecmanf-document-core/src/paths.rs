@@ -20,7 +20,7 @@ use crate::path_codec::{
 use crate::path_model::{
     AnchorId, AnchorKind, Color, HandleSlot, NewAnchor, NodeId, PathEditError, PathSnapshot,
 };
-use crate::units::{Point, Vec2};
+use crate::units::{Length, Point, Vec2};
 
 /// Default handle length a corner→symmetric/asymmetric conversion pulls
 /// out (`specs/0002-path-node-editing/specification.md` acceptance
@@ -132,6 +132,7 @@ impl Document {
             closed,
             path_codec::DEFAULT_STROKE_WIDTH_MM,
             Color::BLACK,
+            crate::units::Angle::from_radians(0.0),
         );
         self.commit_with_label("create_path");
         id
@@ -206,6 +207,45 @@ impl Document {
             write_point(&anchor_map_at(anchors, *index), KEY_POINT, *point);
         }
         self.commit_with_label("move_anchors");
+        Ok(())
+    }
+
+    /// Resizes a path by writing every named anchor's new point and
+    /// handle vectors, plus the stroke width, together as **one commit**
+    /// (`specs/0005-object-transform/adrs.md`'s resize-writes table:
+    /// "anchors, `stroke_width`" — acceptance criteria 12, 8).
+    /// `vecmanf-ui-core` computes every value (via
+    /// [`crate::path_model::PathSnapshot::scaled`] plus its own stroke-
+    /// factor arithmetic) before calling this; this method only writes
+    /// what was computed, resolving every named anchor before writing
+    /// any of them so one stale id refuses the whole call.
+    ///
+    /// # Errors
+    /// [`PathEditError::NoSuchPath`] if `path` no longer exists;
+    /// [`PathEditError::NoSuchAnchor`] if any named anchor no longer
+    /// exists.
+    pub fn resize_path(
+        &self,
+        path: NodeId,
+        anchors: &[(AnchorId, Point, Vec2, Vec2)],
+        stroke_width: Option<Length>,
+    ) -> Result<(), PathEditError> {
+        let (meta, anchor_list) = self.path_parts(path)?;
+        let resolved: Vec<(usize, Point, Vec2, Vec2)> = anchors
+            .iter()
+            .map(|&(id, point, handle_in, handle_out)| {
+                let index = anchor_index(&anchor_list, id)?;
+                Ok((index, point, handle_in, handle_out))
+            })
+            .collect::<Result<_, PathEditError>>()?;
+        for (index, point, handle_in, handle_out) in resolved {
+            let map = anchor_map_at(&anchor_list, index);
+            write_point(&map, KEY_POINT, point);
+            write_vec2(&map, KEY_HANDLE_IN, handle_in);
+            write_vec2(&map, KEY_HANDLE_OUT, handle_out);
+        }
+        crate::shapes::write_stroke_width_if_changed(&meta, stroke_width);
+        self.commit_with_label("resize_path");
         Ok(())
     }
 
@@ -536,12 +576,18 @@ impl Document {
     /// # Panics
     /// Does not panic in practice — see [`Document::create_path`]'s own
     /// doc comment.
+    /// `rotation` defaults to zero at every call site except
+    /// `crate::path_topology::split_open_path`, which passes the
+    /// original path's own `rotation` (`specs/0005-object-transform/
+    /// adrs.md`, architect note: "`Document::split_at_anchor`'s new
+    /// object (open path) copies the original's rotation").
     pub(crate) fn create_path_uncommitted(
         &self,
         anchors: &[NewAnchor],
         closed: bool,
         stroke_width_mm: f64,
         stroke: Color,
+        rotation: crate::units::Angle,
     ) -> NodeId {
         let tree = self.loro().get_tree(OBJECTS_TREE);
         // invariant: creating a root-level node on a freshly obtained
@@ -553,6 +599,9 @@ impl Document {
         #[allow(clippy::unwrap_used)]
         let meta = tree.get_meta(tree_id).unwrap();
         path_codec::write_path_style(&meta, closed, stroke_width_mm, stroke);
+        if rotation.as_radians() != 0.0 {
+            path_codec::write_rotation(&meta, rotation);
+        }
         let anchor_list = insert_anchors_container(&meta);
         for anchor in anchors {
             push_anchor(&anchor_list, anchor);
@@ -794,6 +843,63 @@ mod tests {
             ),
             (Vec2::new(3.0, 4.0), existing_out),
             "handle_out passed through unchanged"
+        );
+    }
+
+    /// Acceptance criteria 12, 8: `resize_path` writes every named
+    /// anchor's point and handles plus the stroke width, all in one
+    /// commit.
+    #[test]
+    fn resize_path_writes_anchors_and_stroke_width_in_one_commit() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let id = document.create_path(&[anchor(1, 0.0, 0.0), anchor(2, 10.0, 0.0)], false);
+        let before = document.loro().len_changes();
+        document
+            .resize_path(
+                id,
+                &[
+                    (a, Point::new(0.0, 0.0), Vec2::ZERO, Vec2::new(1.0, 0.0)),
+                    (b, Point::new(20.0, 0.0), Vec2::new(-1.0, 0.0), Vec2::ZERO),
+                ],
+                Some(Length::from_mm(0.5)),
+            )
+            .expect("resize");
+        let after = document.loro().len_changes();
+        assert_eq!(after - before, 1, "one commit");
+        let snapshot = document.path(id).expect("exists");
+        assert_eq!(snapshot.anchors[1].point, Point::new(20.0, 0.0));
+        assert_eq!(snapshot.anchors[0].handle_out, Vec2::new(1.0, 0.0));
+        assert!((snapshot.stroke_width.as_mm() - 0.5).abs() < 1e-9);
+    }
+
+    /// A refused `resize_path` (one stale anchor id) must not leave the
+    /// path half-resized.
+    #[test]
+    fn resize_path_refuses_the_whole_batch_on_one_stale_id() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let id = document.create_path(&[anchor(1, 0.0, 0.0), anchor(2, 10.0, 0.0)], false);
+        let result = document.resize_path(
+            id,
+            &[
+                (a, Point::new(99.0, 99.0), Vec2::ZERO, Vec2::ZERO),
+                (
+                    AnchorId::new(9, 9),
+                    Point::new(0.0, 0.0),
+                    Vec2::ZERO,
+                    Vec2::ZERO,
+                ),
+            ],
+            Some(Length::from_mm(1.0)),
+        );
+        assert_eq!(result, Err(PathEditError::NoSuchAnchor));
+        let snapshot = document.path(id).expect("exists");
+        assert_eq!(
+            snapshot.anchors[0].point,
+            Point::new(0.0, 0.0),
+            "untouched by the refused batch"
         );
     }
 

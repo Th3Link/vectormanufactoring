@@ -27,7 +27,7 @@ fn draw_path(session: &mut Session, points: &[Point]) {
     session.set_tool(Tool::Pen);
     for &p in points {
         session.pointer_down(p, false);
-        session.pointer_up(p, false);
+        session.pointer_up(p, false, false);
     }
     session.finish_pen();
 }
@@ -57,9 +57,9 @@ fn ac6_two_select_tool_selected_objects_both_get_editable_nodes_in_the_node_tool
     // Select both objects with the Select tool (shift-click).
     session.set_tool(Tool::Select);
     session.pointer_down(Point::new(0.0, 0.0), false);
-    session.pointer_up(Point::new(0.0, 0.0), false);
+    session.pointer_up(Point::new(0.0, 0.0), false, false);
     session.pointer_down(Point::new(0.0, 50.0), true);
-    session.pointer_up(Point::new(0.0, 50.0), false);
+    session.pointer_up(Point::new(0.0, 50.0), false, false);
 
     // Switch to the Node tool via the rail/shortcut (set_tool), not a
     // double-click.
@@ -67,7 +67,7 @@ fn ac6_two_select_tool_selected_objects_both_get_editable_nodes_in_the_node_tool
 
     // Path A's node is hit-testable and selectable.
     session.pointer_down(Point::new(0.0, 0.0), false);
-    session.pointer_up(Point::new(0.0, 0.0), false);
+    session.pointer_up(Point::new(0.0, 0.0), false, false);
     assert!(
         session.node_toolbar_state().can_delete,
         "path A's node is selected and editable"
@@ -76,7 +76,7 @@ fn ac6_two_select_tool_selected_objects_both_get_editable_nodes_in_the_node_tool
     // Path B's node is *also* hit-testable and selectable, in the same
     // session, without re-entering the Node tool.
     session.pointer_down(Point::new(0.0, 50.0), false);
-    session.pointer_up(Point::new(0.0, 50.0), false);
+    session.pointer_up(Point::new(0.0, 50.0), false, false);
     assert!(
         session.node_toolbar_state().can_delete,
         "path B's node is selected and editable too, same Node-tool session"
@@ -99,15 +99,15 @@ fn ac7_shift_click_a_node_on_a_different_object_adds_it_to_the_selection() {
 
     session.set_tool(Tool::Select);
     session.pointer_down(Point::new(0.0, 0.0), false);
-    session.pointer_up(Point::new(0.0, 0.0), false);
+    session.pointer_up(Point::new(0.0, 0.0), false, false);
     session.pointer_down(Point::new(0.0, 50.0), true);
-    session.pointer_up(Point::new(0.0, 50.0), false);
+    session.pointer_up(Point::new(0.0, 50.0), false, false);
 
     session.set_tool(Tool::Node);
     session.pointer_down(Point::new(0.0, 0.0), false);
-    session.pointer_up(Point::new(0.0, 0.0), false);
+    session.pointer_up(Point::new(0.0, 0.0), false, false);
     session.pointer_down(Point::new(0.0, 50.0), true);
-    session.pointer_up(Point::new(0.0, 50.0), false);
+    session.pointer_up(Point::new(0.0, 50.0), false, false);
 
     // Both nodes selected together: endpoints of two different open
     // paths, so Join becomes available (AC 8/9 share this rule).
@@ -135,15 +135,15 @@ fn plain_click_on_a_cross_path_selected_node_drags_both_paths_as_one_commit() {
 
     session.set_tool(Tool::Select);
     session.pointer_down(Point::new(0.0, 0.0), false);
-    session.pointer_up(Point::new(0.0, 0.0), false);
+    session.pointer_up(Point::new(0.0, 0.0), false, false);
     session.pointer_down(Point::new(0.0, 50.0), true);
-    session.pointer_up(Point::new(0.0, 50.0), false);
+    session.pointer_up(Point::new(0.0, 50.0), false, false);
 
     session.set_tool(Tool::Node);
     session.pointer_down(Point::new(0.0, 0.0), false);
-    session.pointer_up(Point::new(0.0, 0.0), false);
+    session.pointer_up(Point::new(0.0, 0.0), false, false);
     session.pointer_down(Point::new(0.0, 50.0), true);
-    session.pointer_up(Point::new(0.0, 50.0), false);
+    session.pointer_up(Point::new(0.0, 50.0), false, false);
     assert!(
         session.node_toolbar_state().can_join,
         "cross-path selection built, same as AC 7's own test"
@@ -160,7 +160,7 @@ fn plain_click_on_a_cross_path_selected_node_drags_both_paths_as_one_commit() {
 
     // Dragging from there moves both selected nodes, on both objects, as
     // one commit.
-    session.pointer_up(Point::new(3.0, 4.0), false);
+    session.pointer_up(Point::new(3.0, 4.0), false, false);
 
     let document = document_of(&session);
     let ids = document.object_ids();
@@ -211,7 +211,7 @@ fn decoration_rendering_reflects_both_cross_path_selected_nodes() {
 
     // Select path A's node alone.
     session.pointer_down(Point::new(0.0, 0.0), false);
-    session.pointer_up(Point::new(0.0, 0.0), false);
+    session.pointer_up(Point::new(0.0, 0.0), false, false);
     let one_selected = session.draw_list().triangle_count();
     assert_eq!(
         baseline - one_selected,
@@ -222,7 +222,7 @@ fn decoration_rendering_reflects_both_cross_path_selected_nodes() {
 
     // Shift-click path B's node: now a genuine cross-path selection.
     session.pointer_down(Point::new(0.0, 50.0), true);
-    session.pointer_up(Point::new(0.0, 50.0), false);
+    session.pointer_up(Point::new(0.0, 50.0), false, false);
     let two_selected = session.draw_list().triangle_count();
     assert_eq!(
         baseline - two_selected,
@@ -267,17 +267,17 @@ fn ac9_cross_object_join_last_to_first_appends_second_path_unchanged() {
 
     session.set_tool(Tool::Select);
     session.pointer_down(Point::new(0.0, 0.0), false);
-    session.pointer_up(Point::new(0.0, 0.0), false);
+    session.pointer_up(Point::new(0.0, 0.0), false, false);
     session.pointer_down(Point::new(100.0, 50.0), true);
-    session.pointer_up(Point::new(100.0, 50.0), false);
+    session.pointer_up(Point::new(100.0, 50.0), false, false);
 
     session.set_tool(Tool::Node);
     // First-selected: path A's last anchor (20, 0).
     session.pointer_down(Point::new(20.0, 0.0), false);
-    session.pointer_up(Point::new(20.0, 0.0), false);
+    session.pointer_up(Point::new(20.0, 0.0), false, false);
     // Second-selected: path B's first anchor (100, 50).
     session.pointer_down(Point::new(100.0, 50.0), true);
-    session.pointer_up(Point::new(100.0, 50.0), false);
+    session.pointer_up(Point::new(100.0, 50.0), false, false);
 
     assert!(session.node_toolbar_state().can_join);
     session.join_selected();
@@ -361,17 +361,17 @@ fn ac9_cross_object_join_honors_selection_order_not_path_creation_order() {
 
     session.set_tool(Tool::Select);
     session.pointer_down(Point::new(100.0, 50.0), false);
-    session.pointer_up(Point::new(100.0, 50.0), false);
+    session.pointer_up(Point::new(100.0, 50.0), false, false);
     session.pointer_down(Point::new(0.0, 0.0), true);
-    session.pointer_up(Point::new(0.0, 0.0), false);
+    session.pointer_up(Point::new(0.0, 0.0), false, false);
 
     session.set_tool(Tool::Node);
     // First-selected this time: path B's *first* anchor (100, 50).
     session.pointer_down(Point::new(100.0, 50.0), false);
-    session.pointer_up(Point::new(100.0, 50.0), false);
+    session.pointer_up(Point::new(100.0, 50.0), false, false);
     // Second-selected: path A's *last* anchor (20, 0).
     session.pointer_down(Point::new(20.0, 0.0), true);
-    session.pointer_up(Point::new(20.0, 0.0), false);
+    session.pointer_up(Point::new(20.0, 0.0), false, false);
 
     assert!(session.node_toolbar_state().can_join);
     session.join_selected();
@@ -433,24 +433,24 @@ fn ac9_cross_object_join_forces_corner_kind_regardless_of_originals() {
     session.set_tool(Tool::Node);
     // Convert path A's last anchor to Symmetric.
     session.pointer_down(Point::new(20.0, 0.0), false);
-    session.pointer_up(Point::new(20.0, 0.0), false);
+    session.pointer_up(Point::new(20.0, 0.0), false, false);
     session.convert_selected(AnchorKind::Symmetric);
     // Convert path B's first anchor to Asymmetric.
     session.pointer_down(Point::new(100.0, 50.0), false);
-    session.pointer_up(Point::new(100.0, 50.0), false);
+    session.pointer_up(Point::new(100.0, 50.0), false, false);
     session.convert_selected(AnchorKind::Asymmetric);
 
     session.set_tool(Tool::Select);
     session.pointer_down(Point::new(0.0, 0.0), false);
-    session.pointer_up(Point::new(0.0, 0.0), false);
+    session.pointer_up(Point::new(0.0, 0.0), false, false);
     session.pointer_down(Point::new(100.0, 50.0), true);
-    session.pointer_up(Point::new(100.0, 50.0), false);
+    session.pointer_up(Point::new(100.0, 50.0), false, false);
 
     session.set_tool(Tool::Node);
     session.pointer_down(Point::new(20.0, 0.0), false);
-    session.pointer_up(Point::new(20.0, 0.0), false);
+    session.pointer_up(Point::new(20.0, 0.0), false, false);
     session.pointer_down(Point::new(100.0, 50.0), true);
-    session.pointer_up(Point::new(100.0, 50.0), false);
+    session.pointer_up(Point::new(100.0, 50.0), false, false);
 
     session.join_selected();
 
