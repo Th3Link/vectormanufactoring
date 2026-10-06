@@ -22,7 +22,7 @@ pub const KNOB_DIAMETER_PX: f64 = 10.0;
 
 /// The empty gap two drawn glyphs keep between them, screen pixels
 /// (criterion 8).
-pub const MIN_GLYPH_GAP_PX: f64 = 4.0;
+pub(crate) const MIN_GLYPH_GAP_PX: f64 = 4.0;
 
 /// The centre distance of two radius handles at the largest radius:
 /// the knob diameter plus the gap, screen pixels.
@@ -42,7 +42,7 @@ pub const PARAM_HIT_PX: f64 = 12.0;
 
 /// The centre handle is not drawn while a parameter handle centre is within
 /// this distance of the box centre, screen pixels (criterion 8).
-pub const CENTRE_YIELD_PX: f64 = 20.0;
+pub(crate) const CENTRE_YIELD_PX: f64 = 20.0;
 
 /// The corner a radius handle belongs to, in the primitive's local frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -156,7 +156,11 @@ pub fn radius_gain(shorter_side_mm: f64, tolerances: &TransformHandleTolerances)
 /// The star's first inner vertex in its local frame: at `θ + π/N` from the
 /// first outer vertex, `ratio` of the way to the outer radius.
 #[must_use]
-pub fn star_inner_vertex(frame: StarFrame, point_count: PointCount, ratio: InnerRatio) -> Point {
+pub(crate) fn star_inner_vertex(
+    frame: StarFrame,
+    point_count: PointCount,
+    ratio: InnerRatio,
+) -> Point {
     let step = std::f64::consts::TAU / f64::from(point_count.get());
     let theta = frame.angle.as_radians() + step / 2.0;
     let radius = frame.radius.as_mm() * ratio.get();

@@ -4,10 +4,9 @@
 //! handle, laid out in an [`OrientedBox`]'s local frame and mapped to
 //! document space through it (`adrs.md`: "every handle position... is
 //! computed in the object's own local, rotated coordinate frame").
-//! Distinct from [`crate::handle_layout`], which lays out each
-//! primitive's *own* shape-tool handles (corner radius, inner radius) —
-//! this module is the Select tool's one, kind-independent vocabulary
-//! that sits on top of any object's [`OrientedBox`]. The resize and
+//! This is the Select tool's one, kind-independent vocabulary of
+//! transform handles on top of any object's [`OrientedBox`]; the parameter
+//! (knob) handles are laid out in [`crate::param_handles`]. The resize and
 //! rotate arithmetic lives next door in [`crate::transform_math`].
 
 use vecmanf_document_core::{Angle, Point, Tolerance};
@@ -23,9 +22,7 @@ use crate::param_handles::{
 pub const ALL_EIGHT: [ResizeDirection; 8] = ResizeDirection::ALL_EIGHT;
 
 /// The 4 corner-only handles a polygon or star shows (acceptance
-/// criterion 11: "corner handles only — no edge handles" — note this is
-/// the diagonal corners, distinct from `crate::handle_layout`'s own
-/// cardinal-only polygon/star handles).
+/// criterion 11: "corner handles only — no edge handles").
 pub const CORNERS_FOUR: [ResizeDirection; 4] = [
     ResizeDirection::Ne,
     ResizeDirection::Se,

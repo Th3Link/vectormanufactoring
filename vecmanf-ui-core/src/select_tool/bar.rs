@@ -71,11 +71,6 @@ impl SelectTool {
         changes_something && commit_param_batch(document, &pending.ids, pending.value).is_ok()
     }
 
-    /// Drops the slider edit in flight without writing.
-    pub fn cancel_bar_preview(&mut self) {
-        self.bar_preview = None;
-    }
-
     /// One commit of `value` on every selected object of the control's kind:
     /// a stepper click or a typed "Points" or "Ratio". Any slider edit in
     /// flight is flushed first.

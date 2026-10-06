@@ -62,9 +62,9 @@ pub use param_edit::{
 };
 pub use param_entry::ParamEntry;
 pub use param_handles::{
-    CENTRE_YIELD_PX, Corner, HandleTiers, KNOB_DIAMETER_PX, KNOB_INSET_PX, KNOB_PITCH_PX,
-    MIN_GLYPH_GAP_PX, PARAM_HIT_PX, PARAM_MIN_SIDE_PX, ParamHandle, centre_drawn, handle_tiers,
-    param_handles, radius_gain, radius_travel, star_inner_vertex,
+    Corner, HandleTiers, KNOB_DIAMETER_PX, KNOB_INSET_PX, KNOB_PITCH_PX, PARAM_HIT_PX,
+    PARAM_MIN_SIDE_PX, ParamHandle, centre_drawn, handle_tiers, param_handles, radius_gain,
+    radius_travel,
 };
 pub use pen_tool::{PenTool, PointerUpOutcome as PenPointerUpOutcome};
 pub use poly_star_tool::{PolyStarMode, PolygonStarTool};
