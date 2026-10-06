@@ -22,6 +22,7 @@ use crate::shape_tool_common::{
     LiveShape, ShapeHitTolerances, apply_selection_click, constrained_endpoint, is_degenerate,
     rects_only,
 };
+use crate::transform_drag::pin_rect_resize;
 
 #[derive(Debug, Default)]
 enum RectDrag {
@@ -237,7 +238,12 @@ impl RectangleTool {
                 ..
             } => {
                 let delta = local_delta(rotation, down_at, current);
-                let bounds = resize_rect_bounds(start_bounds, direction, delta);
+                let bounds = pin_rect_resize(
+                    start_bounds,
+                    resize_rect_bounds(start_bounds, direction, delta),
+                    direction,
+                    rotation,
+                );
                 Some(LiveShape::Adjusting(Shape::Rect {
                     bounds,
                     corner_radius,
@@ -296,7 +302,12 @@ impl RectangleTool {
                     return RectPointerUpOutcome::NoOp;
                 }
                 let delta = local_delta(rotation, down_at, point);
-                let bounds = resize_rect_bounds(start_bounds, direction, delta);
+                let bounds = pin_rect_resize(
+                    start_bounds,
+                    resize_rect_bounds(start_bounds, direction, delta),
+                    direction,
+                    rotation,
+                );
                 let _ = document.set_rect_bounds(id, bounds);
                 RectPointerUpOutcome::Resized
             }
@@ -626,7 +637,12 @@ mod tests {
         });
         let angle = Angle::from_radians(30.0_f64.to_radians());
         document
-            .rotate_object(id, Point::new(5.0, 5.0), angle)
+            .rotate_object(
+                &document
+                    .object(id)
+                    .expect("object exists")
+                    .rotated(Point::new(5.0, 5.0), angle),
+            )
             .expect("rotate");
         let mut tool = RectangleTool::new();
         let mut selection = ObjectSelection::new();
@@ -667,6 +683,60 @@ mod tests {
         };
         assert!((bounds.width.as_mm() - 15.0).abs() < 1e-9);
         assert!((bounds.height.as_mm() - 10.0).abs() < 1e-9);
+    }
+
+    /// Architect item 4: the rectangle tool's own resize of a *rotated*
+    /// rectangle pins the opposite corner on screen too (one rule with
+    /// the Select tool), instead of letting it drift.
+    #[test]
+    fn a_rotated_rectangles_own_se_resize_keeps_the_nw_corner_put() {
+        use vecmanf_document_core::{Angle, Vec2, outline_of_rotated};
+        let document = Document::new(1);
+        let id = document.create_rect(RectBounds {
+            origin: Point::new(0.0, 0.0),
+            width: Length::from_mm(10.0),
+            height: Length::from_mm(10.0),
+        });
+        let angle = Angle::from_radians(30.0_f64.to_radians());
+        document
+            .rotate_object(
+                &document
+                    .object(id)
+                    .expect("object exists")
+                    .rotated(Point::new(5.0, 5.0), angle),
+            )
+            .expect("rotate");
+        let nw_before = {
+            let p = document.primitive(id).expect("exists");
+            outline_of_rotated(&p.shape, p.rotation)[0].point
+        };
+        let mut tool = RectangleTool::new();
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let se = Point::new(10.0, 10.0).rotated_around(Point::new(5.0, 5.0), angle);
+        let outcome =
+            tool.pointer_down(&snapshots(&document), &mut selection, se, TOLERANCES, false);
+        assert_eq!(outcome, RectPointerDownOutcome::Handle);
+        let drag_to = se.translated(Vec2::new(6.0, 4.0).rotated(angle));
+        // The live preview and the commit agree on the pinned result.
+        tool.pointer_move(drag_to, false);
+        let Some(LiveShape::Adjusting(Shape::Rect { bounds: live, .. })) = tool.live_shape() else {
+            panic!("expected a live rect");
+        };
+        tool.pointer_up(&document, drag_to, false);
+        let p = document.primitive(id).expect("exists");
+        let Shape::Rect { bounds, .. } = p.shape else {
+            panic!("rect");
+        };
+        assert_eq!(bounds, live, "preview == commit");
+        assert!((bounds.width.as_mm() - 16.0).abs() < 1e-9);
+        assert!((bounds.height.as_mm() - 14.0).abs() < 1e-9);
+        let nw_after = outline_of_rotated(&p.shape, p.rotation)[0].point;
+        assert!(
+            (nw_after.x - nw_before.x).abs() < 1e-9,
+            "{nw_after:?} vs {nw_before:?}"
+        );
+        assert!((nw_after.y - nw_before.y).abs() < 1e-9);
     }
 
     /// AC6: "remove rounding" zeroes the radius.

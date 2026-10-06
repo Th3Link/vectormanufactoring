@@ -30,6 +30,7 @@ mod select_tool;
 mod selection;
 mod shape_hit_test;
 mod shape_tool_common;
+mod transform_drag;
 mod transform_handle_layout;
 mod viewport;
 

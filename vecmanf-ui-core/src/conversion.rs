@@ -117,11 +117,10 @@ mod tests {
             height: Length::from_mm(10.0),
         });
         document
-            .rotate_object(
-                id,
+            .rotate_object(&document.object(id).expect("object exists").rotated(
                 Point::new(0.0, 0.0),
                 vecmanf_document_core::Angle::from_radians(std::f64::consts::FRAC_PI_2),
-            )
+            ))
             .expect("rotate");
         let mut minter = AnchorIdMinter::new(1);
         let conversions = build_primitive_conversions(&document, &mut minter, &[id]);

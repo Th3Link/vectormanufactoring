@@ -201,11 +201,10 @@ mod tests {
             height: Length::from_mm(10.0),
         });
         document
-            .rotate_object(
-                rect,
+            .rotate_object(&document.object(rect).expect("object exists").rotated(
                 Point::new(0.0, 0.0),
                 vecmanf_document_core::Angle::from_radians(std::f64::consts::FRAC_PI_4),
-            )
+            ))
             .expect("rotate");
         let objects = vec![document.object(rect).expect("exists")];
         // The unrotated top edge sat at y = -5; after a 45-degree

@@ -15,6 +15,7 @@ use crate::shape_tool_common::{
     LiveShape, ShapeHitTolerances, apply_selection_click, constrained_endpoint, ellipses_only,
     is_degenerate,
 };
+use crate::transform_drag::pin_ellipse_resize;
 
 #[derive(Debug, Default)]
 enum EllipseDrag {
@@ -172,7 +173,12 @@ impl EllipseTool {
                 ..
             } => {
                 let delta = local_delta(rotation, down_at, current);
-                let frame = resize_ellipse_frame(start_frame, direction, delta);
+                let frame = pin_ellipse_resize(
+                    start_frame,
+                    resize_ellipse_frame(start_frame, direction, delta),
+                    direction,
+                    rotation,
+                );
                 Some(LiveShape::Adjusting(Shape::Ellipse { frame }))
             }
         }
@@ -211,7 +217,12 @@ impl EllipseTool {
                     return EllipsePointerUpOutcome::NoOp;
                 }
                 let delta = local_delta(rotation, down_at, point);
-                let frame = resize_ellipse_frame(start_frame, direction, delta);
+                let frame = pin_ellipse_resize(
+                    start_frame,
+                    resize_ellipse_frame(start_frame, direction, delta),
+                    direction,
+                    rotation,
+                );
                 let _ = document.set_ellipse_frame(id, frame);
                 EllipsePointerUpOutcome::Resized
             }
@@ -259,7 +270,12 @@ mod tests {
         });
         let angle = Angle::from_radians(45.0_f64.to_radians());
         document
-            .rotate_object(id, Point::new(0.0, 0.0), angle)
+            .rotate_object(
+                &document
+                    .object(id)
+                    .expect("object exists")
+                    .rotated(Point::new(0.0, 0.0), angle),
+            )
             .expect("rotate");
         let mut tool = EllipseTool::new();
         let mut selection = ObjectSelection::new();
@@ -283,6 +299,56 @@ mod tests {
         };
         assert!((frame.rx.as_mm() - 7.0).abs() < 1e-9);
         assert!((frame.ry.as_mm() - 5.0).abs() < 1e-9);
+    }
+
+    /// Architect item 4, for the ellipse tool: the far (NW) point of a
+    /// rotated ellipse's bounding box stays put while its SE handle is
+    /// dragged.
+    #[test]
+    fn a_rotated_ellipses_own_se_resize_keeps_the_opposite_corner_put() {
+        use vecmanf_document_core::Vec2;
+        let document = Document::new(1);
+        let id = document.create_ellipse(EllipseFrame {
+            center: Point::new(0.0, 0.0),
+            rx: Length::from_mm(5.0),
+            ry: Length::from_mm(3.0),
+        });
+        let angle = Angle::from_radians(30.0_f64.to_radians());
+        document
+            .rotate_object(
+                &document
+                    .object(id)
+                    .expect("object exists")
+                    .rotated(Point::new(0.0, 0.0), angle),
+            )
+            .expect("rotate");
+        // The local NW box corner (-5, -3) on screen.
+        let nw = Point::new(-5.0, -3.0).rotated_around(Point::new(0.0, 0.0), angle);
+        let mut tool = EllipseTool::new();
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let se = Point::new(5.0, 3.0).rotated_around(Point::new(0.0, 0.0), angle);
+        let outcome =
+            tool.pointer_down(&snapshots(&document), &mut selection, se, TOLERANCES, false);
+        assert_eq!(outcome, EllipsePointerDownOutcome::Handle);
+        tool.pointer_up(
+            &document,
+            se.translated(Vec2::new(4.0, 2.0).rotated(angle)),
+            false,
+        );
+        let p = document.primitive(id).expect("exists");
+        let Shape::Ellipse { frame } = p.shape else {
+            panic!("ellipse");
+        };
+        assert!((frame.rx.as_mm() - 7.0).abs() < 1e-9);
+        assert!((frame.ry.as_mm() - 4.0).abs() < 1e-9);
+        let nw_after = Point::new(
+            frame.center.x - frame.rx.as_mm(),
+            frame.center.y - frame.ry.as_mm(),
+        )
+        .rotated_around(frame.center, p.rotation);
+        assert!((nw_after.x - nw.x).abs() < 1e-9, "{nw_after:?} vs {nw:?}");
+        assert!((nw_after.y - nw.y).abs() < 1e-9);
     }
 
     /// AC7, AC8: an ellipse drag creates rx/ry from the bbox, and Ctrl

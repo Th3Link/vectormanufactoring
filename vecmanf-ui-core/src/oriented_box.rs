@@ -207,11 +207,10 @@ mod tests {
             height: Length::from_mm(10.0),
         });
         document
-            .rotate_object(
-                id,
+            .rotate_object(&document.object(id).expect("object exists").rotated(
                 Point::new(5.0, 5.0),
                 Angle::from_radians(std::f64::consts::FRAC_PI_4),
-            )
+            ))
             .expect("rotate");
         let object = document.object(id).expect("exists");
         let b = oriented_bounds(&object);
@@ -232,11 +231,10 @@ mod tests {
             height: Length::from_mm(10.0),
         });
         document
-            .rotate_object(
-                id,
+            .rotate_object(&document.object(id).expect("object exists").rotated(
                 Point::new(5.0, 5.0),
                 Angle::from_radians(std::f64::consts::FRAC_PI_2),
-            )
+            ))
             .expect("rotate");
         let object = document.object(id).expect("exists");
         let b = oriented_bounds(&object);
@@ -258,11 +256,10 @@ mod tests {
             height: Length::from_mm(4.0),
         });
         document
-            .rotate_object(
-                id,
+            .rotate_object(&document.object(id).expect("object exists").rotated(
                 Point::new(5.0, 2.0),
                 Angle::from_radians(std::f64::consts::FRAC_PI_2),
-            )
+            ))
             .expect("rotate");
         let b = oriented_bounds(&document.object(id).expect("exists"));
         let corners = b.document_corners();
@@ -290,7 +287,12 @@ mod tests {
             height: Length::from_mm(10.0),
         });
         document
-            .rotate_object(id, Point::new(5.0, 5.0), Angle::from_radians(0.7))
+            .rotate_object(
+                &document
+                    .object(id)
+                    .expect("object exists")
+                    .rotated(Point::new(5.0, 5.0), Angle::from_radians(0.7)),
+            )
             .expect("rotate");
         let object = document.object(id).expect("exists");
         let b = oriented_bounds(&object);
@@ -315,11 +317,10 @@ mod tests {
             false,
         );
         document
-            .rotate_object(
-                id,
+            .rotate_object(&document.object(id).expect("object exists").rotated(
                 Point::new(0.0, 0.0),
                 Angle::from_radians(std::f64::consts::FRAC_PI_2),
-            )
+            ))
             .expect("rotate");
         let object = document.object(id).expect("exists");
         let b = oriented_bounds(&object);

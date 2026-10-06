@@ -465,7 +465,12 @@ mod tests {
             .expect("radius");
         let angle = Angle::from_radians(30.0_f64.to_radians());
         document
-            .rotate_object(id, Point::new(5.0, 5.0), angle)
+            .rotate_object(
+                &document
+                    .object(id)
+                    .expect("object exists")
+                    .rotated(Point::new(5.0, 5.0), angle),
+            )
             .expect("rotate");
         let snapshot = document.primitive(id).expect("exists");
 

@@ -76,7 +76,12 @@ fn rect_ellipse_boxes_are_the_frame_with_the_objects_rotation() {
         ry: Length::from_mm(3.0),
     });
     document
-        .rotate_object(rect, pt(7.0, 5.0), Angle::from_radians(0.5))
+        .rotate_object(
+            &document
+                .object(rect)
+                .expect("object exists")
+                .rotated(pt(7.0, 5.0), Angle::from_radians(0.5)),
+        )
         .unwrap();
     let b = oriented_bounds(&document.object(rect).unwrap());
     assert!(close(b.min.x, 2.0) && close(b.min.y, 3.0));
@@ -125,7 +130,12 @@ fn a_rotated_path_box_is_tight_in_the_objects_own_frame() {
     let id = document.object_ids()[0];
     let angle = 0.7;
     document
-        .rotate_object(id, pt(3.0, 4.0), Angle::from_radians(angle))
+        .rotate_object(
+            &document
+                .object(id)
+                .expect("object exists")
+                .rotated(pt(3.0, 4.0), Angle::from_radians(angle)),
+        )
         .unwrap();
     let object = document.object(id).unwrap();
     assert!(close(object.rotation().as_radians(), angle));
@@ -203,7 +213,12 @@ fn oriented_box_to_document_and_to_local_are_inverse() {
         height: Length::from_mm(10.0),
     });
     document
-        .rotate_object(id, pt(20.0, 10.0), Angle::from_radians(-2.2))
+        .rotate_object(
+            &document
+                .object(id)
+                .expect("object exists")
+                .rotated(pt(20.0, 10.0), Angle::from_radians(-2.2)),
+        )
         .unwrap();
     let b = oriented_bounds(&document.object(id).unwrap());
     for p in [pt(0.0, 0.0), pt(12.5, -3.0), pt(1e4, -1e4)] {
@@ -755,7 +770,6 @@ fn rotate_delta_is_zero_when_the_pointer_sits_on_the_pivot() {
 }
 
 #[test]
-#[ignore = "FINDING (medium): rotate_delta_angle returns NaN for a NaN pointer; the Select tool then writes NaN into `rotation` and the saved file reopens as Damaged"]
 fn rotate_delta_never_leaks_a_nan_angle() {
     let c = pt(5.0, 5.0);
     let d = rotate_delta_angle(c, pt(5.0, 0.0), pt(f64::NAN, f64::NAN), false).as_radians();

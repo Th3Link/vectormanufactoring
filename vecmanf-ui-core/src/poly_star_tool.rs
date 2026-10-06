@@ -675,7 +675,12 @@ mod tests {
         );
         let rotation = Angle::from_radians(0.9);
         document
-            .rotate_object(id, Point::new(0.0, 0.0), rotation)
+            .rotate_object(
+                &document
+                    .object(id)
+                    .expect("object exists")
+                    .rotated(Point::new(0.0, 0.0), rotation),
+            )
             .expect("rotate");
         let mut tool = PolygonStarTool::new();
         let mut selection = ObjectSelection::new();

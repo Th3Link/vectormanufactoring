@@ -14,27 +14,18 @@
 //! editing/adrs.md`'s rule, extended here to a resize/rotate too).
 
 use vecmanf_document_core::{
-    AnchorId, Document, EllipseFrame, Length, NodeId, ObjectSnapshot, Point, PrimitiveSnapshot,
-    Shape, StarFrame, Tolerance, Vec2, shape_center,
+    Document, NodeId, ObjectSnapshot, Point, PrimitiveSnapshot, Shape, Tolerance, Vec2,
 };
 
 use crate::ResizeDirection;
 use crate::hit_test_object::hit_test_object;
 use crate::object_selection::ObjectSelection;
 use crate::oriented_box::{OrientedBox, oriented_bounds};
+use crate::transform_drag::{commit_resize, compute_resize, compute_rotate};
 use crate::transform_handle_layout::{
     ALL_EIGHT, CORNERS_FOUR, TransformHandle, hit_test_transform_handle,
-    polygon_star_resize_factor, resize_anchor_local_position, resize_local_box, rotate_delta_angle,
-    rotate_pivot, scaled_and_floored, stroke_or_radius_factor, transform_handles,
+    resize_anchor_local_position, resize_handle_hit, rotate_pivot, transform_handles,
 };
-
-/// A resize/corner-radius drag can never drive a stroke width to zero
-/// or below (acceptance criterion 8 of `specs/0005-object-transform/
-/// specification.md`: "the stroke width stays at the smallest value
-/// still above zero") — this is that smallest value. Not a design-
-/// system token: no acceptance criterion pins an exact number, only
-/// that it must stay strictly positive.
-const MIN_STROKE_WIDTH_MM: f64 = 0.01;
 
 /// The three tolerances the Select tool's own transform handles need —
 /// mirrors [`crate::ShapeHitTolerances`]'s split for the shape tools.
@@ -67,7 +58,6 @@ enum SelectDrag {
     },
     /// A rotate-handle drag in progress.
     Rotating {
-        id: NodeId,
         start: ObjectSnapshot,
         start_box: OrientedBox,
         down_at: Point,
@@ -235,7 +225,7 @@ impl SelectTool {
             .into_iter()
             .partition(|(h, _)| matches!(h, TransformHandle::Rotate));
         let hit = hit_test_transform_handle(&rotate, point, tolerances.rotate.as_mm())
-            .or_else(|| hit_test_transform_handle(&resize, point, tolerances.resize.as_mm()))?;
+            .or_else(|| resize_handle_hit(&resize, &box_, point, tolerances.resize))?;
         Some((object, box_, hit))
     }
 
@@ -263,7 +253,6 @@ impl SelectTool {
         {
             self.drag = match handle {
                 TransformHandle::Rotate => SelectDrag::Rotating {
-                    id: object.id(),
                     start: object.clone(),
                     start_box: box_,
                     down_at: point,
@@ -353,11 +342,9 @@ impl SelectTool {
                 start_box,
                 down_at,
                 ..
-            } => {
-                let pivot = rotate_pivot(start_box, shift);
-                let delta_angle = rotate_delta_angle(pivot, *down_at, current, ctrl);
-                Some(start.rotated(pivot, delta_angle))
-            }
+            } => Some(compute_rotate(
+                start, start_box, *down_at, current, shift, ctrl,
+            )),
             SelectDrag::None | SelectDrag::Moving { .. } | SelectDrag::Resizing { .. } => None,
         }
     }
@@ -403,10 +390,12 @@ impl SelectTool {
                 }
                 let resized =
                     compute_resize(&start, &start_box, direction, down_at, point, shift, ctrl);
-                commit_resize(document, id, &resized);
+                if resized != start {
+                    commit_resize(document, id, &resized);
+                }
             }
             SelectDrag::Rotating {
-                id,
+                start,
                 start_box,
                 down_at,
                 ..
@@ -414,9 +403,10 @@ impl SelectTool {
                 if down_at == point {
                     return;
                 }
-                let pivot = rotate_pivot(&start_box, shift);
-                let delta_angle = rotate_delta_angle(pivot, down_at, point, ctrl);
-                let _ = document.rotate_object(id, pivot, delta_angle);
+                let rotated = compute_rotate(&start, &start_box, down_at, point, shift, ctrl);
+                if rotated != start {
+                    let _ = document.rotate_object(&rotated);
+                }
             }
         }
     }
@@ -447,186 +437,6 @@ impl SelectTool {
     }
 }
 
-/// [`SelectTool::live_resize`] and [`SelectTool::pointer_up`]'s one
-/// shared resize rule, dispatching on the object's own kind
-/// (`specs/0005-object-transform/adrs.md`: "a resize rewrites geometry...
-/// preview and commit share one implementation").
-fn compute_resize(
-    start: &ObjectSnapshot,
-    start_box: &OrientedBox,
-    direction: ResizeDirection,
-    down_at: Point,
-    current: Point,
-    shift: bool,
-    ctrl: bool,
-) -> ObjectSnapshot {
-    let local_delta = start_box
-        .to_local(down_at)
-        .vector_to(start_box.to_local(current));
-    match start {
-        ObjectSnapshot::Primitive(primitive) => {
-            compute_primitive_resize(primitive, start_box, direction, local_delta, shift, ctrl)
-        }
-        ObjectSnapshot::Path(path) => {
-            let resized = resize_local_box(
-                start_box.min,
-                start_box.max,
-                direction,
-                local_delta,
-                shift,
-                ctrl,
-            );
-            let anchor_local =
-                resize_anchor_local_position(start_box.min, start_box.max, direction, shift);
-            let anchor_document = start_box.to_document(anchor_local);
-            let mut scaled = path.scaled(anchor_document, resized.sx, resized.sy);
-            let factor = stroke_or_radius_factor(resized.sx, resized.sy);
-            scaled.stroke_width = scaled_and_floored(
-                path.stroke_width,
-                factor,
-                Length::from_mm(MIN_STROKE_WIDTH_MM),
-            );
-            ObjectSnapshot::Path(scaled)
-        }
-    }
-}
-
-fn compute_primitive_resize(
-    primitive: &PrimitiveSnapshot,
-    start_box: &OrientedBox,
-    direction: ResizeDirection,
-    local_delta: Vec2,
-    shift: bool,
-    ctrl: bool,
-) -> ObjectSnapshot {
-    let mut result = *primitive;
-    match primitive.shape {
-        Shape::Rect { corner_radius, .. } => {
-            let resized = resize_local_box(
-                start_box.min,
-                start_box.max,
-                direction,
-                local_delta,
-                shift,
-                ctrl,
-            );
-            let factor = stroke_or_radius_factor(resized.sx, resized.sy);
-            result.shape = Shape::Rect {
-                bounds: vecmanf_document_core::RectBounds {
-                    origin: resized.min,
-                    width: Length::from_mm(resized.max.x - resized.min.x),
-                    height: Length::from_mm(resized.max.y - resized.min.y),
-                },
-                corner_radius: scaled_and_floored(corner_radius, factor, Length::from_mm(0.0)),
-            };
-            result.stroke_width = scaled_and_floored(
-                primitive.stroke_width,
-                factor,
-                Length::from_mm(MIN_STROKE_WIDTH_MM),
-            );
-        }
-        Shape::Ellipse { .. } => {
-            let resized = resize_local_box(
-                start_box.min,
-                start_box.max,
-                direction,
-                local_delta,
-                shift,
-                ctrl,
-            );
-            let factor = stroke_or_radius_factor(resized.sx, resized.sy);
-            result.shape = Shape::Ellipse {
-                frame: EllipseFrame {
-                    center: Point::new(
-                        f64::midpoint(resized.min.x, resized.max.x),
-                        f64::midpoint(resized.min.y, resized.max.y),
-                    ),
-                    rx: Length::from_mm((resized.max.x - resized.min.x) / 2.0),
-                    ry: Length::from_mm((resized.max.y - resized.min.y) / 2.0),
-                },
-            };
-            result.stroke_width = scaled_and_floored(
-                primitive.stroke_width,
-                factor,
-                Length::from_mm(MIN_STROKE_WIDTH_MM),
-            );
-        }
-        Shape::Polygon { frame, point_count } => {
-            let factor = polygon_star_resize_factor(frame.radius.as_mm(), direction, local_delta);
-            result.shape = Shape::Polygon {
-                frame: StarFrame {
-                    radius: Length::from_mm(frame.radius.as_mm() * factor),
-                    ..frame
-                },
-                point_count,
-            };
-            result.stroke_width = scaled_and_floored(
-                primitive.stroke_width,
-                factor,
-                Length::from_mm(MIN_STROKE_WIDTH_MM),
-            );
-        }
-        Shape::Star {
-            frame,
-            point_count,
-            inner_ratio,
-        } => {
-            let factor = polygon_star_resize_factor(frame.radius.as_mm(), direction, local_delta);
-            result.shape = Shape::Star {
-                frame: StarFrame {
-                    radius: Length::from_mm(frame.radius.as_mm() * factor),
-                    ..frame
-                },
-                point_count,
-                inner_ratio,
-            };
-            result.stroke_width = scaled_and_floored(
-                primitive.stroke_width,
-                factor,
-                Length::from_mm(MIN_STROKE_WIDTH_MM),
-            );
-        }
-    }
-    // A primitive rotates about its *own* frame center, which this resize
-    // just moved — so on a rotated object the anchor (the opposite corner
-    // or edge, or the center under Shift) would swing in document space.
-    // Pin it: translate the whole frame by however far the anchor moved.
-    // A no-op at zero rotation, where the local and document frames agree.
-    let anchor_local = resize_anchor_local_position(start_box.min, start_box.max, direction, shift);
-    let before = anchor_local.rotated_around(start_box.pivot, result.rotation);
-    let after = anchor_local.rotated_around(shape_center(&result.shape), result.rotation);
-    ObjectSnapshot::Primitive(result).translated(after.vector_to(before))
-}
-
-/// Writes a resize's resulting geometry, dispatching on the object's own
-/// kind to the matching one-commit `Document` method.
-fn commit_resize(document: &Document, id: NodeId, result: &ObjectSnapshot) {
-    match result {
-        ObjectSnapshot::Primitive(primitive) => match primitive.shape {
-            Shape::Rect {
-                bounds,
-                corner_radius,
-            } => {
-                let _ = document.resize_rect(id, bounds, corner_radius, primitive.stroke_width);
-            }
-            Shape::Ellipse { frame } => {
-                let _ = document.resize_ellipse(id, frame, primitive.stroke_width);
-            }
-            Shape::Polygon { frame, .. } | Shape::Star { frame, .. } => {
-                let _ = document.resize_star_frame(id, frame, primitive.stroke_width);
-            }
-        },
-        ObjectSnapshot::Path(path) => {
-            let anchors: Vec<(AnchorId, Point, Vec2, Vec2)> = path
-                .anchors
-                .iter()
-                .map(|a| (a.id, a.point, a.handle_in, a.handle_out))
-                .collect();
-            let _ = document.resize_path(id, &anchors, path.stroke_width);
-        }
-    }
-}
-
 /// Acceptance criteria 22, 23: what a double-click hit, for `Session` to
 /// map to the object's own tool (`tool_for`) and hand off to.
 #[must_use]
@@ -651,7 +461,9 @@ pub fn double_click(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vecmanf_document_core::{AnchorId, EllipseFrame, Length, NewAnchor, NodeId, RectBounds};
+    use vecmanf_document_core::{
+        AnchorId, EllipseFrame, Length, NewAnchor, NodeId, RectBounds, StarFrame,
+    };
 
     fn rect(document: &Document, x: f64) -> NodeId {
         document.create_rect(RectBounds {
@@ -1506,7 +1318,12 @@ mod tests {
         let id = rect(&document, 0.0);
         let angle = Angle::from_radians(30.0_f64.to_radians());
         document
-            .rotate_object(id, Point::new(5.0, 5.0), angle)
+            .rotate_object(
+                &document
+                    .object(id)
+                    .expect("object exists")
+                    .rotated(Point::new(5.0, 5.0), angle),
+            )
             .expect("rotate");
         let objects = vec![document.object(id).expect("exists")];
         let mut selection = ObjectSelection::new();
@@ -1853,6 +1670,195 @@ mod tests {
         assert!(document.path(rect_id).is_none());
     }
 
+    /// UX review item 1: on a small object the handles' hit radii must not
+    /// swallow the body. A 10 × 5.5 rectangle (a 40 × 22 px box at the
+    /// usual 16 px radius, all lengths divided by 4) with 4-unit hit
+    /// radii: points on the top outline away from a handle, and the
+    /// middle of the box, are *not* handle hits (so the body — the move —
+    /// gets them), while the handles themselves and points just outside
+    /// them still are.
+    #[test]
+    fn a_small_rectangles_body_stays_reachable_despite_the_handle_radii() {
+        let document = Document::new(1);
+        let id = document.create_rect(RectBounds {
+            origin: Point::new(0.0, 0.0),
+            width: Length::from_mm(10.0),
+            height: Length::from_mm(5.5),
+        });
+        let objects = vec![document.object(id).expect("exists")];
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let wide = TransformHandleTolerances {
+            resize: Tolerance::from_mm(4.0),
+            rotate: Tolerance::from_mm(4.0),
+            rotate_offset_mm: 8.0,
+        };
+        let handle_at = |point: Point| {
+            SelectTool::handle_at(&objects, &selection, point, wide).map(|(_, _, h)| h)
+        };
+        // 2.5 from the NW corner and from the N handle: both full 4-unit
+        // radii would claim it; the shrunk radius (a third of 5.5) does
+        // not, so the outline press there moves the object.
+        assert_eq!(handle_at(Point::new(2.5, 0.0)), None);
+        // The middle is deep inside: body, not resize.
+        assert_eq!(handle_at(Point::new(5.0, 2.75)), None);
+        // The handles still work, from just outside as well.
+        assert_eq!(
+            handle_at(Point::new(10.0, 5.5)),
+            Some(TransformHandle::Resize(ResizeDirection::Se))
+        );
+        assert_eq!(
+            handle_at(Point::new(11.0, 6.5)),
+            Some(TransformHandle::Resize(ResizeDirection::Se))
+        );
+        // And just inside a handle, within the thin inner band, too.
+        assert_eq!(
+            handle_at(Point::new(9.5, 5.0)),
+            Some(TransformHandle::Resize(ResizeDirection::Se))
+        );
+    }
+
+    /// A zero-height path (a line) keeps grabbable handles: the radius
+    /// floor stops the box-size scaling from shrinking it to nothing.
+    #[test]
+    fn a_line_paths_handles_stay_grabbable() {
+        let document = Document::new(1);
+        let id = path(&document, 0.0);
+        let objects = vec![document.object(id).expect("exists")];
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let mut tool = SelectTool::new();
+        let outcome = tool.pointer_down(
+            &objects,
+            &mut selection,
+            Point::new(10.0, 0.0),
+            TOLERANCE,
+            HANDLE_TOLERANCES,
+            false,
+        );
+        assert_eq!(outcome, SelectPointerDownOutcome::Handle);
+    }
+
+    /// Tester finding: the polygon/star corner handle follows the pointer
+    /// exactly — dragging the NE corner out by (+5, -5) puts the new
+    /// corner at (r+5, -(r+5)), i.e. the radius grows by 5, not by the
+    /// 7.07 of raw diagonal displacement.
+    #[test]
+    fn a_polygon_corner_handle_ends_up_under_the_pointer() {
+        use vecmanf_document_core::PointCount;
+        let document = Document::new(1);
+        let id = document.create_polygon(
+            StarFrame {
+                center: Point::new(0.0, 0.0),
+                radius: Length::from_mm(10.0),
+                angle: vecmanf_document_core::Angle::from_radians(0.0),
+            },
+            PointCount::new(6).unwrap(),
+        );
+        let objects = vec![document.object(id).expect("exists")];
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let ne = handle_pos(
+            &objects,
+            &selection,
+            TransformHandle::Resize(ResizeDirection::Ne),
+        );
+        assert_eq!(ne, Point::new(10.0, -10.0));
+        let mut tool = SelectTool::new();
+        tool.pointer_down(
+            &objects,
+            &mut selection,
+            ne,
+            TOLERANCE,
+            HANDLE_TOLERANCES,
+            false,
+        );
+        tool.pointer_up(
+            &document,
+            &objects,
+            &mut selection,
+            Point::new(15.0, -15.0),
+            false,
+            false,
+        );
+        let Shape::Polygon { frame, .. } = document.primitive(id).expect("exists").shape else {
+            panic!("polygon");
+        };
+        assert!(
+            (frame.radius.as_mm() - 15.0).abs() < 1e-9,
+            "{}",
+            frame.radius.as_mm()
+        );
+    }
+
+    /// Tester/ADR: a NaN, infinite or absurd pointer never writes
+    /// non-finite geometry — the drag resolves to "no change".
+    #[test]
+    fn hostile_pointer_values_resolve_to_no_change() {
+        let document = Document::new(1);
+        let id = rect(&document, 0.0);
+        let before = document.object(id);
+        let objects = vec![before.clone().expect("exists")];
+        // NaN/infinity leave every drag unchanged; a finite but absurd
+        // 1e300 only a *resize* would blow up (a rotation by any finite
+        // pointer is a legal angle), so it is checked on resizes alone.
+        let cases = [
+            (Point::new(f64::NAN, f64::NAN), true),
+            (Point::new(f64::INFINITY, 0.0), true),
+            (Point::new(1e300, -1e300), false),
+        ];
+        for (bad, include_rotate) in cases {
+            for wanted in [
+                TransformHandle::Rotate,
+                TransformHandle::Resize(ResizeDirection::Se),
+                TransformHandle::Resize(ResizeDirection::E),
+            ] {
+                if wanted == TransformHandle::Rotate && !include_rotate {
+                    continue;
+                }
+                let mut selection = ObjectSelection::new();
+                selection.select_single(id);
+                let at = handle_pos(&objects, &selection, wanted);
+                let mut tool = SelectTool::new();
+                tool.pointer_down(
+                    &objects,
+                    &mut selection,
+                    at,
+                    TOLERANCE,
+                    HANDLE_TOLERANCES,
+                    false,
+                );
+                tool.pointer_up(&document, &objects, &mut selection, bad, true, true);
+                assert_eq!(document.object(id), before, "{wanted:?} to {bad:?}");
+            }
+        }
+    }
+
+    /// Architect item 1: the live rotate preview and the committed
+    /// rotation are the same snapshot — one rule.
+    #[test]
+    fn rotate_preview_and_commit_resolve_to_the_same_snapshot() {
+        let document = Document::new(1);
+        let id = rect(&document, 0.0);
+        let objects = vec![document.object(id).expect("exists")];
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let mut tool = SelectTool::new();
+        let r = handle_pos(&objects, &selection, TransformHandle::Rotate);
+        tool.pointer_down(
+            &objects,
+            &mut selection,
+            r,
+            TOLERANCE,
+            HANDLE_TOLERANCES,
+            false,
+        );
+        let to = Point::new(-3.0, 4.0);
+        let preview = tool.live_rotate(to, true, false).expect("rotating");
+        tool.pointer_up(&document, &objects, &mut selection, to, true, false);
+        assert_eq!(document.object(id), Some(preview));
+    }
+
     /// Acceptance criterion 23: a plain body drag still moves the object
     /// and never touches its rotation or size, even for an already-
     /// rotated object.
@@ -1862,7 +1868,12 @@ mod tests {
         let document = Document::new(1);
         let id = rect(&document, 0.0);
         document
-            .rotate_object(id, Point::new(5.0, 5.0), Angle::from_radians(0.3))
+            .rotate_object(
+                &document
+                    .object(id)
+                    .expect("object exists")
+                    .rotated(Point::new(5.0, 5.0), Angle::from_radians(0.3)),
+            )
             .expect("rotate");
         let objects = vec![document.object(id).expect("exists")];
         let mut selection = ObjectSelection::new();

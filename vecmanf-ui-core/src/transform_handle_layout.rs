@@ -9,7 +9,7 @@
 //! this module is the Select tool's one, kind-independent vocabulary
 //! that sits on top of any object's [`OrientedBox`].
 
-use vecmanf_document_core::{Angle, Length, Point, Vec2};
+use vecmanf_document_core::{Angle, Length, Point, Tolerance, Vec2};
 
 use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;
@@ -252,6 +252,47 @@ pub fn resize_cursor_angle_degrees(direction: ResizeDirection, rotation: Angle) 
     (base + rotation.as_radians().to_degrees()).rem_euclid(180.0)
 }
 
+/// How far inside the box's edge, as a fraction of the resize hit radius
+/// (6 of 16 px), a resize handle still wins a press over the body.
+const INNER_HIT_BAND: f64 = 6.0 / 16.0;
+
+/// The resize handle (if any) a press at `point` grabs — without
+/// letting the handles swallow a small object's body.
+///
+/// Every handle has a hit radius `r` (16 px at the usual zoom), so on
+/// an object under about `2r` across the radii would cover the whole
+/// outline and nothing could be moved. Two rules keep the body
+/// reachable: the radius shrinks to a third of the box's smaller side
+/// (never below a quarter of `r`, so a line or a point stays
+/// grabbable); and a point *inside* the box only grabs a handle
+/// within [`INNER_HIT_BAND`] of `r` from its edge — a press deeper in
+/// belongs to the body. Outside the box a handle always wins.
+pub(crate) fn resize_handle_hit(
+    resize_handles: &[(TransformHandle, Point)],
+    box_: &OrientedBox,
+    point: Point,
+    tolerance: Tolerance,
+) -> Option<TransformHandle> {
+    let full = tolerance.as_mm();
+    let radius = (box_.width().min(box_.height()) / 3.0).clamp(full / 4.0, full);
+    let hit = hit_test_transform_handle(resize_handles, point, radius)?;
+    let local = box_.to_local(point);
+    let inside = local.x > box_.min.x
+        && local.x < box_.max.x
+        && local.y > box_.min.y
+        && local.y < box_.max.y;
+    if inside {
+        let depth = (local.x - box_.min.x)
+            .min(box_.max.x - local.x)
+            .min(local.y - box_.min.y)
+            .min(box_.max.y - local.y);
+        if depth > radius * INNER_HIT_BAND {
+            return None;
+        }
+    }
+    Some(hit)
+}
+
 /// The local-frame point a resize with `direction`/`shift` keeps fixed
 /// (acceptance criteria 4, 7): the box's own center under `shift`, or
 /// the opposite corner/edge-midpoint otherwise — the same anchor
@@ -413,11 +454,14 @@ fn anchor_edge(start_min: f64, start_max: f64, new_extent: f64, dragged_sign: f6
 
 /// A polygon/star's own uniform-scale factor from dragging corner
 /// handle `direction` (acceptance criterion 11: always uniform,
-/// regardless of Ctrl) — projects `local_delta` onto that corner's own
-/// (normalized) diagonal direction and adds it to `start_radius`,
-/// clamped at zero, returning the resulting `new_radius / start_radius`
-/// factor (or `1.0` for a degenerate zero starting radius, the same
-/// `safe_factor` rule every other factor in this module uses).
+/// regardless of Ctrl). The handle sits at the corner of the shape's
+/// frame box, `radius * √2` from the center along its diagonal, so the
+/// pointer's displacement along that diagonal moves the *corner*: the
+/// new corner distance is `radius·√2 + projected`, and the radius is
+/// that over `√2` — the handle then follows the pointer exactly instead
+/// of overshooting it. Clamped at zero; `1.0` for a degenerate zero
+/// starting radius (the same `safe_factor` rule every other factor here
+/// uses).
 #[must_use]
 pub fn polygon_star_resize_factor(
     start_radius: f64,
@@ -426,7 +470,7 @@ pub fn polygon_star_resize_factor(
 ) -> f64 {
     let unit = direction.unit_vector().normalized_to(1.0);
     let projected = local_delta.x * unit.x + local_delta.y * unit.y;
-    let new_radius = (start_radius + projected).max(0.0);
+    let new_radius = (start_radius + projected / std::f64::consts::SQRT_2).max(0.0);
     safe_factor(new_radius, start_radius)
 }
 
@@ -469,7 +513,10 @@ pub fn rotate_pivot(box_: &OrientedBox, shift: bool) -> Point {
 pub fn rotate_delta_angle(pivot: Point, down_at: Point, current: Point, ctrl: bool) -> Angle {
     let from = pivot.vector_to(down_at);
     let to = pivot.vector_to(current);
-    if from.length() <= f64::EPSILON || to.length() <= f64::EPSILON {
+    // `!(x > eps)` also rules out NaN: a non-finite pointer sweeps no
+    // angle rather than leaking NaN into `rotation`.
+    let usable = |v: Vec2| v.length() > f64::EPSILON && v.length().is_finite();
+    if !usable(from) || !usable(to) {
         return Angle::from_radians(0.0);
     }
     let from_angle = from.y.atan2(from.x);
@@ -770,9 +817,13 @@ mod tests {
     /// always a uniform radius scale.
     #[test]
     fn polygon_star_resize_factor_scales_the_radius() {
-        // A vector exactly along the Ne handle's own diagonal direction,
-        // of length 5, so projecting it back out gives exactly 5.
-        let diagonal = ResizeDirection::Ne.unit_vector().normalized_to(5.0);
+        // The Ne handle sits r√2 = 14.14 from the center; pulling it
+        // 7.07 further along its diagonal puts it at 21.2 = 15·√2, so the
+        // radius is 15 (factor 1.5) — the handle ends exactly under the
+        // pointer.
+        let diagonal = ResizeDirection::Ne
+            .unit_vector()
+            .normalized_to(10.0 * std::f64::consts::SQRT_2 / 2.0);
         let factor = polygon_star_resize_factor(10.0, ResizeDirection::Ne, diagonal);
         assert!((factor - 1.5).abs() < 1e-9, "factor was {factor}");
     }
