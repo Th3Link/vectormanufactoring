@@ -128,6 +128,15 @@ It composes on top of `rotation` with no migration. That story's `adrs.md`
 decides whether the affine also absorbs `rotation` (a format bump with a
 non-empty migration) or stays on group nodes only.
 
+*2026-10-06 (architect, `edit-interaction-polish`):* a polygon or star's real
+orientation is the sum of two registers, `StarFrame.angle` (the first vertex in
+the shape's own frame, set by the create-drag) and `rotation` (the Select
+tool's turn). The shown angle is `ObjectSnapshot::orientation()`, with no
+stored change. The oriented selection box turns by `rotation` alone, so a shape
+created at 78.7° has an axis-aligned box. The primitives rework can fold
+`StarFrame.angle` into `rotation` with a real migration if the box should turn
+with the shape. See `specs/edit-interaction-polish/adrs.md`, decision 1.
+
 ## Undo cannot reach a collaborator's change
 
 Undo and redo are scoped to the local peer
