@@ -74,7 +74,7 @@ fn ac8_default_keeps_the_stroke_width_for_every_handle() {
     let docs: Vec<(Document, Point)> = vec![
         {
             let d = Document::new(1);
-            d.create_rect(RectBounds {
+            let _ = d.create_rect(RectBounds {
                 origin: pt(0.0, 0.0),
                 width: Length::from_mm(40.0),
                 height: Length::from_mm(20.0),
@@ -83,7 +83,7 @@ fn ac8_default_keeps_the_stroke_width_for_every_handle() {
         },
         {
             let d = Document::new(1);
-            d.create_ellipse(EllipseFrame {
+            let _ = d.create_ellipse(EllipseFrame {
                 center: pt(20.0, 10.0),
                 rx: Length::from_mm(20.0),
                 ry: Length::from_mm(10.0),
@@ -92,7 +92,7 @@ fn ac8_default_keeps_the_stroke_width_for_every_handle() {
         },
         {
             let d = Document::new(1);
-            d.create_path(
+            let _ = d.create_path(
                 &[
                     NewAnchor::corner(AnchorId::new(1, 1), pt(0.0, 0.0)),
                     NewAnchor::corner(AnchorId::new(1, 2), pt(40.0, 20.0)),
