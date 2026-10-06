@@ -4128,8 +4128,14 @@ fn ac16_a_typed_angle_equals_a_dragged_angle_for_paths_ellipses_and_stars() {
                 let n = change_count(&s);
                 if typed {
                     open_entry(&mut s, h, shift, false).unwrap();
+                    // `edit-interaction-polish` criterion 7: a typed angle is
+                    // the shown angle (orientation). A star created with its
+                    // first tip up (-90) ends at -49 after a 41 degree turn,
+                    // so that is what is typed; the other kinds show their
+                    // rotation register, 0 here, and take 41.
+                    let typed_angle = if kind == 2 { "-49" } else { "41" };
                     assert_eq!(
-                        s.commit_transform_entry("41", "", 0),
+                        s.commit_transform_entry(typed_angle, "", 0),
                         EntryOutcome::Committed
                     );
                 } else {

@@ -272,6 +272,10 @@ pub struct PrimitiveSnapshot {
     pub rotation: Angle,
 }
 
+/// How far (radians) above -π a wrapped orientation may lie and still be a
+/// half turn: float noise from summing two registers.
+const HALF_TURN_EPSILON_RAD: f64 = 1e-9;
+
 /// One tree node's data, read generically without first knowing whether
 /// it is a path or a primitive (`adrs.md`: "`Document::path(id)` returns
 /// `None` for a primitive node... reading goes through an object-level
@@ -321,7 +325,15 @@ impl ObjectSnapshot {
                 rotation,
                 ..
             }) => {
-                Angle::from_radians(frame.angle.as_radians() + rotation.as_radians()).normalized()
+                let sum = Angle::from_radians(frame.angle.as_radians() + rotation.as_radians())
+                    .normalized();
+                // A sum a rounding error past a half turn must show 180, not
+                // -180 (the range is `(-180, 180]`).
+                if sum.as_radians() < -std::f64::consts::PI + HALF_TURN_EPSILON_RAD {
+                    Angle::from_radians(std::f64::consts::PI)
+                } else {
+                    sum
+                }
             }
             _ => self.rotation(),
         }
@@ -699,6 +711,7 @@ mod tests {
     fn orientation_wraps_into_minus_180_exclusive_to_180_inclusive() {
         assert!((orientation_deg(&polygon_snapshot(180.0, 0.0)) - 180.0).abs() < 1e-9);
         assert!((orientation_deg(&polygon_snapshot(-180.0, 0.0)) - 180.0).abs() < 1e-9);
+        assert!((orientation_deg(&polygon_snapshot(-170.0, -10.0 + 1e-12)) - 180.0).abs() < 1e-9);
         assert!((orientation_deg(&polygon_snapshot(170.0, 30.0)) + 160.0).abs() < 1e-9);
         assert!((orientation_deg(&polygon_snapshot(-170.0, -30.0)) - 160.0).abs() < 1e-9);
     }

@@ -368,7 +368,7 @@ impl Session {
             }
             EditHandle::Rotate(_) => {
                 let live = self.select_live_transform()?;
-                format_degrees(live.rotation().as_radians().to_degrees())
+                format_degrees(live.orientation().as_radians().to_degrees())
             }
             EditHandle::Resize(_) => match &self.select_live_transform()? {
                 ObjectSnapshot::Primitive(p)

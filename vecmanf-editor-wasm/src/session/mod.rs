@@ -35,7 +35,7 @@ use vecmanf_document_core::{
     Document, Length, NodeId, ObjectSnapshot, OpenError, Point, SaveError, Tolerance,
 };
 use vecmanf_ui_core::{
-    AnchorIdMinter, EllipseTool, Hit, HitTolerances, NodeTool, ObjectSelection, PenTool,
+    AnchorIdMinter, EllipseTool, Hit, HitTolerances, Modifiers, NodeTool, ObjectSelection, PenTool,
     PolygonStarTool, RectangleTool, SelectTool, Viewport, hit_test,
 };
 
@@ -394,7 +394,7 @@ impl Session {
                 );
             }
             Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
-                self.shape_pointer_move(point, constrain);
+                self.shape_pointer_move(point, Modifiers::new(shift, constrain));
             }
             Tool::Pen => {}
         }
@@ -434,7 +434,7 @@ impl Session {
                 self.node.pointer_up(&self.document, point);
             }
             Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
-                self.shape_pointer_up(point, constrain);
+                self.shape_pointer_up(point, Modifiers::new(shift, constrain));
             }
         }
     }
