@@ -1280,3 +1280,29 @@ fn ac03_tiny_and_huge_create_drags_keep_the_angle_rule() {
         assert_eq!(n_objects(&s), 0);
     }
 }
+
+#[test]
+fn ac03_every_point_count_3_to_1024_orients_the_first_vertex_at_the_pointer_and_shows_it() {
+    for n in 3..=1024u32 {
+        for (mode, deg) in [(PolyStarMode::Polygon, -123.4), (PolyStarMode::Star, 37.0)] {
+            if mode == PolyStarMode::Star && n % 7 != 0 && n >= 30 {
+                continue;
+            }
+            let mut s = make_session(mode, n, 0.37);
+            let b = drag_point(deg, 14.0);
+            create(&mut s, pt(A.0, A.1), b, false, false);
+            let p = prim_of(&s, 0);
+            let v = first_vertex(&p);
+            assert!(
+                (v.x - b.x).abs() < 1e-7 && (v.y - b.y).abs() < 1e-7,
+                "{mode:?} n={n}: first vertex {v:?}, pointer {b:?}"
+            );
+            if n % 61 == 0 || n < 12 || n > 1020 {
+                assert!(
+                    adiff(chip_angle(&mut s), deg).abs() <= 0.051,
+                    "{mode:?} n={n}"
+                );
+            }
+        }
+    }
+}

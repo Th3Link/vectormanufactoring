@@ -1824,3 +1824,40 @@ fn finding_pointer_cancelled_without_a_pressed_button_keeps_the_pen_path() {
         "no button was down: nothing was lost, the path must stay"
     );
 }
+
+#[test]
+fn ac50_the_selected_node_after_a_split_is_the_one_with_the_original_outgoing_handle() {
+    for closed in [false, true] {
+        let d = Document::new(1);
+        let mut middle = anchor(2, 10.0, 0.0);
+        middle.handle_out = vecmanf_document_core::Vec2::new(3.0, 2.0);
+        let _ = d.create_path(&[anchor(1, 0.0, 0.0), middle, anchor(3, 20.0, 5.0)], closed);
+        let mut s = node_session(&d, pt(0.0, 0.0));
+        click(&mut s, pt(10.0, 0.0));
+        s.split_selected();
+        let before = change_count(&s);
+        drag(&mut s, pt(10.0, 0.0), pt(12.0, -9.0));
+        assert_eq!(change_count(&s), before + 1, "closed {closed}: one commit");
+        let d2 = doc_of(&s);
+        let mut moved = Vec::new();
+        for id in d2.object_ids() {
+            let p = d2.path(id).unwrap();
+            for a in &p.anchors {
+                if near(a.point, pt(12.0, -9.0)) {
+                    moved.push((a.handle_out, a.handle_in));
+                }
+            }
+        }
+        assert_eq!(moved.len(), 1, "closed {closed}: exactly one node moved");
+        assert_eq!(
+            moved[0].0,
+            vecmanf_document_core::Vec2::new(3.0, 2.0),
+            "closed {closed}: the dragged (selected) node keeps the original outgoing handle"
+        );
+        assert_eq!(
+            moved[0].1,
+            vecmanf_document_core::Vec2::ZERO,
+            "closed {closed}"
+        );
+    }
+}
