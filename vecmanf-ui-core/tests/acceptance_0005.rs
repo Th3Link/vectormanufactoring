@@ -16,11 +16,33 @@ use vecmanf_document_core::{
     Vec2,
 };
 use vecmanf_ui_core::{
-    ALL_EIGHT, CORNERS_FOUR, ResizeDirection, TransformHandle, hit_test_transform_handle,
-    oriented_bounds, polygon_star_resize_factor, resize_anchor_local_position,
-    resize_cursor_angle_degrees, resize_local_box, rotate_delta_angle, rotate_pivot,
-    scaled_and_floored, stroke_or_radius_factor, transform_handles,
+    ALL_EIGHT, CORNERS_FOUR, HandleSpec, ResizeDirection, TransformHandle,
+    TransformHandleTolerances, hit_transform_handle, oriented_bounds, polygon_star_resize_factor,
+    resize_anchor_local_position, resize_cursor_angle_degrees, resize_local_box,
+    rotate_delta_angle, rotate_pivot, scaled_and_floored, stroke_or_radius_factor,
+    transform_handles,
 };
+
+/// Handle tolerances where one screen pixel is one millimetre, with the
+/// rotate offset given and no centre handle (the slice 5 tests predate it).
+fn tolerances(rotate_offset_mm: f64, hit_mm: f64) -> TransformHandleTolerances {
+    TransformHandleTolerances {
+        resize: vecmanf_document_core::Tolerance::from_mm(hit_mm),
+        rotate: vecmanf_document_core::Tolerance::from_mm(hit_mm),
+        rotate_offset_mm,
+        center_min_side_mm: f64::INFINITY,
+        ..TransformHandleTolerances::at_scale(1.0)
+    }
+}
+
+/// Eight resize handles plus all eight rotate handles (Shift revealed).
+fn all_handles_spec() -> HandleSpec {
+    HandleSpec {
+        resize_directions: &ALL_EIGHT,
+        skew: false,
+        side_rotate: true,
+    }
+}
 
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)
@@ -241,10 +263,15 @@ fn box_of(x0: f64, y0: f64, x1: f64, y1: f64, angle: f64) -> vecmanf_ui_core::Or
 }
 
 #[test]
-fn eight_resize_plus_one_rotate_handle_at_the_corners_and_edge_midpoints() {
+fn eight_resize_plus_corner_rotate_handles_at_the_corners_and_edge_midpoints() {
     let b = box_of(0.0, 0.0, 40.0, 20.0, 0.0);
-    let handles = transform_handles(&b, &ALL_EIGHT, 5.0);
-    assert_eq!(handles.len(), 9);
+    // Shift not held: eight resize and four corner rotate handles.
+    let spec = HandleSpec {
+        side_rotate: false,
+        ..all_handles_spec()
+    };
+    let handles = transform_handles(&b, spec, &tolerances(32.0, 1.0));
+    assert_eq!(handles.len(), 12);
     let at = |h: TransformHandle| handles.iter().find(|(k, _)| *k == h).unwrap().1;
     let expect = [
         (ResizeDirection::Nw, pt(0.0, 0.0)),
@@ -263,18 +290,29 @@ fn eight_resize_plus_one_rotate_handle_at_the_corners_and_edge_midpoints() {
             "{d:?}: {got:?}"
         );
     }
-    let rotate = at(TransformHandle::Rotate);
+    // A corner rotate handle sits 32 away on the outward diagonal.
+    let offset = 32.0 / 2.0_f64.sqrt();
+    let rotate = at(TransformHandle::Rotate(ResizeDirection::Se));
     assert!(
-        close(rotate.x, 20.0) && close(rotate.y, -5.0),
-        "rotate handle above the top edge: {rotate:?}"
+        close(rotate.x, 40.0 + offset) && close(rotate.y, 20.0 + offset),
+        "corner rotate handle outside the Se corner: {rotate:?}"
     );
 }
 
 #[test]
-fn polygon_star_handle_set_has_four_corners_and_a_rotate_handle_only() {
+fn polygon_star_handle_set_has_four_corners_and_the_corner_rotate_handles_only() {
     let b = box_of(0.0, 0.0, 20.0, 20.0, 0.0);
-    let handles = transform_handles(&b, &CORNERS_FOUR, 5.0);
-    assert_eq!(handles.len(), 5);
+    let spec = HandleSpec {
+        resize_directions: &CORNERS_FOUR,
+        skew: false,
+        side_rotate: false,
+    };
+    let handles = transform_handles(&b, spec, &tolerances(5.0, 1.0));
+    assert_eq!(
+        handles.len(),
+        8,
+        "four corners and four corner rotate handles"
+    );
     for (kind, _) in &handles {
         if let TransformHandle::Resize(d) = kind {
             assert!(
@@ -300,17 +338,17 @@ proptest! {
     ) {
         let flat = box_of(x0, y0, x0 + w, y0 + h, 0.0);
         let turned = box_of(x0, y0, x0 + w, y0 + h, angle);
-        let a = transform_handles(&flat, &ALL_EIGHT, offset);
-        let b = transform_handles(&turned, &ALL_EIGHT, offset);
+        let a = transform_handles(&flat, all_handles_spec(), &tolerances(offset, 1.0));
+        let b = transform_handles(&turned, all_handles_spec(), &tolerances(offset, 1.0));
         let c = pt(x0 + w / 2.0, y0 + h / 2.0);
         for ((ka, pa), (kb, pb)) in a.iter().zip(&b) {
             prop_assert_eq!(ka, kb);
             let want = rot(*pa, c, angle);
             prop_assert!((want.x - pb.x).abs() < 1e-6 && (want.y - pb.y).abs() < 1e-6);
         }
-        // Rotate handle sits `offset` from the (rotated) top-edge handle along local up.
+        // The top side rotate handle sits `offset` from the (rotated) top-edge handle along local up.
         let top = b.iter().find(|(k, _)| *k == TransformHandle::Resize(ResizeDirection::N)).unwrap().1;
-        let rotate = b.iter().find(|(k, _)| *k == TransformHandle::Rotate).unwrap().1;
+        let rotate = b.iter().find(|(k, _)| *k == TransformHandle::Rotate(ResizeDirection::N)).unwrap().1;
         let dist = (top.x - rotate.x).hypot(top.y - rotate.y);
         prop_assert!((dist - offset).abs() < 1e-6, "offset {dist} vs {offset}");
         // direction = local up = (sin a, -cos a)
@@ -322,40 +360,42 @@ proptest! {
 #[test]
 fn hit_test_picks_the_nearest_handle_within_tolerance_and_none_outside() {
     let b = box_of(0.0, 0.0, 40.0, 20.0, 0.0);
-    let handles = transform_handles(&b, &ALL_EIGHT, 5.0);
+    let tol = tolerances(5.0, 1.0);
+    let handles = transform_handles(&b, all_handles_spec(), &tol);
+    let hit = |x: f64, y: f64| hit_transform_handle(&handles, &b, pt(x, y), &tol, false);
     assert_eq!(
-        hit_test_transform_handle(&handles, pt(40.5, 20.5), 1.0),
+        hit(40.5, 20.5),
         Some(TransformHandle::Resize(ResizeDirection::Se))
     );
+    // The top side rotate handle (revealed by Shift) sits 5 above the top edge.
     assert_eq!(
-        hit_test_transform_handle(&handles, pt(20.0, -4.6), 1.0),
-        Some(TransformHandle::Rotate)
+        hit(20.0, -4.6),
+        Some(TransformHandle::Rotate(ResizeDirection::N))
     );
+    assert_eq!(hit(25.0, 5.0), None);
     assert_eq!(
-        hit_test_transform_handle(&handles, pt(25.0, 5.0), 1.0),
+        hit_transform_handle(&[], &b, pt(0.0, 0.0), &tol, false),
         None
     );
-    assert_eq!(hit_test_transform_handle(&[], pt(0.0, 0.0), 1.0), None);
 }
 
 #[test]
-fn rotate_and_top_edge_hit_areas_at_the_documented_radii_overlap() {
-    // docs/design-system.md: resize hit radius 16 px, rotate 12 px, offset 20 px.
-    // 16 + 12 > 20, so the two hit areas overlap by 8 px; the resize handle
-    // only keeps the 8 px nearest the box if the rotate handle is preferred,
-    // and with `hit_test_transform_handle` alone the NEAREST wins. Pin the
-    // nearest-wins rule at the midpoint boundary so any change is noticed.
-    let px = 1.0;
+fn rotate_and_top_edge_hit_areas_at_the_documented_radii_do_not_overlap() {
+    // docs/design-system.md: resize hit radius 16 px, rotate 16 px, offset
+    // 32 px (the sum of the two radii), so the two hit areas touch but never
+    // overlap. The one nearest-centre rule puts the boundary at the
+    // midpoint, 16 px above the top edge.
     let b = box_of(0.0, 0.0, 100.0, 100.0, 0.0);
-    let handles = transform_handles(&b, &ALL_EIGHT, 20.0 * px);
-    let tolerance = 16.0 * px;
+    let tol = tolerances(32.0, 16.0);
+    let handles = transform_handles(&b, all_handles_spec(), &tol);
+    let hit = |y: f64| hit_transform_handle(&handles, &b, pt(50.0, y), &tol, false);
     assert_eq!(
-        hit_test_transform_handle(&handles, pt(50.0, -9.0), tolerance),
+        hit(-15.0),
         Some(TransformHandle::Resize(ResizeDirection::N))
     );
     assert_eq!(
-        hit_test_transform_handle(&handles, pt(50.0, -11.0), tolerance),
-        Some(TransformHandle::Rotate)
+        hit(-17.0),
+        Some(TransformHandle::Rotate(ResizeDirection::N))
     );
 }
 
@@ -720,24 +760,28 @@ proptest! {
         prop_assert!(delta > -PI - 1e-12 && delta <= PI + 1e-12);
     }
 
+    /// Superseded by `object-transform-refinements` criterion 33: the stops
+    /// are the multiples of 15 and of 22.5 degrees, so the snapped delta is
+    /// always a stop and never further than half the widest gap (15 degrees,
+    /// between 30 and 45) from the free delta.
     #[test]
-    fn ctrl_snaps_the_delta_to_whole_15_degree_steps_within_half_a_step(
+    fn ctrl_snaps_the_delta_to_a_15_or_22_5_degree_stop_within_half_a_gap(
         r in 1.0..100.0_f64, a0 in -3.0..3.0_f64, sweep in -3.1..3.1_f64,
     ) {
         let c = pt(0.0, 0.0);
         let free = rotate_delta_angle(c, on_circle(c, r, a0), on_circle(c, r, a0 + sweep), false).as_radians();
         let snapped = rotate_delta_angle(c, on_circle(c, r, a0), on_circle(c, r, a0 + sweep), true).as_radians();
-        let step = PI / 12.0;
-        let k = (snapped / step).round();
-        prop_assert!((snapped - k * step).abs() < 1e-9, "not a multiple of 15 deg: {}", snapped.to_degrees());
+        let in_period = snapped.to_degrees().abs().rem_euclid(45.0);
+        let is_stop = [0.0, 15.0, 22.5, 30.0, 45.0].iter().any(|s| (in_period - s).abs() < 1e-6);
+        prop_assert!(is_stop, "not a stop: {} deg", snapped.to_degrees());
         let mut d = (snapped - free).abs();
         if d > PI { d = 2.0 * PI - d; }
-        prop_assert!(d <= step / 2.0 + 1e-9, "snap moved {} deg", d.to_degrees());
+        prop_assert!(d <= 7.5_f64.to_radians() + 1e-9, "snap moved {} deg", d.to_degrees());
     }
 }
 
 #[test]
-fn ctrl_snap_boundaries_at_7_5_degrees() {
+fn ctrl_snap_boundaries_between_adjacent_stops() {
     let c = pt(0.0, 0.0);
     let from = pt(10.0, 0.0);
     let delta = |deg: f64| {
@@ -745,12 +789,19 @@ fn ctrl_snap_boundaries_at_7_5_degrees() {
             .as_radians()
             .to_degrees()
     };
-    assert!((delta(7.49) - 0.0).abs() < 1e-9);
-    assert!((delta(7.51) - 15.0).abs() < 1e-9);
-    assert!((delta(22.49) - 15.0).abs() < 1e-9);
-    assert!((delta(22.51) - 30.0).abs() < 1e-9);
-    assert!((delta(-7.49) - 0.0).abs() < 1e-9);
-    assert!((delta(-7.51) + 15.0).abs() < 1e-9);
+    for (raw, want) in [
+        (7.49, 0.0),
+        (7.51, 15.0),
+        (18.74, 15.0),
+        (18.76, 22.5),
+        (26.24, 22.5),
+        (26.26, 30.0),
+        (37.49, 30.0),
+        (37.51, 45.0),
+    ] {
+        assert!((delta(raw) - want).abs() < 1e-9, "{raw}");
+        assert!((delta(-raw) + want).abs() < 1e-9, "-{raw}");
+    }
     assert!((delta(179.0) - 180.0).abs() < 1e-9);
     // across the +-180 seam
     assert!((delta(-179.0).abs() - 180.0).abs() < 1e-9);
@@ -782,12 +833,12 @@ fn rotate_delta_never_leaks_a_nan_angle() {
 #[test]
 fn rotate_pivot_is_the_center_or_the_bottom_edge_midpoint_in_document_space() {
     let b = box_of(0.0, 0.0, 40.0, 20.0, 0.0);
-    let center = rotate_pivot(&b, false);
+    let center = rotate_pivot(&b, ResizeDirection::N, false);
     assert!(close(center.x, 20.0) && close(center.y, 10.0));
-    let bottom = rotate_pivot(&b, true);
+    let bottom = rotate_pivot(&b, ResizeDirection::N, true);
     assert!(close(bottom.x, 20.0) && close(bottom.y, 20.0));
     let b = box_of(0.0, 0.0, 40.0, 20.0, FRAC_PI_2);
-    let bottom = rotate_pivot(&b, true);
+    let bottom = rotate_pivot(&b, ResizeDirection::N, true);
     // local bottom-mid (20,20) about (20,10) by +90 deg -> (10,10)
     assert!(close(bottom.x, 10.0) && close(bottom.y, 10.0), "{bottom:?}");
 }
