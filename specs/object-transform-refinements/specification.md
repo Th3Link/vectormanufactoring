@@ -264,7 +264,7 @@ referenz / fester punkt bleibt identisch zum händischen ziehen."
     left or right handle, Height for a top or bottom one).
 26. Given one selected polygon or star, when the maker double-clicks a
     corner resize handle, then a single field opens, visibly labelled "r"
-    (accessible name "Radius"), pre-filled
+    (accessible name "Outer radius"), pre-filled
     with the outer radius the readout shows; entering a value scales the
     shape uniformly as slice 5 criterion 11 defines.
 27. Given a size entry is committed with Enter, then the document ends in
@@ -813,7 +813,8 @@ the readout's value (one decimal, same sign), all text selected.
 "Width" and "Height", measured along the object's own axes), the unit
 ("mm", the document's display unit) as a fixed suffix. Edge handles show
 only the one field. Polygon and star: one field labelled "r" with
-`aria-label` "Radius". When linked (Ctrl at the second press, criterion
+`aria-label` "Outer radius" (renamed from "Radius" by
+`specs/unified-object-editing/`, which adds a "Corner radius" field). When linked (Ctrl at the second press, criterion
 29) a 12 px chain glyph sits between the fields and typing in one
 updates the other live in the field; it is an indicator, not a toggle.
 Width is focused and selected on open; Tab goes Width, Height, back to
@@ -908,7 +909,13 @@ cursor; no chip, no hint change.
 
 ### Select tool top bar
 
-Nothing is added. The bar holds tool-wide settings that persist across
+**Superseded as a statement of the bar's layout** by
+`specs/unified-object-editing/` (criteria 21 to 23 and UX notes section 4): the
+Select bar there carries "Scale stroke width", "Scale corner radius", the
+kind controls that apply to the selection and "Object to path". What follows
+stays true for this spec's own features: no control is added for them.
+
+Nothing is added by this spec. The bar holds tool-wide settings that persist across
 drags ("Scale stroke width"); everything here is either a held modifier
 (Shift, Ctrl) or a per-handle transient (entry chip, hint chip). A
 permanent "show side rotate handles" or "snap" control would duplicate
