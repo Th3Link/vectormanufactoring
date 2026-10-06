@@ -100,3 +100,7 @@ built (tasks 9-11). Task 13's PR step: draft PR #35, not marked ready.
 - Full gate from `CLAUDE.md` §7, including `vecmanf-app` and
   `cd frontend && npm install && npm run build`.
 - Manual check in the Browser pane against a served build of this worktree.
+
+## Known limitations
+
+- The size entry fields are 100 px wide (design-system row): a width of 10000 mm or more (for example 12345.6) clips its last digit. Widening needs a UX decision on the field width.

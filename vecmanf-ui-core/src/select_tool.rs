@@ -511,6 +511,14 @@ impl SelectTool {
     /// Cancels whichever drag is in flight, writing nothing.
     pub fn escape(&mut self) {
         self.drag = SelectDrag::None;
+        self.last_press_handle = None;
+    }
+
+    /// Forgets which handle the last press grabbed: the Select tool was left
+    /// or re-entered, so a later double-click's first press may never have
+    /// reached it.
+    pub fn forget_press(&mut self) {
+        self.last_press_handle = None;
     }
 
     /// Acceptance criteria 19, 21: deletes every selected object as one
@@ -525,6 +533,7 @@ impl SelectTool {
     ) {
         self.drag = SelectDrag::None;
         self.entry = None;
+        self.last_press_handle = None;
         selection.retain_existing(objects);
         if selection.is_empty() {
             return;

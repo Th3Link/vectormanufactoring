@@ -90,6 +90,8 @@ export function TransformEntryChip({
 
   const placement = placeEntryChip(entry.handle, entry.center, sizes.chip, sizes.canvas, entry.glyphReach);
 
+  const messageAbove = placement.top + sizes.chip.height / 2 < entry.handle.y;
+
   const returnFocusToCanvas = () => containerRef.current?.focus();
 
   const selectField = (index: number) => {
@@ -168,7 +170,7 @@ export function TransformEntryChip({
       aria-label={isAngle ? "Rotation" : "Size"}
       tabIndex={-1}
       data-transform-entry
-      className="absolute z-20 flex flex-col rounded-[8px] p-1.5 outline-none"
+      className="absolute z-20 rounded-[8px] p-1.5 outline-none"
       style={{
         left: placement.left,
         top: placement.top,
@@ -230,19 +232,30 @@ export function TransformEntryChip({
         })}
       </div>
       {/* Always mounted so the polite live region announces a change; empty
-          it has no height, and the message grows the card downward without
-          moving the field row (the chip is anchored by the row). */}
+          it has no height. The message sits outside the field row (the chip
+          is anchored by the row, so it never jumps), on the side away from
+          the handle: above the row when the chip is above its handle, so an
+          error never covers the handle it belongs to. */}
       <div
         id={messageId}
         role="status"
         aria-live="polite"
         className={
-          invalid ? "mt-1 flex items-center gap-1 text-xs" : "h-0 overflow-hidden text-xs"
+          invalid
+            ? `absolute left-0 flex w-max min-w-full items-center gap-1 whitespace-nowrap rounded-[8px] px-1.5 py-1 text-xs ${
+                messageAbove ? "bottom-full mb-1" : "top-full mt-1"
+              }`
+            : "absolute h-0 overflow-hidden text-xs"
+        }
+        style={
+          invalid
+            ? { background: "var(--toolbar-bg)", boxShadow: "var(--panel-elevation-shadow)" }
+            : undefined
         }
       >
         {invalid && (
           <>
-            <CircleAlert aria-hidden className="size-3" />
+            <CircleAlert aria-hidden className="size-3 shrink-0" />
             <span>{MESSAGES[invalid.reason]}</span>
           </>
         )}

@@ -766,7 +766,8 @@ modifier:
 - Resize: "Resize" / "Shift: from center" / "Ctrl: keep proportions"
   (corners only) / "Double-click: type a size"
 - Rotate corner: "Rotate" / "Shift: pivot at opposite corner" / "Ctrl:
-  snap" / "Double-click: type an angle". Side: "opposite side".
+  snap" / "Double-click: type an angle". Side: "Pivot: opposite side" (in place
+  of the Shift line: the side handles exist only while Shift is held).
 - Skew: "Skew" / "Shift: from the center line" / "Ctrl: snap"
 - Center: "Move"
 

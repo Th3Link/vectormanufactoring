@@ -65,6 +65,8 @@ impl SelectTool {
     ) -> SelectDoubleClickOutcome {
         let (shift, ctrl) = modifiers;
         self.drag = SelectDrag::None;
+        // Kept (not consumed): a rapid third press is another double-click on
+        // the same handle and keeps its entry.
         let first_press_handle = self.last_press_handle;
         if let Some((object, box_, handle)) =
             Self::handle_at(objects, selection, point, handle_tolerances, shift)

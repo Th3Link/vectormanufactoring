@@ -251,6 +251,7 @@ impl Session {
         // commits it against whatever is selected *then* instead).
         self.commit_poly_star_ratio();
         self.select.cancel_entry();
+        self.select.forget_press();
         self.tool = tool;
     }
 
