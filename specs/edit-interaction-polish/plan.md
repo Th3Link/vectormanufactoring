@@ -64,6 +64,11 @@ and read where the select decoration input is built, `session/select_view.rs`).
   device pixels, 1.33 CSS pixels), because 1.5 device pixels cannot be crisp.
 - An edge longer than 50,000 screen pixels is drawn solid (it bounds the draw
   list at absurd zoom; no clipping to the viewport exists in render-core).
+- Review decision (coordinator, after the tester's finding): a sub-pixel pan of a
+  pixel-snapped box re-fits the dashes when its snapped pixel length changes by
+  one (criteria 63 and 65 pull apart; accepted). Whole-pixel translation and
+  zoom of the same snapped size stay rigid. The tester's formerly ignored test
+  asserts exactly that. The four refinements are noted in `adrs.md` decision 7.
 
 ### Validation
 

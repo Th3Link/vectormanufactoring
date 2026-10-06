@@ -899,39 +899,61 @@ fn ac63_ac66_rotated_boxes_at_dpr_2_keep_screen_pixel_patterns_and_full_accent()
     }
 }
 
+/// The top edge's pattern of a snapped box: (snapped pixel length, dash count, gap*1000).
+fn snapped_top_pattern(view: ViewTransform, b: [(f64, f64); 4]) -> (i64, usize, i64) {
+    let list = build(view, &[b], None, 1.0);
+    let tris = device_tris(&list, view, 1.0, ACCENT);
+    let e = axis_edges(&tris);
+    let (x0, y0, x1, _) = e.bbox;
+    let half = e.lw / 2.0;
+    let d = dashes_along(&e.top, (x0 + half, y0 + half), (x1 - half, y0 + half), e.lw);
+    let gap = if d.len() > 1 {
+        ((d[1].0 - d[0].1) * 1000.0).round() as i64
+    } else {
+        0
+    };
+    (((x1 - x0) * 1000.0).round() as i64, d.len(), gap)
+}
+
 #[test]
-#[ignore = "FINDING (low): a sub-pixel pan of a snapped box re-fits the dashes (gap 2.929 vs 2.857 px over 15 dashes)"]
-fn ac63_ac65_pan_of_a_snapped_box_changes_the_pattern_only_rigidly() {
-    // Spec 63: panning shifts the pattern only rigidly with the box and it
-    // never shimmers or crawls. A snapped box can change its pixel length by
-    // one when its true edges straddle a pixel boundary differently, which
-    // re-fits the dashes. Count the distinct top-edge patterns over a
-    // sub-pixel pan of a box whose true width is 100.5 px.
-    let mut patterns: Vec<(usize, i64)> = Vec::new();
+fn ac63_ac65_a_snapped_box_keeps_its_pattern_rigid_and_refits_only_when_its_pixel_length_changes() {
+    // Decision (coordinator, PR 2 review): criteria 63 and 65 pull apart for a
+    // sub-pixel pan. A snapped box changes its pixel length by one pixel when
+    // its true edges straddle a pixel boundary differently, and that re-fits
+    // the dashes (e.g. gap 2.929 vs 2.857 px over 15 dashes). Accepted. What
+    // must hold: a whole-pixel translation, and a zoom, of a box that keeps
+    // its snapped size leave the pattern identical; the pattern is a function
+    // of the snapped pixel length alone.
+    let mut by_length: Vec<(i64, (usize, i64))> = Vec::new();
     for step in 0..40 {
         let dx = f64::from(step) * 0.05;
-        let view = ViewTransform::identity();
         let b = box_px(200.0 + dx, 150.0, 100.5, 60.0, 0.0);
-        let list = build(view, &[b], None, 1.0);
-        let tris = device_tris(&list, view, 1.0, ACCENT);
-        let e = axis_edges(&tris);
-        let (x0, y0, x1, _) = e.bbox;
-        let half = e.lw / 2.0;
-        let d = dashes_along(&e.top, (x0 + half, y0 + half), (x1 - half, y0 + half), e.lw);
-        let gap = if d.len() > 1 {
-            ((d[1].0 - d[0].1) * 1000.0).round() as i64
-        } else {
-            0
-        };
-        let key = (d.len(), gap);
-        if !patterns.contains(&key) {
-            patterns.push(key);
+        let (len, n, gap) = snapped_top_pattern(ViewTransform::identity(), b);
+        match by_length.iter().find(|(l, _)| *l == len) {
+            Some((_, seen)) => {
+                assert_eq!(*seen, (n, gap), "same snapped length {len}, new pattern");
+            }
+            None => by_length.push((len, (n, gap))),
         }
     }
-    assert_eq!(
-        patterns.len(),
-        1,
-        "a sub-pixel pan re-fits the dash pattern ({} distinct patterns: dashes, gap*1000): {patterns:?}",
-        patterns.len()
+    assert!(
+        by_length.len() <= 2,
+        "a 100.5 px box snaps to at most two pixel lengths: {by_length:?}"
     );
+    // Whole-pixel translation and zoom of the same snapped size: identical.
+    let reference = snapped_top_pattern(
+        ViewTransform::identity(),
+        box_px(200.5, 150.5, 100.0, 60.0, 0.0),
+    );
+    for (dx, dy) in [(0.0, 0.0), (1.0, 0.0), (37.0, -12.0), (-80.0, 400.0)] {
+        for scale in [0.5, 1.0, 2.0, 3.37] {
+            let view = view_of(scale, 3.0, -2.0);
+            let b = box_px(200.5 + dx, 150.5 + dy, 100.0, 60.0, 0.0);
+            assert_eq!(
+                snapped_top_pattern(view, b),
+                reference,
+                "translated by ({dx}, {dy}) at scale {scale}"
+            );
+        }
+    }
 }

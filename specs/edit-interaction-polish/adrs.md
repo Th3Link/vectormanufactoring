@@ -681,6 +681,28 @@ to the PO" (criteria 21, 41, 59, 64 and four smaller ones).
     each selected object of a multi-selection has its own dashed box; the
     marquee box stays solid; the draw list of two equal inputs is equal.
 
+- **2026-10-06 (PR 2 build, reviewed): four refinements of this decision.**
+  - **`fit_dashes` picks the gap nearest 3**, not the smallest count. Among the
+    counts with an exact fit (dash 4, gap 2 to 4) the one whose gap is nearest
+    the nominal 3 is used. The smallest count is the largest gap and would draw
+    nearly every edge as 4 on / 4 off, not the customer's V1 (4 on / 3 off).
+    The two flex bands are unchanged (gap 2, dash about 2.7 to 4).
+  - **End dashes overshoot the corner by half a line width** (first and last
+    dash of every edge of a selection box), so the two edges cover the whole
+    corner pixel and the corner is closed, not notched. The 20 percent hover
+    box is not extended: it would blend the corner pixel twice.
+  - **An edge longer than 50,000 screen pixels is drawn solid.** render-core
+    has no viewport, so this bounds the draw list at absurd zoom, where the
+    edge is far off screen anyway.
+  - **A sub-pixel pan re-fits a pixel-snapped box by at most one pixel of
+    length.** Criteria 63 (rigid pattern) and 65 (pixel-snapped line) pull
+    apart here: a snapped box changes its pixel length by one when its true
+    edges straddle a pixel boundary differently, and the dashes re-fit (for
+    example gap 2.929 vs 2.857 px over 15 dashes). Accepted. A whole-pixel
+    translation and a zoom of a box that keeps its snapped size leave the
+    pattern identical; the pattern is a function of the snapped pixel length.
+    Tested by `ac63_ac65_a_snapped_box_keeps_its_pattern_rigid_and_refits_only_when_its_pixel_length_changes`.
+
 ### 8. Sequencing, the PR split, what each PR deletes and rewrites
 
 - **2026-10-06: four PRs, in this order, each a `story/` PR that needs
