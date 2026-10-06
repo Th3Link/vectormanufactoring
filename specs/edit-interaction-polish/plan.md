@@ -41,11 +41,13 @@ and read where the select decoration input is built, `session/select_view.rs`).
   1, 1.25, 1.5, 2 and 3; a rotated box is not snapped.
 - [x] 5. Skew guide constants 2 on / 2 off; `the_skew_guide_draws_as_dashes`
   rewritten to the exact count of eighteen dashes at 70 px (AC 68).
-- [ ] 6. `Session::set_device_pixel_ratio`, called from `attach_canvas` and
+- [x] 6. `Session::set_device_pixel_ratio`, called from `attach_canvas` and
   `resize` (AC 65). Session test: the input carries the ratio.
-- [ ] 7. Browser pixel readback (not a CI test): axis-aligned box rows at DPR 1,
+- [x] 7. Browser pixel readback (not a CI test): axis-aligned box rows at DPR 1,
   1.5 and 2, zoom 100 and 200 percent, a rotated box, the skew guide (AC 63 to 68).
-- [ ] 8. `docs/design-system.md` rows (skew guide, selection box, hover box).
+  Done in the Browser pane with `devicePixelRatio` overridden; the skew guide and
+  the rotated box were only looked at, not measured.
+- [x] 8. `docs/design-system.md` rows (skew guide, selection box, hover box).
 
 ### Decisions taken here (inside the ADR)
 
