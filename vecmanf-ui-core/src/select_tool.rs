@@ -1,73 +1,50 @@
 //! The Select tool's state machine (`specs/0004-canvas-navigation-and-
 //! selection/specification.md`, acceptance criteria 14-23; extended by
-//! `specs/0005-object-transform/specification.md`, acceptance criteria
-//! 1-23): click/shift-toggle selection over [`hit_test_object`], a
-//! single-object drag-to-move tracked as a screen-independent document-
-//! space offset, Delete/Backspace, the double-click handoff outcome —
-//! and now, for a single-object selection only (acceptance criterion
-//! 2), the 8 resize + 1 rotate transform handles
-//! [`crate::transform_handle_layout`] lays out on that object's own
-//! [`OrientedBox`]. Follows [`crate::RectangleTool`]'s established
-//! pattern — ephemeral in-progress drag state (ADR 0009 §2), one
+//! `specs/0005-object-transform/specification.md` and
+//! `specs/object-transform-refinements/specification.md`): click/shift-
+//! toggle selection over [`hit_test_object`], a drag-to-move tracked as a
+//! screen-independent document-space offset, Delete/Backspace, the double-
+//! click handoff outcome — and, for a single-object selection only, the
+//! transform handles [`crate::transform_handle_layout`] lays out on that
+//! object's own [`OrientedBox`]: resize, rotate (corner and Shift-revealed
+//! side), skew (paths) and the centre move handle, plus the typed numeric
+//! entry [`crate::transform_entry`]. Follows [`crate::RectangleTool`]'s
+//! established pattern — ephemeral in-progress drag state (ADR 0009 §2), one
 //! [`vecmanf_document_core::Document`] commit on release, a press-and-
-//! release with no movement writes nothing (`specs/0002-path-node-
-//! editing/adrs.md`'s rule, extended here to a resize/rotate too).
+//! release inside the 3 px dead zone writes nothing.
 
-use vecmanf_document_core::{
-    Document, NodeId, ObjectSnapshot, Point, PrimitiveSnapshot, Shape, Tolerance, Vec2,
-};
+use vecmanf_document_core::{Angle, Document, ObjectSnapshot, Point, Tolerance, Vec2};
 
-use crate::ResizeDirection;
 use crate::hit_test_object::hit_test_object;
 use crate::object_selection::ObjectSelection;
 use crate::oriented_box::{OrientedBox, oriented_bounds};
 use crate::transform_drag::{
-    ResizeOptions, StrokeScaling, commit_resize, compute_resize, compute_rotate,
+    DragOrigin, StrokeScaling, TransformDrag, is_polygon_or_star, pivot_for,
 };
+use crate::transform_entry::TransformEntry;
+pub use crate::transform_handle_layout::TransformHandleTolerances;
 use crate::transform_handle_layout::{
-    ALL_EIGHT, CORNERS_FOUR, TransformHandle, hit_test_transform_handle,
-    resize_anchor_local_position, resize_handle_hit, rotate_pivot, transform_handles,
+    ALL_EIGHT, CORNERS_FOUR, HandleSpec, TransformHandle, hit_transform_handle, transform_handles,
 };
+use crate::transform_math::skew_frame;
 
-/// The three tolerances the Select tool's own transform handles need —
-/// mirrors [`crate::ShapeHitTolerances`]'s split for the shape tools.
-#[derive(Debug, Clone, Copy)]
-pub struct TransformHandleTolerances {
-    /// Bounds a hit against one of the 8 resize handles.
-    pub resize: Tolerance,
-    /// Bounds a hit against the rotate handle.
-    pub rotate: Tolerance,
-    /// The rotate handle's screen-space offset above the top-edge
-    /// resize handle, already converted to document millimetres by the
-    /// caller at the current zoom (the same convention every other
-    /// handle's screen-space hit size already uses).
-    pub rotate_offset_mm: f64,
-}
+mod entry;
+
+pub use entry::double_click;
 
 #[derive(Debug, Clone, Default)]
 enum SelectDrag {
     #[default]
     None,
-    /// A move in progress: the document point the drag started at.
-    Moving { down_at: Point },
-    /// A resize-handle drag in progress.
-    Resizing {
-        id: NodeId,
-        start: ObjectSnapshot,
-        start_box: OrientedBox,
-        direction: ResizeDirection,
-        down_at: Point,
-        /// The tool's [`StrokeScaling`] as of the press: a drag uses it
-        /// for its whole duration, so a toggle mid-drag applies from the
-        /// next drag (AC 28).
-        stroke_scaling: StrokeScaling,
+    /// A move in progress (body or centre handle).
+    Moving {
+        origin: DragOrigin,
+        /// Whether the press was on the centre handle (it then shows its
+        /// dragging look).
+        from_center: bool,
     },
-    /// A rotate-handle drag in progress.
-    Rotating {
-        start: ObjectSnapshot,
-        start_box: OrientedBox,
-        down_at: Point,
-    },
+    /// A resize, rotate or skew drag in progress.
+    Transforming(TransformDrag),
 }
 
 /// What [`SelectTool::pointer_down`] did.
@@ -81,57 +58,76 @@ pub enum SelectPointerDownOutcome {
     /// Nothing was hit; the selection was cleared (acceptance criterion
     /// 15) unless Shift was held.
     Cleared,
-    /// A transform handle was hit; a resize or rotate drag began
+    /// A transform handle was hit; a resize, rotate or skew drag began
     /// (`specs/0005-object-transform/specification.md`, acceptance
     /// criterion 1).
     Handle,
 }
 
-/// What a double-click on the Select tool hit (`adrs.md`: "the Select
-/// tool returns an outcome (the hit `NodeId` and its kind, or a miss)").
+/// What a double-click on the Select tool did (`adrs.md`, "double-click on
+/// a handle").
 #[derive(Debug, Clone, PartialEq)]
 pub enum SelectDoubleClickOutcome {
     /// Nothing was hit; no handoff.
     Miss,
     /// This object was hit — the caller (`Session`) selects it and maps
-    /// its kind to the tool to hand off to (acceptance criteria 22, 23).
+    /// its kind to the tool to hand off to (acceptance criteria 22, 23 of
+    /// slice 4; criterion 3 of `object-transform-refinements` for the
+    /// inside of the selected box).
     Hit(ObjectSnapshot),
+    /// A rotate or resize handle was double-clicked: the numeric entry is
+    /// open (criteria 18, 25, 26), and there is no handoff (criteria 23,
+    /// 32).
+    EntryOpened,
+    /// A skew handle was double-clicked: nothing happens, and there is no
+    /// handoff (criterion 49).
+    Ignored,
 }
 
 /// The Select tool's state: no shape handles, no path nodes
 /// (`specification.md`: "the Select tool shows no shape handles... only
 /// the bounding box") for two-or-more selected objects — but, since
-/// `object-transform`, a single selected object's own 8 resize + 1
-/// rotate transform handles — plus a plain object selection (shared
-/// with the shape tools, [`ObjectSelection`]) and whichever single-
-/// object drag is in flight.
+/// `object-transform`, a single selected object's own transform handles —
+/// plus a plain object selection (shared with the shape tools,
+/// [`ObjectSelection`]), whichever drag is in flight and the open numeric
+/// entry, if any.
 #[derive(Debug, Default)]
 pub struct SelectTool {
     drag: SelectDrag,
     stroke_scaling: StrokeScaling,
+    entry: Option<TransformEntry>,
+    /// The handle the most recent press landed on (`None` for a press
+    /// anywhere else): a double-click only acts on a handle the *first*
+    /// press already grabbed, so double-clicking the outline of an object
+    /// that is not selected yet (whose handles appear after the first click)
+    /// still hands off.
+    last_press_handle: Option<TransformHandle>,
 }
 
-/// Whether `object` is a polygon or a star — the one kind whose
-/// transform handles are corner-only and always-uniform (acceptance
-/// criterion 11).
-fn is_polygon_or_star(object: &ObjectSnapshot) -> bool {
-    matches!(
-        object,
-        ObjectSnapshot::Primitive(PrimitiveSnapshot {
-            shape: Shape::Polygon { .. } | Shape::Star { .. },
-            ..
-        })
-    )
-}
-
-/// Every resize-handle direction `object`'s own transform-handle set
-/// shows (acceptance criterion 11: corner-only for a polygon/star).
-fn resize_directions_for(object: &ObjectSnapshot) -> &'static [ResizeDirection] {
-    if is_polygon_or_star(object) {
-        &CORNERS_FOUR
-    } else {
-        &ALL_EIGHT
+/// The handle kinds `object` shows (criteria 11, 37, 50): corner resize
+/// only for a polygon or star; skew handles only for a path; the side
+/// rotate handles when `side_rotate`.
+fn handle_spec_for(object: &ObjectSnapshot, side_rotate: bool) -> HandleSpec {
+    HandleSpec {
+        resize_directions: if is_polygon_or_star(object) {
+            &CORNERS_FOUR
+        } else {
+            &ALL_EIGHT
+        },
+        skew: matches!(object, ObjectSnapshot::Path(_)),
+        side_rotate,
     }
+}
+
+/// The sole selected object in `objects`, if the selection is exactly one.
+fn sole_selected<'a>(
+    objects: &'a [ObjectSnapshot],
+    selection: &ObjectSelection,
+) -> Option<&'a ObjectSnapshot> {
+    let [only_id] = selection.ids() else {
+        return None;
+    };
+    objects.iter().find(|o| o.id() == *only_id)
 }
 
 impl SelectTool {
@@ -156,98 +152,134 @@ impl SelectTool {
         self.stroke_scaling = stroke_scaling;
     }
 
+    /// Whether the four side rotate handles show right now (criterion 6):
+    /// the live Shift state while idle; frozen as it was at the press during
+    /// a drag, and as it was when a numeric entry opened while one is open,
+    /// so pressing Shift mid-drag reveals nothing and a dragged side handle
+    /// stays until the drag ends.
+    #[must_use]
+    pub fn side_rotate_revealed(&self, live_shift: bool) -> bool {
+        match &self.drag {
+            SelectDrag::Moving { origin, .. } => origin.side_rotate_revealed,
+            SelectDrag::Transforming(drag) => drag.origin.side_rotate_revealed,
+            SelectDrag::None => self
+                .entry
+                .as_ref()
+                .map_or(live_shift, TransformEntry::side_rotate_revealed),
+        }
+    }
+
     /// Every transform handle the current single-object selection shows
     /// right now, in document space — `empty` for no selection or a
-    /// multi-selection (acceptance criterion 2). Independent of whether
-    /// a drag is in flight; `Session`'s own decoration input calls this
-    /// every frame, the same way `vecmanf-ui-core::handles_for` already
-    /// works for a shape tool's own handles.
+    /// multi-selection (acceptance criterion 2 of slice 5). Independent of
+    /// whether a drag is in flight; `side_rotate` is
+    /// [`SelectTool::side_rotate_revealed`].
     #[must_use]
     pub fn transform_handles(
         objects: &[ObjectSnapshot],
         selection: &ObjectSelection,
         tolerances: TransformHandleTolerances,
+        side_rotate: bool,
     ) -> Vec<(TransformHandle, Point)> {
-        let [only_id] = selection.ids() else {
+        let Some(object) = sole_selected(objects, selection) else {
             return Vec::new();
         };
-        let Some(object) = objects.iter().find(|o| o.id() == *only_id) else {
-            return Vec::new();
-        };
-        let box_ = oriented_bounds(object);
         transform_handles(
-            &box_,
-            resize_directions_for(object),
-            tolerances.rotate_offset_mm,
+            &oriented_bounds(object),
+            handle_spec_for(object, side_rotate),
+            &tolerances,
         )
     }
 
-    /// Which handle, if any, is currently being dragged — for the
-    /// renderer's own "solid fill while dragging" state
-    /// (`docs/design-system.md`).
+    /// Which handle is currently being dragged, for the renderer's "solid
+    /// fill while dragging" state and the cursor (`docs/design-system.md`).
+    /// The centre handle counts while a move that started on it runs.
     #[must_use]
-    pub const fn dragging_handle(&self) -> Option<TransformHandle> {
+    pub fn dragging_handle(&self) -> Option<TransformHandle> {
         match &self.drag {
-            SelectDrag::Resizing { direction, .. } => Some(TransformHandle::Resize(*direction)),
-            SelectDrag::Rotating { .. } => Some(TransformHandle::Rotate),
-            SelectDrag::None | SelectDrag::Moving { .. } => None,
+            SelectDrag::Transforming(drag) => Some(drag.handle),
+            SelectDrag::Moving {
+                from_center: true, ..
+            } => Some(TransformHandle::Move),
+            SelectDrag::Moving { .. } | SelectDrag::None => None,
         }
     }
 
-    /// The active scale/rotate pivot, shown only while a drag is in
-    /// flight (`docs/design-system.md`'s "Transform pivot marker") —
-    /// `shift`'s live state decides which point, re-evaluated every
-    /// frame so the marker jumps the instant the modifier changes.
+    /// The active scale/rotate/skew pivot, shown while a drag is in flight
+    /// or a numeric entry is open (`docs/design-system.md`'s "Transform
+    /// pivot marker") — `shift`'s live state decides which point during a
+    /// drag, re-evaluated every frame so the marker jumps the instant the
+    /// modifier changes; an open entry's point is fixed when it opened
+    /// (criteria 22, 28).
     #[must_use]
     pub fn live_pivot(&self, shift: bool) -> Option<Point> {
         match &self.drag {
-            SelectDrag::Resizing {
-                start,
-                start_box,
-                direction,
-                ..
-            } => {
-                let local = if is_polygon_or_star(start) {
-                    start_box.local_center()
-                } else {
-                    resize_anchor_local_position(start_box.min, start_box.max, *direction, shift)
-                };
-                Some(start_box.to_document(local))
+            SelectDrag::Transforming(drag) => {
+                pivot_for(drag.handle, &drag.start, &drag.start_box, shift)
             }
-            SelectDrag::Rotating { start_box, .. } => Some(rotate_pivot(start_box, shift)),
-            SelectDrag::None | SelectDrag::Moving { .. } => None,
+            SelectDrag::Moving { .. } => None,
+            SelectDrag::None => self.entry.as_ref().map(TransformEntry::pivot),
         }
     }
 
+    /// The pivot the handle under the pointer *would* use if pressed now
+    /// (criterion 55): the marker's preview while Shift is held with no drag
+    /// running. `None` for the centre handle.
+    #[must_use]
+    pub fn hover_pivot(
+        object: &ObjectSnapshot,
+        box_: &OrientedBox,
+        handle: TransformHandle,
+        shift: bool,
+    ) -> Option<Point> {
+        pivot_for(handle, object, box_, shift)
+    }
+
     /// The transform handle of the current single-object selection under
-    /// `point`, if any, with that object and its oriented box — the one
-    /// hit test [`SelectTool::pointer_down`] (to start a drag) and a
-    /// hover cursor query (`Session`'s cursor hint) both use, so what
-    /// the cursor promises and what a press does can never disagree.
-    /// `None` for no selection or a multi-selection (acceptance
-    /// criterion 2).
+    /// `point`, if any, with that object and its oriented box — the one hit
+    /// rule [`SelectTool::pointer_down`] (to start a drag), a hover cursor
+    /// query and a double-click all use, so what the cursor promises and
+    /// what a press does can never disagree (criterion 9). `shift` is the
+    /// live Shift state: it decides whether the side rotate handles exist.
+    /// The centre handle is never returned (it is a body press); see
+    /// [`SelectTool::hover_handle_at`]. `None` for no selection or a
+    /// multi-selection.
     #[must_use]
     pub fn handle_at<'a>(
         objects: &'a [ObjectSnapshot],
         selection: &ObjectSelection,
         point: Point,
         tolerances: TransformHandleTolerances,
+        shift: bool,
     ) -> Option<(&'a ObjectSnapshot, OrientedBox, TransformHandle)> {
-        let [only_id] = selection.ids() else {
-            return None;
-        };
-        let object = objects.iter().find(|o| o.id() == *only_id)?;
+        Self::query_handle(objects, selection, point, tolerances, shift, false)
+    }
+
+    /// [`SelectTool::handle_at`] for hover, cursor and hint: also reports the
+    /// centre move handle where no other handle is hit.
+    #[must_use]
+    pub fn hover_handle_at<'a>(
+        objects: &'a [ObjectSnapshot],
+        selection: &ObjectSelection,
+        point: Point,
+        tolerances: TransformHandleTolerances,
+        shift: bool,
+    ) -> Option<(&'a ObjectSnapshot, OrientedBox, TransformHandle)> {
+        Self::query_handle(objects, selection, point, tolerances, shift, true)
+    }
+
+    fn query_handle<'a>(
+        objects: &'a [ObjectSnapshot],
+        selection: &ObjectSelection,
+        point: Point,
+        tolerances: TransformHandleTolerances,
+        shift: bool,
+        include_move: bool,
+    ) -> Option<(&'a ObjectSnapshot, OrientedBox, TransformHandle)> {
+        let object = sole_selected(objects, selection)?;
         let box_ = oriented_bounds(object);
-        let handles = transform_handles(
-            &box_,
-            resize_directions_for(object),
-            tolerances.rotate_offset_mm,
-        );
-        let (rotate, resize): (Vec<_>, Vec<_>) = handles
-            .into_iter()
-            .partition(|(h, _)| matches!(h, TransformHandle::Rotate));
-        let hit = hit_test_transform_handle(&rotate, point, tolerances.rotate.as_mm())
-            .or_else(|| resize_handle_hit(&resize, &box_, point, tolerances.resize))?;
+        let handles = transform_handles(&box_, handle_spec_for(object, shift), &tolerances);
+        let hit = hit_transform_handle(&handles, &box_, point, &tolerances, include_move)?;
         Some((object, box_, hit))
     }
 
@@ -258,10 +290,7 @@ impl SelectTool {
         selection: &ObjectSelection,
         point: Point,
     ) -> bool {
-        let [only_id] = selection.ids() else {
-            return false;
-        };
-        let Some(object) = objects.iter().find(|o| o.id() == *only_id) else {
+        let Some(object) = sole_selected(objects, selection) else {
             return false;
         };
         let box_ = oriented_bounds(object);
@@ -272,10 +301,12 @@ impl SelectTool {
             && local.y <= box_.max.y
     }
 
-    /// Acceptance criteria 1, 4-18: hit-tests `point` first against the
-    /// current single-object selection's own transform handles, then
-    /// (same as before `object-transform`) against every object's own
-    /// body — updates `selection` and starts whichever drag matches.
+    /// Acceptance criteria 1, 4-18 of slice 5 and 1-11 here: hit-tests
+    /// `point` first against the current single-object selection's own
+    /// transform handles, then (same as before) against every object's own
+    /// body — updates `selection` and starts whichever drag matches. Also
+    /// closes an open numeric entry (the press itself is processed as
+    /// usual, criterion 20).
     pub fn pointer_down(
         &mut self,
         objects: &[ObjectSnapshot],
@@ -285,43 +316,45 @@ impl SelectTool {
         handle_tolerances: TransformHandleTolerances,
         shift: bool,
     ) -> SelectPointerDownOutcome {
+        self.entry = None;
+        self.last_press_handle = None;
         // `adrs.md`: "ui-core filters the selection against the current
         // snapshot first" — drops any id a prior action (this peer's own
         // edit in a different tool, or a collaborator) has since removed,
         // before this click can act on it.
         selection.retain_existing(objects);
+        let origin = DragOrigin::new(point, handle_tolerances.drag_threshold_mm, shift);
 
         if let Some((object, box_, handle)) =
-            Self::handle_at(objects, selection, point, handle_tolerances)
+            Self::handle_at(objects, selection, point, handle_tolerances, shift)
         {
-            self.drag = match handle {
-                TransformHandle::Rotate => SelectDrag::Rotating {
-                    start: object.clone(),
-                    start_box: box_,
-                    down_at: point,
-                },
-                TransformHandle::Resize(direction) => SelectDrag::Resizing {
-                    id: object.id(),
-                    start: object.clone(),
-                    start_box: box_,
-                    direction,
-                    down_at: point,
-                    stroke_scaling: self.stroke_scaling,
-                },
-            };
+            self.drag = SelectDrag::Transforming(TransformDrag {
+                origin,
+                start: object.clone(),
+                start_box: box_,
+                handle,
+                stroke_scaling: self.stroke_scaling,
+            });
+            self.last_press_handle = Some(handle);
             return SelectPointerDownOutcome::Handle;
         }
+        let from_center = matches!(
+            Self::hover_handle_at(objects, selection, point, handle_tolerances, shift),
+            Some((_, _, TransformHandle::Move))
+        );
 
         let Some(hit) = hit_test_object(objects, point, tolerance) else {
             // A press inside the sole selected object's own (oriented) box
             // that is not on a handle is a grab of that object — its body
-            // (acceptance criterion 23). Without it a small unfilled
-            // object could not be moved at all: the handle radii tile its
-            // whole outline and its interior hits nothing. Unselected
-            // objects still hit only on their outline (see `adrs.md`'s
-            // 2026-10-06 note).
+            // (acceptance criterion 23 of slice 5). Without it a small
+            // unfilled object could not be moved at all: the handle radii
+            // tile its whole outline and its interior hits nothing.
+            // Unselected objects still hit only on their outline.
             if !shift && Self::is_inside_selected_box(objects, selection, point) {
-                self.drag = SelectDrag::Moving { down_at: point };
+                self.drag = SelectDrag::Moving {
+                    origin,
+                    from_center,
+                };
                 return SelectPointerDownOutcome::Selected;
             }
             if !shift {
@@ -343,83 +376,103 @@ impl SelectTool {
             // all" convention.
             selection.select_single(hit);
         }
-        self.drag = SelectDrag::Moving { down_at: point };
+        self.drag = SelectDrag::Moving {
+            origin,
+            from_center: false,
+        };
         SelectPointerDownOutcome::Selected
+    }
+
+    /// Records the pointer's position for the drag in flight, so the 3 px
+    /// dead zone, once left, stays left (criterion 41's "a drag"). A no-op
+    /// when idle.
+    pub fn pointer_moved(&mut self, point: Point) {
+        match &mut self.drag {
+            SelectDrag::Moving { origin, .. } => origin.note(point),
+            SelectDrag::Transforming(drag) => drag.origin.note(point),
+            SelectDrag::None => {}
+        }
     }
 
     /// The live, uncommitted move offset while a drag is in flight — the
     /// Select tool's own counterpart to the shape tools' `live_shape`
-    /// (acceptance criterion 20's "live"). `None` when idle, or once the
-    /// drag has moved nowhere yet — a press-and-release with no movement
+    /// (acceptance criterion 20's "live"). `None` when idle, or while the
+    /// pointer is still inside the dead zone — a press-and-release there
     /// must write nothing (`specs/0002-path-node-editing/adrs.md`'s rule).
     #[must_use]
     pub fn live_offset(&self, current_point: Point) -> Option<Vec2> {
-        match self.drag {
-            SelectDrag::Moving { down_at } => {
-                let offset = down_at.vector_to(current_point);
-                if offset == Vec2::ZERO {
-                    None
-                } else {
-                    Some(offset)
-                }
+        match &self.drag {
+            SelectDrag::Moving { origin, .. } if origin.is_active_at(current_point) => {
+                Some(origin.down_at.vector_to(current_point))
             }
-            SelectDrag::None | SelectDrag::Resizing { .. } | SelectDrag::Rotating { .. } => None,
+            SelectDrag::Moving { .. } | SelectDrag::Transforming(_) | SelectDrag::None => None,
         }
     }
 
-    /// The live, uncommitted resize preview (acceptance criterion 14):
-    /// the object as it would commit right now, re-evaluated from the
-    /// drag-start snapshot every call so `shift`/`ctrl`'s live state is
-    /// always reflected. `None` unless a resize is in flight.
+    /// The live, uncommitted resize, rotate or skew preview (acceptance
+    /// criteria 14, 22 of slice 5; 40 here): the object as it would commit
+    /// right now, re-evaluated from the drag-start snapshot every call so
+    /// `shift`/`ctrl`'s live state is always reflected. `None` unless such a
+    /// drag is in flight and past the dead zone.
     #[must_use]
-    pub fn live_resize(&self, current: Point, shift: bool, ctrl: bool) -> Option<ObjectSnapshot> {
+    pub fn live_transform(
+        &self,
+        current: Point,
+        shift: bool,
+        ctrl: bool,
+    ) -> Option<ObjectSnapshot> {
         match &self.drag {
-            SelectDrag::Resizing {
-                start,
-                start_box,
-                direction,
-                down_at,
-                stroke_scaling,
-                ..
-            } => Some(compute_resize(
-                start,
-                start_box,
-                *direction,
-                *down_at,
-                current,
-                ResizeOptions {
-                    shift,
-                    ctrl,
-                    stroke_scaling: *stroke_scaling,
-                },
-            )),
-            SelectDrag::None | SelectDrag::Moving { .. } | SelectDrag::Rotating { .. } => None,
+            SelectDrag::Transforming(drag) if drag.origin.is_active_at(current) => {
+                Some(drag.resolve(current, shift, ctrl))
+            }
+            SelectDrag::Transforming(_) | SelectDrag::Moving { .. } | SelectDrag::None => None,
         }
     }
 
-    /// The live, uncommitted rotate preview (acceptance criterion 22).
-    /// `None` unless a rotate is in flight.
+    /// The live skew angle for the readout (criterion 40): `None` unless a
+    /// skew drag is in flight and past the dead zone.
     #[must_use]
-    pub fn live_rotate(&self, current: Point, shift: bool, ctrl: bool) -> Option<ObjectSnapshot> {
+    pub fn live_skew_angle(&self, current: Point, shift: bool, ctrl: bool) -> Option<Angle> {
         match &self.drag {
-            SelectDrag::Rotating {
-                start,
-                start_box,
-                down_at,
-                ..
-            } => Some(compute_rotate(
-                start, start_box, *down_at, current, shift, ctrl,
-            )),
-            SelectDrag::None | SelectDrag::Moving { .. } | SelectDrag::Resizing { .. } => None,
+            SelectDrag::Transforming(drag) if drag.origin.is_active_at(current) => {
+                drag.skew_angle_at(current, shift, ctrl)
+            }
+            SelectDrag::Transforming(_) | SelectDrag::Moving { .. } | SelectDrag::None => None,
         }
+    }
+
+    /// For a skew drag in flight: the two end points of the dashed guide
+    /// along the line that stays fixed (criterion 56) — the fixed edge, or
+    /// the line through the box center under `shift` — extended
+    /// `extend_mm` past each end of the box.
+    #[must_use]
+    pub fn skew_guide(&self, shift: bool, extend_mm: f64) -> Option<(Point, Point)> {
+        let SelectDrag::Transforming(drag) = &self.drag else {
+            return None;
+        };
+        let TransformHandle::Skew(side) = drag.handle else {
+            return None;
+        };
+        let frame = skew_frame(&drag.start_box, side, shift);
+        let (sin, cos) = drag.start_box.angle.as_radians().sin_cos();
+        // The fixed line runs along `u` for an x skew, along `v` otherwise.
+        let (direction, length) = if frame.along_u {
+            (Vec2::new(cos, sin), drag.start_box.width())
+        } else {
+            (Vec2::new(-sin, cos), drag.start_box.height())
+        };
+        let half = direction.scaled(length / 2.0 + extend_mm);
+        Some((
+            frame.fixed_point.translated(half.negated()),
+            frame.fixed_point.translated(half),
+        ))
     }
 
     /// Commits whatever drag is in flight — a move (as one
     /// [`vecmanf_document_core::Document::translate_objects`] call for
-    /// the whole selection, acceptance criteria 18, 20), a resize, or a
-    /// rotate (one [`vecmanf_document_core::Document::rotate_object`]
-    /// call, acceptance criteria 15-18) — a no-op (writes nothing) if no
-    /// drag was in flight, or it moved nowhere (acceptance criterion 3).
+    /// the whole selection), a resize, a rotate or a skew (one commit
+    /// each) — a no-op (writes nothing) if no drag was in flight, or the
+    /// pointer never left the dead zone, or the result equals the start.
     /// `shift`/`ctrl` are the modifiers' state at release.
     pub fn pointer_up(
         &mut self,
@@ -432,56 +485,24 @@ impl SelectTool {
     ) {
         match std::mem::take(&mut self.drag) {
             SelectDrag::None => {}
-            SelectDrag::Moving { down_at } => {
-                if down_at == point {
+            SelectDrag::Moving { origin, .. } => {
+                if !origin.is_active_at(point) {
                     return;
                 }
-                let offset = down_at.vector_to(point);
+                let offset = origin.down_at.vector_to(point);
                 selection.retain_existing(objects);
                 if selection.is_empty() {
                     return;
                 }
                 let _ = document.translate_objects(selection.ids(), offset);
             }
-            SelectDrag::Resizing {
-                id,
-                start,
-                start_box,
-                direction,
-                down_at,
-                stroke_scaling,
-            } => {
-                if down_at == point {
+            SelectDrag::Transforming(drag) => {
+                if !drag.origin.is_active_at(point) {
                     return;
                 }
-                let resized = compute_resize(
-                    &start,
-                    &start_box,
-                    direction,
-                    down_at,
-                    point,
-                    ResizeOptions {
-                        shift,
-                        ctrl,
-                        stroke_scaling,
-                    },
-                );
-                if resized != start {
-                    commit_resize(document, id, &resized, stroke_scaling);
-                }
-            }
-            SelectDrag::Rotating {
-                start,
-                start_box,
-                down_at,
-                ..
-            } => {
-                if down_at == point {
-                    return;
-                }
-                let rotated = compute_rotate(&start, &start_box, down_at, point, shift, ctrl);
-                if rotated != start {
-                    let _ = document.rotate_object(&rotated);
+                let result = drag.resolve(point, shift, ctrl);
+                if result != drag.start {
+                    drag.commit(document, &result);
                 }
             }
         }
@@ -490,6 +511,14 @@ impl SelectTool {
     /// Cancels whichever drag is in flight, writing nothing.
     pub fn escape(&mut self) {
         self.drag = SelectDrag::None;
+        self.last_press_handle = None;
+    }
+
+    /// Forgets which handle the last press grabbed: the Select tool was left
+    /// or re-entered, so a later double-click's first press may never have
+    /// reached it.
+    pub fn forget_press(&mut self) {
+        self.last_press_handle = None;
     }
 
     /// Acceptance criteria 19, 21: deletes every selected object as one
@@ -503,6 +532,8 @@ impl SelectTool {
         selection: &mut ObjectSelection,
     ) {
         self.drag = SelectDrag::None;
+        self.entry = None;
+        self.last_press_handle = None;
         selection.retain_existing(objects);
         if selection.is_empty() {
             return;
@@ -513,30 +544,11 @@ impl SelectTool {
     }
 }
 
-/// Acceptance criteria 22, 23: what a double-click hit, for `Session` to
-/// map to the object's own tool (`tool_for`) and hand off to.
-#[must_use]
-pub fn double_click(
-    objects: &[ObjectSnapshot],
-    point: Point,
-    tolerance: Tolerance,
-) -> SelectDoubleClickOutcome {
-    let Some(hit) = hit_test_object(objects, point, tolerance) else {
-        return SelectDoubleClickOutcome::Miss;
-    };
-    objects
-        .iter()
-        .find(|object| object.id() == hit)
-        .cloned()
-        .map_or(
-            SelectDoubleClickOutcome::Miss,
-            SelectDoubleClickOutcome::Hit,
-        )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ResizeDirection;
+    use vecmanf_document_core::Shape;
     use vecmanf_document_core::{
         AnchorId, EllipseFrame, Length, NewAnchor, NodeId, RectBounds, StarFrame,
     };
@@ -565,7 +577,16 @@ mod tests {
     const HANDLE_TOLERANCES: TransformHandleTolerances = TransformHandleTolerances {
         resize: Tolerance::from_mm(1.0),
         rotate: Tolerance::from_mm(1.0),
+        skew: Tolerance::from_mm(1.0),
+        center_hover: Tolerance::from_mm(1.0),
         rotate_offset_mm: 5.0,
+        skew_offset_mm: 2.5,
+        edge_handle_min_side_mm: 0.0,
+        skew_min_side_mm: 0.0,
+        // No centre handle and no dead zone in these unit-scale tests;
+        // the refinements' own tests set them.
+        center_min_side_mm: 1e9,
+        drag_threshold_mm: 0.0,
     };
 
     #[test]
@@ -948,18 +969,19 @@ mod tests {
 
     // --- object-transform (slice 5) ---
 
-    /// Acceptance criterion 1: with exactly one object selected, its 9
-    /// handles (8 resize + 1 rotate) appear; clicking one starts a
-    /// resize/rotate drag rather than a move.
+    /// Acceptance criterion 1: with exactly one object selected, its
+    /// handles appear: 8 resize and the 4 corner rotate handles on a
+    /// rectangle (the side rotate handles need Shift, the centre handle a
+    /// big enough box, skew a path).
     #[test]
-    fn ac1_a_single_selection_shows_nine_handles() {
+    fn ac1_a_single_selection_shows_twelve_handles() {
         let document = Document::new(1);
         let id = rect(&document, 0.0);
         let objects = vec![document.object(id).expect("exists")];
         let mut selection = ObjectSelection::new();
         selection.select_single(id);
-        let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES);
-        assert_eq!(handles.len(), 9);
+        let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES, false);
+        assert_eq!(handles.len(), 12);
     }
 
     /// Acceptance criterion 2: a multi-selection shows no transform
@@ -976,7 +998,7 @@ mod tests {
         let mut selection = ObjectSelection::new();
         selection.toggle(a);
         selection.toggle(b);
-        let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES);
+        let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES, false);
         assert_eq!(handles.len(), 0);
     }
 
@@ -1002,7 +1024,7 @@ mod tests {
         assert_eq!(outcome, SelectPointerDownOutcome::Handle);
 
         let live = tool
-            .live_resize(Point::new(15.0, 13.0), false, false)
+            .live_transform(Point::new(15.0, 13.0), false, false)
             .expect("resize in progress");
         let ObjectSnapshot::Primitive(p) = &live else {
             panic!("expected a primitive");
@@ -1281,7 +1303,8 @@ mod tests {
         );
         tool.set_stroke_scaling(StrokeScaling::Proportional); // mid-drag
         let to = Point::new(20.0, 20.0);
-        let ObjectSnapshot::Primitive(preview) = tool.live_resize(to, false, false).unwrap() else {
+        let ObjectSnapshot::Primitive(preview) = tool.live_transform(to, false, false).unwrap()
+        else {
             panic!("primitive");
         };
         assert!(
@@ -1412,8 +1435,8 @@ mod tests {
         selection.select_single(id);
         let mut tool = SelectTool::new();
         // The Ne corner handle sits along the (1,-1) diagonal.
-        let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES);
-        assert_eq!(handles.len(), 5, "4 corners + rotate, no edges");
+        let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES, false);
+        assert_eq!(handles.len(), 8, "4 corners + 4 corner rotate, no edges");
         let (_, ne_position) = handles
             .iter()
             .find(|(h, _)| matches!(h, TransformHandle::Resize(ResizeDirection::Ne)))
@@ -1528,10 +1551,10 @@ mod tests {
         let mut selection = ObjectSelection::new();
         selection.select_single(id);
         let mut tool = SelectTool::new();
-        let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES);
+        let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES, false);
         let (_, rotate_position) = handles
             .iter()
-            .find(|(h, _)| matches!(h, TransformHandle::Rotate))
+            .find(|(h, _)| matches!(h, TransformHandle::Rotate(_)))
             .expect("rotate handle exists");
         let outcome = tool.pointer_down(
             &objects,
@@ -1572,10 +1595,10 @@ mod tests {
         let mut selection = ObjectSelection::new();
         selection.select_single(id);
         let mut tool = SelectTool::new();
-        let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES);
+        let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES, false);
         let (_, rotate_position) = handles
             .iter()
-            .find(|(h, _)| matches!(h, TransformHandle::Rotate))
+            .find(|(h, _)| matches!(h, TransformHandle::Rotate(_)))
             .expect("rotate handle exists");
         tool.pointer_down(
             &objects,
@@ -1634,7 +1657,7 @@ mod tests {
             let p = document.primitive(id).expect("exists");
             outline_of_rotated(&p.shape, p.rotation)[0].point
         };
-        let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES);
+        let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES, false);
         let se = handles
             .iter()
             .find(|(h, _)| matches!(h, TransformHandle::Resize(ResizeDirection::Se)))
@@ -1675,7 +1698,7 @@ mod tests {
         selection: &ObjectSelection,
         wanted: TransformHandle,
     ) -> Point {
-        SelectTool::transform_handles(objects, selection, HANDLE_TOLERANCES)
+        SelectTool::transform_handles(objects, selection, HANDLE_TOLERANCES, false)
             .into_iter()
             .find(|(h, _)| *h == wanted)
             .expect("handle exists")
@@ -1693,7 +1716,7 @@ mod tests {
         selection.select_single(id);
         let before = document.object(id);
         for wanted in [
-            TransformHandle::Rotate,
+            TransformHandle::Rotate(ResizeDirection::Ne),
             TransformHandle::Resize(ResizeDirection::Se),
             TransformHandle::Resize(ResizeDirection::N),
         ] {
@@ -1882,17 +1905,22 @@ mod tests {
         assert!((frame.center.y - (-3.0 + 4.0)).abs() < 1e-9);
     }
 
-    /// Acceptance criterion 16: Shift pivots a rotate to the bottom-edge
-    /// midpoint, so the object's center swings around it.
+    /// Criteria 12, 13: no modifier rotates about the box center; Shift
+    /// pivots a corner rotate on the opposite corner, so the object's
+    /// center swings around it.
     #[test]
-    fn ac16_shift_rotates_about_the_bottom_edge_midpoint() {
+    fn ac13_shift_rotates_a_corner_handle_about_the_opposite_corner() {
         let document = Document::new(1);
         let id = rect(&document, 0.0);
         let objects = vec![document.object(id).expect("exists")];
         let mut selection = ObjectSelection::new();
         selection.select_single(id);
         let mut tool = SelectTool::new();
-        let r = handle_pos(&objects, &selection, TransformHandle::Rotate);
+        let r = handle_pos(
+            &objects,
+            &selection,
+            TransformHandle::Rotate(ResizeDirection::Ne),
+        );
         tool.pointer_down(
             &objects,
             &mut selection,
@@ -1901,26 +1929,27 @@ mod tests {
             HANDLE_TOLERANCES,
             false,
         );
-        // Bottom-edge midpoint is (5, 10); the handle sits straight above
-        // it at (5, -5), so a quarter turn clockwise (+90° in Y-down)
-        // swings it to (20, 10).
-        let current = Point::new(5.0 + 15.0, 10.0);
-        assert_eq!(tool.live_pivot(true), Some(Point::new(5.0, 10.0)));
+        assert_eq!(tool.live_pivot(true), Some(Point::new(0.0, 10.0)));
         assert_eq!(tool.live_pivot(false), Some(Point::new(5.0, 5.0)));
+        // The Ne rotate handle is (13.54, -3.54): from the Sw corner
+        // (0, 10) the vector is (13.54, -13.54); a clockwise quarter turn
+        // (+90 degrees in Y-down) gives (13.54, 13.54).
+        let offset = 5.0 / std::f64::consts::SQRT_2;
+        let current = Point::new(10.0 + offset, 10.0 + 10.0 + offset);
         tool.pointer_up(&document, &objects, &mut selection, current, true, false);
         let snapshot = document.primitive(id).expect("exists");
         assert!((snapshot.rotation.as_radians() - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
         let Shape::Rect { bounds, .. } = snapshot.shape else {
             panic!("expected rect");
         };
-        // The old center (5, 5) is 5 above the pivot; a clockwise quarter
-        // turn about (5, 10) puts it at (10, 10).
+        // The old center (5, 5) is (5, -5) from the pivot; a clockwise
+        // quarter turn about (0, 10) puts it at (5, 15).
         let center = Point::new(
             bounds.origin.x + bounds.width.as_mm() / 2.0,
             bounds.origin.y + bounds.height.as_mm() / 2.0,
         );
         assert!(
-            (center.x - 10.0).abs() < 1e-9 && (center.y - 10.0).abs() < 1e-9,
+            (center.x - 5.0).abs() < 1e-9 && (center.y - 15.0).abs() < 1e-9,
             "{center:?}"
         );
     }
@@ -1943,7 +1972,11 @@ mod tests {
             let mut selection = ObjectSelection::new();
             selection.select_single(id);
             let mut tool = SelectTool::new();
-            let r = handle_pos(&objects, &selection, TransformHandle::Rotate);
+            let r = handle_pos(
+                &objects,
+                &selection,
+                TransformHandle::Rotate(ResizeDirection::Ne),
+            );
             tool.pointer_down(
                 &objects,
                 &mut selection,
@@ -1996,9 +2029,10 @@ mod tests {
             resize: Tolerance::from_mm(4.0),
             rotate: Tolerance::from_mm(4.0),
             rotate_offset_mm: 8.0,
+            ..HANDLE_TOLERANCES
         };
         let handle_at = |point: Point| {
-            SelectTool::handle_at(&objects, &selection, point, wide).map(|(_, _, h)| h)
+            SelectTool::handle_at(&objects, &selection, point, wide, false).map(|(_, _, h)| h)
         };
         // 2.5 from the NW corner and from the N handle: both full 4-unit
         // radii would claim it; the shrunk radius (a third of 5.5) does
@@ -2037,6 +2071,7 @@ mod tests {
             resize: Tolerance::from_mm(16.0),
             rotate: Tolerance::from_mm(16.0),
             rotate_offset_mm: 32.0,
+            ..HANDLE_TOLERANCES
         };
         for (size, height) in [
             (10.0, 10.0),
@@ -2094,13 +2129,13 @@ mod tests {
                 // The handles still win where they are.
                 let objects = vec![document.object(id).expect("exists")];
                 let at = |wanted: TransformHandle| {
-                    SelectTool::transform_handles(&objects, &selection, wide)
+                    SelectTool::transform_handles(&objects, &selection, wide, false)
                         .into_iter()
                         .find(|(h, _)| *h == wanted)
                         .expect("handle exists")
                         .1
                 };
-                let rotate = at(TransformHandle::Rotate);
+                let rotate = at(TransformHandle::Rotate(ResizeDirection::Ne));
                 let se = at(TransformHandle::Resize(ResizeDirection::Se));
                 let mut tool = SelectTool::new();
                 assert_eq!(
@@ -2244,11 +2279,11 @@ mod tests {
         ];
         for (bad, include_rotate) in cases {
             for wanted in [
-                TransformHandle::Rotate,
+                TransformHandle::Rotate(ResizeDirection::Ne),
                 TransformHandle::Resize(ResizeDirection::Se),
                 TransformHandle::Resize(ResizeDirection::E),
             ] {
-                if wanted == TransformHandle::Rotate && !include_rotate {
+                if matches!(wanted, TransformHandle::Rotate(_)) && !include_rotate {
                     continue;
                 }
                 let mut selection = ObjectSelection::new();
@@ -2279,7 +2314,11 @@ mod tests {
         let mut selection = ObjectSelection::new();
         selection.select_single(id);
         let mut tool = SelectTool::new();
-        let r = handle_pos(&objects, &selection, TransformHandle::Rotate);
+        let r = handle_pos(
+            &objects,
+            &selection,
+            TransformHandle::Rotate(ResizeDirection::Ne),
+        );
         tool.pointer_down(
             &objects,
             &mut selection,
@@ -2289,7 +2328,7 @@ mod tests {
             false,
         );
         let to = Point::new(-3.0, 4.0);
-        let preview = tool.live_rotate(to, true, false).expect("rotating");
+        let preview = tool.live_transform(to, true, false).expect("rotating");
         tool.pointer_up(&document, &objects, &mut selection, to, true, false);
         assert_eq!(document.object(id), Some(preview));
     }

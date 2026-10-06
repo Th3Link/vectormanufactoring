@@ -183,6 +183,82 @@ export interface LiveReadout {
   y: number;
 }
 
+/** One field of the typed numeric entry chip (`object-transform-
+ * refinements` criteria 18-32), as `vecmanf-editor-wasm` describes it. */
+export interface TransformEntryField {
+  /** Visible label ("W", "H", "r"; empty for the angle). */
+  label: string;
+  /** Accessible name ("Width", "Height", "Radius", "Angle"). */
+  name: string;
+  /** The text the field opens with. */
+  prefill: string;
+  editable: boolean;
+}
+
+/** The open numeric entry: what to show and where. Positions are canvas-
+ * relative CSS pixels, already converted by Rust. */
+export interface TransformEntryState {
+  kind: "angle" | "size" | "radius";
+  fields: TransformEntryField[];
+  /** Whether the two fields are linked (Ctrl at the second press). */
+  linked: boolean;
+  handle: { x: number; y: number };
+  center: { x: number; y: number };
+  /** How far past the handle's position its outermost glyph reaches, in
+   * CSS pixels: 6 normally, 22 for an edge resize handle with a skew arrow
+   * on the same side (the chip must clear the arrow). */
+  glyphReach: number;
+}
+
+/** Reads the wasm-bindgen `TransformEntryView` once, immediately, so it can
+ * be `free()`d rather than held onto — same reasoning as `readToolbarState`. */
+function readTransformEntry(
+  raw:
+    | {
+        kind: string;
+        field_count: number;
+        field_label(index: number): string;
+        field_name(index: number): string;
+        field_prefill(index: number): string;
+        field_editable(index: number): boolean;
+        linked: boolean;
+        handle_x: number;
+        handle_y: number;
+        center_x: number;
+        center_y: number;
+        glyph_reach: number;
+        free(): void;
+      }
+    | undefined,
+): TransformEntryState | null {
+  if (!raw) {
+    return null;
+  }
+  const fields: TransformEntryField[] = [];
+  for (let index = 0; index < raw.field_count; index += 1) {
+    fields.push({
+      label: raw.field_label(index),
+      name: raw.field_name(index),
+      prefill: raw.field_prefill(index),
+      editable: raw.field_editable(index),
+    });
+  }
+  const entry: TransformEntryState = {
+    kind: raw.kind as TransformEntryState["kind"],
+    fields,
+    linked: raw.linked,
+    handle: { x: raw.handle_x, y: raw.handle_y },
+    center: { x: raw.center_x, y: raw.center_y },
+    glyphReach: raw.glyph_reach,
+  };
+  raw.free();
+  return entry;
+}
+
+function sameEntry(a: TransformEntryState | null, b: TransformEntryState | null): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 export interface EditorSession {
   /** Attach to the `<canvas>` element the host renders. */
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
@@ -204,6 +280,20 @@ export interface EditorSession {
    * or `"resize:<degrees>"` (`object-transform`'s transform-handle
    * cursors); `Canvas` turns it into a CSS cursor via `lib/cursors`. */
   cursorHint: string;
+  /** Which hint the handle under the pointer earns (`""`, `"resize-edge"`,
+   * `"resize-corner"`, `"resize-corner-uniform"`, `"rotate-corner"`,
+   * `"rotate-side"`, `"skew"`, `"move"`): the hover chip's content
+   * (`object-transform-refinements` criterion 54). */
+  handleHint: string;
+  /** The typed numeric entry to show, or `null`. */
+  transformEntry: TransformEntryState | null;
+  /** Enter in the entry chip: `"committed"`, `"unchanged"` (both close it)
+   * or `"invalid:<field>:number|positive"` (it stays open). */
+  commitTransformEntry: (first: string, second: string, lastEdited: number) => string;
+  /** Closes the entry without writing (Escape, blur). Idempotent. */
+  cancelTransformEntry: () => void;
+  /** For linked fields: the text the other field takes. */
+  transformEntryLinked: (field: number, text: string) => string | undefined;
   /** Acceptance criterion 5's cursor cue: whether the live cursor is
    * over the in-progress pen path's own close target — `Canvas` swaps
    * to the "pen-with-small-circle" cursor variant while this is `true`. */
@@ -267,6 +357,8 @@ export interface EditorSession {
   /** The browser took the pointer away (a system gesture, an alert):
    * cancel any in-flight drag instead of leaving it half-done. */
   onPointerCancel: () => void;
+  /** The canvas container lost focus: clears the Shift/Ctrl reveal state. */
+  onContainerBlur: (event: React.FocusEvent<HTMLDivElement>) => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void;
   onKeyUp: (event: React.KeyboardEvent<HTMLDivElement>) => void;
   /** File → New: swaps in a brand-new, empty session. */
@@ -313,6 +405,15 @@ export function useEditorSession(
     null,
   );
   const suppressedPressRef = useRef(false);
+  /** The second press of a double-click: its position and modifiers, the
+   * ones `double_click` is called with when its release arrives (a handle
+   * is picked at the second press, `object-transform-refinements`). */
+  const doubleClickPressRef = useRef<{
+    x: number;
+    y: number;
+    shift: boolean;
+    ctrl: boolean;
+  } | null>(null);
   /** Whether a drag-pan gesture is in flight — a ref (not just the
    * mirrored `isPanning` state below) so `onPointerMove`/`onPointerUp`
    * read the current value synchronously within the same event, not a
@@ -331,6 +432,9 @@ export function useEditorSession(
   const [liveReadout, setLiveReadout] = useState<LiveReadout | null>(null);
   const [scaleStrokeWidth, setScaleStrokeWidthState] = useState(false);
   const [cursorHint, setCursorHint] = useState("default");
+  const [handleHint, setHandleHint] = useState("");
+  const [transformEntry, setTransformEntry] = useState<TransformEntryState | null>(null);
+  const entryOpenRef = useRef(false);
   /** The last pointer position over the canvas (CSS px) — lets a
    * modifier key press/release re-run the hover, so the Select tool's
    * pivot marker and live preview react the instant Shift/Ctrl change,
@@ -339,6 +443,14 @@ export function useEditorSession(
   const [zoomPercent, setZoomPercent] = useState(100);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceHeld, setIsSpaceHeld] = useState(false);
+
+  /** Re-reads the typed entry (position follows zoom, pan and resize; it
+   * closes on a tool switch or a selection change). */
+  const syncEntry = useCallback((session: WasmSession) => {
+    const next = readTransformEntry(session.transform_entry());
+    entryOpenRef.current = next !== null;
+    setTransformEntry((previous) => (sameEntry(previous, next) ? previous : next));
+  }, []);
 
   /** Re-reads every bit of session-owned UI state after any call that
    * might have changed it — cheap, and simpler than having every call
@@ -358,7 +470,8 @@ export function useEditorSession(
     // (criterion 27); reading it back here is what resets the UI.
     setScaleStrokeWidthState(session.scale_stroke_width());
     setZoomPercent(session.zoom_percent());
-  }, []);
+    syncEntry(session);
+  }, [syncEntry]);
 
   /** Frees whatever session is currently attached (if any), makes
    * `session` the live one, and attaches it to the host's `<canvas>` —
@@ -439,6 +552,9 @@ export function useEditorSession(
           // frame on screen waiting for the render loop's next
           // animation-frame tick.
           sessionRef.current?.resize(width, height, devicePixelRatio);
+          if (entryOpenRef.current && sessionRef.current) {
+            syncEntry(sessionRef.current);
+          }
         } catch {
           // A dropped frame on resize (e.g. a momentarily lost surface)
           // is not fatal — the render loop's own next tick recovers it;
@@ -466,6 +582,9 @@ export function useEditorSession(
       const { deltaX, deltaY } = normalizedWheelDelta(event);
       session.wheel(deltaX, deltaY, x, y, event.shiftKey, event.ctrlKey || event.metaKey);
       setZoomPercent(session.zoom_percent());
+      if (entryOpenRef.current) {
+        syncEntry(session);
+      }
     };
     canvas?.addEventListener("wheel", onWheel, { passive: false });
 
@@ -486,7 +605,7 @@ export function useEditorSession(
       sessionRef.current?.free();
       sessionRef.current = null;
     };
-  }, [attachSession]);
+  }, [attachSession, syncEntry]);
 
   const newProject = useCallback(() => {
     void createSession().then(attachSession);
@@ -663,8 +782,15 @@ export function useEditorSession(
       lastPressRef.current = { time: now, x, y };
       suppressedPressRef.current = isDoubleClick;
       if (isDoubleClick) {
+        doubleClickPressRef.current = {
+          x,
+          y,
+          shift: event.shiftKey,
+          ctrl: event.ctrlKey || event.metaKey,
+        };
         return;
       }
+      setHandleHint("");
       // Capture the pointer for every tool, not only for panning: a
       // transform drag (a rotate swings the pointer in a wide arc) must
       // keep receiving moves and the release when the pointer leaves the
@@ -694,6 +820,9 @@ export function useEditorSession(
       }
       if (panningRef.current) {
         session?.pan_to(x, y);
+        if (entryOpenRef.current && session) {
+          syncEntry(session);
+        }
         return;
       }
       session?.pointer_hover(
@@ -707,8 +836,9 @@ export function useEditorSession(
       );
       setLiveReadout(readLiveReadout(session?.live_readout()));
       setCursorHint(session?.cursor_hint() ?? "default");
+      setHandleHint(session?.handle_hint() ?? "");
     },
-    [canvasPoint, onCursorMove],
+    [canvasPoint, onCursorMove, syncEntry],
   );
 
   const onPointerUp = useCallback(
@@ -741,8 +871,20 @@ export function useEditorSession(
       if (suppressedPressRef.current) {
         suppressedPressRef.current = false;
         // One dispatch point for every tool (acceptance criteria 3, 12,
-        // 22, 23) — `Session` itself decides what a double-click does.
-        session.double_click(x, y);
+        // 22, 23) — `Session` itself decides what a double-click does. A
+        // transform handle is picked at the *second press*: its position
+        // and modifiers, not the release's.
+        const press = doubleClickPressRef.current ?? {
+          x,
+          y,
+          shift: event.shiftKey,
+          ctrl: event.ctrlKey || event.metaKey,
+        };
+        doubleClickPressRef.current = null;
+        session.double_click(press.x, press.y, press.shift, press.ctrl);
+        // Re-run the hover so the cursor describes the handle under the
+        // pointer right away (a skew double-click changes nothing else).
+        session.pointer_hover(x, y, event.shiftKey, event.ctrlKey || event.metaKey);
       } else {
         session.pointer_up(x, y, event.shiftKey, event.ctrlKey || event.metaKey);
       }
@@ -765,30 +907,58 @@ export function useEditorSession(
     setIsHoveringPenCloseTarget(false);
     setLiveReadout(null);
     setCursorHint("default");
+    setHandleHint("");
     lastPointerRef.current = null;
   }, []);
 
-  /** Re-runs the hover at the last pointer position with the modifier
-   * state of `event` — Shift/Ctrl (`object-transform`'s pivot swap,
-   * proportional resize, 15° snap) must take effect live, on the key
-   * event itself, not only on the next pointer move. */
-  const refreshModifiers = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      const session = sessionRef.current;
-      const last = lastPointerRef.current;
-      if (!session || !last) {
+  /** Tells the session the modifier state changed — from window-level key
+   * events, so Shift reveals the side rotate handles with no pointer
+   * movement and while the canvas is not focused — and re-runs the hover
+   * at the last pointer position, so the pivot marker, live preview, cursor
+   * and hint follow the key in the same frame
+   * (`object-transform-refinements` criteria 6, 14). */
+  const applyModifiers = useCallback((shift: boolean, ctrl: boolean) => {
+    const session = sessionRef.current;
+    if (!session) {
+      return;
+    }
+    session.modifiers_changed(shift, ctrl);
+    const last = lastPointerRef.current;
+    if (last) {
+      session.pointer_hover(last.x, last.y, shift, ctrl);
+      setLiveReadout(readLiveReadout(session.live_readout()));
+      setHandleHint("");
+    }
+    setCursorHint(session.cursor_hint());
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      applyModifiers(event.shiftKey, event.ctrlKey || event.metaKey);
+    };
+    // A key released outside the window must not leave Shift stuck: the
+    // side rotate handles and the pivot follow `modifiers_changed`.
+    const onWindowBlur = () => applyModifiers(false, false);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKey);
+    window.addEventListener("blur", onWindowBlur);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKey);
+      window.removeEventListener("blur", onWindowBlur);
+    };
+  }, [applyModifiers]);
+
+  /** The canvas container lost focus to something outside it. */
+  const onContainerBlur = useCallback(
+    (event: React.FocusEvent<HTMLDivElement>) => {
+      const next = event.relatedTarget;
+      if (next instanceof Node && event.currentTarget.contains(next)) {
         return;
       }
-      session.pointer_hover(
-        last.x,
-        last.y,
-        event.shiftKey,
-        event.ctrlKey || event.metaKey,
-      );
-      setLiveReadout(readLiveReadout(session.live_readout()));
-      setCursorHint(session.cursor_hint());
+      applyModifiers(false, false);
     },
-    [],
+    [applyModifiers],
   );
 
   const onKeyDown = useCallback(
@@ -836,11 +1006,6 @@ export function useEditorSession(
           event.preventDefault();
           deleteSelected();
           break;
-        case "Shift":
-        case "Control":
-        case "Meta":
-          refreshModifiers(event);
-          break;
         case " ":
           // Space+drag pans (acceptance criterion 4) — `preventDefault`
           // so it never activates a focused button
@@ -855,7 +1020,7 @@ export function useEditorSession(
           return;
       }
     },
-    [deleteSelected, escape, finishPen, refreshModifiers, setTool, tool],
+    [deleteSelected, escape, finishPen, setTool, tool],
   );
 
   const onKeyUp = useCallback(
@@ -865,15 +1030,37 @@ export function useEditorSession(
       }
       if (event.key === " ") {
         setIsSpaceHeld(false);
-      } else if (
-        event.key === "Shift" ||
-        event.key === "Control" ||
-        event.key === "Meta"
-      ) {
-        refreshModifiers(event);
       }
     },
-    [refreshModifiers],
+    [],
+  );
+
+  const commitTransformEntry = useCallback(
+    (first: string, second: string, lastEdited: number): string => {
+      const session = sessionRef.current;
+      if (!session) {
+        return "unchanged";
+      }
+      const outcome = session.commit_transform_entry(first, second, lastEdited);
+      syncFromSession();
+      return outcome;
+    },
+    [syncFromSession],
+  );
+
+  const cancelTransformEntry = useCallback(() => {
+    const session = sessionRef.current;
+    if (!session || !entryOpenRef.current) {
+      return;
+    }
+    session.cancel_transform_entry();
+    syncFromSession();
+  }, [syncFromSession]);
+
+  const transformEntryLinked = useCallback(
+    (field: number, text: string): string | undefined =>
+      sessionRef.current?.transform_entry_linked(field, text) ?? undefined,
+    [],
   );
 
   return {
@@ -886,6 +1073,12 @@ export function useEditorSession(
     polyStarRatio,
     liveReadout,
     cursorHint,
+    handleHint,
+    transformEntry,
+    commitTransformEntry,
+    cancelTransformEntry,
+    transformEntryLinked,
+    onContainerBlur,
     isHoveringPenCloseTarget,
     zoomPercent,
     isPanning,

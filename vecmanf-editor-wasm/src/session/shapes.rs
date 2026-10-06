@@ -331,6 +331,7 @@ impl Session {
     /// AC22's "remain selected together" wording, not a literal one — a
     /// known, narrowed scope (see this crate's own report).
     pub fn convert_selected_to_paths(&mut self) {
+        self.select.cancel_entry();
         let ids = self.selection.ids().to_vec();
         if ids.is_empty() {
             return;

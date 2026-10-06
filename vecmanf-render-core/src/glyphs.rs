@@ -13,7 +13,7 @@
 //! a document primitive's own stroke and handles are built, reusing
 //! these glyphs as its drawing primitives.
 
-use vecmanf_document_core::{Point, Vec2};
+use vecmanf_document_core::{Angle, Point, Vec2};
 
 use crate::color::RgbaColor;
 
@@ -89,37 +89,63 @@ pub fn square(center: Point, size_mm: f64, color: RgbaColor) -> DrawList {
 /// side; `0` degenerates to [`square`].
 #[must_use]
 pub fn rounded_square(center: Point, size_mm: f64, radius_mm: f64, color: RgbaColor) -> DrawList {
+    rounded_rect(
+        center,
+        (size_mm, size_mm),
+        radius_mm,
+        Angle::from_radians(0.0),
+        color,
+    )
+}
+
+/// A rectangle `size_mm` = (along, across) with rounded corners, turned by
+/// `angle` (clockwise in Y-down) about `center` — the skew handle's
+/// hover and dragging ground. `radius_mm` is clamped to half the shorter
+/// side.
+#[must_use]
+pub fn rounded_rect(
+    center: Point,
+    size_mm: (f64, f64),
+    radius_mm: f64,
+    angle: Angle,
+    color: RgbaColor,
+) -> DrawList {
     const ARC_SEGMENTS: usize = 4;
-    let half = size_mm / 2.0;
-    let radius = radius_mm.clamp(0.0, half);
+    let (half_w, half_h) = (size_mm.0 / 2.0, size_mm.1 / 2.0);
+    let radius = radius_mm.clamp(0.0, half_w.min(half_h));
     // Corner arc centers and the angle (in Y-down radians) each arc
     // starts at, clockwise on screen: top-right, bottom-right,
     // bottom-left, top-left.
     let corners = [
         (
-            Point::new(half - radius, -(half - radius)),
+            Point::new(half_w - radius, -(half_h - radius)),
             -std::f64::consts::FRAC_PI_2,
         ),
-        (Point::new(half - radius, half - radius), 0.0),
+        (Point::new(half_w - radius, half_h - radius), 0.0),
         (
-            Point::new(-(half - radius), half - radius),
+            Point::new(-(half_w - radius), half_h - radius),
             std::f64::consts::FRAC_PI_2,
         ),
         (
-            Point::new(-(half - radius), -(half - radius)),
+            Point::new(-(half_w - radius), -(half_h - radius)),
             std::f64::consts::PI,
         ),
     ];
+    let turn = Vec2::new(1.0, 0.0).rotated(angle);
+    let place = |x: f64, y: f64| {
+        // `turn` is the unit x axis, its perpendicular the unit y axis.
+        center.translated(Vec2::new(x * turn.x - y * turn.y, x * turn.y + y * turn.x))
+    };
     let mut outline: Vec<Point> = Vec::with_capacity(4 * (ARC_SEGMENTS + 1));
     for (arc_center, start) in corners {
         for i in 0..=ARC_SEGMENTS {
             #[allow(clippy::cast_precision_loss)] // tiny compile-time constant
             let t = i as f64 / ARC_SEGMENTS as f64;
             let angle = start + t * std::f64::consts::FRAC_PI_2;
-            outline.push(center.translated(Vec2::new(
+            outline.push(place(
                 arc_center.x + radius * angle.cos(),
                 arc_center.y + radius * angle.sin(),
-            )));
+            ));
         }
     }
     let mut list = DrawList::default();
@@ -127,6 +153,30 @@ pub fn rounded_square(center: Point, size_mm: f64, radius_mm: f64, color: RgbaCo
         let next = (i + 1) % outline.len();
         list.push_triangle(center, outline[i], outline[next], color);
     }
+    list
+}
+
+/// An arrow from `from` to `to`: a `width_mm` shaft ending in a triangular
+/// head `head_mm` long and `2 * head_mm` wide (a 3 px head is 6 px across).
+/// Empty when the two points coincide.
+#[must_use]
+pub fn arrow(from: Point, to: Point, width_mm: f64, head_mm: f64, color: RgbaColor) -> DrawList {
+    let direction = from.vector_to(to);
+    let mut list = DrawList::default();
+    if direction.length() <= f64::EPSILON {
+        return list;
+    }
+    let unit = direction.normalized_to(1.0);
+    let head_len = head_mm.min(direction.length());
+    let base = to.translated(unit.scaled(-head_len));
+    list.extend(thick_line(from, base, width_mm, color));
+    let side = Vec2::new(-unit.y, unit.x).scaled(head_mm);
+    list.push_triangle(
+        to,
+        base.translated(side),
+        base.translated(side.negated()),
+        color,
+    );
     list
 }
 

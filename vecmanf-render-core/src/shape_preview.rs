@@ -186,7 +186,7 @@ fn shape_handle_glyph(center: Point, size_mm: f64, outline_mm: f64, dragging: bo
 /// `pen_preview.rs`'s rubber-band line: built from short solid segments
 /// rather than a real stippled-stroke primitive, since this crate has
 /// none yet.
-fn dashed_guide(
+pub(crate) fn dashed_guide(
     a: Point,
     b: Point,
     width_mm: f64,

@@ -1,6 +1,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
+import { HandleHintChip } from "@/components/HandleHintChip";
 import { NodeContextMenu } from "@/components/NodeToolbar";
+import { TransformEntryChip } from "@/components/TransformEntryChip";
 import type { EditorSession } from "@/hooks/useEditorSession";
 import { cursorForHint } from "@/lib/cursors";
 import { placeReadout } from "@/lib/readoutPlacement";
@@ -34,6 +36,7 @@ export function Canvas({ editor }: CanvasProps) {
       tabIndex={0}
       onKeyDown={editor.onKeyDown}
       onKeyUp={editor.onKeyUp}
+      onBlur={editor.onContainerBlur}
       // Transform-handle cursors (`object-transform`): only the Select
       // tool ever reports a non-default hint, and a pan gesture (grab
       // cursors above) always wins.
@@ -98,6 +101,21 @@ export function Canvas({ editor }: CanvasProps) {
           style={{ background: "var(--canvas-bg)" }}
         />
       </NodeContextMenu>
+      {editor.transformEntry && (
+        // Keyed by the handle so a different entry starts with fresh text,
+        // while a zoom or pan (same handle, new position) keeps what was typed.
+        <TransformEntryChip
+          key={`${editor.transformEntry.kind}:${editor.transformEntry.fields
+            .map((f) => f.name + f.prefill)
+            .join("|")}`}
+          entry={editor.transformEntry}
+          containerRef={editor.containerRef}
+          onCommit={editor.commitTransformEntry}
+          onCancel={editor.cancelTransformEntry}
+          onLinked={editor.transformEntryLinked}
+        />
+      )}
+      <HandleHintChip hint={editor.handleHint} containerRef={editor.containerRef} />
       {editor.liveReadout && (
         <ReadoutChip
           text={editor.liveReadout.text}

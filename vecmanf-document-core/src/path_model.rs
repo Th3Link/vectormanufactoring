@@ -308,6 +308,38 @@ impl PathSnapshot {
         }
         scaled
     }
+
+    /// This path sheared about the line through `pivot` along the path's own
+    /// local axes (`specs/object-transform-refinements/adrs.md`, "skew
+    /// (Part B) writes anchors only"): in local coordinates the linear part
+    /// is `L = [[1, ku], [kv, 1]]` (an x skew sets `ku`, a y skew `kv`; the
+    /// caller passes one of them as zero), applied to every anchor's offset
+    /// from `pivot`; in document space `M = R(θ) · L · R(−θ)` with θ the
+    /// path's `rotation`. Handle vectors are relative to their anchor, so
+    /// they take the linear part only, without a translation. An affine map
+    /// sends a cubic's control points to the control points of its image, so
+    /// every segment stays exact. `rotation` is untouched: a shear is baked
+    /// into the anchors and handles, the register keeps naming the box's
+    /// orientation.
+    #[must_use]
+    pub fn sheared(&self, pivot: Point, ku: f64, kv: f64) -> Self {
+        let into_local = Angle::from_radians(-self.rotation.as_radians());
+        let out_of_local = self.rotation;
+        let shear = |x: f64, y: f64| (x + ku * y, y + kv * x);
+        let mut sheared = self.clone();
+        for anchor in &mut sheared.anchors {
+            let local = anchor.point.rotated_around(pivot, into_local);
+            let (dx, dy) = shear(local.x - pivot.x, local.y - pivot.y);
+            anchor.point =
+                Point::new(pivot.x + dx, pivot.y + dy).rotated_around(pivot, out_of_local);
+            for handle in [&mut anchor.handle_in, &mut anchor.handle_out] {
+                let local = handle.rotated(into_local);
+                let (hx, hy) = shear(local.x, local.y);
+                *handle = Vec2::new(hx, hy).rotated(out_of_local);
+            }
+        }
+        sheared
+    }
 }
 
 /// `point`, mapped into the local frame about `pivot` (rotate by
@@ -475,5 +507,84 @@ mod tests {
         // document Y) doubles the Y extent, leaving X untouched.
         assert!(scaled.anchors[1].point.x.abs() < 1e-6);
         assert!((scaled.anchors[1].point.y - 20.0).abs() < 1e-6);
+    }
+    /// Skew: an x shear about the line `y = 0` moves each point along x in
+    /// proportion to its distance from that line; the line itself stays.
+    #[test]
+    fn path_sheared_moves_points_in_proportion_to_their_distance_from_the_line() {
+        let path = simple_path(Point::new(0.0, 0.0), Point::new(10.0, 4.0));
+        let sheared = path.sheared(Point::new(0.0, 0.0), 0.5, 0.0);
+        assert!(
+            sheared.anchors[0].point.x.abs() < 1e-12,
+            "on the fixed line"
+        );
+        assert!((sheared.anchors[1].point.x - 12.0).abs() < 1e-12);
+        assert!((sheared.anchors[1].point.y - 4.0).abs() < 1e-12);
+        // Handle vector (2, 0) has no y component: unchanged by an x shear
+        // (linear part only, no translation).
+        assert!((sheared.anchors[1].handle_out.x - 2.0).abs() < 1e-12);
+        assert!(sheared.anchors[1].handle_out.y.abs() < 1e-12);
+    }
+
+    /// A y shear moves along y in proportion to the distance from the
+    /// vertical line, and a handle with an x component picks up a y part.
+    #[test]
+    fn path_sheared_in_y_shears_handles_by_the_linear_part_only() {
+        let path = simple_path(Point::new(0.0, 0.0), Point::new(10.0, 4.0));
+        let sheared = path.sheared(Point::new(0.0, 0.0), 0.0, 0.25);
+        assert!((sheared.anchors[1].point.x - 10.0).abs() < 1e-12);
+        assert!((sheared.anchors[1].point.y - 6.5).abs() < 1e-12);
+        assert!((sheared.anchors[1].handle_out.x - 2.0).abs() < 1e-12);
+        assert!((sheared.anchors[1].handle_out.y - 0.5).abs() < 1e-12);
+        assert!((sheared.anchors[1].handle_in.y + 0.5).abs() < 1e-12);
+    }
+
+    /// Criterion 44: the shear acts along the path's local axes, and the
+    /// `rotation` register is not touched.
+    #[test]
+    fn path_sheared_acts_along_local_axes_and_keeps_rotation() {
+        let theta = Angle::from_radians(std::f64::consts::FRAC_PI_2);
+        let path = simple_path(Point::new(0.0, 0.0), Point::new(10.0, 0.0))
+            .rotated(Point::new(0.0, 0.0), theta);
+        // The path now runs along document +y; its local x axis is +y. A
+        // local y shear (kv) therefore moves points along local y, which is
+        // document -x. Anchor 1 at local (10, 0): local y' = 0 + kv * 10.
+        let sheared = path.sheared(Point::new(0.0, 0.0), 0.0, 0.3);
+        assert!((sheared.anchors[1].point.x + 3.0).abs() < 1e-9);
+        assert!((sheared.anchors[1].point.y - 10.0).abs() < 1e-9);
+        assert!((sheared.rotation.as_radians() - theta.as_radians()).abs() < 1e-15);
+    }
+
+    /// Criterion 43: a skew by k followed by one by −k restores every
+    /// anchor and handle (the fixed line is unchanged by the first skew).
+    #[test]
+    fn path_sheared_by_k_then_minus_k_is_the_identity() {
+        let original = simple_path(Point::new(3.0, -2.0), Point::new(10.0, 4.0))
+            .rotated(Point::new(1.0, 1.0), Angle::from_radians(0.7));
+        let pivot = Point::new(5.0, 5.0);
+        for (ku, kv) in [(0.8, 0.0), (0.0, -1.3)] {
+            let round_trip = original.sheared(pivot, ku, kv).sheared(pivot, -ku, -kv);
+            for (a, b) in round_trip.anchors.iter().zip(&original.anchors) {
+                assert!((a.point.x - b.point.x).abs() < 1e-9);
+                assert!((a.point.y - b.point.y).abs() < 1e-9);
+                assert!((a.handle_in.x - b.handle_in.x).abs() < 1e-9);
+                assert!((a.handle_out.y - b.handle_out.y).abs() < 1e-9);
+            }
+        }
+    }
+
+    /// Node kinds, node count and everything but anchors are unchanged
+    /// (criterion 42).
+    #[test]
+    fn path_sheared_changes_only_points_and_handle_vectors() {
+        let path = simple_path(Point::new(0.0, 0.0), Point::new(10.0, 4.0));
+        let sheared = path.sheared(Point::new(0.0, 0.0), 0.5, 0.0);
+        assert_eq!(sheared.anchors.len(), path.anchors.len());
+        for (a, b) in sheared.anchors.iter().zip(&path.anchors) {
+            assert_eq!(a.id, b.id);
+            assert_eq!(a.kind, b.kind);
+        }
+        assert_eq!(sheared.stroke_width, path.stroke_width);
+        assert_eq!(sheared.closed, path.closed);
     }
 }

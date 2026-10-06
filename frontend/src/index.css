@@ -106,6 +106,10 @@
        mini-toolbar) — what makes them read as "floating over" the
        canvas rather than framing it. */
     --panel-elevation-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+    /* object-transform-refinements (docs/design-system.md): border of a
+       numeric-entry field whose content was refused; 4.8:1 on
+       --toolbar-bg, always paired with a message and aria-invalid. */
+    --field-invalid: #B3261E;
 }
 
 .dark {

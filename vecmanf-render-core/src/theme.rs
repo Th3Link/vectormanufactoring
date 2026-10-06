@@ -150,6 +150,49 @@ pub const TRANSFORM_ROTATE_HANDLE_STROKE_PX: f64 = 2.0;
 /// only draws a glyph at whatever position it is handed.
 pub const TRANSFORM_ROTATE_HANDLE_SIZE_PX: f64 = 12.0;
 
+/// The centre move handle's footprint, screen-space pixels (`docs/
+/// design-system.md`'s "Transform center move handle": "16×16px rounded
+/// square (3px radius), white fill, 1px `--accent` outline").
+pub const TRANSFORM_MOVE_HANDLE_SIZE_PX: f64 = 16.0;
+
+/// The centre move handle's corner radius, screen-space pixels.
+pub const TRANSFORM_MOVE_HANDLE_CORNER_RADIUS_PX: f64 = 3.0;
+
+/// The centre move handle's outline thickness, screen-space pixels.
+pub const TRANSFORM_MOVE_HANDLE_OUTLINE_PX: f64 = 1.0;
+
+/// The four-way arrow inside the centre move handle: its width,
+/// screen-space pixels ("a four-way arrow 10px wide inside (1.5px stroke)").
+pub const TRANSFORM_MOVE_ARROW_SIZE_PX: f64 = 10.0;
+
+/// Stroke of the arrows inside the move and skew handle glyphs, screen-space
+/// pixels (1.5 px in `docs/design-system.md`).
+pub const TRANSFORM_ARROW_STROKE_PX: f64 = 1.5;
+
+/// Arrowhead length of the move and skew handle glyphs, screen-space
+/// pixels (3 px in `docs/design-system.md`).
+pub const TRANSFORM_ARROW_HEAD_PX: f64 = 3.0;
+
+/// The skew handle's footprint along its side, screen-space pixels
+/// (`docs/design-system.md`'s "Transform skew handle": "18×12px").
+pub const TRANSFORM_SKEW_HANDLE_LENGTH_PX: f64 = 18.0;
+
+/// The skew handle's footprint across its side, screen-space pixels.
+pub const TRANSFORM_SKEW_HANDLE_WIDTH_PX: f64 = 12.0;
+
+/// The skew handle's hover and dragging ground corner radius, screen-space
+/// pixels (3 px in `docs/design-system.md`).
+pub const TRANSFORM_SKEW_HANDLE_CORNER_RADIUS_PX: f64 = 3.0;
+
+/// The skew fixed-line guide's color: `--transform-guide`, `--accent` at
+/// full opacity (`--accent-hover` at 20% was invisible, about 1.1:1 on the
+/// canvas, `docs/design-system.md`).
+pub const TRANSFORM_SKEW_GUIDE_COLOR: RgbaColor = ACCENT;
+
+/// The skew fixed-line guide's weight, screen-space pixels (1 px dashed in
+/// `docs/design-system.md`).
+pub const TRANSFORM_SKEW_GUIDE_WIDTH_PX: f64 = 1.0;
+
 /// The pivot marker's diameter, screen-space pixels (`docs/design-
 /// system.md`'s "Transform pivot marker").
 pub const TRANSFORM_PIVOT_MARKER_SIZE_PX: f64 = 6.0;

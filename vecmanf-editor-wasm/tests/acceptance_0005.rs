@@ -246,12 +246,21 @@ fn eight(x0: f64, y0: f64, x1: f64, y1: f64, c: Point, a: f64) -> [(&'static str
     ]
 }
 
-/// The rotate handle's document position: 20 px above the top-edge handle
-/// along the box's own local up direction.
-fn rotate_handle(session: &Session, x0: f64, y0: f64, x1: f64, c: Point, a: f64) -> Point {
+/// A corner rotate handle's document position (`object-transform-
+/// refinements` criterion 5): 32 px from the Ne corner along its outward
+/// diagonal, in the box's own frame. Replaces slice 5's single rotate handle
+/// above the top edge for every non-Shift rotate.
+fn rotate_handle(session: &Session, _x0: f64, y0: f64, x1: f64, c: Point, a: f64) -> Point {
+    let diagonal = px(session, 32.0) / std::f64::consts::SQRT_2;
+    rot(pt(x1 + diagonal, y0 - diagonal), c, a)
+}
+
+/// The top side rotate handle (criterion 6): 32 px above the top edge,
+/// revealed only while Shift is held, so a press on it holds Shift. Its
+/// Shift pivot is the bottom-edge midpoint, as slice 5's single rotate
+/// handle's was.
+fn top_rotate_handle(session: &Session, x0: f64, y0: f64, x1: f64, c: Point, a: f64) -> Point {
     let top_mid = pt(f64::midpoint(x0, x1), y0);
-    // The rotate handle sits 32 px above the top edge (UX review: 16 + 16 px
-    // hit radii must not overlap; was 20 px).
     rot(pt(top_mid.x, top_mid.y - px(session, 32.0)), c, a)
 }
 
@@ -277,6 +286,25 @@ fn rotate_drag(
     let end = start + degrees.to_radians();
     let to = pt(pivot.x + dist * end.cos(), pivot.y + dist * end.sin());
     drag(session, handle, to, shift, ctrl);
+}
+
+/// The pointer position `degrees` (clockwise) from `handle` as seen from
+/// `pivot`, at the handle's own distance.
+fn swept_to(handle: Point, pivot: Point, degrees: f64) -> Point {
+    let v = (handle.x - pivot.x, handle.y - pivot.y);
+    let end = v.1.atan2(v.0) + degrees.to_radians();
+    let dist = v.0.hypot(v.1);
+    pt(pivot.x + dist * end.cos(), pivot.y + dist * end.sin())
+}
+
+/// [`rotate_drag`] for the Shift-only side rotate handles: Shift is held
+/// from the press (the handle only exists then) to the release.
+fn shift_rotate_drag(session: &mut Session, handle: Point, pivot: Point, degrees: f64, ctrl: bool) {
+    let to = swept_to(handle, pivot, degrees);
+    session.pointer_hover(handle, true, false);
+    session.pointer_down(handle, true);
+    session.pointer_hover(to, true, ctrl);
+    session.pointer_up(to, true, ctrl);
 }
 
 /// A point on a 40 x 20 ellipse's outline centred at (20, 10) that the
@@ -1289,8 +1317,8 @@ fn ac15_rotate_handle_drag_rotates_about_the_box_center_following_the_pointer() 
     select_at(&mut s, pt(20.0, 0.0));
     let c = pt(20.0, 10.0);
     let handle = rotate_handle(&s, 0.0, 0.0, 40.0, c, 0.0);
-    // Handle is straight up from the centre; pointer swings to straight right.
-    drag(&mut s, handle, pt(120.0, 10.0), false, false);
+    // The corner handle swings a quarter turn clockwise about the centre.
+    drag(&mut s, handle, swept_to(handle, c, 90.0), false, false);
     let (b, _, _, rotation) = rect_of(&s);
     assert!(close(rotation, FRAC_PI_2), "rotation {rotation}");
     // Centre unmoved, frame unchanged in its local axes.
@@ -1384,9 +1412,9 @@ fn ac16_shift_rotates_about_the_bottom_edge_midpoint() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 0.0));
     select_at(&mut s, pt(20.0, 0.0));
     let c = pt(20.0, 10.0);
-    let handle = rotate_handle(&s, 0.0, 0.0, 40.0, c, 0.0);
+    let handle = top_rotate_handle(&s, 0.0, 0.0, 40.0, c, 0.0);
     let pivot = pt(20.0, 20.0);
-    rotate_drag(&mut s, handle, pivot, 90.0, true, false);
+    shift_rotate_drag(&mut s, handle, pivot, 90.0, false);
     let (b, _, _, rotation) = rect_of(&s);
     assert!(close(rotation, FRAC_PI_2));
     // Centre (20,10) swung about (20,20) by 90 deg clockwise -> (30,20).
@@ -1402,8 +1430,8 @@ fn ac16_shift_pivot_for_a_path_bakes_about_the_bottom_midpoint() {
     let mut s = open_in_session(&triangle_doc());
     select_at(&mut s, pt(20.0, 0.0));
     let c = pt(20.0, 10.0);
-    let handle = rotate_handle(&s, 0.0, 0.0, 40.0, c, 0.0);
-    rotate_drag(&mut s, handle, pt(20.0, 20.0), 90.0, true, false);
+    let handle = top_rotate_handle(&s, 0.0, 0.0, 40.0, c, 0.0);
+    shift_rotate_drag(&mut s, handle, pt(20.0, 20.0), 90.0, false);
     let p = path_of(&s);
     let pivot = pt(20.0, 20.0);
     for (got, orig) in p
@@ -1424,9 +1452,9 @@ fn ac16_releasing_shift_mid_drag_returns_the_pivot_to_the_center() {
     let handle = rotate_handle(&s, 0.0, 0.0, 40.0, c, 0.0);
     s.pointer_hover(handle, false, false);
     s.pointer_down(handle, false);
-    s.pointer_hover(pt(120.0, 20.0), true, false);
+    s.pointer_hover(swept_to(handle, c, 60.0), true, false);
     // Released without Shift at a final position: pure centre-pivot result.
-    let to = pt(20.0 + 100.0, 10.0);
+    let to = swept_to(handle, c, 90.0);
     s.pointer_hover(to, false, false);
     s.pointer_up(to, false, false);
     let (b, _, _, rotation) = rect_of(&s);
@@ -1438,17 +1466,24 @@ fn ac16_releasing_shift_mid_drag_returns_the_pivot_to_the_center() {
 }
 
 #[test]
-fn ac17_ctrl_snaps_rotation_to_15_degree_steps_with_exact_boundaries() {
+fn ac17_ctrl_snaps_rotation_to_15_and_22_5_degree_stops_with_exact_boundaries() {
+    // Superseded by `object-transform-refinements` criterion 33: the stops
+    // are the multiples of 15 and of 22.5 degrees.
     for (drag_deg, expect_deg) in [
         (0.0, 0.0),
         (7.4, 0.0),
         (7.6, 15.0),
         (14.0, 15.0),
+        (18.7, 15.0),
+        (18.8, 22.5),
+        (26.2, 22.5),
+        (26.3, 30.0),
         (37.4, 30.0),
         (37.6, 45.0),
         (45.0, 45.0),
+        (64.0, 67.5),
         (89.0, 90.0),
-        (-22.0, -15.0),
+        (-22.0, -22.5),
         (-8.0, -15.0),
         (180.0, 180.0),
     ] {
@@ -1460,7 +1495,6 @@ fn ac17_ctrl_snaps_rotation_to_15_degree_steps_with_exact_boundaries() {
         let (.., rotation) = rect_of(&s);
         let mut diff = rotation - f64::to_radians(expect_deg);
         diff = (diff + PI).rem_euclid(2.0 * PI) - PI;
-        // -8 deg snaps to 0 (nearest multiple of 15), written above as 0.
         assert!(
             diff.abs() < 1e-6,
             "drag {drag_deg}: got {} deg, expected {expect_deg}",
@@ -1470,25 +1504,28 @@ fn ac17_ctrl_snaps_rotation_to_15_degree_steps_with_exact_boundaries() {
 }
 
 #[test]
-fn ac17_ctrl_snap_readout_is_a_whole_number_without_a_decimal() {
+fn ac17_ctrl_snap_readout_shows_up_to_one_decimal() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 0.0));
     select_at(&mut s, pt(20.0, 0.0));
     let c = pt(20.0, 10.0);
     let handle = rotate_handle(&s, 0.0, 0.0, 40.0, c, 0.0);
-    let end = (-FRAC_PI_2) + 46.0_f64.to_radians();
-    let to = pt(c.x + 60.0 * end.cos(), c.y + 60.0 * end.sin());
+    let to = swept_to(handle, c, 46.0);
     s.pointer_hover(handle, false, false);
     s.pointer_down(handle, false);
     s.pointer_hover(to, false, true);
     assert_eq!(s.live_readout().unwrap().text, "45°");
+    // A 22.5 degree stop shows its decimal (criterion 35).
+    s.pointer_hover(swept_to(handle, c, 23.0), false, true);
+    assert_eq!(s.live_readout().unwrap().text, "22.5°");
     s.pointer_up(to, false, true);
 }
 
 #[test]
 fn ac17_ctrl_snaps_relative_to_the_angle_at_drag_start() {
     // Start from a rotation of 10 deg (UI rotate, no snap), then Ctrl-rotate
-    // another ~20 deg: result must be 10 + 15 = 25 deg (steps from the start
-    // angle), not an absolute multiple of 15 (15 or 30).
+    // another ~20 deg: result must be 10 + 22.5 = 32.5 deg (the stop nearest
+    // the swept 20 deg, measured from the start angle), not an absolute
+    // stop (30).
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 0.0));
     select_at(&mut s, pt(20.0, 0.0));
     let c = pt(20.0, 10.0);
@@ -1503,8 +1540,8 @@ fn ac17_ctrl_snaps_relative_to_the_angle_at_drag_start() {
     rotate_drag(&mut s, handle, c, 20.0, false, true);
     let (.., rotation) = rect_of(&s);
     assert!(
-        close(rotation, 25.0_f64.to_radians()),
-        "expected 25 deg, got {} deg",
+        close(rotation, 32.5_f64.to_radians()),
+        "expected 32.5 deg, got {} deg",
         rotation.to_degrees()
     );
 }
@@ -1514,8 +1551,8 @@ fn ac17_shift_and_ctrl_together_snap_about_the_bottom_pivot() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 0.0));
     select_at(&mut s, pt(20.0, 0.0));
     let c = pt(20.0, 10.0);
-    let handle = rotate_handle(&s, 0.0, 0.0, 40.0, c, 0.0);
-    rotate_drag(&mut s, handle, pt(20.0, 20.0), 92.0, true, true);
+    let handle = top_rotate_handle(&s, 0.0, 0.0, 40.0, c, 0.0);
+    shift_rotate_drag(&mut s, handle, pt(20.0, 20.0), 92.0, true);
     let (b, _, _, rotation) = rect_of(&s);
     assert!(close(rotation, FRAC_PI_2), "{rotation}");
     let centre = pt(
@@ -2302,7 +2339,7 @@ fn live_rotation_preview_draws_the_rotated_shape_before_release() {
     select_at(&mut s, pt(50.0, 0.0));
     let c = pt(50.0, 10.0);
     let handle = rotate_handle(&s, 0.0, 0.0, 100.0, c, 0.0);
-    let to = pt(c.x + 200.0, c.y); // straight right: 90 deg
+    let to = swept_to(handle, c, 90.0);
     s.pointer_hover(handle, false, false);
     s.pointer_down(handle, false);
     s.pointer_hover(to, false, false);
@@ -2375,9 +2412,9 @@ fn ac25_double_click_hands_a_rotated_rect_to_its_tool_with_the_radius_handle_on_
 {
     let (mut s, c, a) = rotate_rect_via_document(30.0, 0.0);
     // Double-click on the rotated outline (midpoint of the top edge, off handles).
-    let on_edge = rot(pt(20.0, 0.0), c, a);
+    let on_edge = rot(pt(10.0, 0.0), c, a);
     click(&mut s, on_edge);
-    s.double_click(on_edge);
+    s.double_click(on_edge, false, false);
     assert_eq!(s.tool(), Tool::Rectangle, "handoff");
     // At zero radius the radius handle sits on the NE corner; it must be on the
     // *rotated* NE corner. Dragging it inward along the rotated diagonal rounds the corners.
@@ -2403,9 +2440,9 @@ fn ac25_double_click_hands_a_rotated_rect_to_its_tool_with_the_radius_handle_on_
 #[test]
 fn ac25_the_unrotated_radius_handle_position_is_no_longer_a_handle() {
     let (mut s, c, a) = rotate_rect_via_document(90.0, 0.0);
-    let on_edge = rot(pt(20.0, 0.0), c, a);
+    let on_edge = rot(pt(10.0, 0.0), c, a);
     click(&mut s, on_edge);
-    s.double_click(on_edge);
+    s.double_click(on_edge, false, false);
     assert_eq!(s.tool(), Tool::Rectangle);
     // Unrotated NE corner is (40,0); for 90 deg it is far from the rotated one (30,-10... ).
     let before = rect_of(&s).1;
@@ -2421,9 +2458,9 @@ fn ac25_the_unrotated_radius_handle_position_is_no_longer_a_handle() {
 #[test]
 fn ac25_rotated_rect_with_radius_handle_inset_along_the_rotated_diagonal() {
     let (mut s, c, a) = rotate_rect_via_document(30.0, 5.0);
-    let on_edge = rot(pt(20.0, 0.0), c, a);
+    let on_edge = rot(pt(10.0, 0.0), c, a);
     click(&mut s, on_edge);
-    s.double_click(on_edge);
+    s.double_click(on_edge, false, false);
     assert_eq!(s.tool(), Tool::Rectangle);
     // Radius handle = NE corner + inward diagonal * radius (local), rotated.
     let local = pt(40.0 - 5.0 / 2.0_f64.sqrt(), 0.0 + 5.0 / 2.0_f64.sqrt());
@@ -2453,9 +2490,9 @@ fn ac25_rotated_rect_with_radius_handle_inset_along_the_rotated_diagonal() {
 #[test]
 fn ac25_rotated_rect_resize_handle_of_its_own_tool_drags_in_local_axes() {
     let (mut s, c, a) = rotate_rect_via_document(30.0, 0.0);
-    let on_edge = rot(pt(20.0, 0.0), c, a);
+    let on_edge = rot(pt(10.0, 0.0), c, a);
     click(&mut s, on_edge);
-    s.double_click(on_edge);
+    s.double_click(on_edge, false, false);
     assert_eq!(s.tool(), Tool::Rectangle);
     // S edge handle (20,20) rotated; drag it 5 along local +y.
     let se = rot(pt(20.0, 20.0), c, a);
@@ -2497,7 +2534,7 @@ fn ac25_rotated_star_inner_ratio_and_outer_handles_follow_the_rotation() {
         f64::midpoint(o[0].point.y, o[1].point.y),
     );
     click(&mut s, mid);
-    s.double_click(mid);
+    s.double_click(mid, false, false);
     assert_eq!(s.tool(), Tool::PolygonStar);
     // First inner vertex in the local frame: theta = -pi/2 + pi/5, radius 5.
     let theta = -FRAC_PI_2 + PI / 5.0;
@@ -2517,7 +2554,7 @@ fn ac25_rotated_star_inner_ratio_and_outer_handles_follow_the_rotation() {
     // The stale unrotated handle position does nothing.
     let mut s = open_in_session(&document);
     click(&mut s, mid);
-    s.double_click(mid);
+    s.double_click(mid, false, false);
     drag(&mut s, local, pt(local.x - 1.0, local.y), false, false);
     let (_, _, ratio, ..) = star_like(&s);
     assert!(
@@ -2548,7 +2585,7 @@ fn ac25_rotated_polygon_outer_radius_handle_follows_rotation() {
         f64::midpoint(o[0].point.y, o[1].point.y),
     );
     click(&mut s, mid);
-    s.double_click(mid);
+    s.double_click(mid, false, false);
     assert_eq!(s.tool(), Tool::PolygonStar);
     // Local E cardinal handle (40,30) rotated 90 deg => (30,40).
     let e = rot(pt(40.0, 30.0), c, rotation);
@@ -2580,7 +2617,7 @@ fn ac25_rotated_ellipse_handles_follow_rotation_in_the_ellipse_tool() {
     // (20+20cos t, 10+10 sin t) rotated.
     let on_outline = rot(ell(), c, FRAC_PI_2);
     click(&mut s, on_outline);
-    s.double_click(on_outline);
+    s.double_click(on_outline, false, false);
     assert_eq!(s.tool(), Tool::Ellipse);
     // Local E handle (40,10) -> rotated 90 deg: (20,30). Drag 6 along local x = document +y.
     let e = rot(pt(40.0, 10.0), c, FRAC_PI_2);
@@ -3015,8 +3052,8 @@ fn ac25_rotated_rect_corner_echoes_are_drawn_on_the_rotated_corners() {
     zoom_to_max(&mut s);
     s.pointer_leave();
     let plain = s.draw_list().triangle_count();
-    click(&mut s, rot(pt(20.0, 0.0), c, a));
-    s.double_click(rot(pt(20.0, 0.0), c, a));
+    click(&mut s, rot(pt(10.0, 0.0), c, a));
+    s.double_click(rot(pt(10.0, 0.0), c, a), false, false);
     assert_eq!(s.tool(), Tool::Rectangle);
     let list = s.draw_list();
     assert!(list.triangle_count() > plain, "handles drew something");
@@ -3090,7 +3127,8 @@ fn live_rotation_preview_draws_the_rotated_geometry_at_the_rotated_position() {
     let handle = rotate_handle(&s, 0.0, 0.0, 100.0, c, 0.0);
     s.pointer_hover(handle, false, false);
     s.pointer_down(handle, false);
-    s.pointer_hover(pt(250.0, 10.0), false, false); // 90 deg
+    let to = swept_to(handle, c, 90.0); // 90 deg
+    s.pointer_hover(to, false, false);
     let list = s.draw_list();
     // The rotated 100 x 20 rect spans y in [-40, 60] around x = 50.
     for want in [pt(50.0, 59.0), pt(50.0, -39.0)] {
@@ -3101,5 +3139,5 @@ fn live_rotation_preview_draws_the_rotated_geometry_at_the_rotated_position() {
             "no preview geometry near {want:?}"
         );
     }
-    s.pointer_up(pt(250.0, 10.0), false, false);
+    s.pointer_up(to, false, false);
 }
