@@ -436,6 +436,30 @@ already there.
     resize commands refuse a width that is `≤ 0` or not finite; today only
     `ui-core` floors it (`MIN_STROKE_WIDTH_MM`).
 
+- **2026-10-06 (architect): what `object-transform-refinements` (PR #35)
+  adds to the resize path.** Copied from
+  `specs/object-transform-refinements/adrs.md`; read the module names above
+  as these from now on.
+  - The stroke factor is applied in `ui-core::transform_drag::scale_stroke`
+    (called by `resize_by_local_delta`), and every resize write goes through
+    `ui-core::transform_commit::commit_resize` (via `commit_gesture`).
+    `select_tool` no longer touches the width.
+  - The typed size entry resolves through the same `resize_by_local_delta`
+    and commits through the same `commit_resize`, so re-pointing the four
+    resize commands to `style.stroke_width` covers it. There is no second
+    call site. Its `StrokeScaling` is read when the chip opens.
+  - Skew commits through `resize_path(.., None)` and must keep writing no
+    style key. Dash lengths are multiples of the width, so a skew leaves
+    them alone.
+  - After a skew the oriented box is recomputed tight in the same θ frame
+    (refinements criterion 45), so a gradient re-fits to the new rectangle
+    and does not shear with the shape. The `0007` tester adds one case: a
+    linear-gradient path skewed 30°, gradient box equals the new
+    `oriented_bounds`.
+  - "Resize commands refuse a width ≤ 0" is never reached by the entry:
+    sizes ≤ 0 are refused before resolution and the factor `√(sx·sy)` is
+    then > 0.
+
 ## Flagged to the lead
 
 1. **Resolved 2026-10-04 in `specification.md`.** AC 9 now stores dash

@@ -203,6 +203,37 @@ are under "Flagged to the lead", each with a default.
   rectangle and ellipse tools. This feature adds the `alt` field to that
   struct instead of creating it; the shape tools ignore `alt`.
 
+- **2026-10-06 (architect): what `object-transform-refinements` (PR #35)
+  changed under this slice.** Read the notes above with these corrections.
+  - **Dead zone exists.** Every Select-tool drag already has a 3 px dead
+    zone: `ui-core::transform_drag::DragOrigin` (`note`, `is_active_at`)
+    with the threshold in `TransformHandleTolerances::drag_threshold_mm`.
+    `Marquee`/`Lasso` and the `Pending*` states use `DragOrigin`; no third
+    threshold mechanism. `DRAG_THRESHOLD_PX` is already renamed.
+  - **Press order.** `SelectTool::handle_at` (resize, eight rotate, skew;
+    nearest-centre rule) runs first on every press, then a press inside the
+    sole selected object's box is a move, then the body hit. The candidate
+    cycle, marquee and lasso start only after both miss. Shift on a press
+    that hits a handle is a pivot modifier, not a selection toggle.
+  - **Double-click.** Handle (entry, only when the first press of the
+    double-click was on that same handle), then inside the sole selected box
+    (handoff), then the outline. With click cycling, the outline handoff
+    targets the object the first click selected, not `hit_test_object`'s
+    best match.
+  - **Modifiers.** `Session::modifiers_changed(shift, ctrl)` only caches;
+    the frontend calls it from window-level `keydown`/`keyup`, `(false,
+    false)` on window and canvas blur, then re-sends `pointer_hover` at the
+    last position. Add `alt` to that call; the frontend's Alt default
+    suppression goes into the same window handler.
+  - **Module sizes.** `session/mod.rs` is now 492 non-test lines, not
+    1,200; Select glue is `session/select.rs` (dispatch) and
+    `session/select_view.rs` (decorations, cursor, hint, readout).
+    `select_tool.rs` is about 530 non-test lines and must not grow: the
+    candidate cycle and marquee/lasso state go into child modules
+    (`select_tool/cycle.rs`, `select_tool/marquee.rs`, the pattern of
+    `select_tool/entry.rs`), and `docs/technical-debt.md` names this slice
+    as the one that brings `select_tool.rs` under 500.
+
 - **2026-10-05: the crate boundary.**
   - `vecmanf-geometry-core`: no change.
   - `vecmanf-document-core`: no change.
