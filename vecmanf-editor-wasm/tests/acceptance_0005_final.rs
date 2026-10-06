@@ -200,10 +200,11 @@ fn f1_the_inside_test_uses_the_rotated_box() {
     let size = 80.0;
     let (mut s, c, s_mm) = one(Kind::Rect, size, a);
     click(&mut s, outline_point(Kind::Rect, c, s_mm, a));
-    // Local point just inside the NE corner region; rotate to document space.
-    // Local (c + 0.45 s, c - 0.45 s) is inside the box, near the corner,
-    // beyond handle radius? handles are at most ~16px; use 0.3 s (24 px away).
-    let inside = rot(pt(c.x + 0.3 * s_mm, c.y - 0.3 * s_mm), c, a);
+    // A local point inside the box, clear of every handle; rotate to document
+    // space. Local (c + 0.3 s, c) is 16 px inside the east edge and, with the
+    // corner-radius handles of `unified-object-editing` 15 px in along the
+    // corner diagonals, more than 12 px from each of them.
+    let inside = rot(pt(c.x + 0.3 * s_mm, c.y), c, a);
     let before = origin_x_of_first(&s);
     drag(&mut s, inside, pt(inside.x + 2.0, inside.y));
     assert!((origin_x_of_first(&s) - before - 2.0).abs() < 1e-6, "moved");

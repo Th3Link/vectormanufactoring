@@ -891,6 +891,7 @@ fn ac8_stroke_stays_positive_for_every_object_kind_when_collapsed() {
 #[test]
 fn ac9_corner_radius_scales_by_the_same_factor_for_equal_factors() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 4.0));
+    s.set_scale_corner_radius(true); // off by default since `unified-object-editing`
     select_at(&mut s, pt(20.0, 0.0));
     drag(&mut s, pt(40.0, 20.0), pt(60.0, 30.0), false, false); // 1.5
     let (b, r, ..) = rect_of(&s);
@@ -901,6 +902,7 @@ fn ac9_corner_radius_scales_by_the_same_factor_for_equal_factors() {
 #[test]
 fn ac9_corner_radius_uses_the_geometric_mean_for_unequal_factors() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 4.0));
+    s.set_scale_corner_radius(true); // off by default since `unified-object-editing`
     select_at(&mut s, pt(20.0, 0.0));
     drag(&mut s, pt(40.0, 20.0), pt(60.0, 50.0), false, false); // 1.5, 2.5
     let (_, r, ..) = rect_of(&s);
@@ -912,6 +914,7 @@ fn ac9_corner_radius_uses_the_geometric_mean_for_unequal_factors() {
 
     // Single-axis edge handle: sx 2, sy 1.
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 4.0));
+    s.set_scale_corner_radius(true);
     select_at(&mut s, pt(20.0, 0.0));
     drag(&mut s, pt(40.0, 10.0), pt(80.0, 10.0), false, false);
     let (_, r, ..) = rect_of(&s);
@@ -2345,24 +2348,33 @@ fn live_rotation_preview_draws_the_rotated_shape_before_release() {
     s.pointer_hover(to, false, false);
     // Doc not yet changed:
     assert!(close(prim(&s).rotation.as_radians(), 0.0));
-    // Preview vertices belonging to the stroke: ignore handle glyphs by
-    // restricting to vertices inside a generous band around the rotated rect
-    // outline's centre column; the rotated 20-wide column must exist while the
-    // original 100-wide row's far ends (x < 38 or x > 62 at y near 10) must
-    // not be stroked (only glyphs can be out there).
+    // Blue new, black old (`unified-object-editing` criterion 10): the
+    // committed rectangle stays drawn unchanged in its own black stroke, and
+    // the rotated outline is drawn over it. Rotated 90 degrees about (50, 10)
+    // the corners move from (0, 0) to (60, -40) and from (100, 20) to (40, 60).
     let list = s.draw_list();
-    let near_centre_row_far_ends = list
-        .triangles
-        .iter()
-        .filter(|v| {
-            (v.position.y - 10.0).abs() < 0.2 && (v.position.x < 2.0 || v.position.x > 98.0)
-        })
-        .count();
-    // The rotated rect has no stroke at (0,10)/(100,10); selection decorations
-    // are rotated too, so nothing remains there either.
-    assert_eq!(
-        near_centre_row_far_ends, 0,
-        "preview still shows the unrotated rect/box"
+    let near = |v: &vecmanf_render_core::Vertex, x: f64, y: f64| {
+        (v.position.x - x).abs() < 1.0 && (v.position.y - y).abs() < 1.0
+    };
+    let black = vecmanf_render_core::RgbaColor::BLACK;
+    assert!(
+        list.triangles
+            .iter()
+            .any(|v| near(v, 0.0, 0.0) && v.color == black),
+        "the old geometry stays drawn in black"
+    );
+    assert!(
+        list.triangles
+            .iter()
+            .filter(|v| near(v, 0.0, 0.0) || near(v, 100.0, 20.0))
+            .all(|v| v.color == black),
+        "nothing but the old stroke at the old corners: box, handles and outline follow the new geometry"
+    );
+    assert!(
+        list.triangles
+            .iter()
+            .any(|v| near(v, 60.0, -40.0) && v.color != black),
+        "the rotated outline is drawn at its new corner"
     );
     s.pointer_up(to, false, false);
 }

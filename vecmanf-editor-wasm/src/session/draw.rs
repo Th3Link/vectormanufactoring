@@ -40,6 +40,15 @@ impl Session {
             view,
             &self.shape_decoration_input(),
         ));
+        // The blue half of blue-new, black-old: the geometry a release would
+        // commit, over the committed objects drawn above and under the boxes
+        // and handles below (`specs/unified-object-editing` criterion 10).
+        if let Some(live) = self.select_live_edit() {
+            list.extend(vecmanf_render_core::build_live_edit_preview(
+                &live.objects,
+                view,
+            ));
+        }
         list.extend(build_select_draw_list(
             view,
             &self.select_decoration_input(),

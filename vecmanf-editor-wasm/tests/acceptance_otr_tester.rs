@@ -820,6 +820,9 @@ struct Cand {
     pos: (f64, f64),     // local px from the centre
     radius: f64,
     order: u8, // 0 resize 1 skew 2 rotate
+    /// A corner-radius handle of `unified-object-editing`: ranks before
+    /// resize on an exact tie and has no inner hit band.
+    param: bool,
 }
 
 /// Reference model of criterion 9 in screen pixels, in the box's local frame.
@@ -839,6 +842,7 @@ fn model_hint(
             pos: (sx * hw, sy * hh),
             radius: rr,
             order: 0,
+            param: false,
         });
         let d = 32.0 / SQRT_2;
         c.push(Cand {
@@ -846,7 +850,20 @@ fn model_hint(
             pos: (sx * (hw + d), sy * (hh + d)),
             radius: 16.0,
             order: 2,
+            param: false,
         });
+        // The rectangle's radius handle at radius 0: 15 px in along the
+        // corner's diagonal, drawn from a shorter side of 72 px.
+        if kind == Kind::Rect && s >= 72.0 {
+            let along = 15.0 / SQRT_2;
+            c.push(Cand {
+                class: "param-radius",
+                pos: (sx * (hw - along), sy * (hh - along)),
+                radius: 12.0,
+                order: 0,
+                param: true,
+            });
+        }
     }
     // Edge resize handles are not drawn below 24 px but design-system.md says
     // "hit-testing is unchanged" (slice 5), so they stay hit-testable.
@@ -857,6 +874,7 @@ fn model_hint(
                 pos: (nx * hw, ny * hh),
                 radius: rr,
                 order: 0,
+                param: false,
             });
         }
     }
@@ -867,6 +885,7 @@ fn model_hint(
                 pos: (nx * (hw + 32.0 * nx.abs()), ny * (hh + 32.0 * ny.abs())),
                 radius: 16.0,
                 order: 2,
+                param: false,
             });
         }
     }
@@ -877,12 +896,14 @@ fn model_hint(
                 pos: (0.0, -(hh + 16.0)),
                 radius: 12.0,
                 order: 1,
+                param: false,
             });
             c.push(Cand {
                 class: "skew",
                 pos: (0.0, hh + 16.0),
                 radius: 12.0,
                 order: 1,
+                param: false,
             });
         }
         if 2.0 * hw >= 24.0 {
@@ -891,12 +912,14 @@ fn model_hint(
                 pos: (-(hw + 16.0), 0.0),
                 radius: 12.0,
                 order: 1,
+                param: false,
             });
             c.push(Cand {
                 class: "skew",
                 pos: (hw + 16.0, 0.0),
                 radius: 12.0,
                 order: 1,
+                param: false,
             });
         }
     }
@@ -908,13 +931,14 @@ fn model_hint(
         if d > cand.radius {
             continue;
         }
-        if cand.order == 0 && inside && depth > cand.radius * 6.0 / 16.0 {
+        if cand.order == 0 && !cand.param && inside && depth > cand.radius * 6.0 / 16.0 {
             continue;
         }
+        let rank = |c: &Cand| if c.param { 0 } else { c.order + 1 };
         match best {
             None => best = Some((cand, d)),
             Some((b, bd)) => {
-                if d < bd - 1e-9 || ((d - bd).abs() <= 1e-9 && cand.order < b.order) {
+                if d < bd - 1e-9 || ((d - bd).abs() <= 1e-9 && rank(cand) < rank(b)) {
                     best = Some((cand, d));
                 }
             }
@@ -994,6 +1018,7 @@ fn run_hit_rule(kind: Kind, w_mm: f64, h_mm: f64, th: f64, shift: bool) {
                     "move" => got_c == "move",
                     h if h.starts_with("rotate") => got_c == "rotate",
                     "skew" => got_c.starts_with("skew:"),
+                    "param-radius" => got_c == "pointer",
                     _ => got_c.starts_with("resize:"),
                 };
                 checked += 1;
@@ -2311,6 +2336,7 @@ fn ac27_stroke_switch_value_is_honoured_and_corner_radius_scales() {
         let id = d.create_rect(bounds(0.0, 0.0, 40.0, 20.0));
         d.set_corner_radius(&[id], Length::from_mm(4.0)).unwrap();
         let mut a = open_in_session(&d);
+        a.set_scale_corner_radius(true); // off by default since `unified-object-editing`
         a.set_scale_stroke_width(on);
         click(&mut a, pt(20.0, 0.0));
         let sw0 = prim(&a).stroke_width.as_mm();
@@ -2320,6 +2346,7 @@ fn ac27_stroke_switch_value_is_honoured_and_corner_radius_scales() {
             EntryOutcome::Committed
         );
         let mut dr = open_in_session(&d);
+        dr.set_scale_corner_radius(true);
         dr.set_scale_stroke_width(on);
         click(&mut dr, pt(20.0, 0.0));
         drag(&mut dr, pt(40.0, 20.0), pt(80.0, 40.0));
@@ -3171,12 +3198,14 @@ fn ac40_skew_readout_has_axis_sign_and_one_decimal() {
 
 #[test]
 fn ac40_preview_and_commit_are_the_same_function() {
-    // Observe the preview through the draw list at the last pointer position
-    // and compare against the draw list after release: identical triangles
-    // except the decoration that only exists during a drag. We compare the
-    // path stroke by reading the committed anchors against the reference
-    // (above) and the draw list triangle count before/after release.
+    // Blue new, black old (`unified-object-editing` criteria 10 and 13): the
+    // frame during the drag holds the committed path unchanged in black and,
+    // over it, the blue outline of exactly the geometry the release commits.
+    // The expected blue layer is built from the committed object after the
+    // release, with the renderer's own function, and must appear unchanged in
+    // the mid-drag frame; the black stroke from before the drag must too.
     let (mut s, b) = selected_triangle();
+    let before_drag = s.draw_list();
     let from = skew_handle_pos(&s, &b, (0.0, -1.0));
     s.pointer_hover(from, false, false);
     s.pointer_down(from, false);
@@ -3184,26 +3213,34 @@ fn ac40_preview_and_commit_are_the_same_function() {
     s.pointer_hover(to, false, false);
     let preview = s.draw_list();
     s.pointer_up(to, false, false);
-    let committed = s.draw_list();
-    // the geometry (path stroke) vertices of the preview must all be present
-    // unchanged in the committed list
-    let in_committed = |v: &vecmanf_render_core::Vertex| {
-        committed
+    let committed = vecmanf_document_core::ObjectSnapshot::Path(path_of(&s));
+    let expected_blue = vecmanf_render_core::build_live_edit_preview(&[committed], s.view());
+    assert_ne!(expected_blue.triangle_count(), 0);
+    let in_frame = |frame: &vecmanf_render_core::DrawList, v: &vecmanf_render_core::Vertex| {
+        frame
             .triangles
             .iter()
-            .any(|w| pnear(w.position, v.position, 1e-6))
+            .any(|w| w.color == v.color && pnear(w.position, v.position, 1e-6))
     };
-    let missing = preview
+    let missing_blue = expected_blue
         .triangles
         .iter()
-        .filter(|v| !in_committed(v))
+        .filter(|v| !in_frame(&preview, v))
         .count();
-    // decoration differs (guide, pivot marker, dragging look); the path
-    // stroke itself is the bulk of the list and must match
-    assert!(
-        missing * 4 < preview.triangles.len(),
-        "{missing} of {} preview vertices not in the committed frame",
-        preview.triangles.len()
+    assert_eq!(
+        missing_blue, 0,
+        "the blue outline during the drag is the committed geometry"
+    );
+    let black = vecmanf_render_core::RgbaColor::BLACK;
+    let old_stroke_gone = before_drag
+        .triangles
+        .iter()
+        .filter(|v| v.color == black)
+        .filter(|v| !in_frame(&preview, v))
+        .count();
+    assert_eq!(
+        old_stroke_gone, 0,
+        "the old stroke is unchanged during the drag"
     );
 }
 

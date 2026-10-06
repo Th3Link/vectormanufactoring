@@ -1,17 +1,20 @@
 //! What `Session` shows for the Select tool (`specs/0004-canvas-navigation-
 //! and-selection`, `specs/0005-object-transform`, `specs/object-transform-
-//! refinements`): the selection and hover boxes, the transform-handle
-//! overlay with its pivot marker and skew guide, the cursor and hint for
-//! the handle under the pointer, and the live numeric readout of a drag.
-//! Split out of `session/select.rs`, which dispatches the events.
+//! refinements`, `specs/unified-object-editing`): the selection and hover
+//! boxes, the transform- and parameter-handle overlay with its pivot marker,
+//! skew guide and radius guides, the cursor and hint for the handle under
+//! the pointer, and the live numeric readout of a drag. Split out of
+//! `session/select.rs`, which dispatches the events.
 
-use vecmanf_document_core::{Angle, ObjectSnapshot, Shape, Vec2};
+use vecmanf_document_core::{
+    Angle, ObjectSnapshot, PrimitiveSnapshot, Shape, Vec2, effective_corner_radius,
+};
 use vecmanf_render_core::{
     SelectDecorationInput, TransformDecorationInput, TransformGlyphKind, TransformHandleGlyph,
 };
 use vecmanf_ui_core::{
-    EditHandle, SelectTool, Side, format_degrees, is_corner, is_drawn_handle, oriented_bounds,
-    resize_cursor_angle_degrees, skew_cursor_angle_degrees,
+    EditHandle, LiveEdit, ParamHandle, SelectTool, Side, format_degrees, is_corner,
+    is_drawn_handle, oriented_bounds, resize_cursor_angle_degrees, skew_cursor_angle_degrees,
 };
 
 use super::Session;
@@ -22,19 +25,42 @@ use super::Tool;
 const SKEW_GUIDE_EXTEND_PX: f64 = 16.0;
 
 impl Session {
-    /// The live (possibly drag-translated, -resized, -rotated or -skewed)
-    /// objects of every kind, paths first.
+    /// The Select tool's live edit (`specs/unified-object-editing`, criteria
+    /// 10 to 14): what a release at the current pointer position and
+    /// modifiers would commit, for the blue half of blue-new, black-old.
+    /// `None` outside the Select tool, with nothing in flight, inside the
+    /// dead zone, before the pointer has ever moved over the canvas, and
+    /// where the result equals the committed objects. The cached
+    /// `select_shift_held`/`select_ctrl_held` let this be read at render time.
+    pub(super) fn select_live_edit(&self) -> Option<LiveEdit> {
+        if self.tool != Tool::Select {
+            return None;
+        }
+        let cursor = self.pointer_position?;
+        let objects = self.objects();
+        self.select.live_edit(
+            &objects,
+            &self.selection,
+            cursor,
+            self.select_shift_held,
+            self.select_ctrl_held,
+        )
+    }
+
+    /// The document's objects with the Select tool's live edit substituted:
+    /// the one place live geometry enters, and only for the decorations (the
+    /// boxes, handles, pivot marker and readout follow the new geometry). The
+    /// objects themselves are always drawn as committed, so the old geometry
+    /// stays on screen under the blue outline.
     fn live_objects(&self) -> Vec<ObjectSnapshot> {
-        let mut objects: Vec<ObjectSnapshot> = self
-            .live_node_drag_paths()
-            .into_iter()
-            .map(ObjectSnapshot::Path)
-            .collect();
-        objects.extend(
-            self.primitives_for_render()
-                .into_iter()
-                .map(ObjectSnapshot::Primitive),
-        );
+        let mut objects = self.objects();
+        if let Some(live) = self.select_live_edit() {
+            for new in live.objects {
+                if let Some(slot) = objects.iter_mut().find(|o| o.id() == new.id()) {
+                    *slot = new;
+                }
+            }
+        }
         objects
     }
 
@@ -96,13 +122,16 @@ impl Session {
         .map(|(object, box_, handle)| (object.clone(), box_, handle))
     }
 
-    /// Builds the Select tool's transform-handle overlay for this frame
+    /// Builds the Select tool's handle overlay for this frame
     /// (`specs/0005-object-transform/specification.md`, acceptance
     /// criteria 1, 14-17, 22; `object-transform-refinements` 1, 5-8, 37,
-    /// 55, 56): every handle of the current single-object selection, using
-    /// the *live* object so the handles track the live preview, the pivot
-    /// marker while a drag runs or an entry is open (or, with Shift held,
-    /// the pivot the hovered handle would use), and the skew guide.
+    /// 55, 56; `unified-object-editing` 1, 7, 8): every handle of the
+    /// current single-object selection, using the *live* object so the
+    /// handles track the live preview, the pivot marker while a drag runs or
+    /// an entry is open (or, with Shift held, the pivot the hovered handle
+    /// would use), the skew guide and the radius guides. Parameter handles
+    /// are left out while the same object is moved, resized, rotated or
+    /// skewed by drag (criterion 7).
     pub(super) fn select_transform_decoration_input(&self) -> TransformDecorationInput {
         if self.tool != Tool::Select {
             return TransformDecorationInput::default();
@@ -110,10 +139,7 @@ impl Session {
         let objects = self.live_objects();
         let tolerances = self.transform_handle_tolerances();
         let dragging = self.select.dragging_handle();
-        let entry_handle = self
-            .select
-            .entry()
-            .map(vecmanf_ui_core::TransformEntry::handle);
+        let entry_handle = self.select.entry_handle();
         let highlighted = dragging.or(entry_handle);
         let hover = self.select_hovered_handle(&objects);
         let hovered = hover.as_ref().map(|(_, _, handle)| *handle);
@@ -125,18 +151,36 @@ impl Session {
             return TransformDecorationInput::default();
         };
         let box_ = oriented_bounds(object);
-        // The centre handle hides while a resize, rotate or skew drag runs
-        // or an entry is open: the pivot marker may live there.
+        // The centre handle hides while a resize, rotate, skew or parameter
+        // drag runs or an entry is open: the pivot marker may live there, and
+        // a parameter drag has it yield (criterion 8).
         let hide_center = highlighted.is_some_and(|handle| handle != EditHandle::Move);
+        let params_visible = self.select.param_handles_visible();
+        let radius_in_use = matches!(
+            highlighted,
+            Some(EditHandle::Param(ParamHandle::CornerRadius(_)))
+        );
         let (sin, cos) = box_.angle.as_radians().sin_cos();
-        let handles =
+        let drawn: Vec<(EditHandle, vecmanf_document_core::Point)> =
             SelectTool::transform_handles(&objects, &self.selection, tolerances, side_rotate)
                 .into_iter()
                 .filter(|(handle, _)| {
                     is_drawn_handle(*handle, &box_, &tolerances)
                         && !(hide_center && *handle == EditHandle::Move)
+                        && (params_visible || !matches!(handle, EditHandle::Param(_)))
                 })
-                .map(|(handle, position)| TransformHandleGlyph {
+                .collect();
+        let mut param_guides = Vec::new();
+        let handles = drawn
+            .into_iter()
+            .map(|(handle, position)| {
+                let active = highlighted == Some(handle) || hovered == Some(handle);
+                if let (EditHandle::Param(ParamHandle::CornerRadius(corner)), true) =
+                    (handle, active)
+                {
+                    param_guides.push((box_.to_document(corner.local_position(&box_)), position));
+                }
+                TransformHandleGlyph {
                     position,
                     kind: match handle {
                         EditHandle::Resize(_) => TransformGlyphKind::Resize,
@@ -149,11 +193,18 @@ impl Session {
                             },
                         },
                         EditHandle::Move => TransformGlyphKind::Move,
+                        EditHandle::Param(_) => TransformGlyphKind::Parameter,
                     },
                     dragging: highlighted == Some(handle),
-                    hovered: hovered == Some(handle),
-                })
-                .collect();
+                    // The other three radius handles of a radius drag take the
+                    // hover ground: they move in step (criterion 2).
+                    hovered: hovered == Some(handle)
+                        || (radius_in_use
+                            && highlighted != Some(handle)
+                            && matches!(handle, EditHandle::Param(ParamHandle::CornerRadius(_)))),
+                }
+            })
+            .collect();
         let live_pivot = self.select.live_pivot(self.select_shift_held);
         // Criterion 55: Shift held, nothing running, the pointer on a handle:
         // the marker previews the point that handle would use.
@@ -172,6 +223,7 @@ impl Session {
             handles,
             pivot_marker: live_pivot.or(preview),
             skew_guide,
+            param_guides,
         }
     }
 
@@ -186,14 +238,15 @@ impl Session {
 
     /// Which cursor the canvas should show (`specs/0005-object-transform/
     /// specification.md`'s UX notes, "Cursor feedback"; `object-transform-
-    /// refinements`' "Cursors"), as a plain string the host turns into CSS:
-    /// `"default"` (the Select tool's normal cursor, also every other tool),
-    /// `"rotate"` (the non-rotating circular arrow over — or while dragging
-    /// — any of the eight rotate handles), `"resize:<degrees>"` or
-    /// `"skew:<degrees>"` (a double or paired arrow rotated to that
-    /// on-screen angle, clockwise from horizontal: the handle's own base
-    /// angle plus the object's rotation) or `"move"` (the centre handle).
-    /// Never changes with Shift or Ctrl.
+    /// refinements`' "Cursors"; `unified-object-editing` criterion 5), as a
+    /// plain string the host turns into CSS: `"default"` (the Select tool's
+    /// normal cursor, also every other tool), `"rotate"` (the non-rotating
+    /// circular arrow over — or while dragging — any of the eight rotate
+    /// handles), `"resize:<degrees>"` or `"skew:<degrees>"` (a double or
+    /// paired arrow rotated to that on-screen angle, clockwise from
+    /// horizontal: the handle's own base angle plus the object's rotation),
+    /// `"move"` (the centre handle) or `"pointer"` (a parameter handle, hover
+    /// and drag, whatever the modifiers). Never changes with Shift or Ctrl.
     #[must_use]
     pub fn cursor_hint(&self) -> String {
         if self.tool != Tool::Select {
@@ -219,15 +272,18 @@ impl Session {
                 format!("skew:{:.1}", skew_cursor_angle_degrees(side, rotation))
             }
             Some(EditHandle::Move) => "move".to_string(),
+            Some(EditHandle::Param(_)) => "pointer".to_string(),
             None => "default".to_string(),
         }
     }
 
-    /// Which hint the handle under the pointer earns (criterion 54), as a
-    /// plain string for the host's hover chip: `""` (none), `"resize-edge"`,
-    /// `"resize-corner"`, `"resize-corner-uniform"` (polygon and star: no
-    /// Ctrl line), `"rotate-corner"`, `"rotate-side"`, `"skew"` or `"move"`.
-    /// Empty while a drag runs or an entry is open.
+    /// Which hint the handle under the pointer earns (criterion 54;
+    /// `unified-object-editing` criterion 20), as a plain string for the
+    /// host's hover chip: `""` (none), `"resize-edge"`, `"resize-corner"`,
+    /// `"resize-corner-uniform"` (polygon and star: no Ctrl line),
+    /// `"rotate-corner"`, `"rotate-side"`, `"skew"`, `"move"`,
+    /// `"param-radius"` (a rectangle's corner radius) or `"param-inner"` (a
+    /// star's inner radius). Empty while a drag runs or an entry is open.
     #[must_use]
     pub fn handle_hint(&self) -> String {
         if self.tool != Tool::Select {
@@ -250,17 +306,34 @@ impl Session {
             EditHandle::Rotate(_) => "rotate-side",
             EditHandle::Skew(_) => "skew",
             EditHandle::Move => "move",
+            EditHandle::Param(ParamHandle::CornerRadius(_)) => "param-radius",
+            EditHandle::Param(ParamHandle::InnerRadius) => "param-inner",
         }
         .to_string()
     }
 
+    /// The Select tool's live resolved object for the drag in flight, even
+    /// where it equals the committed one (a readout still shows the value at
+    /// the start of a drag that has left the dead zone). `None` outside such
+    /// a drag.
+    fn select_live_transform(&self) -> Option<ObjectSnapshot> {
+        if self.tool != Tool::Select {
+            return None;
+        }
+        let cursor = self.pointer_position?;
+        self.select
+            .live_transform(cursor, self.select_shift_held, self.select_ctrl_held)
+    }
+
     /// The on-canvas numeric readout for an in-flight Select-tool resize,
-    /// rotate or skew (acceptance criteria 14, 22 of slice 5; 35, 40 here):
-    /// the object's live size in millimetres ("W × H mm"; a polygon/star's
-    /// single outer radius, "r R mm"), its live rotation ("37.4°", one
-    /// decimal at most, "22.5°" on a snap stop) or the skew ("Skew x
-    /// +12.5°", a real minus sign when negative), anchored at the pointer.
-    /// `None` outside such a drag.
+    /// rotate, skew or parameter drag (acceptance criteria 14, 22 of slice 5;
+    /// 35, 40 of the refinements; 20 of `unified-object-editing`): the
+    /// object's live size in millimetres ("W × H mm"; a polygon/star's single
+    /// outer radius, "r R mm"), its live rotation ("37.4°", one decimal at
+    /// most, "22.5°" on a snap stop), the skew ("Skew x +12.5°", a real minus
+    /// sign when negative), a rectangle's corner radius ("r 3.5 mm") or a
+    /// star's inner ratio ("ratio 0.45"), anchored at the pointer. `None`
+    /// outside such a drag.
     pub(super) fn select_live_readout(&self) -> Option<super::shapes::LiveReadout> {
         if self.tool != Tool::Select {
             return None;
@@ -294,9 +367,29 @@ impl Session {
                     format!("{:.1} × {:.1} mm", b.width(), b.height())
                 }
             },
+            EditHandle::Param(_) => param_readout(&self.select_live_transform()?)?,
             EditHandle::Move => return None,
         };
         Some(super::shapes::LiveReadout { text, anchor })
+    }
+}
+
+/// `r 3.5 mm` for a rectangle's effective corner radius, `ratio 0.45` for a
+/// star's inner ratio.
+fn param_readout(object: &ObjectSnapshot) -> Option<String> {
+    let ObjectSnapshot::Primitive(PrimitiveSnapshot { shape, .. }) = object else {
+        return None;
+    };
+    match *shape {
+        Shape::Rect {
+            bounds,
+            corner_radius,
+        } => Some(format!(
+            "r {:.1} mm",
+            effective_corner_radius(bounds, corner_radius).as_mm()
+        )),
+        Shape::Star { inner_ratio, .. } => Some(format!("ratio {:.2}", inner_ratio.get())),
+        Shape::Ellipse { .. } | Shape::Polygon { .. } => None,
     }
 }
 
@@ -525,17 +618,22 @@ mod tests {
         session.select_transform_decoration_input().handles.len()
     }
 
+    /// A 227 px shorter side is above the 72 px threshold, so a selected
+    /// rectangle at rest also draws its four corner-radius handles
+    /// (`unified-object-editing` criteria 1, 7).
+    const RADIUS_HANDLES: usize = 4;
+
     /// Criteria 1, 5, 6: eight resize, four corner rotate and the centre
     /// handle; Shift adds four side rotate handles in the same frame, with no
     /// pointer movement, and moves none.
     #[test]
     fn shift_adds_the_side_rotate_handles_and_modifiers_changed_needs_no_pointer() {
         let mut session = big_rect_session();
-        assert_eq!(handle_count(&session), 13);
+        assert_eq!(handle_count(&session), 13 + RADIUS_HANDLES);
         session.modifiers_changed(true, false);
-        assert_eq!(handle_count(&session), 17);
+        assert_eq!(handle_count(&session), 17 + RADIUS_HANDLES);
         session.modifiers_changed(false, false);
-        assert_eq!(handle_count(&session), 13);
+        assert_eq!(handle_count(&session), 13 + RADIUS_HANDLES);
     }
 
     /// Criterion 6: the set is frozen during a drag (Shift pressed
@@ -551,7 +649,11 @@ mod tests {
         );
         session.pointer_hover(corner, false, false);
         session.pointer_down(corner, false);
-        assert_eq!(handle_count(&session), 12, "centre hidden during a rotate");
+        assert_eq!(
+            handle_count(&session),
+            12,
+            "centre hidden during a rotate, and no radius handle during another drag"
+        );
         session.modifiers_changed(true, false);
         assert_eq!(handle_count(&session), 12, "Shift mid-drag reveals nothing");
         session.escape();
@@ -564,7 +666,7 @@ mod tests {
         session.modifiers_changed(false, false);
         assert_eq!(handle_count(&session), 16, "the dragged side handle stays");
         session.escape();
-        assert_eq!(handle_count(&session), 13);
+        assert_eq!(handle_count(&session), 13 + RADIUS_HANDLES);
     }
 
     /// Criteria 40, 56 and 55: the pivot marker while a drag runs, the

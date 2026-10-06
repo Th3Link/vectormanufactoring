@@ -9,8 +9,10 @@
 //! shares `Session`'s privacy boundary and its methods join the same type's
 //! `impl Session`.
 
-use vecmanf_document_core::{ObjectSnapshot, Point, Shape, Vec2};
-use vecmanf_ui_core::{SelectDoubleClickOutcome, StrokeScaling, TransformHandleTolerances};
+use vecmanf_document_core::{ObjectSnapshot, Point, Shape};
+use vecmanf_ui_core::{
+    CornerRadiusScaling, SelectDoubleClickOutcome, StrokeScaling, TransformHandleTolerances,
+};
 
 use super::{Session, Tool};
 
@@ -39,36 +41,6 @@ pub(super) fn tool_for(object: &ObjectSnapshot) -> Tool {
 }
 
 impl Session {
-    /// The Select tool's own live, uncommitted move offset while a drag
-    /// is in flight (acceptance criterion 20's "live") — `None` outside
-    /// the Select tool, with no drag in flight, inside the 3 px dead zone,
-    /// or before the pointer has ever moved over the canvas.
-    pub(super) fn select_live_offset(&self) -> Option<Vec2> {
-        if self.tool != Tool::Select {
-            return None;
-        }
-        let cursor = self.pointer_position?;
-        self.select.live_offset(cursor)
-    }
-
-    /// The Select tool's own live, uncommitted resize, rotate or skew
-    /// preview while one of those drags is in flight (`specs/0005-object-
-    /// transform/specification.md`, acceptance criteria 14, 22; 40 of
-    /// `object-transform-refinements`) — `None` outside the Select tool,
-    /// with no such drag in flight, inside the dead zone, or before the
-    /// pointer has ever moved over the canvas. The cached
-    /// `select_shift_held`/`select_ctrl_held` (set by every
-    /// [`Session::pointer_hover`] and [`Session::modifiers_changed`] call)
-    /// are what let this be read at render time, with no event of its own.
-    pub(super) fn select_live_transform(&self) -> Option<ObjectSnapshot> {
-        if self.tool != Tool::Select {
-            return None;
-        }
-        let cursor = self.pointer_position?;
-        self.select
-            .live_transform(cursor, self.select_shift_held, self.select_ctrl_held)
-    }
-
     /// The "Scale stroke width" switch (`specs/0005-object-transform/
     /// specification.md` AC 26-31): whether a Select-tool resize scales the
     /// stroke width. Off in every new session (`Session::new`/`open` build a
@@ -87,6 +59,28 @@ impl Session {
             StrokeScaling::Proportional
         } else {
             StrokeScaling::Keep
+        });
+    }
+
+    /// The "Scale corner radius" switch (`specs/unified-object-editing/`,
+    /// criterion 23): whether a Select-tool resize scales a rectangle's
+    /// corner radius with it. Off in every new session; never written to the
+    /// document.
+    #[must_use]
+    pub fn scale_corner_radius(&self) -> bool {
+        self.select.corner_radius_scaling() == CornerRadiusScaling::Proportional
+    }
+
+    /// Sets the switch for the *next* resize drag or typed size (a drag in
+    /// flight and an open entry keep the value they started with). Clicking
+    /// the switch while a numeric entry is open closes the entry without
+    /// writing (`object-transform-refinements` criterion 31).
+    pub fn set_scale_corner_radius(&mut self, on: bool) {
+        self.select.cancel_entry();
+        self.select.set_corner_radius_scaling(if on {
+            CornerRadiusScaling::Proportional
+        } else {
+            CornerRadiusScaling::Keep
         });
     }
 

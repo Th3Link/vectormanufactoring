@@ -58,8 +58,8 @@ impl Session {
     }
 
     /// Same as `primitives`, except every currently selected star's
-    /// `inner_ratio` is overridden by the ratio slider's own live,
-    /// uncommitted preview if one is in flight (architect review: the
+    /// `inner_ratio` is overridden by the shape tool's ratio slider's own
+    /// live, uncommitted preview if one is in flight (architect review: the
     /// slider commits once on release, not once per tick, so this is
     /// how the selected star still visibly tracks it on every frame in
     /// between — acceptance criterion 14's "updates live"). Used only
@@ -76,35 +76,6 @@ impl Session {
                     && let Shape::Star { inner_ratio, .. } = &mut primitive.shape
                 {
                     *inner_ratio = preview_ratio;
-                }
-            }
-        }
-        // The Select tool's own live move offset (acceptance criterion
-        // 20's "live"), applied via the one shared `ObjectSnapshot::
-        // translated` rule `Document::translate_objects` commits with
-        // (`specs/0004-canvas-navigation-and-selection/adrs.md`) — so the
-        // preview and the eventual commit can never disagree.
-        if let Some(offset) = self.select_live_offset() {
-            for primitive in &mut primitives {
-                if self.selection.contains(primitive.id) {
-                    let translated = vecmanf_document_core::ObjectSnapshot::Primitive(*primitive)
-                        .translated(offset);
-                    if let vecmanf_document_core::ObjectSnapshot::Primitive(moved) = translated {
-                        *primitive = moved;
-                    }
-                }
-            }
-        }
-        // The Select tool's own live resize/rotate preview
-        // (`specs/0005-object-transform/specification.md`, acceptance
-        // criteria 14, 22) — same "preview and commit share one
-        // implementation" reasoning as the move offset above.
-        if let Some(vecmanf_document_core::ObjectSnapshot::Primitive(live)) =
-            self.select_live_transform()
-        {
-            for primitive in &mut primitives {
-                if primitive.id == live.id {
-                    *primitive = live;
                 }
             }
         }

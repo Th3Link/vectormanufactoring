@@ -214,6 +214,18 @@ fn a_selected_rect_outline_press_is_a_handle_or_a_move_at_every_zoom() {
             (0.0, 20.0),
             (0.0, 10.0),
         ];
+        // The four corner-radius handles of `unified-object-editing`: on each
+        // corner's inward diagonal, 15 px from it at radius 0 (the box is
+        // 72 px or more on its shorter side at every zoom here). They take a
+        // press within 12 px of them, nearest centre first, and win a tie.
+        let knobs: Vec<(f64, f64)> = [(0.0, 0.0, 1.0, 1.0), (40.0, 0.0, -1.0, 1.0)]
+            .iter()
+            .chain([(40.0, 20.0, -1.0, -1.0), (0.0, 20.0, 1.0, -1.0)].iter())
+            .map(|&(x, y, dx, dy)| {
+                let along = 15.0 / scale / std::f64::consts::SQRT_2;
+                (x + dx * along, y + dy * along)
+            })
+            .collect();
         let mut tested_handle = 0;
         let mut tested_body = 0;
         for p in edge_samples() {
@@ -221,7 +233,21 @@ fn a_selected_rect_outline_press_is_a_handle_or_a_move_at_every_zoom() {
                 .iter()
                 .map(|h| (h.0 - p.x).hypot(h.1 - p.y) * scale)
                 .fold(f64::INFINITY, f64::min);
+            let knob_px = knobs
+                .iter()
+                .map(|k| (k.0 - p.x).hypot(k.1 - p.y) * scale)
+                .fold(f64::INFINITY, f64::min);
             let hint = hint_at(&mut s, p);
+            if knob_px < 11.0 && knob_px <= nearest_px - 0.5 {
+                assert_eq!(
+                    hint, "pointer",
+                    "{percent}%: {p:?} is {knob_px:.1}px from a radius handle, hint {hint}"
+                );
+                continue;
+            }
+            if knob_px < 13.0 {
+                continue; // on the edge of a radius handle's hit area
+            }
             if nearest_px < 15.0 {
                 assert!(
                     hint.starts_with("resize:"),

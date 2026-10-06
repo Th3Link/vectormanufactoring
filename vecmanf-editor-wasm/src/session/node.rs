@@ -6,7 +6,7 @@
 //! are (`docs/technical-debt.md`, "`Session` is one module past the size
 //! limit").
 
-use vecmanf_document_core::{AnchorKind, ObjectSnapshot, Point};
+use vecmanf_document_core::{AnchorKind, Point};
 use vecmanf_render_core::{DecorationInput, Hovered as RenderHovered};
 use vecmanf_ui_core::{Hit, NodeToolbarState};
 
@@ -20,37 +20,13 @@ impl Session {
     /// so this is a pure "apply already-resolved data" step with no
     /// geometry of its own. Falls back to the committed snapshot
     /// unmodified outside the node tool, with no drag in flight, or with
-    /// the pointer off the canvas (`self.pointer_position` is `None`).
-    /// Also applies the Select tool's own live move offset
-    /// (`select_live_offset`) to every selected path, via the same
-    /// [`vecmanf_document_core::ObjectSnapshot::translated`] rule
-    /// [`Document::translate_objects`] commits with
-    /// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "Preview and
-    /// commit therefore share one implementation").
+    /// the pointer off the canvas (`self.pointer_position` is `None`). The
+    /// Select tool's live edit is not substituted here: its blue outline is
+    /// drawn over the committed paths (`specs/unified-object-editing`).
     pub(super) fn live_node_drag_paths(&self) -> Vec<vecmanf_document_core::PathSnapshot> {
         let mut paths = self.paths();
         if self.tool == Tool::Node {
             self.apply_live_node_drag(&mut paths);
-        }
-        if let Some(offset) = self.select_live_offset() {
-            for snapshot in &mut paths {
-                if self.selection.contains(snapshot.id) {
-                    let translated = ObjectSnapshot::Path(snapshot.clone()).translated(offset);
-                    if let ObjectSnapshot::Path(path) = translated {
-                        *snapshot = path;
-                    }
-                }
-            }
-        }
-        // The Select tool's own live resize/rotate preview
-        // (`specs/0005-object-transform/specification.md`, acceptance
-        // criteria 14, 22).
-        if let Some(ObjectSnapshot::Path(live)) = self.select_live_transform() {
-            for snapshot in &mut paths {
-                if snapshot.id == live.id {
-                    *snapshot = live.clone();
-                }
-            }
         }
         paths
     }
