@@ -1297,7 +1297,7 @@ fn ac03_every_point_count_3_to_1024_orients_the_first_vertex_at_the_pointer_and_
                 (v.x - b.x).abs() < 1e-7 && (v.y - b.y).abs() < 1e-7,
                 "{mode:?} n={n}: first vertex {v:?}, pointer {b:?}"
             );
-            if n % 61 == 0 || n < 12 || n > 1020 {
+            if n % 61 == 0 || !(12..=1020).contains(&n) {
                 assert!(
                     adiff(chip_angle(&mut s), deg).abs() <= 0.051,
                     "{mode:?} n={n}"
