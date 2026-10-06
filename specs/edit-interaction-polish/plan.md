@@ -48,6 +48,10 @@ and read where the select decoration input is built, `session/select_view.rs`).
   Done in the Browser pane with `devicePixelRatio` overridden; the skew guide and
   the rotated box were only looked at, not measured.
 - [x] 8. `docs/design-system.md` rows (skew guide, selection box, hover box).
+- [x] 9. UX review fix (criterion 68): the skew guide is pixel-snapped like the box
+  (`snap_guide_line`; a rotated guide stays anti-aliased at 1 px) and the box leaves
+  its own dashes off the edge the guide covers (`SelectDecorationInput::skew_guide`,
+  cut to the guide's extent; a Shift centre line cuts nothing).
 
 ### Decisions taken here (inside the ADR)
 

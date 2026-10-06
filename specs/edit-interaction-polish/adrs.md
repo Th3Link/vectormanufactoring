@@ -703,6 +703,16 @@ to the PO" (criteria 21, 41, 59, 64 and four smaller ones).
     pattern identical; the pattern is a function of the snapped pixel length.
     Tested by `ac63_ac65_a_snapped_box_keeps_its_pattern_rigid_and_refits_only_when_its_pixel_length_changes`.
 
+- **2026-10-07 (PR 2 UX review): the skew guide takes the box's snap, and the
+  box yields the fixed edge.** `TransformDecorationInput` gains
+  `device_pixel_ratio` (the guide snaps with the box's own `snap_to_device`,
+  full accent, whole device pixels; a rotated guide stays 1 px anti-aliased).
+  `SelectDecorationInput` gains `skew_guide`: a selected box's edge that lies on
+  it (both ends within 1 px of the guide line) draws no dashes inside the
+  guide's extent, so the guide's 2 / 2 reads alone and does not fill the box's
+  4 / 3 gaps. A Shift guide through the centre cuts no edge. Both are scalars
+  and points; no new crate, trait or dependency.
+
 ### 8. Sequencing, the PR split, what each PR deletes and rewrites
 
 - **2026-10-06: four PRs, in this order, each a `story/` PR that needs
