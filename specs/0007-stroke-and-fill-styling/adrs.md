@@ -405,6 +405,31 @@ already there.
   test against; whoever builds this slice after `object-transform` merges
   should confirm this default and add a test, not silently inherit it.
 
+- **2026-10-06 (architect): gradient box decided; resize-path writes
+  re-pointed.** Resolves the note above, after reviewing PR #29.
+  - **The gradient box is the object's oriented box**, the same one the
+    Select tool draws: `vecmanf-ui-core::oriented_bounds` (local-frame
+    `min`/`max`, `angle`, `pivot`; geometry only, stroke excluded). A
+    rotated object's gradient turns with it, for paths and primitives
+    alike. `render-core` does not recompute it: `editor-wasm` passes the
+    `OrientedBox` values in the fill draw command (commands carry resolved
+    geometry). It has no `ui-core` dependency, so it takes plain points and
+    an `Angle`, not the type. SVG export (slice 10): a primitive uses
+    `objectBoundingBox` under its `rotate()`; a path, whose anchors are
+    baked, uses `userSpaceOnUse` with a `gradientTransform` built from the
+    box. Test: rotate a linear-gradient rectangle 90° and the gradient runs
+    top to bottom on screen.
+  - **Slice 5 writes `stroke_width` directly** in `Document::resize_rect`,
+    `resize_ellipse`, `resize_star_frame` and `resize_path`, through
+    `path_codec::write_stroke_width`, and `ui-core::select_tool` scales the
+    snapshot's `stroke_width` field. When `style: Style` replaces that
+    field, those four commands take the scaled width through the style
+    codec, and `select_tool` scales `style.stroke_width` only. Dash lengths
+    are stored as multiples of the width (AC 9), so they follow the resize
+    with no extra write. The `> 0` refusal on open makes the document-core
+    resize commands refuse a width that is `≤ 0` or not finite; today only
+    `ui-core` floors it (`MIN_STROKE_WIDTH_MM`).
+
 ## Flagged to the lead
 
 1. **Resolved 2026-10-04 in `specification.md`.** AC 9 now stores dash
