@@ -1718,6 +1718,67 @@ mod tests {
         );
     }
 
+    /// UX review item 1, through the tool itself, at the real 40 × 22 px
+    /// size with 16 px hit radii (this needed the `nearest_point_on_segment`
+    /// fix to be testable): a press on the top outline away from any
+    /// handle is a *move* (the object follows the drag), and a press at
+    /// the centre is not a resize. An unfilled object's centre is not a
+    /// body hit either (slice 4: outline only), so it just deselects.
+    #[test]
+    fn a_40_by_22_rectangle_moves_from_its_outline_and_is_not_resized_from_its_centre() {
+        let document = Document::new(1);
+        let id = document.create_rect(RectBounds {
+            origin: Point::new(0.0, 0.0),
+            width: Length::from_mm(40.0),
+            height: Length::from_mm(22.0),
+        });
+        let objects = vec![document.object(id).expect("exists")];
+        let wide = TransformHandleTolerances {
+            resize: Tolerance::from_mm(16.0),
+            rotate: Tolerance::from_mm(16.0),
+            rotate_offset_mm: 32.0,
+        };
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+
+        let mut tool = SelectTool::new();
+        let centre = tool.pointer_down(
+            &objects,
+            &mut selection,
+            Point::new(20.0, 11.0),
+            TOLERANCE,
+            wide,
+            false,
+        );
+        assert_ne!(centre, SelectPointerDownOutcome::Handle);
+        assert!(tool.dragging_handle().is_none());
+
+        selection.select_single(id);
+        let on_outline = Point::new(10.0, 0.0);
+        assert_eq!(
+            tool.pointer_down(&objects, &mut selection, on_outline, TOLERANCE, wide, false),
+            SelectPointerDownOutcome::Selected,
+            "an outline press away from every handle starts a move"
+        );
+        assert!(
+            tool.dragging_handle().is_none(),
+            "a move, not a handle drag"
+        );
+        tool.pointer_up(
+            &document,
+            &objects,
+            &mut selection,
+            on_outline.translated(Vec2::new(5.0, 3.0)),
+            false,
+            false,
+        );
+        let Shape::Rect { bounds, .. } = document.primitive(id).expect("exists").shape else {
+            panic!("rect");
+        };
+        assert_eq!(bounds.origin, Point::new(5.0, 3.0), "moved by the drag");
+        assert!((bounds.width.as_mm() - 40.0).abs() < 1e-9, "not resized");
+    }
+
     /// A zero-height path (a line) keeps grabbable handles: the radius
     /// floor stops the box-size scaling from shrinking it to nothing.
     #[test]
