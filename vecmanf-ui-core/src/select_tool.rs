@@ -19,18 +19,21 @@ use crate::hit_test_object::hit_test_object;
 use crate::object_selection::ObjectSelection;
 use crate::oriented_box::{OrientedBox, oriented_bounds};
 use crate::param_handles::{ParamHandle, centre_drawn, handle_tiers, param_handles, radius_gain};
+use crate::select_bar::BarPreview;
 use crate::transform_commit::same_within_tolerance;
 use crate::transform_drag::{
     CornerRadiusScaling, DragOrigin, ScaleModes, StrokeScaling, TransformDrag, is_polygon_or_star,
 };
-use crate::transform_entry::TransformEntry;
 pub use crate::transform_handle_layout::TransformHandleTolerances;
 use crate::transform_handle_layout::{
     ALL_EIGHT, CORNERS_FOUR, EditHandle, HandleSpec, hit_transform_handle, transform_handles,
 };
 
+mod bar;
 mod entry;
 mod preview;
+
+use entry::OpenEntry;
 
 pub use entry::double_click;
 pub use preview::LiveEdit;
@@ -101,7 +104,10 @@ pub enum SelectDoubleClickOutcome {
 pub struct SelectTool {
     drag: SelectDrag,
     modes: ScaleModes,
-    entry: Option<TransformEntry>,
+    entry: Option<OpenEntry>,
+    /// The Select bar's slider edit in flight (a Points or Ratio drag):
+    /// previewed in blue, committed once.
+    bar_preview: Option<BarPreview>,
     /// The handle the most recent press landed on (`None` for a press
     /// anywhere else): a double-click only acts on a handle the *first*
     /// press already grabbed, so double-clicking the outline of an object
@@ -212,10 +218,10 @@ impl SelectTool {
         match &self.drag {
             SelectDrag::Moving { origin, .. } => origin.shift_at_press,
             SelectDrag::Transforming(drag) => drag.origin.shift_at_press,
-            SelectDrag::None => self
-                .entry
-                .as_ref()
-                .map_or(live_shift, TransformEntry::side_rotate_revealed),
+            SelectDrag::None => match &self.entry {
+                Some(OpenEntry::Transform(entry)) => entry.side_rotate_revealed(),
+                Some(OpenEntry::Param(_)) | None => live_shift,
+            },
         }
     }
 

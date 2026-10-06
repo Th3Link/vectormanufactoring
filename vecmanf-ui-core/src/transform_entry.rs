@@ -26,6 +26,23 @@ const SIZE_EQUAL_EPSILON_MM: f64 = 1e-9;
 /// A typed angle within this (radians) of the current rotation is equal.
 const ANGLE_EQUAL_EPSILON_RAD: f64 = 1e-12;
 
+impl EntryField {
+    /// The single field of a parameter-handle entry (`crate::ParamEntry`).
+    pub(crate) fn for_param(
+        label: &'static str,
+        accessible_name: &'static str,
+        prefill: String,
+    ) -> Self {
+        Self {
+            label,
+            accessible_name,
+            prefill,
+            editable: true,
+            axis: FieldAxis::Radius,
+        }
+    }
+}
+
 /// Which kind of value an entry edits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntryKind {
@@ -37,6 +54,11 @@ pub enum EntryKind {
     /// One field: a polygon or star's outer radius, in millimetres
     /// (criterion 26).
     OuterRadius,
+    /// One field: a rectangle's corner radius, in millimetres
+    /// (`specs/unified-object-editing/`, criterion 18).
+    CornerRadius,
+    /// One field: a star's inner ratio (criterion 19).
+    InnerRatio,
 }
 
 /// What a field edits.
@@ -72,6 +94,10 @@ pub enum InvalidReason {
     NotANumber,
     /// A size of zero or less ("Must be above 0").
     NotPositive,
+    /// A corner radius below zero ("Must be 0 or more").
+    Negative,
+    /// An inner ratio outside 0.01 to 0.99 ("Must be 0.01 to 0.99").
+    RatioRange,
 }
 
 /// What [`TransformEntry::commit`] did.
@@ -128,7 +154,7 @@ pub fn format_degrees(degrees: f64) -> String {
 }
 
 /// The one decimal a size readout and a size field prefill show.
-fn format_mm(value: f64) -> String {
+pub(crate) fn format_mm(value: f64) -> String {
     format!("{value:.1}")
 }
 

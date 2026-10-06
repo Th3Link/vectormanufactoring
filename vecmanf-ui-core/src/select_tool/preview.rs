@@ -6,13 +6,14 @@
 
 use vecmanf_document_core::{Angle, ObjectSnapshot, Point, Vec2};
 
+use super::entry::OpenEntry;
 use super::{SelectDrag, SelectTool};
 use crate::object_selection::ObjectSelection;
 use crate::oriented_box::OrientedBox;
+use crate::param_edit::apply_param;
 use crate::skew_math::skew_frame;
 use crate::transform_commit::same_within_tolerance;
 use crate::transform_drag::pivot_for;
-use crate::transform_entry::TransformEntry;
 use crate::transform_handle_layout::EditHandle;
 
 /// The geometry a release would commit right now, for the blue half of
@@ -49,8 +50,18 @@ impl SelectTool {
                 .filter(|object| selection.contains(object.id()))
                 .map(|object| object.translated(offset))
                 .collect()
+        } else if let Some(live) = self.live_transform(pointer, shift, ctrl) {
+            vec![live]
         } else {
-            vec![self.live_transform(pointer, shift, ctrl)?]
+            // No drag in flight: a slider edit of the bar, previewed the same
+            // way (criterion 10), on the objects it was started against.
+            let pending = self.bar_preview.as_ref()?;
+            pending
+                .ids
+                .iter()
+                .filter_map(|id| objects.iter().find(|object| object.id() == *id))
+                .map(|object| apply_param(object, pending.value))
+                .collect()
         };
         let changed = resolved.iter().any(|new| {
             objects
@@ -59,6 +70,14 @@ impl SelectTool {
                 .is_none_or(|old| !same_within_tolerance(old, new))
         });
         changed.then_some(LiveEdit { objects: resolved })
+    }
+
+    /// Whether a move, resize, rotate, skew or parameter drag is in flight. A
+    /// drag writes nothing until its release, so the document cannot change
+    /// under it.
+    #[must_use]
+    pub const fn drag_in_flight(&self) -> bool {
+        !matches!(self.drag, SelectDrag::None)
     }
 
     /// Whether the parameter handles are drawn right now: not while the same
@@ -101,7 +120,10 @@ impl SelectTool {
                 pivot_for(drag.handle, &drag.start, &drag.start_box, shift)
             }
             SelectDrag::Moving { .. } => None,
-            SelectDrag::None => self.entry.as_ref().map(TransformEntry::pivot),
+            SelectDrag::None => match &self.entry {
+                Some(OpenEntry::Transform(entry)) => Some(entry.pivot()),
+                Some(OpenEntry::Param(_)) | None => None,
+            },
         }
     }
 

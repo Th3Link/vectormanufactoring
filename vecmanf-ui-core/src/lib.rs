@@ -25,10 +25,12 @@ mod object_bounds;
 mod object_selection;
 mod oriented_box;
 mod param_edit;
+mod param_entry;
 mod param_handles;
 mod pen_tool;
 mod poly_star_tool;
 mod rectangle_tool;
+mod select_bar;
 mod select_tool;
 mod selection;
 mod shape_hit_test;
@@ -60,6 +62,7 @@ pub use param_edit::{
     MAX_INNER_RATIO, MIN_INNER_RATIO, ParamValue, apply_param, clamped_ratio, commit_param_batch,
     value_from_pointer,
 };
+pub use param_entry::ParamEntry;
 pub use param_handles::{
     CENTRE_YIELD_PX, Corner, HandleTiers, KNOB_DIAMETER_PX, KNOB_INSET_PX, KNOB_PITCH_PX,
     MIN_GLYPH_GAP_PX, PARAM_HIT_PX, PARAM_MIN_SIDE_PX, ParamHandle, centre_drawn, handle_tiers,
@@ -70,6 +73,9 @@ pub use poly_star_tool::{
     PolyStarMode, PolyStarPointerDownOutcome, PolyStarPointerUpOutcome, PolygonStarTool,
 };
 pub use rectangle_tool::{RectPointerDownOutcome, RectPointerUpOutcome, RectangleTool};
+pub use select_bar::{
+    BarPreview, BarValue, ObjectKind, SelectBarState, ids_of_kind, select_bar_state,
+};
 pub use select_tool::{
     LiveEdit, SelectDoubleClickOutcome, SelectPointerDownOutcome, SelectTool,
     TransformHandleTolerances, double_click,
