@@ -24,7 +24,7 @@ const MAX_POINT_COUNT = 1024;
  * The contextual tool-options bar for the three shape tools
  * (`specs/0003-primitive-shapes/specification.md`'s UX notes, "Tool rail
  * additions and shortcuts" / "Polygon/star point-count and ratio"):
- * shown directly under the main menu, full width, the same row and
+ * floating over the canvas at the top (see `App.tsx`), the same row and
  * mechanism as `NodeToolbar`'s own bar — only the controls relevant to
  * the active shape tool are shown.
  *
@@ -47,8 +47,11 @@ export function ShapeToolbar({
 }: ShapeToolbarProps) {
   return (
     <div
-      className="flex h-9 shrink-0 items-center gap-3 border-b border-border px-2 text-sm"
-      style={{ background: "var(--toolbar-bg)" }}
+      className="flex pointer-events-auto h-9 min-w-0 items-center gap-3 rounded-lg px-2 text-sm"
+      style={{
+        background: "var(--toolbar-bg)",
+        boxShadow: "var(--panel-elevation-shadow)",
+      }}
     >
       {tool === "rectangle" && (
         <button
