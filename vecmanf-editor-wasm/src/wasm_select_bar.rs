@@ -69,7 +69,9 @@ impl From<SelectBarState> for SelectBarView {
             radius_mixed,
             radius,
             radius_limited: state.radius_limited.is_some(),
-            radius_stored: state.radius_limited.map_or(0.0, vecmanf_document_core::Length::as_mm),
+            radius_stored: state
+                .radius_limited
+                .map_or(0.0, vecmanf_document_core::Length::as_mm),
             remove_rounding_shown: state.remove_rounding_shown,
             remove_rounding_enabled: state.remove_rounding_enabled,
             points_shown,
