@@ -9,7 +9,7 @@
 //! and `SelectTool::pointer_down`.
 
 use vecmanf_document_core::Point;
-use vecmanf_ui_core::{EntryKind, EntryOutcome, SelectTool, TransformEntry};
+use vecmanf_ui_core::{EntryKind, EntryOutcome, SelectTool, TransformEntry, TransformHandle};
 
 use super::{Session, Tool};
 
@@ -40,6 +40,10 @@ pub struct EntryView {
     /// The box center, in document space: the chip goes outward from it,
     /// through the handle.
     pub center: Point,
+    /// How far past the handle's position its outermost glyph reaches, in
+    /// screen pixels: 6 normally, 22 for an edge resize handle with a skew
+    /// arrow on the same side, which the chip must clear.
+    pub glyph_reach_px: f64,
 }
 
 impl Session {
@@ -58,15 +62,25 @@ impl Session {
     pub fn transform_entry(&self) -> Option<EntryView> {
         let entry = self.open_entry()?;
         let objects = self.objects();
-        let handle = SelectTool::transform_handles(
+        let handles = SelectTool::transform_handles(
             &objects,
             &self.selection,
             self.transform_handle_tolerances(),
             entry.side_rotate_revealed(),
-        )
-        .into_iter()
-        .find(|(handle, _)| *handle == entry.handle())?
-        .1;
+        );
+        let handle = handles
+            .iter()
+            .find(|(handle, _)| *handle == entry.handle())?
+            .1;
+        // An edge resize handle with a skew arrow on its side: the arrow
+        // sits 16 px out and is 12 px deep, so the glyphs reach 22 px.
+        let skew_beyond = matches!(
+            entry.handle(),
+            TransformHandle::Resize(direction)
+                if handles.iter().any(|(h, _)| matches!(
+                    h, TransformHandle::Skew(side) if side.direction() == direction
+                ))
+        );
         let box_ = entry.start_box();
         Some(EntryView {
             kind: match entry.kind() {
@@ -87,6 +101,7 @@ impl Session {
             linked: entry.linked(),
             handle,
             center: box_.to_document(box_.local_center()),
+            glyph_reach_px: if skew_beyond { 22.0 } else { 6.0 },
         })
     }
 

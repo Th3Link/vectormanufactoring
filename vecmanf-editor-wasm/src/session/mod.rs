@@ -68,14 +68,6 @@ const POINT_TOLERANCE_PX: f64 = 16.0;
 const HANDLE_TOLERANCE_PX: f64 = 16.0;
 /// 4px segment hit-test tolerance (`docs/design-system.md`).
 const SEGMENT_TOLERANCE_PX: f64 = 4.0;
-/// How far (screen pixels) a pen-tool press must move before it counts
-/// as a drag rather than a plain click (acceptance criteria 1 vs 2). Not
-/// itself a named design-system token; a small, deliberately generous
-/// value so an imprecise click is never misread as a drag. The Select
-/// tool's dead zone is the same 3 px, kept in
-/// `vecmanf_ui_core::TransformHandleTolerances::at_scale`.
-const DRAG_THRESHOLD_PX: f64 = 3.0;
-
 /// The largest pointer coordinate (document millimetres) a tool ever sees.
 /// A finite value beyond it — one past `f32` range panics the draw-list
 /// tessellator — is clamped to it; real pointer events are nowhere near.

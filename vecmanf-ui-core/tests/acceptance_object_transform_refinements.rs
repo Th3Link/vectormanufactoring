@@ -179,7 +179,12 @@ impl Rig {
         self.release(to, shift, ctrl);
     }
 
+    /// A whole double-click: the first press and release, then the second
+    /// press's `double_click` (a handle only opens an entry if the first
+    /// press grabbed it).
     fn double_click(&mut self, at: Point, shift: bool, ctrl: bool) -> SelectDoubleClickOutcome {
+        self.press(at, shift);
+        self.release(at, shift, ctrl);
         let objects = self.objects();
         self.tool.double_click(
             &objects,
@@ -620,6 +625,38 @@ fn a_double_click_dispatches_by_what_is_under_the_second_press() {
         }
         assert_eq!(rig.object(), before, "{kind:?}: nothing written");
     }
+}
+
+/// The real flow: double-clicking the outline of an object that is not
+/// selected yet. The handles only appear after the first click, so the second
+/// press must hand off even though it lands on the N-edge handle.
+#[test]
+fn double_clicking_the_outline_of_an_unselected_object_at_a_handle_spot_hands_off() {
+    let mut rig = Rig::new(Kind::Rect);
+    rig.selection.clear();
+    let before = rig.object();
+    let outcome = rig.double_click(pt(60.0, 20.0), false, false);
+    assert_eq!(outcome, SelectDoubleClickOutcome::Hit(before));
+    assert!(rig.tool.entry().is_none(), "no size entry opened");
+}
+
+#[test]
+fn a_double_click_on_a_handle_the_first_press_did_not_grab_does_not_open_an_entry() {
+    let mut rig = Rig::new(Kind::Rect);
+    // First press on the body, second on the Se corner: not one handle.
+    rig.press(pt(40.0, 40.0), false);
+    rig.release(pt(40.0, 40.0), false, false);
+    let objects = rig.objects();
+    let outcome = rig.tool.double_click(
+        &objects,
+        &rig.selection,
+        pt(110.0, 80.0),
+        SEGMENT_TOLERANCE,
+        tolerances(),
+        (false, false),
+    );
+    assert!(!matches!(outcome, SelectDoubleClickOutcome::EntryOpened));
+    assert!(rig.tool.entry().is_none());
 }
 
 #[test]

@@ -65,7 +65,8 @@ function coversPoint(placement: Placement, chip: Size, point: { x: number; y: nu
  * Where to put the typed-entry chip (`object-transform-refinements` UX
  * notes, "Numeric entry control"): upright, centred outward from the handle
  * along the line from the box centre through it, with 10px clear of the
- * handle's glyph edge, then clamped inside the canvas. If the clamp would
+ * handle's glyph edge (`glyphReach`: further out where a skew arrow sits
+ * on the same side), then clamped inside the canvas. If the clamp would
  * cover the handle it flips to the inner side. While the handle is off
  * screen the chip stays clamped at the canvas edge.
  */
@@ -74,6 +75,7 @@ export function placeEntryChip(
   center: { x: number; y: number },
   chip: Size,
   canvas: Size,
+  glyphReach = HANDLE_GLYPH_RADIUS_PX,
 ): Placement {
   let dx = handle.x - center.x;
   let dy = handle.y - center.y;
@@ -89,7 +91,7 @@ export function placeEntryChip(
     // The chip's half-extent along the direction, so the nearest point of
     // the chip (not its centre) is the gap away from the glyph.
     const reach =
-      HANDLE_GLYPH_RADIUS_PX +
+      glyphReach +
       ENTRY_CHIP_GAP_PX +
       (Math.abs(dx) * chip.width) / 2 +
       (Math.abs(dy) * chip.height) / 2;

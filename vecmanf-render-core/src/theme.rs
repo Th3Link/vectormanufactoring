@@ -184,6 +184,11 @@ pub const TRANSFORM_SKEW_HANDLE_WIDTH_PX: f64 = 12.0;
 /// pixels (3 px in `docs/design-system.md`).
 pub const TRANSFORM_SKEW_HANDLE_CORNER_RADIUS_PX: f64 = 3.0;
 
+/// The skew fixed-line guide's color: `--transform-guide`, `--accent` at
+/// full opacity (`--accent-hover` at 20% was invisible, about 1.1:1 on the
+/// canvas, `docs/design-system.md`).
+pub const TRANSFORM_SKEW_GUIDE_COLOR: RgbaColor = ACCENT;
+
 /// The skew fixed-line guide's weight, screen-space pixels (1 px dashed in
 /// `docs/design-system.md`).
 pub const TRANSFORM_SKEW_GUIDE_WIDTH_PX: f64 = 1.0;

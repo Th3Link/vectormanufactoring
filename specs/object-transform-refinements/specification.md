@@ -144,7 +144,10 @@ Decided by the `product-owner` on the architect's flags (2026-10-06). Items
    shrink rule, at least 4), rotate 16, skew 12. On an exact tie the order is
    resize, then skew, then rotate. The center handle is not part of this
    test (criterion 4; criterion 3's body move is the fallback inside the
-   box). Layout (`ux-engineer`, UX notes): a corner rotate handle sits 32 px
+   box). An edge resize handle on a box whose shorter side is under 24 px is
+   not drawn but stays hit-testable (slice 5's rule: hit-testing is
+   unchanged; the glyphs would merge). Layout (`ux-engineer`, UX notes): a
+   corner rotate handle sits 32 px
    outward on the diagonal from its corner resize handle, so resize and
    rotate hit areas never overlap at any box size; every handle glyph keeps
    a clear gap of at least 4 px to every other glyph. Skew hit areas
@@ -546,7 +549,7 @@ the customer decides. They are `Proposal`, not customer requirements.
     preview.
 56. (Should, Proposal) Given a skew drag in progress, then a 1 px dashed
     guide is drawn along the line that stays fixed (the fixed edge, or the
-    line through the box center with Shift), extended 12 px past each end of
+    line through the box center with Shift), extended 16 px past each end of
     the box; it disappears on release or Escape.
 
 ## Accepted decisions (not criteria)
@@ -804,7 +807,7 @@ Text `text-sm` (14 px), tabular numerals, right-aligned. Pre-filled with
 the readout's value (one decimal, same sign), all text selected.
 
 **Size chip:** a group on a `--toolbar-bg` card, 6 px padding, 8 px radius,
-`--panel-elevation-shadow`. Fields 84 px wide, 28 px high, 4 px apart:
+`--panel-elevation-shadow`. Fields 100 px wide (revised after the UI review: 84 px let the "mm" suffix touch the last digit and clipped values of 1000 mm and more), 28 px high, 4 px apart:
 "W" and "H" (visible 12 px labels inside the left edge; `aria-label`
 "Width" and "Height", measured along the object's own axes), the unit
 ("mm", the document's display unit) as a fixed suffix. Edge handles show
@@ -892,8 +895,8 @@ every pair the clearances listed above at any box size.
   "15°" under Ctrl). Sign as criterion 40.
 - Pivot marker at the fixed point (criterion 40).
 - A **fixed-line guide**: a 1 px dashed line (4 on / 3 off,
-  `--shape-handle-guide`) along the line that stays put (the fixed edge,
-  or the line through the center under Shift), extended 12 px past each
+  `--accent` at 100%, token `--transform-guide`; the corner-radius guide token was too faint here) along the line that stays put (the fixed edge,
+  or the line through the center under Shift), extended 16 px past each
   end of the box. A point does not tell a maker which edge holds still in
   a shear; the line does. Shown during a skew drag only.
 - The selection box in the preview is the tight oriented box around the

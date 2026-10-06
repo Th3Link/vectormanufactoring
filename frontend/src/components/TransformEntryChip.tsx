@@ -41,6 +41,7 @@ export function TransformEntryChip({
   onLinked,
 }: TransformEntryChipProps) {
   const chipRef = useRef<HTMLDivElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const messageId = useId();
   const [texts, setTexts] = useState<string[]>(() => entry.fields.map((f) => f.prefill));
@@ -66,12 +67,15 @@ export function TransformEntryChip({
   // Measured before paint so the chip is placed correctly on its first frame.
   useLayoutEffect(() => {
     const chip = chipRef.current;
+    const row = rowRef.current;
     const container = containerRef.current;
-    if (!chip || !container) {
+    if (!chip || !row || !container) {
       return;
     }
+    // The chip is placed by its field row (card padding included), so an
+    // error message growing the card downward does not move the field.
     const next = {
-      chip: { width: chip.offsetWidth, height: chip.offsetHeight },
+      chip: { width: chip.offsetWidth, height: row.offsetHeight + 12 },
       canvas: { width: container.clientWidth, height: container.clientHeight },
     };
     setSizes((previous) =>
@@ -84,7 +88,7 @@ export function TransformEntryChip({
     );
   }, [entry, invalid, containerRef]);
 
-  const placement = placeEntryChip(entry.handle, entry.center, sizes.chip, sizes.canvas);
+  const placement = placeEntryChip(entry.handle, entry.center, sizes.chip, sizes.canvas, entry.glyphReach);
 
   const returnFocusToCanvas = () => containerRef.current?.focus();
 
@@ -155,7 +159,7 @@ export function TransformEntryChip({
   };
 
   const isAngle = entry.kind === "angle";
-  const fieldWidth = isAngle ? 80 : 84;
+  const fieldWidth = isAngle ? 80 : 100;
 
   return (
     <div
@@ -164,7 +168,7 @@ export function TransformEntryChip({
       aria-label={isAngle ? "Rotation" : "Size"}
       tabIndex={-1}
       data-transform-entry
-      className="absolute z-20 flex flex-col gap-1 rounded-lg p-1.5 outline-none"
+      className="absolute z-20 flex flex-col rounded-[8px] p-1.5 outline-none"
       style={{
         left: placement.left,
         top: placement.top,
@@ -173,7 +177,7 @@ export function TransformEntryChip({
         color: "var(--toolbar-icon)",
       }}
     >
-      <div className="flex items-center gap-1">
+      <div ref={rowRef} className="flex items-center gap-1">
         {entry.fields.map((field, index) => {
           const isInvalid = invalid?.field === index;
           return (
@@ -206,7 +210,7 @@ export function TransformEntryChip({
                   onChange={(event) => onChange(index, event.target.value)}
                   onKeyDown={(event) => onKeyDown(event, index)}
                   onBlur={onBlur}
-                  className={`h-7 w-full rounded-[5px] border bg-white pr-6 pl-5 text-right text-sm tabular-nums outline-none ${
+                  className={`h-7 w-full rounded-[5px] border bg-white ${isAngle ? "pr-6" : "pr-8"} pl-5 text-right text-sm tabular-nums outline-none ${
                     isInvalid
                       ? "border-[var(--field-invalid)] shadow-[inset_0_0_0_1px_var(--field-invalid)]"
                       : "border-[color-mix(in_srgb,var(--toolbar-icon)_60%,transparent)] focus:border-[var(--editor-accent)] focus:shadow-[inset_0_0_0_1px_var(--editor-accent)]"
@@ -225,12 +229,16 @@ export function TransformEntryChip({
           );
         })}
       </div>
+      {/* Always mounted so the polite live region announces a change; empty
+          it has no height, and the message grows the card downward without
+          moving the field row (the chip is anchored by the row). */}
       <div
         id={messageId}
         role="status"
         aria-live="polite"
-        className="flex min-h-0 items-center gap-1 text-xs"
-        style={{ display: invalid ? "flex" : "none" }}
+        className={
+          invalid ? "mt-1 flex items-center gap-1 text-xs" : "h-0 overflow-hidden text-xs"
+        }
       >
         {invalid && (
           <>

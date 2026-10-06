@@ -144,6 +144,10 @@ pub struct TransformHandleTolerances {
     pub drag_threshold_mm: f64,
 }
 
+/// The dead zone radius of every Select-tool drag on the selected object, and
+/// of the Pen tool's click-versus-drag test, in screen pixels.
+pub const DRAG_THRESHOLD_PX: f64 = 3.0;
+
 impl TransformHandleTolerances {
     /// The design-system pixel constants at `px_per_mm` screen pixels per
     /// document millimetre.
@@ -160,9 +164,21 @@ impl TransformHandleTolerances {
             edge_handle_min_side_mm: mm(24.0),
             skew_min_side_mm: mm(24.0),
             center_min_side_mm: mm(48.0),
-            drag_threshold_mm: mm(3.0),
+            drag_threshold_mm: mm(DRAG_THRESHOLD_PX),
         }
     }
+}
+
+/// How far under a pixel threshold a size may fall and still count as
+/// reaching it: a box of exactly 48 px must keep its centre handle although
+/// `px / scale * scale` rounds a hair under 48 (about 0.05 px at the 48 px
+/// threshold).
+const THRESHOLD_SLACK: f64 = 1e-3;
+
+/// Whether `value` reaches `threshold` (both millimetres), within
+/// [`THRESHOLD_SLACK`].
+fn at_least(value: f64, threshold: f64) -> bool {
+    value >= threshold * (1.0 - THRESHOLD_SLACK)
 }
 
 /// A box dimension at or below this (millimetres) is "zero" for the skew
@@ -234,7 +250,7 @@ fn skew_side_visible(box_: &OrientedBox, side: Side, min_side_mm: f64) -> bool {
     } else {
         box_.width()
     };
-    lever > ZERO_EXTENT_MM && lever >= min_side_mm
+    lever > ZERO_EXTENT_MM && at_least(lever, min_side_mm)
 }
 
 /// Every handle the box currently has, in document space, paired with its
@@ -287,7 +303,10 @@ pub fn transform_handles(
             }
         }
     }
-    if box_.width().min(box_.height()) >= tolerances.center_min_side_mm {
+    if at_least(
+        box_.width().min(box_.height()),
+        tolerances.center_min_side_mm,
+    ) {
         handles.push((TransformHandle::Move, at(box_.local_center())));
     }
     handles
@@ -305,7 +324,10 @@ pub fn is_drawn_handle(
     match handle {
         TransformHandle::Resize(direction) => {
             is_corner(direction)
-                || box_.width().min(box_.height()) >= tolerances.edge_handle_min_side_mm
+                || at_least(
+                    box_.width().min(box_.height()),
+                    tolerances.edge_handle_min_side_mm,
+                )
         }
         TransformHandle::Rotate(_) | TransformHandle::Skew(_) | TransformHandle::Move => true,
     }
@@ -860,6 +882,35 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    /// A box of exactly 48 px keeps its centre handle and one of exactly 24 px
+    /// its edge and skew handles, whatever the zoom rounds to.
+    #[test]
+    fn the_pixel_thresholds_hold_at_exactly_48_and_24_px() {
+        for scale in [3.779_527_559, 1.0, 0.37, 7.131, 25.0] {
+            let tolerances = TransformHandleTolerances::at_scale(scale);
+            let box_ =
+                |px: f64| unrotated_box(Point::new(0.0, 0.0), Point::new(px / scale, px / scale));
+            let spec = HandleSpec { skew: true, ..RECT };
+            let handles = transform_handles(&box_(48.0), spec, &tolerances);
+            assert!(
+                handles.iter().any(|(h, _)| *h == TransformHandle::Move),
+                "{scale}"
+            );
+            let small = box_(24.0);
+            let handles = transform_handles(&small, spec, &tolerances);
+            assert_eq!(
+                count(&handles, |h| matches!(h, TransformHandle::Skew(_))),
+                4,
+                "{scale}"
+            );
+            assert!(is_drawn_handle(
+                TransformHandle::Resize(ResizeDirection::N),
+                &small,
+                &tolerances
+            ));
         }
     }
 }

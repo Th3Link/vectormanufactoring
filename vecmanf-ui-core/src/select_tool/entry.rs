@@ -48,7 +48,8 @@ impl SelectTool {
 
     /// Acceptance criteria 3, 18, 22, 23, 25-28, 32, 49: the double-click
     /// dispatch. A double-click on a handle (at the *second press's*
-    /// position and modifiers) opens the numeric entry for a rotate or
+    /// position and modifiers, and only if the first press grabbed the same
+    /// handle) opens the numeric entry for a rotate or
     /// resize handle and does nothing for a skew handle — neither hands
     /// off to the object's own tool. Anywhere else inside the box of the
     /// sole selected object, the centre handle included, hands off to it;
@@ -64,8 +65,10 @@ impl SelectTool {
     ) -> SelectDoubleClickOutcome {
         let (shift, ctrl) = modifiers;
         self.drag = SelectDrag::None;
+        let first_press_handle = self.last_press_handle;
         if let Some((object, box_, handle)) =
             Self::handle_at(objects, selection, point, handle_tolerances, shift)
+                .filter(|(_, _, handle)| first_press_handle == Some(*handle))
         {
             let entry = match handle {
                 TransformHandle::Rotate(direction) => {

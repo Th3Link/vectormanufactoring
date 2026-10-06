@@ -19,7 +19,7 @@ use super::Tool;
 
 /// How far the skew guide extends past each end of the box, screen pixels
 /// (`docs/design-system.md`, "Transform skew fixed-line guide").
-const SKEW_GUIDE_EXTEND_PX: f64 = 12.0;
+const SKEW_GUIDE_EXTEND_PX: f64 = 16.0;
 
 impl Session {
     /// The live (possibly drag-translated, -resized, -rotated or -skewed)
@@ -643,7 +643,7 @@ mod tests {
 
     /// Criterion 56: a skew drag draws a dashed guide along the fixed line
     /// (the bottom edge for a top handle, the centre line under Shift),
-    /// 12 px past each end of the box; it is gone after Escape.
+    /// 16 px past each end of the box; it is gone after Escape.
     #[test]
     fn a_skew_drag_draws_the_fixed_line_guide() {
         use vecmanf_document_core::{AnchorId, NewAnchor};
@@ -668,7 +668,7 @@ mod tests {
             .select_transform_decoration_input()
             .skew_guide
             .unwrap();
-        let pad = 12.0 / scale;
+        let pad = 16.0 / scale;
         assert!((guide.0.x - (10.0 - pad)).abs() < 1e-9 && (guide.0.y - 80.0).abs() < 1e-9);
         assert!((guide.1.x - (110.0 + pad)).abs() < 1e-9 && (guide.1.y - 80.0).abs() < 1e-9);
         session.modifiers_changed(true, false);

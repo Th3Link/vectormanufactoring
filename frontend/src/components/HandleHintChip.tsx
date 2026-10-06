@@ -28,7 +28,7 @@ const HINT_LINES: Record<string, string[]> = {
   ],
   "rotate-side": [
     "Rotate",
-    "Shift: pivot at opposite side",
+    "Pivot: opposite side",
     "Ctrl: snap",
     "Double-click: type an angle",
   ],
@@ -60,6 +60,22 @@ export function HandleHintChip({ hint, containerRef }: HandleHintChipProps) {
     canvas: { width: Number.POSITIVE_INFINITY, height: Number.POSITIVE_INFINITY },
   });
 
+  // Always track the pointer, hint or not: the move that makes a hint
+  // appear happens before this component's hint effect is registered, so
+  // recording only while a hint is active left the anchor stale or empty.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return undefined;
+    }
+    const track = (event: PointerEvent) => {
+      const bounds = container.getBoundingClientRect();
+      pointerRef.current = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+    };
+    container.addEventListener("pointermove", track);
+    return () => container.removeEventListener("pointermove", track);
+  }, [containerRef]);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container || !lines) {
@@ -68,15 +84,18 @@ export function HandleHintChip({ hint, containerRef }: HandleHintChipProps) {
     let timer: number | undefined;
     const arm = () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => setAnchor(pointerRef.current), HINT_DELAY_MS);
+      timer = window.setTimeout(() => {
+        // No known pointer position: no hint rather than one at a stale spot.
+        if (pointerRef.current) {
+          setAnchor(pointerRef.current);
+        }
+      }, HINT_DELAY_MS);
     };
     const hide = () => {
       window.clearTimeout(timer);
       setAnchor(null);
     };
-    const onMove = (event: PointerEvent) => {
-      const bounds = container.getBoundingClientRect();
-      pointerRef.current = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+    const onMove = () => {
       // Any movement is not resting: hide and wait for the pointer to stop.
       hide();
       arm();

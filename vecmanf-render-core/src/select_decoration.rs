@@ -14,7 +14,7 @@
 //! `vecmanf-editor-wasm` — the same way `primitive-shapes` already passes
 //! shape-handle positions.
 
-use vecmanf_document_core::{NodeId, Point, Vec2, ViewTransform};
+use vecmanf_document_core::{Angle, NodeId, Point, Vec2, ViewTransform};
 
 use crate::color::RgbaColor;
 use crate::glyphs::{self, DrawList, quad_outline};
@@ -259,7 +259,7 @@ fn skew_handle_glyph(
             center,
             (length, width),
             radius,
-            unit.y.atan2(unit.x),
+            Angle::from_radians(unit.y.atan2(unit.x)),
             theme::ACCENT,
         ));
         RgbaColor::WHITE
@@ -269,7 +269,7 @@ fn skew_handle_glyph(
                 center,
                 (length, width),
                 radius,
-                unit.y.atan2(unit.x),
+                Angle::from_radians(unit.y.atan2(unit.x)),
                 theme::ACCENT_HOVER,
             ));
         }
@@ -333,7 +333,7 @@ pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationI
             from,
             to,
             screen_px_to_mm(view, theme::TRANSFORM_SKEW_GUIDE_WIDTH_PX),
-            theme::ACCENT_HOVER,
+            theme::TRANSFORM_SKEW_GUIDE_COLOR,
             screen_px_to_mm(view, theme::GUIDE_DASH_PX),
             screen_px_to_mm(view, theme::GUIDE_GAP_PX),
         ));

@@ -182,7 +182,8 @@ impl TransformEntry {
             linked: false,
             stroke_scaling: StrokeScaling::Keep,
             side_rotate_revealed: !is_corner(direction),
-            pivot: pivot_for(handle, object, box_, shift).unwrap_or_else(|| box_.local_center()),
+            pivot: pivot_for(handle, object, box_, shift)
+                .unwrap_or_else(|| box_.to_document(box_.local_center())),
             fields: vec![EntryField {
                 label: "",
                 accessible_name: "Angle",
@@ -257,7 +258,8 @@ impl TransformEntry {
             linked,
             stroke_scaling,
             side_rotate_revealed: false,
-            pivot: pivot_for(handle, object, box_, shift).unwrap_or_else(|| box_.local_center()),
+            pivot: pivot_for(handle, object, box_, shift)
+                .unwrap_or_else(|| box_.to_document(box_.local_center())),
             fields,
         }
     }

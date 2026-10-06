@@ -13,7 +13,7 @@
 //! a document primitive's own stroke and handles are built, reusing
 //! these glyphs as its drawing primitives.
 
-use vecmanf_document_core::{Point, Vec2};
+use vecmanf_document_core::{Angle, Point, Vec2};
 
 use crate::color::RgbaColor;
 
@@ -89,11 +89,17 @@ pub fn square(center: Point, size_mm: f64, color: RgbaColor) -> DrawList {
 /// side; `0` degenerates to [`square`].
 #[must_use]
 pub fn rounded_square(center: Point, size_mm: f64, radius_mm: f64, color: RgbaColor) -> DrawList {
-    rounded_rect(center, (size_mm, size_mm), radius_mm, 0.0, color)
+    rounded_rect(
+        center,
+        (size_mm, size_mm),
+        radius_mm,
+        Angle::from_radians(0.0),
+        color,
+    )
 }
 
 /// A rectangle `size_mm` = (along, across) with rounded corners, turned by
-/// `angle_rad` (clockwise in Y-down) about `center` — the skew handle's
+/// `angle` (clockwise in Y-down) about `center` — the skew handle's
 /// hover and dragging ground. `radius_mm` is clamped to half the shorter
 /// side.
 #[must_use]
@@ -101,7 +107,7 @@ pub fn rounded_rect(
     center: Point,
     size_mm: (f64, f64),
     radius_mm: f64,
-    angle_rad: f64,
+    angle: Angle,
     color: RgbaColor,
 ) -> DrawList {
     const ARC_SEGMENTS: usize = 4;
@@ -125,7 +131,7 @@ pub fn rounded_rect(
             std::f64::consts::PI,
         ),
     ];
-    let turn = Vec2::new(1.0, 0.0).rotated(vecmanf_document_core::Angle::from_radians(angle_rad));
+    let turn = Vec2::new(1.0, 0.0).rotated(angle);
     let place = |x: f64, y: f64| {
         // `turn` is the unit x axis, its perpendicular the unit y axis.
         center.translated(Vec2::new(x * turn.x - y * turn.y, x * turn.y + y * turn.x))

@@ -96,6 +96,12 @@ pub struct SelectTool {
     drag: SelectDrag,
     stroke_scaling: StrokeScaling,
     entry: Option<TransformEntry>,
+    /// The handle the most recent press landed on (`None` for a press
+    /// anywhere else): a double-click only acts on a handle the *first*
+    /// press already grabbed, so double-clicking the outline of an object
+    /// that is not selected yet (whose handles appear after the first click)
+    /// still hands off.
+    last_press_handle: Option<TransformHandle>,
 }
 
 /// The handle kinds `object` shows (criteria 11, 37, 50): corner resize
@@ -311,6 +317,7 @@ impl SelectTool {
         shift: bool,
     ) -> SelectPointerDownOutcome {
         self.entry = None;
+        self.last_press_handle = None;
         // `adrs.md`: "ui-core filters the selection against the current
         // snapshot first" — drops any id a prior action (this peer's own
         // edit in a different tool, or a collaborator) has since removed,
@@ -328,6 +335,7 @@ impl SelectTool {
                 handle,
                 stroke_scaling: self.stroke_scaling,
             });
+            self.last_press_handle = Some(handle);
             return SelectPointerDownOutcome::Handle;
         }
         let from_center = matches!(

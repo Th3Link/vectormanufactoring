@@ -151,6 +151,7 @@ pub struct TransformEntryView {
     pub handle_y: f64,
     pub center_x: f64,
     pub center_y: f64,
+    pub glyph_reach: f64,
 }
 
 #[wasm_bindgen]
@@ -219,6 +220,7 @@ impl TransformEntryView {
             handle_y,
             center_x,
             center_y,
+            glyph_reach: entry.glyph_reach_px,
         }
     }
 }

@@ -67,6 +67,15 @@ fn click(session: &mut Session, at: Point) {
 }
 
 /// A press, a move and a release; Shift and Ctrl are held from the move.
+/// A whole double-click: the first press and release, then the second
+/// press's `double_click`.
+fn dbl(session: &mut Session, at: Point, shift: bool, ctrl: bool) {
+    session.pointer_hover(at, shift, ctrl);
+    session.pointer_down(at, shift);
+    session.pointer_up(at, shift, ctrl);
+    session.double_click(at, shift, ctrl);
+}
+
 fn drag(session: &mut Session, from: Point, to: Point, shift: bool, ctrl: bool) {
     session.pointer_hover(from, false, false);
     session.pointer_down(from, false);
@@ -268,7 +277,7 @@ fn the_skew_handle_cursor_turns_with_a_rotated_path() {
     let mut session = selected(&path_document());
     // Rotate by typing 30 degrees.
     session.pointer_hover(ne_rotate(), false, false);
-    session.double_click(ne_rotate(), false, false);
+    dbl(&mut session, ne_rotate(), false, false);
     let _ = session.commit_transform_entry("30", "", 0);
     let bytes = session.pack("0.1.0").unwrap();
     let document = unpack(99, &bytes).unwrap();
@@ -313,16 +322,16 @@ fn the_skew_handle_cursor_turns_with_a_rotated_path() {
 #[test]
 fn a_double_click_inside_the_box_hands_off_and_on_a_handle_does_not() {
     let mut session = selected(&rect_document());
-    session.double_click(pt(60.0, 50.0), false, false);
+    dbl(&mut session, pt(60.0, 50.0), false, false);
     assert_eq!(session.tool(), Tool::Rectangle, "centre handle: handoff");
 
     let mut session = selected(&rect_document());
-    session.double_click(pt(40.0, 60.0), false, false);
+    dbl(&mut session, pt(40.0, 60.0), false, false);
     assert_eq!(session.tool(), Tool::Rectangle, "anywhere inside the box");
 
     for at in [ne_rotate(), se_resize()] {
         let mut session = selected(&rect_document());
-        session.double_click(at, false, false);
+        dbl(&mut session, at, false, false);
         assert_eq!(session.tool(), Tool::Select, "{at:?}: no handoff");
         assert!(
             session.transform_entry().is_some(),
@@ -331,7 +340,7 @@ fn a_double_click_inside_the_box_hands_off_and_on_a_handle_does_not() {
     }
 
     let mut session = selected(&path_document());
-    session.double_click(top_skew(), false, false);
+    dbl(&mut session, top_skew(), false, false);
     assert_eq!(session.tool(), Tool::Select, "skew handle: no handoff");
     assert!(
         session.transform_entry().is_none(),
@@ -343,7 +352,7 @@ fn a_double_click_inside_the_box_hands_off_and_on_a_handle_does_not() {
 fn the_angle_entry_commits_one_change_and_survives_save_and_reopen() {
     let mut session = selected(&rect_document());
     let before = changes(&session);
-    session.double_click(ne_rotate(), false, false);
+    dbl(&mut session, ne_rotate(), false, false);
     let view = session.transform_entry().expect("entry");
     assert_eq!(view.kind, "angle");
     assert_eq!(view.fields.len(), 1);
@@ -373,13 +382,13 @@ fn the_angle_entry_commits_one_change_and_survives_save_and_reopen() {
 fn an_untouched_equal_or_invalid_entry_writes_nothing() {
     let mut session = selected(&rect_document());
     let before = changes(&session);
-    session.double_click(ne_rotate(), false, false);
+    dbl(&mut session, ne_rotate(), false, false);
     assert_eq!(
         session.commit_transform_entry("0", "", 0),
         vecmanf_ui_core::EntryOutcome::Unchanged
     );
     assert!(session.transform_entry().is_none());
-    session.double_click(ne_rotate(), false, false);
+    dbl(&mut session, ne_rotate(), false, false);
     assert!(matches!(
         session.commit_transform_entry("abc", "", 0),
         vecmanf_ui_core::EntryOutcome::Invalid { field: 0, .. }
@@ -397,7 +406,7 @@ fn an_untouched_equal_or_invalid_entry_writes_nothing() {
 fn the_size_entry_commits_one_change_with_the_hand_drags_fixed_point() {
     let mut session = selected(&rect_document());
     let before = changes(&session);
-    session.double_click(se_resize(), false, false);
+    dbl(&mut session, se_resize(), false, false);
     let view = session.transform_entry().expect("entry");
     assert_eq!(view.kind, "size");
     assert_eq!(
@@ -423,7 +432,7 @@ fn the_size_entry_commits_one_change_with_the_hand_drags_fixed_point() {
 #[test]
 fn ctrl_at_the_second_press_links_width_and_height() {
     let mut session = selected(&rect_document());
-    session.double_click(se_resize(), false, true);
+    dbl(&mut session, se_resize(), false, true);
     let view = session.transform_entry().expect("entry");
     assert!(view.linked);
     assert_eq!(
@@ -452,7 +461,7 @@ fn every_way_of_leaving_closes_the_entry_without_writing() {
     for (label, action) in actions {
         let mut session = selected(&rect_document());
         let before = changes(&session);
-        session.double_click(ne_rotate(), false, false);
+        dbl(&mut session, ne_rotate(), false, false);
         assert!(session.transform_entry().is_some(), "{label}: opened");
         action(&mut session);
         assert!(session.transform_entry().is_none(), "{label}: closed");
@@ -481,13 +490,13 @@ fn the_press_that_closes_the_entry_is_processed_normally() {
     let mut session = Session::open(2, &bytes).unwrap();
     session.set_tool(Tool::Select);
     click(&mut session, pt(10.0, 50.0));
-    session.double_click(ne_rotate(), false, false);
+    dbl(&mut session, ne_rotate(), false, false);
     assert!(session.transform_entry().is_some());
     click(&mut session, pt(300.0, 40.0));
     assert!(session.transform_entry().is_none());
     // The second object is now the selection: a double-click on its Se
     // resize handle opens a size entry for it.
-    session.double_click(pt(340.0, 60.0), false, false);
+    dbl(&mut session, pt(340.0, 60.0), false, false);
     let view = session.transform_entry().expect("second object's entry");
     assert_eq!(view.fields[0].prefill, "40.0");
     let _ = second;
@@ -581,4 +590,20 @@ fn a_primitive_never_skews() {
     assert_eq!(object(&session), before);
     assert_eq!(changes(&session), before_changes);
     assert_eq!(session.tool(), Tool::Select);
+}
+
+#[test]
+fn double_clicking_the_n_edge_of_an_unselected_rectangle_hands_off_to_the_rectangle_tool() {
+    let bytes = pack(&rect_document(), "0.1.0").expect("pack");
+    let mut session = Session::open(2, &bytes).expect("open");
+    session.set_tool(Tool::Select);
+    // The top-edge midpoint is where the N resize handle will appear: the
+    // first click selects, the second press must hand off.
+    let on_edge = pt(60.0, 20.0);
+    session.pointer_hover(on_edge, false, false);
+    session.pointer_down(on_edge, false);
+    session.pointer_up(on_edge, false, false);
+    session.double_click(on_edge, false, false);
+    assert_eq!(session.tool(), Tool::Rectangle);
+    assert!(session.transform_entry().is_none());
 }

@@ -719,7 +719,11 @@ commit):** `session/mod.rs` is under 500 non-test lines (Node and Pen glue,
 the live select preview, `draw_list` and the open-error text moved to
 `session/node.rs`, `pen.rs`, `select.rs`, `draw.rs`, `open_error.rs`), and
 `transform_handle_layout.rs` keeps layout and hit test while the arithmetic
-is in `transform_math.rs`. Left open: `select_tool.rs` is about 530 and
-`transform_drag.rs` about 505 non-test lines after the refinements; the typed
-entry and double-click dispatch already moved to `select_tool/entry.rs` and
-`transform_commit.rs`, further splitting waits for `advanced-selection`.
+is in `transform_math.rs`. Left open, after the refinements: `select_tool.rs` (about 530
+non-test lines), `transform_drag.rs` (about 505), `transform_math.rs` (about
+527) and `vecmanf-editor-wasm/src/wasm_api.rs` (about 770, 154 of them added
+here by the entry, hint and modifier surface) are over or at the ~500-line
+limit. The typed entry and double-click dispatch already moved to
+`select_tool/entry.rs` and `transform_commit.rs`; `advanced-selection`, which
+reworks the press dispatch, is the slice that brings `select_tool.rs` under
+500, and splits `wasm_api.rs` by tool alongside its new calls.

@@ -204,6 +204,10 @@ export interface TransformEntryState {
   linked: boolean;
   handle: { x: number; y: number };
   center: { x: number; y: number };
+  /** How far past the handle's position its outermost glyph reaches, in
+   * CSS pixels: 6 normally, 22 for an edge resize handle with a skew arrow
+   * on the same side (the chip must clear the arrow). */
+  glyphReach: number;
 }
 
 /** Reads the wasm-bindgen `TransformEntryView` once, immediately, so it can
@@ -222,6 +226,7 @@ function readTransformEntry(
         handle_y: number;
         center_x: number;
         center_y: number;
+        glyph_reach: number;
         free(): void;
       }
     | undefined,
@@ -244,6 +249,7 @@ function readTransformEntry(
     linked: raw.linked,
     handle: { x: raw.handle_x, y: raw.handle_y },
     center: { x: raw.center_x, y: raw.center_y },
+    glyphReach: raw.glyph_reach,
   };
   raw.free();
   return entry;
@@ -876,6 +882,9 @@ export function useEditorSession(
         };
         doubleClickPressRef.current = null;
         session.double_click(press.x, press.y, press.shift, press.ctrl);
+        // Re-run the hover so the cursor describes the handle under the
+        // pointer right away (a skew double-click changes nothing else).
+        session.pointer_hover(x, y, event.shiftKey, event.ctrlKey || event.metaKey);
       } else {
         session.pointer_up(x, y, event.shiftKey, event.ctrlKey || event.metaKey);
       }
