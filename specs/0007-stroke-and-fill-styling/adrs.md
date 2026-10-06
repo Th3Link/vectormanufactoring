@@ -422,9 +422,15 @@ already there.
   - **Slice 5 writes `stroke_width` directly** in `Document::resize_rect`,
     `resize_ellipse`, `resize_star_frame` and `resize_path`, through
     `path_codec::write_stroke_width`, and `ui-core::select_tool` scales the
-    snapshot's `stroke_width` field. When `style: Style` replaces that
-    field, those four commands take the scaled width through the style
-    codec, and `select_tool` scales `style.stroke_width` only. Dash lengths
+    snapshot's `stroke_width` field. *2026-10-06 (architect):* only with
+    the Select tool's "Scale stroke width" switch on (slice 5 AC 8, 26).
+    The switch is off by default, and then the commands receive
+    `stroke_width: None` and leave the key untouched (see
+    `specs/0005-object-transform/adrs.md`). When `style: Style` replaces that
+    field, those four commands take `Option<Length>` and write a `Some`
+    width through the style codec. With the switch on, `select_tool`
+    scales `style.stroke_width` only. A resize with the switch off writes
+    no style key at all. Dash lengths
     are stored as multiples of the width (AC 9), so they follow the resize
     with no extra write. The `> 0` refusal on open makes the document-core
     resize commands refuse a width that is `≤ 0` or not finite; today only

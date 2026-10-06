@@ -147,7 +147,7 @@ lead", each with the default this file builds against.
   |---|---|---|
   | rotate about centre | `rotation` | anchors, `rotation` |
   | rotate, Shift pivot | `rotation`, frame | anchors, `rotation` |
-  | resize (any handle) | frame, `corner_radius` (rect), `stroke_width` | anchors, `stroke_width` |
+  | resize (any handle) | frame, `corner_radius` (rect, only if changed), `stroke_width` (only with the switch on, AC 26) | anchors, `stroke_width` (only with the switch on) |
   | move (slice 4) | frame | anchors |
 
   A Select-tool resize now writes `corner_radius` (AC 9), where slice 3's
@@ -214,7 +214,73 @@ lead", each with the default this file builds against.
   review):* this sentence first said the width keeps its drag-start value;
   AC 8 was reworded to "the smallest value still above zero", and the code
   (`transform_drag::MIN_STROKE_WIDTH_MM` = 0.01 mm) follows AC 8. Floored
-  at 0.01 mm, never ≤ 0.
+  at 0.01 mm, never ≤ 0. *2026-10-06 (customer feedback):* stroke scaling
+  now happens only with the "Scale stroke width" switch on (AC 26); see the
+  next note. The corner-radius rule is unchanged (AC 9, 31).
+
+- **2026-10-06 (architect): the "Scale stroke width" switch (AC 8, 26-31).**
+  A resize leaves `stroke_width` alone unless the switch is on.
+  - **Where the state lives: `SelectTool`, not `Document`.** Options: (A) a
+    field on `ui-core`'s `SelectTool`, reached through `Session`. Chosen. It
+    is tool state (the customer, 2026-10-06: it belongs to the tool and sits
+    in the Select tool's contextual bar, so AC 30's Properties-panel section
+    is superseded). It is ephemeral under ADR 0009 §2, like the polygon/star
+    tool's mode and point count. `Session::new` and `Session::open` build a
+    fresh `SelectTool`, so AC 27 (off in every new session) holds by
+    construction, and AC 29 holds because nothing reaches the document.
+    (B) a document or project setting. Rejected: AC 27 and 29 forbid both.
+    (C) the frontend holds the state and passes it on every pointer event.
+    Rejected: that gives two owners, and the `ui-core` tests for AC 28 could
+    not reach it.
+  - **Type: `pub enum StrokeScaling { Keep, Proportional }` in `ui-core`,
+    default `Keep`.** It is not a `bool`, because `compute_resize` already
+    takes `shift` and `ctrl`, and a third bool trips
+    `clippy::fn_params_excessive_bools` (pedantic, `-D warnings`).
+  - **How it reaches the arithmetic (AC 28).** `SelectTool::pointer_down`
+    copies the tool's current value into `SelectDrag::Resizing {
+    stroke_scaling, .. }`. The live preview and the release commit both
+    pass that copied value to the single `compute_resize(..,
+    stroke_scaling)`. A toggle during a drag changes only the tool field,
+    so it applies from the next press. `scale_stroke` runs only for
+    `Proportional`. The √(sx·sy) factor and the 0.01 mm floor are
+    unchanged. The corner-radius factor is computed as before in both
+    states (AC 31).
+  - **Writes (AC 8: "the stored stroke width is not rewritten").** The
+    four commands `Document::resize_rect`, `resize_ellipse`,
+    `resize_star_frame` and `resize_path` take `stroke_width:
+    Option<Length>`, and `None` leaves the key untouched.
+    `commit_resize(document, id, result, stroke_scaling)` passes `None`
+    for `Keep`. Rejected: always passing the width and skipping the write
+    when it equals the stored value. With the switch off, a peer's stroke
+    edit that merged in during the drag differs from the drag-start
+    snapshot, so the comparison would write the old width back over it.
+    `None` cannot do that. With the switch on, the same command still
+    skips a write equal to the stored value. `resize_rect` also skips an
+    unchanged `corner_radius`: a radius of 0 scales to 0, and rewriting
+    it would beat a concurrent radius edit. This is slice 2's rule and
+    0007's style rule 5 (an LWW rewrite of an unchanged value is a new
+    operation). The merge table above reflects this.
+  - **wasm and frontend.** Add a getter/setter pair on `WasmSession`,
+    `scale_stroke_width() -> bool` and `set_scale_stroke_width(bool)`, the
+    same pattern as `poly_star_mode`/`set_poly_star_mode`. They forward
+    to `Session` and on to `SelectTool`. A `bool` is fine at the JS
+    boundary. The frontend reads the getter after New/Open and never
+    stores the value (no `localStorage`). No new crate, no new
+    dependency, no format change, and `format_version` is unaffected.
+  - **Tests to update** (they assert the old always-on scaling):
+    `vecmanf-editor-wasm/tests/acceptance_0005.rs` `ac8_*` (lines
+    730-826; switch them on, and add AC 8 off-state, AC 27 and AC 28
+    tests); `vecmanf-ui-core/src/select_tool.rs` unit tests
+    `ac8_proportional_resize_scales_stroke_width`,
+    `ac8_non_proportional_resize_scales_stroke_width_by_the_geometric_mean`
+    and `ac8_stroke_width_is_floored_above_zero_when_a_resize_collapses_the_object`
+    (set `Proportional`); every call site of the four resize commands
+    for the `Option` signature: `vecmanf-document-core` unit tests in
+    `shapes.rs`, `paths.rs` and `objects.rs:486`,
+    `tests/acceptance_0005.rs:127-172` and `tests/acceptance_0005_peers.rs:60-84`. The `ui-core` property tests
+    on `stroke_or_radius_factor` and the editor-wasm reverify
+    finiteness/rotate tests stay valid. No fixture file assumes stroke
+    scaling.
 
 - **2026-10-05: `format_version` goes to 4.** Migration from version 3 is
   empty: absent `rotation` reads as 0. The bump is needed for the reader. A
