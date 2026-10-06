@@ -190,6 +190,11 @@ the parameter-handle threshold).
    on no handle moves the object; the centre handle is not hit-tested.
 6. Given a handle that is not drawn (criterion 7), then it has no hit area and
    no hover or cursor state, so a press where it would be moves the object.
+   One exception: the 4 edge resize handles of a box whose shorter side is
+   under 24 px are not drawn (criterion 7) but remain hit-testable, with
+   hover, cursor and drag, as `specs/object-transform-refinements/`
+   criterion 9 decides. Parameter handles, the centre handle and the side
+   rotate handles have no such exception.
 7. Given the box's shorter side `s` in screen pixels, then the handles drawn on
    one selected primitive follow these tiers: under 24, the 4 corner resize
    and 4 corner rotate handles (Shift: the 4 side rotate handles); 24 to 47,
@@ -317,7 +322,10 @@ the parameter-handle threshold).
 
     Changing Points or Ratio updates every acted-on shape live and commits once
     per interaction (a slider drag is one commit, not one per tick; a stepper
-    click is one commit), as `0003` criteria 10, 14 and 15 define. If the
+    click is one commit), as `0003` criteria 10, 14 and 15 define. The Points
+    number field commits typed text on Enter or on blur, and a stepper click
+    immediately; each is one commit, and typing does not commit per
+    keystroke. A value that is not valid on Enter or blur is not written. If the
     acted-on shapes hold different values, the field is empty with the
     placeholder "Mixed" and a typed value applies to all of them; a slider has
     no thumb while mixed until touched. With a rectangle and a star selected
@@ -328,8 +336,10 @@ the parameter-handle threshold).
     bar shows a number field "Radius" with the fixed suffix "mm" (accessible
     name "Corner radius"), always enabled, acting on the selected rectangles.
     It shows the effective radius; Enter writes it to every selected
-    rectangle in one commit (all four corners, limited to half the shorter
-    side as in criterion 18). Escape or a press elsewhere restores the shown
+    rectangle in one commit (all four corners). Each rectangle gets
+    min(typed value, half of its own shorter side), so with several
+    rectangles of different sizes the limit applies per rectangle, not as one
+    clamped value for the batch (limit as in criterion 18). Escape or a press elsewhere restores the shown
     value and writes nothing. An empty or non-numeric value marks the field
     invalid ("Enter a number") and writes nothing; a negative value is invalid
     ("Must be 0 or more"). Rectangles holding different radii show the field
@@ -430,8 +440,13 @@ the parameter-handle threshold).
 35. Given a press with exactly one primitive selected, then the order is: a hit
     on a drawn handle (criterion 5) starts that handle's drag, Shift or not
     (`specs/object-transform-refinements/` criterion 11, extended to parameter
-    handles); else a press inside the selected box starts a move; else an
-    outline hit within 8 px selects, Shift toggles; else the marquee starts.
+    handles); else, with Shift held, an outline hit within 4 px is tried
+    first and toggles that object in the selection, so Shift-click
+    add-to-selection works over a filled shape; else a plain press (no Shift)
+    inside the selected box starts a move; else an outline hit within 4 px
+    selects, Shift toggles; else the marquee starts. The 4 px is the Select
+    tool's existing outline tolerance (`SEGMENT_TOLERANCE_PX`, unchanged since
+    slice 4); `specs/advanced-selection/` raises it to 8 px when it ships.
     Once `specs/advanced-selection/` ships, two clauses are added in front of
     and inside that order: Alt held at the press starts the lasso
     (`specs/advanced-selection/` criteria 16 and 17, also on a handle, and no
