@@ -142,7 +142,9 @@ reports them (Ctrl is Cmd on macOS, as everywhere else in the product).
 15. Given a create-drag in progress in centered mode, when the maker pans or
     zooms the canvas mid-drag (`canvas-navigation-and-selection` criterion
     24), then A stays fixed in document space and remains the box center.
-16. Given a press that lands on an existing shape of the active tool's kind
+16. **Superseded by `specs/unified-object-editing/` criterion 25** (a press in
+    a creation tool never selects, toggles, moves or handle-drags an existing
+    object; it always creates). Original text kept for history: Given a press that lands on an existing shape of the active tool's kind
     (its outline or, when selected, a handle) within the existing hit
     tolerances, then nothing changes: with no modifier it selects or starts a
     handle drag; with Shift it toggles that shape's selection
@@ -150,10 +152,14 @@ reports them (Ctrl is Cmd on macOS, as everywhere else in the product).
     starts. Shift pressed on empty canvas starts a create-drag and leaves the
     selection handling it has today. Only a press that starts a create-drag
     is affected by this spec.
-17. Given the maker drags a resize or corner-radius handle of a selected
-    rectangle or ellipse under its own tool, or any drag in the Select tool,
-    then Shift and Ctrl have no effect from this spec (the Select tool's own
-    modifiers stay as in `object-transform`). Given the polygon/star tool,
+17. The first sentence is **superseded by `specs/unified-object-editing/`**
+    (the shape tools have no handles any more, so there is no handle drag under
+    a tool's own tool; the Select tool's own modifiers stay as in
+    `object-transform`). Original first sentence, kept for history: Given the
+    maker drags a resize or corner-radius handle of a selected rectangle or
+    ellipse under its own tool, or any drag in the Select tool, then Shift and
+    Ctrl have no effect from this spec. The rest of the criterion stands:
+    given the polygon/star tool,
     then a create-drag behaves exactly as it does today and as before this
     spec (verified in the running app, build of `main`): the press point is
     the shape's center, the pointer is one vertex (the tip, for a star), the
@@ -171,12 +177,16 @@ reports them (Ctrl is Cmd on macOS, as everywhere else in the product).
   effect. Unchanged by this spec; the customer is happy with it.
 - Modifier behaviour on shape-tool handle drags (resize, corner radius,
   inner radius). The Select tool already has Ctrl and Shift for resizing.
+  (Superseded: the shape tools no longer have handles,
+  `specs/unified-object-editing/` criterion 25.)
 - Changing what happens with a one-axis-only drag (zero height or width). It
   is created today, with or without Shift; whether to refuse it is a separate
   question and not part of this request.
 - Fixing that a newly created shape is not selected after release, although
   `primitive-shapes` criterion 1 says it becomes the selected object. This
-  predates this spec and is unchanged by it.
+  predates this spec and is unchanged by it. (Superseded:
+  `specs/unified-object-editing/` criterion 28 selects the new shape and
+  switches to the Select tool after a create-drag.)
 - A drag threshold for shape creation: only A equal to B is refused.
 - Numeric entry of size or position, snapping, a persistent "draw from
   center" option or toggle.

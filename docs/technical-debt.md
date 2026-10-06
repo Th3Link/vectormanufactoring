@@ -727,3 +727,14 @@ limit. The typed entry and double-click dispatch already moved to
 `select_tool/entry.rs` and `transform_commit.rs`; `advanced-selection`, which
 reworks the press dispatch, is the slice that brings `select_tool.rs` under
 500, and splits `wasm_api.rs` by tool alongside its new calls.
+
+*2026-10-06 (architect, `unified-object-editing`):* that feature's PR 1
+task 1 is a second pure-move prelude for the files left over after the
+refinements: the Select preview accessors out of `select_tool.rs` into
+`select_tool/preview.rs`, `resize_primitive` and `pin_*` out of
+`transform_drag.rs` into `transform_primitive.rs`, the skew arithmetic out of
+`transform_math.rs` into `skew_math.rs`. Its new code goes into new modules
+(`param_handles.rs`, `param_edit.rs`, `param_entry.rs`, `select_bar.rs`) and
+its new wasm calls into `wasm_select_bar.rs`, so none of the over-limit files
+grows. PR 2 removes about 80 lines from `wasm_api.rs` and most of
+`session/shapes.rs`. See `specs/unified-object-editing/adrs.md`, "size limits".

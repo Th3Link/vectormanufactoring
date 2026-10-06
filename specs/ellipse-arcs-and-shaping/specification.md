@@ -79,13 +79,20 @@ ellipse with a curve other than 100% has no arc (Part B criterion 31).
 ### Acceptance criteria
 
 1. Given one selected circle or ellipse and handles drawn
-   (`specs/unified-object-editing/` criteria 6 to 8), then two arc handles are
+   (`specs/unified-object-editing/` criteria 6 to 8, so from a shorter side of
+   72 px on screen, the parameter-handle threshold T), then two arc handles are
    shown, a start handle and an end handle, on the outline at the arc's start
    and end angles, together with the transform handles. They are shown on a
    whole ellipse as well, so the maker finds them without a manual; where
    exactly (both would sit at the same point as a resize handle) is the
    `ux-engineer`'s decision, and the two are always distinguishable from each
-   other and reachable.
+   other and reachable. They use the parameter-handle rules of
+   `specs/unified-object-editing/` (UX notes sections 1 and 2): the "knob"
+   glyph, a hit radius of 12 px, the built-in pointer cursor, not drawn during
+   a move, resize, rotate or skew drag of the same object, and no drawn glyph
+   closer than 4 px to another (an arc handle that would land within that
+   distance of a resize or rotate glyph is placed by the `ux-engineer`'s rule,
+   not by overlapping it). Below T the arc is set by the bar (criterion 3).
 2. Given the maker drags an arc handle, then that handle's angle follows the
    pointer: with the pointer at (x, y) in the ellipse's own frame relative to
    its centre, the angle is atan2(y / ry, x / rx), whether the pointer is
@@ -269,6 +276,11 @@ holds on an ellipse with per-axis radii.
     handle can sit at the same point (an arc at -45°); then the arc handle,
     which is on the outline, wins the tie and the curve handle is reached after
     moving the arc handle. The `ux-engineer` may choose a different resolution.
+    The curve handle follows the same parameter-handle rules as the arc handles
+    (criterion 1: knob glyph, threshold T = 72 px, hit radius 12 px, the 4 px
+    clearance, not drawn during other drags of the same object); the centre
+    handle yields when it is within 20 px of it (`specs/unified-object-editing/`
+    criterion 8).
 23. Given the maker drags the curve handle with the pointer at (x, y) in the
     ellipse's own frame relative to its centre, then with `u = x / rx` and
     `v = -y / ry` (screen y down, so `u`, `v` are positive towards the handle's
@@ -436,8 +448,10 @@ on screen), for the ellipse E.
     side's middle at 0%, outside it for `k > 0`, inside for `k < 0`); it follows
     rotation. It has the parameter-handle silhouette of criterion 22; hit order
     as in `specs/unified-object-editing/` criterion 5; no two glyphs closer
-    than 4 px. A polygon had no parameter handle before this; the curve handle
-    is its only one.
+    than 4 px, with the threshold T of 72 px and the knob glyph of
+    `specs/unified-object-editing/` (a star's inner-radius handle and this one
+    are two knobs that must also clear each other). A polygon had no parameter
+    handle before this; the curve handle is its only one.
 41. Given the maker drags the curve handle, then the pointer is projected onto
     the perpendicular bisector of that side's chord (in the shape's own frame,
     unaffected by rotation), `t` is its signed distance from the chord's middle

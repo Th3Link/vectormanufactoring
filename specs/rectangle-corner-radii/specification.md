@@ -77,8 +77,15 @@ criterion 9.
 ### Setting the radii
 
 1. Given a rectangle, then four radius handles are shown, one per corner, each
-   at the position its own effective radius implies, each draggable (at radius
-   0 too). The rectangle stores four radii.
+   at the position its own effective radius implies by the position rule of
+   `specs/unified-object-editing/` criterion 2 (on the corner's diagonal, 15 px
+   from the corner at radius 0), each draggable (at radius 0 too). The
+   rectangle stores four radii. The rule maps the largest linked radius to the
+   far end of the travel, so an unlinked corner may exceed that value (up to
+   its limit in criterion 4): its handle then sits further along the diagonal,
+   and the 4 px clearance of `specs/unified-object-editing/` criterion 8 still
+   holds because the limit keeps the two radii on one side summing to at most
+   that side's length.
 2. Given the "Link corners" switch is on (Select tool setting, default on, kept
    for the session, never written to the project), when the maker drags any
    radius handle, then all four radii become the dragged value, limited to half
@@ -100,7 +107,7 @@ criterion 9.
    zero-radius position, then the radius (of the dragged corner, or of all four
    when linked) is exactly 0 and the corner is sharp.
 6. Given a double-click on a radius handle, then a field "r" (accessible name
-   "Radius", mm) opens as `specs/unified-object-editing/` criterion 18
+   "Corner radius", mm) opens as `specs/unified-object-editing/` criterion 18
    defines, and Enter applies the value to all four corners when linked or to
    that corner when unlinked (the state of switch and Shift at the second
    press, fixed when the field opens). A value above the limit of criterion 4
@@ -154,10 +161,12 @@ criterion 9.
     effect on the radii, and the radii have no effect on the stroke; the two
     switches are independent of each other (`0005` criterion 31, stroke part).
 14. Given a move, a rotation or a numeric size entry (W and H), then the radii
-    follow criteria 12 and 15 for a size entry, with the switch read when Enter
-    is pressed (same rule as the equivalent drag,
-    `specs/object-transform-refinements/` criterion 27), and are unchanged by a
-    move or a rotation. The radius handles follow the rectangle's rotation
+    follow criteria 12 and 15 for a size entry, with the switch read when the
+    entry opens, the same moment `specs/unified-object-editing/` criterion 23
+    fixes for a typed size (the equivalent drag reads it at the press,
+    `specs/object-transform-refinements/` criterion 27; a click on the switch
+    closes an open entry without writing), and are unchanged by a move or a
+    rotation. The radius handles follow the rectangle's rotation
     (`specs/unified-object-editing/` criterion 4).
 15. Given the Select tool is active, then its top bar shows a switch "Scale
     corner radius" next to "Scale stroke width", visible and operable with or
@@ -278,15 +287,16 @@ register, stored raw, clamped on evaluation) has to carry four radii. Questions:
 
 (filled in by ux-engineer before Ready)
 
-Open points: the "Link corners" switch's look (chain icon) and its place in
-the Select bar's rectangle segment; the Select bar now carries two session
-switches ("Scale stroke width", "Scale corner radius") that are always visible,
-plus selection-dependent controls: layout, labels and whether "Scale corner
-radius" is dimmed or only labelled when no rectangle is selected (it stays
-operable, criterion 15); how four radius handles and the centre
-handle stay clear at large radii (see `specs/unified-object-editing/`
-criterion 8); a hint line for Shift; how an unlinked drag that stops at its
-limit is shown (the handle stops, a short readout "max" is a candidate).
+Decided in `specs/unified-object-editing/` UX notes (2026-10-06): the bar's
+layout (the two switches first, never dimmed or disabled; the "Radius" field
+and a reserved 28 px slot for the "Link corners" toggle in the rectangle
+group), clearance of four radius handles and the centre handle (its section 1),
+the hint line "Shift: this corner only", and the "r 12.0 mm max" readout when an
+unlinked drag stops at its limit.
+
+Still open for the `ux-engineer` when this spec is built: the look of the "Link
+corners" toggle (a chain icon in the reserved slot) and the corner-linking
+state shown on the handles of an unlinked drag.
 
 ## Links
 Requirements: R-EDIT-002 (`docs/requirements.md`)
