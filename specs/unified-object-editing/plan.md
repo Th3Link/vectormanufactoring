@@ -47,72 +47,81 @@ stop and ask the lead.
   then an outline hit selects, then the empty canvas clears. A Shift press and a
   sole selected path keep today's order (outline toggle first); the spec text
   names one primitive only and a path box often overlaps other objects.
-- **A handle that is not drawn has no hit area** (criterion 6) is applied to
-  every handle family through one `edit_handles` function that both the drawn
-  set and the hit rule read, so they cannot disagree. This also removes the
-  slice 5 behaviour that edge resize handles of a box under 24 px stayed
-  hit-testable although not drawn; the tier rule of criterion 7 is the single
-  source.
+- **A handle that is not drawn has no hit area** (criterion 6) holds for the
+  parameter handles and the centre handle: `drawn_edit_handles` builds the one
+  list the hit rule reads, and a knob below 72 px or a centre handle that yields
+  is not in it. An edge resize handle of a box under 24 px stays hit-testable
+  although not drawn, as in slice 5 (`is_drawn_handle`, the tester's model in
+  `acceptance_otr_tester.rs` and the "handles reachable" reverify test pin
+  it); the architect's text keeps `is_drawn_handle` for the same reason. Reading
+  criterion 6 literally would remove it; flagged to the lead.
 - `apply_param` is the one value rule for drag, typed entry and bar field and
   returns the start snapshot unchanged when the clamped value equals the start's
   effective value within 1e-9 mm, so a drag back to its start writes nothing
   (criterion 12) even when the stored radius is larger than the effective one.
 - The radius gain `G(s)` is frozen at the press (`TransformDrag::param_gain`).
 - A fifth tolerance field `param_centre_yield_mm` (20 px) carries the centre
-  yield distance next to the four of the ADR.
+  yield distance next to the four of the ADR. 20 px is `11.3 + 5 + 4` rounded
+  down, so a knob on the diagonal of the centre glyph's corner has 3.7 px of
+  clearance, not 4; the clearance property excludes the centre glyph as the
+  architect specified, a separate test asserts at least 3.6 px.
+- **Document reads.** `Session::draw_list` reads the document once per frame and
+  a Select drag keeps the snapshot it started with (`drag_objects`): the 200
+  object move frame fell from 123 ms to 8.5 ms. The architect's cache by
+  document version needs a `Document` accessor that PR 1 may not add.
 
 ## Tasks
 
-- [ ] 1. Pure-move prelude, one commit, no behaviour change: `resize_primitive`,
+- [x] 1. Pure-move prelude, one commit, no behaviour change: `resize_primitive`,
       `scaled_star_frame`, `pin_*` to `transform_primitive.rs`; `SkewFrame`,
       `skew_frame`, `skew_angle`, `skew_factor` to `skew_math.rs`; preview
       accessors to `select_tool/preview.rs` (no AC; keeps `select_tool.rs`
       under the size limit, `docs/technical-debt.md`)
-- [ ] 2. Rename commit, compile-driven: `TransformHandle` to `EditHandle` with an
-      empty-use `Param(ParamHandle)` variant, `DragOrigin::side_rotate_revealed`
-      to `shift_at_press`, `EntryKind::Radius` to `OuterRadius` with accessible
-      name "Outer radius" (AC 19)
-- [ ] 3. `param_handles.rs`: `ParamHandle`, `Corner`, `param_handles` layout
+- [x] 2. Rename commit, compile-driven: `TransformHandle` to `EditHandle`,
+      `DragOrigin::side_rotate_revealed` to `shift_at_press`, `EntryKind::Radius`
+      to `OuterRadius` with accessible name "Outer radius" (AC 19); the `Param`
+      variant arrives with its layout in task 3
+- [x] 3. `param_handles.rs`: `ParamHandle`, `Corner`, `param_handles` layout
       (inset 15 px, pitch 14 px, `L(s)`, `G(s)`), tolerance fields,
       `handle_tiers` (24/48/72 with `THRESHOLD_SLACK`), `centre_drawn`, the
       "no param handle during another drag and for two or more objects" drawn
       set; tests: tier boundaries 24/48/72, the rectangle and star clearance
       property sweeps including the star worst case (4.6 px at `s` 72),
       `L(T) > 0`, named glyph-size constants (AC 1, 2, 4, 7, 8)
-- [ ] 4. Param arm of `hit_transform_handle`: 12 px radius, rank 0, no inner
+- [x] 4. Param arm of `hit_transform_handle`: 12 px radius, rank 0, no inner
       band, tie order param > resize > skew > rotate, undrawn handles absent from
       the hit set, body reachability, drawn glyph always hits its own handle;
       press order of criterion 35 (AC 5, 6, 35)
-- [ ] 5. `param_edit.rs`: `ParamValue`, `value_from_pointer` (rect radius with
+- [x] 5. `param_edit.rs`: `ParamValue`, `value_from_pointer` (rect radius with
       gain per corner diagonal, star ratio), `apply_param` with clamps,
       `commit_param`; `TransformDrag` and `commit_gesture` arms; dead zone,
       Escape, zero-position and clamp tests ported from the shape-tool tests
       (AC 2, 3, 4, 9, 24)
-- [ ] 6. `ScaleModes { stroke, radius }`, `CornerRadiusScaling { Keep, Proportional }`
+- [x] 6. `ScaleModes { stroke, radius }`, `CornerRadiusScaling { Keep, Proportional }`
       (default `Keep`), `resize_primitive` radius factor, read at the press and
       when an entry opens, `Document::resize_rect` leaves an unchanged radius
       register alone, merge test (peer A resizes with `Keep`, peer B sets the
       radius; B survives), `SelectTool` and `Session` accessors; the `0005`
       criteria 9 and 31 tests run with the switch on, new tests assert the off
       default (AC 23)
-- [ ] 7. `LiveEdit` and `SelectTool::live_edit`, `build_live_edit_preview` in
+- [x] 7. `LiveEdit` and `SelectTool::live_edit`, `build_live_edit_preview` in
       `vecmanf-render-core`, `Session` substitution removal (`live_objects` is
       the only substitution, for decorations), zero-offset move guard,
       release-equals-preview property test for every handle kind, `#[ignore]`
       benchmark of `Session::draw_list()` for a 200-object move (AC 10, 11, 12,
       13, 14, 15)
-- [ ] 8. `ParamEntry` (`param_entry.rs`), `OpenEntry` in `SelectTool`, readouts
+- [x] 8. `ParamEntry` (`param_entry.rs`), `OpenEntry` in `SelectTool`, readouts
       "r 3.5 mm" and "ratio 0.45", cursor `pointer` and hint strings for the
       parameter handles, double-click on a parameter handle opens its entry
       (AC 5, 18, 19, 20)
-- [ ] 9. `select_bar.rs` (`select_bar_state`, `ids_of_kind`, Radius field state
+- [x] 9. `select_bar.rs` (`select_bar_state`, `ids_of_kind`, Radius field state
       incl. Mixed and "limited", Remove rounding enabled flag, Points and
       Ratio, Object to path), `Session` bar methods and `wasm_select_bar.rs`,
       `SelectToolbar.tsx` with the two switches first, kind groups, Object to
       path last, parameter-handle drawing and cursor in the frontend, Edit
       hint strings (AC 21, 21a, 22, 23). Remove rounding, Points, Ratio and
       Object to path stay in the shape bars until PR 2
-- [ ] 10. Round-trip and compatibility tests (AC 24, 38), `docs/design-system.md`
+- [x] 10. Round-trip and compatibility tests (AC 24, 38), `docs/design-system.md`
       gaps, `docs/technical-debt.md`, full gate, Browser-pane check, demo notes
 
 ## Validation

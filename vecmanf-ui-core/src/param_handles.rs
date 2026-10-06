@@ -116,7 +116,7 @@ pub struct HandleTiers {
 }
 
 /// The tiers of a box whose shorter side is `shorter_side_mm` (document
-/// millimetres), with the shared [`at_least`] slack so a box of exactly 24,
+/// millimetres), with the shared rounding slack so a box of exactly 24,
 /// 48 or 72 px keeps its tier under `px / scale * scale` rounding. There is
 /// no hysteresis.
 #[must_use]

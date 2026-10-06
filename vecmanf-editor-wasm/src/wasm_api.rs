@@ -563,8 +563,10 @@ impl WasmSession {
         self.session.node_toolbar_state().into()
     }
 
-    /// Acceptance criterion 6's "remove rounding" action. A no-op
-    /// outside the rectangle tool.
+    /// Acceptance criterion 6's "remove rounding" action, from the Select
+    /// bar (`unified-object-editing` criterion 21) or the Rectangle tool's:
+    /// zeroes the radius of every selected rectangle. A no-op in every other
+    /// tool.
     pub fn remove_corner_rounding(&mut self) {
         self.session.remove_corner_rounding();
     }

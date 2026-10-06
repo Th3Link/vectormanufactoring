@@ -452,6 +452,19 @@ that a pan only rewrites the view uniform. A draw list depends on scale and
 never on origin (slice 4 rule). Do this when a real document is measured to
 stutter, not before.
 
+**Measured 2026-10-06 (`unified-object-editing` PR 1, release build, host CPU,
+`Session::draw_list()` only, 100 paths of 50 nodes plus 100 rectangles, all
+selected):** 102 ms per frame at rest before the change, almost all of it
+reading every object out of the document, which the frame did about six times.
+`draw_list` now reads once per frame (18 ms at rest) and a Select drag keeps
+the snapshot it started with, so the 200-object move frame, blue overlay
+included, costs 8.5 ms (`vecmanf-editor-wasm/tests/unified_object_editing.rs`,
+the `#[ignore]` benchmark). That meets 50 fps but not the architect's 8 ms
+budget by 0.5 ms, and a frame at rest with no drag still costs 18 ms. The
+cache above needs a cheap document version (a read-only accessor on `Document`,
+which that story did not add); with it the 12 ms read disappears from every
+frame, not only from drag frames.
+
 ## The canvas does not react to a `devicePixelRatio` change with no resize event
 
 The fix below sizes the backing store once, at attach and on every

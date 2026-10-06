@@ -949,3 +949,94 @@ fn a_200_object_move_draws_within_the_frame_budget() {
         );
     }
 }
+
+// ---------------------------------------------------------------------
+// Criteria 24, 38: the stored fields are the ones the shape tools wrote
+// ---------------------------------------------------------------------
+
+fn objects_of(document: &Document) -> Vec<ObjectSnapshot> {
+    document
+        .object_ids()
+        .into_iter()
+        .filter_map(|id| document.object(id))
+        .collect()
+}
+
+/// Criterion 24: a radius, a ratio and a point count set through the Select
+/// tool leave exactly the objects the `Document` commands the shape tools
+/// used would leave: same fields, nothing new, the same `format_version`.
+#[test]
+fn values_set_with_the_select_tool_equal_values_written_with_the_shape_tool_commands() {
+    let build = || {
+        let document = Document::new(1);
+        let rect = document.create_rect(bounds(10.0, 20.0, 100.0, 60.0));
+        let star = document.create_star(
+            star_frame(260.0, 50.0, 40.0),
+            PointCount::new(5).unwrap(),
+            InnerRatio::new(0.5).unwrap(),
+        );
+        (document, rect, star)
+    };
+    let (reference, rect, star) = build();
+    reference
+        .set_corner_radius(&[rect], Length::from_mm(12.5))
+        .unwrap();
+    reference
+        .set_inner_ratio(&[star], InnerRatio::new(0.65).unwrap())
+        .unwrap();
+    reference
+        .set_point_count(&[star], PointCount::new(9).unwrap())
+        .unwrap();
+
+    let (document, rect_id, _) = build();
+    let mut session = open(&document);
+    click(&mut session, pt(10.0, 50.0)); // the rectangle
+    assert_eq!(
+        session.set_selected_radius_text("12.5"),
+        EntryOutcome::Committed
+    );
+    click(&mut session, pt(300.0, 50.0)); // the star's first outer vertex
+    session.set_selected_ratio(InnerRatio::new(0.65).unwrap());
+    session.set_selected_point_count(PointCount::new(9).unwrap());
+
+    let edited = state_of(&session);
+    assert_eq!(objects_of(&edited), objects_of(&reference));
+    assert!(edited.object(rect_id).is_some());
+    let bytes = session.pack("0.1.0").unwrap();
+    let mut archive = zip::ZipArchive::new(Cursor::new(&bytes)).unwrap();
+    let manifest: serde_json::Value =
+        serde_json::from_reader(archive.by_name("manifest.json").unwrap()).unwrap();
+    assert_eq!(manifest["format_version"], CURRENT_FORMAT_VERSION);
+}
+
+/// Criterion 38: a project with primitives saved before this change opens in
+/// the same state, and a Select-tool selection and a plain click write
+/// nothing to it.
+#[test]
+fn a_project_with_primitives_opens_in_the_same_state_and_a_click_writes_nothing() {
+    let document = Document::new(1);
+    let rect = document.create_rect(bounds(10.0, 20.0, 100.0, 60.0));
+    document
+        .set_corner_radius(&[rect], Length::from_mm(7.0))
+        .unwrap();
+    let _ = document.create_ellipse(vecmanf_document_core::EllipseFrame {
+        center: pt(300.0, 50.0),
+        rx: Length::from_mm(40.0),
+        ry: Length::from_mm(25.0),
+    });
+    let _ = document.create_polygon(star_frame(400.0, 50.0, 30.0), PointCount::new(6).unwrap());
+    let _ = document.create_star(
+        star_frame(500.0, 50.0, 30.0),
+        PointCount::new(7).unwrap(),
+        InnerRatio::new(0.4).unwrap(),
+    );
+    let before = objects_of(&document);
+    let mut session = open(&document);
+    assert_eq!(objects_of(&state_of(&session)), before, "opens unchanged");
+    let changes = change_count(&session);
+    click(&mut session, pt(10.0, 50.0));
+    click(&mut session, pt(300.0, 50.0));
+    session.pointer_hover(pt(5.0, 5.0), false, false);
+    assert_eq!(change_count(&session), changes, "selecting writes nothing");
+    assert_eq!(objects_of(&state_of(&session)), before);
+}
