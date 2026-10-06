@@ -26,7 +26,7 @@ mod wasm_api;
 #[cfg(target_arch = "wasm32")]
 mod wasm_select_bar;
 
-pub use session::{Session, Tool};
+pub use session::{EscapeStep, KeyHint, KeyInput, KeyOutcome, Session, Tool};
 
 #[cfg(target_arch = "wasm32")]
 pub use wasm_api::{WasmSession, init_panic_hook};

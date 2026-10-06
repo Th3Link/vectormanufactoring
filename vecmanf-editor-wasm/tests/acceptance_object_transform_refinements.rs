@@ -455,7 +455,9 @@ fn every_way_of_leaving_closes_the_entry_without_writing() {
     // (label, action) pairs; each starts from a freshly opened angle entry.
     type Action = fn(&mut Session);
     let actions: Vec<(&str, Action)> = vec![
-        ("escape", Session::escape),
+        ("escape", |s| {
+            let _ = s.escape();
+        }),
         ("tool switch", |s| s.set_tool(Tool::Pen)),
         ("press elsewhere", |s| {
             s.pointer_hover(pt(900.0, 900.0), false, false);

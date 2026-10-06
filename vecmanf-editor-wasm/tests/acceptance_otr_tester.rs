@@ -1799,7 +1799,12 @@ fn ac21_invalid_angle_text_keeps_the_entry_open_and_writes_nothing() {
 fn ac20_escape_blur_tool_switch_and_selection_change_close_without_writing() {
     let closers: Vec<(&str, Box<dyn Fn(&mut Session)>)> = vec![
         ("cancel", Box::new(|s| s.cancel_transform_entry())),
-        ("escape", Box::new(|s| s.escape())),
+        (
+            "escape",
+            Box::new(|s| {
+                let _ = s.escape();
+            }),
+        ),
         ("tool switch", Box::new(|s| s.set_tool(Tool::Node))),
         (
             "stroke switch",

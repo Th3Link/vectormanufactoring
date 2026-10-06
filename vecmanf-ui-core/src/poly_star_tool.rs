@@ -174,6 +174,13 @@ impl PolygonStarTool {
         })
     }
 
+    /// Whether a create-drag is in flight (the button is down), also while it
+    /// is still degenerate and shows no preview.
+    #[must_use]
+    pub const fn drag_in_flight(&self) -> bool {
+        self.drag.is_some()
+    }
+
     /// Discards any in-progress drag, writing nothing. Returns whether there
     /// was one.
     pub fn escape(&mut self) -> bool {

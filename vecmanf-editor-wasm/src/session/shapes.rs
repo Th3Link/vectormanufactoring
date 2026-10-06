@@ -74,18 +74,13 @@ impl Session {
     }
 
     /// Cancels whichever creation tool's in-progress drag, writing nothing.
-    pub(super) fn shape_escape(&mut self) {
+    /// Returns whether there was one.
+    pub(super) fn shape_escape(&mut self) -> bool {
         match self.tool {
-            Tool::Rectangle => {
-                self.rectangle.escape();
-            }
-            Tool::Ellipse => {
-                self.ellipse.escape();
-            }
-            Tool::PolygonStar => {
-                self.poly_star.escape();
-            }
-            Tool::Select | Tool::Pen | Tool::Node => {}
+            Tool::Rectangle => self.rectangle.escape(),
+            Tool::Ellipse => self.ellipse.escape(),
+            Tool::PolygonStar => self.poly_star.escape(),
+            Tool::Select | Tool::Pen | Tool::Node => false,
         }
     }
 
