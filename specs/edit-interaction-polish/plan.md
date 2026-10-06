@@ -25,8 +25,8 @@ PR 1 does not.
   `transform_math.rs` (`rotate_delta_for`), `transform_drag.rs`,
   `transform_entry.rs` (three readers), `node_tool.rs` (`cancel_drag`,
   `clear_selection`, Split selects one node, hit-test tie),
-  `hit_test.rs` (tie goes to a selected node), `select_tool/entry.rs` and
-  `select_tool/handles.rs` (`open_entry_for_key`, `entry_anchor` for R and S).
+  `hit_test.rs` (tie goes to a selected node), `select_tool/entry.rs`
+  (`open_entry_for_key`), the three shape tools (`drag_in_flight`).
 - `vecmanf-render-core`: `decorations.rs` (selected node glyphs drawn last).
 - `vecmanf-editor-wasm`: new `session/keys.rs` (`escape`, `delete_selected`,
   `decide`, `key_down`), new `wasm_keys.rs`; `session/mod.rs` (`button_down`,
@@ -57,30 +57,31 @@ PR 1 does not.
   angle ("r 12.0 mm, -15°"). Session tests: A = (100, 50), B = (110, 48), Ctrl
   gives first vertex (109.85, 47.36), radius 10.20 mm; edge-on-axis table;
   an old project opens unchanged. (3, 4, 5, 6, 8, 2)
-- [ ] 6. Pure-move prelude: `escape` and `delete_selected` from `session/mod.rs`
+- [x] 6. Pure-move prelude: `escape` and `delete_selected` from `session/mod.rs`
   into `session/keys.rs`. (no behaviour change)
-- [ ] 7. `entry_anchor`: an entry stores the document-space position of the
-  handle it belongs to, computed from the layout's position functions, so R and
-  S open a chip for a box too small to draw that handle. (57)
-- [ ] 8. `SelectTool::open_entry_for_key` for `EntryKey::{Angle, Size}` with
-  `shift = false`; the same entry as the double-click route. (57)
-- [ ] 9. `decide(input, KeyState) -> KeyAction` and the gate (criterion 55) in
+- [x] 7. `SelectTool::open_entry_for_key` for `EntryKey::{Angle, Size}` with
+  `shift = false`: the same entry as the double-click route, on the top-right
+  corner rotate handle (R) and the bottom-right corner resize handle (S). Both
+  corner handles exist at any box size (`transform_handles` always lists them),
+  so the stored `entry_anchor` the ADR schedules for PR 3 is not needed for R
+  and S; PR 3 adds it for M and K. (57)
+- [x] 8. `decide(input, KeyState) -> KeyAction` and the gate (criterion 55) in
   `session/keys.rs`, table-driven tests first; `Session::key_down` for B, N, E,
-  `*`, R, S, Delete, Backspace, Enter, Escape; M and K return
-  `Hint(SelectFirst)` until PR 3 (listed as not yet bound). `wasm_keys.rs`; the
-  frontend forwards key, modifiers, repeat and one `dom_blocked`, the letter
-  `switch` is deleted. (54, 55, 57, 60, 61)
-- [ ] 10. `NodeTool::cancel_drag` and `clear_selection` replace `NodeTool::escape`;
+  `*`, R, S, Delete, Backspace, Enter, Escape. M and K are ignored (no hint)
+  until PR 3 gives them a chip. (54, 55, 57, 60, 61)
+- [x] 9. `wasm_keys.rs` (`key_down`, `pointer_cancelled`, `selection_count`); the
+  frontend `onKeyDown` forwards key, modifiers, repeat and one `dom_blocked`, the
+  letter `switch` is deleted. (55)
+- [x] 10. `NodeTool::cancel_drag` and `clear_selection` replace `NodeTool::escape`;
   `Session::escape() -> EscapeStep`, `button_down`, `pointer_cancelled`; the
-  cascade of criterion 42 for every tool; the slice-6 Escape tests are rewritten
-  to the two-step Node behaviour. (42 to 49, 60)
-- [ ] 11. Split selects one node (the new second one); hit-test tie goes to the
+  cascade of criterion 42 for every tool; the Node-tool Escape tests are
+  rewritten to the two-step behaviour. (42 to 49, 60)
+- [x] 11. Split selects one node (the new second one); hit-test tie goes to the
   selected node; selected node glyphs drawn on top; the `split_selected_on_*`
-  tests and `acceptance_0006*.rs` criterion-15 assertions are rewritten, not
-  weakened. (50, 51, 52)
-- [ ] 12. Rail tooltips and `selection_count` (`wasm_keys.rs`); transient hint
-  message for a refused key; the hint lines of the rotate and resize handles
-  gain "or R" and "or S". (62, and the R and S part of 24)
+  tests and the session test are rewritten with stronger assertions. (50, 51, 52)
+- [x] 12. Rail tooltips and `selection_count`; transient hint message for
+  "Select one object to type a value"; the hint lines of the rotate and resize
+  handles gain "or R" and "or S". (62, and the R and S part of 24)
 - [ ] 13. Gate: fmt, clippy (host and wasm32 per core crate and editor-wasm),
   nextest, rustdoc, deny, banned-dependency check, `npm run build`, `tsc -b
   --noEmit`, `npm run lint`, license check, `npm audit`; the CI result of the
