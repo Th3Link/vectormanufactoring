@@ -166,7 +166,7 @@ pub fn arc_arrow(center: Point, diameter_mm: f64, thickness_mm: f64, color: Rgba
     let end_angle = start + sweep;
     let tangent = Vec2::new(-end_angle.sin(), end_angle.cos());
     let tip = at(mid, 1.0).translated(tangent.scaled(thickness_mm * 1.6));
-    let base_half = thickness_mm * 1.5;
+    let base_half = thickness_mm;
     list.push_triangle(
         tip,
         at(mid + base_half, 1.0),

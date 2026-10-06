@@ -144,8 +144,8 @@ fn rotate_handle_glyph(
         }
         theme::ACCENT
     };
-    // The arc sits inside the 12px footprint, leaving room for the
-    // arrowhead's flare.
+    // The arc fills 90% of the 12px footprint; the arrowhead flares to
+    // about the edge of it.
     list.extend(glyphs::arc_arrow(
         center,
         size * 0.75,
@@ -159,7 +159,17 @@ fn rotate_handle_glyph(
 #[must_use]
 pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationInput) -> DrawList {
     let mut list = DrawList::default();
+    // A handle exactly at the active pivot (Shift put the pivot on it, or
+    // a resize anchors on the opposite corner) is not drawn: the pivot
+    // dot replaces it, so it never reads as a pressed handle with a dot
+    // on top. "At" is within one screen pixel.
+    let at_pivot_mm = screen_px_to_mm(view, 1.0);
     for handle in &input.handles {
+        if let Some(pivot) = input.pivot_marker
+            && handle.position.vector_to(pivot).length() <= at_pivot_mm
+        {
+            continue;
+        }
         if handle.is_rotate {
             list.extend(rotate_handle_glyph(
                 view,
@@ -345,6 +355,44 @@ mod tests {
         assert!(
             drag.triangles.iter().any(|v| v.color == RgbaColor::WHITE),
             "the dragging glyph is white on a solid ground"
+        );
+    }
+
+    /// UX review item 4: a handle sitting exactly on the pivot is not
+    /// drawn, so the pivot dot is not painted over a "pressed" handle.
+    #[test]
+    fn a_handle_at_the_pivot_is_replaced_by_the_pivot_dot() {
+        let handle = |x: f64, y: f64| TransformHandleGlyph {
+            position: Point::new(x, y),
+            is_rotate: false,
+            dragging: false,
+            hovered: false,
+        };
+        let with_pivot_elsewhere = TransformDecorationInput {
+            handles: vec![handle(0.0, 0.0), handle(10.0, 10.0)],
+            pivot_marker: Some(Point::new(50.0, 50.0)),
+        };
+        let at_handle = TransformDecorationInput {
+            handles: vec![handle(0.0, 0.0), handle(10.0, 10.0)],
+            pivot_marker: Some(Point::new(0.0, 0.0)),
+        };
+        let view = ViewTransform::identity();
+        let elsewhere = build_transform_handles(view, &with_pivot_elsewhere);
+        let on_handle = build_transform_handles(view, &at_handle);
+        assert!(
+            on_handle.triangle_count() < elsewhere.triangle_count(),
+            "one handle glyph fewer when the pivot sits on it"
+        );
+        let handle_glyph = build_transform_handles(
+            view,
+            &TransformDecorationInput {
+                handles: vec![handle(0.0, 0.0)],
+                pivot_marker: None,
+            },
+        );
+        assert_eq!(
+            elsewhere.triangle_count() - on_handle.triangle_count(),
+            handle_glyph.triangle_count()
         );
     }
 

@@ -136,7 +136,7 @@ pub const TRANSFORM_RESIZE_HANDLE_CORNER_RADIUS_PX: f64 = 2.0;
 /// The rotate handle's arc stroke thickness, screen-space pixels — this
 /// crate's own choice (the design-system row gives only the 12×12px
 /// footprint and "circular-arrow icon"), thick enough to read at 12px.
-pub const TRANSFORM_ROTATE_HANDLE_STROKE_PX: f64 = 1.5;
+pub const TRANSFORM_ROTATE_HANDLE_STROKE_PX: f64 = 2.0;
 
 /// The rotate handle's own glyph size, screen-space pixels (`docs/
 /// design-system.md`'s "Transform rotate handle": "12×12px... circular-

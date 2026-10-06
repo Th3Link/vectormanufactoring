@@ -335,11 +335,10 @@ mod tests {
         let document = Document::new(1);
         let (id, _) = rect_snapshot(&document);
         document
-            .rotate_object(
-                id,
+            .rotate_object(&document.object(id).expect("object exists").rotated(
                 Point::new(5.0, 5.0),
                 Angle::from_radians(std::f64::consts::FRAC_PI_4),
-            )
+            ))
             .expect("rotate");
         let snapshot = document.primitive(id).expect("exists");
         let list = build(
@@ -369,11 +368,10 @@ mod tests {
         let document = Document::new(1);
         let (id, _) = rect_snapshot(&document);
         document
-            .rotate_object(
-                id,
+            .rotate_object(&document.object(id).expect("object exists").rotated(
                 Point::new(5.0, 5.0),
                 Angle::from_radians(std::f64::consts::FRAC_PI_4),
-            )
+            ))
             .expect("rotate");
         let snapshot = document.primitive(id).expect("exists");
         let input = ShapeDecorationInput {
