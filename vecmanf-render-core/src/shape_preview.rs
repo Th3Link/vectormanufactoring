@@ -12,7 +12,9 @@
 //! selection or its handle-layout module directly (ADR 0011 §3), so
 //! `vecmanf-editor-wasm` builds this input from them each frame.
 
-use vecmanf_document_core::{NodeId, Point, PrimitiveSnapshot, Shape, ViewTransform, outline_of};
+use vecmanf_document_core::{
+    Angle, NodeId, Point, PrimitiveSnapshot, Shape, ViewTransform, outline_of_rotated, shape_center,
+};
 
 use crate::color::RgbaColor;
 use crate::glyphs::{self, DrawList};
@@ -101,7 +103,7 @@ fn outline_to_anchors(
 /// (`specs/0004-canvas-navigation-and-selection/adrs.md`), the same way
 /// [`crate::build_draw_list`] does for a path's own stroke.
 fn primitive_stroke(snapshot: &PrimitiveSnapshot, view: ViewTransform) -> DrawList {
-    let outline = outline_of(&snapshot.shape);
+    let outline = outline_of_rotated(&snapshot.shape, snapshot.rotation);
     let anchors = outline_to_anchors(&outline);
     let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
     let min_width_mm = screen_px_to_mm(view, theme::MIN_DISPLAY_STROKE_WIDTH_PX);
@@ -127,25 +129,38 @@ fn primitive_stroke(snapshot: &PrimitiveSnapshot, view: ViewTransform) -> DrawLi
 /// (`vecmanf_ui_core::LiveShape`); this function only draws the
 /// [`Shape`] it is given.
 #[must_use]
-pub fn build_shape_live_preview(shape: &Shape, view: ViewTransform) -> DrawList {
-    let outline = outline_of(shape);
+pub fn build_shape_live_preview(shape: &Shape, rotation: Angle, view: ViewTransform) -> DrawList {
+    let outline = outline_of_rotated(shape, rotation);
     let anchors = outline_to_anchors(&outline);
     let width = screen_px_to_mm(view, theme::LIVE_PREVIEW_STROKE_PX);
     let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
     stroke::path_stroke(&anchors, true, width, theme::ACCENT, tolerance_mm)
 }
 
-fn bounding_box_outline(shape: &Shape, width_mm: f64, color: RgbaColor) -> DrawList {
-    // The frame-bounds rule itself moved to `vecmanf-document-core`
-    // (`specs/0004-canvas-navigation-and-selection/adrs.md`: "the
-    // primitive box... moves to `document-core` as plain arithmetic on
-    // its own types") so `vecmanf-ui-core`'s `object_bounds` can share
-    // it for the Select tool's own bounding box; the rectangle-outline
-    // *drawing* itself is `glyphs::box_outline`, shared with
-    // `select_decoration.rs` (architect review: the four-`thick_line`
-    // loop was duplicated between the two).
+fn bounding_box_outline(
+    shape: &Shape,
+    rotation: Angle,
+    width_mm: f64,
+    color: RgbaColor,
+) -> DrawList {
+    // The frame-bounds rule itself lives in `vecmanf-document-core`
+    // (`specs/0004-canvas-navigation-and-selection/adrs.md`); the box is
+    // that unrotated frame turned about the shape's own center by its
+    // `rotation` (`object-transform` acceptance criterion 25: the two
+    // handle sets and the box must agree about where the corners are).
     let (min, max) = vecmanf_document_core::shape_frame_bounds(shape);
-    glyphs::box_outline(min, max, width_mm, color)
+    let center = shape_center(shape);
+    glyphs::quad_outline(
+        [
+            Point::new(min.x, min.y),
+            Point::new(max.x, min.y),
+            Point::new(max.x, max.y),
+            Point::new(min.x, max.y),
+        ]
+        .map(|corner| corner.rotated_around(center, rotation)),
+        width_mm,
+        color,
+    )
 }
 
 /// A hollow shape-handle glyph: `--accent` outline, white idle fill or
@@ -232,12 +247,14 @@ pub fn build(
         if selected {
             list.extend(bounding_box_outline(
                 &snapshot.shape,
+                snapshot.rotation,
                 outline_width,
                 theme::ACCENT,
             ));
         } else if hovered {
             list.extend(bounding_box_outline(
                 &snapshot.shape,
+                snapshot.rotation,
                 outline_width,
                 theme::ACCENT_HOVER,
             ));
@@ -248,10 +265,10 @@ pub fn build(
         if !input.selected.contains(id) {
             continue;
         }
-        let corner = primitives
-            .iter()
-            .find(|p| p.id == *id)
-            .and_then(|p| rect_top_right_corner(&p.shape));
+        let corner = primitives.iter().find(|p| p.id == *id).and_then(|p| {
+            rect_top_right_corner(&p.shape)
+                .map(|corner| corner.rotated_around(shape_center(&p.shape), p.rotation))
+        });
         for handle in handles {
             if handle.kind == ShapeHandleKind::CornerRadius
                 && let Some(corner) = corner
@@ -304,8 +321,81 @@ mod tests {
             },
             corner_radius: Length::from_mm(0.0),
         };
-        let list = build_shape_live_preview(&shape, ViewTransform::identity());
+        let list =
+            build_shape_live_preview(&shape, Angle::from_radians(0.0), ViewTransform::identity());
         assert_ne!(list.triangles, Vec::<glyphs::Vertex>::new());
+    }
+
+    /// Acceptance criterion 25 (and the slice's whole point): a rotated
+    /// primitive's stroke is drawn turned, not as its unrotated frame —
+    /// a 10 × 10 square rotated 45° about its center reaches the apex
+    /// `(5, 5 - 7.07)` and leaves its unrotated corner `(0, 0)` empty.
+    #[test]
+    fn a_rotated_primitives_stroke_is_drawn_turned() {
+        let document = Document::new(1);
+        let (id, _) = rect_snapshot(&document);
+        document
+            .rotate_object(
+                id,
+                Point::new(5.0, 5.0),
+                Angle::from_radians(std::f64::consts::FRAC_PI_4),
+            )
+            .expect("rotate");
+        let snapshot = document.primitive(id).expect("exists");
+        let list = build(
+            &[snapshot],
+            ViewTransform::identity(),
+            &ShapeDecorationInput::default(),
+        );
+        let reaches = |target: Point| {
+            list.triangles
+                .iter()
+                .any(|v| v.position.vector_to(target).length() < 1.0)
+        };
+        assert!(
+            reaches(Point::new(5.0, 5.0 - 50.0_f64.sqrt())),
+            "apex drawn"
+        );
+        assert!(
+            !reaches(Point::new(0.0, 0.0)),
+            "unrotated corner left empty"
+        );
+    }
+
+    /// The shape tools' selection box turns with the primitive too, so
+    /// the box, the outline and the handles agree about the corners.
+    #[test]
+    fn a_rotated_primitives_selection_box_is_oriented() {
+        let document = Document::new(1);
+        let (id, _) = rect_snapshot(&document);
+        document
+            .rotate_object(
+                id,
+                Point::new(5.0, 5.0),
+                Angle::from_radians(std::f64::consts::FRAC_PI_4),
+            )
+            .expect("rotate");
+        let snapshot = document.primitive(id).expect("exists");
+        let input = ShapeDecorationInput {
+            selected: vec![id],
+            hovered: None,
+            handles: vec![],
+        };
+        let with_box = build(&[snapshot], ViewTransform::identity(), &input);
+        let without = build(
+            &[snapshot],
+            ViewTransform::identity(),
+            &ShapeDecorationInput::default(),
+        );
+        let box_only: Vec<_> = with_box.triangles[without.triangles.len()..].to_vec();
+        // The selection box's own thick lines run along the turned edges,
+        // so they reach the rotated apex too.
+        let apex = Point::new(5.0, 5.0 - 50.0_f64.sqrt());
+        assert!(
+            box_only
+                .iter()
+                .any(|v| v.position.vector_to(apex).length() < 1.0)
+        );
     }
 
     #[test]

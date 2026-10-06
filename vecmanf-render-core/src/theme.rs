@@ -129,12 +129,18 @@ pub const TRANSFORM_RESIZE_HANDLE_SIZE_PX: f64 = SHAPE_HANDLE_SIZE_PX;
 /// reasoning as [`SHAPE_HANDLE_OUTLINE_PX`].
 pub const TRANSFORM_RESIZE_HANDLE_OUTLINE_PX: f64 = 1.0;
 
+/// The transform resize handle's corner radius, screen-space pixels
+/// (`docs/design-system.md`: "8×8px screen-space, 2px corner radius").
+pub const TRANSFORM_RESIZE_HANDLE_CORNER_RADIUS_PX: f64 = 2.0;
+
+/// The rotate handle's arc stroke thickness, screen-space pixels — this
+/// crate's own choice (the design-system row gives only the 12×12px
+/// footprint and "circular-arrow icon"), thick enough to read at 12px.
+pub const TRANSFORM_ROTATE_HANDLE_STROKE_PX: f64 = 1.5;
+
 /// The rotate handle's own glyph size, screen-space pixels (`docs/
 /// design-system.md`'s "Transform rotate handle": "12×12px... circular-
-/// arrow icon glyph"). Drawn as a plain circle in this crate today — the
-/// "arrow" glyph detail is frontend/ux-engineer follow-up, same
-/// `CLAUDE.md` §4 "UI wiring thin" split every earlier slice's exact
-/// cursor/icon rendering already took.
+/// arrow icon glyph").
 ///
 /// The resize/rotate handles' own hit-test radii and the rotate
 /// handle's 20px screen offset (`docs/design-system.md`'s own rows) are
