@@ -4,6 +4,9 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { TransformEntryState } from "@/hooks/useEditorSession";
 import { placeEntryChip } from "@/lib/readoutPlacement";
 
+/** Height of the message card plus its gap, in px. */
+const MESSAGE_CARD_PX = 28;
+
 /** The two messages of a refused field (`object-transform-refinements`
  * UX notes, "Validation"). */
 const MESSAGES = {
@@ -90,7 +93,14 @@ export function TransformEntryChip({
 
   const placement = placeEntryChip(entry.handle, entry.center, sizes.chip, sizes.canvas, entry.glyphReach);
 
-  const messageAbove = placement.top + sizes.chip.height / 2 < entry.handle.y;
+  // The message card goes on the side away from the handle, but flips when
+  // that side has no room inside the canvas, and grows towards the canvas
+  // centre horizontally so it is never clipped at a side edge.
+  const awayIsAbove = placement.top + sizes.chip.height / 2 < entry.handle.y;
+  const roomAbove = placement.top >= MESSAGE_CARD_PX;
+  const roomBelow = sizes.canvas.height - (placement.top + sizes.chip.height) >= MESSAGE_CARD_PX;
+  const messageAbove = awayIsAbove ? roomAbove || !roomBelow : !roomBelow && roomAbove;
+  const messageLeft = placement.left + sizes.chip.width / 2 <= sizes.canvas.width / 2;
 
   const returnFocusToCanvas = () => containerRef.current?.focus();
 
@@ -170,7 +180,7 @@ export function TransformEntryChip({
       aria-label={isAngle ? "Rotation" : "Size"}
       tabIndex={-1}
       data-transform-entry
-      className="absolute z-20 rounded-[8px] p-1.5 outline-none"
+      className="absolute z-30 rounded-[8px] p-1.5 outline-none"
       style={{
         left: placement.left,
         top: placement.top,
@@ -242,7 +252,7 @@ export function TransformEntryChip({
         aria-live="polite"
         className={
           invalid
-            ? `absolute left-0 flex w-max min-w-full items-center gap-1 whitespace-nowrap rounded-[8px] px-1.5 py-1 text-xs ${
+            ? `absolute ${messageLeft ? "left-0" : "right-0"} flex w-max min-w-full items-center gap-1 whitespace-nowrap rounded-[8px] px-1.5 py-1 text-xs ${
                 messageAbove ? "bottom-full mb-1" : "top-full mt-1"
               }`
             : "absolute h-0 overflow-hidden text-xs"
