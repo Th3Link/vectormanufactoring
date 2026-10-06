@@ -19,7 +19,7 @@ use crate::skew_math::{skew_angle, skew_factor, skew_frame};
 use crate::transform_commit::{commit_gesture, sane_or};
 use crate::transform_handle_layout::{EditHandle, Side};
 use crate::transform_math::{
-    resize_anchor_local_position, resize_local_box, rotate_delta_angle, rotate_pivot,
+    resize_anchor_local_position, resize_local_box, rotate_delta_for, rotate_pivot,
     scaled_and_floored, stroke_or_radius_factor,
 };
 use crate::transform_primitive::resize_primitive;
@@ -184,7 +184,7 @@ impl TransformDrag {
                 rotate_by(
                     start,
                     pivot,
-                    rotate_delta_angle(pivot, down_at, current, ctrl),
+                    rotate_delta_for(start, pivot, down_at, current, ctrl),
                 )
             }
             EditHandle::Skew(side) => skew_by_angle(
