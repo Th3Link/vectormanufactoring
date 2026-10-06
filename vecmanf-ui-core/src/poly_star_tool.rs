@@ -5,12 +5,12 @@
 //! (ux-engineer review).
 
 use vecmanf_document_core::{
-    Document, InnerRatio, NodeId, Point, PointCount, PrimitiveSnapshot, Shape, StarFrame,
+    Angle, Document, InnerRatio, NodeId, Point, PointCount, PrimitiveSnapshot, Shape, StarFrame,
 };
 
 use crate::ObjectSelection;
 use crate::handle_layout::{
-    self, HandleKind, ResizeDirection, inner_ratio_from_drag, scale_star_frame,
+    self, HandleKind, ResizeDirection, inner_ratio_from_drag, local_delta, scale_star_frame,
 };
 use crate::shape_hit_test::{hit_test_handle, hit_test_primitive};
 use crate::shape_tool_common::{
@@ -50,11 +50,14 @@ enum PolyStarDrag {
         /// `None` for a polygon, `Some` for a star — same reasoning as
         /// `point_count`.
         inner_ratio: Option<InnerRatio>,
+        /// The primitive's own rotation (acceptance criterion 25).
+        rotation: Angle,
     },
     DraggingInnerRadius {
         id: NodeId,
         down_at: Point,
         current: Point,
+        rotation: Angle,
         start_ratio: InnerRatio,
         frame: StarFrame,
         point_count: PointCount,
@@ -264,7 +267,7 @@ impl PolygonStarTool {
                     unreachable!("filtered to polygon/star above")
                 }
             };
-            let handles = handle_layout::polygon_or_star_handles(frame, point_count, inner_ratio);
+            let handles = handle_layout::handles_for(snapshot);
             if let Some(index) = hit_test_handle(&handles, point, tolerances.handle) {
                 self.drag = match (handles[index].kind, inner_ratio) {
                     (HandleKind::Resize(direction), _) => PolyStarDrag::Resizing {
@@ -275,12 +278,14 @@ impl PolygonStarTool {
                         start_frame: frame,
                         point_count,
                         inner_ratio,
+                        rotation: snapshot.rotation,
                     },
                     (HandleKind::InnerRadius, Some(start_ratio)) => {
                         PolyStarDrag::DraggingInnerRadius {
                             id: snapshot.id,
                             down_at: point,
                             current: point,
+                            rotation: snapshot.rotation,
                             start_ratio,
                             frame,
                             point_count,
@@ -355,9 +360,10 @@ impl PolygonStarTool {
                 start_frame,
                 point_count,
                 inner_ratio,
+                rotation,
                 ..
             } => {
-                let delta = down_at.vector_to(current);
+                let delta = local_delta(rotation, down_at, current);
                 let frame = scale_star_frame(start_frame, direction, delta);
                 let shape = match inner_ratio {
                     None => Shape::Polygon { frame, point_count },
@@ -375,9 +381,10 @@ impl PolygonStarTool {
                 start_ratio,
                 frame,
                 point_count,
+                rotation,
                 ..
             } => {
-                let delta = down_at.vector_to(current);
+                let delta = local_delta(rotation, down_at, current);
                 let ratio = inner_ratio_from_drag(frame, point_count, start_ratio, delta);
                 Some(LiveShape::Adjusting(Shape::Star {
                     frame,
@@ -408,12 +415,13 @@ impl PolygonStarTool {
                 direction,
                 down_at,
                 start_frame,
+                rotation,
                 ..
             } => {
                 if point == down_at {
                     return PolyStarPointerUpOutcome::NoOp;
                 }
-                let delta = down_at.vector_to(point);
+                let delta = local_delta(rotation, down_at, point);
                 let frame = scale_star_frame(start_frame, direction, delta);
                 let _ = document.set_star_frame(id, frame);
                 PolyStarPointerUpOutcome::Resized
@@ -424,12 +432,13 @@ impl PolygonStarTool {
                 start_ratio,
                 frame,
                 point_count,
+                rotation,
                 ..
             } => {
                 if point == down_at {
                     return PolyStarPointerUpOutcome::NoOp;
                 }
-                let delta = down_at.vector_to(point);
+                let delta = local_delta(rotation, down_at, point);
                 let ratio = inner_ratio_from_drag(frame, point_count, start_ratio, delta);
                 self.ratio = ratio;
                 let _ = document.set_inner_ratio(&[id], ratio);
@@ -645,6 +654,57 @@ mod tests {
         assert!((new_frame.radius.as_mm() - 20.0).abs() < 1e-9);
         assert_eq!(point_count.get(), 5);
         assert!((inner_ratio.get() - 0.4).abs() < 1e-9);
+    }
+
+    /// `object-transform` acceptance criterion 25: a rotated star's
+    /// inner-radius handle hit-tests at the rotated position, and
+    /// pulling it 1 mm further out along its own (rotated) direction
+    /// raises the ratio by exactly 0.1 of the 10 mm outer radius.
+    #[test]
+    fn ac25_a_rotated_stars_inner_radius_handle_follows_and_drags_in_local_axes() {
+        let document = Document::new(1);
+        let frame = StarFrame {
+            center: Point::new(0.0, 0.0),
+            radius: Length::from_mm(10.0),
+            angle: Angle::from_radians(0.0),
+        };
+        let id = document.create_star(
+            frame,
+            PointCount::new(5).unwrap(),
+            InnerRatio::new(0.5).unwrap(),
+        );
+        let rotation = Angle::from_radians(0.9);
+        document
+            .rotate_object(id, Point::new(0.0, 0.0), rotation)
+            .expect("rotate");
+        let mut tool = PolygonStarTool::new();
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+
+        let local = handle_layout::inner_radius_handle_position(
+            frame,
+            PointCount::new(5).unwrap(),
+            InnerRatio::new(0.5).unwrap(),
+        );
+        let rotated = local.rotated_around(frame.center, rotation);
+        let outcome = tool.pointer_down(
+            &snapshots(&document),
+            &mut selection,
+            rotated,
+            TOLERANCES,
+            false,
+        );
+        assert_eq!(outcome, PolyStarPointerDownOutcome::Handle);
+        let outward = frame.center.vector_to(rotated).normalized_to(1.0);
+        tool.pointer_up(&document, rotated.translated(outward));
+        let Shape::Star { inner_ratio, .. } = document.primitive(id).expect("exists").shape else {
+            panic!("expected star");
+        };
+        assert!(
+            (inner_ratio.get() - 0.6).abs() < 1e-9,
+            "got {}",
+            inner_ratio.get()
+        );
     }
 
     /// AC14: dragging the inner-radius handle changes only the ratio; a

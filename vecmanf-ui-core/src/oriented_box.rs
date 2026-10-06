@@ -83,6 +83,22 @@ impl OrientedBox {
         local.rotated_around(self.pivot, self.angle)
     }
 
+    /// The box's four corners in document space, in order around its
+    /// perimeter (top-left, top-right, bottom-right, bottom-left of the
+    /// *local* frame) — what the selection/hover outline draws, so the
+    /// outline turns with the object instead of re-squaring to the
+    /// screen axes (acceptance criterion 18).
+    #[must_use]
+    pub fn document_corners(&self) -> [Point; 4] {
+        [
+            Point::new(self.min.x, self.min.y),
+            Point::new(self.max.x, self.min.y),
+            Point::new(self.max.x, self.max.y),
+            Point::new(self.min.x, self.max.y),
+        ]
+        .map(|corner| self.to_document(corner))
+    }
+
     /// Maps a point from document space into this box's local frame —
     /// the inverse of [`OrientedBox::to_document`], used to map a
     /// pointer position into local axes before resize/rotate drag
@@ -228,6 +244,40 @@ mod tests {
         let mapped = b.to_document(b.min);
         assert!((mapped.x - 10.0).abs() < 1e-9);
         assert!((mapped.y - 0.0).abs() < 1e-9);
+    }
+
+    /// Acceptance criterion 18: a rotated object's outline corners are
+    /// the local box's corners turned by its rotation, not the
+    /// axis-aligned bounds of the turned shape.
+    #[test]
+    fn document_corners_follow_the_objects_rotation() {
+        let document = Document::new(1);
+        let id = document.create_rect(RectBounds {
+            origin: Point::new(0.0, 0.0),
+            width: Length::from_mm(10.0),
+            height: Length::from_mm(4.0),
+        });
+        document
+            .rotate_object(
+                id,
+                Point::new(5.0, 2.0),
+                Angle::from_radians(std::f64::consts::FRAC_PI_2),
+            )
+            .expect("rotate");
+        let b = oriented_bounds(&document.object(id).expect("exists"));
+        let corners = b.document_corners();
+        // Turned 90 degrees about (5, 2): the 10x4 box is now 4 wide, 10 tall.
+        let xs: Vec<f64> = corners.iter().map(|c| c.x).collect();
+        let ys: Vec<f64> = corners.iter().map(|c| c.y).collect();
+        let span = |v: &[f64]| {
+            v.iter().copied().fold(f64::MIN, f64::max) - v.iter().copied().fold(f64::MAX, f64::min)
+        };
+        assert!((span(&xs) - 4.0).abs() < 1e-9);
+        assert!((span(&ys) - 10.0).abs() < 1e-9);
+        // Consecutive corners are still a rectangle's edges (right angles).
+        let e1 = corners[0].vector_to(corners[1]);
+        let e2 = corners[1].vector_to(corners[2]);
+        assert!((e1.x * e2.x + e1.y * e2.y).abs() < 1e-9);
     }
 
     /// `to_local` is the exact inverse of `to_document`.

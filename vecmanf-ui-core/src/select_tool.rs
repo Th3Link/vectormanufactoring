@@ -15,7 +15,7 @@
 
 use vecmanf_document_core::{
     AnchorId, Document, EllipseFrame, Length, NodeId, ObjectSnapshot, Point, PrimitiveSnapshot,
-    Shape, StarFrame, Tolerance, Vec2,
+    Shape, StarFrame, Tolerance, Vec2, shape_center,
 };
 
 use crate::ResizeDirection;
@@ -207,6 +207,38 @@ impl SelectTool {
         }
     }
 
+    /// The transform handle of the current single-object selection under
+    /// `point`, if any, with that object and its oriented box — the one
+    /// hit test [`SelectTool::pointer_down`] (to start a drag) and a
+    /// hover cursor query (`Session`'s cursor hint) both use, so what
+    /// the cursor promises and what a press does can never disagree.
+    /// `None` for no selection or a multi-selection (acceptance
+    /// criterion 2).
+    #[must_use]
+    pub fn handle_at<'a>(
+        objects: &'a [ObjectSnapshot],
+        selection: &ObjectSelection,
+        point: Point,
+        tolerances: TransformHandleTolerances,
+    ) -> Option<(&'a ObjectSnapshot, OrientedBox, TransformHandle)> {
+        let [only_id] = selection.ids() else {
+            return None;
+        };
+        let object = objects.iter().find(|o| o.id() == *only_id)?;
+        let box_ = oriented_bounds(object);
+        let handles = transform_handles(
+            &box_,
+            resize_directions_for(object),
+            tolerances.rotate_offset_mm,
+        );
+        let (rotate, resize): (Vec<_>, Vec<_>) = handles
+            .into_iter()
+            .partition(|(h, _)| matches!(h, TransformHandle::Rotate));
+        let hit = hit_test_transform_handle(&rotate, point, tolerances.rotate.as_mm())
+            .or_else(|| hit_test_transform_handle(&resize, point, tolerances.resize.as_mm()))?;
+        Some((object, box_, hit))
+    }
+
     /// Acceptance criteria 1, 4-18: hit-tests `point` first against the
     /// current single-object selection's own transform handles, then
     /// (same as before `object-transform`) against every object's own
@@ -226,48 +258,25 @@ impl SelectTool {
         // before this click can act on it.
         selection.retain_existing(objects);
 
-        if let [only_id] = selection.ids()
-            && let Some(object) = objects.iter().find(|o| o.id() == *only_id)
+        if let Some((object, box_, handle)) =
+            Self::handle_at(objects, selection, point, handle_tolerances)
         {
-            let box_ = oriented_bounds(object);
-            let handles = transform_handles(
-                &box_,
-                resize_directions_for(object),
-                handle_tolerances.rotate_offset_mm,
-            );
-            let rotate_handles: Vec<_> = handles
-                .iter()
-                .copied()
-                .filter(|(h, _)| matches!(h, TransformHandle::Rotate))
-                .collect();
-            let resize_handles: Vec<_> = handles
-                .iter()
-                .copied()
-                .filter(|(h, _)| matches!(h, TransformHandle::Resize(_)))
-                .collect();
-            if hit_test_transform_handle(&rotate_handles, point, handle_tolerances.rotate.as_mm())
-                .is_some()
-            {
-                self.drag = SelectDrag::Rotating {
-                    id: *only_id,
+            self.drag = match handle {
+                TransformHandle::Rotate => SelectDrag::Rotating {
+                    id: object.id(),
                     start: object.clone(),
                     start_box: box_,
                     down_at: point,
-                };
-                return SelectPointerDownOutcome::Handle;
-            }
-            if let Some(TransformHandle::Resize(direction)) =
-                hit_test_transform_handle(&resize_handles, point, handle_tolerances.resize.as_mm())
-            {
-                self.drag = SelectDrag::Resizing {
-                    id: *only_id,
+                },
+                TransformHandle::Resize(direction) => SelectDrag::Resizing {
+                    id: object.id(),
                     start: object.clone(),
                     start_box: box_,
                     direction,
                     down_at: point,
-                };
-                return SelectPointerDownOutcome::Handle;
-            }
+                },
+            };
+            return SelectPointerDownOutcome::Handle;
         }
 
         let Some(hit) = hit_test_object(objects, point, tolerance) else {
@@ -578,7 +587,15 @@ fn compute_primitive_resize(
             );
         }
     }
-    ObjectSnapshot::Primitive(result)
+    // A primitive rotates about its *own* frame center, which this resize
+    // just moved — so on a rotated object the anchor (the opposite corner
+    // or edge, or the center under Shift) would swing in document space.
+    // Pin it: translate the whole frame by however far the anchor moved.
+    // A no-op at zero rotation, where the local and document frames agree.
+    let anchor_local = resize_anchor_local_position(start_box.min, start_box.max, direction, shift);
+    let before = anchor_local.rotated_around(start_box.pivot, result.rotation);
+    let after = anchor_local.rotated_around(shape_center(&result.shape), result.rotation);
+    ObjectSnapshot::Primitive(result).translated(after.vector_to(before))
 }
 
 /// Writes a resize's resulting geometry, dispatching on the object's own
@@ -634,7 +651,7 @@ pub fn double_click(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vecmanf_document_core::{AnchorId, Length, NewAnchor, NodeId, RectBounds};
+    use vecmanf_document_core::{AnchorId, EllipseFrame, Length, NewAnchor, NodeId, RectBounds};
 
     fn rect(document: &Document, x: f64) -> NodeId {
         document.create_rect(RectBounds {
@@ -1476,6 +1493,364 @@ mod tests {
             (degrees - 15.0).abs() < 1e-6,
             "snapped to 15 degrees, got {degrees}"
         );
+    }
+
+    /// Acceptance criteria 4, 18: resizing a *rotated* primitive along its
+    /// own axes keeps the opposite corner fixed on screen too — the
+    /// frame's own center moves with the resize, and the rotation turns
+    /// about that center, so without pinning the anchor it would swing.
+    #[test]
+    fn ac4_ac18_resizing_a_rotated_rect_keeps_the_opposite_corner_fixed_in_document_space() {
+        use vecmanf_document_core::{Angle, outline_of_rotated};
+        let document = Document::new(1);
+        let id = rect(&document, 0.0);
+        let angle = Angle::from_radians(30.0_f64.to_radians());
+        document
+            .rotate_object(id, Point::new(5.0, 5.0), angle)
+            .expect("rotate");
+        let objects = vec![document.object(id).expect("exists")];
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let nw_before = {
+            let p = document.primitive(id).expect("exists");
+            outline_of_rotated(&p.shape, p.rotation)[0].point
+        };
+        let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES);
+        let se = handles
+            .iter()
+            .find(|(h, _)| matches!(h, TransformHandle::Resize(ResizeDirection::Se)))
+            .expect("Se handle")
+            .1;
+        let mut tool = SelectTool::new();
+        tool.pointer_down(
+            &objects,
+            &mut selection,
+            se,
+            TOLERANCE,
+            HANDLE_TOLERANCES,
+            false,
+        );
+        // Drag 5 mm along the object's own local X axis.
+        let drag_to = se.translated(Vec2::new(5.0, 0.0).rotated(angle));
+        tool.pointer_up(&document, &objects, &mut selection, drag_to, false, false);
+        let p = document.primitive(id).expect("exists");
+        let Shape::Rect { bounds, .. } = p.shape else {
+            panic!("expected rect");
+        };
+        assert!(
+            (bounds.width.as_mm() - 15.0).abs() < 1e-9,
+            "grew along local X"
+        );
+        assert!((bounds.height.as_mm() - 10.0).abs() < 1e-9);
+        let nw_after = outline_of_rotated(&p.shape, p.rotation)[0].point;
+        assert!(
+            (nw_after.x - nw_before.x).abs() < 1e-9,
+            "{nw_after:?} vs {nw_before:?}"
+        );
+        assert!((nw_after.y - nw_before.y).abs() < 1e-9);
+        assert!((p.rotation.as_radians() - angle.as_radians()).abs() < 1e-9);
+    }
+
+    fn handle_pos(
+        objects: &[ObjectSnapshot],
+        selection: &ObjectSelection,
+        wanted: TransformHandle,
+    ) -> Point {
+        SelectTool::transform_handles(objects, selection, HANDLE_TOLERANCES)
+            .into_iter()
+            .find(|(h, _)| *h == wanted)
+            .expect("handle exists")
+            .1
+    }
+
+    /// Acceptance criterion 3: pressing any transform handle and
+    /// releasing without moving writes nothing.
+    #[test]
+    fn ac3_a_press_and_release_on_a_handle_writes_nothing() {
+        let document = Document::new(1);
+        let id = rect(&document, 0.0);
+        let objects = vec![document.object(id).expect("exists")];
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let before = document.object(id);
+        for wanted in [
+            TransformHandle::Rotate,
+            TransformHandle::Resize(ResizeDirection::Se),
+            TransformHandle::Resize(ResizeDirection::N),
+        ] {
+            let at = handle_pos(&objects, &selection, wanted);
+            let mut tool = SelectTool::new();
+            let outcome = tool.pointer_down(
+                &objects,
+                &mut selection,
+                at,
+                TOLERANCE,
+                HANDLE_TOLERANCES,
+                false,
+            );
+            assert_eq!(outcome, SelectPointerDownOutcome::Handle);
+            tool.pointer_up(&document, &objects, &mut selection, at, true, true);
+            assert_eq!(document.object(id), before, "{wanted:?}");
+        }
+    }
+
+    /// Acceptance criterion 6: an edge handle changes only its own
+    /// perpendicular dimension; Ctrl adds nothing.
+    #[test]
+    fn ac6_edge_handle_changes_one_dimension_and_ignores_ctrl() {
+        let document = Document::new(1);
+        let id = rect(&document, 0.0);
+        let objects = vec![document.object(id).expect("exists")];
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let mut tool = SelectTool::new();
+        let n = handle_pos(
+            &objects,
+            &selection,
+            TransformHandle::Resize(ResizeDirection::N),
+        );
+        tool.pointer_down(
+            &objects,
+            &mut selection,
+            n,
+            TOLERANCE,
+            HANDLE_TOLERANCES,
+            false,
+        );
+        tool.pointer_up(
+            &document,
+            &objects,
+            &mut selection,
+            Point::new(50.0, -6.0),
+            false,
+            true,
+        );
+        let Shape::Rect { bounds, .. } = document.primitive(id).expect("exists").shape else {
+            panic!("expected rect");
+        };
+        assert!(
+            (bounds.width.as_mm() - 10.0).abs() < 1e-9,
+            "width untouched"
+        );
+        assert!((bounds.height.as_mm() - 16.0).abs() < 1e-9);
+        assert!(
+            (bounds.origin.y - (-6.0)).abs() < 1e-9,
+            "bottom edge anchored"
+        );
+    }
+
+    /// Acceptance criterion 8: a non-proportional resize scales the
+    /// stroke width by √(sx·sy) (4 × 1 → 2).
+    #[test]
+    fn ac8_non_proportional_resize_scales_stroke_width_by_the_geometric_mean() {
+        let document = Document::new(1);
+        let id = rect(&document, 0.0);
+        let objects = vec![document.object(id).expect("exists")];
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let mut tool = SelectTool::new();
+        let e = handle_pos(
+            &objects,
+            &selection,
+            TransformHandle::Resize(ResizeDirection::E),
+        );
+        tool.pointer_down(
+            &objects,
+            &mut selection,
+            e,
+            TOLERANCE,
+            HANDLE_TOLERANCES,
+            false,
+        );
+        tool.pointer_up(
+            &document,
+            &objects,
+            &mut selection,
+            Point::new(40.0, 5.0),
+            false,
+            false,
+        );
+        let snapshot = document.primitive(id).expect("exists");
+        assert!(
+            (snapshot.stroke_width.as_mm() - 0.5).abs() < 1e-9,
+            "0.25 × √4"
+        );
+    }
+
+    /// Acceptance criterion 8: a drag toward zero never takes the stroke
+    /// width to zero or below — it stays at the smallest positive value.
+    #[test]
+    fn ac8_stroke_width_is_floored_above_zero_when_a_resize_collapses_the_object() {
+        let document = Document::new(1);
+        let id = rect(&document, 0.0);
+        let objects = vec![document.object(id).expect("exists")];
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let mut tool = SelectTool::new();
+        let e = handle_pos(
+            &objects,
+            &selection,
+            TransformHandle::Resize(ResizeDirection::E),
+        );
+        tool.pointer_down(
+            &objects,
+            &mut selection,
+            e,
+            TOLERANCE,
+            HANDLE_TOLERANCES,
+            false,
+        );
+        tool.pointer_up(
+            &document,
+            &objects,
+            &mut selection,
+            Point::new(-80.0, 5.0),
+            false,
+            false,
+        );
+        let snapshot = document.primitive(id).expect("exists");
+        assert!(
+            snapshot.stroke_width.as_mm() > 0.0,
+            "never zero or negative"
+        );
+        assert!(snapshot.stroke_width.as_mm() < 0.25);
+    }
+
+    /// Acceptance criterion 10: an ellipse resizes through the Select
+    /// tool's handles — rx/ry follow the box.
+    #[test]
+    fn ac10_ellipse_resizes_through_the_select_tools_handles() {
+        let document = Document::new(1);
+        let id = document.create_ellipse(EllipseFrame {
+            center: Point::new(0.0, 0.0),
+            rx: Length::from_mm(5.0),
+            ry: Length::from_mm(3.0),
+        });
+        let objects = vec![document.object(id).expect("exists")];
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let mut tool = SelectTool::new();
+        let se = handle_pos(
+            &objects,
+            &selection,
+            TransformHandle::Resize(ResizeDirection::Se),
+        );
+        tool.pointer_down(
+            &objects,
+            &mut selection,
+            se,
+            TOLERANCE,
+            HANDLE_TOLERANCES,
+            false,
+        );
+        tool.pointer_up(
+            &document,
+            &objects,
+            &mut selection,
+            se.translated(Vec2::new(4.0, 2.0)),
+            false,
+            false,
+        );
+        let Shape::Ellipse { frame } = document.primitive(id).expect("exists").shape else {
+            panic!("still an ellipse");
+        };
+        assert!((frame.rx.as_mm() - 7.0).abs() < 1e-9);
+        assert!((frame.ry.as_mm() - 4.0).abs() < 1e-9);
+        // Anchored at the opposite (Nw) corner (-5, -3).
+        assert!((frame.center.x - (-5.0 + 7.0)).abs() < 1e-9);
+        assert!((frame.center.y - (-3.0 + 4.0)).abs() < 1e-9);
+    }
+
+    /// Acceptance criterion 16: Shift pivots a rotate to the bottom-edge
+    /// midpoint, so the object's center swings around it.
+    #[test]
+    fn ac16_shift_rotates_about_the_bottom_edge_midpoint() {
+        let document = Document::new(1);
+        let id = rect(&document, 0.0);
+        let objects = vec![document.object(id).expect("exists")];
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let mut tool = SelectTool::new();
+        let r = handle_pos(&objects, &selection, TransformHandle::Rotate);
+        tool.pointer_down(
+            &objects,
+            &mut selection,
+            r,
+            TOLERANCE,
+            HANDLE_TOLERANCES,
+            false,
+        );
+        // Bottom-edge midpoint is (5, 10); the handle sits straight above
+        // it at (5, -5), so a quarter turn clockwise (+90° in Y-down)
+        // swings it to (20, 10).
+        let current = Point::new(5.0 + 15.0, 10.0);
+        assert_eq!(tool.live_pivot(true), Some(Point::new(5.0, 10.0)));
+        assert_eq!(tool.live_pivot(false), Some(Point::new(5.0, 5.0)));
+        tool.pointer_up(&document, &objects, &mut selection, current, true, false);
+        let snapshot = document.primitive(id).expect("exists");
+        assert!((snapshot.rotation.as_radians() - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
+        let Shape::Rect { bounds, .. } = snapshot.shape else {
+            panic!("expected rect");
+        };
+        // The old center (5, 5) is 5 above the pivot; a clockwise quarter
+        // turn about (5, 10) puts it at (10, 10).
+        let center = Point::new(
+            bounds.origin.x + bounds.width.as_mm() / 2.0,
+            bounds.origin.y + bounds.height.as_mm() / 2.0,
+        );
+        assert!(
+            (center.x - 10.0).abs() < 1e-9 && (center.y - 10.0).abs() < 1e-9,
+            "{center:?}"
+        );
+    }
+
+    /// Acceptance criteria 20, 21: rotating a path bakes its anchors and
+    /// stores the angle; rotating a primitive keeps it the same kind.
+    #[test]
+    fn ac20_ac21_rotate_bakes_a_path_and_never_converts_a_primitive() {
+        let document = Document::new(1);
+        let path_id = document.create_path(
+            &[
+                NewAnchor::corner(AnchorId::new(1, 1), Point::new(0.0, 0.0)),
+                NewAnchor::corner(AnchorId::new(1, 2), Point::new(10.0, 0.0)),
+            ],
+            false,
+        );
+        let rect_id = rect(&document, 100.0);
+        for id in [path_id, rect_id] {
+            let objects = vec![document.object(id).expect("exists")];
+            let mut selection = ObjectSelection::new();
+            selection.select_single(id);
+            let mut tool = SelectTool::new();
+            let r = handle_pos(&objects, &selection, TransformHandle::Rotate);
+            tool.pointer_down(
+                &objects,
+                &mut selection,
+                r,
+                TOLERANCE,
+                HANDLE_TOLERANCES,
+                false,
+            );
+            let b = oriented_bounds(&objects[0]);
+            let pivot = b.to_document(b.local_center());
+            let to = pivot.translated(
+                pivot
+                    .vector_to(r)
+                    .rotated(vecmanf_document_core::Angle::from_radians(0.6)),
+            );
+            tool.pointer_up(&document, &objects, &mut selection, to, false, false);
+        }
+        let path = document.path(path_id).expect("still a path");
+        assert!((path.rotation.as_radians() - 0.6).abs() < 1e-9);
+        assert!(
+            path.anchors[1].point.y.abs() > 0.1,
+            "anchors baked, not just the register"
+        );
+        assert!(
+            document.primitive(rect_id).is_some(),
+            "rectangle stays a rectangle"
+        );
+        assert!(document.path(rect_id).is_none());
     }
 
     /// Acceptance criterion 23: a plain body drag still moves the object

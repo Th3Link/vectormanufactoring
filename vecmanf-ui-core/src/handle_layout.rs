@@ -7,8 +7,8 @@
 //! [`crate::shape_hit_test`] for the latter.
 
 use vecmanf_document_core::{
-    EllipseFrame, InnerRatio, Length, Point, PointCount, PrimitiveSnapshot, RectBounds, Shape,
-    StarFrame, Vec2, effective_corner_radius,
+    Angle, EllipseFrame, InnerRatio, Length, Point, PointCount, PrimitiveSnapshot, RectBounds,
+    Shape, StarFrame, Vec2, effective_corner_radius, shape_center,
 };
 
 /// One of a rectangle/ellipse's eight bounding-box resize handles, or a
@@ -249,11 +249,17 @@ pub fn inner_radius_handle_position(
         .translated(Vec2::new(radius * theta.cos(), radius * theta.sin()))
 }
 
-/// Every handle a selected primitive currently shows — dispatches on
-/// its [`Shape`].
+/// Every handle a selected primitive currently shows, at the positions
+/// its own `rotation` implies (`specs/0005-object-transform/
+/// specification.md` acceptance criterion 25: "handles follow the
+/// object's local frame"): each shape's handles are laid out in its own
+/// unrotated local frame by the functions above, then turned about the
+/// shape's frame center — the same pivot [`vecmanf_document_core::
+/// outline_of_rotated`] turns the outline about, so a handle never
+/// disagrees with the corner it belongs to.
 #[must_use]
 pub fn handles_for(snapshot: &PrimitiveSnapshot) -> Vec<ShapeHandle> {
-    match snapshot.shape {
+    let local = match snapshot.shape {
         Shape::Rect {
             bounds,
             corner_radius,
@@ -265,7 +271,26 @@ pub fn handles_for(snapshot: &PrimitiveSnapshot) -> Vec<ShapeHandle> {
             point_count,
             inner_ratio,
         } => polygon_or_star_handles(frame, point_count, Some(inner_ratio)),
-    }
+    };
+    let center = shape_center(&snapshot.shape);
+    local
+        .into_iter()
+        .map(|handle| ShapeHandle {
+            position: handle.position.rotated_around(center, snapshot.rotation),
+            ..handle
+        })
+        .collect()
+}
+
+/// A pointer drag's displacement from `from` to `to`, expressed along a
+/// primitive's own local axes (turned by `-rotation`) — what every
+/// shape-tool handle drag's arithmetic expects, since that arithmetic
+/// works on the primitive's unrotated stored frame (acceptance criterion
+/// 25). Identical to a plain `from.vector_to(to)` at zero rotation.
+#[must_use]
+pub(crate) fn local_delta(rotation: Angle, from: Point, to: Point) -> Vec2 {
+    from.vector_to(to)
+        .rotated(Angle::from_radians(-rotation.as_radians()))
 }
 
 /// Resizes a rectangle's bounding box by dragging the handle at
@@ -424,6 +449,55 @@ mod tests {
             .filter(|h| h.kind == HandleKind::CornerRadiusEcho)
             .count();
         assert_eq!(echoes, 3);
+    }
+
+    /// `object-transform` acceptance criterion 25: the corner-radius
+    /// handle of a rectangle rotated 30° sits inset along the *rotated*
+    /// corner — the unrotated position turned 30° about the center — and
+    /// a drag of it is measured along the rectangle's own local axes.
+    #[test]
+    fn handles_for_a_rotated_rect_follow_its_rotation() {
+        use vecmanf_document_core::Document;
+        let document = Document::new(1);
+        let id = document.create_rect(bounds(0.0, 0.0, 10.0, 10.0));
+        document
+            .set_corner_radius(&[id], Length::from_mm(2.0))
+            .expect("radius");
+        let angle = Angle::from_radians(30.0_f64.to_radians());
+        document
+            .rotate_object(id, Point::new(5.0, 5.0), angle)
+            .expect("rotate");
+        let snapshot = document.primitive(id).expect("exists");
+
+        let unrotated = rect_handles(bounds(0.0, 0.0, 10.0, 10.0), Length::from_mm(2.0));
+        let local = unrotated
+            .iter()
+            .find(|h| h.kind == HandleKind::CornerRadius)
+            .expect("corner-radius handle")
+            .position;
+        let rotated = handles_for(&snapshot)
+            .into_iter()
+            .find(|h| h.kind == HandleKind::CornerRadius)
+            .expect("corner-radius handle")
+            .position;
+        let expected = local.rotated_around(Point::new(5.0, 5.0), angle);
+        assert!((rotated.x - expected.x).abs() < 1e-9);
+        assert!((rotated.y - expected.y).abs() < 1e-9);
+        assert!(
+            (rotated.x - local.x).abs() > 0.5 || (rotated.y - local.y).abs() > 0.5,
+            "30° off where it sits on an unrotated rectangle of the same size"
+        );
+    }
+
+    /// A pointer displacement along the object's own axes is the plain
+    /// displacement turned back by the rotation.
+    #[test]
+    fn local_delta_undoes_the_rotation() {
+        let angle = Angle::from_radians(std::f64::consts::FRAC_PI_2);
+        let delta = local_delta(angle, Point::new(0.0, 0.0), Point::new(0.0, 5.0));
+        // Document +Y on a 90°-rotated object is its own local +X.
+        assert!((delta.x - 5.0).abs() < 1e-9);
+        assert!(delta.y.abs() < 1e-9);
     }
 
     /// AC3: dragging the E handle changes only width.

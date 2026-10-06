@@ -60,8 +60,9 @@ pub use shape_hit_test::{hit_test_handle, hit_test_primitive};
 pub use shape_tool_common::{LiveShape, ShapeHitTolerances};
 pub use transform_handle_layout::{
     ALL_EIGHT, CORNERS_FOUR, ResizedBox, TransformHandle, hit_test_transform_handle,
-    polygon_star_resize_factor, resize_anchor_local_position, resize_handle_local_position,
-    resize_local_box, rotate_delta_angle, rotate_handle_local_position, rotate_pivot,
-    scaled_and_floored, stroke_or_radius_factor, transform_handles,
+    polygon_star_resize_factor, resize_anchor_local_position, resize_cursor_angle_degrees,
+    resize_handle_local_position, resize_local_box, rotate_delta_angle,
+    rotate_handle_local_position, rotate_pivot, scaled_and_floored, stroke_or_radius_factor,
+    transform_handles,
 };
 pub use viewport::{PX_PER_MM_AT_100, Viewport, Zoom};

@@ -233,6 +233,25 @@ pub fn resize_local_box(
     }
 }
 
+/// The on-screen direction, in degrees clockwise from the horizontal, a
+/// resize handle's double-headed-arrow cursor must point
+/// (`specs/0005-object-transform/specification.md`'s UX notes, "Cursor
+/// feedback": "object rotation + handle's own base angle"): `0` for the
+/// E/W handles, `90` for N/S, `45` for the Se/Nw diagonal, `-45` for
+/// Ne/Sw — all in Y-down screen space — plus `rotation`. Reduced to
+/// `[0, 180)` since a double-headed arrow looks the same turned half a
+/// circle.
+#[must_use]
+pub fn resize_cursor_angle_degrees(direction: ResizeDirection, rotation: Angle) -> f64 {
+    let base = match direction {
+        ResizeDirection::E | ResizeDirection::W => 0.0,
+        ResizeDirection::Se | ResizeDirection::Nw => 45.0,
+        ResizeDirection::S | ResizeDirection::N => 90.0,
+        ResizeDirection::Sw | ResizeDirection::Ne => 135.0,
+    };
+    (base + rotation.as_radians().to_degrees()).rem_euclid(180.0)
+}
+
 /// The local-frame point a resize with `direction`/`shift` keeps fixed
 /// (acceptance criteria 4, 7): the box's own center under `shift`, or
 /// the opposite corner/edge-midpoint otherwise — the same anchor
@@ -541,6 +560,29 @@ mod tests {
         assert_eq!(resized.max, Point::new(15.0, 12.0));
         assert!((resized.sx - 1.5).abs() < 1e-9);
         assert!((resized.sy - 1.2).abs() < 1e-9);
+    }
+
+    /// UX notes' rotated resize cursors: base angle plus the object's
+    /// own rotation, never one of the four fixed browser cursors once
+    /// rotated.
+    #[test]
+    fn resize_cursor_angle_adds_the_objects_rotation_to_the_handles_base_angle() {
+        let zero = Angle::from_radians(0.0);
+        assert!((resize_cursor_angle_degrees(ResizeDirection::E, zero) - 0.0).abs() < 1e-9);
+        assert!((resize_cursor_angle_degrees(ResizeDirection::N, zero) - 90.0).abs() < 1e-9);
+        assert!((resize_cursor_angle_degrees(ResizeDirection::Se, zero) - 45.0).abs() < 1e-9);
+        assert!((resize_cursor_angle_degrees(ResizeDirection::Ne, zero) - 135.0).abs() < 1e-9);
+        // A "top" handle on a 45-degree-rotated object points along the
+        // 45-degree diagonal's perpendicular-to-edge direction: 90 + 45.
+        let rotated = Angle::from_radians(45.0_f64.to_radians());
+        assert!((resize_cursor_angle_degrees(ResizeDirection::N, rotated) - 135.0).abs() < 1e-9);
+        // Opposite handles share one cursor angle.
+        assert!(
+            (resize_cursor_angle_degrees(ResizeDirection::N, rotated)
+                - resize_cursor_angle_degrees(ResizeDirection::S, rotated))
+            .abs()
+                < 1e-9
+        );
     }
 
     /// `resize_anchor_local_position` matches the fixed corner

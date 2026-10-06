@@ -4,10 +4,12 @@
 //! follows, including [`crate::LiveShape`]'s live-preview plumbing
 //! (ux-engineer review).
 
-use vecmanf_document_core::{Document, EllipseFrame, NodeId, Point, PrimitiveSnapshot, Shape};
+use vecmanf_document_core::{
+    Angle, Document, EllipseFrame, NodeId, Point, PrimitiveSnapshot, Shape,
+};
 
 use crate::ObjectSelection;
-use crate::handle_layout::{self, HandleKind, ResizeDirection, resize_ellipse_frame};
+use crate::handle_layout::{self, HandleKind, ResizeDirection, local_delta, resize_ellipse_frame};
 use crate::shape_hit_test::{hit_test_handle, hit_test_primitive};
 use crate::shape_tool_common::{
     LiveShape, ShapeHitTolerances, apply_selection_click, constrained_endpoint, ellipses_only,
@@ -29,6 +31,8 @@ enum EllipseDrag {
         down_at: Point,
         current: Point,
         start_frame: EllipseFrame,
+        /// The primitive's own rotation (acceptance criterion 25).
+        rotation: Angle,
     },
 }
 
@@ -86,7 +90,7 @@ impl EllipseTool {
             && let Some(snapshot) = ellipses.iter().find(|p| p.id == *only)
             && let Shape::Ellipse { frame } = snapshot.shape
         {
-            let handles = handle_layout::ellipse_handles(frame);
+            let handles = handle_layout::handles_for(snapshot);
             if let Some(index) = hit_test_handle(&handles, point, tolerances.handle) {
                 let HandleKind::Resize(direction) = handles[index].kind else {
                     // invariant: `ellipse_handles` only ever produces
@@ -99,6 +103,7 @@ impl EllipseTool {
                     down_at: point,
                     current: point,
                     start_frame: frame,
+                    rotation: snapshot.rotation,
                 };
                 return EllipsePointerDownOutcome::Handle;
             }
@@ -163,9 +168,10 @@ impl EllipseTool {
                 down_at,
                 current,
                 start_frame,
+                rotation,
                 ..
             } => {
-                let delta = down_at.vector_to(current);
+                let delta = local_delta(rotation, down_at, current);
                 let frame = resize_ellipse_frame(start_frame, direction, delta);
                 Some(LiveShape::Adjusting(Shape::Ellipse { frame }))
             }
@@ -198,12 +204,13 @@ impl EllipseTool {
                 direction,
                 down_at,
                 start_frame,
+                rotation,
                 ..
             } => {
                 if point == down_at {
                     return EllipsePointerUpOutcome::NoOp;
                 }
-                let delta = down_at.vector_to(point);
+                let delta = local_delta(rotation, down_at, point);
                 let frame = resize_ellipse_frame(start_frame, direction, delta);
                 let _ = document.set_ellipse_frame(id, frame);
                 EllipsePointerUpOutcome::Resized
@@ -235,6 +242,47 @@ mod tests {
             .into_iter()
             .filter_map(|id| document.primitive(id))
             .collect()
+    }
+
+    /// `object-transform` acceptance criterion 25: a rotated ellipse's
+    /// handles sit on its turned bounding box and drag along its own
+    /// axes — its rotated E handle pulled 4 mm out along local X grows
+    /// rx by 2 mm (the box widens by 4 mm, anchored at the far edge).
+    #[test]
+    fn ac25_a_rotated_ellipses_own_handles_follow_and_drag_in_local_axes() {
+        use vecmanf_document_core::Vec2;
+        let document = Document::new(1);
+        let id = document.create_ellipse(EllipseFrame {
+            center: Point::new(0.0, 0.0),
+            rx: Length::from_mm(5.0),
+            ry: Length::from_mm(5.0),
+        });
+        let angle = Angle::from_radians(45.0_f64.to_radians());
+        document
+            .rotate_object(id, Point::new(0.0, 0.0), angle)
+            .expect("rotate");
+        let mut tool = EllipseTool::new();
+        let mut selection = ObjectSelection::new();
+        selection.select_single(id);
+        let e_handle = Point::new(5.0, 0.0).rotated_around(Point::new(0.0, 0.0), angle);
+        let outcome = tool.pointer_down(
+            &snapshots(&document),
+            &mut selection,
+            e_handle,
+            TOLERANCES,
+            false,
+        );
+        assert_eq!(outcome, EllipsePointerDownOutcome::Handle);
+        tool.pointer_up(
+            &document,
+            e_handle.translated(Vec2::new(4.0, 0.0).rotated(angle)),
+            false,
+        );
+        let Shape::Ellipse { frame } = document.primitive(id).expect("exists").shape else {
+            panic!("expected ellipse");
+        };
+        assert!((frame.rx.as_mm() - 7.0).abs() < 1e-9);
+        assert!((frame.ry.as_mm() - 5.0).abs() < 1e-9);
     }
 
     /// AC7, AC8: an ellipse drag creates rx/ry from the bbox, and Ctrl
