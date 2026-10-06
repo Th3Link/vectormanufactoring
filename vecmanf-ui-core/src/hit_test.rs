@@ -76,7 +76,7 @@ pub fn hit_test(
     segment_tolerance: Tolerance,
 ) -> Option<Hit> {
     let handle = hit_test_handle(paths, selection, point, handle_tolerance);
-    let node = hit_test_node(paths, point, node_tolerance);
+    let node = hit_test_node(paths, selection, point, node_tolerance);
     // The nearer of the two wins; a handle wins an exact tie (its own
     // glyph draws on top of the node's, `vecmanf-render-core::
     // decorations`, so winning the tie is what the maker actually sees
@@ -142,18 +142,46 @@ fn hit_test_handle(
     best
 }
 
-fn hit_test_node(paths: &[PathSnapshot], point: Point, tolerance: Tolerance) -> Option<(f64, Hit)> {
-    let mut best: Option<(f64, Hit)> = None;
+/// Two node distances closer than this (millimetres) are the same distance:
+/// the coincident pair a Split leaves, and any two nodes drawn on top of each
+/// other.
+const NODE_TIE_EPSILON_MM: f64 = 1e-9;
+
+/// The nearest node within `tolerance`; of two at the same distance (within
+/// [`NODE_TIE_EPSILON_MM`]) a selected one wins over an unselected one
+/// (`specs/edit-interaction-polish/` criterion 50: what is drawn highlighted
+/// is what the next drag moves), and otherwise the first in document order.
+fn hit_test_node(
+    paths: &[PathSnapshot],
+    selection: &NodeSelection,
+    point: Point,
+    tolerance: Tolerance,
+) -> Option<(f64, Hit)> {
+    let mut best: Option<(f64, Hit, bool)> = None;
     for snapshot in paths {
         for anchor in &snapshot.anchors {
             let d = distance(anchor.point, point);
-            best = better(best, d, tolerance, || Hit::Node {
-                path: snapshot.id,
-                anchor: anchor.id,
+            if d > tolerance.as_mm() {
+                continue;
+            }
+            let selected = selection.contains_node(anchor.id);
+            let wins = best.is_none_or(|(best_distance, _, best_selected)| {
+                d < best_distance - NODE_TIE_EPSILON_MM
+                    || (d <= best_distance + NODE_TIE_EPSILON_MM && selected && !best_selected)
             });
+            if wins {
+                best = Some((
+                    d,
+                    Hit::Node {
+                        path: snapshot.id,
+                        anchor: anchor.id,
+                    },
+                    selected,
+                ));
+            }
         }
     }
-    best
+    best.map(|(d, hit, _)| (d, hit))
 }
 
 /// Every adjacent pair of indices into a run of `len` anchors, in
@@ -576,6 +604,116 @@ mod tests {
                 path,
                 start: ids[2],
                 end: ids[0]
+            })
+        );
+    }
+
+    /// Two paths whose first nodes coincide at the origin, as after a Split.
+    fn coincident_pair() -> (Document, [(NodeId, AnchorId); 2]) {
+        let document = Document::new(1);
+        let (a, b) = (AnchorId::new(1, 1), AnchorId::new(1, 2));
+        let first = document.create_path(
+            &[
+                NewAnchor::corner(AnchorId::new(1, 10), Point::new(-20.0, 0.0)),
+                NewAnchor::corner(a, Point::new(0.0, 0.0)),
+            ],
+            false,
+        );
+        let second = document.create_path(
+            &[
+                NewAnchor::corner(b, Point::new(0.0, 0.0)),
+                NewAnchor::corner(AnchorId::new(1, 11), Point::new(20.0, 0.0)),
+            ],
+            false,
+        );
+        (document, [(first, a), (second, b)])
+    }
+
+    fn node_hit_with(selected: &[(NodeId, AnchorId)], document: &Document) -> Option<Hit> {
+        let paths: Vec<PathSnapshot> = document
+            .object_ids()
+            .into_iter()
+            .filter_map(|id| document.path(id))
+            .collect();
+        let mut selection = NodeSelection::new();
+        selection.select_nodes(selected.to_vec());
+        hit_test(
+            &paths,
+            &selection,
+            Point::new(0.0, 0.0),
+            POINT_TOLERANCE,
+            HANDLE_TOLERANCE,
+            SEGMENT_TOLERANCE,
+        )
+    }
+
+    /// `edit-interaction-polish` criterion 50: of two coincident nodes the
+    /// selected one is hit, whichever comes first in document order; with
+    /// neither or both selected the first in document order wins as before.
+    #[test]
+    fn a_tie_between_coincident_nodes_goes_to_the_selected_one() {
+        let (document, [first, second]) = coincident_pair();
+        let hit = |selected: &[(NodeId, AnchorId)]| node_hit_with(selected, &document);
+        assert_eq!(
+            hit(&[second]),
+            Some(Hit::Node {
+                path: second.0,
+                anchor: second.1
+            })
+        );
+        assert_eq!(
+            hit(&[first]),
+            Some(Hit::Node {
+                path: first.0,
+                anchor: first.1
+            })
+        );
+        assert_eq!(
+            hit(&[]),
+            Some(Hit::Node {
+                path: first.0,
+                anchor: first.1
+            }),
+            "no selection: document order"
+        );
+        assert_eq!(
+            hit(&[first, second]),
+            Some(Hit::Node {
+                path: first.0,
+                anchor: first.1
+            }),
+            "both selected: document order"
+        );
+    }
+
+    /// The tie rule is for equal distances only: a nearer unselected node
+    /// still beats a farther selected one.
+    #[test]
+    fn a_nearer_unselected_node_still_beats_a_farther_selected_one() {
+        let (document, [first, second]) = coincident_pair();
+        let paths: Vec<PathSnapshot> = document
+            .object_ids()
+            .into_iter()
+            .filter_map(|id| document.path(id))
+            .collect();
+        let mut selection = NodeSelection::new();
+        selection.select_nodes(vec![second]);
+        // Move the selected node one unit away from the point.
+        let mut moved = paths.clone();
+        moved[1].anchors[0].point = Point::new(1.0, 0.0);
+        let hit = hit_test(
+            &moved,
+            &selection,
+            Point::new(0.0, 0.0),
+            POINT_TOLERANCE,
+            HANDLE_TOLERANCE,
+            SEGMENT_TOLERANCE,
+        );
+        assert_eq!(
+            hit,
+            Some(Hit::Node {
+                path: first.0,
+                anchor: first.1
             })
         );
     }

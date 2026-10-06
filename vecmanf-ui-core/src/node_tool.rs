@@ -227,20 +227,28 @@ impl NodeTool {
         }
     }
 
-    /// Acceptance criterion: Escape with a selection present clears it;
-    /// with nothing selected it is a no-op
-    /// (`specs/0002-path-node-editing/specification.md`'s node-tool actions
-    /// notes). Also cancels any drag currently in flight, writing nothing
-    /// — consistent with the pen tool's own Escape, which discards its
-    /// in-progress state rather than leaving a gesture half-finished.
-    /// Returns whether anything (a selection, a drag, or both) was
-    /// cancelled.
-    pub fn escape(&mut self) -> bool {
+    /// Escape, step 2 of `specs/edit-interaction-polish/` criterion 42: cancels
+    /// the node or handle drag in flight, writing nothing, and keeps the
+    /// selection (criterion 45: one step per key). Returns whether there was a
+    /// drag.
+    pub fn cancel_drag(&mut self) -> bool {
+        !matches!(std::mem::take(&mut self.drag), Drag::None)
+    }
+
+    /// Whether a node or handle drag is in flight.
+    #[must_use]
+    pub const fn drag_in_flight(&self) -> bool {
+        !matches!(self.drag, Drag::None)
+    }
+
+    /// Escape, step 3 of criterion 42 for the Node tool (criterion 45): clears
+    /// the node and segment selection, leaving the path itself as it is.
+    /// Returns whether anything was selected (`specs/0002-path-node-editing`'s
+    /// "Escape with nothing selected is a no-op" still holds for this call).
+    pub fn clear_selection(&mut self) -> bool {
         let had_selection = !self.selection.is_empty();
-        let had_drag = !matches!(self.drag, Drag::None);
         self.selection.clear();
-        self.drag = Drag::None;
-        had_selection || had_drag
+        had_selection
     }
 
     /// Acceptance criteria 7, 8, 9, 10, 14: the maker pressed the mouse
@@ -599,12 +607,14 @@ impl NodeTool {
     /// Acceptance criteria 12-15: Split. A no-op (no commit, and
     /// `minter` is not advanced) when the current selection is not
     /// exactly one node, or [`Document::split_at_anchor`] itself refuses.
-    /// On success, selects both resulting coincident nodes (criterion
-    /// 15) via [`NodeSelection::select_nodes`] — on one path (criterion
-    /// 14's closed-path case) or two (criterion 13's open-path case);
-    /// either way it is now just an ordinary, possibly multi-path, node
-    /// selection, the same representation an interactive cross-path
-    /// shift-click builds.
+    /// On success, selects exactly one of the two resulting coincident
+    /// nodes (`specs/edit-interaction-polish/` criterion 50, superseding
+    /// `0006` criterion 15): the new second node, the copy that keeps the
+    /// original outgoing handle (the first node of the new path object for
+    /// an open path, the new first node of the opened path for a closed
+    /// one), which is the one `minter` just minted an id for. A press at the
+    /// shared position then hits it ([`hit_test`]'s tie rule) and a drag
+    /// moves that node only.
     pub fn split_selected(&mut self, minter: &mut AnchorIdMinter, document: &Document) {
         let [(path, anchor)] = self.selection.node_pairs() else {
             return;
@@ -614,7 +624,9 @@ impl NodeTool {
         let Ok((first, second)) = document.split_at_anchor(path, anchor, new_id) else {
             return;
         };
-        self.selection.select_nodes(vec![first, second]);
+        let second_node = if second.1 == new_id { second } else { first };
+        self.selection
+            .select_single_node(second_node.0, second_node.1);
     }
 
     /// Whether [`NodeTool::split_selected`] would do anything right now
@@ -1312,11 +1324,12 @@ mod tests {
     // for an open conflict against a later review note that asked for
     // the opposite.
 
-    /// Escape mid-drag cancels the drag (consistent with the pen tool's
-    /// own Escape): the subsequent release that would otherwise end the
-    /// drag is now a no-op, and the node never moves.
+    /// Escape mid-drag is one step (`specs/edit-interaction-polish/`
+    /// criteria 42 and 45): it cancels the drag and keeps the selection; the
+    /// release that would otherwise end the drag is then a no-op and the node
+    /// never moves.
     #[test]
-    fn escape_mid_drag_cancels_it() {
+    fn escape_mid_drag_cancels_only_the_drag_and_keeps_the_selection() {
         let document = Document::new(1);
         let a = AnchorId::new(1, 1);
         let b = AnchorId::new(1, 2);
@@ -1329,8 +1342,15 @@ mod tests {
         tool.pointer_up(&document, Point::new(0.0, 0.0));
         let paths = vec![document.path(path).expect("exists")];
         tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+        assert!(tool.drag_in_flight());
 
-        assert!(tool.escape(), "a drag was in flight to cancel");
+        assert!(tool.cancel_drag(), "a drag was in flight to cancel");
+        assert!(!tool.drag_in_flight());
+        assert!(
+            tool.selection().contains_node(a),
+            "criterion 45: the selection is kept"
+        );
+        assert!(!tool.cancel_drag(), "nothing more to cancel");
 
         let outcome = tool.pointer_up(&document, Point::new(50.0, 50.0));
         assert_eq!(outcome, PointerUpOutcome::NoOp, "the drag was cancelled");
@@ -1338,8 +1358,10 @@ mod tests {
         assert_eq!(snapshot.anchors[0].point, Point::new(0.0, 0.0), "unmoved");
     }
 
+    /// Criterion 45: with a node or segment selected the next step clears it
+    /// (the path stays); with none selected there is nothing left to clear.
     #[test]
-    fn escape_clears_a_present_selection_and_is_a_no_op_otherwise() {
+    fn clearing_the_selection_is_a_no_op_once_nothing_is_selected() {
         let document = Document::new(1);
         let a = AnchorId::new(1, 1);
         let b = AnchorId::new(1, 2);
@@ -1347,10 +1369,28 @@ mod tests {
         let paths = vec![document.path(path).expect("exists")];
         let mut tool = NodeTool::new();
         tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+        tool.pointer_up(&document, Point::new(0.0, 0.0));
 
-        assert!(tool.escape());
-        assert!(tool.selection().is_empty(), "escape clears the selection");
-        assert!(!tool.escape());
+        assert!(tool.clear_selection());
+        assert!(tool.selection().is_empty(), "the selection is cleared");
+        assert!(!tool.clear_selection());
+        assert!(document.path(path).is_some(), "the path itself stays");
+    }
+
+    /// A segment selection counts as "selected" for the same step.
+    #[test]
+    fn a_segment_selection_is_cleared_by_the_same_step() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path = open_two_node_path(&document, a, b);
+        let paths = vec![document.path(path).expect("exists")];
+        let mut tool = NodeTool::new();
+        let outcome = tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, false);
+        assert_eq!(outcome, PointerDownOutcome::Segment);
+        tool.pointer_up(&document, Point::new(10.0, 0.0));
+        assert!(tool.clear_selection());
+        assert!(tool.selection().is_empty());
     }
 
     #[test]
@@ -1551,46 +1591,114 @@ mod tests {
         );
     }
 
-    /// AC12/AC13/AC15: splitting an interior node of an open path
-    /// produces two objects, both resulting nodes selected across them.
-    #[test]
-    fn split_selected_on_an_interior_node_selects_both_new_objects_nodes() {
+    /// A three-node open path with its middle node at (10, 0), and the Node
+    /// tool with that node selected.
+    fn open_path_with_the_middle_selected() -> (Document, NodeId, NodeTool) {
         let document = Document::new(1);
-        let a = AnchorId::new(1, 1);
-        let middle = AnchorId::new(1, 2);
-        let c = AnchorId::new(1, 3);
         let path = document.create_path(
             &[
-                NewAnchor::corner(a, Point::new(0.0, 0.0)),
-                NewAnchor::corner(middle, Point::new(10.0, 0.0)),
-                NewAnchor::corner(c, Point::new(20.0, 0.0)),
+                NewAnchor::corner(AnchorId::new(1, 1), Point::new(0.0, 0.0)),
+                NewAnchor::corner(AnchorId::new(1, 2), Point::new(10.0, 0.0)),
+                NewAnchor::corner(AnchorId::new(1, 3), Point::new(20.0, 0.0)),
             ],
             false,
         );
         let paths = vec![document.path(path).expect("exists")];
         let mut tool = NodeTool::new();
-        let mut minter = AnchorIdMinter::new(9);
         tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, false);
+        tool.pointer_up(&document, Point::new(10.0, 0.0));
+        (document, path, tool)
+    }
+
+    fn all_paths(document: &Document) -> Vec<vecmanf_document_core::PathSnapshot> {
+        document
+            .object_ids()
+            .into_iter()
+            .filter_map(|id| document.path(id))
+            .collect()
+    }
+
+    /// Criteria 50 to 52: splitting an interior node of an open path makes
+    /// two objects and selects exactly one node, the first node of the new
+    /// second object (the copy that keeps the outgoing handle); the other
+    /// coincident node is not selected.
+    #[test]
+    fn split_selected_on_an_interior_node_selects_only_the_second_node() {
+        let (document, path, mut tool) = open_path_with_the_middle_selected();
+        let mut minter = AnchorIdMinter::new(9);
         assert!(tool.toolbar_state(&document).can_split);
 
         tool.split_selected(&mut minter, &document);
 
-        assert_eq!(document.object_ids().len(), 2, "two separate objects now");
-        let selected = tool.selection().join_pairs().expect(
-            "AC15: Split's own two-object result selects both coincident nodes, reachable \
-             via NodeSelection::join_pairs for an immediate re-Join",
+        let ids = document.object_ids();
+        assert_eq!(ids.len(), 2, "two separate objects now");
+        let second = *ids.iter().find(|id| **id != path).expect("the new object");
+        let new_first = document.path(second).expect("exists").anchors[0].id;
+        assert_eq!(
+            tool.selection().node_pairs(),
+            &[(second, new_first)],
+            "exactly the new second object's first node"
         );
-        assert_ne!(selected.0.0, selected.1.0, "on two different path objects");
+        assert!(
+            !tool.selection().contains_node(AnchorId::new(1, 2)),
+            "the first node, left on the original, is not selected"
+        );
+        // Criterion 52: one selected end node, so Split and Join are off.
+        let state = tool.toolbar_state(&document);
+        assert!(!state.can_split && !state.can_join);
+        assert!(state.can_convert_to_corner && state.can_delete);
     }
 
-    /// AC14: splitting a node of a closed path opens it, selecting both
-    /// resulting nodes as an ordinary same-path multi-selection.
+    /// Criterion 50: a press at the shared position hits the selected node
+    /// (the tie goes to it), keeps the selection, and a drag moves that node
+    /// only: the end of one piece at (10, 8), the other still at (10, 0),
+    /// without any prior click on empty canvas (criterion 51).
     #[test]
-    fn split_selected_on_a_closed_path_node_opens_it_selecting_both_ends() {
+    fn after_a_split_a_drag_at_the_shared_point_moves_only_the_selected_end() {
+        let (document, path, mut tool) = open_path_with_the_middle_selected();
+        let mut minter = AnchorIdMinter::new(9);
+        tool.split_selected(&mut minter, &document);
+        let selected_before = tool.selection().node_pairs().to_vec();
+
+        let paths = all_paths(&document);
+        let outcome = tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, false);
+        assert_eq!(outcome, PointerDownOutcome::Node);
+        assert_eq!(
+            tool.selection().node_pairs(),
+            selected_before,
+            "the press hit the selected node and kept the selection"
+        );
+        tool.pointer_up(&document, Point::new(10.0, 8.0));
+
+        let original = document.path(path).expect("exists");
+        assert_eq!(
+            original.anchors.last().expect("anchor").point,
+            Point::new(10.0, 0.0)
+        );
+        let other = document
+            .object_ids()
+            .into_iter()
+            .find(|id| *id != path)
+            .and_then(|id| document.path(id))
+            .expect("the new object");
+        assert_eq!(other.anchors[0].point, Point::new(10.0, 8.0));
+        assert_eq!(
+            other.anchors[1].point,
+            Point::new(20.0, 0.0),
+            "the rest stays"
+        );
+    }
+
+    /// Criterion 51 for a closed path: the new first node of the opened path
+    /// is the selected one and the drag moves it alone.
+    #[test]
+    fn split_selected_on_a_closed_path_node_selects_the_new_first_node_only() {
         let document = Document::new(1);
-        let a = AnchorId::new(1, 1);
-        let b = AnchorId::new(1, 2);
-        let c = AnchorId::new(1, 3);
+        let (a, b, c) = (
+            AnchorId::new(1, 1),
+            AnchorId::new(1, 2),
+            AnchorId::new(1, 3),
+        );
         let path = document.create_path(
             &[
                 NewAnchor::corner(a, Point::new(0.0, 0.0)),
@@ -1603,49 +1711,97 @@ mod tests {
         let mut tool = NodeTool::new();
         let mut minter = AnchorIdMinter::new(9);
         tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
-        assert!(
-            tool.toolbar_state(&document).can_split,
-            "any closed-path node splits"
-        );
+        tool.pointer_up(&document, Point::new(0.0, 0.0));
+        assert!(tool.toolbar_state(&document).can_split);
 
         tool.split_selected(&mut minter, &document);
 
         let snapshot = document.path(path).expect("exists");
         assert!(!snapshot.closed);
         assert_eq!(snapshot.anchors.len(), 4);
+        let new_first = snapshot.anchors[0].id;
+        assert_ne!(new_first, a, "the new copy leads the opened path");
+        assert_eq!(tool.selection().node_pairs(), &[(path, new_first)]);
+        assert!(
+            !tool.selection().contains_node(a),
+            "the old node is not selected"
+        );
+
+        let paths = vec![snapshot];
+        tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
+        tool.pointer_up(&document, Point::new(-3.0, 4.0));
+        let moved = document.path(path).expect("exists");
+        assert_eq!(moved.anchors[0].point, Point::new(-3.0, 4.0));
         assert_eq!(
-            tool.selection().nodes().len(),
-            2,
-            "both ends of one open path"
+            moved.anchors.last().expect("anchor").point,
+            Point::new(0.0, 0.0)
         );
     }
 
-    /// Split then immediately re-Join (AC15's own stated reason for
-    /// selecting both resulting nodes) round-trips back to one object.
+    /// The new second node keeps the original outgoing handle; the first
+    /// node's is retracted (`0006` criteria 13, 14, unchanged): the selected
+    /// node is the one that carries the handle.
+    #[test]
+    fn the_selected_node_after_a_split_keeps_the_original_outgoing_handle() {
+        let document = Document::new(1);
+        let (a, b, c) = (
+            AnchorId::new(1, 1),
+            AnchorId::new(1, 2),
+            AnchorId::new(1, 3),
+        );
+        let mut middle = NewAnchor::corner(b, Point::new(10.0, 0.0));
+        middle.handle_out = Vec2::new(3.0, 2.0);
+        for closed in [false, true] {
+            let path = document.create_path(
+                &[
+                    NewAnchor::corner(a, Point::new(0.0, 0.0)),
+                    middle,
+                    NewAnchor::corner(c, Point::new(20.0, 5.0)),
+                ],
+                closed,
+            );
+            let paths = vec![document.path(path).expect("exists")];
+            let mut tool = NodeTool::new();
+            let mut minter = AnchorIdMinter::new(9);
+            tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, false);
+            tool.pointer_up(&document, Point::new(10.0, 0.0));
+            tool.split_selected(&mut minter, &document);
+            let [(selected_path, selected)] = tool.selection().node_pairs() else {
+                panic!("one selected node");
+            };
+            let snapshot = document.path(*selected_path).expect("exists");
+            let node = snapshot
+                .anchors
+                .iter()
+                .find(|n| n.id == *selected)
+                .expect("node");
+            assert_eq!(node.handle_out, Vec2::new(3.0, 2.0), "closed {closed}");
+            assert_eq!(node.handle_in, Vec2::ZERO, "closed {closed}");
+        }
+    }
+
+    /// Split then Re-Join is no longer one click (criterion 52): pull the
+    /// selected end away, shift-click the other end, and Join restores one
+    /// object.
     #[test]
     fn split_then_rejoin_restores_one_object() {
-        let document = Document::new(1);
-        let a = AnchorId::new(1, 1);
-        let middle = AnchorId::new(1, 2);
-        let c = AnchorId::new(1, 3);
-        let path = document.create_path(
-            &[
-                NewAnchor::corner(a, Point::new(0.0, 0.0)),
-                NewAnchor::corner(middle, Point::new(10.0, 0.0)),
-                NewAnchor::corner(c, Point::new(20.0, 0.0)),
-            ],
-            false,
-        );
-        let paths = vec![document.path(path).expect("exists")];
-        let mut tool = NodeTool::new();
+        let (document, _, mut tool) = open_path_with_the_middle_selected();
         let mut minter = AnchorIdMinter::new(9);
-        tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, false);
         tool.split_selected(&mut minter, &document);
         assert_eq!(document.object_ids().len(), 2);
         assert!(
-            tool.toolbar_state(&document).can_join,
-            "AC15: immediately re-joinable"
+            !tool.toolbar_state(&document).can_join,
+            "one selected node cannot be joined"
         );
+
+        // Pull the selected end away, then select the end left at (10, 0).
+        let paths = all_paths(&document);
+        tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, false);
+        tool.pointer_up(&document, Point::new(10.0, 8.0));
+        let paths = all_paths(&document);
+        tool.pointer_down(&paths, Point::new(10.0, 0.0), TOLERANCES, true);
+        tool.pointer_up(&document, Point::new(10.0, 0.0));
+        assert!(tool.toolbar_state(&document).can_join, "two selected ends");
 
         tool.join_selected(&document);
         assert_eq!(document.object_ids().len(), 1, "back to one object");
