@@ -307,6 +307,26 @@ impl ObjectSnapshot {
         }
     }
 
+    /// The angle shown and typed for this object
+    /// (`specs/edit-interaction-polish/` criterion 1, `adrs.md` decision 1):
+    /// for a polygon or star the clockwise angle of its first outer vertex
+    /// from straight right, `StarFrame.angle + rotation` wrapped into
+    /// `(-π, π]` (the same sum [`crate::outline_of_rotated`] draws); for every
+    /// other kind the [`ObjectSnapshot::rotation`] register.
+    #[must_use]
+    pub fn orientation(&self) -> Angle {
+        match self {
+            Self::Primitive(PrimitiveSnapshot {
+                shape: Shape::Polygon { frame, .. } | Shape::Star { frame, .. },
+                rotation,
+                ..
+            }) => {
+                Angle::from_radians(frame.angle.as_radians() + rotation.as_radians()).normalized()
+            }
+            _ => self.rotation(),
+        }
+    }
+
     /// This object rotated by `angle` about `pivot` (acceptance criteria
     /// 15-18, 20 of `specs/0005-object-transform/specification.md`): a
     /// path bakes every anchor's point about `pivot` and every handle
@@ -639,6 +659,92 @@ mod tests {
         let frame = StarFrame::from_center_and_vertex(Point::new(0.0, 0.0), Point::new(10.0, 0.0));
         assert!((frame.radius.as_mm() - 10.0).abs() < f64::EPSILON);
         assert!(frame.angle.as_radians().abs() < 1e-9);
+    }
+
+    fn polygon_snapshot(frame_angle: f64, rotation: f64) -> ObjectSnapshot {
+        ObjectSnapshot::Primitive(PrimitiveSnapshot {
+            id: NodeId::from_parts(1, 1),
+            shape: Shape::Polygon {
+                frame: StarFrame {
+                    center: Point::new(0.0, 0.0),
+                    radius: Length::from_mm(10.0),
+                    angle: Angle::from_radians(frame_angle.to_radians()),
+                },
+                point_count: PointCount::new(5).unwrap(),
+            },
+            stroke_width: Length::from_mm(0.25),
+            stroke: Color::BLACK,
+            fill: None,
+            rotation: Angle::from_radians(rotation.to_radians()),
+        })
+    }
+
+    fn orientation_deg(snapshot: &ObjectSnapshot) -> f64 {
+        snapshot.orientation().as_radians().to_degrees()
+    }
+
+    /// `edit-interaction-polish` criterion 1 and decision 1: the orientation
+    /// of a polygon or star is the frame's own first-vertex angle plus the
+    /// `rotation` register.
+    #[test]
+    fn orientation_of_a_polygon_is_the_frame_angle_plus_the_rotation() {
+        assert!((orientation_deg(&polygon_snapshot(78.7, 0.0)) - 78.7).abs() < 1e-9);
+        assert!((orientation_deg(&polygon_snapshot(10.0, 30.0)) - 40.0).abs() < 1e-9);
+        assert!((orientation_deg(&polygon_snapshot(0.0, -90.0)) + 90.0).abs() < 1e-9);
+    }
+
+    /// The shown angle is wrapped into `(-180, 180]`: a first vertex pointing
+    /// left shows 180, not -180, and a sum past 180 wraps.
+    #[test]
+    fn orientation_wraps_into_minus_180_exclusive_to_180_inclusive() {
+        assert!((orientation_deg(&polygon_snapshot(180.0, 0.0)) - 180.0).abs() < 1e-9);
+        assert!((orientation_deg(&polygon_snapshot(-180.0, 0.0)) - 180.0).abs() < 1e-9);
+        assert!((orientation_deg(&polygon_snapshot(170.0, 30.0)) + 160.0).abs() < 1e-9);
+        assert!((orientation_deg(&polygon_snapshot(-170.0, -30.0)) - 160.0).abs() < 1e-9);
+    }
+
+    /// Rectangles, ellipses and paths keep reading the `rotation` register
+    /// alone (criterion 1: "Rectangles, ellipses and paths are unchanged").
+    #[test]
+    fn orientation_of_other_kinds_is_the_rotation_register() {
+        let rect = ObjectSnapshot::Primitive(PrimitiveSnapshot {
+            id: NodeId::from_parts(1, 3),
+            shape: Shape::Rect {
+                bounds: RectBounds {
+                    origin: Point::new(0.0, 0.0),
+                    width: Length::from_mm(10.0),
+                    height: Length::from_mm(5.0),
+                },
+                corner_radius: Length::from_mm(0.0),
+            },
+            stroke_width: Length::from_mm(0.25),
+            stroke: Color::BLACK,
+            fill: None,
+            rotation: Angle::from_radians(0.5),
+        });
+        assert!((rect.orientation().as_radians() - 0.5).abs() < 1e-12);
+        let path = ObjectSnapshot::Path(PathSnapshot {
+            id: NodeId::from_parts(1, 4),
+            closed: false,
+            stroke_width: Length::from_mm(0.25),
+            stroke: Color::BLACK,
+            fill: None,
+            anchors: Vec::new(),
+            rotation: Angle::from_radians(-0.25),
+        });
+        assert!((path.orientation().as_radians() + 0.25).abs() < 1e-12);
+    }
+
+    /// Rotating a polygon by a delta changes the shown angle by the delta,
+    /// wrapped (criterion 1).
+    #[test]
+    fn rotating_a_polygon_changes_the_orientation_by_the_delta() {
+        let snapshot = polygon_snapshot(78.7, 0.0);
+        let center = Point::new(0.0, 0.0);
+        let turned = snapshot.rotated(center, Angle::from_radians(30.0_f64.to_radians()));
+        assert!((orientation_deg(&turned) - 108.7).abs() < 1e-9);
+        let wrapped = turned.rotated(center, Angle::from_radians(90.0_f64.to_radians()));
+        assert!((orientation_deg(&wrapped) + 161.3).abs() < 1e-9);
     }
 
     #[test]
