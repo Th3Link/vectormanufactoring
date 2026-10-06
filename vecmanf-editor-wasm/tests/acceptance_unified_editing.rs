@@ -3456,3 +3456,305 @@ fn ac38_selecting_hovering_and_clicking_handles_writes_nothing_and_a_saved_proje
     assert_eq!(vv_of(&s), v0, "no click or hover writes");
     assert_eq!(doc_of(&s).export_loro_snapshot().unwrap(), snap0);
 }
+
+#[test]
+fn ac12_inside_the_dead_zone_no_blue_outline_and_no_handle_change_is_drawn() {
+    for h in [
+        H::Move,
+        H::ResizeCorner(1),
+        H::RotCorner(2),
+        H::Radius(0),
+        H::ResizeEdge(3),
+    ] {
+        let mut sc = rect_scene(100, 150.0, 100.0, 20.0, 0.2);
+        let from = handle_point(&sc, h);
+        let v0 = vv_of(&sc.s);
+        sc.s.pointer_hover(from, false, false);
+        let idle = sc.s.draw_list();
+        sc.s.pointer_down(from, false);
+        let at = pt(from.x + 2.9 / sc.k, from.y);
+        sc.s.pointer_hover(at, false, false);
+        let during = sc.s.draw_list();
+        let n_blue = |d: &DrawList| d.triangles.iter().filter(|v| is_blue(v)).count();
+        // blue triangles belong to box, handles and any preview; a preview
+        // would add triangles over the idle count at this very position
+        sc.s.pointer_up(at, false, false);
+        assert_eq!(vv_of(&sc.s), v0, "{h:?}");
+        sc.s.pointer_hover(from, false, false);
+        assert!(
+            n_blue(&during) <= n_blue(&idle),
+            "{h:?}: no preview inside the dead zone ({} vs {})",
+            n_blue(&during),
+            n_blue(&idle)
+        );
+    }
+}
+
+fn white_count(dl: &DrawList) -> usize {
+    (0..dl.triangles.len() / 3)
+        .filter(|c| {
+            let v = &dl.triangles[3 * c];
+            v.color.r == 255 && v.color.g == 255 && v.color.b == 255 && v.color.a == 255
+        })
+        .count()
+}
+
+#[test]
+fn ac07_parameter_handles_are_not_drawn_while_the_object_is_moved_resized_or_rotated() {
+    // Two rectangles that differ only by the parameter tier (100 px and 60 px
+    // across). The white ground of a knob is the only white glyph part that
+    // differs between them, so equal white counts during a drag mean no knob
+    // is drawn.
+    for (h, off, knobs_stay) in [
+        (H::Move, (40.0, 25.0), false),
+        (H::RotCorner(1), (35.0, 50.0), false),
+        (H::ResizeCorner(2), (6.0, 6.0), false),
+        (H::ResizeEdge(1), (6.0, 0.0), false),
+        (H::Radius(0), (30.0, 30.0), true),
+    ] {
+        let counts = |side: f64| {
+            let mut sc = rect_scene(100, side, side, 0.0, 0.0);
+            sc.s.pointer_hover(pt(900.0, 900.0), false, false);
+            let idle = white_count(&sc.s.draw_list());
+            let from = handle_point(&sc, h);
+            sc.s.pointer_hover(from, false, false);
+            sc.s.pointer_down(from, false);
+            sc.s.pointer_hover(
+                pt(from.x + off.0 / sc.k, from.y + off.1 / sc.k),
+                false,
+                false,
+            );
+            (idle, white_count(&sc.s.draw_list()))
+        };
+        let (idle_big, during_big) = counts(100.0);
+        let (idle_small, during_small) = counts(60.0);
+        assert!(idle_big > idle_small, "{h:?}: knobs at idle");
+        if knobs_stay {
+            assert!(
+                during_big > during_small,
+                "{h:?}: the knobs stay drawn during a radius drag"
+            );
+        } else {
+            assert_eq!(during_big, during_small, "{h:?}: no knob during the drag");
+        }
+    }
+}
+
+#[test]
+fn ac13_preview_equals_release_at_other_zoom_levels() {
+    for pct in [25, 400, 1600] {
+        sweep(
+            &format!("rect {pct}%"),
+            &move || rect_scene(pct, 150.0, 100.0, 20.0, 0.4),
+            &[
+                H::Move,
+                H::ResizeCorner(1),
+                H::ResizeEdge(2),
+                H::RotCorner(3),
+                H::RotSide(0),
+                H::Radius(2),
+            ],
+            4,
+            0xabc0 + pct as u64,
+        );
+        sweep(
+            &format!("star {pct}%"),
+            &move || star_scene(pct, 60.0, 6, Some(0.5), 0.2),
+            &[H::Move, H::ResizeCorner(0), H::RotCorner(1), H::Inner],
+            4,
+            0xdef0 + pct as u64,
+        );
+    }
+}
+
+#[test]
+fn ac11_a_multi_object_move_shows_the_path_in_blue_over_its_black_old_one() {
+    let mut s = open_in_session(&bar_doc());
+    select_set(&mut s, &[0, 6]);
+    let k = k_of(&s);
+    let old: Vec<Point> = {
+        let a = [pt(600.0, 10.0), pt(640.0, 10.0), pt(640.0, 40.0)];
+        (0..30)
+            .map(|i| {
+                let t = f64::from(i) / 10.0;
+                let (p, q) = (a[(t as usize) % 3], a[((t as usize) + 1) % 3]);
+                let f = t - t.floor();
+                pt(p.x + (q.x - p.x) * f, p.y + (q.y - p.y) * f)
+            })
+            .collect()
+    };
+    let from = pt(620.0, 10.0);
+    let off = (60.0 / k, 33.0 / k);
+    s.pointer_hover(from, false, false);
+    s.pointer_down(from, false);
+    s.pointer_hover(pt(from.x + off.0, from.y + off.1), false, false);
+    let dl = s.draw_list();
+    let new: Vec<Point> = old.iter().map(|p| pt(p.x + off.0, p.y + off.1)).collect();
+    assert_eq!(black_cover_misses(&dl, &old, k), 0, "the path stays drawn");
+    assert_eq!(blue_cover_misses(&dl, &new, k), 0, "its blue copy follows");
+    s.pointer_up(pt(from.x + off.0, from.y + off.1), false, false);
+}
+
+#[test]
+fn ac06_a_centre_handle_that_yields_has_no_hover_or_cursor_state() {
+    // s = 200: a knob is within 20 px of the centre from rho of about 0.92;
+    // at rho 0.95 it is 17 px from it, more than its 12 px hit radius.
+    for s in [200.0, 300.0] {
+        let rho = 0.95;
+        let mut sc = rect_scene(100, s, s, rho * s / 2.0, 0.0);
+        let p = handle_p(s, rho * s / 2.0);
+        let dist_from_centre = s * SQRT_2 / 2.0 - p;
+        assert!(
+            (12.5..20.0).contains(&dist_from_centre),
+            "scene: {dist_from_centre}"
+        );
+        let (cur, hnt) = hint(&mut sc.s, sc.fr.c);
+        assert_ne!(cur, "move", "s={s}: the centre handle is not drawn");
+        assert_eq!(hnt, "", "s={s}");
+    }
+}
+
+// =====================================================================
+// Criterion 8: clearance of the drawn glyphs, from the specification's own
+// numbers (glyph sizes of docs/design-system.md, positions of the UX notes)
+// =====================================================================
+
+#[test]
+fn ac08_no_two_drawn_glyphs_come_closer_than_4_px_for_a_rectangle_at_any_size_and_radius() {
+    const KNOB: f64 = 5.0; // 10 px circle
+    const RESIZE: f64 = 4.0 * SQRT_2; // 8 px square, circumscribed
+    const CENTRE: f64 = 8.0 * SQRT_2; // 16 px square, circumscribed
+    for (w, h) in [
+        (72.0, 72.0),
+        (72.0, 400.0),
+        (100.0, 100.0),
+        (150.0, 90.0),
+        (400.0, 400.0),
+        (1000.0, 73.0),
+    ] {
+        let s = f64::min(w, h);
+        for step in 0..=40 {
+            let rho = f64::from(step) / 40.0;
+            let p = 15.0 + rho * l_of(s);
+            // local px from the centre
+            let mut knobs = vec![];
+            for (sx, sy) in CORNERS {
+                knobs.push((sx * (w / 2.0 - p / SQRT_2), sy * (h / 2.0 - p / SQRT_2)));
+            }
+            let mut others: Vec<((f64, f64), f64, &str)> = vec![];
+            for (sx, sy) in CORNERS {
+                others.push(((sx * w / 2.0, sy * h / 2.0), RESIZE, "corner resize"));
+            }
+            for (nx, ny) in SIDES {
+                others.push(((nx * w / 2.0, ny * h / 2.0), RESIZE, "edge resize"));
+            }
+            let centre_drawn = knobs.iter().all(|k| k.0.hypot(k.1) > 20.0);
+            if centre_drawn {
+                others.push(((0.0, 0.0), CENTRE, "centre"));
+            }
+            for (i, a) in knobs.iter().enumerate() {
+                for (j, b) in knobs.iter().enumerate().skip(i + 1) {
+                    let gap = (a.0 - b.0).hypot(a.1 - b.1) - 2.0 * KNOB;
+                    assert!(
+                        gap >= 4.0 - 1e-9,
+                        "{w}x{h} rho {rho}: knobs {i},{j} gap {gap}"
+                    );
+                }
+                for (pos, r, name) in &others {
+                    let gap = (a.0 - pos.0).hypot(a.1 - pos.1) - KNOB - r;
+                    // the centre glyph's own clearance rule is the 20 px yield
+                    // (3.7 px at the worst diagonal): the spec rounds 11.3 + 5 + 4
+                    let need = if *name == "centre" { 3.6 } else { 4.0 };
+                    assert!(
+                        gap >= need - 1e-9,
+                        "{w}x{h} rho {rho}: knob {i} vs {name}: gap {gap}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn ac08_the_star_worst_case_keeps_4_px_at_72() {
+    // N a multiple of 4, ratio .99: the inner vertex sits on the box diagonal
+    // at 0.99 R, the corner glyph at sqrt2 R.
+    let r = 36.0;
+    let gap = r * (SQRT_2 - 0.99) - 5.0 - 4.0 * SQRT_2;
+    assert!(gap >= 4.0, "{gap}");
+}
+
+#[test]
+fn ac08_drawn_glyph_extents_match_the_design_system_sizes() {
+    let mut sc = rect_scene(100, 120.0, 120.0, 0.0, 0.0);
+    sc.s.pointer_hover(pt(900.0, 900.0), false, false);
+    let dl = sc.s.draw_list();
+    let extent = |centre: Point, search_px: f64| {
+        let mut r: f64 = 0.0;
+        let mut n = 0;
+        for c in 0..dl.triangles.len() / 3 {
+            let t = &dl.triangles[3 * c..3 * c + 3];
+            if t.iter().all(|v| {
+                (v.position.x - centre.x).hypot(v.position.y - centre.y) * sc.k <= search_px
+                    && is_blue_or_white(v)
+            }) {
+                for v in t {
+                    r = r.max((v.position.x - centre.x).hypot(v.position.y - centre.y) * sc.k);
+                    n += 1;
+                }
+            }
+        }
+        (r, n)
+    };
+    fn is_blue_or_white(v: &Vertex) -> bool {
+        is_blue(v) || (v.color.r == 255 && v.color.g == 255 && v.color.b == 255)
+    }
+    // a knob: a 10 px circle
+    let knob = radius_handle_pos(&sc.fr, (-1.0, -1.0), 0.0);
+    let (r, n) = extent(knob, 7.5);
+    assert!(n > 0, "a knob is drawn");
+    assert!((4.9..=5.1).contains(&r), "knob radius {r} px");
+    // centre handle: 16 px rounded square, extent at most the half diagonal
+    let (r, n) = extent(sc.fr.c, 13.0);
+    assert!(n > 0);
+    assert!(r <= 8.0 * SQRT_2 + 0.1, "centre glyph radius {r}");
+}
+
+#[test]
+fn ac16_live_readouts_during_primitive_drags() {
+    for build in 0..4 {
+        let mk = || match build {
+            0 => rect_scene(100, 160.0, 120.0, 10.0, 0.0),
+            1 => ellipse_scene(100, 160.0, 120.0, 0.0),
+            2 => star_scene(100, 80.0, 8, None, 0.0),
+            _ => star_scene(100, 80.0, 8, Some(0.5), 0.0),
+        };
+        // resize
+        let mut sc = mk();
+        let from = sc.fr.corner(1.0, 1.0);
+        sc.s.pointer_hover(from, false, false);
+        sc.s.pointer_down(from, false);
+        sc.s.pointer_hover(pt(from.x + 20.0 / sc.k, from.y + 12.0 / sc.k), false, false);
+        let text = sc.s.live_readout().expect("resize readout").text;
+        if build < 2 {
+            assert!(
+                text.contains('×') && text.contains("mm"),
+                "kind {build}: {text}"
+            );
+        } else {
+            assert!(
+                text.starts_with('r') && text.contains("mm"),
+                "kind {build}: {text}"
+            );
+        }
+        sc.s.escape();
+        // rotate
+        let mut sc = mk();
+        let from = sc.fr.rot_corner(1.0, -1.0);
+        sc.s.pointer_hover(from, false, false);
+        sc.s.pointer_down(from, false);
+        sc.s.pointer_hover(pt(from.x + 20.0 / sc.k, from.y + 40.0 / sc.k), false, false);
+        let text = sc.s.live_readout().expect("rotate readout").text;
+        assert!(text.contains('°'), "kind {build}: {text}");
+    }
+}
