@@ -12,7 +12,7 @@ const HINT_OFFSET_PX = 12;
 
 /** One short line each: the handle's name, then its modifiers. */
 const HINT_LINES: Record<string, string[]> = {
-  "resize-edge": ["Resize", "Shift: from center", "Double-click or S: type a size"],
+  "resize-edge": ["Resize", "Shift: from center", "Double-click: type a size"],
   "resize-corner": [
     "Resize",
     "Shift: from center",
@@ -34,7 +34,7 @@ const HINT_LINES: Record<string, string[]> = {
     "Rotate",
     "Pivot: opposite side",
     "Ctrl: snap",
-    "Double-click or R: type an angle",
+    "Double-click: type an angle",
   ],
   skew: ["Skew", "Shift: from the center line", "Ctrl: snap"],
   move: ["Move"],

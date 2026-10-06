@@ -158,6 +158,7 @@ function App() {
           tool={editor.tool}
           selectionCount={editor.selectionCount}
           onSelect={editor.setTool}
+          onReturnFocus={() => editor.containerRef.current?.focus()}
         />
         <Canvas editor={editor} />
         {/* Contextual tool bar: floats over the canvas, right of the tool
