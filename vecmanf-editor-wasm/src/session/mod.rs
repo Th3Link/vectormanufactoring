@@ -26,7 +26,9 @@ mod node;
 mod open_error;
 mod pen;
 mod select;
+mod select_view;
 mod shapes;
+mod transform_entry;
 
 use vecmanf_document_core::{
     Document, Length, NodeId, ObjectSnapshot, OpenError, Point, SaveError, Tolerance,
@@ -44,6 +46,8 @@ pub use open_error::map_open_error;
 // a host build does not see an unused public re-export.
 #[cfg(target_arch = "wasm32")]
 pub use shapes::LiveReadout;
+#[cfg(target_arch = "wasm32")]
+pub use transform_entry::{EntryFieldView, EntryView};
 
 /// 16px node hit-test radius (`docs/design-system.md`; 2026-10-05:
 /// doubled from 8px — customer feedback: "you can click on the nodes
@@ -64,25 +68,13 @@ const POINT_TOLERANCE_PX: f64 = 16.0;
 const HANDLE_TOLERANCE_PX: f64 = 16.0;
 /// 4px segment hit-test tolerance (`docs/design-system.md`).
 const SEGMENT_TOLERANCE_PX: f64 = 4.0;
-/// The Select tool's own transform resize-handle hit-test radius
-/// (`docs/design-system.md`'s now-resolved "Transform resize handle
-/// hit-test radius" row, `object-transform`): equal to
-/// [`HANDLE_TOLERANCE_PX`], not an independent value.
-const TRANSFORM_RESIZE_HANDLE_TOLERANCE_PX: f64 = HANDLE_TOLERANCE_PX;
-/// The rotate handle's own hit-test radius (`docs/design-system.md`'s
-/// "Transform rotate handle hit-test radius"): equal to the resize
-/// radius, with [`TRANSFORM_ROTATE_HANDLE_OFFSET_PX`] at least the sum of
-/// the two radii so the rotate and top-edge hit areas cannot overlap.
-const TRANSFORM_ROTATE_HANDLE_TOLERANCE_PX: f64 = 16.0;
-/// The rotate handle's screen-space offset above the top-edge resize
-/// handle (`docs/design-system.md`'s "Transform rotate handle offset"):
-/// 16 + 16 px, the two hit radii.
-const TRANSFORM_ROTATE_HANDLE_OFFSET_PX: f64 = 32.0;
 /// How far (screen pixels) a pen-tool press must move before it counts
 /// as a drag rather than a plain click (acceptance criteria 1 vs 2). Not
 /// itself a named design-system token; a small, deliberately generous
-/// value so an imprecise click is never misread as a drag.
-const PEN_DRAG_THRESHOLD_PX: f64 = 3.0;
+/// value so an imprecise click is never misread as a drag. The Select
+/// tool's dead zone is the same 3 px, kept in
+/// `vecmanf_ui_core::TransformHandleTolerances::at_scale`.
+const DRAG_THRESHOLD_PX: f64 = 3.0;
 
 /// The largest pointer coordinate (document millimetres) a tool ever sees.
 /// A finite value beyond it — one past `f32` range panics the draw-list
@@ -266,6 +258,7 @@ impl Session {
         // preview would otherwise sit unflushed until some later event
         // commits it against whatever is selected *then* instead).
         self.commit_poly_star_ratio();
+        self.select.cancel_entry();
         self.tool = tool;
     }
 
@@ -441,6 +434,7 @@ impl Session {
         match self.tool {
             Tool::Select => {
                 self.select.escape();
+                self.select.cancel_entry();
             }
             Tool::Pen => {
                 self.pen.escape();
@@ -480,11 +474,14 @@ impl Session {
     /// tool treats it exactly like an ordinary release (unchanged from
     /// before this slice — the first click of a double-click is an
     /// ordinary press with no movement, which already writes nothing).
-    pub fn double_click(&mut self, point: Point) {
+    pub fn double_click(&mut self, point: Point, shift: bool, ctrl: bool) {
+        let Some(point) = sanitized_point(point) else {
+            return;
+        };
         match self.tool {
             Tool::Pen => self.finish_pen(),
             Tool::Node => self.insert_at(point),
-            Tool::Select => self.select_double_click(point),
+            Tool::Select => self.select_double_click(point, shift, ctrl),
             Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
                 self.shape_pointer_up(point, false);
             }

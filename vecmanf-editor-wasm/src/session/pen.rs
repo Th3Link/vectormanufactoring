@@ -5,11 +5,11 @@
 
 use vecmanf_document_core::Length;
 
-use super::{PEN_DRAG_THRESHOLD_PX, Session, Tool};
+use super::{DRAG_THRESHOLD_PX, Session, Tool};
 
 impl Session {
     pub(super) fn drag_threshold(&self) -> Length {
-        Length::from_mm(PEN_DRAG_THRESHOLD_PX / self.view().scale())
+        Length::from_mm(DRAG_THRESHOLD_PX / self.view().scale())
     }
 
     /// Acceptance criterion 3 / the dedicated "finish path" action

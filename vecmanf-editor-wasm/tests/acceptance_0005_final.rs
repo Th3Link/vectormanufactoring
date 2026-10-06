@@ -259,7 +259,8 @@ fn handles_still_win_and_rotate_handle_works() {
         // Rotate handle.
         let (mut s, c, s_mm) = one(Kind::Rect, size, 0.0);
         click(&mut s, outline_point(Kind::Rect, c, s_mm, 0.0));
-        let handle = pt(c.x, c.y - s_mm / 2.0 - px(32.0));
+        let diagonal = px(32.0) / std::f64::consts::SQRT_2;
+        let handle = pt(c.x + s_mm / 2.0 + diagonal, c.y - s_mm / 2.0 - diagonal);
         assert_eq!(hint(&mut s, handle), "rotate");
         let before_x = origin_x_of_first(&s);
         drag(&mut s, handle, rot(handle, c, 20.0_f64.to_radians()));
@@ -387,7 +388,8 @@ fn zero_movement_press_inside_the_box_writes_nothing() {
         click(&mut s, c);
         assert_eq!(snap(&s), before, "{kind:?}: click inside wrote");
         // Still selected after the click: a handle responds.
-        let handle = pt(c.x, c.y - s_mm / 2.0 - px(32.0));
+        let diagonal = px(32.0) / std::f64::consts::SQRT_2;
+        let handle = pt(c.x + s_mm / 2.0 + diagonal, c.y - s_mm / 2.0 - diagonal);
         assert_eq!(hint(&mut s, handle), "rotate", "{kind:?}: still selected");
         // Press, wiggle back to the same spot, release.
         s.pointer_hover(c, false, false);

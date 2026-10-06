@@ -135,6 +135,94 @@ impl LiveReadout {
     }
 }
 
+/// `wasm-bindgen`'s JS-facing mirror of [`crate::session::EntryView`]
+/// (`specs/object-transform-refinements/adrs.md`, "wasm surface": strings
+/// and scalars only): the typed numeric entry chip's content and where it
+/// belongs. `handle_*`/`center_*` are canvas-relative CSS pixels, already
+/// converted; the host puts the chip outward of the handle, along the line
+/// from the center through it.
+#[wasm_bindgen]
+#[derive(Debug, Clone)]
+pub struct TransformEntryView {
+    kind: String,
+    fields: Vec<crate::session::EntryFieldView>,
+    pub linked: bool,
+    pub handle_x: f64,
+    pub handle_y: f64,
+    pub center_x: f64,
+    pub center_y: f64,
+}
+
+#[wasm_bindgen]
+impl TransformEntryView {
+    /// `"angle"`, `"size"` or `"radius"`.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn kind(&self) -> String {
+        self.kind.clone()
+    }
+
+    /// How many fields the chip has (one or two).
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn field_count(&self) -> u32 {
+        u32::try_from(self.fields.len()).unwrap_or(0)
+    }
+
+    /// Field `index`'s visible label ("W", "H", "r"; empty for the angle).
+    #[must_use]
+    pub fn field_label(&self, index: u32) -> String {
+        self.field(index)
+            .map(|f| f.label.to_string())
+            .unwrap_or_default()
+    }
+
+    /// Field `index`'s accessible name ("Width", "Height", "Radius", "Angle").
+    #[must_use]
+    pub fn field_name(&self, index: u32) -> String {
+        self.field(index)
+            .map(|f| f.accessible_name.to_string())
+            .unwrap_or_default()
+    }
+
+    /// The text field `index` opens with.
+    #[must_use]
+    pub fn field_prefill(&self, index: u32) -> String {
+        self.field(index)
+            .map(|f| f.prefill.clone())
+            .unwrap_or_default()
+    }
+
+    /// Whether field `index` can be edited.
+    #[must_use]
+    pub fn field_editable(&self, index: u32) -> bool {
+        self.field(index).is_some_and(|f| f.editable)
+    }
+}
+
+impl TransformEntryView {
+    fn field(&self, index: u32) -> Option<&crate::session::EntryFieldView> {
+        self.fields.get(usize::try_from(index).ok()?)
+    }
+
+    /// Converts a document-space [`crate::session::EntryView`] to this
+    /// screen-pixel mirror — [`WasmSession::transform_entry`] is the one
+    /// caller.
+    fn from_document_space(entry: crate::session::EntryView, view: ViewTransform) -> Self {
+        let (handle_x, handle_y) = view.document_to_screen(entry.handle);
+        let (center_x, center_y) = view.document_to_screen(entry.center);
+        Self {
+            kind: entry.kind.to_string(),
+            fields: entry.fields,
+            linked: entry.linked,
+            handle_x,
+            handle_y,
+            center_x,
+            center_y,
+        }
+    }
+}
+
 /// A document-space point, for [`WasmSession::screen_to_document`] — a
 /// plain `f64`-fields struct needs no getter methods, same reasoning as
 /// [`NodeToolbarState`]'s own doc comment.
@@ -294,9 +382,75 @@ impl WasmSession {
     /// double-click detector (unchanged, now in pixels) calls this
     /// instead of choosing per tool itself
     /// (`specs/0004-canvas-navigation-and-selection/adrs.md`).
-    pub fn double_click(&mut self, x: f64, y: f64) {
+    pub fn double_click(&mut self, x: f64, y: f64, shift: bool, ctrl: bool) {
         let point = self.session.screen_to_document(x, y);
-        self.session.double_click(point);
+        self.session.double_click(point, shift, ctrl);
+    }
+
+    /// Shift or Ctrl changed with no pointer movement
+    /// (`object-transform-refinements`, "Shift reveal"): call from
+    /// window-level key events, and with `(false, false)` when the window or
+    /// canvas loses focus.
+    pub fn modifiers_changed(&mut self, shift: bool, ctrl: bool) {
+        self.session.modifiers_changed(shift, ctrl);
+    }
+
+    /// Which hint the handle under the pointer earns (`""`, `"resize-edge"`,
+    /// `"resize-corner"`, `"resize-corner-uniform"`, `"rotate-corner"`,
+    /// `"rotate-side"`, `"skew"` or `"move"`) — for the host's 600 ms hover
+    /// chip. Call after every [`WasmSession::pointer_hover`].
+    #[must_use]
+    pub fn handle_hint(&self) -> String {
+        self.session.handle_hint()
+    }
+
+    /// The typed numeric entry to show, or `undefined` (criteria 18, 25, 26
+    /// of `object-transform-refinements`). Call after every pointer release
+    /// and tool or selection change.
+    #[must_use]
+    pub fn transform_entry(&self) -> Option<TransformEntryView> {
+        let view = self.session.view();
+        self.session
+            .transform_entry()
+            .map(|entry| TransformEntryView::from_document_space(entry, view))
+    }
+
+    /// For linked fields (criterion 29): the text the other field takes after
+    /// field `field` became `text`, or `undefined`.
+    #[must_use]
+    pub fn transform_entry_linked(&self, field: u32, text: &str) -> Option<String> {
+        self.session
+            .transform_entry_linked(usize::try_from(field).ok()?, text)
+    }
+
+    /// Enter in the entry chip: `"committed"`, `"unchanged"` (both close the
+    /// chip), or `"invalid:<field>:number"` / `"invalid:<field>:positive"`
+    /// (the chip stays open; criteria 19, 21, 27, 30, 31). `last_edited` is
+    /// the index of the field edited last.
+    pub fn commit_transform_entry(
+        &mut self,
+        first: &str,
+        second: &str,
+        last_edited: u32,
+    ) -> String {
+        let last = usize::try_from(last_edited).unwrap_or(0);
+        match self.session.commit_transform_entry(first, second, last) {
+            vecmanf_ui_core::EntryOutcome::Committed => "committed".to_string(),
+            vecmanf_ui_core::EntryOutcome::Unchanged => "unchanged".to_string(),
+            vecmanf_ui_core::EntryOutcome::Invalid { field, reason } => format!(
+                "invalid:{field}:{}",
+                match reason {
+                    vecmanf_ui_core::InvalidReason::NotANumber => "number",
+                    vecmanf_ui_core::InvalidReason::NotPositive => "positive",
+                }
+            ),
+        }
+    }
+
+    /// Closes the numeric entry without writing (criterion 20): Escape, a
+    /// blur, a window blur. Idempotent.
+    pub fn cancel_transform_entry(&mut self) {
+        self.session.cancel_transform_entry();
     }
 
     /// A wheel event at canvas-relative CSS pixel `(x, y)`: pans

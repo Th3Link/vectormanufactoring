@@ -292,7 +292,7 @@ fn rot(p: Point, c: Point, a: f64) -> Point {
     pt(c.x + dx * cs - dy * sn, c.y + dx * sn + dy * cs)
 }
 
-/// The 8 resize handle positions plus the rotate handle for a box of
+/// The 8 resize handle positions plus the Ne corner rotate handle for a box of
 /// `w` x `h` mm centred on `c`, rotated by `a`, at `scale` px/mm.
 fn handle_positions(c: Point, w: f64, h: f64, a: f64, scale: f64) -> Vec<(String, Point)> {
     let (x0, y0, x1, y1) = (c.x - w / 2.0, c.y - h / 2.0, c.x + w / 2.0, c.y + h / 2.0);
@@ -305,7 +305,13 @@ fn handle_positions(c: Point, w: f64, h: f64, a: f64, scale: f64) -> Vec<(String
         ("s", pt(c.x, y1)),
         ("sw", pt(x0, y1)),
         ("w", pt(x0, c.y)),
-        ("rotate", pt(c.x, y0 - 32.0 / scale)),
+        (
+            "rotate",
+            pt(
+                x1 + 32.0 / scale / std::f64::consts::SQRT_2,
+                y0 - 32.0 / scale / std::f64::consts::SQRT_2,
+            ),
+        ),
     ];
     local
         .into_iter()
@@ -391,9 +397,12 @@ fn rotate_and_resize_hit_areas_never_swallow_each_other_on_small_objects() {
                     "{size}px {deg}deg: {name} reads as {hint}"
                 );
             }
-            // The centre of the box is never a transform handle.
+            // The centre of the box is never a resize or rotate handle: it
+            // is the body (a move), and from 48 px up the centre move
+            // handle gives it the `move` cursor.
             let hint = hint_at(&mut s, c);
-            assert_eq!(hint, "default", "{size}px {deg}deg centre");
+            let expected = if size >= 48.0 { "move" } else { "default" };
+            assert_eq!(hint, expected, "{size}px {deg}deg centre");
         }
     }
 }
@@ -482,7 +491,8 @@ fn small_rotated_rect_resize_and_rotate_behave() {
             let (mut s, c, w, h, scale) = small_session(Kind::Rect, size, size, a);
             click(&mut s, rot(pt(c.x, c.y - h / 2.0), c, a));
             let before = prim(&s);
-            let handle = rot(pt(c.x, c.y - h / 2.0 - 32.0 / scale), c, a);
+            let diagonal = 32.0 / scale / std::f64::consts::SQRT_2;
+            let handle = rot(pt(c.x + w / 2.0 + diagonal, c.y - h / 2.0 - diagonal), c, a);
             let to = rot(handle, c, 20.0_f64.to_radians());
             drag(&mut s, handle, to);
             let after = prim(&s);
@@ -513,7 +523,8 @@ fn selected() -> Session {
 
 fn rotate_handle_pos() -> Point {
     let scale = 96.0 / 25.4;
-    pt(20.0, -32.0 / scale)
+    let diagonal = 32.0 / scale / std::f64::consts::SQRT_2;
+    pt(40.0 + diagonal, -diagonal)
 }
 
 #[test]

@@ -608,7 +608,7 @@ fn ac22_double_click_on_a_path_hands_off_to_the_node_tool() {
     draw_path(&mut session, Point::new(0.0, 0.0), Point::new(10.0, 0.0));
     session.set_tool(Tool::Select);
 
-    session.double_click(Point::new(5.0, 0.0));
+    session.double_click(Point::new(5.0, 0.0), false, false);
     assert_eq!(session.tool(), Tool::Node);
 }
 
@@ -618,7 +618,7 @@ fn ac23_double_click_on_a_rect_hands_off_to_the_rectangle_tool() {
     draw_rect(&mut session, 0.0, 0.0, 10.0, 10.0);
     session.set_tool(Tool::Select);
 
-    session.double_click(Point::new(0.0, 5.0));
+    session.double_click(Point::new(0.0, 5.0), false, false);
     assert_eq!(session.tool(), Tool::Rectangle);
 }
 
@@ -628,7 +628,7 @@ fn ac23_double_click_on_an_ellipse_hands_off_to_the_ellipse_tool() {
     draw_ellipse(&mut session, 0.0, 0.0, 10.0, 10.0);
     session.set_tool(Tool::Select);
 
-    session.double_click(Point::new(5.0, 0.0));
+    session.double_click(Point::new(5.0, 0.0), false, false);
     assert_eq!(session.tool(), Tool::Ellipse);
 }
 
@@ -636,7 +636,7 @@ fn ac23_double_click_on_an_ellipse_hands_off_to_the_ellipse_tool() {
 fn double_click_on_empty_canvas_does_not_switch_tools() {
     let mut session = Session::new(1);
     session.set_tool(Tool::Select);
-    session.double_click(Point::new(900.0, 900.0));
+    session.double_click(Point::new(900.0, 900.0), false, false);
     assert_eq!(session.tool(), Tool::Select);
 }
 
