@@ -12,6 +12,11 @@ import type { Tool } from "@/hooks/useEditorSession";
 
 interface ToolRailProps {
   tool: Tool;
+  /** How many objects are selected; with the Select tool active and one or
+   * more selected the plain letters R and S act on the selection, so the
+   * Rectangle tool is reached by "Esc, R" (`specs/edit-interaction-polish/`
+   * criterion 62). */
+  selectionCount: number;
   onSelect: (tool: Tool) => void;
 }
 
@@ -71,7 +76,9 @@ function ToolButton({ tool, active, label, shortcut, icon, onSelect }: ToolButto
  * Ellipse, Polygon-star, each shifted down one slot but otherwise in
  * their own established order.
  */
-export function ToolRail({ tool, onSelect }: ToolRailProps) {
+export function ToolRail({ tool, selectionCount, onSelect }: ToolRailProps) {
+  // The one state that changes a letter: the Select tool with a selection.
+  const letterActsOnSelection = tool === "select" && selectionCount > 0;
   return (
     <Tooltip.Provider>
       <div
@@ -85,7 +92,7 @@ export function ToolRail({ tool, onSelect }: ToolRailProps) {
           tool="select"
           active={tool === "select"}
           label="Select tool"
-          shortcut="S"
+          shortcut="S or Esc"
           icon={<SelectIcon size={20} />}
           onSelect={onSelect}
         />
@@ -109,7 +116,7 @@ export function ToolRail({ tool, onSelect }: ToolRailProps) {
           tool="rectangle"
           active={tool === "rectangle"}
           label="Rectangle tool"
-          shortcut="R"
+          shortcut={letterActsOnSelection ? "Esc, R" : "R"}
           icon={<Square size={20} />}
           onSelect={onSelect}
         />

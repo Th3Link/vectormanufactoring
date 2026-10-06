@@ -224,7 +224,9 @@ function readToolbarState(raw: {
 function isFormControl(target: EventTarget): boolean {
   return (
     target instanceof HTMLElement &&
-    target.closest('input, textarea, select, button, [role="switch"]') !== null
+    target.closest(
+      'input, textarea, select, button, [role="switch"], [contenteditable]:not([contenteditable="false"])',
+    ) !== null
   );
 }
 
@@ -343,6 +345,22 @@ function sameEntry(a: TransformEntryState | null, b: TransformEntryState | null)
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+/** A key that could not act, shown for 2 s next to the pointer
+ * (`specs/edit-interaction-polish/` criterion 59). */
+export interface KeyHint {
+  text: string;
+  /** Changes on every message, so the 2 s life restarts. */
+  id: number;
+}
+
+/** What `WasmSession.key_down` returns for a refused key. */
+const KEY_HINT_TEXT: Record<string, string> = {
+  "hint-select-one": "Select one object to type a value",
+};
+
+/** How long a key hint stays. */
+const KEY_HINT_MS = 2000;
+
 export interface EditorSession {
   /** Attach to the `<canvas>` element the host renders. */
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
@@ -399,8 +417,13 @@ export interface EditorSession {
    * (`docs/design-system.md`'s "Pan cursor"). */
   isSpaceHeld: boolean;
   setTool: (tool: Tool) => void;
-  escape: () => void;
   deleteSelected: () => void;
+  /** How many objects the session has selected: the rail's tooltips name
+   * "Esc, R" while the Select tool has one (criterion 62). */
+  selectionCount: number;
+  /** The one-line message of a key that could not act ("Select one object to
+   * type a value"), or `null`; it clears itself after 2 s. */
+  keyHint: KeyHint | null;
   convertSelected: (kind: "corner" | "symmetric" | "asymmetric") => void;
   makeLine: () => void;
   makeCurve: () => void;
@@ -542,6 +565,9 @@ export function useEditorSession(
   const [zoomPercent, setZoomPercent] = useState(100);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceHeld, setIsSpaceHeld] = useState(false);
+  const [selectionCount, setSelectionCount] = useState(0);
+  const [keyHint, setKeyHint] = useState<KeyHint | null>(null);
+  const keyHintCounter = useRef(0);
 
   /** Re-reads the typed entry (position follows zoom, pan and resize; it
    * closes on a tool switch or a selection change). */
@@ -572,6 +598,7 @@ export function useEditorSession(
     const nextBar = readSelectBar(session.select_bar_state());
     setSelectBar((previous) => (sameSelectBar(previous, nextBar) ? previous : nextBar));
     setZoomPercent(session.zoom_percent());
+    setSelectionCount(session.selection_count());
     syncEntry(session);
   }, [syncEntry]);
 
@@ -736,11 +763,6 @@ export function useEditorSession(
     },
     [syncFromSession],
   );
-
-  const escape = useCallback(() => {
-    sessionRef.current?.escape();
-    syncFromSession();
-  }, [syncFromSession]);
 
   const deleteSelected = useCallback(() => {
     sessionRef.current?.delete_selected();
@@ -1035,7 +1057,7 @@ export function useEditorSession(
   );
 
   const onPointerCancel = useCallback(() => {
-    sessionRef.current?.escape();
+    sessionRef.current?.pointer_cancelled();
     setLiveReadout(null);
     setCursorHint("default");
     syncFromSession();
@@ -1079,7 +1101,10 @@ export function useEditorSession(
     };
     // A key released outside the window must not leave Shift stuck: the
     // side rotate handles and the pivot follow `modifiers_changed`.
-    const onWindowBlur = () => applyModifiers(false, false);
+    const onWindowBlur = () => {
+      sessionRef.current?.pointer_cancelled();
+      applyModifiers(false, false);
+    };
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKey);
     window.addEventListener("blur", onWindowBlur);
@@ -1102,67 +1127,65 @@ export function useEditorSession(
     [applyModifiers],
   );
 
+  /** A key pressed on the canvas. Every rule (the gate of criterion 55, the
+   * key table of criterion 54, the Escape cascade of criterion 42) is
+   * `Session::key_down`'s: this forwards the key, the modifiers, the key
+   * repeat and the one fact only the DOM has (an IME composition is running
+   * or Space is held), and prevents the page's default for everything the
+   * session handled, so Ctrl+R and Ctrl+S keep their page and menu behaviour.
+   * Keys typed into a control are that control's, not the canvas's. */
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      // Keys typed into a control (the toolbar's switch, a field) are
-      // that control's, not canvas shortcuts: Space must toggle the
-      // switch, not start a pan, and tool letters must not switch tools.
       if (isFormControl(event.target)) {
         return;
       }
-      switch (event.key) {
-        case "s":
-        case "S":
-          setTool("select");
-          break;
-        case "b":
-        case "B":
-          setTool("pen");
-          break;
-        case "n":
-        case "N":
-          setTool("node");
-          break;
-        case "r":
-        case "R":
-          setTool("rectangle");
-          break;
-        case "e":
-        case "E":
-          setTool("ellipse");
-          break;
-        case "*":
-          setTool("polygon-star");
-          break;
-        case "Enter":
-          if (tool === "pen") {
-            finishPen();
-          }
-          break;
-        case "Escape":
-          escape();
-          break;
-        case "Delete":
-        case "Backspace":
-          event.preventDefault();
-          deleteSelected();
-          break;
-        case " ":
-          // Space+drag pans (acceptance criterion 4) — `preventDefault`
-          // so it never activates a focused button
-          // (`specs/0004-canvas-navigation-and-selection/adrs.md`'s
-          // frontend requirement); the open-hand cursor shows from this
-          // moment, before any drag motion (`docs/design-system.md`'s
-          // "Pan cursor").
-          event.preventDefault();
-          setIsSpaceHeld(true);
-          break;
-        default:
-          return;
+      if (event.key === " ") {
+        // Space+drag pans (acceptance criterion 4) — `preventDefault`
+        // so it never activates a focused button
+        // (`specs/0004-canvas-navigation-and-selection/adrs.md`'s
+        // frontend requirement); the open-hand cursor shows from this
+        // moment, before any drag motion (`docs/design-system.md`'s
+        // "Pan cursor").
+        event.preventDefault();
+        setIsSpaceHeld(true);
+        return;
       }
+      const session = sessionRef.current;
+      if (!session) {
+        return;
+      }
+      const outcome = session.key_down(
+        event.key,
+        event.shiftKey,
+        event.ctrlKey || event.metaKey,
+        event.altKey,
+        event.repeat,
+        event.nativeEvent.isComposing || isSpaceHeld,
+      );
+      if (outcome === "ignored") {
+        return;
+      }
+      event.preventDefault();
+      const hint = KEY_HINT_TEXT[outcome];
+      if (hint !== undefined) {
+        keyHintCounter.current += 1;
+        setKeyHint({ text: hint, id: keyHintCounter.current });
+      }
+      setLiveReadout(readLiveReadout(session.live_readout()));
+      setCursorHint(session.cursor_hint());
+      syncFromSession();
     },
-    [deleteSelected, escape, finishPen, setTool, tool],
+    [isSpaceHeld, syncFromSession],
   );
+
+  // A key hint clears itself after 2 s; a newer message restarts the clock.
+  useEffect(() => {
+    if (!keyHint) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setKeyHint(null), KEY_HINT_MS);
+    return () => window.clearTimeout(timer);
+  }, [keyHint]);
 
   const onKeyUp = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -1227,8 +1250,9 @@ export function useEditorSession(
     isPanning,
     isSpaceHeld,
     setTool,
-    escape,
     deleteSelected,
+    selectionCount,
+    keyHint,
     convertSelected,
     makeLine,
     makeCurve,

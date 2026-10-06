@@ -187,7 +187,7 @@ fn the_pen_discards_during_a_handle_drag_and_enter_finishes() {
     assert_eq!(escape(&mut session), EscapeStep::CancelledDrag);
     assert!(session.pen_in_progress().is_none());
     session.pointer_up(pt(70.0, 30.0), false, false);
-    assert!(objects(&session).is_empty());
+    assert_eq!(objects(&session).len(), 0, "nothing was written");
 
     let mut session = Session::new(1);
     session.set_tool(Tool::Pen);
@@ -575,12 +575,12 @@ fn delete_keys_delete_the_selection_in_select_and_node() {
     let mut session = session_of(&rect_document());
     click(&mut session, pt(10.0, 50.0));
     assert_eq!(key(&mut session, "Delete"), KeyOutcome::Deleted);
-    assert!(objects(&session).is_empty());
+    assert_eq!(objects(&session).len(), 0, "nothing was written");
 
     let mut session = session_of(&rect_document());
     click(&mut session, pt(10.0, 50.0));
     assert_eq!(key(&mut session, "Backspace"), KeyOutcome::Deleted);
-    assert!(objects(&session).is_empty());
+    assert_eq!(objects(&session).len(), 0, "nothing was written");
 
     let mut session = session_of(&path_document());
     session.set_tool(Tool::Node);

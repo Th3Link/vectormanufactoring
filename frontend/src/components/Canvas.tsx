@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 
 import { EditHintChip } from "@/components/EditHintChip";
 import { HandleHintChip } from "@/components/HandleHintChip";
+import { KeyHintChip } from "@/components/KeyHintChip";
 import { NodeContextMenu } from "@/components/NodeToolbar";
 import { TransformEntryChip } from "@/components/TransformEntryChip";
 import type { EditorSession } from "@/hooks/useEditorSession";
@@ -123,6 +124,7 @@ export function Canvas({ editor }: CanvasProps) {
         />
       )}
       <HandleHintChip hint={editor.handleHint} containerRef={editor.containerRef} />
+      <KeyHintChip hint={editor.keyHint} containerRef={editor.containerRef} />
       <EditHintChip
         hint={editor.editHint}
         polygon={editor.selectBar.pointsShown && !editor.selectBar.ratioShown}

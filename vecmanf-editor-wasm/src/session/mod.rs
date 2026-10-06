@@ -1007,7 +1007,7 @@ mod tests {
                     path.anchors[path.anchors.len() - 1].point,
                 ]
             })
-            .filter(|p| p.x == 10.0)
+            .filter(|p| (p.x - 10.0).abs() < 1e-9)
             .collect();
         assert_eq!(ends.len(), 2, "both pieces still end at x = 10");
         assert!(ends.contains(&Point::new(10.0, 0.0)));

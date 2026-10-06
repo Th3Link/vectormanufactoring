@@ -10,6 +10,7 @@ use super::{Session, Tool};
 /// modifiers (`ctrl` already folds in Cmd) and the two facts only the DOM
 /// knows.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[allow(clippy::struct_excessive_bools)] // one flag per DOM fact, as the host reports them
 pub struct KeyInput<'a> {
     /// `KeyboardEvent.key`: `"r"`, `"*"`, `"Delete"`, `"Escape"` and so on.
     pub key: &'a str,
@@ -53,6 +54,28 @@ pub enum KeyOutcome {
     PenFinished,
     /// The key could not act; show this hint.
     Hint(KeyHint),
+}
+
+impl KeyOutcome {
+    /// The string the frontend reads (ADR 0001 §5: strings and scalars across
+    /// the wasm boundary). Everything but `"ignored"` means the key was
+    /// handled and its page default is to be prevented.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::Ignored => "ignored",
+            Self::ToolChanged => "tool",
+            Self::EntryOpened => "entry",
+            Self::Deleted => "deleted",
+            Self::PenFinished => "pen",
+            Self::Escape(EscapeStep::ClosedEntry) => "escape-entry",
+            Self::Escape(EscapeStep::CancelledDrag) => "escape-drag",
+            Self::Escape(EscapeStep::ClearedState) => "escape-state",
+            Self::Escape(EscapeStep::LeftTool) => "escape-tool",
+            Self::Escape(EscapeStep::Nothing) => "escape-none",
+            Self::Hint(KeyHint::SelectOne) => "hint-select-one",
+        }
+    }
 }
 
 /// The one step a single Escape press took (criterion 42); the document is
@@ -109,7 +132,7 @@ enum KeyAction {
 
 /// The key table and its gate (criteria 54, 55, 60, 61) as a pure function:
 /// the one place that says what a key does in which state.
-fn decide(input: &KeyInput<'_>, state: &KeyState) -> KeyAction {
+fn decide(input: &KeyInput<'_>, state: KeyState) -> KeyAction {
     match input.key {
         // Never gated by the list of criterion 55; a held Escape acts once.
         "Escape" => {
@@ -228,7 +251,7 @@ impl Session {
             entry_open: self.select.has_entry(),
             selected: self.selected_for_keys(),
         };
-        match decide(&input, &state) {
+        match decide(&input, state) {
             KeyAction::Ignore => KeyOutcome::Ignored,
             KeyAction::SetTool(tool) => {
                 self.set_tool(tool);
@@ -375,6 +398,9 @@ mod tests {
         Tool::Ellipse,
         Tool::PolygonStar,
     ];
+    /// One gate condition, applied to a key and a state.
+    type Blocker = Box<dyn Fn(&mut KeyInput<'_>, &mut KeyState)>;
+
     const SELECTIONS: [Selected; 3] = [Selected::None, Selected::One, Selected::Many];
 
     fn state(tool: Tool, selected: Selected) -> KeyState {
@@ -406,7 +432,7 @@ mod tests {
                     ("*", Tool::PolygonStar),
                 ] {
                     assert_eq!(
-                        decide(&key(k), &state(tool, selected)),
+                        decide(&key(k), state(tool, selected)),
                         KeyAction::SetTool(target),
                         "{k} in {tool:?} with {selected:?}"
                     );
@@ -432,7 +458,7 @@ mod tests {
                         _ => KeyAction::SetTool(target),
                     };
                     assert_eq!(
-                        decide(&key(k), &state(tool, selected)),
+                        decide(&key(k), state(tool, selected)),
                         expected,
                         "{k} in {tool:?} with {selected:?}"
                     );
@@ -446,8 +472,8 @@ mod tests {
     fn letters_are_case_insensitive() {
         for (upper, lower) in [("B", "b"), ("N", "n"), ("E", "e"), ("R", "r"), ("S", "s")] {
             assert_eq!(
-                decide(&key(upper), &state(Tool::Select, Selected::One)),
-                decide(&key(lower), &state(Tool::Select, Selected::One)),
+                decide(&key(upper), state(Tool::Select, Selected::One)),
+                decide(&key(lower), state(Tool::Select, Selected::One)),
                 "{upper}"
             );
         }
@@ -460,7 +486,7 @@ mod tests {
         for tool in TOOLS {
             for k in ["Delete", "Backspace"] {
                 assert_eq!(
-                    decide(&key(k), &state(tool, Selected::One)),
+                    decide(&key(k), state(tool, Selected::One)),
                     KeyAction::Delete
                 );
             }
@@ -484,7 +510,7 @@ mod tests {
             "Shift",
         ] {
             assert_eq!(
-                decide(&key(k), &state(Tool::Select, Selected::One)),
+                decide(&key(k), state(Tool::Select, Selected::One)),
                 KeyAction::Ignore,
                 "{k}"
             );
@@ -496,7 +522,7 @@ mod tests {
     #[test]
     fn every_gate_condition_blocks_every_gated_key() {
         let gated = ["b", "n", "e", "r", "s", "*", "Delete", "Backspace"];
-        let mut blockers: Vec<(&str, Box<dyn Fn(&mut KeyInput<'_>, &mut KeyState)>)> = vec![
+        let mut blockers: Vec<(&str, Blocker)> = vec![
             ("ctrl", Box::new(|i, _| i.ctrl = true)),
             ("alt", Box::new(|i, _| i.alt = true)),
             ("repeat", Box::new(|i, _| i.repeat = true)),
@@ -526,7 +552,7 @@ mod tests {
                                 continue;
                             }
                             assert_eq!(
-                                decide(&input, &st),
+                                decide(&input, st),
                                 KeyAction::Ignore,
                                 "{k} in {tool:?} with {selected:?} blocked by {name_a} + {name_b}"
                             );
@@ -547,11 +573,11 @@ mod tests {
             ..KeyInput::default()
         };
         assert_eq!(
-            decide(&shifted("*"), &st),
+            decide(&shifted("*"), st),
             KeyAction::SetTool(Tool::PolygonStar)
         );
         for k in ["B", "N", "E", "R", "S", "Delete"] {
-            assert_eq!(decide(&shifted(k), &st), KeyAction::Ignore, "Shift+{k}");
+            assert_eq!(decide(&shifted(k), st), KeyAction::Ignore, "Shift+{k}");
         }
     }
 
@@ -567,7 +593,7 @@ mod tests {
                 alt,
                 ..KeyInput::default()
             };
-            assert_eq!(decide(&input, &st), KeyAction::Ignore, "{k}");
+            assert_eq!(decide(&input, st), KeyAction::Ignore, "{k}");
         }
     }
 
@@ -586,26 +612,50 @@ mod tests {
             dom_blocked: true,
             ..KeyInput::default()
         };
-        assert_eq!(decide(&escape, &busy), KeyAction::Escape);
+        assert_eq!(decide(&escape, busy), KeyAction::Escape);
         assert_eq!(
             decide(
                 &KeyInput {
                     repeat: true,
                     ..escape
                 },
-                &busy
+                busy
             ),
             KeyAction::Ignore,
             "criterion 60: a held Escape acts once"
         );
-        assert_eq!(decide(&key("Enter"), &busy), KeyAction::FinishPen);
+        assert_eq!(decide(&key("Enter"), busy), KeyAction::FinishPen);
         assert_eq!(
-            decide(&key("Enter"), &state(Tool::Pen, Selected::None)),
+            decide(&key("Enter"), state(Tool::Pen, Selected::None)),
             KeyAction::Ignore,
             "no path to finish"
         );
         let mut select_with_path = state(Tool::Select, Selected::One);
         select_with_path.pen_open = true;
-        assert_eq!(decide(&key("Enter"), &select_with_path), KeyAction::Ignore);
+        assert_eq!(decide(&key("Enter"), select_with_path), KeyAction::Ignore);
+    }
+
+    /// The codes the frontend reads are distinct and only `ignored` means
+    /// "do not prevent the default".
+    #[test]
+    fn outcome_codes_are_distinct() {
+        let all = [
+            KeyOutcome::Ignored,
+            KeyOutcome::ToolChanged,
+            KeyOutcome::EntryOpened,
+            KeyOutcome::Deleted,
+            KeyOutcome::PenFinished,
+            KeyOutcome::Escape(EscapeStep::ClosedEntry),
+            KeyOutcome::Escape(EscapeStep::CancelledDrag),
+            KeyOutcome::Escape(EscapeStep::ClearedState),
+            KeyOutcome::Escape(EscapeStep::LeftTool),
+            KeyOutcome::Escape(EscapeStep::Nothing),
+            KeyOutcome::Hint(KeyHint::SelectOne),
+        ];
+        let mut codes: Vec<&str> = all.iter().map(|o| o.code()).collect();
+        codes.sort_unstable();
+        codes.dedup();
+        assert_eq!(codes.len(), all.len());
+        assert_eq!(KeyOutcome::Ignored.code(), "ignored");
     }
 }

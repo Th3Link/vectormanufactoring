@@ -211,11 +211,13 @@ fn ctrl_is_read_live_and_at_the_release() {
     escaped.pointer_hover(b, false, true);
     escaped.escape();
     assert!(escaped.live_readout().is_none());
-    assert!(
+    assert_eq!(
         unpack(99, &escaped.pack("0.1.0").unwrap())
             .unwrap()
             .object_ids()
-            .is_empty()
+            .len(),
+        0,
+        "Escape wrote nothing"
     );
 }
 

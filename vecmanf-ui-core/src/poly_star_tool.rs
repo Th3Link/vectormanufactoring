@@ -410,11 +410,10 @@ mod tests {
                 Modifiers::new(false, true),
             );
             let angle = frame_of(shape).angle.as_radians().to_degrees();
-            assert!(
-                (angle - stop).abs() < 1e-6
-                    || (angle.abs() - 180.0).abs() < 1e-6 && stop.abs() == 180.0,
-                "raw {raw}: got {angle}, want {stop}"
-            );
+            // A half turn is 180 or -180: the same direction.
+            let same = (angle - stop).abs() < 1e-6
+                || ((angle.abs() - 180.0).abs() < 1e-6 && (stop.abs() - 180.0).abs() < 1e-6);
+            assert!(same, "raw {raw}: got {angle}, want {stop}");
         }
     }
 
@@ -466,6 +465,6 @@ mod tests {
         tool.pointer_move(Point::new(9.0, 5.0), Modifiers::new(false, true));
         assert!(tool.escape());
         assert_eq!(tool.live_shape(), None);
-        assert!(document.object_ids().is_empty());
+        assert_eq!(document.object_ids().len(), 0, "nothing was written");
     }
 }

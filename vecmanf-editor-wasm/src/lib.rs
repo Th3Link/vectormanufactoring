@@ -24,6 +24,8 @@ mod gpu;
 #[cfg(target_arch = "wasm32")]
 mod wasm_api;
 #[cfg(target_arch = "wasm32")]
+mod wasm_keys;
+#[cfg(target_arch = "wasm32")]
 mod wasm_select_bar;
 
 pub use session::{EscapeStep, KeyHint, KeyInput, KeyOutcome, Session, Tool};
