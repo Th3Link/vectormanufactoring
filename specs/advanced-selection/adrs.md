@@ -198,6 +198,10 @@ are under "Flagged to the lead", each with a default.
   browser's default action for Alt during a Select-tool drag (Firefox and
   Windows focus the menu bar on a lone Alt release). That is input
   translation, not logic.
+  *2026-10-06 (architect):* `specs/shape-creation-from-center/adrs.md`
+  introduces `vecmanf-ui-core::Modifiers { shift, ctrl }` first, for the
+  rectangle and ellipse tools. This feature adds the `alt` field to that
+  struct instead of creating it; the shape tools ignore `alt`.
 
 - **2026-10-05: the crate boundary.**
   - `vecmanf-geometry-core`: no change.

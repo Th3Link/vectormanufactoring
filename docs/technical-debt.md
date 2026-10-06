@@ -707,4 +707,9 @@ no behaviour change.
 
 **Resolution:** a `chore/` PR after `object-transform` merges and before
 the next slice that adds a tool. Revisit if a slice needs `mod.rs` above
-900 lines first.
+900 lines first. *2026-10-06 (architect):* `mod.rs` is at about 840 lines of
+non-test code on `main`. The split is now task 1 of whichever of
+`object-transform-refinements`, `0007-stroke-and-fill-styling` and
+`advanced-selection` starts first, as a pure-move commit. The module list
+is in `specs/object-transform-refinements/adrs.md` ("split the oversized
+modules first").
