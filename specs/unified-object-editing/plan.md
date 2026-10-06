@@ -1,13 +1,14 @@
 # Plan for Unified object editing: one Select tool for every object and its own handles
 
-This plan covers **PR 1** only (branch `story/unified-object-editing`, worktree
+This plan covers **PR 1** (criteria 1 to 24, 35 without the advanced-selection
+clauses, 37 and 38) and **PR 2** (criteria 25 to 34, delete-and-rewire), both on
+branch `story/unified-object-editing` and draft PR #38, worktree
 `/home/marc/workbench/vecmanf-claude/unified-editing-1`, from `origin/main` at
-`0b1f8ec`): `specification.md` criteria 1 to 24, 35 without the
-advanced-selection clauses, 37 and 38, in the order and with the cut line of
-`adrs.md` ("the two-PR split, task order and exact cut line"). PR 2 (criteria
-25 to 34, delete-and-rewire) is a separate later job and is not planned here.
-PR 1 adds; it deletes nothing the shape tools use, so the shape tools keep
-working unchanged next to the new Select-tool editing until PR 2 lands.
+`0b1f8ec`, in the order and with the cut line of `adrs.md` ("the two-PR split,
+task order and exact cut line"). PR 1 added and deleted nothing the shape tools
+used; PR 2 (tasks 11 to 15 below) turns the shape tools into creation-only tools
+and deletes the editing code that PR 1 made redundant. The two merge in one
+window (the lead's decision).
 
 No new crate, no new dependency, no new trait, no document-model change, no
 `format_version` change (stays 5), no new `vecmanf-document-core` or
@@ -123,6 +124,71 @@ stop and ask the lead.
 - [x] 10. Round-trip and compatibility tests (AC 24, 38), `docs/design-system.md`
       gaps, `docs/technical-debt.md`, full gate, Browser-pane check, demo notes
 
+### PR 2
+
+- [x] 11. `vecmanf-ui-core`: `ResizeDirection` to `resize_direction.rs`;
+      `shape_tool_common.rs` becomes `CreatePreview` and `CreateOutcome` plus
+      `is_degenerate` and `constrained_endpoint`; the rectangle, ellipse and
+      polygon/star tools become creation-only (`pointer_down(point)`,
+      `pointer_move`, `live_shape`, `pointer_up -> CreateOutcome`, `escape`); a
+      press without movement writes nothing and leaves the selection alone;
+      `handle_layout.rs`, `shape_hit_test.rs`, `pin_rect_resize`,
+      `pin_ellipse_resize` deleted (AC 25, 26)
+- [x] 12. `SelectTool::double_click` on a primitive returns `EditHint` and never
+      a handoff (paths still hand off to the Node tool); a double-click on a
+      parameter handle still opens its entry (AC 31, 32, 33)
+- [x] 13. `vecmanf-render-core`: `ShapeDecorationInput`, the shape handle glyphs
+      and the primitive bounding box outline deleted; `build_primitive_strokes`
+      and `build_shape_live_preview` stay (AC 27)
+- [x] 14. `vecmanf-editor-wasm`: `Session::shape_pointer_up` sets `Tool::Select`
+      and selects the new id; creation tools draw each selected object's plain
+      box, no hover, no handles; `convert_selected_to_paths` and
+      `remove_corner_rounding` live in `session/select_bar.rs`; the old
+      `poly_star_*` selection-editing calls leave `wasm_api.rs`;
+      `double_click` returns a bool for the hint chip (AC 27, 28, 29, 31)
+- [x] 15. Frontend: `ShapeToolbar` holds only the polygon/star next-shape
+      settings with the "New:" prefix; `EditHintChip` (three lines); crosshair
+      for every creation tool; no hover highlight (AC 29, 30, 32, 34)
+
+#### What replaced each deleted test
+
+| Deleted | Replaced by |
+|---|---|
+| `rectangle_tool.rs` unit tests: resize, radius drag (rotated, shrunken, zero at the diagonal), remove rounding, selection click | `tests/unified_object_editing.rs` `ported_ac3_*`, `ported_all_four_radius_handles_*` and the `param_edit.rs` tests of PR 1; the Remove rounding tests in `vecmanf-editor-wasm/tests/unified_object_editing.rs` and `acceptance_unified_editing.rs`; the creation-only unit tests in `rectangle_tool.rs`; `session/shapes.rs` `a_press_without_movement_creates_nothing_and_keeps_the_selection` |
+| `ellipse_tool.rs` unit tests: resize | `ported_ac9_resizing_an_ellipse_can_break_rx_eq_ry` |
+| `poly_star_tool.rs` unit tests: resize, inner radius, point count, ratio preview | `ported_ac13_*`, `ported_ac14_*`, `ported_ac15_*`; the bar Points tests in `vecmanf-editor-wasm/tests/unified_object_editing.rs` and `acceptance_unified_editing.rs` |
+| `handle_layout.rs`, `shape_hit_test.rs` tests | the PR 1 `param_handles.rs` and `transform_handle_layout.rs` tests; `hit_test_object.rs` tests for the outline rule |
+| `acceptance_0003.rs` AC3, AC9, AC13, AC14, AC15, `hit_test_handle_ignores_non_draggable_echo_handles` | the `ported_*` tests above (same numbers) |
+| wasm `acceptance_0005.rs` `ac25_*` shape-tool handle tests | eight `ac25_*` tests rewritten against the Select tool with the old numbers (`radius_knob`, `inward_step` helpers) |
+| `session/shapes.rs` radius and ratio preview tests | the `unified_object_editing.rs` (wasm) tests `a_star_inner_radius_drag_shows_a_ratio_readout` and the release-equals-preview tests of PR 1 |
+| `acceptance_object_transform_refinements.rs` double-click tests (ui-core) | same tests, primitives now assert `EditHint`, paths still assert `Hit`; the outline-at-a-handle-spot test asserts `EditHint` and an empty entry |
+
+No test was deleted without a replacement of at least the same strength; the
+shape-tool double-click handoff tests changed their expected outcome on purpose
+(criterion 32 reverses the old behaviour).
+
+#### Deleted-names check
+
+A grep over the Rust crates and `frontend/src` finds none of: `HandleKind`,
+`ShapeHandle`, `handles_for`, `rect_handles`, `ellipse_handles`,
+`polygon_or_star_handles`, `corner_inward_diagonal`, `resize_rect_bounds`,
+`resize_ellipse_frame`, `scale_star_frame`, `CARDINAL_FOUR`, `ShapeHitTolerances`,
+`LiveShape`, `rects_only`, `ellipses_only`, `polygons_and_stars_only`,
+`apply_selection_click`, `pin_rect_resize`, `pin_ellipse_resize`,
+`hovered_primitive`, `update_hovered_primitive`, `shape_matches_active_tool`,
+`tool_for_shape`, `shape_decoration_input`, `primitives_for_render`,
+`ShapeDecorationInput`, `RenderShapeHandle`, `ShapeHandleKind`,
+`shape_handle_glyph`, `build_shape_draw_list`. Two names that look similar remain
+on purpose: `hit_test::hit_test_handle` (the Node tool's own node/handle test) and
+`Session::poly_star_ratio` (the next-shape setting).
+
+#### Not done in PR 2
+
+- `shape-creation-from-center` criteria 16 and the first sentence of 17 are
+  superseded by this story; that spec is not built and not edited here.
+- No frontend test runner exists, so the hint chip, the "New:" bar, the crosshair
+  and the hand-over to Select are checked in the Browser pane only.
+
 ## Validation
 
 - Core logic test first in `vecmanf-ui-core` and `vecmanf-render-core`; session
@@ -137,6 +203,6 @@ stop and ask the lead.
   entry equals bar value.
 - The gate of `CLAUDE.md` §7 plus `cd frontend && npm run build`, with `vecmanf-app`
   in the workspace.
-- Shape-tool tests are not touched in PR 1; every Select-tool equivalent of a
-  shape-tool test is added with the old test's numbers (ADR: "port in PR 1,
-  delete in PR 2").
+- Shape-tool tests were not touched in PR 1; every Select-tool equivalent of a
+  shape-tool test was added with the old test's numbers (ADR: "port in PR 1,
+  delete in PR 2"), and PR 2 deleted the old ones (table above).

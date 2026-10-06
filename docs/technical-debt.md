@@ -760,3 +760,11 @@ story):* `select_tool.rs` is 375 non-test lines (the handle queries moved to
 about 435, `session/mod.rs` 510 (it gained the `drag_objects` field) and
 `vecmanf-editor-wasm/src/wasm_api.rs` 779 (the Select bar's calls are in
 `wasm_select_bar.rs`; PR 2 removes about 80 lines here).
+
+*2026-10-06 (implementer, `unified-object-editing` PR 2):* the shape tools are
+creation-only. `session/shapes.rs` is 170 non-test lines, `session/mod.rs` 499,
+`vecmanf-editor-wasm/src/wasm_api.rs` 760 (about 20 lines less than the
+expected 80: the Select bar's calls were already in `wasm_select_bar.rs`, and the
+two new surfaces `double_click -> bool` and the polygon/star setters stayed),
+`select_tool.rs` 379, `transform_drag.rs` 379. Only `wasm_api.rs` is still over
+the ~500-line limit; splitting it by tool stays with `advanced-selection`.
