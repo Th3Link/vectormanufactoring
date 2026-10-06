@@ -80,6 +80,7 @@ fn build(
             selected: selected.iter().map(|b| (id, doc_quad(view, *b))).collect(),
             hovered: hovered.map(|b| (id, doc_quad(view, b))),
             device_pixel_ratio: dpr,
+            skew_guide: None,
         },
     )
 }
@@ -820,6 +821,7 @@ fn hostile_non_finite_corners_do_not_panic_or_hang() {
                     selected: vec![(id, q)],
                     hovered: Some((id, q)),
                     device_pixel_ratio: 1.0,
+                    skew_guide: None,
                 },
             );
             assert!(start.elapsed().as_secs() < 5);
@@ -841,6 +843,7 @@ fn hostile_non_finite_corners_do_not_panic_or_hang() {
                 selected: vec![(id, q)],
                 hovered: None,
                 device_pixel_ratio: 2.0,
+                skew_guide: None,
             },
         );
         assert!(start.elapsed().as_secs() < 5, "scale {scale}");

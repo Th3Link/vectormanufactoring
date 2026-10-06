@@ -120,7 +120,20 @@ impl Session {
             selected,
             hovered,
             device_pixel_ratio: self.device_pixel_ratio,
+            skew_guide: self.skew_guide_now(),
         }
+    }
+
+    /// The skew fixed-line guide of the drag in flight, if it is a skew drag:
+    /// drawn by the transform overlay, and the box leaves its own dashes off
+    /// the edge it covers.
+    fn skew_guide_now(
+        &self,
+    ) -> Option<(vecmanf_document_core::Point, vecmanf_document_core::Point)> {
+        self.select.skew_guide(
+            self.select_shift_held,
+            SKEW_GUIDE_EXTEND_PX / self.view().scale(),
+        )
     }
 
     /// The handle under the pointer, if any, with its object and box — the
@@ -236,15 +249,12 @@ impl Session {
         } else {
             None
         };
-        let skew_guide = self.select.skew_guide(
-            self.select_shift_held,
-            SKEW_GUIDE_EXTEND_PX / self.view().scale(),
-        );
         TransformDecorationInput {
             handles,
             pivot_marker: live_pivot.or(preview),
-            skew_guide,
+            skew_guide: self.skew_guide_now(),
             param_guides,
+            device_pixel_ratio: self.device_pixel_ratio,
         }
     }
 
@@ -916,6 +926,25 @@ mod tests {
             .skew_guide
             .unwrap();
         assert!((guide.0.y - 50.0).abs() < 1e-9, "Shift: through the centre");
+        // Criterion 68: the box learns the guide, and under a fixed-edge guide
+        // leaves its own dashes off that edge (fewer triangles); the centre
+        // line under Shift covers none of its edges.
+        let box_triangles = |session: &Session| {
+            vecmanf_render_core::build_select_draw_list(
+                session.view(),
+                &session.select_decoration_input(),
+            )
+            .triangle_count()
+        };
+        assert_eq!(session.select_decoration_input().skew_guide, Some(guide));
+        let centre_line = box_triangles(&session);
+        session.modifiers_changed(false, false);
+        let fixed_edge = box_triangles(&session);
+        session.escape();
+        assert!(session.select_decoration_input().skew_guide.is_none());
+        let at_rest = box_triangles(&session);
+        assert_eq!(centre_line, at_rest, "Shift: the centre line cuts no edge");
+        assert!(fixed_edge < at_rest, "{fixed_edge} vs {at_rest}");
         session.escape();
         assert!(
             session

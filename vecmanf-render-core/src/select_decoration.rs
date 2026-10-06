@@ -9,6 +9,7 @@ use vecmanf_document_core::{Angle, Point, Vec2, ViewTransform};
 use crate::color::RgbaColor;
 use crate::glyphs::{self, DrawList};
 use crate::screen_px_to_mm;
+use crate::select_box;
 use crate::shape_preview;
 use crate::theme;
 
@@ -75,6 +76,10 @@ pub struct TransformDecorationInput {
     /// radius handle (`docs/design-system.md`, "Parameter handle guide"):
     /// corner first, handle second.
     pub param_guides: Vec<(Point, Point)>,
+    /// `window.devicePixelRatio`: the skew guide snaps to whole device pixels
+    /// with it, as the selection box does. Not a positive finite number (and
+    /// the default 0) reads as 1.
+    pub device_pixel_ratio: f64,
 }
 
 /// A hollow resize-handle glyph: `--accent` outline on a rounded square
@@ -346,10 +351,12 @@ pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationI
         ));
     }
     if let Some((from, to)) = input.skew_guide {
+        let (from, to, width_px) =
+            select_box::snap_guide_line(view, from, to, input.device_pixel_ratio);
         list.extend(shape_preview::dashed_guide(
             from,
             to,
-            screen_px_to_mm(view, theme::TRANSFORM_SKEW_GUIDE_WIDTH_PX),
+            screen_px_to_mm(view, width_px),
             theme::TRANSFORM_SKEW_GUIDE_COLOR,
             screen_px_to_mm(view, theme::SKEW_GUIDE_DASH_PX),
             screen_px_to_mm(view, theme::SKEW_GUIDE_GAP_PX),
@@ -402,6 +409,7 @@ mod tests {
             pivot_marker: None,
             skew_guide: None,
             param_guides: Vec::new(),
+            ..TransformDecorationInput::default()
         };
         let list = build_transform_handles(ViewTransform::identity(), &input);
         assert_ne!(list.triangles.len(), 0);
@@ -423,6 +431,7 @@ mod tests {
                 pivot_marker: None,
                 skew_guide: None,
                 param_guides: Vec::new(),
+                ..TransformDecorationInput::default()
             };
             build_transform_handles(ViewTransform::identity(), &input)
         };
@@ -452,12 +461,14 @@ mod tests {
             pivot_marker: Some(Point::new(50.0, 50.0)),
             skew_guide: None,
             param_guides: Vec::new(),
+            ..TransformDecorationInput::default()
         };
         let at_handle = TransformDecorationInput {
             handles: vec![handle(0.0, 0.0), handle(10.0, 10.0)],
             pivot_marker: Some(Point::new(0.0, 0.0)),
             skew_guide: None,
             param_guides: Vec::new(),
+            ..TransformDecorationInput::default()
         };
         let view = ViewTransform::identity();
         let elsewhere = build_transform_handles(view, &with_pivot_elsewhere);
@@ -473,6 +484,7 @@ mod tests {
                 pivot_marker: None,
                 skew_guide: None,
                 param_guides: Vec::new(),
+                ..TransformDecorationInput::default()
             },
         );
         assert_eq!(
@@ -489,6 +501,7 @@ mod tests {
             pivot_marker: Some(Point::new(5.0, 5.0)),
             skew_guide: None,
             param_guides: Vec::new(),
+            ..TransformDecorationInput::default()
         };
         let list = build_transform_handles(ViewTransform::identity(), &input);
         assert_ne!(list.triangles.len(), 0);
@@ -510,6 +523,7 @@ mod tests {
                 pivot_marker: None,
                 skew_guide: None,
                 param_guides: Vec::new(),
+                ..TransformDecorationInput::default()
             },
         )
     }
@@ -588,6 +602,7 @@ mod tests {
             pivot_marker: None,
             skew_guide: Some((Point::new(0.0, 0.0), Point::new(70.0, 0.0))),
             param_guides: Vec::new(),
+            ..TransformDecorationInput::default()
         };
         let list = build_transform_handles(ViewTransform::identity(), &input);
         // 70 px at 2 on / 2 off (criterion 68): eighteen dashes of two triangles each.
@@ -722,5 +737,80 @@ mod tests {
                 .iter()
                 .all(|v| v.color == theme::SHAPE_HANDLE_GUIDE)
         );
+    }
+
+    /// Criterion 68: the axis-aligned guide is pixel-snapped like the box (one
+    /// whole device row or column, full accent), so it no longer renders as
+    /// pale blocks; the ends sit on whole device pixels.
+    #[test]
+    fn the_skew_guide_sits_on_whole_device_pixels() {
+        for ratio in [1.0, 1.5, 2.0, 3.0] {
+            let input = TransformDecorationInput {
+                skew_guide: Some((Point::new(-5.3, 40.7), Point::new(126.2, 40.7))),
+                device_pixel_ratio: ratio,
+                ..TransformDecorationInput::default()
+            };
+            let list = build_transform_handles(ViewTransform::identity(), &input);
+            assert_ne!(list.triangle_count(), 0);
+            let width = crate::select_box::device_line_width(ratio);
+            for v in &list.triangles {
+                assert_eq!(v.color, theme::TRANSFORM_SKEW_GUIDE_COLOR);
+                let y = v.position.y * ratio;
+                // Across the line the edges are whole device pixel boundaries.
+                assert!((y - y.round()).abs() < 1e-6, "ratio {ratio}: y {y}");
+            }
+            let ys: Vec<f64> = list
+                .triangles
+                .iter()
+                .map(|v| v.position.y * ratio)
+                .collect();
+            let span = ys.iter().copied().fold(f64::MIN, f64::max)
+                - ys.iter().copied().fold(f64::MAX, f64::min);
+            assert!(
+                (span - width).abs() < 1e-6,
+                "ratio {ratio}: {span} device px thick"
+            );
+        }
+    }
+
+    /// At ratio 1 every dash of the guide is two whole pixels with two whole
+    /// pixels between, so none renders as a half-covered block.
+    #[test]
+    fn the_snapped_guide_dashes_are_whole_pixels_at_ratio_one() {
+        let input = TransformDecorationInput {
+            skew_guide: Some((Point::new(-5.3, 40.7), Point::new(126.2, 40.7))),
+            device_pixel_ratio: 1.0,
+            ..TransformDecorationInput::default()
+        };
+        let list = build_transform_handles(ViewTransform::identity(), &input);
+        for v in &list.triangles {
+            assert!(
+                (v.position.x - v.position.x.round()).abs() < 1e-6,
+                "{}",
+                v.position.x
+            );
+        }
+    }
+
+    /// A rotated guide is not snapped: the same dashes the guide drew before.
+    #[test]
+    fn a_rotated_skew_guide_keeps_its_true_line() {
+        let (from, to) = (Point::new(3.3, 4.4), Point::new(90.1, 52.7));
+        let input = TransformDecorationInput {
+            skew_guide: Some((from, to)),
+            device_pixel_ratio: 2.0,
+            ..TransformDecorationInput::default()
+        };
+        let view = ViewTransform::identity();
+        let got = build_transform_handles(view, &input);
+        let want = shape_preview::dashed_guide(
+            from,
+            to,
+            1.0,
+            theme::TRANSFORM_SKEW_GUIDE_COLOR,
+            theme::SKEW_GUIDE_DASH_PX,
+            theme::SKEW_GUIDE_GAP_PX,
+        );
+        assert_eq!(got.triangles, want.triangles);
     }
 }

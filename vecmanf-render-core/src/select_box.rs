@@ -40,6 +40,11 @@ pub struct SelectDecorationInput {
     /// axis-aligned box line snaps to whole device pixels with it. A value
     /// that is not a positive finite number, and the default 0, read as 1.
     pub device_pixel_ratio: f64,
+    /// The two end points of the skew fixed-line guide while a skew drag runs
+    /// (`edit-interaction-polish` criterion 68). A selected box's edge that
+    /// lies on this line is not drawn where the guide covers it: the guide
+    /// replaces the box's own dashes there, so it reads alone.
+    pub skew_guide: Option<(Point, Point)>,
 }
 
 /// How one box edge is cut into dashes: `count` dashes of `dash_px` with
@@ -130,12 +135,44 @@ pub(crate) fn snap_to_device(coord_px: f64, ratio: f64, line_device_px: f64) -> 
 
 type Screen = (f64, f64);
 
-fn effective_ratio(ratio: f64) -> f64 {
+pub(crate) fn effective_ratio(ratio: f64) -> f64 {
     if ratio.is_finite() && ratio > 0.0 {
         ratio
     } else {
         1.0
     }
+}
+
+/// A guide line `from` to `to` (document space) as it is drawn: snapped to the
+/// device pixel grid with the box's own rule when it runs along a screen axis
+/// (the line on whole device pixels, the ends on the grid, a whole number of
+/// device pixels wide), else the true line at 1 px (a rotated line can be no
+/// crisper). Returns the end points and the width in screen pixels.
+pub(crate) fn snap_guide_line(
+    view: ViewTransform,
+    from: Point,
+    to: Point,
+    ratio: f64,
+) -> (Point, Point, f64) {
+    let ratio = effective_ratio(ratio);
+    let (a, b) = (view.document_to_screen(from), view.document_to_screen(to));
+    let horizontal = (b.1 - a.1).abs() <= AXIS_EPSILON_PX;
+    let vertical = (b.0 - a.0).abs() <= AXIS_EPSILON_PX;
+    if !horizontal && !vertical {
+        return (from, to, theme::BOUNDING_BOX_OUTLINE_PX);
+    }
+    let width = device_line_width(ratio);
+    let on_grid = |v: f64| (v * ratio).round() / ratio;
+    let across = |v: f64| snap_to_device(v, ratio, width);
+    let place = |(x, y): Screen| {
+        let (x, y) = if horizontal {
+            (on_grid(x), across(y))
+        } else {
+            (across(x), on_grid(y))
+        };
+        view.screen_to_document(x, y)
+    };
+    (place(a), place(b), width / ratio)
 }
 
 /// A box in screen pixels, with the width its line is drawn at.
@@ -177,26 +214,13 @@ impl ScreenBox {
     }
 }
 
-/// One box edge `from` to `to` (screen pixels) as dashes, or one solid line.
-/// The first and the last dash reach half a line width past the corner, so
-/// the two edges that meet there cover the whole corner pixel.
-fn dashed_edge(
-    view: ViewTransform,
-    from: Screen,
-    to: Screen,
-    width_px: f64,
-    color: RgbaColor,
-) -> DrawList {
-    let mut list = DrawList::default();
-    let length = (to.0 - from.0).hypot(to.1 - from.1);
-    if length <= f64::EPSILON {
-        return list;
-    }
-    let (ux, uy) = ((to.0 - from.0) / length, (to.1 - from.1) / length);
-    let at = |along: f64| view.screen_to_document(from.0 + ux * along, from.1 + uy * along);
-    let width_mm = width_px / view.scale();
+/// The spans `(start, end)` along an edge of `length` screen pixels that carry
+/// a line: the dashes, or one solid span. The first and the last reach half a
+/// line width past the corner, so the two edges that meet there cover the
+/// whole corner pixel.
+fn edge_spans(length: f64, width_px: f64) -> Vec<(f64, f64)> {
     let half = width_px / 2.0;
-    let spans: Vec<(f64, f64)> = match fit_dashes(length) {
+    match fit_dashes(length) {
         None => vec![(-half, length + half)],
         Some(fit) => (0..fit.count)
             .map(|i| {
@@ -212,7 +236,75 @@ fn dashed_edge(
                 )
             })
             .collect(),
-    };
+    }
+}
+
+/// `spans` without the part inside `(from, to)` (an interval along the same edge).
+fn cut_span_interval(spans: Vec<(f64, f64)>, (from, to): (f64, f64)) -> Vec<(f64, f64)> {
+    let mut out = Vec::with_capacity(spans.len() + 1);
+    for (start, end) in spans {
+        if end <= from || start >= to {
+            out.push((start, end));
+            continue;
+        }
+        if start < from {
+            out.push((start, from));
+        }
+        if end > to {
+            out.push((to, end));
+        }
+    }
+    out
+}
+
+/// Where the skew guide `guide` (screen pixels) covers the edge `from` to `to`:
+/// the interval of the guide along the edge, if both edge ends lie on the
+/// guide's line.
+fn guide_cover(from: Screen, to: Screen, guide: (Screen, Screen)) -> Option<(f64, f64)> {
+    let length = (to.0 - from.0).hypot(to.1 - from.1);
+    let guide_length = (guide.1.0 - guide.0.0).hypot(guide.1.1 - guide.0.1);
+    if length <= f64::EPSILON || guide_length <= f64::EPSILON {
+        return None;
+    }
+    let (ux, uy) = ((to.0 - from.0) / length, (to.1 - from.1) / length);
+    let (gx, gy) = (
+        (guide.1.0 - guide.0.0) / guide_length,
+        (guide.1.1 - guide.0.1) / guide_length,
+    );
+    // Perpendicular distance of a point from the guide's line.
+    let distance = |p: Screen| ((p.0 - guide.0.0) * gy - (p.1 - guide.0.1) * gx).abs();
+    if distance(from) > theme::SELECTION_BOX_GUIDE_TOLERANCE_PX
+        || distance(to) > theme::SELECTION_BOX_GUIDE_TOLERANCE_PX
+    {
+        return None;
+    }
+    let along = |p: Screen| (p.0 - from.0) * ux + (p.1 - from.1) * uy;
+    let (a, b) = (along(guide.0), along(guide.1));
+    Some((a.min(b), a.max(b)))
+}
+
+/// One box edge `from` to `to` (screen pixels) as dashes, or one solid line,
+/// minus the interval `cut` along it where the skew guide draws instead.
+fn dashed_edge(
+    view: ViewTransform,
+    from: Screen,
+    to: Screen,
+    width_px: f64,
+    cut: Option<(f64, f64)>,
+    color: RgbaColor,
+) -> DrawList {
+    let mut list = DrawList::default();
+    let length = (to.0 - from.0).hypot(to.1 - from.1);
+    if length <= f64::EPSILON {
+        return list;
+    }
+    let (ux, uy) = ((to.0 - from.0) / length, (to.1 - from.1) / length);
+    let at = |along: f64| view.screen_to_document(from.0 + ux * along, from.1 + uy * along);
+    let width_mm = width_px / view.scale();
+    let mut spans = edge_spans(length, width_px);
+    if let Some(cut) = cut {
+        spans = cut_span_interval(spans, cut);
+    }
     for (start, end) in spans {
         list.extend(thick_line(at(start), at(end), width_mm, color));
     }
@@ -227,14 +319,20 @@ fn dashed_edge(
 pub fn build(view: ViewTransform, input: &SelectDecorationInput) -> DrawList {
     let ratio = effective_ratio(input.device_pixel_ratio);
     let mut list = DrawList::default();
+    let guide = input
+        .skew_guide
+        .map(|(a, b)| (view.document_to_screen(a), view.document_to_screen(b)));
     for &(_, corners) in &input.selected {
         let screen = ScreenBox::new(view, corners, ratio);
         for i in 0..4 {
+            let (from, to) = (screen.corners[i], screen.corners[(i + 1) % 4]);
+            let cut = guide.and_then(|g| guide_cover(from, to, g));
             list.extend(dashed_edge(
                 view,
-                screen.corners[i],
-                screen.corners[(i + 1) % 4],
+                from,
+                to,
                 screen.width_px,
+                cut,
                 theme::ACCENT,
             ));
         }
@@ -867,5 +965,144 @@ mod tests {
         let view = view_at(1.0);
         let list = build(view, &selected_input(px_box(0.5, 0.5, 100_000.0, 8.0, 1.0)));
         assert_eq!(list.triangle_count(), 8);
+    }
+
+    // ---- the skew guide replaces the box's dashes on the fixed edge (68) ----
+
+    fn with_guide(
+        corners: SelectionBox,
+        guide: (Point, Point),
+        ratio: f64,
+    ) -> SelectDecorationInput {
+        SelectDecorationInput {
+            selected: vec![(fixture_id(), corners)],
+            skew_guide: Some(guide),
+            device_pixel_ratio: ratio,
+            ..SelectDecorationInput::default()
+        }
+    }
+
+    /// Samples along the edge `a` to `b` (screen pixels, away from the corners):
+    /// inside `(from, to)` along the edge the guide covers it, so the box draws
+    /// nothing there; outside, the box is drawn as without the guide.
+    fn assert_cut(
+        view: ViewTransform,
+        corners: SelectionBox,
+        edge: usize,
+        guide: (Point, Point),
+        cut: (f64, f64),
+    ) {
+        let screen = corners.map(|c| view.document_to_screen(c));
+        let (a, b) = (screen[edge], screen[(edge + 1) % 4]);
+        let length = (b.0 - a.0).hypot(b.1 - a.1);
+        let plain = screen_triangles(&build(view, &selected_input(corners)), view);
+        let cut_list = screen_triangles(&build(view, &with_guide(corners, guide, 1.0)), view);
+        let mut inside_seen = false;
+        let mut t = 1.0;
+        while t < length - 1.0 {
+            let p = lerp(a, b, t / length);
+            if t > cut.0 && t < cut.1 {
+                assert!(!covered(&cut_list, p), "t {t} is under the guide");
+                inside_seen |= covered(&plain, p);
+            } else {
+                assert_eq!(
+                    covered(&cut_list, p),
+                    covered(&plain, p),
+                    "t {t} is outside the guide"
+                );
+            }
+            t += 0.25;
+        }
+        assert!(inside_seen, "the plain box has dashes under the guide");
+    }
+
+    #[test]
+    fn the_box_edge_on_the_skew_guide_is_not_drawn_where_the_guide_covers_it() {
+        let view = view_at(1.0);
+        let corners = px_box(10.5, 10.5, 100.0, 60.0, 1.0);
+        // The fixed (bottom) edge, the guide reaching 16 px past both ends.
+        let guide = (Point::new(-5.5, 70.5), Point::new(126.5, 70.5));
+        let plain = build(view, &selected_input(corners)).triangle_count();
+        let cut = build(view, &with_guide(corners, guide, 1.0)).triangle_count();
+        // The 100 px bottom edge is 15 dashes of two triangles.
+        assert_eq!(plain - cut, 30);
+        assert_cut(view, corners, 2, guide, (0.0, 100.0 + 32.0));
+    }
+
+    #[test]
+    fn a_guide_shorter_than_the_edge_cuts_only_its_own_part() {
+        let view = view_at(1.0);
+        let corners = px_box(10.5, 10.5, 100.0, 60.0, 1.0);
+        let guide = (Point::new(40.5, 70.5), Point::new(80.5, 70.5));
+        // Edge 2 runs right to left: along-distance from (110.5, 70.5).
+        assert_cut(view, corners, 2, guide, (30.0, 70.0));
+    }
+
+    #[test]
+    fn a_rotated_boxs_fixed_edge_is_cut_too() {
+        let view = view_at(1.0);
+        let corners = turned_box(80.0, 60.0, 120.0, 70.0, 25.0, 1.0);
+        let (a, b) = (corners[1], corners[2]);
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let length = dx.hypot(dy);
+        let (ux, uy) = (dx / length, dy / length);
+        let guide = (
+            Point::new(a.x - ux * 16.0, a.y - uy * 16.0),
+            Point::new(b.x + ux * 16.0, b.y + uy * 16.0),
+        );
+        assert_cut(view, corners, 1, guide, (-16.0, length + 16.0));
+    }
+
+    #[test]
+    fn a_guide_through_the_centre_cuts_nothing() {
+        let view = view_at(1.0);
+        let corners = px_box(10.5, 10.5, 100.0, 60.0, 1.0);
+        let centre = (Point::new(-5.5, 40.5), Point::new(126.5, 40.5));
+        assert_eq!(
+            build(view, &with_guide(corners, centre, 1.0)).triangles,
+            build(view, &selected_input(corners)).triangles
+        );
+    }
+
+    #[test]
+    fn the_cut_follows_a_snapped_edge_within_a_pixel() {
+        // The guide runs on the true edge (y 70.7); the box edge snapped to 70.5.
+        let view = view_at(1.0);
+        let corners = px_box(10.5, 10.7, 100.0, 60.0, 1.0);
+        let guide = (Point::new(-5.5, 70.7), Point::new(126.5, 70.7));
+        let plain = build(view, &selected_input(corners)).triangle_count();
+        let cut = build(view, &with_guide(corners, guide, 1.0)).triangle_count();
+        assert_eq!(plain - cut, 30);
+    }
+
+    // ---- the guide's own snap ------------------------------------------
+
+    #[test]
+    fn an_axis_aligned_guide_snaps_like_the_box_and_a_rotated_one_does_not() {
+        for ratio in [1.0, 1.5, 2.0, 3.0] {
+            let view = view_at(1.0);
+            let (from, to, width) =
+                snap_guide_line(view, Point::new(-5.3, 40.7), Point::new(126.2, 40.7), ratio);
+            let w = device_line_width(ratio);
+            assert!((width * ratio - w).abs() < 1e-9, "ratio {ratio}");
+            // The line is the box's own snapped coordinate.
+            assert!((from.y - snap_to_device(40.7, ratio, w)).abs() < 1e-9);
+            assert!((to.y - from.y).abs() < 1e-9);
+            // The ends are on the device grid.
+            for x in [from.x, to.x] {
+                assert!(
+                    (x * ratio - (x * ratio).round()).abs() < 1e-6,
+                    "ratio {ratio}: {x}"
+                );
+            }
+            // A vertical guide likewise.
+            let (from, to, _) =
+                snap_guide_line(view, Point::new(40.7, -5.3), Point::new(40.7, 126.2), ratio);
+            assert!((from.x - snap_to_device(40.7, ratio, w)).abs() < 1e-9);
+            assert!((to.x - from.x).abs() < 1e-9);
+        }
+        let (from, to) = (Point::new(3.3, 4.4), Point::new(90.1, 52.7));
+        let rotated = snap_guide_line(view_at(2.0), from, to, 2.0);
+        assert_eq!(rotated, (from, to, 1.0));
     }
 }

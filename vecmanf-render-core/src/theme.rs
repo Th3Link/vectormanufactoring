@@ -185,9 +185,8 @@ pub const TRANSFORM_SKEW_HANDLE_CORNER_RADIUS_PX: f64 = 3.0;
 /// canvas, `docs/design-system.md`).
 pub const TRANSFORM_SKEW_GUIDE_COLOR: RgbaColor = ACCENT;
 
-/// The skew fixed-line guide's weight, screen-space pixels (1 px dashed in
-/// `docs/design-system.md`).
-pub const TRANSFORM_SKEW_GUIDE_WIDTH_PX: f64 = 1.0;
+// The skew fixed-line guide's weight is `BOUNDING_BOX_OUTLINE_PX`: the guide
+// takes the box's own line and snap (`edit-interaction-polish` criterion 68).
 
 /// The pivot marker's diameter, screen-space pixels (`docs/design-
 /// system.md`'s "Transform pivot marker").
@@ -236,6 +235,11 @@ pub const SELECTION_BOX_GAP_MAX_PX: f64 = 4.0;
 /// An edge shorter than this has room for no two dashes and a gap and is
 /// drawn solid, screen-space pixels (`edit-interaction-polish` criterion 64).
 pub const SELECTION_BOX_MIN_DASHED_EDGE_PX: f64 = 10.0;
+
+/// How far from the skew guide's line both ends of a selection-box edge may
+/// lie for the edge to count as on it, screen pixels (the snap moves a box
+/// edge by at most half a device pixel).
+pub const SELECTION_BOX_GUIDE_TOLERANCE_PX: f64 = 1.0;
 
 /// An edge longer than this is drawn solid, screen-space pixels: it bounds
 /// the draw list at an absurd zoom, where the edge is far off screen anyway.

@@ -118,6 +118,7 @@ fn ac65_ac67_the_session_draws_strokes_then_the_dashed_box_then_the_handles() {
                 selected: vec![(id, rect_corners(10.0, 10.0, 40.0, 20.0))],
                 hovered: None,
                 device_pixel_ratio: dpr,
+                skew_guide: None,
             },
         );
         assert!(
@@ -204,6 +205,7 @@ fn ac65_the_box_keeps_snapping_after_zoom_and_pan() {
                     selected: vec![(id, rect_corners(10.0, 10.0, 40.0, 20.0))],
                     hovered: None,
                     device_pixel_ratio: dpr,
+                    skew_guide: None,
                 },
             );
             assert!(
@@ -255,6 +257,7 @@ fn ac66_hovering_an_unselected_object_draws_a_solid_accent_hover_box() {
             selected: vec![],
             hovered: Some((b, rect_corners(100.0, 10.0, 40.0, 20.0))),
             device_pixel_ratio: 2.0,
+            skew_guide: None,
         },
     );
     assert_eq!(
@@ -281,6 +284,7 @@ fn ac66_hovering_an_unselected_object_draws_a_solid_accent_hover_box() {
             selected: vec![(a, rect_corners(10.0, 10.0, 40.0, 20.0))],
             hovered: None,
             device_pixel_ratio: 2.0,
+            skew_guide: None,
         },
     );
     assert!(sel_only.triangle_count() > 8);
@@ -301,6 +305,7 @@ fn ac66_hovering_the_selected_object_adds_no_hover_box() {
             selected: vec![],
             hovered: Some((id, rect_corners(10.0, 10.0, 40.0, 20.0))),
             device_pixel_ratio: 1.0,
+            skew_guide: None,
         },
     );
     assert!(
@@ -364,7 +369,9 @@ fn guide_intervals(
             let (x, y) = view.document_to_screen(v.position);
             let along = (x - ax) * u.0 + (y - ay) * u.1;
             let across = (x - ax) * n.0 + (y - ay) * n.1;
-            if across.abs() > 0.75 {
+            // The guide snaps to the device pixel grid (UX review of PR 2): its
+            // centre moves by at most half a pixel, its half width is another half.
+            if across.abs() > 1.01 {
                 ok = false;
             }
             lo = lo.min(along);
@@ -470,13 +477,15 @@ fn ac68_skew_guide_is_two_on_two_off_16_px_past_each_end_at_every_zoom() {
         let (ax, _) = view.document_to_screen(pt(100.0, 130.0));
         let (bx, _) = view.document_to_screen(pt(140.0, 130.0));
         let l = bx - ax;
-        // 16 px past each end; the last dash may stop a gap and a dash short
+        // 16 px past each end; the last dash may stop a gap and a dash short;
+        // the guide's ends snap to the device pixel grid (UX review of PR 2),
+        // which moves them by at most half a pixel.
         let (rb, ra) = (reach(&before, -1.0), reach(&after, 1.0) - l);
         assert!(
-            (12.0..=16.1).contains(&rb),
+            (12.0..=16.6).contains(&rb),
             "{what}: reaches {rb} px before"
         );
-        assert!((12.0..=16.1).contains(&ra), "{what}: reaches {ra} px after");
+        assert!((12.0..=16.6).contains(&ra), "{what}: reaches {ra} px after");
         // Escape removes the guide
         s.escape();
         s.pointer_up(pt(from.x + 40.0 / k, from.y), false, false);
