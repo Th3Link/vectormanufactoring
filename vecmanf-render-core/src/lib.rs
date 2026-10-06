@@ -16,6 +16,7 @@
 mod color;
 mod decorations;
 mod glyphs;
+mod live_preview;
 mod pen_preview;
 mod select_decoration;
 mod shape_preview;
@@ -25,16 +26,15 @@ mod theme;
 pub use color::RgbaColor;
 pub use decorations::{DecorationInput, Hovered};
 pub use glyphs::{DrawList, Vertex};
+pub use live_preview::build_live_edit_preview;
 pub use pen_preview::build_pen_preview;
 pub use select_decoration::{
     SelectDecorationInput, SelectionBox, TransformDecorationInput, TransformGlyphKind,
     TransformHandleGlyph,
 };
-pub use shape_preview::{
-    RenderShapeHandle, ShapeDecorationInput, ShapeHandleKind, build_shape_live_preview,
-};
+pub use shape_preview::{build_primitive_strokes, build_shape_live_preview};
 
-use vecmanf_document_core::{PathSnapshot, PrimitiveSnapshot, ViewTransform};
+use vecmanf_document_core::{PathSnapshot, ViewTransform};
 
 fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
     px / view.scale()
@@ -63,19 +63,6 @@ pub fn build_draw_list(
     }
     list.extend(decorations::build(paths, view, input));
     list
-}
-
-/// Builds one frame's primitive-shape geometry: every primitive's own
-/// stroke (acceptance criterion 16), plus bounding-box selection/hover
-/// and shape-handle decorations, from `input`
-/// (`specs/0003-primitive-shapes/specification.md`).
-#[must_use]
-pub fn build_shape_draw_list(
-    primitives: &[PrimitiveSnapshot],
-    view: ViewTransform,
-    input: &ShapeDecorationInput,
-) -> DrawList {
-    shape_preview::build(primitives, view, input)
 }
 
 /// Builds the Select tool's own decoration geometry for this frame: a

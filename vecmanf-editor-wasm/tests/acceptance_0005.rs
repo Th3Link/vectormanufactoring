@@ -891,6 +891,7 @@ fn ac8_stroke_stays_positive_for_every_object_kind_when_collapsed() {
 #[test]
 fn ac9_corner_radius_scales_by_the_same_factor_for_equal_factors() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 4.0));
+    s.set_scale_corner_radius(true); // off by default since `unified-object-editing`
     select_at(&mut s, pt(20.0, 0.0));
     drag(&mut s, pt(40.0, 20.0), pt(60.0, 30.0), false, false); // 1.5
     let (b, r, ..) = rect_of(&s);
@@ -901,6 +902,7 @@ fn ac9_corner_radius_scales_by_the_same_factor_for_equal_factors() {
 #[test]
 fn ac9_corner_radius_uses_the_geometric_mean_for_unequal_factors() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 4.0));
+    s.set_scale_corner_radius(true); // off by default since `unified-object-editing`
     select_at(&mut s, pt(20.0, 0.0));
     drag(&mut s, pt(40.0, 20.0), pt(60.0, 50.0), false, false); // 1.5, 2.5
     let (_, r, ..) = rect_of(&s);
@@ -912,6 +914,7 @@ fn ac9_corner_radius_uses_the_geometric_mean_for_unequal_factors() {
 
     // Single-axis edge handle: sx 2, sy 1.
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 4.0));
+    s.set_scale_corner_radius(true);
     select_at(&mut s, pt(20.0, 0.0));
     drag(&mut s, pt(40.0, 10.0), pt(80.0, 10.0), false, false);
     let (_, r, ..) = rect_of(&s);
@@ -2345,24 +2348,33 @@ fn live_rotation_preview_draws_the_rotated_shape_before_release() {
     s.pointer_hover(to, false, false);
     // Doc not yet changed:
     assert!(close(prim(&s).rotation.as_radians(), 0.0));
-    // Preview vertices belonging to the stroke: ignore handle glyphs by
-    // restricting to vertices inside a generous band around the rotated rect
-    // outline's centre column; the rotated 20-wide column must exist while the
-    // original 100-wide row's far ends (x < 38 or x > 62 at y near 10) must
-    // not be stroked (only glyphs can be out there).
+    // Blue new, black old (`unified-object-editing` criterion 10): the
+    // committed rectangle stays drawn unchanged in its own black stroke, and
+    // the rotated outline is drawn over it. Rotated 90 degrees about (50, 10)
+    // the corners move from (0, 0) to (60, -40) and from (100, 20) to (40, 60).
     let list = s.draw_list();
-    let near_centre_row_far_ends = list
-        .triangles
-        .iter()
-        .filter(|v| {
-            (v.position.y - 10.0).abs() < 0.2 && (v.position.x < 2.0 || v.position.x > 98.0)
-        })
-        .count();
-    // The rotated rect has no stroke at (0,10)/(100,10); selection decorations
-    // are rotated too, so nothing remains there either.
-    assert_eq!(
-        near_centre_row_far_ends, 0,
-        "preview still shows the unrotated rect/box"
+    let near = |v: &vecmanf_render_core::Vertex, x: f64, y: f64| {
+        (v.position.x - x).abs() < 1.0 && (v.position.y - y).abs() < 1.0
+    };
+    let black = vecmanf_render_core::RgbaColor::BLACK;
+    assert!(
+        list.triangles
+            .iter()
+            .any(|v| near(v, 0.0, 0.0) && v.color == black),
+        "the old geometry stays drawn in black"
+    );
+    assert!(
+        list.triangles
+            .iter()
+            .filter(|v| near(v, 0.0, 0.0) || near(v, 100.0, 20.0))
+            .all(|v| v.color == black),
+        "nothing but the old stroke at the old corners: box, handles and outline follow the new geometry"
+    );
+    assert!(
+        list.triangles
+            .iter()
+            .any(|v| near(v, 60.0, -40.0) && v.color != black),
+        "the rotated outline is drawn at its new corner"
     );
     s.pointer_up(to, false, false);
 }
@@ -2407,32 +2419,60 @@ fn rotate_rect_via_document(deg: f64, radius: f64) -> (Session, Point, f64) {
     (open_in_session(&document), c, deg.to_radians())
 }
 
-#[test]
-fn ac25_double_click_hands_a_rotated_rect_to_its_tool_with_the_radius_handle_on_the_rotated_corner()
-{
-    let (mut s, c, a) = rotate_rect_via_document(30.0, 0.0);
-    // Double-click on the rotated outline (midpoint of the top edge, off handles).
-    let on_edge = rot(pt(10.0, 0.0), c, a);
-    click(&mut s, on_edge);
-    s.double_click(on_edge, false, false);
-    assert_eq!(s.tool(), Tool::Rectangle, "handoff");
-    // At zero radius the radius handle sits on the NE corner; it must be on the
-    // *rotated* NE corner. Dragging it inward along the rotated diagonal rounds the corners.
-    let ne = rot(pt(40.0, 0.0), c, a);
-    let inward_local = (-1.0 / 2.0_f64.sqrt(), 1.0 / 2.0_f64.sqrt());
+/// A rectangle's radius handle at `corner` (signs of the local corner), from
+/// the specification's rule (`unified-object-editing` criterion 2): on the
+/// corner's inward diagonal at `p = 15 + rho * L(s)` pixels, with
+/// `L(s) = (s - 14)/sqrt(2) - 15`, `s` the shorter side in pixels and `rho` the
+/// radius over half of it; rotated about `c` by `a`. Also returns the radius
+/// gain `G(s) = (s/2)/L(s)`: millimetres of radius per millimetre of pointer
+/// travel along the diagonal.
+fn radius_knob(
+    s: &Session,
+    c: Point,
+    a: f64,
+    (w, h): (f64, f64),
+    corner: (f64, f64),
+    radius: f64,
+) -> (Point, f64) {
+    let scale = s.view().scale();
+    let shorter_px = w.min(h) * scale;
+    let rho = radius / (w.min(h) / 2.0);
+    let travel = (shorter_px - 14.0) / 2.0_f64.sqrt() - 15.0;
+    let along = (15.0 + rho * travel) / scale / 2.0_f64.sqrt();
+    let local = pt(
+        c.x + corner.0 * (w / 2.0 - along),
+        c.y + corner.1 * (h / 2.0 - along),
+    );
+    (rot(local, c, a), (shorter_px / 2.0) / travel)
+}
+
+/// The document-space step of `d` millimetres along a local corner's inward
+/// diagonal, for a primitive rotated by `a`.
+fn inward_step(corner: (f64, f64), a: f64, d: f64) -> (f64, f64) {
     let (sn, cs) = a.sin_cos();
-    let d = 6.0;
-    let delta = (
-        d * (inward_local.0 * cs - inward_local.1 * sn),
-        d * (inward_local.0 * sn + inward_local.1 * cs),
-    );
-    drag(&mut s, ne, pt(ne.x + delta.0, ne.y + delta.1), false, false);
+    let inward = (-corner.0 / 2.0_f64.sqrt(), -corner.1 / 2.0_f64.sqrt());
+    (
+        d * (inward.0 * cs - inward.1 * sn),
+        d * (inward.0 * sn + inward.1 * cs),
+    )
+}
+
+// Ported from the shape tools' own handle tests (`unified-object-editing`:
+// the shape tools only create): the same rotated scenarios, driven through
+// the Select tool, where the radius handle follows the position rule and gain
+// of the specification.
+
+#[test]
+fn ac25_a_rotated_rect_radius_handle_sits_on_the_rotated_corner_and_drags_along_its_diagonal() {
+    let (mut s, c, a) = rotate_rect_via_document(30.0, 0.0);
+    click(&mut s, rot(pt(10.0, 0.0), c, a));
+    assert_eq!(s.tool(), Tool::Select);
+    let (knob, gain) = radius_knob(&s, c, a, (40.0, 20.0), (1.0, -1.0), 0.0);
+    let (dx, dy) = inward_step((1.0, -1.0), a, 6.0);
+    drag(&mut s, knob, pt(knob.x + dx, knob.y + dy), false, false);
     let (b, r, _, rotation) = rect_of(&s);
-    assert!(
-        r.as_mm() > 1.0,
-        "corner radius handle grabbed? radius {}",
-        r.as_mm()
-    );
+    assert!(close(r.as_mm(), gain * 6.0), "radius {}", r.as_mm());
+    assert!(r.as_mm() > 1.0, "the radius handle was grabbed");
     assert!(close(rotation, a), "rotation untouched by the radius drag");
     assert!(close(b.width.as_mm(), 40.0) && close(b.height.as_mm(), 20.0));
 }
@@ -2440,60 +2480,44 @@ fn ac25_double_click_hands_a_rotated_rect_to_its_tool_with_the_radius_handle_on_
 #[test]
 fn ac25_the_unrotated_radius_handle_position_is_no_longer_a_handle() {
     let (mut s, c, a) = rotate_rect_via_document(90.0, 0.0);
-    let on_edge = rot(pt(10.0, 0.0), c, a);
-    click(&mut s, on_edge);
-    s.double_click(on_edge, false, false);
-    assert_eq!(s.tool(), Tool::Rectangle);
-    // Unrotated NE corner is (40,0); for 90 deg it is far from the rotated one (30,-10... ).
+    click(&mut s, rot(pt(10.0, 0.0), c, a));
+    // The knob of the unrotated frame's NE corner: far from the rotated one.
+    let (stale, _) = radius_knob(&s, c, 0.0, (40.0, 20.0), (1.0, -1.0), 0.0);
     let before = rect_of(&s).1;
-    drag(&mut s, pt(40.0, 0.0), pt(34.0, 6.0), false, false);
+    drag(
+        &mut s,
+        stale,
+        pt(stale.x - 4.0, stale.y + 4.0),
+        false,
+        false,
+    );
     let (b, r, ..) = rect_of(&s);
     assert_eq!(
         r, before,
-        "pressing at the stale unrotated corner must not grab the radius handle"
+        "pressing at the stale unrotated position must not grab the radius handle"
     );
     assert_eq!(b, rect_of(&s).0);
 }
 
 #[test]
-fn ac25_rotated_rect_with_radius_handle_inset_along_the_rotated_diagonal() {
+fn ac25_a_rotated_rect_with_a_radius_places_its_handle_along_the_rotated_diagonal() {
     let (mut s, c, a) = rotate_rect_via_document(30.0, 5.0);
-    let on_edge = rot(pt(10.0, 0.0), c, a);
-    click(&mut s, on_edge);
-    s.double_click(on_edge, false, false);
-    assert_eq!(s.tool(), Tool::Rectangle);
-    // Radius handle = NE corner + inward diagonal * radius (local), rotated.
-    let local = pt(40.0 - 5.0 / 2.0_f64.sqrt(), 0.0 + 5.0 / 2.0_f64.sqrt());
-    let handle = rot(local, c, a);
-    let (sn, cs) = a.sin_cos();
-    let d = 3.0;
-    let inward = (-1.0 / 2.0_f64.sqrt(), 1.0 / 2.0_f64.sqrt());
-    let delta = (
-        d * (inward.0 * cs - inward.1 * sn),
-        d * (inward.0 * sn + inward.1 * cs),
-    );
-    drag(
-        &mut s,
-        handle,
-        pt(handle.x + delta.0, handle.y + delta.1),
-        false,
-        false,
-    );
+    click(&mut s, rot(pt(10.0, 0.0), c, a));
+    let (knob, gain) = radius_knob(&s, c, a, (40.0, 20.0), (1.0, -1.0), 5.0);
+    let (dx, dy) = inward_step((1.0, -1.0), a, 3.0);
+    drag(&mut s, knob, pt(knob.x + dx, knob.y + dy), false, false);
     let (_, r, ..) = rect_of(&s);
     assert!(
-        close(r.as_mm(), 8.0),
-        "radius should follow the drag by 3: {}",
+        close(r.as_mm(), 5.0 + gain * 3.0),
+        "radius should follow the drag by 3 x gain: {}",
         r.as_mm()
     );
 }
 
 #[test]
-fn ac25_rotated_rect_resize_handle_of_its_own_tool_drags_in_local_axes() {
+fn ac25_a_rotated_rect_resize_handle_drags_in_local_axes() {
     let (mut s, c, a) = rotate_rect_via_document(30.0, 0.0);
-    let on_edge = rot(pt(10.0, 0.0), c, a);
-    click(&mut s, on_edge);
-    s.double_click(on_edge, false, false);
-    assert_eq!(s.tool(), Tool::Rectangle);
+    click(&mut s, rot(pt(10.0, 0.0), c, a));
     // S edge handle (20,20) rotated; drag it 5 along local +y.
     let se = rot(pt(20.0, 20.0), c, a);
     let (sn, cs) = a.sin_cos();
@@ -2513,7 +2537,7 @@ fn ac25_rotated_rect_resize_handle_of_its_own_tool_drags_in_local_axes() {
 }
 
 #[test]
-fn ac25_rotated_star_inner_ratio_and_outer_handles_follow_the_rotation() {
+fn ac25_a_rotated_star_inner_ratio_handle_follows_the_rotation() {
     let document = star_doc(30.0, 30.0, 10.0, 5, 0.5);
     let id = document.object_ids()[0];
     let c = pt(30.0, 30.0);
@@ -2534,8 +2558,7 @@ fn ac25_rotated_star_inner_ratio_and_outer_handles_follow_the_rotation() {
         f64::midpoint(o[0].point.y, o[1].point.y),
     );
     click(&mut s, mid);
-    s.double_click(mid, false, false);
-    assert_eq!(s.tool(), Tool::PolygonStar);
+    assert_eq!(s.tool(), Tool::Select);
     // First inner vertex in the local frame: theta = -pi/2 + pi/5, radius 5.
     let theta = -FRAC_PI_2 + PI / 5.0;
     let local = pt(30.0 + 5.0 * theta.cos(), 30.0 + 5.0 * theta.sin());
@@ -2554,7 +2577,6 @@ fn ac25_rotated_star_inner_ratio_and_outer_handles_follow_the_rotation() {
     // The stale unrotated handle position does nothing.
     let mut s = open_in_session(&document);
     click(&mut s, mid);
-    s.double_click(mid, false, false);
     drag(&mut s, local, pt(local.x - 1.0, local.y), false, false);
     let (_, _, ratio, ..) = star_like(&s);
     assert!(
@@ -2564,7 +2586,7 @@ fn ac25_rotated_star_inner_ratio_and_outer_handles_follow_the_rotation() {
 }
 
 #[test]
-fn ac25_rotated_polygon_outer_radius_handle_follows_rotation() {
+fn ac25_a_rotated_polygon_corner_handle_follows_the_rotation_and_scales_the_radius() {
     let document = polygon_doc(30.0, 30.0, 10.0, 6);
     let id = document.object_ids()[0];
     let c = pt(30.0, 30.0);
@@ -2585,12 +2607,18 @@ fn ac25_rotated_polygon_outer_radius_handle_follows_rotation() {
         f64::midpoint(o[0].point.y, o[1].point.y),
     );
     click(&mut s, mid);
-    s.double_click(mid, false, false);
-    assert_eq!(s.tool(), Tool::PolygonStar);
-    // Local E cardinal handle (40,30) rotated 90 deg => (30,40).
-    let e = rot(pt(40.0, 30.0), c, rotation);
-    assert!(pclose(e, pt(30.0, 40.0)));
-    drag(&mut s, e, pt(30.0, 46.0), false, false);
+    // The corner handle of the circumscribed box: local (40,40), rotated 90
+    // degrees about the centre => (20,40). A polygon's four cardinal outer
+    // handles of the old tool no longer exist.
+    let corner = rot(pt(40.0, 40.0), c, rotation);
+    assert!(pclose(corner, pt(20.0, 40.0)));
+    // 6 along each local axis is 6 sqrt(2) along the diagonal: radius 10 + 6.
+    let (sn, cs) = rotation.sin_cos();
+    let to = pt(
+        corner.x + 6.0 * cs - 6.0 * sn,
+        corner.y + 6.0 * sn + 6.0 * cs,
+    );
+    drag(&mut s, corner, to, false, false);
     let (frame, ..) = star_like(&s);
     assert!(
         close(frame.radius.as_mm(), 16.0),
@@ -2600,7 +2628,7 @@ fn ac25_rotated_polygon_outer_radius_handle_follows_rotation() {
 }
 
 #[test]
-fn ac25_rotated_ellipse_handles_follow_rotation_in_the_ellipse_tool() {
+fn ac25_a_rotated_ellipse_edge_handle_follows_the_rotation() {
     let document = ellipse_doc(20.0, 10.0, 20.0, 10.0);
     let id = document.object_ids()[0];
     let c = pt(20.0, 10.0);
@@ -2617,8 +2645,7 @@ fn ac25_rotated_ellipse_handles_follow_rotation_in_the_ellipse_tool() {
     // (20+20cos t, 10+10 sin t) rotated.
     let on_outline = rot(ell(), c, FRAC_PI_2);
     click(&mut s, on_outline);
-    s.double_click(on_outline, false, false);
-    assert_eq!(s.tool(), Tool::Ellipse);
+    assert_eq!(s.tool(), Tool::Select);
     // Local E handle (40,10) -> rotated 90 deg: (20,30). Drag 6 along local x = document +y.
     let e = rot(pt(40.0, 10.0), c, FRAC_PI_2);
     drag(&mut s, e, pt(e.x, e.y + 6.0), false, false);
@@ -2630,6 +2657,31 @@ fn ac25_rotated_ellipse_handles_follow_rotation_in_the_ellipse_tool() {
         "rx {}",
         frame.rx.as_mm()
     );
+}
+
+#[test]
+fn ac25_a_rotated_rect_draws_all_four_radius_handles_on_the_rotated_corners() {
+    let (mut s, c, a) = rotate_rect_via_document(30.0, 5.0);
+    zoom_to_max(&mut s);
+    s.pointer_leave();
+    let plain = s.draw_list().triangle_count();
+    click(&mut s, rot(pt(10.0, 0.0), c, a));
+    s.pointer_leave();
+    let list = s.draw_list();
+    assert!(list.triangle_count() > plain, "handles drew something");
+    let scale = s.view().scale();
+    for corner in [(1.0, -1.0), (-1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
+        let (want, _) = radius_knob(&s, c, a, (40.0, 20.0), corner, 5.0);
+        // The knob's 4 px centre dot has its vertices 2 px from the centre.
+        let on_dot = list.triangles.iter().any(|v| {
+            let d = (v.position.x - want.x).hypot(v.position.y - want.y) * scale;
+            (d - 2.0).abs() < 0.05
+        });
+        assert!(
+            on_dot,
+            "no radius handle glyph at the rotated position {want:?}"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------
@@ -3042,38 +3094,6 @@ fn a_rotated_paths_selection_box_survives_object_to_path() {
         assert!(
             hint_at(&mut s, p).starts_with("resize:"),
             "handle {name} oriented"
-        );
-    }
-}
-
-#[test]
-fn ac25_rotated_rect_corner_echoes_are_drawn_on_the_rotated_corners() {
-    let (mut s, c, a) = rotate_rect_via_document(30.0, 5.0);
-    zoom_to_max(&mut s);
-    s.pointer_leave();
-    let plain = s.draw_list().triangle_count();
-    click(&mut s, rot(pt(10.0, 0.0), c, a));
-    s.double_click(rot(pt(10.0, 0.0), c, a), false, false);
-    assert_eq!(s.tool(), Tool::Rectangle);
-    let list = s.draw_list();
-    assert!(list.triangle_count() > plain, "handles drew something");
-    let r = 5.0 / 2.0_f64.sqrt();
-    // local radius handle and the three echoes: corner moved inwards by 5 along the diagonal
-    let locals = [
-        pt(40.0 - r, 0.0 + r),
-        pt(0.0 + r, 0.0 + r),
-        pt(0.0 + r, 20.0 - r),
-        pt(40.0 - r, 20.0 - r),
-    ];
-    for local in locals {
-        let want = rot(local, c, a);
-        let near = list
-            .triangles
-            .iter()
-            .any(|v| (v.position.x - want.x).hypot(v.position.y - want.y) < 0.05);
-        assert!(
-            near,
-            "no handle glyph vertices at the rotated position {want:?}"
         );
     }
 }

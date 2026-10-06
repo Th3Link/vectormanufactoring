@@ -12,9 +12,9 @@ use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;
 use crate::transform_commit::{MAX_COORDINATE_MM, commit_gesture};
 use crate::transform_drag::{
-    ResizeOptions, StrokeScaling, is_polygon_or_star, pivot_for, resize_by_local_delta, rotate_by,
+    ResizeOptions, ScaleModes, is_polygon_or_star, pivot_for, resize_by_local_delta, rotate_by,
 };
-use crate::transform_handle_layout::{TransformHandle, is_corner};
+use crate::transform_handle_layout::{EditHandle, is_corner};
 use crate::transform_math::{local_delta_for_radius, local_delta_for_size};
 use vecmanf_document_core::PrimitiveSnapshot;
 
@@ -26,6 +26,23 @@ const SIZE_EQUAL_EPSILON_MM: f64 = 1e-9;
 /// A typed angle within this (radians) of the current rotation is equal.
 const ANGLE_EQUAL_EPSILON_RAD: f64 = 1e-12;
 
+impl EntryField {
+    /// The single field of a parameter-handle entry (`crate::ParamEntry`).
+    pub(crate) fn for_param(
+        label: &'static str,
+        accessible_name: &'static str,
+        prefill: String,
+    ) -> Self {
+        Self {
+            label,
+            accessible_name,
+            prefill,
+            editable: true,
+            axis: FieldAxis::Radius,
+        }
+    }
+}
+
 /// Which kind of value an entry edits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntryKind {
@@ -36,7 +53,12 @@ pub enum EntryKind {
     Size,
     /// One field: a polygon or star's outer radius, in millimetres
     /// (criterion 26).
-    Radius,
+    OuterRadius,
+    /// One field: a rectangle's corner radius, in millimetres
+    /// (`specs/unified-object-editing/`, criterion 18).
+    CornerRadius,
+    /// One field: a star's inner ratio (criterion 19).
+    InnerRatio,
 }
 
 /// What a field edits.
@@ -54,7 +76,7 @@ pub struct EntryField {
     /// The visible label ("W", "H", "r"; empty for the angle, whose "°" is
     /// a fixed suffix).
     pub label: &'static str,
-    /// The accessible name ("Width", "Height", "Radius", "Angle").
+    /// The accessible name ("Width", "Height", "Outer radius", "Angle").
     pub accessible_name: &'static str,
     /// The text the field opens with: the live readout's rounded value.
     pub prefill: String,
@@ -72,6 +94,10 @@ pub enum InvalidReason {
     NotANumber,
     /// A size of zero or less ("Must be above 0").
     NotPositive,
+    /// A corner radius below zero ("Must be 0 or more").
+    Negative,
+    /// An inner ratio outside 0.01 to 0.99 ("Must be 0.01 to 0.99").
+    RatioRange,
 }
 
 /// What [`TransformEntry::commit`] did.
@@ -100,13 +126,13 @@ pub struct TransformEntry {
     kind: EntryKind,
     start: ObjectSnapshot,
     start_box: OrientedBox,
-    handle: TransformHandle,
+    handle: EditHandle,
     /// Shift at the second press: the fixed point and the rotate pivot.
     shift: bool,
     /// Width and height are linked (Ctrl at the second press on a corner
     /// of a rectangle, ellipse or path).
     linked: bool,
-    stroke_scaling: StrokeScaling,
+    modes: ScaleModes,
     side_rotate_revealed: bool,
     pivot: Point,
     fields: Vec<EntryField>,
@@ -128,7 +154,7 @@ pub fn format_degrees(degrees: f64) -> String {
 }
 
 /// The one decimal a size readout and a size field prefill show.
-fn format_mm(value: f64) -> String {
+pub(crate) fn format_mm(value: f64) -> String {
     format!("{value:.1}")
 }
 
@@ -172,7 +198,7 @@ impl TransformEntry {
         direction: ResizeDirection,
         shift: bool,
     ) -> Self {
-        let handle = TransformHandle::Rotate(direction);
+        let handle = EditHandle::Rotate(direction);
         Self {
             kind: EntryKind::Angle,
             start: object.clone(),
@@ -180,7 +206,7 @@ impl TransformEntry {
             handle,
             shift,
             linked: false,
-            stroke_scaling: StrokeScaling::Keep,
+            modes: ScaleModes::default(),
             side_rotate_revealed: !is_corner(direction),
             pivot: pivot_for(handle, object, box_, shift)
                 .unwrap_or_else(|| box_.to_document(box_.local_center())),
@@ -199,25 +225,25 @@ impl TransformEntry {
     /// A size entry for resize handle `direction` (criteria 25-29):
     /// `modifiers` are Shift (fixed point = box center) and Ctrl (linked
     /// width/height on a corner of a rectangle, ellipse or path) at the
-    /// second press; `stroke_scaling` is the switch's value now.
+    /// second press; `modes` are the two switches' values now.
     #[must_use]
     pub fn for_resize(
         object: &ObjectSnapshot,
         box_: &OrientedBox,
         direction: ResizeDirection,
         modifiers: (bool, bool),
-        stroke_scaling: StrokeScaling,
+        modes: ScaleModes,
     ) -> Self {
         let (shift, ctrl) = modifiers;
-        let handle = TransformHandle::Resize(direction);
+        let handle = EditHandle::Resize(direction);
         let radius_entry = is_polygon_or_star(object);
         let editable = |extent: f64| extent > SIZE_EQUAL_EPSILON_MM;
         let (kind, fields) = if let Some(radius) = outer_radius(object).filter(|_| radius_entry) {
             (
-                EntryKind::Radius,
+                EntryKind::OuterRadius,
                 vec![EntryField {
                     label: "r",
-                    accessible_name: "Radius",
+                    accessible_name: "Outer radius",
                     prefill: format_mm(radius),
                     editable: editable(radius),
                     axis: FieldAxis::Radius,
@@ -256,7 +282,7 @@ impl TransformEntry {
             handle,
             shift,
             linked,
-            stroke_scaling,
+            modes,
             side_rotate_revealed: false,
             pivot: pivot_for(handle, object, box_, shift)
                 .unwrap_or_else(|| box_.to_document(box_.local_center())),
@@ -273,7 +299,7 @@ impl TransformEntry {
     /// The handle the entry belongs to (it keeps its dragging look while
     /// the chip is open).
     #[must_use]
-    pub const fn handle(&self) -> TransformHandle {
+    pub const fn handle(&self) -> EditHandle {
         self.handle
     }
 
@@ -414,7 +440,7 @@ impl TransformEntry {
                 .map(|(_, value)| *value)
         };
         match self.handle {
-            TransformHandle::Rotate(_) => {
+            EditHandle::Rotate(_) => {
                 let Some(degrees) = target(FieldAxis::Angle) else {
                     return self.start.clone();
                 };
@@ -425,7 +451,7 @@ impl TransformEntry {
                     Angle::from_radians(change).normalized(),
                 )
             }
-            TransformHandle::Resize(direction) => {
+            EditHandle::Resize(direction) => {
                 let delta = if let Some(radius) = target(FieldAxis::Radius) {
                     local_delta_for_radius(self.start_value(FieldAxis::Radius), direction, radius)
                 } else {
@@ -445,11 +471,11 @@ impl TransformEntry {
                     ResizeOptions {
                         shift: self.shift,
                         ctrl: self.linked,
-                        stroke_scaling: self.stroke_scaling,
+                        modes: self.modes,
                     },
                 )
             }
-            TransformHandle::Skew(_) | TransformHandle::Move => self.start.clone(),
+            EditHandle::Skew(_) | EditHandle::Move | EditHandle::Param(_) => self.start.clone(),
         }
     }
 
@@ -471,7 +497,7 @@ impl TransformEntry {
             Err((field, reason)) => EntryOutcome::Invalid { field, reason },
             Ok(None) => EntryOutcome::Unchanged,
             Ok(Some(result)) => {
-                commit_gesture(document, self.handle, &result, self.stroke_scaling);
+                commit_gesture(document, self.handle, &result, self.modes);
                 EntryOutcome::Committed
             }
         }

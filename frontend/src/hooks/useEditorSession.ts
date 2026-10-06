@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { createSession, openSession } from "@/lib/editorSession";
 import type { WasmSession } from "@/lib/editorSession";
+import type { EditHint } from "@/components/EditHintChip";
 
 /** The canvas's backing-buffer (physical pixel) size for a given CSS
  * (layout) size, plus the `devicePixelRatio` that relates the two —
@@ -64,6 +65,88 @@ const EMPTY_TOOLBAR_STATE: NodeToolbarState = {
   canJoin: false,
   canSplit: false,
 };
+
+/** A plain-JS copy of the Rust `SelectBarView` (`specs/unified-object-editing/`
+ * criteria 21, 21a, 22): which kind controls the Select bar shows and their
+ * values. A `*Mixed` flag means the selected objects differ (the field is
+ * empty with the placeholder "Mixed"). */
+export interface SelectBarState {
+  radiusShown: boolean;
+  radiusMixed: boolean;
+  /** The effective radius, millimetres. */
+  radius: number;
+  /** The stored radius exceeds what the rectangle allows ("limited"). */
+  radiusLimited: boolean;
+  /** The stored radius, millimetres, for the tooltip of "limited". */
+  radiusStored: number;
+  removeRoundingShown: boolean;
+  removeRoundingEnabled: boolean;
+  pointsShown: boolean;
+  pointsMixed: boolean;
+  points: number;
+  ratioShown: boolean;
+  ratioMixed: boolean;
+  ratio: number;
+  objectToPathShown: boolean;
+}
+
+const EMPTY_SELECT_BAR_STATE: SelectBarState = {
+  radiusShown: false,
+  radiusMixed: false,
+  radius: 0,
+  radiusLimited: false,
+  radiusStored: 0,
+  removeRoundingShown: false,
+  removeRoundingEnabled: false,
+  pointsShown: false,
+  pointsMixed: false,
+  points: 0,
+  ratioShown: false,
+  ratioMixed: false,
+  ratio: 0,
+  objectToPathShown: false,
+};
+
+function readSelectBar(raw: {
+  radius_shown: boolean;
+  radius_mixed: boolean;
+  radius: number;
+  radius_limited: boolean;
+  radius_stored: number;
+  remove_rounding_shown: boolean;
+  remove_rounding_enabled: boolean;
+  points_shown: boolean;
+  points_mixed: boolean;
+  points: number;
+  ratio_shown: boolean;
+  ratio_mixed: boolean;
+  ratio: number;
+  object_to_path_shown: boolean;
+  free(): void;
+}): SelectBarState {
+  const state: SelectBarState = {
+    radiusShown: raw.radius_shown,
+    radiusMixed: raw.radius_mixed,
+    radius: raw.radius,
+    radiusLimited: raw.radius_limited,
+    radiusStored: raw.radius_stored,
+    removeRoundingShown: raw.remove_rounding_shown,
+    removeRoundingEnabled: raw.remove_rounding_enabled,
+    pointsShown: raw.points_shown,
+    pointsMixed: raw.points_mixed,
+    points: raw.points,
+    ratioShown: raw.ratio_shown,
+    ratioMixed: raw.ratio_mixed,
+    ratio: raw.ratio,
+    objectToPathShown: raw.object_to_path_shown,
+  };
+  raw.free();
+  return state;
+}
+
+function sameSelectBar(a: SelectBarState, b: SelectBarState): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 /** A hand-rolled double-click detector (specs/0002-path-node-editing/
  * adrs.md's `PenTool` doc comment: "double-click detection itself is the
@@ -188,7 +271,8 @@ export interface LiveReadout {
 export interface TransformEntryField {
   /** Visible label ("W", "H", "r"; empty for the angle). */
   label: string;
-  /** Accessible name ("Width", "Height", "Radius", "Angle"). */
+  /** Accessible name ("Width", "Height", "Outer radius", "Angle",
+   * "Corner radius", "Inner ratio"). */
   name: string;
   /** The text the field opens with. */
   prefill: string;
@@ -198,7 +282,7 @@ export interface TransformEntryField {
 /** The open numeric entry: what to show and where. Positions are canvas-
  * relative CSS pixels, already converted by Rust. */
 export interface TransformEntryState {
-  kind: "angle" | "size" | "radius";
+  kind: "angle" | "size" | "radius" | "corner-radius" | "inner-ratio";
   fields: TransformEntryField[];
   /** Whether the two fields are linked (Ctrl at the second press). */
   linked: boolean;
@@ -276,6 +360,10 @@ export interface EditorSession {
   /** The live numeric readout for an in-progress create-drag, or `null`
    * outside one (ux-engineer review item 2). */
   liveReadout: LiveReadout | null;
+  /** The edit hint after a double-click on a primitive, or `null`. */
+  editHint: EditHint | null;
+  /** Closes the edit hint (3 s, a press, a key, the pointer leaving). */
+  dismissEditHint: () => void;
   /** `vecmanf-editor-wasm`'s `cursor_hint()` — `"default"`, `"rotate"`
    * or `"resize:<degrees>"` (`object-transform`'s transform-handle
    * cursors); `Canvas` turns it into a CSS cursor via `lib/cursors`. */
@@ -288,7 +376,8 @@ export interface EditorSession {
   /** The typed numeric entry to show, or `null`. */
   transformEntry: TransformEntryState | null;
   /** Enter in the entry chip: `"committed"`, `"unchanged"` (both close it)
-   * or `"invalid:<field>:number|positive"` (it stays open). */
+   * or `"invalid:<field>:number|positive|negative|ratio-range"` (it stays
+   * open). */
   commitTransformEntry: (first: string, second: string, lastEdited: number) => string;
   /** Closes the entry without writing (Escape, blur). Idempotent. */
   cancelTransformEntry: () => void;
@@ -331,23 +420,29 @@ export interface EditorSession {
    * stroke. Session state, off in every new session, never saved. */
   scaleStrokeWidth: boolean;
   setScaleStrokeWidth: (on: boolean) => void;
+  /** The Select tool's "Scale corner radius" switch
+   * (`unified-object-editing` criterion 23): whether a resize scales a
+   * rectangle's corner radius. Session state, off in every new session. */
+  scaleCornerRadius: boolean;
+  setScaleCornerRadius: (on: boolean) => void;
+  /** What the Select bar shows for the current selection (criteria 21-22). */
+  selectBar: SelectBarState;
+  /** Enter in the bar's "Radius" field: `"committed"`, `"unchanged"`,
+   * `"invalid:number"` or `"invalid:negative"`. */
+  setSelectedRadius: (text: string) => string;
+  /** The bar's "Points" field and stepper: one commit. */
+  setSelectedPointCount: (count: number) => void;
+  /** The bar's "Ratio" slider: a live preview on every tick (nothing is
+   * written), one commit on release. */
+  previewSelectedRatio: (ratio: number) => void;
+  commitSelectedRatio: () => void;
   /** The mode toggle (acceptance criteria 11 vs. 12). */
   setPolyStarMode: (mode: PolyStarMode) => void;
-  /** The point-count stepper (acceptance criteria 10, 15). */
+  /** The point-count setting for the next shape (acceptance criterion 10). */
   setPolyStarPointCount: (count: number) => void;
-  /** The ratio field's instantaneous commit (acceptance criteria 12,
-   * 14) — one commit immediately. For a continuously-dragged slider,
-   * use `previewPolyStarRatio` on every tick and `commitPolyStarRatio`
-   * once instead (architect review: one commit per tick is the bug
-   * this pair exists to avoid). */
+  /** The ratio setting for the next star (it never changes a selected
+   * star: that is the Select bar's Ratio). */
   setPolyStarRatio: (ratio: number) => void;
-  /** The ratio slider's live, uncommitted preview — call on every
-   * slider tick. Writes nothing to the document. */
-  previewPolyStarRatio: (ratio: number) => void;
-  /** Commits whatever `previewPolyStarRatio` has accumulated, as one
-   * commit for the whole selection — call once, when the slider drag
-   * ends. */
-  commitPolyStarRatio: () => void;
   /** "Object to path" (acceptance criteria 17, 21, 22). */
   convertSelectedToPaths: () => void;
   onPointerDown: (event: React.PointerEvent<HTMLCanvasElement>) => void;
@@ -431,7 +526,11 @@ export function useEditorSession(
     useState(false);
   const [liveReadout, setLiveReadout] = useState<LiveReadout | null>(null);
   const [scaleStrokeWidth, setScaleStrokeWidthState] = useState(false);
+  const [scaleCornerRadius, setScaleCornerRadiusState] = useState(false);
+  const [selectBar, setSelectBar] = useState<SelectBarState>(EMPTY_SELECT_BAR_STATE);
   const [cursorHint, setCursorHint] = useState("default");
+  const [editHint, setEditHint] = useState<EditHint | null>(null);
+  const editHintCounter = useRef(0);
   const [handleHint, setHandleHint] = useState("");
   const [transformEntry, setTransformEntry] = useState<TransformEntryState | null>(null);
   const entryOpenRef = useRef(false);
@@ -469,6 +568,9 @@ export function useEditorSession(
     // A new or opened project's session starts with the switch off
     // (criterion 27); reading it back here is what resets the UI.
     setScaleStrokeWidthState(session.scale_stroke_width());
+    setScaleCornerRadiusState(session.scale_corner_radius());
+    const nextBar = readSelectBar(session.select_bar_state());
+    setSelectBar((previous) => (sameSelectBar(previous, nextBar) ? previous : nextBar));
     setZoomPercent(session.zoom_percent());
     syncEntry(session);
   }, [syncEntry]);
@@ -696,6 +798,48 @@ export function useEditorSession(
     [syncFromSession],
   );
 
+  const setScaleCornerRadius = useCallback(
+    (on: boolean) => {
+      sessionRef.current?.set_scale_corner_radius(on);
+      syncFromSession();
+    },
+    [syncFromSession],
+  );
+
+  const setSelectedRadius = useCallback(
+    (text: string): string => {
+      const session = sessionRef.current;
+      if (!session) {
+        return "unchanged";
+      }
+      const outcome = session.set_selected_radius(text);
+      syncFromSession();
+      return outcome;
+    },
+    [syncFromSession],
+  );
+
+  const setSelectedPointCount = useCallback(
+    (count: number) => {
+      sessionRef.current?.set_selected_point_count(count);
+      syncFromSession();
+    },
+    [syncFromSession],
+  );
+
+  const previewSelectedRatio = useCallback(
+    (ratio: number) => {
+      sessionRef.current?.preview_selected_ratio(ratio);
+      syncFromSession();
+    },
+    [syncFromSession],
+  );
+
+  const commitSelectedRatio = useCallback(() => {
+    sessionRef.current?.commit_selected_ratio();
+    syncFromSession();
+  }, [syncFromSession]);
+
   const setPolyStarMode = useCallback(
     (mode: PolyStarMode) => {
       sessionRef.current?.set_poly_star_mode(mode);
@@ -719,16 +863,6 @@ export function useEditorSession(
     },
     [syncFromSession],
   );
-
-  const previewPolyStarRatio = useCallback((ratio: number) => {
-    sessionRef.current?.preview_poly_star_ratio(ratio);
-    setPolyStarRatioState(ratio);
-  }, []);
-
-  const commitPolyStarRatio = useCallback(() => {
-    sessionRef.current?.commit_poly_star_ratio();
-    syncFromSession();
-  }, [syncFromSession]);
 
   const convertSelectedToPaths = useCallback(() => {
     sessionRef.current?.convert_selected_to_paths();
@@ -881,7 +1015,12 @@ export function useEditorSession(
           ctrl: event.ctrlKey || event.metaKey,
         };
         doubleClickPressRef.current = null;
-        session.double_click(press.x, press.y, press.shift, press.ctrl);
+        if (session.double_click(press.x, press.y, press.shift, press.ctrl)) {
+          // A double-click on a primitive changes nothing; the hint says how
+          // to edit it (criterion 32), on every such double-click.
+          editHintCounter.current += 1;
+          setEditHint({ x: press.x, y: press.y, id: editHintCounter.current });
+        }
         // Re-run the hover so the cursor describes the handle under the
         // pointer right away (a skew double-click changes nothing else).
         session.pointer_hover(x, y, event.shiftKey, event.ctrlKey || event.metaKey);
@@ -901,6 +1040,8 @@ export function useEditorSession(
     setCursorHint("default");
     syncFromSession();
   }, [syncFromSession]);
+
+  const dismissEditHint = useCallback(() => setEditHint(null), []);
 
   const onPointerLeave = useCallback(() => {
     sessionRef.current?.pointer_leave();
@@ -1073,6 +1214,8 @@ export function useEditorSession(
     polyStarRatio,
     liveReadout,
     cursorHint,
+    editHint,
+    dismissEditHint,
     handleHint,
     transformEntry,
     commitTransformEntry,
@@ -1096,11 +1239,16 @@ export function useEditorSession(
     removeCornerRounding,
     scaleStrokeWidth,
     setScaleStrokeWidth,
+    scaleCornerRadius,
+    setScaleCornerRadius,
+    selectBar,
+    setSelectedRadius,
+    setSelectedPointCount,
+    previewSelectedRatio,
+    commitSelectedRatio,
     setPolyStarMode,
     setPolyStarPointCount,
     setPolyStarRatio,
-    previewPolyStarRatio,
-    commitPolyStarRatio,
     convertSelectedToPaths,
     onPointerDown,
     onPointerMove,

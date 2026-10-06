@@ -461,6 +461,21 @@ that a pan only rewrites the view uniform. A draw list depends on scale and
 never on origin (slice 4 rule). Do this when a real document is measured to
 stutter, not before.
 
+**Measured 2026-10-06 (`unified-object-editing` PR 1, release build, host CPU,
+`Session::draw_list()` only, 100 paths of 50 nodes plus 100 rectangles, all
+selected):** 102 ms per frame at rest before the change, almost all of it
+reading every object out of the document, which the frame did about six times.
+`draw_list` now reads once per frame (18 ms at rest) and a Select drag keeps
+the snapshot it started with, so the 200-object move frame, blue overlay
+included, costs 8.5 ms (`vecmanf-editor-wasm/tests/unified_object_editing.rs`,
+the `#[ignore]` benchmark). That meets 50 fps but not the architect's 8 ms
+budget by 0.5 ms, and a frame at rest with no drag still costs 18 ms. The
+cache above needs a cheap document version, a read-only accessor on
+`Document` that PR 1 did not add; with it the 12 ms read disappears from every
+frame, not only from drag frames. The `Session.drag_objects` snapshot assumes
+the document does not change under a Select drag: no remote merge and no undo
+may run during one. Revisit it when sync or undo reaches the session.
+
 ## The canvas does not react to a `devicePixelRatio` change with no resize event
 
 The fix below sizes the backing store once, at attach and on every
@@ -747,3 +762,18 @@ refinements: the Select preview accessors out of `select_tool.rs` into
 its new wasm calls into `wasm_select_bar.rs`, so none of the over-limit files
 grows. PR 2 removes about 80 lines from `wasm_api.rs` and most of
 `session/shapes.rs`. See `specs/unified-object-editing/adrs.md`, "size limits".
+
+*2026-10-06 (implementer, `unified-object-editing` PR 1, "Left open" after the
+story):* `select_tool.rs` is 375 non-test lines (the handle queries moved to
+`select_tool/handles.rs`), `transform_drag.rs` about 380, `transform_math.rs`
+about 435, `session/mod.rs` 510 (it gained the `drag_objects` field) and
+`vecmanf-editor-wasm/src/wasm_api.rs` 779 (the Select bar's calls are in
+`wasm_select_bar.rs`; PR 2 removes about 80 lines here).
+
+*2026-10-06 (implementer, `unified-object-editing` PR 2):* the shape tools are
+creation-only. `session/shapes.rs` is 170 non-test lines, `session/mod.rs` 499,
+`vecmanf-editor-wasm/src/wasm_api.rs` 760 (about 20 lines less than the
+expected 80: the Select bar's calls were already in `wasm_select_bar.rs`, and the
+two new surfaces `double_click -> bool` and the polygon/star setters stayed),
+`select_tool.rs` 379, `transform_drag.rs` 379. Only `wasm_api.rs` is still over
+the ~500-line limit; splitting it by tool stays with `advanced-selection`.

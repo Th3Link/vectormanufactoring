@@ -4,25 +4,25 @@
 //! handle, laid out in an [`OrientedBox`]'s local frame and mapped to
 //! document space through it (`adrs.md`: "every handle position... is
 //! computed in the object's own local, rotated coordinate frame").
-//! Distinct from [`crate::handle_layout`], which lays out each
-//! primitive's *own* shape-tool handles (corner radius, inner radius) —
-//! this module is the Select tool's one, kind-independent vocabulary
-//! that sits on top of any object's [`OrientedBox`]. The resize and
+//! This is the Select tool's one, kind-independent vocabulary of
+//! transform handles on top of any object's [`OrientedBox`]; the parameter
+//! (knob) handles are laid out in [`crate::param_handles`]. The resize and
 //! rotate arithmetic lives next door in [`crate::transform_math`].
 
 use vecmanf_document_core::{Angle, Point, Tolerance};
 
 use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;
+use crate::param_handles::{
+    CENTRE_YIELD_PX, KNOB_INSET_PX, KNOB_PITCH_PX, PARAM_HIT_PX, PARAM_MIN_SIDE_PX, ParamHandle,
+};
 
 /// The 8 resize handles a rectangle, ellipse or path shows (acceptance
 /// criterion 1).
 pub const ALL_EIGHT: [ResizeDirection; 8] = ResizeDirection::ALL_EIGHT;
 
 /// The 4 corner-only handles a polygon or star shows (acceptance
-/// criterion 11: "corner handles only — no edge handles" — note this is
-/// the diagonal corners, distinct from `crate::handle_layout`'s own
-/// cardinal-only polygon/star handles).
+/// criterion 11: "corner handles only — no edge handles").
 pub const CORNERS_FOUR: [ResizeDirection; 4] = [
     ResizeDirection::Ne,
     ResizeDirection::Se,
@@ -83,7 +83,7 @@ impl Side {
 /// (`specs/object-transform-refinements/adrs.md`, "handle set, hit test and
 /// the Shift reveal").
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TransformHandle {
+pub enum EditHandle {
     /// A resize handle (corner = free/proportional resize, edge
     /// midpoint = single-axis resize).
     Resize(ResizeDirection),
@@ -96,6 +96,9 @@ pub enum TransformHandle {
     /// The centre move handle: hover feedback only, never a press target
     /// of its own (a press on it is a body press).
     Move,
+    /// A parameter handle of a primitive: the corner radius of a rectangle
+    /// or a star's inner radius (`specs/unified-object-editing/`).
+    Param(ParamHandle),
 }
 
 /// Which handle kinds an object's box shows: derived from the object's
@@ -142,6 +145,19 @@ pub struct TransformHandleTolerances {
     pub center_min_side_mm: f64,
     /// The dead zone radius of every drag on the selected object (3 px).
     pub drag_threshold_mm: f64,
+    /// Bounds a hit against a parameter handle (12 px, criterion 5).
+    pub param_hit: Tolerance,
+    /// A radius handle's distance from its corner at radius 0 (15 px).
+    pub param_inset_mm: f64,
+    /// The centre distance of two radius handles at the largest radius
+    /// (14 px: the knob diameter plus 4).
+    pub param_pitch_mm: f64,
+    /// A box's shorter side from which the parameter handles are drawn
+    /// (72 px, criterion 7).
+    pub param_min_side_mm: f64,
+    /// The centre handle is not drawn while a parameter handle is within
+    /// this distance of the box centre (20 px, criterion 8).
+    pub param_centre_yield_mm: f64,
 }
 
 /// The dead zone radius of every Select-tool drag on the selected object, and
@@ -165,6 +181,11 @@ impl TransformHandleTolerances {
             skew_min_side_mm: mm(24.0),
             center_min_side_mm: mm(48.0),
             drag_threshold_mm: mm(DRAG_THRESHOLD_PX),
+            param_hit: Tolerance::from_mm(mm(PARAM_HIT_PX)),
+            param_inset_mm: mm(KNOB_INSET_PX),
+            param_pitch_mm: mm(KNOB_PITCH_PX),
+            param_min_side_mm: mm(PARAM_MIN_SIDE_PX),
+            param_centre_yield_mm: mm(CENTRE_YIELD_PX),
         }
     }
 }
@@ -177,7 +198,7 @@ const THRESHOLD_SLACK: f64 = 1e-3;
 
 /// Whether `value` reaches `threshold` (both millimetres), within
 /// [`THRESHOLD_SLACK`].
-fn at_least(value: f64, threshold: f64) -> bool {
+pub(crate) fn at_least(value: f64, threshold: f64) -> bool {
     value >= threshold * (1.0 - THRESHOLD_SLACK)
 }
 
@@ -265,14 +286,14 @@ pub fn transform_handles(
     box_: &OrientedBox,
     spec: HandleSpec,
     tolerances: &TransformHandleTolerances,
-) -> Vec<(TransformHandle, Point)> {
+) -> Vec<(EditHandle, Point)> {
     let at = |local: Point| box_.to_document(local);
-    let mut handles: Vec<(TransformHandle, Point)> = spec
+    let mut handles: Vec<(EditHandle, Point)> = spec
         .resize_directions
         .iter()
         .map(|&direction| {
             (
-                TransformHandle::Resize(direction),
+                EditHandle::Resize(direction),
                 at(resize_handle_local_position(box_, direction)),
             )
         })
@@ -280,7 +301,7 @@ pub fn transform_handles(
     for direction in ALL_EIGHT {
         if is_corner(direction) || spec.side_rotate {
             handles.push((
-                TransformHandle::Rotate(direction),
+                EditHandle::Rotate(direction),
                 at(rotate_handle_local_position(
                     box_,
                     direction,
@@ -293,7 +314,7 @@ pub fn transform_handles(
         for side in Side::ALL {
             if skew_side_visible(box_, side, tolerances.skew_min_side_mm) {
                 handles.push((
-                    TransformHandle::Skew(side),
+                    EditHandle::Skew(side),
                     at(skew_handle_local_position(
                         box_,
                         side,
@@ -307,7 +328,7 @@ pub fn transform_handles(
         box_.width().min(box_.height()),
         tolerances.center_min_side_mm,
     ) {
-        handles.push((TransformHandle::Move, at(box_.local_center())));
+        handles.push((EditHandle::Move, at(box_.local_center())));
     }
     handles
 }
@@ -317,19 +338,23 @@ pub fn transform_handles(
 /// `edge_handle_min_side_mm` (the glyphs would merge; slice 5's rule).
 #[must_use]
 pub fn is_drawn_handle(
-    handle: TransformHandle,
+    handle: EditHandle,
     box_: &OrientedBox,
     tolerances: &TransformHandleTolerances,
 ) -> bool {
     match handle {
-        TransformHandle::Resize(direction) => {
+        EditHandle::Resize(direction) => {
             is_corner(direction)
                 || at_least(
                     box_.width().min(box_.height()),
                     tolerances.edge_handle_min_side_mm,
                 )
         }
-        TransformHandle::Rotate(_) | TransformHandle::Skew(_) | TransformHandle::Move => true,
+        // A parameter handle is only ever in the set when it is drawn
+        // (`param_handles`): below 72 px there is none.
+        EditHandle::Rotate(_) | EditHandle::Skew(_) | EditHandle::Move | EditHandle::Param(_) => {
+            true
+        }
     }
 }
 
@@ -360,8 +385,8 @@ fn depth_inside(box_: &OrientedBox, point: Point) -> Option<f64> {
 
 /// The one hit rule for press, hover, cursor and hint (criterion 9): every
 /// handle whose centre is within its own radius of `point` is a candidate;
-/// the nearest centre wins, and on an exact tie resize beats skew beats
-/// rotate. The centre handle is not a candidate; with `include_move` it is
+/// the nearest centre wins, and on an exact tie a parameter handle beats
+/// resize beats skew beats rotate. The centre handle is not a candidate; with `include_move` it is
 /// the fallback within its own hover radius (`min(12 px, s/4)`), for hover
 /// feedback only.
 ///
@@ -369,31 +394,34 @@ fn depth_inside(box_: &OrientedBox, point: Point) -> Option<f64> {
 /// reachable: its radius shrinks to a third of the box's smaller side
 /// (never below a quarter of the full radius), and a point *inside* the box
 /// only grabs one within the inner hit band (6 of 16 px of the resize radius) from the edge.
-/// Outside the box a handle always wins.
+/// Outside the box a handle always wins. A parameter handle has its own
+/// radius (12 px) and no inner band: it is the one handle family that sits
+/// inside the box, and `handles` only holds the handles that are drawn.
 #[must_use]
 pub fn hit_transform_handle(
-    handles: &[(TransformHandle, Point)],
+    handles: &[(EditHandle, Point)],
     box_: &OrientedBox,
     point: Point,
     tolerances: &TransformHandleTolerances,
     include_move: bool,
-) -> Option<TransformHandle> {
+) -> Option<EditHandle> {
     let resize_radius = resize_radius(box_, tolerances);
     let inside_depth = depth_inside(box_, point);
-    // (distance, rank, handle): rank 0 resize, 1 skew, 2 rotate.
-    let mut best: Option<(f64, u8, TransformHandle)> = None;
+    // (distance, rank, handle): rank 0 parameter, 1 resize, 2 skew, 3 rotate.
+    let mut best: Option<(f64, u8, EditHandle)> = None;
     for &(handle, position) in handles {
         let (radius, rank) = match handle {
-            TransformHandle::Resize(_) => (resize_radius, 0),
-            TransformHandle::Skew(_) => (tolerances.skew.as_mm(), 1),
-            TransformHandle::Rotate(_) => (tolerances.rotate.as_mm(), 2),
-            TransformHandle::Move => continue,
+            EditHandle::Param(_) => (tolerances.param_hit.as_mm(), 0),
+            EditHandle::Resize(_) => (resize_radius, 1),
+            EditHandle::Skew(_) => (tolerances.skew.as_mm(), 2),
+            EditHandle::Rotate(_) => (tolerances.rotate.as_mm(), 3),
+            EditHandle::Move => continue,
         };
         let distance = position.vector_to(point).length();
         if distance > radius {
             continue;
         }
-        if matches!(handle, TransformHandle::Resize(_))
+        if matches!(handle, EditHandle::Resize(_))
             && inside_depth.is_some_and(|depth| depth > resize_radius * INNER_HIT_BAND)
         {
             continue;
@@ -414,12 +442,12 @@ pub fn hit_transform_handle(
     }
     let (_, center) = handles
         .iter()
-        .find(|(handle, _)| *handle == TransformHandle::Move)?;
+        .find(|(handle, _)| *handle == EditHandle::Move)?;
     let radius = tolerances
         .center_hover
         .as_mm()
         .min(box_.width().min(box_.height()) / 4.0);
-    (center.vector_to(point).length() <= radius).then_some(TransformHandle::Move)
+    (center.vector_to(point).length() <= radius).then_some(EditHandle::Move)
 }
 
 /// The on-screen direction, in degrees clockwise from the horizontal, a
@@ -478,11 +506,11 @@ mod tests {
         side_rotate: false,
     };
 
-    fn count(handles: &[(TransformHandle, Point)], f: impl Fn(&TransformHandle) -> bool) -> usize {
+    fn count(handles: &[(EditHandle, Point)], f: impl Fn(&EditHandle) -> bool) -> usize {
         handles.iter().filter(|(h, _)| f(h)).count()
     }
 
-    fn position_of(handles: &[(TransformHandle, Point)], wanted: TransformHandle) -> Point {
+    fn position_of(handles: &[(EditHandle, Point)], wanted: EditHandle) -> Point {
         handles
             .iter()
             .find(|(h, _)| *h == wanted)
@@ -503,19 +531,10 @@ mod tests {
     fn a_rectangle_shows_resize_corner_rotate_and_centre_handles() {
         let handles = transform_handles(&big_box(), RECT, &tol());
         assert_eq!(handles.len(), 13);
-        assert_eq!(
-            count(&handles, |h| matches!(h, TransformHandle::Resize(_))),
-            8
-        );
-        assert_eq!(
-            count(&handles, |h| matches!(h, TransformHandle::Rotate(_))),
-            4
-        );
-        assert_eq!(
-            count(&handles, |h| matches!(h, TransformHandle::Skew(_))),
-            0
-        );
-        assert_eq!(count(&handles, |h| *h == TransformHandle::Move), 1);
+        assert_eq!(count(&handles, |h| matches!(h, EditHandle::Resize(_))), 8);
+        assert_eq!(count(&handles, |h| matches!(h, EditHandle::Rotate(_))), 4);
+        assert_eq!(count(&handles, |h| matches!(h, EditHandle::Skew(_))), 0);
+        assert_eq!(count(&handles, |h| *h == EditHandle::Move), 1);
     }
 
     /// Criteria 6, 7: Shift reveals four side rotate handles; a polygon
@@ -528,23 +547,14 @@ mod tests {
             side_rotate: true,
         };
         let handles = transform_handles(&big_box(), polygon, &tol());
-        assert_eq!(
-            count(&handles, |h| matches!(h, TransformHandle::Resize(_))),
-            4
-        );
-        assert_eq!(
-            count(&handles, |h| matches!(h, TransformHandle::Rotate(_))),
-            8
-        );
+        assert_eq!(count(&handles, |h| matches!(h, EditHandle::Resize(_))), 4);
+        assert_eq!(count(&handles, |h| matches!(h, EditHandle::Rotate(_))), 8);
         let without = HandleSpec {
             side_rotate: false,
             ..polygon
         };
         let handles = transform_handles(&big_box(), without, &tol());
-        assert_eq!(
-            count(&handles, |h| matches!(h, TransformHandle::Rotate(_))),
-            4
-        );
+        assert_eq!(count(&handles, |h| matches!(h, EditHandle::Rotate(_))), 4);
     }
 
     /// Criterion 5: a corner rotate handle sits 32 px out on the diagonal
@@ -559,22 +569,22 @@ mod tests {
         let handles = transform_handles(&big_box(), spec, &tol());
         let d = 32.0 / std::f64::consts::SQRT_2;
         assert_near(
-            position_of(&handles, TransformHandle::Rotate(ResizeDirection::Ne)),
+            position_of(&handles, EditHandle::Rotate(ResizeDirection::Ne)),
             100.0 + d,
             -d,
         );
         assert_near(
-            position_of(&handles, TransformHandle::Rotate(ResizeDirection::Sw)),
+            position_of(&handles, EditHandle::Rotate(ResizeDirection::Sw)),
             -d,
             100.0 + d,
         );
         assert_near(
-            position_of(&handles, TransformHandle::Rotate(ResizeDirection::N)),
+            position_of(&handles, EditHandle::Rotate(ResizeDirection::N)),
             50.0,
             -32.0,
         );
         assert_near(
-            position_of(&handles, TransformHandle::Rotate(ResizeDirection::E)),
+            position_of(&handles, EditHandle::Rotate(ResizeDirection::E)),
             132.0,
             50.0,
         );
@@ -597,7 +607,7 @@ mod tests {
         // Local top (50, -32) turned a quarter turn about (50, 50): the
         // offset (0, -82) becomes (82, 0).
         assert_near(
-            position_of(&handles, TransformHandle::Rotate(ResizeDirection::N)),
+            position_of(&handles, EditHandle::Rotate(ResizeDirection::N)),
             132.0,
             50.0,
         );
@@ -613,27 +623,24 @@ mod tests {
             ..RECT
         };
         let handles = transform_handles(&big_box(), spec, &tol());
-        assert_eq!(
-            count(&handles, |h| matches!(h, TransformHandle::Skew(_))),
-            4
-        );
+        assert_eq!(count(&handles, |h| matches!(h, EditHandle::Skew(_))), 4);
         assert_near(
-            position_of(&handles, TransformHandle::Skew(Side::Top)),
+            position_of(&handles, EditHandle::Skew(Side::Top)),
             50.0,
             -16.0,
         );
         assert_near(
-            position_of(&handles, TransformHandle::Skew(Side::Right)),
+            position_of(&handles, EditHandle::Skew(Side::Right)),
             116.0,
             50.0,
         );
         assert_near(
-            position_of(&handles, TransformHandle::Skew(Side::Bottom)),
+            position_of(&handles, EditHandle::Skew(Side::Bottom)),
             50.0,
             116.0,
         );
         assert_near(
-            position_of(&handles, TransformHandle::Skew(Side::Left)),
+            position_of(&handles, EditHandle::Skew(Side::Left)),
             -16.0,
             50.0,
         );
@@ -649,12 +656,9 @@ mod tests {
         assert!(
             handles
                 .iter()
-                .all(|(h, _)| !matches!(h, TransformHandle::Skew(Side::Top | Side::Bottom)))
+                .all(|(h, _)| !matches!(h, EditHandle::Skew(Side::Top | Side::Bottom)))
         );
-        assert_eq!(
-            count(&handles, |h| matches!(h, TransformHandle::Skew(_))),
-            2
-        );
+        assert_eq!(count(&handles, |h| matches!(h, EditHandle::Skew(_))), 2);
 
         let line = unrotated_box(Point::new(0.0, 0.0), Point::new(100.0, 0.0));
         let tiny_tiers = TransformHandleTolerances {
@@ -665,15 +669,12 @@ mod tests {
         assert_eq!(
             count(&handles, |h| matches!(
                 h,
-                TransformHandle::Skew(Side::Top | Side::Bottom)
+                EditHandle::Skew(Side::Top | Side::Bottom)
             )),
             0,
             "zero height removes the x-skew handles whatever the pixel tier"
         );
-        assert_eq!(
-            count(&handles, |h| matches!(h, TransformHandle::Skew(_))),
-            2
-        );
+        assert_eq!(count(&handles, |h| matches!(h, EditHandle::Skew(_))), 2);
     }
 
     /// Criterion 4: the centre handle needs a shorter side of 48 px.
@@ -683,12 +684,12 @@ mod tests {
         let large = unrotated_box(Point::new(0.0, 0.0), Point::new(48.0, 200.0));
         assert_eq!(
             count(&transform_handles(&small, RECT, &tol()), |h| *h
-                == TransformHandle::Move),
+                == EditHandle::Move),
             0
         );
         assert_eq!(
             count(&transform_handles(&large, RECT, &tol()), |h| *h
-                == TransformHandle::Move),
+                == EditHandle::Move),
             1
         );
     }
@@ -705,18 +706,18 @@ mod tests {
             .count();
         assert_eq!(handles.len() - drawn, 4, "four edge handles not drawn");
         assert!(is_drawn_handle(
-            TransformHandle::Rotate(ResizeDirection::Ne),
+            EditHandle::Rotate(ResizeDirection::Ne),
             &small,
             &tol()
         ));
     }
 
     fn hit(
-        handles: &[(TransformHandle, Point)],
+        handles: &[(EditHandle, Point)],
         box_: &OrientedBox,
         x: f64,
         y: f64,
-    ) -> Option<TransformHandle> {
+    ) -> Option<EditHandle> {
         hit_transform_handle(handles, box_, Point::new(x, y), &tol(), false)
     }
 
@@ -732,9 +733,9 @@ mod tests {
         };
         let box_ = big_box();
         let handles = transform_handles(&box_, spec, &tol());
-        let n = TransformHandle::Resize(ResizeDirection::N);
-        let skew = TransformHandle::Skew(Side::Top);
-        let rotate = TransformHandle::Rotate(ResizeDirection::N);
+        let n = EditHandle::Resize(ResizeDirection::N);
+        let skew = EditHandle::Skew(Side::Top);
+        let rotate = EditHandle::Rotate(ResizeDirection::N);
         assert_eq!(hit(&handles, &box_, 50.0, -7.0), Some(n));
         assert_eq!(hit(&handles, &box_, 50.0, -9.0), Some(skew));
         assert_eq!(hit(&handles, &box_, 50.0, -23.0), Some(skew));
@@ -749,15 +750,15 @@ mod tests {
         let box_ = big_box();
         let pointer = Point::new(-5.0, 50.0);
         let rotate = (
-            TransformHandle::Rotate(ResizeDirection::N),
+            EditHandle::Rotate(ResizeDirection::N),
             Point::new(-5.0, 55.0),
         );
-        let skew = (TransformHandle::Skew(Side::Top), Point::new(-5.0, 45.0));
+        let skew = (EditHandle::Skew(Side::Top), Point::new(-5.0, 45.0));
         let resize = (
-            TransformHandle::Resize(ResizeDirection::W),
+            EditHandle::Resize(ResizeDirection::W),
             Point::new(-10.0, 50.0),
         );
-        let winner = |handles: &[(TransformHandle, Point)]| {
+        let winner = |handles: &[(EditHandle, Point)]| {
             hit_transform_handle(handles, &box_, pointer, &tol(), false)
         };
         assert_eq!(winner(&[rotate, skew, resize]), Some(resize.0));
@@ -774,7 +775,7 @@ mod tests {
         let handles = transform_handles(&box_, RECT, &tol());
         assert_eq!(
             hit(&handles, &box_, 50.0, 5.0),
-            Some(TransformHandle::Resize(ResizeDirection::N))
+            Some(EditHandle::Resize(ResizeDirection::N))
         );
         assert_eq!(hit(&handles, &box_, 50.0, 7.0), None);
     }
@@ -788,7 +789,7 @@ mod tests {
         assert_eq!(hit(&handles, &box_, 50.0, 50.0), None);
         assert_eq!(
             hit_transform_handle(&handles, &box_, Point::new(50.0, 50.0), &tol(), true),
-            Some(TransformHandle::Move)
+            Some(EditHandle::Move)
         );
         assert_eq!(
             hit_transform_handle(&handles, &box_, Point::new(50.0, 63.0), &tol(), true),
@@ -854,12 +855,13 @@ mod tests {
             side_rotate: true,
             ..RECT
         };
-        let half_extent = |handle: TransformHandle| match handle {
-            TransformHandle::Resize(_) => (4.0, 4.0),
-            TransformHandle::Rotate(_) => (6.0, 6.0),
-            TransformHandle::Skew(side) if side.skews_along_u() => (9.0, 6.0),
-            TransformHandle::Skew(_) => (6.0, 9.0),
-            TransformHandle::Move => (8.0, 8.0),
+        let half_extent = |handle: EditHandle| match handle {
+            EditHandle::Resize(_) => (4.0, 4.0),
+            EditHandle::Rotate(_) => (6.0, 6.0),
+            EditHandle::Skew(side) if side.skews_along_u() => (9.0, 6.0),
+            EditHandle::Skew(_) => (6.0, 9.0),
+            EditHandle::Move => (8.0, 8.0),
+            EditHandle::Param(_) => (5.0, 5.0),
         };
         for (w, h) in [
             (24.0, 24.0),
@@ -896,18 +898,18 @@ mod tests {
             let spec = HandleSpec { skew: true, ..RECT };
             let handles = transform_handles(&box_(48.0), spec, &tolerances);
             assert!(
-                handles.iter().any(|(h, _)| *h == TransformHandle::Move),
+                handles.iter().any(|(h, _)| *h == EditHandle::Move),
                 "{scale}"
             );
             let small = box_(24.0);
             let handles = transform_handles(&small, spec, &tolerances);
             assert_eq!(
-                count(&handles, |h| matches!(h, TransformHandle::Skew(_))),
+                count(&handles, |h| matches!(h, EditHandle::Skew(_))),
                 4,
                 "{scale}"
             );
             assert!(is_drawn_handle(
-                TransformHandle::Resize(ResizeDirection::N),
+                EditHandle::Resize(ResizeDirection::N),
                 &small,
                 &tolerances
             ));

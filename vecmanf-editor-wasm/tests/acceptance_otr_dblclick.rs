@@ -10,7 +10,7 @@
 
 use vecmanf_document_core::{
     AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, Point, PointCount,
-    RectBounds, StarFrame, pack,
+    RectBounds, StarFrame, pack, unpack,
 };
 use vecmanf_editor_wasm::{Session, Tool};
 
@@ -93,13 +93,14 @@ fn path_doc() -> Document {
 
 /// The browser's double-click: press and release at `first`, the second press
 /// at `second` withheld, `double_click` at it, then the re-hover.
-fn dbl(s: &mut Session, first: Point, second: Point, shift: bool, ctrl: bool) {
+fn dbl(s: &mut Session, first: Point, second: Point, shift: bool, ctrl: bool) -> bool {
     s.pointer_hover(first, shift, ctrl);
     s.pointer_down(first, shift);
     s.pointer_up(first, shift, ctrl);
     s.pointer_hover(second, shift, ctrl);
-    s.double_click(second, shift, ctrl);
+    let hint = s.double_click(second, shift, ctrl);
     s.pointer_hover(second, shift, ctrl);
+    hint
 }
 
 fn click(s: &mut Session, p: Point) {
@@ -116,14 +117,18 @@ fn px(s: &Session, pixels: f64) -> f64 {
 fn unselected_handoff(doc: &Document, at: Point, want: Tool, label: &str) {
     let mut s = open(doc);
     let before = bytes(&s);
-    dbl(&mut s, at, at, false, false);
+    let hint = dbl(&mut s, at, at, false, false);
+    // `unified-object-editing` criteria 31, 32: a path hands off to the Node
+    // tool; a primitive changes no tool and asks for the edit hint.
     assert_eq!(s.tool(), want, "{label}: handoff at {at:?}");
+    assert_eq!(hint, want == Tool::Select, "{label}: edit hint at {at:?}");
     assert!(s.transform_entry().is_none(), "{label}: no entry");
     assert_eq!(bytes(&s), before, "{label}: nothing written");
 }
 
 #[test]
-fn double_click_on_the_outline_of_an_unselected_object_hands_off_at_every_handle_spot() {
+fn double_click_on_the_outline_of_an_unselected_object_hands_off_a_path_and_only_hints_for_a_primitive_at_every_handle_spot()
+ {
     // Rectangle: four corners and four edge midpoints (resize handle spots).
     let r = rect_doc();
     for at in [
@@ -136,7 +141,7 @@ fn double_click_on_the_outline_of_an_unselected_object_hands_off_at_every_handle
         pt(70.0, 100.0),
         pt(10.0, 60.0),
     ] {
-        unselected_handoff(&r, at, Tool::Rectangle, "rect");
+        unselected_handoff(&r, at, Tool::Select, "rect");
     }
     // Ellipse: the four extreme points are its edge handle spots.
     let e = ellipse_doc();
@@ -146,11 +151,11 @@ fn double_click_on_the_outline_of_an_unselected_object_hands_off_at_every_handle
         pt(70.0, 100.0),
         pt(10.0, 60.0),
     ] {
-        unselected_handoff(&e, at, Tool::Ellipse, "ellipse");
+        unselected_handoff(&e, at, Tool::Select, "ellipse");
     }
     // Polygon and star: the top vertex is on the outline and at the N spot.
-    unselected_handoff(&polygon_doc(), pt(70.0, 20.0), Tool::PolygonStar, "polygon");
-    unselected_handoff(&star_doc(), pt(70.0, 20.0), Tool::PolygonStar, "star");
+    unselected_handoff(&polygon_doc(), pt(70.0, 20.0), Tool::Select, "polygon");
+    unselected_handoff(&star_doc(), pt(70.0, 20.0), Tool::Select, "star");
     // Path: the top-edge midpoint and an anchor.
     let p = path_doc();
     for at in [
@@ -164,12 +169,12 @@ fn double_click_on_the_outline_of_an_unselected_object_hands_off_at_every_handle
 }
 
 #[test]
-fn a_second_press_a_few_pixels_off_still_hands_off_for_an_unselected_object() {
+fn a_second_press_a_few_pixels_off_still_only_hints_for_an_unselected_primitive() {
     let mut s = open(&rect_doc());
     let first = pt(70.0, 20.0);
     let second = pt(70.0 + px(&s, 4.0), 20.0 + px(&s, 2.0));
-    dbl(&mut s, first, second, false, false);
-    assert_eq!(s.tool(), Tool::Rectangle);
+    assert!(dbl(&mut s, first, second, false, false), "the edit hint");
+    assert_eq!(s.tool(), Tool::Select, "no handoff");
     assert!(s.transform_entry().is_none());
 }
 
@@ -250,7 +255,7 @@ fn a_double_click_on_the_centre_handle_and_inside_the_box_still_hands_off() {
         let mut s = open(&rect_doc());
         click(&mut s, pt(70.0, 20.0));
         dbl(&mut s, at, at, false, false);
-        assert_eq!(s.tool(), Tool::Rectangle, "{at:?}");
+        assert_eq!(s.tool(), Tool::Select, "{at:?}");
         assert!(s.transform_entry().is_none());
     }
 }
@@ -352,7 +357,7 @@ fn rapid_triple_click_on_a_handle_keeps_one_entry_and_the_select_tool() {
 }
 
 #[test]
-fn handle_double_click_then_a_normal_press_elsewhere_closes_the_entry_and_the_next_pair_hands_off()
+fn handle_double_click_then_a_normal_press_elsewhere_closes_the_entry_and_the_next_pair_only_hints()
 {
     let mut s = open(&rect_doc());
     click(&mut s, pt(70.0, 20.0));
@@ -360,8 +365,8 @@ fn handle_double_click_then_a_normal_press_elsewhere_closes_the_entry_and_the_ne
     assert!(s.transform_entry().is_some());
     click(&mut s, pt(70.0, 60.0));
     assert!(s.transform_entry().is_none());
-    dbl(&mut s, pt(70.0, 60.0), pt(70.0, 60.0), false, false);
-    assert_eq!(s.tool(), Tool::Rectangle);
+    assert!(dbl(&mut s, pt(70.0, 60.0), pt(70.0, 60.0), false, false));
+    assert_eq!(s.tool(), Tool::Select);
 }
 
 #[test]
@@ -396,4 +401,49 @@ fn a_drag_then_a_press_at_the_old_spot_does_not_open_an_entry() {
         s.transform_entry().is_none(),
         "entry opened after a completed drag"
     );
+}
+
+/// `unified-object-editing` criterion 31 ("as before"): double-clicking a
+/// polygon that was converted to a path, on a segment, hands off to the Node
+/// tool from the Select tool and writes nothing: the hand-off does not insert a node, neither on
+/// the first press nor on the withheld second one. The same holds on
+/// `origin/main`, where `select_double_click` only switched the tool.
+#[test]
+fn double_click_on_a_converted_polygons_segment_hands_off_without_inserting_a_node() {
+    let mut s = open(&polygon_doc());
+    // Select the polygon at its top vertex, then convert it.
+    click(&mut s, pt(70.0, 20.0));
+    s.convert_selected_to_paths();
+    let after_conversion = bytes(&s);
+    let nodes = |s: &Session| {
+        let d = unpack(3, &bytes(s)).unwrap();
+        d.object_ids()
+            .iter()
+            .filter_map(|id| d.object(*id))
+            .map(|o| match o {
+                vecmanf_document_core::ObjectSnapshot::Path(p) => p.anchors.len(),
+                vecmanf_document_core::ObjectSnapshot::Primitive(_) => 0,
+            })
+            .sum::<usize>()
+    };
+    assert_eq!(nodes(&s), 5, "a five-point polygon becomes five anchors");
+
+    // The midpoint of the segment between the first two anchors.
+    let d = unpack(3, &after_conversion).unwrap();
+    let vecmanf_document_core::ObjectSnapshot::Path(path) = d.object(d.object_ids()[0]).unwrap()
+    else {
+        panic!("converted to a path");
+    };
+    let (a, b) = (path.anchors[0].point, path.anchors[1].point);
+    let mid = pt(f64::midpoint(a.x, b.x), f64::midpoint(a.y, b.y));
+
+    // The conversion leaves the Node tool active; back in the Select tool the
+    // double-click is the hand-off under test.
+    assert_eq!(s.tool(), Tool::Node, "conversion activates the Node tool");
+    s.set_tool(Tool::Select);
+    let hint = dbl(&mut s, mid, mid, false, false);
+    assert!(!hint, "a path gives no edit hint");
+    assert_eq!(s.tool(), Tool::Node, "the Node tool is active");
+    assert_eq!(nodes(&s), 5, "no node was inserted");
+    assert_eq!(bytes(&s), after_conversion, "nothing was written");
 }

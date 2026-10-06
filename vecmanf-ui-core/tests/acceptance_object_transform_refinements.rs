@@ -16,9 +16,9 @@ use vecmanf_document_core::{
     Point, PointCount, RectBounds, StarFrame, Tolerance, Vec2,
 };
 use vecmanf_ui_core::{
-    EntryKind, EntryOutcome, InvalidReason, ObjectSelection, ResizeDirection,
+    EditHandle, EntryKind, EntryOutcome, InvalidReason, ObjectSelection, ResizeDirection,
     SelectDoubleClickOutcome, SelectPointerDownOutcome, SelectTool, Side, StrokeScaling,
-    TransformHandle, TransformHandleTolerances, oriented_bounds,
+    TransformHandleTolerances, oriented_bounds,
 };
 
 const EPS: f64 = 1e-9;
@@ -136,11 +136,11 @@ impl Rig {
         vec![self.object()]
     }
 
-    fn handles(&self, shift: bool) -> Vec<(TransformHandle, Point)> {
+    fn handles(&self, shift: bool) -> Vec<(EditHandle, Point)> {
         SelectTool::transform_handles(&self.objects(), &self.selection, tolerances(), shift)
     }
 
-    fn handle(&self, wanted: TransformHandle, shift: bool) -> Point {
+    fn handle(&self, wanted: EditHandle, shift: bool) -> Point {
         self.handles(shift)
             .into_iter()
             .find(|(h, _)| *h == wanted)
@@ -263,7 +263,7 @@ fn is_polygon_or_star(kind: Kind) -> bool {
     matches!(kind, Kind::Polygon | Kind::Star)
 }
 
-fn count(handles: &[(TransformHandle, Point)], f: impl Fn(&TransformHandle) -> bool) -> usize {
+fn count(handles: &[(EditHandle, Point)], f: impl Fn(&EditHandle) -> bool) -> usize {
     handles.iter().filter(|(h, _)| f(h)).count()
 }
 
@@ -276,10 +276,10 @@ fn every_kind_shows_its_handle_set() {
     for kind in ALL_KINDS {
         let rig = Rig::new(kind);
         let handles = rig.handles(false);
-        let resize = count(&handles, |h| matches!(h, TransformHandle::Resize(_)));
-        let rotate = count(&handles, |h| matches!(h, TransformHandle::Rotate(_)));
-        let skew = count(&handles, |h| matches!(h, TransformHandle::Skew(_)));
-        let centre = count(&handles, |h| *h == TransformHandle::Move);
+        let resize = count(&handles, |h| matches!(h, EditHandle::Resize(_)));
+        let rotate = count(&handles, |h| matches!(h, EditHandle::Rotate(_)));
+        let skew = count(&handles, |h| matches!(h, EditHandle::Skew(_)));
+        let centre = count(&handles, |h| *h == EditHandle::Move);
         assert_eq!(
             resize,
             if is_polygon_or_star(kind) { 4 } else { 8 },
@@ -295,7 +295,7 @@ fn every_kind_shows_its_handle_set() {
 
         let revealed = rig.handles(true);
         assert_eq!(
-            count(&revealed, |h| matches!(h, TransformHandle::Rotate(_))),
+            count(&revealed, |h| matches!(h, EditHandle::Rotate(_))),
             8,
             "{kind:?}: Shift reveals the four side rotate handles, polygon and star too"
         );
@@ -326,7 +326,7 @@ fn a_multi_object_selection_shows_no_handles_at_all() {
 #[test]
 fn a_side_rotate_handle_starts_a_rotate_with_shift_and_is_empty_canvas_without() {
     let mut rig = Rig::new(Kind::Rect);
-    let top = rig.handle(TransformHandle::Rotate(ResizeDirection::N), true);
+    let top = rig.handle(EditHandle::Rotate(ResizeDirection::N), true);
     assert_eq!(
         rig.press(top, true),
         SelectPointerDownOutcome::Handle,
@@ -334,7 +334,7 @@ fn a_side_rotate_handle_starts_a_rotate_with_shift_and_is_empty_canvas_without()
     );
     assert_eq!(
         rig.tool.dragging_handle(),
-        Some(TransformHandle::Rotate(ResizeDirection::N))
+        Some(EditHandle::Rotate(ResizeDirection::N))
     );
     assert_eq!(
         rig.selection.ids(),
@@ -352,7 +352,7 @@ fn a_side_rotate_handle_starts_a_rotate_with_shift_and_is_empty_canvas_without()
 #[test]
 fn the_handle_set_is_frozen_during_a_drag() {
     let mut rig = Rig::new(Kind::Rect);
-    let corner = rig.handle(TransformHandle::Rotate(ResizeDirection::Ne), false);
+    let corner = rig.handle(EditHandle::Rotate(ResizeDirection::Ne), false);
     rig.press(corner, false);
     assert!(
         !rig.tool.side_rotate_revealed(true),
@@ -362,7 +362,7 @@ fn the_handle_set_is_frozen_during_a_drag() {
     assert!(rig.tool.side_rotate_revealed(true), "idle: live Shift");
     assert!(!rig.tool.side_rotate_revealed(false));
 
-    let side = rig.handle(TransformHandle::Rotate(ResizeDirection::E), true);
+    let side = rig.handle(EditHandle::Rotate(ResizeDirection::E), true);
     rig.press(side, true);
     assert!(
         rig.tool.side_rotate_revealed(false),
@@ -375,19 +375,19 @@ fn the_handle_set_is_frozen_during_a_drag() {
 fn a_press_just_off_a_corner_resize_handle_resizes_and_just_beyond_it_rotates() {
     // Criterion 9: resize and rotate regions are disjoint, 32 px apart.
     let mut rig = Rig::new(Kind::Rect);
-    let se = rig.handle(TransformHandle::Resize(ResizeDirection::Se), false);
+    let se = rig.handle(EditHandle::Resize(ResizeDirection::Se), false);
     let toward = Vec2::new(1.0, 1.0).normalized_to(1.0);
     let at = |distance_mm: f64| se.translated(toward.scaled(distance_mm));
     assert_eq!(rig.press(at(7.0), false), SelectPointerDownOutcome::Handle);
     assert_eq!(
         rig.tool.dragging_handle(),
-        Some(TransformHandle::Resize(ResizeDirection::Se))
+        Some(EditHandle::Resize(ResizeDirection::Se))
     );
     rig.tool.escape();
     assert_eq!(rig.press(at(9.0), false), SelectPointerDownOutcome::Handle);
     assert_eq!(
         rig.tool.dragging_handle(),
-        Some(TransformHandle::Rotate(ResizeDirection::Se)),
+        Some(EditHandle::Rotate(ResizeDirection::Se)),
         "9 mm out is past the 8 mm midpoint between the resize and rotate centres (16 mm apart)"
     );
 }
@@ -411,14 +411,14 @@ fn skew_handles_hide_per_axis_below_24_px_and_at_zero_extent() {
     assert_eq!(
         count(&handles, |h| matches!(
             h,
-            TransformHandle::Skew(Side::Top | Side::Bottom)
+            EditHandle::Skew(Side::Top | Side::Bottom)
         )),
         0
     );
     assert_eq!(
         count(&handles, |h| matches!(
             h,
-            TransformHandle::Skew(Side::Left | Side::Right)
+            EditHandle::Skew(Side::Left | Side::Right)
         )),
         2
     );
@@ -437,7 +437,7 @@ fn skew_handles_hide_per_axis_below_24_px_and_at_zero_extent() {
     assert_eq!(
         count(&handles, |h| matches!(
             h,
-            TransformHandle::Skew(Side::Top | Side::Bottom)
+            EditHandle::Skew(Side::Top | Side::Bottom)
         )),
         0
     );
@@ -481,15 +481,15 @@ fn a_wobble_under_the_dead_zone_writes_nothing_for_every_drag_kind() {
         let mut rig = Rig::new(kind);
         let before = rig.object();
         for wanted in [
-            TransformHandle::Resize(ResizeDirection::Se),
-            TransformHandle::Rotate(ResizeDirection::Ne),
+            EditHandle::Resize(ResizeDirection::Se),
+            EditHandle::Rotate(ResizeDirection::Ne),
         ] {
             let at = rig.handle(wanted, false);
             rig.drag(at, at.translated(Vec2::new(1.0, 0.5)), false, false);
             assert_eq!(rig.object(), before, "{kind:?} {wanted:?}");
         }
         if is_path(kind) {
-            let at = rig.handle(TransformHandle::Skew(Side::Top), false);
+            let at = rig.handle(EditHandle::Skew(Side::Top), false);
             rig.drag(at, at.translated(Vec2::new(1.2, 0.0)), false, false);
             assert_eq!(rig.object(), before, "{kind:?} skew");
         }
@@ -542,9 +542,9 @@ fn a_centre_handle_press_moves_exactly_like_a_body_drag() {
     let objects = rig.objects();
     let hovered =
         SelectTool::hover_handle_at(&objects, &rig.selection, centre, tolerances(), false);
-    assert_eq!(hovered.map(|(_, _, h)| h), Some(TransformHandle::Move));
+    assert_eq!(hovered.map(|(_, _, h)| h), Some(EditHandle::Move));
     rig.press(centre, false);
-    assert_eq!(rig.tool.dragging_handle(), Some(TransformHandle::Move));
+    assert_eq!(rig.tool.dragging_handle(), Some(EditHandle::Move));
     rig.tool.pointer_moved(pt(80.0, 40.0));
     rig.release(pt(80.0, 40.0), false, false);
     let after = rig.object();
@@ -571,7 +571,7 @@ fn the_centre_handle_needs_a_forty_eight_pixel_box_and_never_covers_a_resize_han
     selection.select_single(id);
     let objects = vec![document.object(id).unwrap()];
     let handles = SelectTool::transform_handles(&objects, &selection, tolerances(), false);
-    assert_eq!(count(&handles, |h| *h == TransformHandle::Move), 0);
+    assert_eq!(count(&handles, |h| *h == EditHandle::Move), 0);
     assert!(
         SelectTool::hover_handle_at(&objects, &selection, pt(11.5, 50.0), tolerances(), false)
             .is_none(),
@@ -581,7 +581,9 @@ fn the_centre_handle_needs_a_forty_eight_pixel_box_and_never_covers_a_resize_han
 
 #[test]
 fn a_double_click_dispatches_by_what_is_under_the_second_press() {
-    // Inside the box, centre handle included, and not on a handle: handoff.
+    // Inside the box, centre handle included, and not on a handle: a path hands
+    // off to the Node tool; a primitive only asks for the edit hint
+    // (`unified-object-editing` criteria 31, 32).
     for kind in ALL_KINDS {
         let mut rig = Rig::new(kind);
         let before = rig.object();
@@ -589,16 +591,17 @@ fn a_double_click_dispatches_by_what_is_under_the_second_press() {
         let centre = b.to_document(b.local_center());
         for at in [centre, centre.translated(Vec2::new(8.0, 5.0))] {
             let outcome = rig.double_click(at, false, false);
-            assert_eq!(
-                outcome,
-                SelectDoubleClickOutcome::Hit(before.clone()),
-                "{kind:?}"
-            );
+            let expected = if is_path(kind) {
+                SelectDoubleClickOutcome::Hit(before.clone())
+            } else {
+                SelectDoubleClickOutcome::EditHint
+            };
+            assert_eq!(outcome, expected, "{kind:?}");
         }
         assert!(rig.tool.entry().is_none());
 
         // Rotate and resize handles open the entry, no handoff.
-        let rotate = rig.handle(TransformHandle::Rotate(ResizeDirection::Ne), false);
+        let rotate = rig.handle(EditHandle::Rotate(ResizeDirection::Ne), false);
         assert_eq!(
             rig.double_click(rotate, false, false),
             SelectDoubleClickOutcome::EntryOpened,
@@ -606,7 +609,7 @@ fn a_double_click_dispatches_by_what_is_under_the_second_press() {
         );
         assert!(matches!(rig.tool.entry().unwrap().kind(), EntryKind::Angle));
         rig.tool.cancel_entry();
-        let resize = rig.handle(TransformHandle::Resize(ResizeDirection::Se), false);
+        let resize = rig.handle(EditHandle::Resize(ResizeDirection::Se), false);
         assert_eq!(
             rig.double_click(resize, false, false),
             SelectDoubleClickOutcome::EntryOpened,
@@ -616,7 +619,7 @@ fn a_double_click_dispatches_by_what_is_under_the_second_press() {
 
         // A skew handle: nothing, no handoff.
         if is_path(kind) {
-            let skew = rig.handle(TransformHandle::Skew(Side::Top), false);
+            let skew = rig.handle(EditHandle::Skew(Side::Top), false);
             assert_eq!(
                 rig.double_click(skew, false, false),
                 SelectDoubleClickOutcome::Ignored
@@ -629,14 +632,14 @@ fn a_double_click_dispatches_by_what_is_under_the_second_press() {
 
 /// The real flow: double-clicking the outline of an object that is not
 /// selected yet. The handles only appear after the first click, so the second
-/// press must hand off even though it lands on the N-edge handle.
+/// press must not open the N-edge handle's entry: a path hands off, a
+/// primitive only asks for the edit hint.
 #[test]
-fn double_clicking_the_outline_of_an_unselected_object_at_a_handle_spot_hands_off() {
+fn double_clicking_the_outline_of_an_unselected_object_at_a_handle_spot_opens_no_entry() {
     let mut rig = Rig::new(Kind::Rect);
     rig.selection.clear();
-    let before = rig.object();
     let outcome = rig.double_click(pt(60.0, 20.0), false, false);
-    assert_eq!(outcome, SelectDoubleClickOutcome::Hit(before));
+    assert_eq!(outcome, SelectDoubleClickOutcome::EditHint);
     assert!(rig.tool.entry().is_none(), "no size entry opened");
 }
 
@@ -687,7 +690,7 @@ fn the_rotate_pivot_is_the_centre_or_the_opposite_corner_or_side_midpoint() {
         (ResizeDirection::W, pt(110.0, 50.0)),
     ];
     for (direction, opposite) in cases {
-        let at = rig.handle(TransformHandle::Rotate(direction), true);
+        let at = rig.handle(EditHandle::Rotate(direction), true);
         rig.press(at, true);
         let shifted = rig.tool.live_pivot(true).unwrap();
         let plain = rig.tool.live_pivot(false).unwrap();
@@ -710,7 +713,7 @@ fn the_opposite_corner_is_taken_in_the_objects_own_rotated_frame() {
         .object()
         .rotated(pt(60.0, 50.0), Angle::from_radians(0.6));
     rig.document.rotate_object(&rotated).unwrap();
-    let ne = rig.handle(TransformHandle::Rotate(ResizeDirection::Ne), false);
+    let ne = rig.handle(EditHandle::Rotate(ResizeDirection::Ne), false);
     rig.press(ne, true);
     let pivot = rig.tool.live_pivot(true).unwrap();
     let want = turned(pt(60.0, 50.0), pt(10.0, 80.0), 0.6);
@@ -727,7 +730,7 @@ fn a_shifted_corner_rotate_leaves_the_opposite_corner_in_place_for_every_kind() 
         let before = rig.object();
         let box_before = oriented_bounds(&before);
         let sw_before = box_before.to_document(pt(box_before.min.x, box_before.max.y));
-        let ne = rig.handle(TransformHandle::Rotate(ResizeDirection::Ne), false);
+        let ne = rig.handle(EditHandle::Rotate(ResizeDirection::Ne), false);
         let target = turned(sw_before, ne, 0.7);
         rig.drag(ne, target, true, false);
         let after = rig.object();
@@ -754,7 +757,7 @@ fn a_shifted_corner_rotate_leaves_the_opposite_corner_in_place_for_every_kind() 
 fn switching_shift_mid_drag_always_computes_from_the_drag_start() {
     for kind in [Kind::Rect, Kind::OpenPath] {
         let mut rig = Rig::new(kind);
-        let ne = rig.handle(TransformHandle::Rotate(ResizeDirection::Ne), false);
+        let ne = rig.handle(EditHandle::Rotate(ResizeDirection::Ne), false);
         rig.press(ne, false);
         let current = ne.translated(Vec2::new(-30.0, 25.0));
         rig.tool.pointer_moved(current);
@@ -776,7 +779,7 @@ fn switching_shift_mid_drag_always_computes_from_the_drag_start() {
 fn ctrl_snaps_a_rotate_about_whichever_pivot_applies() {
     for shift in [false, true] {
         let mut rig = Rig::new(Kind::Rect);
-        let ne = rig.handle(TransformHandle::Rotate(ResizeDirection::Ne), false);
+        let ne = rig.handle(EditHandle::Rotate(ResizeDirection::Ne), false);
         rig.press(ne, shift);
         let pivot = rig.tool.live_pivot(shift).unwrap();
         let current = turned(pivot, ne, 19.0_f64.to_radians());
@@ -796,7 +799,7 @@ fn commit(rig: &mut Rig, texts: [&str; 2], last: usize) -> EntryOutcome {
 }
 
 fn open_angle(rig: &mut Rig, direction: ResizeDirection, shift: bool) {
-    let at = rig.handle(TransformHandle::Rotate(direction), shift);
+    let at = rig.handle(EditHandle::Rotate(direction), shift);
     assert_eq!(
         rig.double_click(at, shift, false),
         SelectDoubleClickOutcome::EntryOpened
@@ -804,7 +807,7 @@ fn open_angle(rig: &mut Rig, direction: ResizeDirection, shift: bool) {
 }
 
 fn open_size(rig: &mut Rig, direction: ResizeDirection, shift: bool, ctrl: bool) {
-    let at = rig.handle(TransformHandle::Resize(direction), false);
+    let at = rig.handle(EditHandle::Resize(direction), false);
     assert_eq!(
         rig.double_click(at, shift, ctrl),
         SelectDoubleClickOutcome::EntryOpened
@@ -892,7 +895,7 @@ fn the_entry_pivot_is_fixed_when_it_opens_and_matches_a_drag_with_the_same_pivot
 
             // Drag to the same angle with the same pivot.
             let mut dragged = Rig::new(kind);
-            let ne = dragged.handle(TransformHandle::Rotate(ResizeDirection::Ne), false);
+            let ne = dragged.handle(EditHandle::Rotate(ResizeDirection::Ne), false);
             dragged.press(ne, shift);
             let pivot = dragged.tool.live_pivot(shift).unwrap();
             assert!(
@@ -946,11 +949,11 @@ fn a_size_entry_has_the_fields_the_handle_changes() {
     let mut poly = Rig::new(Kind::Polygon);
     open_size(&mut poly, ResizeDirection::Ne, false, false);
     let entry = poly.tool.entry().unwrap();
-    assert_eq!(entry.kind(), EntryKind::Radius);
+    assert_eq!(entry.kind(), EntryKind::OuterRadius);
     assert_eq!(entry.fields().len(), 1);
     assert_eq!(
         (entry.fields()[0].label, entry.fields()[0].accessible_name),
-        ("r", "Radius")
+        ("r", "Outer radius")
     );
     assert_eq!(entry.fields()[0].prefill, "40.0");
     // Centre of the shape is the fixed point, with or without Shift (flag 1).
@@ -1138,7 +1141,7 @@ fn a_typed_size_and_a_dragged_size_leave_the_same_snapshot() {
                         typed.document.rotate_object(&rotated).unwrap();
                     }
                     let start_box = oriented_bounds(&dragged.object());
-                    let at = dragged.handle(TransformHandle::Resize(direction), false);
+                    let at = dragged.handle(EditHandle::Resize(direction), false);
                     // Pull the handle outward by a modest, handle-specific vector.
                     let outward = turned(pt(0.0, 0.0), pt(14.0, 9.0), turn);
                     let to = at.translated(Vec2::new(outward.x, outward.y));
@@ -1155,7 +1158,7 @@ fn a_typed_size_and_a_dragged_size_leave_the_same_snapshot() {
                     let entry = typed.tool.entry().unwrap().clone();
                     let context =
                         format!("{kind:?} {direction:?} shift {shift} ctrl {ctrl} turn {turn}");
-                    let texts = if entry.kind() == EntryKind::Radius {
+                    let texts = if entry.kind() == EntryKind::OuterRadius {
                         let r = radius_of(&result);
                         [format!("{r}"), String::new()]
                     } else if entry.fields().len() == 1 {
@@ -1234,7 +1237,7 @@ fn skewing_from_the_top_keeps_the_bottom_line_and_moves_the_top_one_to_one() {
     let mut rig = Rig::new(Kind::OpenPath);
     let before = rig.object();
     let box_ = oriented_bounds(&before);
-    let top = rig.handle(TransformHandle::Skew(Side::Top), false);
+    let top = rig.handle(EditHandle::Skew(Side::Top), false);
     rig.drag(top, top.translated(Vec2::new(12.0, 3.0)), false, false);
     let after = rig.object();
     let (a, b) = (anchors_of(&before), anchors_of(&after));
@@ -1270,7 +1273,7 @@ fn skew_leaves_the_fixed_edge_alone_and_shift_fixes_the_centre_line() {
     let mut rig = Rig::new(Kind::OpenPath);
     let before = rig.object();
     let box_ = oriented_bounds(&before);
-    let bottom = rig.handle(TransformHandle::Skew(Side::Bottom), false);
+    let bottom = rig.handle(EditHandle::Skew(Side::Bottom), false);
     rig.press(bottom, false);
     let to = bottom.translated(Vec2::new(-9.0, 0.0));
     rig.tool.pointer_moved(to);
@@ -1301,7 +1304,7 @@ fn skew_leaves_the_fixed_edge_alone_and_shift_fixes_the_centre_line() {
 fn the_skew_angle_is_the_arctangent_and_stays_inside_ninety_degrees() {
     let mut rig = Rig::new(Kind::OpenPath);
     let box_ = oriented_bounds(&rig.object());
-    let right = rig.handle(TransformHandle::Skew(Side::Right), false);
+    let right = rig.handle(EditHandle::Skew(Side::Right), false);
     rig.press(right, false);
     let to = right.translated(Vec2::new(0.0, 20.0));
     rig.tool.pointer_moved(to);
@@ -1345,7 +1348,7 @@ fn the_skew_angle_is_the_arctangent_and_stays_inside_ninety_degrees() {
 fn skew_preview_equals_the_committed_result_and_escape_writes_nothing() {
     let mut rig = Rig::new(Kind::ClosedPath);
     let before = rig.object();
-    let top = rig.handle(TransformHandle::Skew(Side::Top), false);
+    let top = rig.handle(EditHandle::Skew(Side::Top), false);
     rig.press(top, false);
     let to = top.translated(Vec2::new(15.0, 0.0));
     rig.tool.pointer_moved(to);
@@ -1365,7 +1368,7 @@ fn skew_preview_equals_the_committed_result_and_escape_writes_nothing() {
 fn a_drag_that_returns_to_its_start_writes_nothing() {
     let mut rig = Rig::new(Kind::OpenPath);
     let before = rig.object();
-    let top = rig.handle(TransformHandle::Skew(Side::Top), false);
+    let top = rig.handle(EditHandle::Skew(Side::Top), false);
     rig.press(top, false);
     rig.tool.pointer_moved(top.translated(Vec2::new(20.0, 0.0)));
     rig.release(top, false, false);
@@ -1394,7 +1397,7 @@ fn a_skew_and_its_inverse_restore_the_path_for_both_axes_with_and_without_shift(
             } else {
                 Vec2::new(0.0, 1.0).rotated(Angle::from_radians(theta))
             };
-            let first = rig.handle(TransformHandle::Skew(side), shift);
+            let first = rig.handle(EditHandle::Skew(side), shift);
             rig.drag(first, first.translated(along.scaled(17.0)), shift, false);
             assert_ne!(rig.object(), before);
             assert_eq!(
@@ -1405,7 +1408,7 @@ fn a_skew_and_its_inverse_restore_the_path_for_both_axes_with_and_without_shift(
             // The box is the tight rectangle in the same frame again.
             let box_after = oriented_bounds(&rig.object());
             assert_eq!(box_after.angle, before.rotation());
-            let second = rig.handle(TransformHandle::Skew(side), shift);
+            let second = rig.handle(EditHandle::Skew(side), shift);
             rig.drag(second, second.translated(along.scaled(-17.0)), shift, false);
             assert_snapshots_close(
                 &rig.object(),
@@ -1426,7 +1429,7 @@ fn a_rotated_path_skews_along_its_local_axes() {
     rig.document.rotate_object(&rotated).unwrap();
     let before = rig.object();
     // Quarter turn: the local top side now faces document +x.
-    let top = rig.handle(TransformHandle::Skew(Side::Top), false);
+    let top = rig.handle(EditHandle::Skew(Side::Top), false);
     let box_ = oriented_bounds(&before);
     let u = Vec2::new(0.0, 1.0); // local x axis after a quarter turn.
     rig.drag(top, top.translated(u.scaled(10.0)), false, false);

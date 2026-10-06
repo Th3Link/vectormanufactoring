@@ -156,7 +156,8 @@ pub struct TransformEntryView {
 
 #[wasm_bindgen]
 impl TransformEntryView {
-    /// `"angle"`, `"size"` or `"radius"`.
+    /// `"angle"`, `"size"`, `"radius"` (a polygon or star's outer radius),
+    /// `"corner-radius"` or `"inner-ratio"`.
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn kind(&self) -> String {
@@ -178,7 +179,7 @@ impl TransformEntryView {
             .unwrap_or_default()
     }
 
-    /// Field `index`'s accessible name ("Width", "Height", "Radius", "Angle").
+    /// Field `index`'s accessible name ("Width", "Height", "Outer radius", "Angle").
     #[must_use]
     pub fn field_name(&self, index: u32) -> String {
         self.field(index)
@@ -240,7 +241,7 @@ pub struct DocumentPoint {
 /// frame.
 #[wasm_bindgen]
 pub struct WasmSession {
-    session: Session,
+    pub(crate) session: Session,
     gpu: Option<Gpu>,
 }
 
@@ -380,13 +381,15 @@ impl WasmSession {
     }
 
     /// The one double-click dispatch point (acceptance criteria 3, 12,
-    /// 22, 23) at canvas-relative CSS pixel `(x, y)` — the host's own
-    /// double-click detector (unchanged, now in pixels) calls this
-    /// instead of choosing per tool itself
-    /// (`specs/0004-canvas-navigation-and-selection/adrs.md`).
-    pub fn double_click(&mut self, x: f64, y: f64, shift: bool, ctrl: bool) {
+    /// 22; `unified-object-editing` 31 to 34) at canvas-relative CSS pixel
+    /// `(x, y)` — the host's own double-click detector (unchanged, now in
+    /// pixels) calls this instead of choosing per tool itself
+    /// (`specs/0004-canvas-navigation-and-selection/adrs.md`). Returns
+    /// `true` when the host should show the edit hint chip (a double-click on
+    /// a primitive's outline, body or centre handle: nothing else changes).
+    pub fn double_click(&mut self, x: f64, y: f64, shift: bool, ctrl: bool) -> bool {
         let point = self.session.screen_to_document(x, y);
-        self.session.double_click(point, shift, ctrl);
+        self.session.double_click(point, shift, ctrl)
     }
 
     /// Shift or Ctrl changed with no pointer movement
@@ -399,7 +402,8 @@ impl WasmSession {
 
     /// Which hint the handle under the pointer earns (`""`, `"resize-edge"`,
     /// `"resize-corner"`, `"resize-corner-uniform"`, `"rotate-corner"`,
-    /// `"rotate-side"`, `"skew"` or `"move"`) — for the host's 600 ms hover
+    /// `"rotate-side"`, `"skew"`, `"move"`, `"param-radius"` or
+    /// `"param-inner"`) — for the host's 600 ms hover
     /// chip. Call after every [`WasmSession::pointer_hover`].
     #[must_use]
     pub fn handle_hint(&self) -> String {
@@ -426,8 +430,9 @@ impl WasmSession {
     }
 
     /// Enter in the entry chip: `"committed"`, `"unchanged"` (both close the
-    /// chip), or `"invalid:<field>:number"` / `"invalid:<field>:positive"`
-    /// (the chip stays open; criteria 19, 21, 27, 30, 31). `last_edited` is
+    /// chip), or `"invalid:<field>:<reason>"` with the reason `number`,
+    /// `positive`, `negative` or `ratio-range` (the chip stays open; criteria
+    /// 19, 21, 27, 30, 31; 18, 19 of `unified-object-editing`). `last_edited` is
     /// the index of the field edited last.
     pub fn commit_transform_entry(
         &mut self,
@@ -444,6 +449,8 @@ impl WasmSession {
                 match reason {
                     vecmanf_ui_core::InvalidReason::NotANumber => "number",
                     vecmanf_ui_core::InvalidReason::NotPositive => "positive",
+                    vecmanf_ui_core::InvalidReason::Negative => "negative",
+                    vecmanf_ui_core::InvalidReason::RatioRange => "ratio-range",
                 }
             ),
         }
@@ -558,8 +565,10 @@ impl WasmSession {
         self.session.node_toolbar_state().into()
     }
 
-    /// Acceptance criterion 6's "remove rounding" action. A no-op
-    /// outside the rectangle tool.
+    /// Acceptance criterion 6's "remove rounding" action, from the Select
+    /// bar (`unified-object-editing` criterion 21) or the Rectangle tool's:
+    /// zeroes the radius of every selected rectangle. A no-op in every other
+    /// tool.
     pub fn remove_corner_rounding(&mut self) {
         self.session.remove_corner_rounding();
     }
@@ -596,14 +605,16 @@ impl WasmSession {
         self.session.set_scale_stroke_width(on);
     }
 
-    /// The polygon/star tool-options bar's current point count
-    /// (acceptance criterion 10).
+    /// The polygon/star bar's point count for the next shape (acceptance
+    /// criterion 10).
     #[must_use]
     pub fn poly_star_point_count(&self) -> u32 {
         self.session.poly_star_point_count().get()
     }
 
-    /// The point-count stepper (acceptance criteria 10, 15).
+    /// The point-count setting for the next shape (acceptance criterion 10);
+    /// it never changes a selected shape (`unified-object-editing` criterion
+    /// 29; the Select bar's `set_selected_point_count` does).
     ///
     /// # Errors
     /// A `JsValue` if `count` is outside `3..=1024`.
@@ -621,10 +632,8 @@ impl WasmSession {
         self.session.poly_star_ratio().get()
     }
 
-    /// The ratio field's instantaneous commit (acceptance criteria 12,
-    /// 14) — one commit immediately. For a continuously-dragged slider,
-    /// call [`WasmSession::preview_poly_star_ratio`] on every tick and
-    /// [`WasmSession::commit_poly_star_ratio`] once instead.
+    /// The ratio setting for the next star (acceptance criteria 12); it never
+    /// changes a selected star.
     ///
     /// # Errors
     /// A `JsValue` if `ratio` is outside the open interval `(0, 1)`.
@@ -633,27 +642,6 @@ impl WasmSession {
             .map_err(|err| JsValue::from_str(&format!("{err}")))?;
         self.session.set_poly_star_ratio(ratio);
         Ok(())
-    }
-
-    /// The ratio slider's live, uncommitted preview (acceptance
-    /// criterion 14's "updates live") — call on every slider tick,
-    /// e.g. a `<input type="range">`'s own `input` event. Writes
-    /// nothing to the document.
-    ///
-    /// # Errors
-    /// A `JsValue` if `ratio` is outside the open interval `(0, 1)`.
-    pub fn preview_poly_star_ratio(&mut self, ratio: f64) -> Result<(), JsValue> {
-        let ratio = vecmanf_document_core::InnerRatio::new(ratio)
-            .map_err(|err| JsValue::from_str(&format!("{err}")))?;
-        self.session.preview_poly_star_ratio(ratio);
-        Ok(())
-    }
-
-    /// Commits whatever [`WasmSession::preview_poly_star_ratio`] has
-    /// accumulated, as one commit for the whole selection — call once,
-    /// on the slider's own `change`/pointer-up event.
-    pub fn commit_poly_star_ratio(&mut self) {
-        self.session.commit_poly_star_ratio();
     }
 
     /// "Object to path" (acceptance criteria 17, 21, 22).

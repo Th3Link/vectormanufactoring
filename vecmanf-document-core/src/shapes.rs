@@ -225,6 +225,41 @@ impl Document {
         Ok(())
     }
 
+    /// Sets each named rectangle's corner radius to its own value as **one
+    /// commit for the whole batch**: the Select bar's "Radius" field over
+    /// rectangles of different sizes (`specs/unified-object-editing/`
+    /// criterion 21a), where each value is limited to half of that
+    /// rectangle's own shorter side. A rectangle whose stored radius already
+    /// equals its value is not rewritten (an LWW rewrite of an unchanged value
+    /// could beat a concurrent radius edit), and nothing is committed when no
+    /// rectangle changes. Every id is resolved and confirmed to be a rectangle
+    /// before any is written. A negative value is floored to zero.
+    ///
+    /// # Errors
+    /// [`ShapeEditError::NoSuchObject`] if any named id no longer exists;
+    /// [`ShapeEditError::NotAPrimitive`] / [`ShapeEditError::WrongShape`] if
+    /// any named id is not a rectangle.
+    pub fn set_corner_radii(&self, radii: &[(NodeId, Length)]) -> Result<(), ShapeEditError> {
+        let metas: Vec<_> = radii
+            .iter()
+            .map(|&(id, radius)| {
+                self.require_shape(id, SHAPE_RECT)
+                    .map(|meta| (meta, Length::from_mm(radius.as_mm().max(0.0))))
+            })
+            .collect::<Result<_, _>>()?;
+        let mut changed = false;
+        for (meta, radius) in metas {
+            if shape_codec::read_corner_radius(&meta) != Some(radius) {
+                shape_codec::write_corner_radius(&meta, radius);
+                changed = true;
+            }
+        }
+        if changed {
+            self.commit_with_label("set_corner_radii");
+        }
+        Ok(())
+    }
+
     /// Sets an ellipse/circle's frame as one commit (acceptance
     /// criterion 9).
     ///

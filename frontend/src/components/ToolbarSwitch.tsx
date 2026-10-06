@@ -1,26 +1,32 @@
 import { Switch, Tooltip } from "radix-ui";
 import { useId } from "react";
 
-export interface ScaleStrokeSwitchProps {
+export interface ToolbarSwitchProps {
+  /** The visible label, left of the track. */
+  label: string;
+  /** What the switch does, shown as a tooltip after a short rest. */
+  tooltip: string;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
 }
 
 /**
- * The Select tool's "Scale stroke width" switch
- * (`specs/0005-object-transform/specification.md` criteria 8, 26-31;
- * control spec in `docs/design-system.md`, "Switch"): off, a resize keeps
- * the stroke thickness; on, the stroke scales with the object. A Radix
- * `Switch` (`role="switch"`, `aria-checked`) inside a `<label>`, so the
- * whole row is the click target; Tab focuses it, Space toggles. Never
- * disabled — it works with nothing selected too. The state is owned by
- * `useEditorSession` (session state, off per session, never saved), not
- * here.
+ * A Select-tool bar switch (`specs/0005-object-transform/specification.md`
+ * criteria 8, 26-31 for "Scale stroke width"; `specs/unified-object-editing/`
+ * criterion 23 for "Scale corner radius"; control spec in
+ * `docs/design-system.md`, "Switch"): off, a resize keeps the property; on, it
+ * scales with the object. A Radix `Switch` (`role="switch"`, `aria-checked`)
+ * inside a `<label>`, so the whole row is the click target; Tab focuses it,
+ * Space toggles. Never disabled and never dimmed: it works with nothing
+ * selected too. The state is owned by `useEditorSession` (session state, off
+ * per session, never saved), not here.
  */
-export function ScaleStrokeSwitch({
+export function ToolbarSwitch({
+  label,
+  tooltip,
   checked,
   onCheckedChange,
-}: ScaleStrokeSwitchProps) {
+}: ToolbarSwitchProps) {
   const id = useId();
   return (
     <Tooltip.Provider>
@@ -30,7 +36,7 @@ export function ScaleStrokeSwitch({
             htmlFor={id}
             className="flex h-7 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-[var(--toolbar-icon)] hover:bg-[var(--editor-accent-hover)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--editor-accent)] has-[:focus-visible]:ring-offset-1 has-[:focus-visible]:ring-offset-[var(--toolbar-bg)]"
           >
-            <span>Scale stroke width</span>
+            <span>{label}</span>
             <Switch.Root
               id={id}
               checked={checked}
@@ -47,8 +53,7 @@ export function ScaleStrokeSwitch({
             sideOffset={6}
             className="z-50 rounded-md bg-popover px-2 py-1 text-xs text-popover-foreground ring-1 ring-foreground/10"
           >
-            Scale stroke width with the object. Off: a resize keeps the stroke
-            thickness.
+            {tooltip}
           </Tooltip.Content>
         </Tooltip.Portal>
       </Tooltip.Root>

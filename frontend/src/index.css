@@ -181,3 +181,52 @@
 .canvas-cursor-pen-close {
   cursor: url("/cursors/pen-close.svg") 2 2, crosshair;
 }
+/* unified-object-editing (docs/design-system.md, "Select bar"): the Ratio
+   slider of a selection whose stars differ shows no thumb and a neutral track
+   (not filled to 0.5) until touched. Touching it previews a value, the stars
+   then agree and the class goes. */
+input[type="range"].select-bar-slider-mixed {
+    appearance: none;
+    background: transparent;
+}
+
+input[type="range"].select-bar-slider-mixed::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--toolbar-icon) 35%, transparent);
+}
+
+input[type="range"].select-bar-slider-mixed::-moz-range-track,
+input[type="range"].select-bar-slider-mixed::-moz-range-progress {
+    height: 4px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--toolbar-icon) 35%, transparent);
+}
+
+input[type="range"].select-bar-slider-mixed::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -6px;
+    opacity: 0;
+}
+
+input[type="range"].select-bar-slider-mixed::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    opacity: 0;
+}
+
+/* Chrome (toolbars, rail, status bar, bars) is not selectable text, so Ctrl+A
+   and a drag across it never leave page text highlighted. Text inputs and the
+   canvas readouts that are typed into stay selectable. */
+@layer base {
+  body {
+    user-select: none;
+  }
+  input,
+  textarea,
+  [contenteditable="true"] {
+    user-select: text;
+  }
+}

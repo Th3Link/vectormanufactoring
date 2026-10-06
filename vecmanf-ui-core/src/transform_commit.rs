@@ -8,8 +8,9 @@ use vecmanf_document_core::{
     AnchorId, Document, Length, NodeId, ObjectSnapshot, Point, Shape, Vec2,
 };
 
-use crate::transform_drag::StrokeScaling;
-use crate::transform_handle_layout::TransformHandle;
+use crate::param_edit::commit_param;
+use crate::transform_drag::{ScaleModes, StrokeScaling};
+use crate::transform_handle_layout::EditHandle;
 
 /// The largest coordinate or size (millimetres, 10 km) a drag may write.
 /// A pointer value beyond it — or NaN/infinite — is hostile or broken
@@ -22,19 +23,20 @@ pub(crate) const MAX_COORDINATE_MM: f64 = 1e7;
 /// typed entry's Enter).
 pub(crate) fn commit_gesture(
     document: &Document,
-    handle: TransformHandle,
+    handle: EditHandle,
     result: &ObjectSnapshot,
-    stroke_scaling: StrokeScaling,
+    modes: ScaleModes,
 ) {
     match handle {
-        TransformHandle::Resize(_) => commit_resize(document, result.id(), result, stroke_scaling),
-        TransformHandle::Rotate(_) => {
+        EditHandle::Resize(_) => commit_resize(document, result.id(), result, modes.stroke),
+        EditHandle::Rotate(_) => {
             let _ = document.rotate_object(result);
         }
-        TransformHandle::Skew(_) => {
+        EditHandle::Skew(_) => {
             commit_resize(document, result.id(), result, StrokeScaling::Keep);
         }
-        TransformHandle::Move => {}
+        EditHandle::Param(param) => commit_param(document, param, result),
+        EditHandle::Move => {}
     }
 }
 
@@ -88,9 +90,35 @@ pub(crate) fn sane_or(start: &ObjectSnapshot, resolved: ObjectSnapshot) -> Objec
 
 fn is_sane(object: &ObjectSnapshot) -> bool {
     let ok = |v: f64| v.is_finite() && v.abs() <= MAX_COORDINATE_MM;
-    let numbers: Vec<f64> = match object {
+    let (numbers, rotation) = numbers_of(object);
+    ok(rotation) && numbers.into_iter().all(ok)
+}
+
+/// Two snapshots of one object are the same within 1e-9 mm and 1e-12 rad: a
+/// resolved edit that equals the committed object is no edit at all, so it
+/// shows no preview and writes nothing (criterion 12 of
+/// `specs/unified-object-editing/`).
+pub(crate) fn same_within_tolerance(a: &ObjectSnapshot, b: &ObjectSnapshot) -> bool {
+    let ((xs, ra), (ys, rb)) = (numbers_of(a), numbers_of(b));
+    xs.len() == ys.len()
+        && (ra - rb).abs() <= SAME_ANGLE_EPSILON_RAD
+        && xs
+            .iter()
+            .zip(&ys)
+            .all(|(x, y)| (x - y).abs() <= SAME_LENGTH_EPSILON_MM)
+}
+
+/// See [`same_within_tolerance`].
+const SAME_LENGTH_EPSILON_MM: f64 = 1e-9;
+/// See [`same_within_tolerance`].
+const SAME_ANGLE_EPSILON_RAD: f64 = 1e-12;
+
+/// Every length-like number of `object` (stroke width included) in a fixed
+/// order, and its rotation in radians.
+fn numbers_of(object: &ObjectSnapshot) -> (Vec<f64>, f64) {
+    match object {
         ObjectSnapshot::Path(path) => {
-            let mut v = vec![path.stroke_width.as_mm(), path.rotation.as_radians()];
+            let mut v = vec![path.stroke_width.as_mm()];
             for a in &path.anchors {
                 v.extend([
                     a.point.x,
@@ -101,10 +129,10 @@ fn is_sane(object: &ObjectSnapshot) -> bool {
                     a.handle_out.y,
                 ]);
             }
-            v
+            (v, path.rotation.as_radians())
         }
         ObjectSnapshot::Primitive(p) => {
-            let mut v = vec![p.stroke_width.as_mm(), p.rotation.as_radians()];
+            let mut v = vec![p.stroke_width.as_mm()];
             match p.shape {
                 Shape::Rect {
                     bounds,
@@ -122,15 +150,27 @@ fn is_sane(object: &ObjectSnapshot) -> bool {
                     frame.rx.as_mm(),
                     frame.ry.as_mm(),
                 ]),
-                Shape::Polygon { frame, .. } | Shape::Star { frame, .. } => v.extend([
+                Shape::Polygon { frame, point_count } => v.extend([
                     frame.center.x,
                     frame.center.y,
                     frame.radius.as_mm(),
                     frame.angle.as_radians(),
+                    f64::from(point_count.get()),
+                ]),
+                Shape::Star {
+                    frame,
+                    point_count,
+                    inner_ratio,
+                } => v.extend([
+                    frame.center.x,
+                    frame.center.y,
+                    frame.radius.as_mm(),
+                    frame.angle.as_radians(),
+                    f64::from(point_count.get()),
+                    inner_ratio.get(),
                 ]),
             }
-            v
+            (v, p.rotation.as_radians())
         }
-    };
-    numbers.into_iter().all(ok)
+    }
 }

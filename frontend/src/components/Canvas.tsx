@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
+import { EditHintChip } from "@/components/EditHintChip";
 import { HandleHintChip } from "@/components/HandleHintChip";
 import { NodeContextMenu } from "@/components/NodeToolbar";
 import { TransformEntryChip } from "@/components/TransformEntryChip";
@@ -59,7 +60,13 @@ export function Canvas({ editor }: CanvasProps) {
               ? editor.isHoveringPenCloseTarget
                 ? "canvas-cursor-pen-close"
                 : "canvas-cursor-pen"
-              : "cursor-default"
+              : editor.tool === "rectangle" ||
+                  editor.tool === "ellipse" ||
+                  editor.tool === "polygon-star"
+                ? // The creation tools show their crosshair everywhere, over
+                  // existing objects too (`unified-object-editing` criterion 25).
+                  "cursor-crosshair"
+                : "cursor-default"
       }`}
     >
       {/* The context-menu wrapper stays mounted across both tools —
@@ -116,6 +123,12 @@ export function Canvas({ editor }: CanvasProps) {
         />
       )}
       <HandleHintChip hint={editor.handleHint} containerRef={editor.containerRef} />
+      <EditHintChip
+        hint={editor.editHint}
+        polygon={editor.selectBar.pointsShown && !editor.selectBar.ratioShown}
+        containerRef={editor.containerRef}
+        onDismiss={editor.dismissEditHint}
+      />
       {editor.liveReadout && (
         <ReadoutChip
           text={editor.liveReadout.text}

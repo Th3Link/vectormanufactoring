@@ -176,6 +176,7 @@ fn ac29_toggling_the_switch_does_not_change_the_saved_file() {
 fn ac31_the_corner_radius_scales_identically_with_the_switch_either_way() {
     let radius = |on: bool| {
         let mut s = rect_session();
+        s.set_scale_corner_radius(true); // off by default since `unified-object-editing`
         s.set_scale_stroke_width(on);
         click(&mut s, pt(20.0, 0.0));
         drag(&mut s, pt(40.0, 20.0), pt(80.0, 40.0)); // sx = sy = 2

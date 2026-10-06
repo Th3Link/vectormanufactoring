@@ -244,8 +244,8 @@ mod select_tool_state {
         AnchorId, Document, Length, NewAnchor, ObjectSnapshot, Point, RectBounds, Tolerance,
     };
     use vecmanf_ui_core::{
-        ObjectSelection, ResizeDirection, SelectTool, Side, TransformHandle,
-        TransformHandleTolerances, oriented_bounds,
+        EditHandle, ObjectSelection, ResizeDirection, SelectTool, Side, TransformHandleTolerances,
+        oriented_bounds,
     };
 
     const K: f64 = 2.0;
@@ -295,7 +295,7 @@ mod select_tool_state {
         let handles = SelectTool::transform_handles(&objects, &sel, tol(), false);
         let ne = handles
             .iter()
-            .find(|(h, _)| *h == TransformHandle::Rotate(ResizeDirection::Ne))
+            .find(|(h, _)| *h == EditHandle::Rotate(ResizeDirection::Ne))
             .unwrap()
             .1;
         tool.pointer_down(
@@ -329,7 +329,7 @@ mod select_tool_state {
         let handles = SelectTool::transform_handles(&objects, &sel, tol(), true);
         let n = handles
             .iter()
-            .find(|(h, _)| *h == TransformHandle::Rotate(ResizeDirection::N))
+            .find(|(h, _)| *h == EditHandle::Rotate(ResizeDirection::N))
             .unwrap()
             .1;
         tool.pointer_down(&objects, &mut sel, n, Tolerance::from_mm(1.0), tol(), true);
@@ -367,43 +367,28 @@ mod select_tool_state {
         let _ = &sel;
         let b = oriented_bounds(object);
         // rotate corner Ne with Shift -> opposite (Sw) corner (0, 40)
-        let p = SelectTool::hover_pivot(
-            object,
-            &b,
-            TransformHandle::Rotate(ResizeDirection::Ne),
-            true,
-        )
-        .unwrap();
+        let p = SelectTool::hover_pivot(object, &b, EditHandle::Rotate(ResizeDirection::Ne), true)
+            .unwrap();
         assert!(
             (p.x - 0.0).abs() < 1e-9 && (p.y - 40.0).abs() < 1e-9,
             "{p:?}"
         );
         // rotate side N with Shift -> bottom midpoint (30, 40)
-        let p = SelectTool::hover_pivot(
-            object,
-            &b,
-            TransformHandle::Rotate(ResizeDirection::N),
-            true,
-        )
-        .unwrap();
+        let p = SelectTool::hover_pivot(object, &b, EditHandle::Rotate(ResizeDirection::N), true)
+            .unwrap();
         assert!(
             (p.x - 30.0).abs() < 1e-9 && (p.y - 40.0).abs() < 1e-9,
             "{p:?}"
         );
         // resize with Shift -> centre
-        let p = SelectTool::hover_pivot(
-            object,
-            &b,
-            TransformHandle::Resize(ResizeDirection::Se),
-            true,
-        )
-        .unwrap();
+        let p = SelectTool::hover_pivot(object, &b, EditHandle::Resize(ResizeDirection::Se), true)
+            .unwrap();
         assert!(
             (p.x - 30.0).abs() < 1e-9 && (p.y - 20.0).abs() < 1e-9,
             "{p:?}"
         );
         // the centre handle has no pivot
-        assert!(SelectTool::hover_pivot(object, &b, TransformHandle::Move, true).is_none());
+        assert!(SelectTool::hover_pivot(object, &b, EditHandle::Move, true).is_none());
     }
 
     #[test]
@@ -413,7 +398,7 @@ mod select_tool_state {
         let handles = SelectTool::transform_handles(&objects, &sel, tol(), false);
         let top = handles
             .iter()
-            .find(|(h, _)| *h == TransformHandle::Skew(Side::Top))
+            .find(|(h, _)| *h == EditHandle::Skew(Side::Top))
             .unwrap()
             .1;
         tool.pointer_down(
@@ -449,7 +434,7 @@ mod select_tool_state {
         let handles = SelectTool::transform_handles(&objects, &sel, tol(), false);
         let se = handles
             .iter()
-            .find(|(h, _)| *h == TransformHandle::Resize(ResizeDirection::Se))
+            .find(|(h, _)| *h == EditHandle::Resize(ResizeDirection::Se))
             .unwrap()
             .1;
         tool.pointer_down(

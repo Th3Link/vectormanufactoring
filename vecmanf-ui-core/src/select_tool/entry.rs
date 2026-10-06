@@ -10,14 +10,60 @@ use vecmanf_document_core::{Document, ObjectSnapshot, Point, Tolerance};
 use super::{SelectDoubleClickOutcome, SelectDrag, SelectTool, sole_selected};
 use crate::hit_test_object::hit_test_object;
 use crate::object_selection::ObjectSelection;
+use crate::param_entry::ParamEntry;
 use crate::transform_entry::{EntryOutcome, TransformEntry};
-use crate::transform_handle_layout::{TransformHandle, TransformHandleTolerances};
+use crate::transform_handle_layout::{EditHandle, TransformHandleTolerances};
+
+/// The one open numeric entry: a transform entry (angle, size, outer radius)
+/// or a parameter entry (corner radius, inner ratio). Two concrete types use
+/// the enum.
+#[derive(Debug, Clone)]
+pub(super) enum OpenEntry {
+    /// An angle, size or outer-radius entry.
+    Transform(TransformEntry),
+    /// A corner-radius or inner-ratio entry.
+    Param(ParamEntry),
+}
+
+impl OpenEntry {
+    pub(super) fn handle(&self) -> EditHandle {
+        match self {
+            Self::Transform(entry) => entry.handle(),
+            Self::Param(entry) => entry.handle(),
+        }
+    }
+}
 
 impl SelectTool {
-    /// The open numeric entry, if any.
+    /// The open angle, size or outer-radius entry, if any.
     #[must_use]
     pub const fn entry(&self) -> Option<&TransformEntry> {
-        self.entry.as_ref()
+        match &self.entry {
+            Some(OpenEntry::Transform(entry)) => Some(entry),
+            Some(OpenEntry::Param(_)) | None => None,
+        }
+    }
+
+    /// The open corner-radius or inner-ratio entry, if any.
+    #[must_use]
+    pub const fn param_entry(&self) -> Option<&ParamEntry> {
+        match &self.entry {
+            Some(OpenEntry::Param(entry)) => Some(entry),
+            Some(OpenEntry::Transform(_)) | None => None,
+        }
+    }
+
+    /// Whether any numeric entry is open.
+    #[must_use]
+    pub const fn has_entry(&self) -> bool {
+        self.entry.is_some()
+    }
+
+    /// The handle the open entry belongs to: it keeps its dragging look while
+    /// the chip is open.
+    #[must_use]
+    pub fn entry_handle(&self) -> Option<EditHandle> {
+        self.entry.as_ref().map(OpenEntry::handle)
     }
 
     /// Closes the numeric entry without writing (criterion 20): idempotent.
@@ -39,7 +85,10 @@ impl SelectTool {
         let Some(entry) = self.entry.as_ref() else {
             return EntryOutcome::Unchanged;
         };
-        let outcome = entry.commit(document, texts, last_edited);
+        let outcome = match entry {
+            OpenEntry::Transform(entry) => entry.commit(document, texts, last_edited),
+            OpenEntry::Param(entry) => entry.commit(document, texts[0]),
+        };
         if !matches!(outcome, EntryOutcome::Invalid { .. }) {
             self.entry = None;
         }
@@ -73,17 +122,16 @@ impl SelectTool {
                 .filter(|(_, _, handle)| first_press_handle == Some(*handle))
         {
             let entry = match handle {
-                TransformHandle::Rotate(direction) => {
-                    Some(TransformEntry::for_rotate(object, &box_, direction, shift))
-                }
-                TransformHandle::Resize(direction) => Some(TransformEntry::for_resize(
-                    object,
-                    &box_,
-                    direction,
-                    (shift, ctrl),
-                    self.stroke_scaling,
+                EditHandle::Rotate(direction) => Some(OpenEntry::Transform(
+                    TransformEntry::for_rotate(object, &box_, direction, shift),
                 )),
-                TransformHandle::Skew(_) | TransformHandle::Move => None,
+                EditHandle::Resize(direction) => Some(OpenEntry::Transform(
+                    TransformEntry::for_resize(object, &box_, direction, (shift, ctrl), self.modes),
+                )),
+                EditHandle::Param(param) => {
+                    ParamEntry::for_handle(object, &box_, param).map(OpenEntry::Param)
+                }
+                EditHandle::Skew(_) | EditHandle::Move => None,
             };
             return match entry {
                 Some(entry) => {
@@ -96,15 +144,15 @@ impl SelectTool {
         if Self::is_inside_selected_box(objects, selection, point)
             && let Some(object) = sole_selected(objects, selection)
         {
-            return SelectDoubleClickOutcome::Hit(object.clone());
+            return hit_outcome(object);
         }
         double_click(objects, point, tolerance)
     }
 }
 
-/// Acceptance criteria 22, 23 of slice 4: what a double-click on an
-/// object's outline hit, for `Session` to map to the object's own tool
-/// (`tool_for`) and hand off to.
+/// What a double-click on an object's outline hit: a path for `Session` to
+/// hand off to the Node tool (criterion 22 of slice 4), or the edit hint for a
+/// primitive (criterion 32 of `unified-object-editing`).
 #[must_use]
 pub fn double_click(
     objects: &[ObjectSnapshot],
@@ -117,9 +165,14 @@ pub fn double_click(
     objects
         .iter()
         .find(|object| object.id() == hit)
-        .cloned()
-        .map_or(
-            SelectDoubleClickOutcome::Miss,
-            SelectDoubleClickOutcome::Hit,
-        )
+        .map_or(SelectDoubleClickOutcome::Miss, hit_outcome)
+}
+
+/// A path is handed off to the Node tool; a primitive only earns the edit
+/// hint (criteria 31, 32).
+fn hit_outcome(object: &ObjectSnapshot) -> SelectDoubleClickOutcome {
+    match object {
+        ObjectSnapshot::Path(_) => SelectDoubleClickOutcome::Hit(object.clone()),
+        ObjectSnapshot::Primitive(_) => SelectDoubleClickOutcome::EditHint,
+    }
 }

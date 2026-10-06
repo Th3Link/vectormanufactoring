@@ -9,7 +9,9 @@
 //! and `SelectTool::pointer_down`.
 
 use vecmanf_document_core::Point;
-use vecmanf_ui_core::{EntryKind, EntryOutcome, SelectTool, TransformEntry, TransformHandle};
+use vecmanf_ui_core::{
+    EditHandle, EntryKind, EntryOutcome, ParamEntry, SelectTool, TransformEntry,
+};
 
 use super::{Session, Tool};
 
@@ -18,7 +20,8 @@ use super::{Session, Tool};
 pub struct EntryFieldView {
     /// The visible label ("W", "H", "r"; empty for the angle).
     pub label: &'static str,
-    /// The accessible name ("Width", "Height", "Radius", "Angle").
+    /// The accessible name ("Width", "Height", "Outer radius", "Angle",
+    /// "Corner radius", "Inner ratio").
     pub accessible_name: &'static str,
     /// The text the field opens with.
     pub prefill: String,
@@ -29,7 +32,8 @@ pub struct EntryFieldView {
 /// An open entry as the host sees it: what to show and where.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EntryView {
-    /// `"angle"`, `"size"` or `"radius"`.
+    /// `"angle"`, `"size"`, `"radius"` (a polygon or star's outer radius),
+    /// `"corner-radius"` or `"inner-ratio"`.
     pub kind: &'static str,
     /// One or two fields.
     pub fields: Vec<EntryFieldView>,
@@ -57,9 +61,58 @@ impl Session {
         (self.selection.ids() == [entry.object().id()]).then_some(entry)
     }
 
-    /// The numeric entry to show, or `None` (criteria 18, 25, 26).
+    /// The open corner-radius or inner-ratio entry, with the same checks.
+    fn open_param_entry(&self) -> Option<&ParamEntry> {
+        if self.tool != Tool::Select {
+            return None;
+        }
+        let entry = self.select.param_entry()?;
+        (self.selection.ids() == [entry.object().id()]).then_some(entry)
+    }
+
+    /// The chip of an open parameter-handle entry: one field next to its
+    /// knob (`unified-object-editing` criteria 18, 19).
+    fn param_entry_view(&self, entry: &ParamEntry) -> Option<EntryView> {
+        let objects = self.objects();
+        let handle = SelectTool::transform_handles(
+            &objects,
+            &self.selection,
+            self.transform_handle_tolerances(),
+            false,
+        )
+        .into_iter()
+        .find(|(handle, _)| *handle == entry.handle())?
+        .1;
+        let box_ = entry.start_box();
+        Some(EntryView {
+            kind: match entry.kind() {
+                EntryKind::CornerRadius => "corner-radius",
+                _ => "inner-ratio",
+            },
+            fields: entry
+                .fields()
+                .iter()
+                .map(|field| EntryFieldView {
+                    label: field.label,
+                    accessible_name: field.accessible_name,
+                    prefill: field.prefill.clone(),
+                    editable: field.editable,
+                })
+                .collect(),
+            linked: false,
+            handle,
+            center: box_.to_document(box_.local_center()),
+            glyph_reach_px: 6.0,
+        })
+    }
+
+    /// The numeric entry to show, or `None` (criteria 18, 25, 26; 18, 19 of
+    /// `unified-object-editing`).
     #[must_use]
     pub fn transform_entry(&self) -> Option<EntryView> {
+        if let Some(entry) = self.open_param_entry() {
+            return self.param_entry_view(entry);
+        }
         let entry = self.open_entry()?;
         let objects = self.objects();
         let handles = SelectTool::transform_handles(
@@ -76,9 +129,9 @@ impl Session {
         // sits 16 px out and is 12 px deep, so the glyphs reach 22 px.
         let skew_beyond = matches!(
             entry.handle(),
-            TransformHandle::Resize(direction)
+            EditHandle::Resize(direction)
                 if handles.iter().any(|(h, _)| matches!(
-                    h, TransformHandle::Skew(side) if side.direction() == direction
+                    h, EditHandle::Skew(side) if side.direction() == direction
                 ))
         );
         let box_ = entry.start_box();
@@ -86,7 +139,9 @@ impl Session {
             kind: match entry.kind() {
                 EntryKind::Angle => "angle",
                 EntryKind::Size => "size",
-                EntryKind::Radius => "radius",
+                EntryKind::OuterRadius => "radius",
+                EntryKind::CornerRadius => "corner-radius",
+                EntryKind::InnerRatio => "inner-ratio",
             },
             fields: entry
                 .fields()
@@ -124,7 +179,7 @@ impl Session {
         second: &str,
         last_edited: usize,
     ) -> EntryOutcome {
-        if self.open_entry().is_none() {
+        if self.open_entry().is_none() && self.open_param_entry().is_none() {
             self.select.cancel_entry();
             return EntryOutcome::Unchanged;
         }

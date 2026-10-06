@@ -159,11 +159,28 @@ function App() {
         {/* Contextual tool bar: floats over the canvas, right of the tool
          * rail, so showing/hiding it never resizes the canvas
          * (`docs/design-system.md`, "no layout shift on tool switch"). */}
-        <div className="pointer-events-none absolute top-3 right-3 left-[72px] z-20 flex justify-center">
+        <div
+          className={`pointer-events-none absolute top-3 right-3 left-[72px] z-20 flex ${
+            // The Select bar is left-aligned so its two switches never move
+            // when the selection changes; the Node and Shape bars stay
+            // centred (`docs/design-system.md`, "Select bar layout").
+            editor.tool === "select" ? "justify-start" : "justify-center"
+          }`}
+        >
           {editor.tool === "select" ? (
             <SelectToolbar
               scaleStrokeWidth={editor.scaleStrokeWidth}
               onSetScaleStrokeWidth={editor.setScaleStrokeWidth}
+              scaleCornerRadius={editor.scaleCornerRadius}
+              onSetScaleCornerRadius={editor.setScaleCornerRadius}
+              bar={editor.selectBar}
+              onSetRadius={editor.setSelectedRadius}
+              onRemoveRounding={editor.removeCornerRounding}
+              onSetPointCount={editor.setSelectedPointCount}
+              onPreviewRatio={editor.previewSelectedRatio}
+              onCommitRatio={editor.commitSelectedRatio}
+              onConvertToPaths={editor.convertSelectedToPaths}
+              onReturnFocus={() => editor.containerRef.current?.focus()}
             />
           ) : null}
           {editor.tool === "node" ? (
@@ -180,9 +197,7 @@ function App() {
               }}
             />
           ) : null}
-          {editor.tool === "rectangle" ||
-          editor.tool === "ellipse" ||
-          editor.tool === "polygon-star" ? (
+          {editor.tool === "polygon-star" ? (
             <ShapeToolbar
               tool={editor.tool}
               polyStarMode={editor.polyStarMode}
@@ -190,10 +205,7 @@ function App() {
               polyStarRatio={editor.polyStarRatio}
               onSetPolyStarMode={editor.setPolyStarMode}
               onSetPolyStarPointCount={editor.setPolyStarPointCount}
-              onPreviewPolyStarRatio={editor.previewPolyStarRatio}
-              onCommitPolyStarRatio={editor.commitPolyStarRatio}
-              onRemoveCornerRounding={editor.removeCornerRounding}
-              onConvertSelectedToPaths={editor.convertSelectedToPaths}
+              onSetPolyStarRatio={editor.setPolyStarRatio}
             />
           ) : null}
         </div>

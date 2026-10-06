@@ -612,24 +612,36 @@ fn ac22_double_click_on_a_path_hands_off_to_the_node_tool() {
     assert_eq!(session.tool(), Tool::Node);
 }
 
-#[test]
-fn ac23_double_click_on_a_rect_hands_off_to_the_rectangle_tool() {
-    let mut session = Session::new(1);
-    draw_rect(&mut session, 0.0, 0.0, 10.0, 10.0);
+/// `unified-object-editing` criterion 32 replaces this criterion 23: a
+/// double-click on a primitive's outline hands off to no tool, changes neither
+/// the document nor the selection, and asks the host for the edit hint.
+fn assert_double_click_only_hints(session: &mut Session, at: Point) {
     session.set_tool(Tool::Select);
-
-    session.double_click(Point::new(0.0, 5.0), false, false);
-    assert_eq!(session.tool(), Tool::Rectangle);
+    let before = document_of(session).export_loro_snapshot().unwrap();
+    assert!(
+        session.double_click(at, false, false),
+        "the edit hint is requested"
+    );
+    assert_eq!(session.tool(), Tool::Select, "no tool switch");
+    assert_eq!(
+        document_of(session).export_loro_snapshot().unwrap(),
+        before,
+        "nothing written"
+    );
 }
 
 #[test]
-fn ac23_double_click_on_an_ellipse_hands_off_to_the_ellipse_tool() {
+fn ac23_double_click_on_a_rect_changes_nothing_and_asks_for_the_hint() {
+    let mut session = Session::new(1);
+    draw_rect(&mut session, 0.0, 0.0, 10.0, 10.0);
+    assert_double_click_only_hints(&mut session, Point::new(0.0, 5.0));
+}
+
+#[test]
+fn ac23_double_click_on_an_ellipse_changes_nothing_and_asks_for_the_hint() {
     let mut session = Session::new(1);
     draw_ellipse(&mut session, 0.0, 0.0, 10.0, 10.0);
-    session.set_tool(Tool::Select);
-
-    session.double_click(Point::new(5.0, 0.0), false, false);
-    assert_eq!(session.tool(), Tool::Ellipse);
+    assert_double_click_only_hints(&mut session, Point::new(5.0, 0.0));
 }
 
 #[test]

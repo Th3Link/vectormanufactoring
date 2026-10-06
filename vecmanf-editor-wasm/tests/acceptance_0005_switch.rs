@@ -757,6 +757,7 @@ fn ac31_the_corner_radius_scales_identically_with_the_switch_on_and_off() {
         let mut radii = vec![];
         for on in [false, true] {
             let mut s = rect_with_radius(2.0, 1.0);
+            s.set_scale_corner_radius(true); // off by default since `unified-object-editing`
             s.set_scale_stroke_width(on);
             drag(&mut s, pt(40.0, 20.0), to, false, false);
             let (r, w) = radius_and_stroke(&s);
@@ -783,6 +784,7 @@ fn ac31_every_handle_scales_the_radius_the_same_in_both_modes() {
         let mut radii = vec![];
         for on in [false, true] {
             let mut s = rect_with_radius(2.0, 1.0);
+            s.set_scale_corner_radius(true);
             s.set_scale_stroke_width(on);
             let h = handles(Kind::Rect)[hi];
             let (press, release) = gesture(Kind::Rect, h, (1.5, 2.0), false);

@@ -16,6 +16,9 @@
  *   resize cursor (the box rotation for the top and bottom handles, plus 90°
  *   for left and right), with `ew-resize`/`ns-resize` as the fallback.
  * - `"move"`: the built-in `move` cursor (the centre handle).
+ * - `"pointer"`: the built-in `pointer` cursor, hovering and dragging a
+ *   parameter handle (`specs/unified-object-editing/` criterion 5): not a
+ *   resize or move cursor, so it does not promise one.
  * - anything else: no override (the tool's normal cursor).
  */
 
@@ -69,6 +72,9 @@ export function cursorForHint(hint: string): string | undefined {
   }
   if (hint === "move") {
     return "move";
+  }
+  if (hint === "pointer") {
+    return "pointer";
   }
   if (hint.startsWith("skew:")) {
     const degrees = Number.parseFloat(hint.slice("skew:".length));

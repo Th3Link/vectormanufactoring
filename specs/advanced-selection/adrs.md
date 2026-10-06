@@ -252,6 +252,12 @@ are under "Flagged to the lead", each with a default.
   - `frontend/`: modifier forwarding, Shift/Ctrl/Alt re-send during a drag,
     Alt default suppression, cursor per gesture.
 
+- **2026-10-06 (architect, from the `unified-object-editing` review): task 1 of
+  this feature is a pure-move split of `vecmanf-editor-wasm/src/wasm_api.rs` by
+  tool (about 760 non-test lines, over the ~500 limit), one `#[wasm_bindgen]
+  impl` per tool as `wasm_select_bar.rs` already does, no behaviour change.
+  It owns the `docs/technical-debt.md` entry on `wasm_api.rs`.**
+
 ## Flagged to the lead
 
 1. **Ctrl-click on empty canvas (new with the rework).** A Ctrl press on

@@ -1,17 +1,11 @@
 //! Hit-testing one document-space point against every object in the
 //! document — any kind, one entry point (`specs/0004-canvas-navigation-
 //! and-selection/adrs.md`, feature-local decision "one object hit test,
-//! no third copy"): [`crate::hit_test`]'s node/handle/segment test and
-//! [`crate::shape_hit_test`]'s primitive-outline test already each
-//! measure the distance from a point to a run of cubic segments; this
-//! module is their union for "any object, selected as a whole" (a path
-//! through its own anchors, a primitive through its outline).
-//!
-//! [`crate::shape_hit_test::hit_test_primitive`] is reimplemented on top
-//! of [`hit_test_object`] rather than kept as a second, independent
-//! definition of "near an outline" (`adrs.md`: "Rejected: having the
-//! Select tool call `hit_test` and `hit_test_primitive` and compare
-//! results. That keeps two definitions of 'near an outline'").
+//! no third copy"): [`crate::hit_test`]'s node/handle/segment test measures
+//! the distance from a point to a run of cubic segments, and this module
+//! applies the same measure to "any object, selected as a whole" (a path
+//! through its own anchors, a primitive through its outline). It is the one
+//! definition of "near an outline"; the shape tools no longer hit-test at all.
 
 use vecmanf_document_core::{NodeId, ObjectSnapshot, Point, Tolerance, Vec2, outline_of_rotated};
 use vecmanf_geometry_core::nearest_point_on_segment;

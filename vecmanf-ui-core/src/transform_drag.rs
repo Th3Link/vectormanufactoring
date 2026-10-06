@@ -5,22 +5,24 @@
 //! per gesture"). `SelectTool`'s live preview, its commit on release and
 //! the typed numeric entry all go through [`TransformDrag::resolve`]'s
 //! building blocks ([`resize_by_local_delta`], [`rotate_by`],
-//! [`skew_by_angle`]), and the shape tools' own rectangle and ellipse
-//! resizes share [`pin_resize_anchor`], so each rule exists once.
+//! [`skew_by_angle`]), so each rule exists once. The primitive-specific
+//! resize arithmetic is in [`crate::transform_primitive`].
 
 use vecmanf_document_core::{
-    Angle, Document, EllipseFrame, Length, ObjectSnapshot, Point, PrimitiveSnapshot, RectBounds,
-    Shape, StarFrame, Vec2, shape_center, translate_shape,
+    Angle, Document, Length, ObjectSnapshot, Point, PrimitiveSnapshot, Shape, Vec2,
 };
 
 use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;
+use crate::param_edit::{apply_param, value_from_pointer};
+use crate::skew_math::{skew_angle, skew_factor, skew_frame};
 use crate::transform_commit::{commit_gesture, sane_or};
-use crate::transform_handle_layout::{Side, TransformHandle};
+use crate::transform_handle_layout::{EditHandle, Side};
 use crate::transform_math::{
-    polygon_star_resize_factor, resize_anchor_local_position, resize_local_box, rotate_delta_angle,
-    rotate_pivot, scaled_and_floored, skew_angle, skew_factor, skew_frame, stroke_or_radius_factor,
+    resize_anchor_local_position, resize_local_box, rotate_delta_angle, rotate_pivot,
+    scaled_and_floored, stroke_or_radius_factor,
 };
+use crate::transform_primitive::resize_primitive;
 
 /// A resize/corner-radius drag can never drive a stroke width to zero
 /// or below (acceptance criterion 8 of `specs/0005-object-transform/
@@ -46,14 +48,40 @@ pub enum StrokeScaling {
     Proportional,
 }
 
-/// The modifiers and mode a resize drag runs with: Shift (center pivot,
-/// AC 7), Ctrl (proportional, AC 5) and the [`StrokeScaling`] captured at
-/// the press (AC 28).
+/// Whether a resize of a rectangle also scales its corner radius, the
+/// "Scale corner radius" switch (`specs/unified-object-editing/`, criterion
+/// 23; customer decision 2026-10-06). An enum, not a `bool`, for the same
+/// reason as [`StrokeScaling`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CornerRadiusScaling {
+    /// The default: a resize keeps the radius's absolute size, and the stored
+    /// register is not rewritten.
+    #[default]
+    Keep,
+    /// The radius scales with the resize, √(sx·sy) like the stroke width
+    /// (`0005` criterion 9).
+    Proportional,
+}
+
+/// The two Select-tool switches that decide what else a resize scales. Tool
+/// state, never written to the document (criteria 23, 28 of slice 5 and 23
+/// here): a drag captures it at the press, a typed size when the entry opens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ScaleModes {
+    /// "Scale stroke width".
+    pub stroke: StrokeScaling,
+    /// "Scale corner radius".
+    pub radius: CornerRadiusScaling,
+}
+
+/// The modifiers and modes a resize drag runs with: Shift (center pivot,
+/// AC 7), Ctrl (proportional, AC 5) and the [`ScaleModes`] captured at the
+/// press (AC 28).
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ResizeOptions {
     pub(crate) shift: bool,
     pub(crate) ctrl: bool,
-    pub(crate) stroke_scaling: StrokeScaling,
+    pub(crate) modes: ScaleModes,
 }
 
 /// The press point of a Select-tool drag, its dead zone and the handle
@@ -68,18 +96,19 @@ pub(crate) struct DragOrigin {
     pub(crate) down_at: Point,
     dead_zone_mm: f64,
     passed: bool,
-    /// Whether the four side rotate handles were showing at the press: the
-    /// handle set is frozen for the whole drag (criterion 6).
-    pub(crate) side_rotate_revealed: bool,
+    /// Whether Shift was held at the press. It reveals the four side rotate
+    /// handles, a set frozen for the whole drag (criterion 6), and later
+    /// inverts a corner-radius link (`specs/rectangle-corner-radii/`).
+    pub(crate) shift_at_press: bool,
 }
 
 impl DragOrigin {
-    pub(crate) const fn new(down_at: Point, dead_zone_mm: f64, side_rotate_revealed: bool) -> Self {
+    pub(crate) const fn new(down_at: Point, dead_zone_mm: f64, shift_at_press: bool) -> Self {
         Self {
             down_at,
             dead_zone_mm,
             passed: false,
-            side_rotate_revealed,
+            shift_at_press,
         }
     }
 
@@ -110,11 +139,16 @@ pub(crate) struct TransformDrag {
     pub(crate) origin: DragOrigin,
     pub(crate) start: ObjectSnapshot,
     pub(crate) start_box: OrientedBox,
-    pub(crate) handle: TransformHandle,
-    /// The tool's [`StrokeScaling`] as of the press: a drag uses it for
+    pub(crate) handle: EditHandle,
+    /// The tool's [`ScaleModes`] as of the press: a drag uses them for
     /// its whole duration, so a toggle mid-drag applies from the next drag
-    /// (AC 28 of slice 5).
-    pub(crate) stroke_scaling: StrokeScaling,
+    /// (AC 28 of slice 5, criterion 23 here).
+    pub(crate) modes: ScaleModes,
+    /// The radius gain ([`crate::radius_gain`]) of a corner-radius drag,
+    /// frozen at the press: it depends on the screen scale, so a wheel zoom
+    /// during the drag cannot change the mapping between frames and release
+    /// equals preview. `1` for every other handle.
+    pub(crate) param_gain: f64,
 }
 
 impl TransformDrag {
@@ -126,7 +160,7 @@ impl TransformDrag {
     pub(crate) fn resolve(&self, current: Point, shift: bool, ctrl: bool) -> ObjectSnapshot {
         let (start, start_box, down_at) = (&self.start, &self.start_box, self.origin.down_at);
         match self.handle {
-            TransformHandle::Resize(direction) => {
+            EditHandle::Resize(direction) => {
                 // `f64::max`/`clamp` swallow a NaN (turning it into 0 or an
                 // edge), so a non-finite pointer must be refused first.
                 let local_delta = local_delta_of(start_box, down_at, current);
@@ -141,11 +175,11 @@ impl TransformDrag {
                     ResizeOptions {
                         shift,
                         ctrl,
-                        stroke_scaling: self.stroke_scaling,
+                        modes: self.modes,
                     },
                 )
             }
-            TransformHandle::Rotate(direction) => {
+            EditHandle::Rotate(direction) => {
                 let pivot = rotate_pivot(start_box, direction, shift);
                 rotate_by(
                     start,
@@ -153,21 +187,28 @@ impl TransformDrag {
                     rotate_delta_angle(pivot, down_at, current, ctrl),
                 )
             }
-            TransformHandle::Skew(side) => skew_by_angle(
+            EditHandle::Skew(side) => skew_by_angle(
                 start,
                 start_box,
                 side,
                 shift,
                 skew_angle(start_box, side, down_at, current, shift, ctrl),
             ),
-            TransformHandle::Move => start.clone(),
+            EditHandle::Param(handle) => {
+                let local_delta = local_delta_of(start_box, down_at, current);
+                value_from_pointer(start, handle, local_delta, self.param_gain).map_or_else(
+                    || start.clone(),
+                    |value| sane_or(start, apply_param(start, value)),
+                )
+            }
+            EditHandle::Move => start.clone(),
         }
     }
 
     /// The skew angle of the drag at `current` (the readout's value), for a
     /// skew drag.
     pub(crate) fn skew_angle_at(&self, current: Point, shift: bool, ctrl: bool) -> Option<Angle> {
-        let TransformHandle::Skew(side) = self.handle else {
+        let EditHandle::Skew(side) = self.handle else {
             return None;
         };
         Some(skew_angle(
@@ -186,7 +227,7 @@ impl TransformDrag {
     /// rotate through `rotate_object`, a skew through `commit_resize` with
     /// no stroke width (anchors only).
     pub(crate) fn commit(&self, document: &Document, result: &ObjectSnapshot) {
-        commit_gesture(document, self.handle, result, self.stroke_scaling);
+        commit_gesture(document, self.handle, result, self.modes);
     }
 }
 
@@ -197,13 +238,13 @@ impl TransformDrag {
 /// [`rotate_pivot`]; a skew about the fixed edge's midpoint or, under Shift,
 /// the center. `None` for the centre move handle.
 pub(crate) fn pivot_for(
-    handle: TransformHandle,
+    handle: EditHandle,
     object: &ObjectSnapshot,
     box_: &OrientedBox,
     shift: bool,
 ) -> Option<Point> {
     match handle {
-        TransformHandle::Resize(direction) => {
+        EditHandle::Resize(direction) => {
             let local = if is_polygon_or_star(object) {
                 box_.local_center()
             } else {
@@ -211,9 +252,9 @@ pub(crate) fn pivot_for(
             };
             Some(box_.to_document(local))
         }
-        TransformHandle::Rotate(direction) => Some(rotate_pivot(box_, direction, shift)),
-        TransformHandle::Skew(side) => Some(skew_frame(box_, side, shift).fixed_point),
-        TransformHandle::Move => None,
+        EditHandle::Rotate(direction) => Some(rotate_pivot(box_, direction, shift)),
+        EditHandle::Skew(side) => Some(skew_frame(box_, side, shift).fixed_point),
+        EditHandle::Move | EditHandle::Param(_) => None,
     }
 }
 
@@ -242,8 +283,9 @@ pub(crate) fn local_delta_of(start_box: &OrientedBox, down_at: Point, current: P
 /// 4-13 of slice 5): the one resize rule, called with the pointer's delta by
 /// a drag and with a typed size's delta by the entry. `start` unchanged if
 /// the result would not be finite and sane. The stroke width scales only
-/// for [`StrokeScaling::Proportional`]; the corner radius scales either way
-/// (AC 9, 31).
+/// for [`StrokeScaling::Proportional`], the corner radius only for
+/// [`CornerRadiusScaling::Proportional`] (AC 9, 31 of slice 5; criterion 23
+/// of `unified-object-editing`).
 pub(crate) fn resize_by_local_delta(
     start: &ObjectSnapshot,
     start_box: &OrientedBox,
@@ -251,15 +293,17 @@ pub(crate) fn resize_by_local_delta(
     local_delta: Vec2,
     options: ResizeOptions,
 ) -> ObjectSnapshot {
-    let ResizeOptions {
-        shift,
-        ctrl,
-        stroke_scaling,
-    } = options;
+    let ResizeOptions { shift, ctrl, modes } = options;
     let (mut resized, factor) = match start {
         ObjectSnapshot::Primitive(primitive) => {
-            let (resized, factor) =
-                resize_primitive(primitive, start_box, direction, local_delta, shift, ctrl);
+            let (resized, factor) = resize_primitive(
+                primitive,
+                start_box,
+                direction,
+                local_delta,
+                (shift, ctrl),
+                modes.radius,
+            );
             (ObjectSnapshot::Primitive(resized), factor)
         }
         ObjectSnapshot::Path(path) => {
@@ -280,7 +324,7 @@ pub(crate) fn resize_by_local_delta(
             )
         }
     };
-    if stroke_scaling == StrokeScaling::Proportional {
+    if modes.stroke == StrokeScaling::Proportional {
         scale_stroke(&mut resized, factor);
     }
     sane_or(start, resized)
@@ -319,176 +363,6 @@ pub(crate) fn skew_by_angle(
         start,
         ObjectSnapshot::Path(path.sheared(frame.fixed_point, ku, kv)),
     )
-}
-
-/// A primitive's resized frame and the stroke/radius factor that goes
-/// with it. Rectangles and ellipses resize their local box (the corner
-/// radius scales with the factor, acceptance criterion 9); a polygon or
-/// star is always a uniform outer-radius scale (criterion 11).
-fn resize_primitive(
-    primitive: &PrimitiveSnapshot,
-    start_box: &OrientedBox,
-    direction: ResizeDirection,
-    local_delta: Vec2,
-    shift: bool,
-    ctrl: bool,
-) -> (PrimitiveSnapshot, f64) {
-    let box_resize = || {
-        resize_local_box(
-            start_box.min,
-            start_box.max,
-            direction,
-            local_delta,
-            shift,
-            ctrl,
-        )
-    };
-    let (shape, factor) = match primitive.shape {
-        Shape::Rect { corner_radius, .. } => {
-            let resized = box_resize();
-            let factor = stroke_or_radius_factor(resized.sx, resized.sy);
-            let shape = Shape::Rect {
-                bounds: RectBounds {
-                    origin: resized.min,
-                    width: Length::from_mm(resized.max.x - resized.min.x),
-                    height: Length::from_mm(resized.max.y - resized.min.y),
-                },
-                corner_radius: scaled_and_floored(corner_radius, factor, Length::from_mm(0.0)),
-            };
-            (shape, factor)
-        }
-        Shape::Ellipse { .. } => {
-            let resized = box_resize();
-            let shape = Shape::Ellipse {
-                frame: EllipseFrame {
-                    center: Point::new(
-                        f64::midpoint(resized.min.x, resized.max.x),
-                        f64::midpoint(resized.min.y, resized.max.y),
-                    ),
-                    rx: Length::from_mm((resized.max.x - resized.min.x) / 2.0),
-                    ry: Length::from_mm((resized.max.y - resized.min.y) / 2.0),
-                },
-            };
-            (shape, stroke_or_radius_factor(resized.sx, resized.sy))
-        }
-        Shape::Polygon { frame, point_count } => {
-            let factor = polygon_star_resize_factor(frame.radius.as_mm(), direction, local_delta);
-            let shape = Shape::Polygon {
-                frame: scaled_star_frame(frame, factor),
-                point_count,
-            };
-            (shape, factor)
-        }
-        Shape::Star {
-            frame,
-            point_count,
-            inner_ratio,
-        } => {
-            let factor = polygon_star_resize_factor(frame.radius.as_mm(), direction, local_delta);
-            let shape = Shape::Star {
-                frame: scaled_star_frame(frame, factor),
-                point_count,
-                inner_ratio,
-            };
-            (shape, factor)
-        }
-    };
-    let anchor_local = resize_anchor_local_position(start_box.min, start_box.max, direction, shift);
-    let pinned = pin_resize_anchor(shape, start_box.pivot, primitive.rotation, anchor_local);
-    (
-        PrimitiveSnapshot {
-            shape: pinned,
-            ..*primitive
-        },
-        factor,
-    )
-}
-
-fn scaled_star_frame(frame: StarFrame, factor: f64) -> StarFrame {
-    StarFrame {
-        radius: Length::from_mm(frame.radius.as_mm() * factor),
-        ..frame
-    }
-}
-
-/// Keeps a resize's anchor fixed in document space.
-///
-/// A primitive rotates about its *own* frame center, which a resize just
-/// moved — so on a rotated object the anchor (the opposite corner or
-/// edge, or the center under Shift) would swing across the canvas.
-/// `after` is the resized shape in its local frame, `before_pivot` the
-/// frame center before the resize, `anchor_local` the anchor in local
-/// coordinates (unchanged by the resize); the whole frame is translated
-/// by however far the anchor moved. A no-op at zero rotation, where the
-/// local and document frames agree, and for a polygon/star, whose center
-/// does not move. The Select tool and the rectangle and ellipse tools'
-/// own resizes all call this, so they cannot disagree.
-pub(crate) fn pin_resize_anchor(
-    after: Shape,
-    before_pivot: Point,
-    rotation: Angle,
-    anchor_local: Point,
-) -> Shape {
-    let before = anchor_local.rotated_around(before_pivot, rotation);
-    let after_anchor = anchor_local.rotated_around(shape_center(&after), rotation);
-    translate_shape(after, after_anchor.vector_to(before))
-}
-
-/// [`pin_resize_anchor`] for the rectangle tool's own resize: the
-/// opposite corner/edge of `start` stays put on screen.
-pub(crate) fn pin_rect_resize(
-    start: RectBounds,
-    resized: RectBounds,
-    direction: ResizeDirection,
-    rotation: Angle,
-) -> RectBounds {
-    let (min, max) = (
-        start.origin,
-        Point::new(
-            start.origin.x + start.width.as_mm(),
-            start.origin.y + start.height.as_mm(),
-        ),
-    );
-    let anchor = resize_anchor_local_position(min, max, direction, false);
-    let center = Point::new(f64::midpoint(min.x, max.x), f64::midpoint(min.y, max.y));
-    let shape = Shape::Rect {
-        bounds: resized,
-        corner_radius: Length::from_mm(0.0),
-    };
-    match pin_resize_anchor(shape, center, rotation, anchor) {
-        Shape::Rect { bounds, .. } => bounds,
-        // invariant: `pin_resize_anchor` only translates; it never changes
-        // the kind.
-        _ => resized,
-    }
-}
-
-/// [`pin_resize_anchor`] for the ellipse tool's own resize.
-pub(crate) fn pin_ellipse_resize(
-    start: EllipseFrame,
-    resized: EllipseFrame,
-    direction: ResizeDirection,
-    rotation: Angle,
-) -> EllipseFrame {
-    let min = Point::new(
-        start.center.x - start.rx.as_mm(),
-        start.center.y - start.ry.as_mm(),
-    );
-    let max = Point::new(
-        start.center.x + start.rx.as_mm(),
-        start.center.y + start.ry.as_mm(),
-    );
-    let anchor = resize_anchor_local_position(min, max, direction, false);
-    match pin_resize_anchor(
-        Shape::Ellipse { frame: resized },
-        start.center,
-        rotation,
-        anchor,
-    ) {
-        Shape::Ellipse { frame } => frame,
-        // invariant: see `pin_rect_resize`.
-        _ => resized,
-    }
 }
 
 /// Scales `object`'s stroke width by `factor`, floored above zero.
