@@ -14,6 +14,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 mod anchor_id_minter;
+mod angle_snap;
 mod conversion;
 mod ellipse_tool;
 mod handle_layout;
@@ -36,6 +37,7 @@ mod transform_math;
 mod viewport;
 
 pub use anchor_id_minter::AnchorIdMinter;
+pub use angle_snap::{MAX_SKEW_SNAP_DEG, snap_angle, snap_skew_angle};
 pub use conversion::build_primitive_conversions;
 pub use ellipse_tool::{EllipsePointerDownOutcome, EllipsePointerUpOutcome, EllipseTool};
 pub use handle_layout::{HandleKind, ResizeDirection, ShapeHandle, handles_for};
