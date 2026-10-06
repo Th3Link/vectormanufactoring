@@ -10,19 +10,12 @@ branching. This slice therefore takes **5**, matching the architect's own
 2026-10-05 resolution note in `adrs.md` (not the plain "4" the dated
 decision above it says) — no discrepancy to report.
 
-## Scope decision (effort-bounded)
+## Scope
 
-This spec's 25 acceptance criteria span document-model data (rotation),
-pure geometry/interaction logic (ui-core), rendering decorations
-(render-core) and device-specific chrome (cursors, on-canvas readouts —
-editor-wasm/frontend). Per `CLAUDE.md` §4 "core logic test-first, UI wiring
-thin": document-core and ui-core get full test coverage against the
-acceptance criteria below. render-core gets the decoration data plumbed
-through (quads + handle positions) at the same fidelity slice 4's own
-decorations use. Exact cursor glyphs/CSS and the live on-canvas numeric
-readout's pixel placement are frontend/editor-wasm concerns outside any
-crate with unit tests today (editor-wasm has none) — flagged in the final
-report as follow-up for ux-engineer/frontend wiring, not silently dropped.
+Every acceptance criterion is in scope, including the on-canvas readout,
+the cursors and the glyph shapes (a first pass of this plan deferred
+those; the lead rejected that — they are criteria 1, 14, 18, 22 and the
+UX notes, not follow-ups).
 
 ## Affected crates/modules
 
@@ -47,46 +40,38 @@ report as follow-up for ux-engineer/frontend wiring, not silently dropped.
 
 ## Tasks (acceptance criteria in parens)
 
-1. `Angle::normalized`, `Point::rotated_around`, `Vec2::rotated` in
-   `units.rs`, tested. (infrastructure for 15-20)
-2. `rotation: Angle` on `PrimitiveSnapshot` and `PathSnapshot`; codec
-   read/write (absent = 0, normalized on write); open-file validation
-   refuses non-finite `rotation` (`OpenError::Damaged`). (19, 24)
-3. `CURRENT_FORMAT_VERSION = 5`; `document.json` gains `rotation` per
-   object. (19, 24)
-4. `shape_center`, `rotate_shape`, `ObjectSnapshot::rotated` (primitive:
-   frame center + rotation register; path: delegates to
-   `PathSnapshot::rotated`). (15-18, 20, 21, 25)
-5. `PathSnapshot::rotated`/`scaled` (bake anchors + handles; `scaled` maps
-   into the path's own local frame via its `rotation`, per axis, back
-   out). (12, 20)
-6. `outline_of_rotated` (rotated primitive outline; single place rotation
-   applies for rendering/hit-test/object-to-path). (17, 21, 25)
-7. `Document::rotate_object` (one commit, dispatches path/primitive).
-   (15-18)
-8. `Document::resize_rect`/`resize_ellipse`/`resize_star_frame`/
-   `resize_path` (frame + corner_radius/stroke_width in one commit).
-   (4-13)
-9. `path_topology::split_open_path` carries the original's rotation to
-   the new object. (20, architect note)
-10. `conversion.rs`/`hit_test_object.rs` use `outline_of_rotated`;
-    object-to-path keeps `rotation` (not stripped). (17, 21, 25)
-11. `OrientedBox` (ui-core): local frame + angle, corner/edge-midpoint
-    positions, document-space mapping — primitive via `shape_center`
-    pivot, path via document-origin pivot + derotated anchor bounds.
-    (1, 18)
-12. `transform_handle_layout.rs`: 8 resize + rotate handle local
-    positions (polygon/star: corners only, AC11); hit test; drag
-    arithmetic for free/proportional/edge resize with opposite-corner or
-    Shift-center pivot (4-7); stroke-width/corner-radius √(sx·sy) factor
-    with zero-floor refusal (8, 9); 15° Ctrl snap for rotate (17);
-    Shift bottom-edge-midpoint pivot for rotate (16); zero-size clamp
-    (13). (4-17)
-13. `select_tool.rs`: resize/rotate drag states gated to single-object
-    selection (1, 2); press-release-no-move writes nothing (3); move
-    unaffected (23); commits via the new Document methods.
-14. Thin `render-core` decoration pass-through for the 8+1 handles
-    (follow-up note for ux-engineer on exact glyphs/cursors).
+- [x] 1. `Angle::normalized`, `Point::rotated_around`, `Vec2::rotated` (infrastructure)
+- [x] 2. `rotation` on snapshots, codec, `Damaged` on non-finite/mistyped (19, 24)
+- [x] 3. `CURRENT_FORMAT_VERSION = 5`, `document.json` carries `rotation`; golden fixture `rotation_v5.vmf`, `future_format_version.vmf` regenerated (19, 24)
+- [x] 4. `shape_center`, `rotate_shape`, `ObjectSnapshot::rotated` (15-18, 20, 21)
+- [x] 5. `PathSnapshot::rotated`/`scaled` (12, 20)
+- [x] 6. `outline_of_rotated`; **used by render-core's primitive stroke and live preview too** (an earlier pass of this slice forgot render-core) (17, 21, 25)
+- [x] 7. `Document::rotate_object` (15-18)
+- [x] 8. `resize_rect`/`resize_ellipse`/`resize_star_frame`/`resize_path` (4-13)
+- [x] 9. Split carries `rotation` (architect note)
+- [x] 10. `conversion.rs`/`hit_test_object.rs` use the rotated outline (17, 21, 25)
+- [x] 11. `OrientedBox` (+ `document_corners`) (1, 18)
+- [x] 12. `transform_handle_layout`: handles, hit test, resize/rotate arithmetic, stroke/radius factor, resize-cursor angle (4-17, cursors)
+- [x] 13. `SelectTool` resize/rotate drags; a rotated primitive's resize pins the anchor in document space (1-3, 4-18, 23)
+- [x] 14. render-core: oriented selection/hover outline (select tool and shape tools), squircle resize handles, circular-arrow rotate handle with idle/hover/dragging looks, pivot marker (1, 18, UX notes)
+- [x] 15. Live numeric readout (size / angle) through the existing `LiveReadout` channel (14, 22)
+- [x] 16. Cursors: `Session::cursor_hint`, `wasm_api::cursor_hint`, `frontend/src/lib/cursors.ts` (rotated resize cursor with built-in fallback; static rotate cursor) (UX notes)
+- [x] 17. Shift/Ctrl threaded through `pointer_hover`/`pointer_up`, re-run on modifier key press/release (5, 7, 16, 17)
+- [x] 18. Shape tools' own handles follow rotation: `handles_for` rotated, drag deltas mapped into local axes, live preview rotated (25)
+- [x] 19. Frontend builds (`npm install`, `npm run build`: `tsc -b` + `vite build`), `vecmanf-app` builds and is in the gate
+
+## Known limitations (not hidden)
+
+- The shape tools' *own* resize of a rotated primitive keeps the opposite
+  edge fixed in the local frame, so on screen the opposite corner drifts
+  (the Select tool's resize pins it; the shape tools' arithmetic is
+  unchanged per `adrs.md`). Criterion 25 asks only for handle position and
+  axes, which are covered.
+- The glyphs (squircle, circular arrow) and the cursor images are simple
+  first versions for the ux-engineer to review; no criterion tests their
+  exact shape.
+- The readout offset is now 12 px for every tool (it was 8 px for the shape
+  tools' create readout), per this slice's UX notes.
 
 ## Validation
 

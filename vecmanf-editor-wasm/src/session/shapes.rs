@@ -353,8 +353,29 @@ impl Session {
     /// The shape to preview on canvas right now — `Session::draw_list`'s
     /// own hook into `live_preview` (ux-engineer review: "a maker
     /// dragging out a rectangle sees a rectangle updating live").
-    pub(super) fn live_preview_shape(&self) -> Option<Shape> {
-        self.live_preview().map(|live| *live.shape())
+    ///
+    /// Paired with the rotation to draw it at: a create-drag is always
+    /// unrotated; a resize/radius/ratio adjustment keeps the single
+    /// selected primitive's own `rotation` (a handle drag only ever
+    /// starts on a single selection), so the preview outline turns with
+    /// the shape instead of snapping unrotated for the length of the
+    /// drag (`object-transform` acceptance criterion 25).
+    pub(super) fn live_preview_shape(&self) -> Option<(Shape, vecmanf_document_core::Angle)> {
+        let live = self.live_preview()?;
+        let rotation = match live {
+            LiveShape::Creating(..) => vecmanf_document_core::Angle::from_radians(0.0),
+            LiveShape::Adjusting(_) => match self.selection.ids() {
+                [only] => self
+                    .primitives()
+                    .into_iter()
+                    .find(|p| p.id == *only)
+                    .map_or(vecmanf_document_core::Angle::from_radians(0.0), |p| {
+                        p.rotation
+                    }),
+                _ => vecmanf_document_core::Angle::from_radians(0.0),
+            },
+        };
+        Some((*live.shape(), rotation))
     }
 
     /// The numeric readout for an in-progress create-drag
@@ -364,6 +385,9 @@ impl Session {
     /// create-drag (ux-engineer review item 2).
     #[must_use]
     pub fn live_readout(&self) -> Option<LiveReadout> {
+        if self.tool == Tool::Select {
+            return self.select_live_readout();
+        }
         let LiveShape::Creating(shape, anchor) = self.live_preview()? else {
             return None;
         };
@@ -787,10 +811,13 @@ mod tests {
         // live preview already exists (an "Adjusting" preview, unlike
         // a create-drag's "Creating" preview, shows up the instant the
         // handle is grabbed) and still reports the starting radius.
-        let Some(Shape::Rect {
-            corner_radius: start_radius,
-            ..
-        }) = session.live_preview_shape()
+        let Some((
+            Shape::Rect {
+                corner_radius: start_radius,
+                ..
+            },
+            _,
+        )) = session.live_preview_shape()
         else {
             panic!("expected a live rect preview as soon as the handle is grabbed");
         };
@@ -804,10 +831,13 @@ mod tests {
         // is committed to the document until release.
         let first_drag = Point::new(handle.position.x - 1.0, handle.position.y + 1.0);
         session.pointer_hover(first_drag, false, false);
-        let Some(Shape::Rect {
-            corner_radius: first_radius,
-            ..
-        }) = session.live_preview_shape()
+        let Some((
+            Shape::Rect {
+                corner_radius: first_radius,
+                ..
+            },
+            _,
+        )) = session.live_preview_shape()
         else {
             panic!("expected a live rect preview mid-drag");
         };
@@ -834,10 +864,13 @@ mod tests {
 
         let second_drag = Point::new(handle.position.x - 2.0, handle.position.y + 2.0);
         session.pointer_hover(second_drag, false, false);
-        let Some(Shape::Rect {
-            corner_radius: second_radius,
-            ..
-        }) = session.live_preview_shape()
+        let Some((
+            Shape::Rect {
+                corner_radius: second_radius,
+                ..
+            },
+            _,
+        )) = session.live_preview_shape()
         else {
             panic!("expected a live rect preview mid-drag");
         };

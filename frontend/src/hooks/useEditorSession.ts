@@ -190,6 +190,10 @@ export interface EditorSession {
   /** The live numeric readout for an in-progress create-drag, or `null`
    * outside one (ux-engineer review item 2). */
   liveReadout: LiveReadout | null;
+  /** `vecmanf-editor-wasm`'s `cursor_hint()` — `"default"`, `"rotate"`
+   * or `"resize:<degrees>"` (`object-transform`'s transform-handle
+   * cursors); `Canvas` turns it into a CSS cursor via `lib/cursors`. */
+  cursorHint: string;
   /** Acceptance criterion 5's cursor cue: whether the live cursor is
    * over the in-progress pen path's own close target — `Canvas` swaps
    * to the "pen-with-small-circle" cursor variant while this is `true`. */
@@ -307,6 +311,12 @@ export function useEditorSession(
   const [isHoveringPenCloseTarget, setIsHoveringPenCloseTarget] =
     useState(false);
   const [liveReadout, setLiveReadout] = useState<LiveReadout | null>(null);
+  const [cursorHint, setCursorHint] = useState("default");
+  /** The last pointer position over the canvas (CSS px) — lets a
+   * modifier key press/release re-run the hover, so the Select tool's
+   * pivot marker and live preview react the instant Shift/Ctrl change,
+   * with no pointer motion needed. */
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
   const [zoomPercent, setZoomPercent] = useState(100);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceHeld, setIsSpaceHeld] = useState(false);
@@ -626,6 +636,7 @@ export function useEditorSession(
         return;
       }
       session.pointer_down(x, y, event.shiftKey);
+      setCursorHint(session.cursor_hint());
       syncFromSession();
     },
     [canvasPoint, isSpaceHeld, syncFromSession],
@@ -635,6 +646,7 @@ export function useEditorSession(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
       const session = sessionRef.current;
       const { x, y } = canvasPoint(event);
+      lastPointerRef.current = { x, y };
       if (session) {
         onCursorMove(readDocumentPoint(session.screen_to_document(x, y)));
       }
@@ -642,11 +654,17 @@ export function useEditorSession(
         session?.pan_to(x, y);
         return;
       }
-      session?.pointer_hover(x, y, event.ctrlKey || event.metaKey);
+      session?.pointer_hover(
+        x,
+        y,
+        event.shiftKey,
+        event.ctrlKey || event.metaKey,
+      );
       setIsHoveringPenCloseTarget(
         session?.is_hovering_pen_close_target() ?? false,
       );
       setLiveReadout(readLiveReadout(session?.live_readout()));
+      setCursorHint(session?.cursor_hint() ?? "default");
     },
     [canvasPoint, onCursorMove],
   );
@@ -678,9 +696,10 @@ export function useEditorSession(
         // 22, 23) — `Session` itself decides what a double-click does.
         session.double_click(x, y);
       } else {
-        session.pointer_up(x, y, event.ctrlKey || event.metaKey);
+        session.pointer_up(x, y, event.shiftKey, event.ctrlKey || event.metaKey);
       }
       setLiveReadout(null);
+      setCursorHint(session.cursor_hint());
       syncFromSession();
     },
     [canvasPoint, syncFromSession],
@@ -690,7 +709,32 @@ export function useEditorSession(
     sessionRef.current?.pointer_leave();
     setIsHoveringPenCloseTarget(false);
     setLiveReadout(null);
+    setCursorHint("default");
+    lastPointerRef.current = null;
   }, []);
+
+  /** Re-runs the hover at the last pointer position with the modifier
+   * state of `event` — Shift/Ctrl (`object-transform`'s pivot swap,
+   * proportional resize, 15° snap) must take effect live, on the key
+   * event itself, not only on the next pointer move. */
+  const refreshModifiers = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const session = sessionRef.current;
+      const last = lastPointerRef.current;
+      if (!session || !last) {
+        return;
+      }
+      session.pointer_hover(
+        last.x,
+        last.y,
+        event.shiftKey,
+        event.ctrlKey || event.metaKey,
+      );
+      setLiveReadout(readLiveReadout(session.live_readout()));
+      setCursorHint(session.cursor_hint());
+    },
+    [],
+  );
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -731,6 +775,11 @@ export function useEditorSession(
           event.preventDefault();
           deleteSelected();
           break;
+        case "Shift":
+        case "Control":
+        case "Meta":
+          refreshModifiers(event);
+          break;
         case " ":
           // Space+drag pans (acceptance criterion 4) — `preventDefault`
           // so it never activates a focused button
@@ -745,14 +794,23 @@ export function useEditorSession(
           return;
       }
     },
-    [deleteSelected, escape, finishPen, setTool, tool],
+    [deleteSelected, escape, finishPen, refreshModifiers, setTool, tool],
   );
 
-  const onKeyUp = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === " ") {
-      setIsSpaceHeld(false);
-    }
-  }, []);
+  const onKeyUp = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === " ") {
+        setIsSpaceHeld(false);
+      } else if (
+        event.key === "Shift" ||
+        event.key === "Control" ||
+        event.key === "Meta"
+      ) {
+        refreshModifiers(event);
+      }
+    },
+    [refreshModifiers],
+  );
 
   return {
     canvasRef,
@@ -763,6 +821,7 @@ export function useEditorSession(
     polyStarPointCount,
     polyStarRatio,
     liveReadout,
+    cursorHint,
     isHoveringPenCloseTarget,
     zoomPercent,
     isPanning,

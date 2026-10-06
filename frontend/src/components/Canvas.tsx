@@ -1,5 +1,12 @@
 import { NodeContextMenu } from "@/components/NodeToolbar";
 import type { EditorSession } from "@/hooks/useEditorSession";
+import { cursorForHint } from "@/lib/cursors";
+
+/** The readout's constant screen-space offset from its anchor, up and to
+ * the right (`specs/0005-object-transform/specification.md`'s UX notes:
+ * 12px, anchored to the pointer so it stays readable while a rotate drag
+ * swings the handle through an arc). */
+const READOUT_OFFSET_PX = 12;
 
 interface CanvasProps {
   editor: EditorSession;
@@ -24,6 +31,14 @@ export function Canvas({ editor }: CanvasProps) {
       tabIndex={0}
       onKeyDown={editor.onKeyDown}
       onKeyUp={editor.onKeyUp}
+      // Transform-handle cursors (`object-transform`): only the Select
+      // tool ever reports a non-default hint, and a pan gesture (grab
+      // cursors above) always wins.
+      style={
+        editor.isPanning || editor.isSpaceHeld
+          ? undefined
+          : { cursor: cursorForHint(editor.cursorHint) }
+      }
       className={`relative flex-1 outline-none ${
         // Pan cursor convention (`docs/design-system.md`): grabbing for
         // the duration of a drag-pan, open-hand from the moment Space is
@@ -92,8 +107,8 @@ export function Canvas({ editor }: CanvasProps) {
         <div
           className="pointer-events-none absolute z-10 -translate-y-full rounded-md px-1.5 py-0.5 text-xs"
           style={{
-            left: editor.liveReadout.x + 8,
-            top: editor.liveReadout.y - 8,
+            left: editor.liveReadout.x + READOUT_OFFSET_PX,
+            top: editor.liveReadout.y - READOUT_OFFSET_PX,
             background: "var(--toolbar-bg)",
             color: "var(--toolbar-icon)",
           }}

@@ -504,6 +504,16 @@ impl WasmSession {
             .map(|readout| LiveReadout::from_document_space(readout, view))
     }
 
+    /// Which cursor the canvas should show: `"default"`, `"rotate"`, or
+    /// `"resize:<degrees>"` (a double-headed arrow turned that many
+    /// degrees clockwise from horizontal) — `object-transform`'s
+    /// transform-handle cursors. Call after every
+    /// [`WasmSession::pointer_hover`].
+    #[must_use]
+    pub fn cursor_hint(&self) -> String {
+        self.session.cursor_hint()
+    }
+
     /// Attaches this session to `canvas`, creating the `wgpu`
     /// device/surface (ADR 0001 §3). Call once, after construction,
     /// before the first [`WasmSession::render`]. `width`×`height` are the

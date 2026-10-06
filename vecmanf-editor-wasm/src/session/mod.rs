@@ -745,9 +745,10 @@ impl Session {
             view,
             &self.select_transform_decoration_input(),
         ));
-        if let Some(live_shape) = self.live_preview_shape() {
+        if let Some((live_shape, rotation)) = self.live_preview_shape() {
             list.extend(vecmanf_render_core::build_shape_live_preview(
                 &live_shape,
+                rotation,
                 view,
             ));
         }
