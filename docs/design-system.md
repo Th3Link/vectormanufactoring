@@ -351,11 +351,11 @@ values, not an implementation site, for those four rows.
     reset to off by `newProject()` and `openProject()` (criterion 27). It is
     never persisted. The press handler reads it once at pointer-down
     (criterion 28).
-  - **Host and bar layout** (customer decision 2026-10-06: the switch
-    belongs to the tool, so it lives in the top contextual bar and does not
-    move into the Properties panel). `SelectToolbar` is the Select tool's
-    own bar, shown whenever `editor.tool === "select"`, with or without a
-    selection (criterion 30). It is the third bar after `NodeToolbar` and
+  - **Host and bar layout** (customer decision 2026-10-06: the switch is a
+    Select tool setting). `SelectToolbar` is the Select tool's own
+    permanent bar, shown whenever `editor.tool === "select"`, with or
+    without a selection (criterion 30); later transform-tool settings are
+    appended to it. It is the third bar after `NodeToolbar` and
     `ShapeToolbar` and looks identical: it lives in the same
     `pointer-events-none` overlay row in `App.tsx` (`absolute top-3 right-3
     left-[72px] z-20`, centred, right of the tool rail), pill `h-9`,
