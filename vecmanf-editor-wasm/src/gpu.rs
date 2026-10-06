@@ -401,6 +401,26 @@ struct SurfaceAndDevice {
     sample_count: u32,
 }
 
+/// The non-sRGB twin of `default` when the surface supports it, else
+/// `default`. `get_default_config` prefers an sRGB format, which makes the
+/// GPU sRGB-encode every shader output; but every colour this renderer
+/// writes (the clear colour and each vertex colour) is already an sRGB
+/// design-system value (`#2F6FEE`, ...), so encoding it again lifted
+/// everything towards white (`#2F6FEE` showed as `#77B0F7`). A `Unorm`
+/// target stores values as given and blends translucent colours in sRGB
+/// space, which is also how CSS composites the design-system alpha tokens.
+fn prefer_unorm_format(
+    default: wgpu::TextureFormat,
+    supported: &[wgpu::TextureFormat],
+) -> wgpu::TextureFormat {
+    let unorm = default.remove_srgb_suffix();
+    if supported.contains(&unorm) {
+        unorm
+    } else {
+        default
+    }
+}
+
 async fn create_surface_and_device(
     canvas: HtmlCanvasElement,
     width: u32,
@@ -441,6 +461,7 @@ async fn create_surface_and_device(
         .get_default_config(&adapter, width.max(1), height.max(1))
         .ok_or_else(|| JsValue::from_str("the surface has no usable default configuration"))?;
     config.alpha_mode = wgpu::CompositeAlphaMode::Opaque;
+    config.format = prefer_unorm_format(config.format, &surface.get_capabilities(&adapter).formats);
     surface.configure(&device, &config);
 
     // Queried from the real adapter rather than assumed: WebGL2
