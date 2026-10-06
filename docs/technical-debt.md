@@ -713,3 +713,13 @@ non-test code on `main`. The split is now task 1 of whichever of
 `advanced-selection` starts first, as a pure-move commit. The module list
 is in `specs/object-transform-refinements/adrs.md` ("split the oversized
 modules first").
+
+**Done (2026-10-06, `object-transform-refinements` task 1, a pure-move
+commit):** `session/mod.rs` is under 500 non-test lines (Node and Pen glue,
+the live select preview, `draw_list` and the open-error text moved to
+`session/node.rs`, `pen.rs`, `select.rs`, `draw.rs`, `open_error.rs`), and
+`transform_handle_layout.rs` keeps layout and hit test while the arithmetic
+is in `transform_math.rs`. Left open: `select_tool.rs` is about 530 and
+`transform_drag.rs` about 505 non-test lines after the refinements; the typed
+entry and double-click dispatch already moved to `select_tool/entry.rs` and
+`transform_commit.rs`, further splitting waits for `advanced-selection`.

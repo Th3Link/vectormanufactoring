@@ -346,7 +346,7 @@ fn depth_inside(box_: &OrientedBox, point: Point) -> Option<f64> {
 /// A resize handle keeps slice 5's rules so a small object's body stays
 /// reachable: its radius shrinks to a third of the box's smaller side
 /// (never below a quarter of the full radius), and a point *inside* the box
-/// only grabs one within [`INNER_HIT_BAND`] of that radius from the edge.
+/// only grabs one within the inner hit band (6 of 16 px of the resize radius) from the edge.
 /// Outside the box a handle always wins.
 #[must_use]
 pub fn hit_transform_handle(
@@ -820,5 +820,46 @@ mod tests {
             resize_handle_local_position(&unrotated, ResizeDirection::Ne),
             resize_handle_local_position(&rotated, ResizeDirection::Ne)
         );
+    }
+    /// Criterion 9 and the UX notes' clearance rule: every glyph keeps a
+    /// clear gap of at least 4 px to every other glyph, at every box size
+    /// (24 px is the smallest box that shows edge, skew and centre-free
+    /// handles; the centre handle needs 48).
+    #[test]
+    fn every_glyph_keeps_four_pixels_clear_of_every_other_glyph() {
+        let spec = HandleSpec {
+            skew: true,
+            side_rotate: true,
+            ..RECT
+        };
+        let half_extent = |handle: TransformHandle| match handle {
+            TransformHandle::Resize(_) => (4.0, 4.0),
+            TransformHandle::Rotate(_) => (6.0, 6.0),
+            TransformHandle::Skew(side) if side.skews_along_u() => (9.0, 6.0),
+            TransformHandle::Skew(_) => (6.0, 9.0),
+            TransformHandle::Move => (8.0, 8.0),
+        };
+        for (w, h) in [
+            (24.0, 24.0),
+            (30.0, 80.0),
+            (48.0, 48.0),
+            (100.0, 200.0),
+            (400.0, 30.0),
+        ] {
+            let box_ = unrotated_box(Point::new(0.0, 0.0), Point::new(w, h));
+            let handles = transform_handles(&box_, spec, &tol());
+            for (i, (a, pa)) in handles.iter().enumerate() {
+                for (b, pb) in &handles[i + 1..] {
+                    let (ha, hb) = (half_extent(*a), half_extent(*b));
+                    let dx = (pa.x - pb.x).abs() - (ha.0 + hb.0);
+                    let dy = (pa.y - pb.y).abs() - (ha.1 + hb.1);
+                    assert!(
+                        dx.max(dy) >= 4.0 - 1e-9,
+                        "{w}x{h}: {a:?} and {b:?} are {} px apart",
+                        dx.max(dy)
+                    );
+                }
+            }
+        }
     }
 }

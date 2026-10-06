@@ -515,4 +515,174 @@ mod tests {
         assert_eq!(draw_count(5.0), 8, "4 corner resize + 4 corner rotate");
         assert_eq!(draw_count(10.0), 12, "8 resize + 4 corner rotate");
     }
+    /// The decoration's handle count and pivot marker for a rectangle
+    /// selected at the default zoom (a 100 x 60 mm box is 378 x 227 px).
+    fn big_rect_session() -> Session {
+        let mut session = Session::new(1);
+        let _ = session.document.create_rect(RectBounds {
+            origin: Point::new(10.0, 20.0),
+            width: Length::from_mm(100.0),
+            height: Length::from_mm(60.0),
+        });
+        session.set_tool(Tool::Select);
+        session.pointer_down(Point::new(10.0, 50.0), false);
+        session.pointer_up(Point::new(10.0, 50.0), false, false);
+        session
+    }
+
+    fn handle_count(session: &Session) -> usize {
+        session.select_transform_decoration_input().handles.len()
+    }
+
+    /// Criteria 1, 5, 6: eight resize, four corner rotate and the centre
+    /// handle; Shift adds four side rotate handles in the same frame, with no
+    /// pointer movement, and moves none.
+    #[test]
+    fn shift_adds_the_side_rotate_handles_and_modifiers_changed_needs_no_pointer() {
+        let mut session = big_rect_session();
+        assert_eq!(handle_count(&session), 13);
+        session.modifiers_changed(true, false);
+        assert_eq!(handle_count(&session), 17);
+        session.modifiers_changed(false, false);
+        assert_eq!(handle_count(&session), 13);
+    }
+
+    /// Criterion 6: the set is frozen during a drag (Shift pressed
+    /// mid-drag reveals nothing, a dragged side handle stays when Shift is
+    /// released); criterion 1's centre handle is not drawn while a rotate,
+    /// resize or skew drag runs, the pivot marker being there.
+    #[test]
+    fn the_handle_set_is_frozen_and_the_centre_hides_during_a_transform_drag() {
+        let mut session = big_rect_session();
+        let corner = Point::new(
+            110.0 + 32.0 / std::f64::consts::SQRT_2 / session.view().scale(),
+            20.0 - 32.0 / std::f64::consts::SQRT_2 / session.view().scale(),
+        );
+        session.pointer_hover(corner, false, false);
+        session.pointer_down(corner, false);
+        assert_eq!(handle_count(&session), 12, "centre hidden during a rotate");
+        session.modifiers_changed(true, false);
+        assert_eq!(handle_count(&session), 12, "Shift mid-drag reveals nothing");
+        session.escape();
+        session.modifiers_changed(false, false);
+
+        let side = Point::new(60.0, 20.0 - 32.0 / session.view().scale());
+        session.modifiers_changed(true, false);
+        session.pointer_hover(side, true, false);
+        session.pointer_down(side, true);
+        session.modifiers_changed(false, false);
+        assert_eq!(handle_count(&session), 16, "the dragged side handle stays");
+        session.escape();
+        assert_eq!(handle_count(&session), 13);
+    }
+
+    /// Criteria 40, 56 and 55: the pivot marker while a drag runs, the
+    /// pivot preview under Shift on a hovered handle, and the skew guide.
+    #[test]
+    fn pivot_marker_preview_and_skew_guide() {
+        let mut session = big_rect_session();
+        let scale = session.view().scale();
+        let corner_offset = 32.0 / std::f64::consts::SQRT_2 / scale;
+        let ne_rotate = Point::new(110.0 + corner_offset, 20.0 - corner_offset);
+        // Nothing hovered: no marker.
+        assert!(
+            session
+                .select_transform_decoration_input()
+                .pivot_marker
+                .is_none()
+        );
+        // Shift held over the corner rotate handle: the marker previews the
+        // opposite corner (10, 80), the pivot a Shift drag would use.
+        session.modifiers_changed(true, false);
+        session.pointer_hover(ne_rotate, true, false);
+        let preview = session
+            .select_transform_decoration_input()
+            .pivot_marker
+            .unwrap();
+        assert!(
+            (preview.x - 10.0).abs() < 1e-9 && (preview.y - 80.0).abs() < 1e-9,
+            "{preview:?}"
+        );
+        // Over a resize handle the preview is the box centre.
+        session.pointer_hover(Point::new(110.0, 80.0), true, false);
+        let preview = session
+            .select_transform_decoration_input()
+            .pivot_marker
+            .unwrap();
+        assert!((preview.x - 60.0).abs() < 1e-9 && (preview.y - 50.0).abs() < 1e-9);
+        // Shift released: the preview is gone again.
+        session.modifiers_changed(false, false);
+        session.pointer_hover(Point::new(110.0, 80.0), false, false);
+        assert!(
+            session
+                .select_transform_decoration_input()
+                .pivot_marker
+                .is_none()
+        );
+        // A rotate drag without Shift shows the centre; with Shift the corner.
+        session.pointer_down(ne_rotate, false);
+        let marker = session
+            .select_transform_decoration_input()
+            .pivot_marker
+            .unwrap();
+        assert!((marker.x - 60.0).abs() < 1e-9 && (marker.y - 50.0).abs() < 1e-9);
+        session.modifiers_changed(true, false);
+        let marker = session
+            .select_transform_decoration_input()
+            .pivot_marker
+            .unwrap();
+        assert!((marker.x - 10.0).abs() < 1e-9 && (marker.y - 80.0).abs() < 1e-9);
+        session.escape();
+        assert!(
+            session
+                .select_transform_decoration_input()
+                .skew_guide
+                .is_none()
+        );
+    }
+
+    /// Criterion 56: a skew drag draws a dashed guide along the fixed line
+    /// (the bottom edge for a top handle, the centre line under Shift),
+    /// 12 px past each end of the box; it is gone after Escape.
+    #[test]
+    fn a_skew_drag_draws_the_fixed_line_guide() {
+        use vecmanf_document_core::{AnchorId, NewAnchor};
+        let mut session = Session::new(1);
+        let _ = session.document.create_path(
+            &[
+                NewAnchor::corner(AnchorId::new(1, 1), Point::new(10.0, 20.0)),
+                NewAnchor::corner(AnchorId::new(1, 2), Point::new(110.0, 20.0)),
+                NewAnchor::corner(AnchorId::new(1, 3), Point::new(110.0, 80.0)),
+                NewAnchor::corner(AnchorId::new(1, 4), Point::new(10.0, 80.0)),
+            ],
+            true,
+        );
+        session.set_tool(Tool::Select);
+        session.pointer_down(Point::new(10.0, 50.0), false);
+        session.pointer_up(Point::new(10.0, 50.0), false, false);
+        let scale = session.view().scale();
+        let top_skew = Point::new(60.0, 20.0 - 16.0 / scale);
+        session.pointer_hover(top_skew, false, false);
+        session.pointer_down(top_skew, false);
+        let guide = session
+            .select_transform_decoration_input()
+            .skew_guide
+            .unwrap();
+        let pad = 12.0 / scale;
+        assert!((guide.0.x - (10.0 - pad)).abs() < 1e-9 && (guide.0.y - 80.0).abs() < 1e-9);
+        assert!((guide.1.x - (110.0 + pad)).abs() < 1e-9 && (guide.1.y - 80.0).abs() < 1e-9);
+        session.modifiers_changed(true, false);
+        let guide = session
+            .select_transform_decoration_input()
+            .skew_guide
+            .unwrap();
+        assert!((guide.0.y - 50.0).abs() < 1e-9, "Shift: through the centre");
+        session.escape();
+        assert!(
+            session
+                .select_transform_decoration_input()
+                .skew_guide
+                .is_none()
+        );
+    }
 }

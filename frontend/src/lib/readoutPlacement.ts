@@ -36,3 +36,67 @@ export function placeReadout(
     top: Math.max(0, Math.min(top, canvas.height - chip.height)),
   };
 }
+
+/** Distance from a handle's glyph edge to the entry chip, in CSS pixels
+ * (`docs/design-system.md`, "Transform entry chip": 10px clear space). */
+const ENTRY_CHIP_GAP_PX = 10;
+
+/** Half the largest handle glyph (the 12px rotate arrow), in CSS pixels. */
+const HANDLE_GLYPH_RADIUS_PX = 6;
+
+function clampInside(left: number, top: number, chip: Size, canvas: Size): Placement {
+  return {
+    left: Math.max(0, Math.min(left, canvas.width - chip.width)),
+    top: Math.max(0, Math.min(top, canvas.height - chip.height)),
+  };
+}
+
+function coversPoint(placement: Placement, chip: Size, point: { x: number; y: number }): boolean {
+  const margin = HANDLE_GLYPH_RADIUS_PX;
+  return (
+    point.x >= placement.left - margin &&
+    point.x <= placement.left + chip.width + margin &&
+    point.y >= placement.top - margin &&
+    point.y <= placement.top + chip.height + margin
+  );
+}
+
+/**
+ * Where to put the typed-entry chip (`object-transform-refinements` UX
+ * notes, "Numeric entry control"): upright, centred outward from the handle
+ * along the line from the box centre through it, with 10px clear of the
+ * handle's glyph edge, then clamped inside the canvas. If the clamp would
+ * cover the handle it flips to the inner side. While the handle is off
+ * screen the chip stays clamped at the canvas edge.
+ */
+export function placeEntryChip(
+  handle: { x: number; y: number },
+  center: { x: number; y: number },
+  chip: Size,
+  canvas: Size,
+): Placement {
+  let dx = handle.x - center.x;
+  let dy = handle.y - center.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 1e-6) {
+    dx = 0;
+    dy = -1;
+  } else {
+    dx /= length;
+    dy /= length;
+  }
+  const at = (sign: number): Placement => {
+    // The chip's half-extent along the direction, so the nearest point of
+    // the chip (not its centre) is the gap away from the glyph.
+    const reach =
+      HANDLE_GLYPH_RADIUS_PX +
+      ENTRY_CHIP_GAP_PX +
+      (Math.abs(dx) * chip.width) / 2 +
+      (Math.abs(dy) * chip.height) / 2;
+    const cx = handle.x + sign * dx * reach;
+    const cy = handle.y + sign * dy * reach;
+    return clampInside(cx - chip.width / 2, cy - chip.height / 2, chip, canvas);
+  };
+  const outward = at(1);
+  return coversPoint(outward, chip, handle) ? at(-1) : outward;
+}
