@@ -5032,6 +5032,7 @@ dependencies = [
  "bytemuck",
  "console_error_panic_hook",
  "loro",
+ "serde_json",
  "vecmanf-document-core",
  "vecmanf-render-core",
  "vecmanf-ui-core",
@@ -5039,6 +5040,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "wgpu",
+ "zip",
 ]
 
 [[package]]

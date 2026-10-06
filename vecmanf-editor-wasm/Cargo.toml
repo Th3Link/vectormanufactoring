@@ -22,6 +22,11 @@ vecmanf-render-core = { path = "../vecmanf-render-core", version = "0.1.0" }
 # "one interaction = one commit" and the per-register write table.
 loro.workspace = true
 
+# `tests/acceptance_0005_switch.rs` builds a merged project file from two
+# peers' Loro snapshots to check concurrent edits survive a resize.
+serde_json.workspace = true
+zip.workspace = true
+
 # `session.rs` (this crate's actual orchestration logic) is plain Rust,
 # host-independent and tested by ordinary `cargo test`. Everything below
 # is wasm32-only: the `wasm-bindgen` surface and the `wgpu` device/
