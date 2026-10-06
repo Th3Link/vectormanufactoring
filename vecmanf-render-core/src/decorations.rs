@@ -28,6 +28,10 @@ pub enum Hovered {
 /// owns both it and this crate (`vecmanf-editor-wasm`).
 #[derive(Debug, Clone, Default)]
 pub struct DecorationInput {
+    /// Whether to draw path nodes (and the handles of selected ones) at
+    /// all. Only the Node tool shows them — `docs/design-system.md`: no
+    /// path nodes in the Select tool or any other tool.
+    pub show_nodes: bool,
     /// Nodes shown as selected, each tagged with its own path (acceptance
     /// criteria 7, 10).
     pub selected_nodes: Vec<(NodeId, vecmanf_document_core::AnchorId)>,
@@ -66,7 +70,8 @@ pub fn build(paths: &[PathSnapshot], view: ViewTransform, input: &DecorationInpu
     let hover_ring_thickness = screen_px_to_mm(view, 1.0);
 
     let mut list = DrawList::default();
-    for snapshot in paths {
+    let drawn_paths = if input.show_nodes { paths } else { &[] };
+    for snapshot in drawn_paths {
         for anchor in &snapshot.anchors {
             let selected = input.is_node_selected(snapshot.id, anchor.id);
 
@@ -186,6 +191,13 @@ mod tests {
 
     use super::*;
 
+    fn nodes_on() -> DecorationInput {
+        DecorationInput {
+            show_nodes: true,
+            ..DecorationInput::default()
+        }
+    }
+
     fn two_node_path() -> (Document, NodeId, AnchorId, AnchorId) {
         let document = Document::new(1);
         let a = AnchorId::new(1, 1);
@@ -200,11 +212,26 @@ mod tests {
         (document, path, a, b)
     }
 
+    /// Path nodes belong to the Node tool only: with `show_nodes` off no
+    /// glyph is drawn for any anchor, selected or hovered or not.
+    #[test]
+    fn no_node_glyphs_are_drawn_unless_show_nodes_is_set() {
+        let (document, path, a, _b) = two_node_path();
+        let paths = vec![document.path(path).expect("exists")];
+        let input = DecorationInput {
+            selected_nodes: vec![(path, a)],
+            hovered: Some(Hovered::Node(path, a)),
+            ..DecorationInput::default()
+        };
+        let list = build(&paths, ViewTransform::identity(), &input);
+        assert_eq!(list.triangle_count(), 0);
+    }
+
     #[test]
     fn an_unselected_node_draws_a_glyph_but_no_handles() {
         let (document, path, _a, _b) = two_node_path();
         let paths = vec![document.path(path).expect("exists")];
-        let input = DecorationInput::default();
+        let input = nodes_on();
         let list = build(&paths, ViewTransform::identity(), &input);
         // Two node glyphs, each as outline+fill (2 quads = 4 triangles each).
         assert_eq!(list.triangle_count(), 8);
@@ -235,7 +262,7 @@ mod tests {
         let list = build(
             &paths,
             ViewTransform::identity(),
-            &DecorationInput::default(),
+            &nodes_on(),
         );
         // A's own glyph is one outline triangle + one fill triangle (2
         // total); B's is a Corner square (2 quads = 4 triangles) — 6 in
@@ -262,12 +289,12 @@ mod tests {
             false,
         );
         let paths = vec![document.path(path).expect("exists")];
-        let unselected = DecorationInput::default();
+        let unselected = nodes_on();
         let without = build(&paths, ViewTransform::identity(), &unselected);
 
         let input = DecorationInput {
             selected_nodes: vec![(path, a)],
-            ..DecorationInput::default()
+            ..nodes_on()
         };
         let with = build(&paths, ViewTransform::identity(), &input);
 
@@ -306,7 +333,7 @@ mod tests {
         let input = DecorationInput {
             selected_nodes: vec![(path, a)],
             hovered: Some(Hovered::Handle(path, a, HandleSlot::Out)),
-            ..DecorationInput::default()
+            ..nodes_on()
         };
         let view = ViewTransform::identity();
         let list = build(&paths, view, &input);
@@ -351,11 +378,11 @@ mod tests {
         let without = build(
             &paths,
             ViewTransform::identity(),
-            &DecorationInput::default(),
+            &nodes_on(),
         );
         let input = DecorationInput {
             selected_segment: Some((path, a, b)),
-            ..DecorationInput::default()
+            ..nodes_on()
         };
         let with = build(&paths, ViewTransform::identity(), &input);
         assert!(with.triangle_count() > without.triangle_count());
@@ -365,7 +392,7 @@ mod tests {
     fn decoration_sizes_shrink_in_document_space_as_zoom_increases() {
         let (document, path, _a, _b) = two_node_path();
         let paths = vec![document.path(path).expect("exists")];
-        let input = DecorationInput::default();
+        let input = nodes_on();
 
         let zoomed_out = build(
             &paths,
