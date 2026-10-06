@@ -13,7 +13,9 @@ use vecmanf_document_core::{
 
 use super::SelectTool;
 use crate::object_selection::ObjectSelection;
-use crate::param_edit::{ParamValue, apply_param, commit_param_batch};
+use crate::param_edit::{
+    PARAM_EQUAL_EPSILON, ParamValue, apply_param, commit_param_batch, max_corner_radius,
+};
 use crate::select_bar::{BarPreview, ObjectKind, ids_of_kind};
 use crate::transform_commit::MAX_COORDINATE_MM;
 use crate::transform_entry::{EntryOutcome, InvalidReason, parse_entry_number};
@@ -24,17 +26,6 @@ const fn kind_of(value: ParamValue) -> ObjectKind {
         ParamValue::Radius(_) => ObjectKind::Rectangle,
         ParamValue::Ratio(_) => ObjectKind::Star,
         ParamValue::PointCount(_) => ObjectKind::PolygonOrStar,
-    }
-}
-
-/// Half the shorter side of a rectangle: the largest radius it allows.
-fn half_shorter_side(object: &ObjectSnapshot) -> Option<f64> {
-    match object {
-        ObjectSnapshot::Primitive(PrimitiveSnapshot {
-            shape: Shape::Rect { bounds, .. },
-            ..
-        }) => Some(bounds.width.as_mm().min(bounds.height.as_mm()) / 2.0),
-        _ => None,
     }
 }
 
@@ -133,7 +124,7 @@ impl SelectTool {
                             ObjectSnapshot::Primitive(PrimitiveSnapshot {
                                 shape: Shape::Rect { corner_radius, .. },
                                 ..
-                            }) if corner_radius.as_mm() > 0.0
+                            }) if corner_radius.as_mm() > PARAM_EQUAL_EPSILON
                         )
                 })
             })
@@ -142,11 +133,10 @@ impl SelectTool {
     }
 
     /// The typed "Radius" field (criterion 21a): Enter writes the value to
-    /// every selected rectangle in one commit, limited to the largest half
-    /// shorter side among them (the register is raw and clamped where it is
-    /// evaluated, so a smaller rectangle shows its effective radius). An
-    /// empty or non-numeric text and a negative value are refused and write
-    /// nothing; an equal value writes nothing.
+    /// every selected rectangle in one commit, each limited to half of its
+    /// own shorter side. A rectangle that already shows the value is not
+    /// rewritten. An empty or non-numeric text and a negative value are
+    /// refused and write nothing; an equal value writes nothing.
     pub fn commit_bar_radius_text(
         &mut self,
         document: &Document,
@@ -162,27 +152,27 @@ impl SelectTool {
         if value < 0.0 {
             return invalid(InvalidReason::Negative);
         }
-        let ids = ids_of_kind(objects, selection, ObjectKind::Rectangle);
-        let targets: Vec<&ObjectSnapshot> = ids
-            .iter()
-            .filter_map(|id| objects.iter().find(|object| object.id() == *id))
+        let value = value.min(MAX_COORDINATE_MM);
+        let radii: Vec<(NodeId, Length)> = ids_of_kind(objects, selection, ObjectKind::Rectangle)
+            .into_iter()
+            .filter_map(|id| {
+                let object = objects.iter().find(|object| object.id() == id)?;
+                let ObjectSnapshot::Primitive(PrimitiveSnapshot {
+                    shape: Shape::Rect { bounds, .. },
+                    ..
+                }) = object
+                else {
+                    return None;
+                };
+                let limited = Length::from_mm(value.min(max_corner_radius(*bounds)));
+                (apply_param(object, ParamValue::Radius(limited)) != *object)
+                    .then_some((id, limited))
+            })
             .collect();
-        let Some(largest_half) = targets
-            .iter()
-            .filter_map(|object| half_shorter_side(object))
-            .reduce(f64::max)
-        else {
-            return EntryOutcome::Unchanged;
-        };
-        let limited = Length::from_mm(value.min(MAX_COORDINATE_MM).min(largest_half));
-        let typed = ParamValue::Radius(limited);
-        if targets
-            .iter()
-            .all(|object| apply_param(object, typed) == **object)
-        {
+        if radii.is_empty() {
             return EntryOutcome::Unchanged;
         }
-        match commit_param_batch(document, &ids, typed) {
+        match document.set_corner_radii(&radii) {
             Ok(()) => EntryOutcome::Committed,
             Err(_) => EntryOutcome::Unchanged,
         }
@@ -365,7 +355,7 @@ mod tests {
     }
 
     #[test]
-    fn the_typed_radius_applies_to_every_rectangle_and_is_limited_to_the_largest_half() {
+    fn the_typed_radius_applies_to_every_rectangle_limited_by_its_own_size() {
         let mut rig = Rig::new();
         let (big, small) = (rig.rect(40.0, 1.0), rig.rect(10.0, 1.0));
         let objects = rig.objects();
@@ -374,7 +364,7 @@ mod tests {
                 .commit_bar_radius_text(&rig.document, &objects, &rig.selection, "100");
         assert_eq!(outcome, EntryOutcome::Committed);
         assert_eq!(rig.radius(big), 20.0, "limited to half of 40");
-        assert_eq!(rig.radius(small), 20.0, "raw, clamped where evaluated");
+        assert_eq!(rig.radius(small), 5.0, "limited to half of its own 10");
     }
 
     #[test]

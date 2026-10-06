@@ -245,8 +245,12 @@ fn a_selected_rect_outline_press_is_a_handle_or_a_move_at_every_zoom() {
                 );
                 continue;
             }
-            if knob_px < 13.0 {
-                continue; // on the edge of a radius handle's hit area
+            if knob_px < 13.0 && knob_px <= nearest_px + 0.5 {
+                // On the edge of a radius handle's hit area and the knob is
+                // the nearest handle (or ties within 0.5 px): the knob's rule.
+                // Where a resize handle is clearly nearer, the original
+                // assertions below stand.
+                continue;
             }
             if nearest_px < 15.0 {
                 assert!(

@@ -1,5 +1,5 @@
 import { CircleAlert } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { ToolbarSwitch } from "@/components/ToolbarSwitch";
 import type { SelectBarState } from "@/hooks/useEditorSession";
@@ -39,8 +39,48 @@ function formatMm(value: number): string {
   return String(Math.round(value * 100) / 100);
 }
 
+/** The divider before a kind group. It stays in the layout but is invisible
+ * when its group starts a wrapped row (`data-row-start` on the group), so the
+ * hiding cannot change the wrapping. */
 function Divider() {
-  return <span aria-hidden className="h-5 w-px shrink-0" style={DIVIDER_STYLE} />;
+  return (
+    <span
+      aria-hidden
+      className="h-5 w-px shrink-0 group-data-[row-start]/row:invisible"
+      style={DIVIDER_STYLE}
+    />
+  );
+}
+
+/** Marks every group of `container` that starts a wrapped row, so no divider
+ * is drawn at the start of a row. Measured, not guessed: re-run after every
+ * render and every resize. */
+function useRowStarts(container: React.RefObject<HTMLDivElement | null>) {
+  useLayoutEffect(() => {
+    const element = container.current;
+    if (!element) {
+      return undefined;
+    }
+    const mark = () => {
+      let rowTop = -1;
+      for (const child of Array.from(element.children) as HTMLElement[]) {
+        const top = child.offsetTop;
+        const startsRow: boolean = rowTop >= 0 && top > rowTop;
+        if (startsRow) {
+          child.dataset.rowStart = "";
+        } else {
+          delete child.dataset.rowStart;
+        }
+        if (rowTop < 0 || startsRow) {
+          rowTop = top;
+        }
+      }
+    };
+    mark();
+    const observer = new ResizeObserver(mark);
+    observer.observe(element);
+    return () => observer.disconnect();
+  });
 }
 
 const BUTTON_CLASS =
@@ -103,7 +143,7 @@ function RadiusField({ bar, onSetRadius, onReturnFocus }: RadiusFieldProps) {
   return (
     <div className="relative flex items-center gap-1.5 text-[var(--toolbar-icon)]">
       <label htmlFor={`${messageId}-field`}>Radius</label>
-      <div className="relative w-20" title={tooltip}>
+      <div className="relative w-28" title={tooltip}>
         <input
           id={`${messageId}-field`}
           type="text"
@@ -142,7 +182,7 @@ function RadiusField({ bar, onSetRadius, onReturnFocus }: RadiusFieldProps) {
             }
           }}
           className={`h-7 w-full rounded-[5px] border bg-white pl-1.5 text-right text-sm tabular-nums outline-none ${
-            bar.radiusLimited ? "pr-[58px]" : "pr-7"
+            bar.radiusLimited ? "pr-[68px]" : "pr-8"
           } ${
             invalid
               ? "border-[var(--field-invalid)] shadow-[inset_0_0_0_2px_var(--field-invalid)]"
@@ -209,6 +249,27 @@ function PointsField({ bar, onSetPointCount }: PointsFieldProps) {
       setText(shown);
     }
   }, [shown]);
+
+  /** The text as a point count, or `null` while it is not a valid one. */
+  const parse = (value: string): number | null => {
+    const next = Math.round(Number(value));
+    return value !== "" &&
+      Number.isFinite(next) &&
+      next >= MIN_POINT_COUNT &&
+      next <= MAX_POINT_COUNT
+      ? next
+      : null;
+  };
+
+  /** Typed text is one commit on Enter or blur; nothing is written for an
+   * invalid value, and an unchanged one writes nothing either. */
+  const commitTyped = () => {
+    const next = parse(text);
+    if (next !== null && String(next) !== shown) {
+      onSetPointCount(next);
+    }
+  };
+
   return (
     <label
       className="flex items-center gap-1.5 text-[var(--toolbar-icon)]"
@@ -228,21 +289,29 @@ function PointsField({ bar, onSetPointCount }: PointsFieldProps) {
         }}
         onBlur={() => {
           editing.current = false;
+          commitTyped();
           setText(shown);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commitTyped();
+            event.currentTarget.blur();
+          }
         }}
         onChange={(event) => {
           setText(event.target.value);
-          const next = Math.round(Number(event.target.value));
-          if (
-            event.target.value !== "" &&
-            Number.isFinite(next) &&
-            next >= MIN_POINT_COUNT &&
-            next <= MAX_POINT_COUNT
-          ) {
+          // A stepper click or an arrow key fires an input event without a
+          // text-editing input type: one commit each. Typing waits for Enter
+          // or blur, so "1024" never writes 10 and 102 on the way.
+          const inputType = (event.nativeEvent as InputEvent).inputType ?? "";
+          const typed = /^(insert(?!Replacement)|delete)/.test(inputType);
+          const next = parse(event.target.value);
+          if (!typed && next !== null) {
             onSetPointCount(next);
           }
         }}
-        className="h-7 w-16 rounded-[5px] border border-[color-mix(in_srgb,var(--toolbar-icon)_60%,transparent)] bg-white px-1.5 text-right text-sm tabular-nums outline-none focus:border-[var(--editor-accent)]"
+        className="h-7 w-20 rounded-[5px] border border-[color-mix(in_srgb,var(--toolbar-icon)_60%,transparent)] bg-white px-1.5 text-right text-sm tabular-nums outline-none focus:ring-2 focus:ring-[var(--editor-accent)]"
         style={{ color: "var(--toolbar-icon)" }}
       />
     </label>
@@ -274,6 +343,8 @@ export function SelectToolbar({
   onConvertToPaths,
   onReturnFocus,
 }: SelectToolbarProps) {
+  const barRef = useRef<HTMLDivElement>(null);
+  useRowStarts(barRef);
   const groups: React.ReactNode[] = [];
   if (bar.radiusShown) {
     groups.push(
@@ -311,6 +382,7 @@ export function SelectToolbar({
               max={0.99}
               step={0.01}
               aria-label="Inner ratio"
+              aria-valuetext={bar.ratioMixed ? "Mixed" : undefined}
               className={bar.ratioMixed ? "select-bar-slider-mixed" : undefined}
               value={bar.ratioMixed ? 0.5 : bar.ratio}
               // Every tick previews live in blue; the one commit happens on
@@ -343,13 +415,16 @@ export function SelectToolbar({
   }
   return (
     <div
-      className="pointer-events-auto flex min-h-9 min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 text-sm"
+      ref={barRef}
+      // Every row is 36 px (28 px controls), so the switches, always on the
+      // first row, sit at the same y whether the bar has one row or two.
+      className="pointer-events-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0 rounded-lg px-2 text-sm"
       style={{
         background: "var(--toolbar-bg)",
         boxShadow: "var(--panel-elevation-shadow)",
       }}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex min-h-9 items-center gap-3">
         <ToolbarSwitch
           label="Scale stroke width"
           tooltip="Scale stroke width with the object. Off: a resize keeps the stroke thickness."
@@ -364,7 +439,7 @@ export function SelectToolbar({
         />
       </div>
       {groups.map((group, index) => (
-        <div key={index} className="flex items-center gap-3">
+        <div key={index} className="group/row flex min-h-9 items-center gap-3">
           <Divider />
           {group}
         </div>

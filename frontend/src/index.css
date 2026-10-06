@@ -182,8 +182,13 @@
   cursor: url("/cursors/pen-close.svg") 2 2, crosshair;
 }
 /* unified-object-editing (docs/design-system.md, "Select bar"): the Ratio
-   slider of a selection whose stars differ shows no thumb until touched.
-   Touching it previews a value, the stars then agree and the class goes. */
+   slider of a selection whose stars differ shows no thumb and a neutral track
+   (not filled to 0.5) until touched. Touching it previews a value, the stars
+   then agree and the class goes. */
+input[type="range"].select-bar-slider-mixed {
+    accent-color: color-mix(in srgb, var(--toolbar-icon) 35%, transparent);
+}
+
 input[type="range"].select-bar-slider-mixed::-webkit-slider-thumb {
     opacity: 0;
 }

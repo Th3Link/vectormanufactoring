@@ -8,8 +8,8 @@
 //! already used.
 
 use vecmanf_document_core::{
-    Document, InnerRatio, Length, NodeId, ObjectSnapshot, PointCount, PrimitiveSnapshot, Shape,
-    ShapeEditError, Vec2, effective_corner_radius,
+    Document, InnerRatio, Length, NodeId, ObjectSnapshot, PointCount, PrimitiveSnapshot,
+    RectBounds, Shape, ShapeEditError, Vec2, effective_corner_radius,
 };
 
 use crate::param_handles::ParamHandle;
@@ -33,6 +33,12 @@ pub enum ParamValue {
     Ratio(InnerRatio),
     /// A polygon or star's point count.
     PointCount(PointCount),
+}
+
+/// The largest corner radius a rectangle allows: half its shorter side.
+#[must_use]
+pub(crate) fn max_corner_radius(bounds: RectBounds) -> f64 {
+    (bounds.width.as_mm().min(bounds.height.as_mm()) / 2.0).max(0.0)
 }
 
 /// The ratio `value`, limited to `MIN_INNER_RATIO..=MAX_INNER_RATIO`; a NaN
@@ -132,9 +138,9 @@ fn apply_to_primitive(start: &PrimitiveSnapshot, value: ParamValue) -> Primitive
             },
             ParamValue::Radius(radius),
         ) => {
-            let half = bounds.width.as_mm().min(bounds.height.as_mm()) / 2.0;
+            let half = max_corner_radius(bounds);
             let limited = if radius.as_mm().is_finite() {
-                radius.as_mm().clamp(0.0, half.max(0.0))
+                radius.as_mm().clamp(0.0, half)
             } else {
                 return *start;
             };

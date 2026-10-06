@@ -4,6 +4,10 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { TransformEntryState } from "@/hooks/useEditorSession";
 import { placeEntryChip } from "@/lib/readoutPlacement";
 
+/** The tool rail's clearance from the canvas's left edge, px (`App.tsx`'s
+ * `left-[72px]` for the contextual bars). */
+const TOOL_RAIL_CLEAR_PX = 72;
+
 /** Height of the message card plus its gap, in px. */
 const MESSAGE_CARD_PX = 28;
 
@@ -97,7 +101,10 @@ export function TransformEntryChip({
     );
   }, [entry, invalid, containerRef]);
 
-  const placement = placeEntryChip(entry.handle, entry.center, sizes.chip, sizes.canvas, entry.glyphReach);
+  const placed = placeEntryChip(entry.handle, entry.center, sizes.chip, sizes.canvas, entry.glyphReach);
+  // The tool rail floats over the canvas's left edge: a chip clamped to the
+  // edge, with its error message, would cover the lower end of the rail.
+  const placement = { ...placed, left: Math.max(placed.left, TOOL_RAIL_CLEAR_PX) };
 
   // The message card goes on the side away from the handle, but flips when
   // that side has no room inside the canvas, and grows towards the canvas

@@ -184,7 +184,6 @@ impl Session {
             highlighted,
             Some(EditHandle::Param(ParamHandle::CornerRadius(_)))
         );
-        let (sin, cos) = box_.angle.as_radians().sin_cos();
         let drawn: Vec<(EditHandle, vecmanf_document_core::Point)> =
             SelectTool::transform_handles(objects, &self.selection, tolerances, side_rotate)
                 .into_iter()
@@ -206,19 +205,7 @@ impl Session {
                 }
                 TransformHandleGlyph {
                     position,
-                    kind: match handle {
-                        EditHandle::Resize(_) => TransformGlyphKind::Resize,
-                        EditHandle::Rotate(_) => TransformGlyphKind::Rotate,
-                        EditHandle::Skew(side) => TransformGlyphKind::Skew {
-                            direction: if side.skews_along_u() {
-                                Vec2::new(cos, sin)
-                            } else {
-                                Vec2::new(-sin, cos)
-                            },
-                        },
-                        EditHandle::Move => TransformGlyphKind::Move,
-                        EditHandle::Param(_) => TransformGlyphKind::Parameter,
-                    },
+                    kind: glyph_kind(handle, &box_),
                     dragging: highlighted == Some(handle),
                     // The other three radius handles of a radius drag take the
                     // hover ground: they move in step (criterion 2).
@@ -395,6 +382,25 @@ impl Session {
             EditHandle::Move => return None,
         };
         Some(super::shapes::LiveReadout { text, anchor })
+    }
+}
+
+/// The glyph a handle draws; a skew glyph's arrows run along its side's axis
+/// in the box's own rotated frame.
+fn glyph_kind(handle: EditHandle, box_: &vecmanf_ui_core::OrientedBox) -> TransformGlyphKind {
+    let (sin, cos) = box_.angle.as_radians().sin_cos();
+    match handle {
+        EditHandle::Resize(_) => TransformGlyphKind::Resize,
+        EditHandle::Rotate(_) => TransformGlyphKind::Rotate,
+        EditHandle::Skew(side) => TransformGlyphKind::Skew {
+            direction: if side.skews_along_u() {
+                Vec2::new(cos, sin)
+            } else {
+                Vec2::new(-sin, cos)
+            },
+        },
+        EditHandle::Move => TransformGlyphKind::Move,
+        EditHandle::Param(_) => TransformGlyphKind::Parameter,
     }
 }
 

@@ -461,9 +461,11 @@ the snapshot it started with, so the 200-object move frame, blue overlay
 included, costs 8.5 ms (`vecmanf-editor-wasm/tests/unified_object_editing.rs`,
 the `#[ignore]` benchmark). That meets 50 fps but not the architect's 8 ms
 budget by 0.5 ms, and a frame at rest with no drag still costs 18 ms. The
-cache above needs a cheap document version (a read-only accessor on `Document`,
-which that story did not add); with it the 12 ms read disappears from every
-frame, not only from drag frames.
+cache above needs a cheap document version, a read-only accessor on
+`Document` that PR 1 did not add; with it the 12 ms read disappears from every
+frame, not only from drag frames. The `Session.drag_objects` snapshot assumes
+the document does not change under a Select drag: no remote merge and no undo
+may run during one. Revisit it when sync or undo reaches the session.
 
 ## The canvas does not react to a `devicePixelRatio` change with no resize event
 
@@ -751,3 +753,10 @@ refinements: the Select preview accessors out of `select_tool.rs` into
 its new wasm calls into `wasm_select_bar.rs`, so none of the over-limit files
 grows. PR 2 removes about 80 lines from `wasm_api.rs` and most of
 `session/shapes.rs`. See `specs/unified-object-editing/adrs.md`, "size limits".
+
+*2026-10-06 (implementer, `unified-object-editing` PR 1, "Left open" after the
+story):* `select_tool.rs` is 375 non-test lines (the handle queries moved to
+`select_tool/handles.rs`), `transform_drag.rs` about 380, `transform_math.rs`
+about 435, `session/mod.rs` 510 (it gained the `drag_objects` field) and
+`vecmanf-editor-wasm/src/wasm_api.rs` 779 (the Select bar's calls are in
+`wasm_select_bar.rs`; PR 2 removes about 80 lines here).

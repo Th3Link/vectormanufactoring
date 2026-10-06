@@ -377,7 +377,7 @@ pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationI
             corner,
             handle,
             screen_px_to_mm(view, 1.0),
-            theme::ACCENT_HOVER,
+            theme::SHAPE_HANDLE_GUIDE,
             screen_px_to_mm(view, theme::GUIDE_DASH_PX),
             screen_px_to_mm(view, theme::GUIDE_GAP_PX),
         ));
@@ -772,10 +772,14 @@ mod tests {
     #[test]
     fn no_glyph_is_drawn_larger_than_the_size_the_clearance_property_assumes() {
         let half_diagonal = |side: f64| side * std::f64::consts::FRAC_1_SQRT_2;
+        // The farthest point of a rounded square: its corner arc's centre
+        // plus the radius.
+        let rounded_square_extent =
+            |side: f64, radius: f64| (side / 2.0 - radius) * std::f64::consts::SQRT_2 + radius;
         let cases = [
             (TransformGlyphKind::Resize, half_diagonal(8.0)),
             (TransformGlyphKind::Rotate, 6.0),
-            (TransformGlyphKind::Move, half_diagonal(16.0)),
+            (TransformGlyphKind::Move, rounded_square_extent(16.0, 3.0)),
             (TransformGlyphKind::Parameter, 5.0),
         ];
         for (kind, bound) in cases {
@@ -864,7 +868,7 @@ mod tests {
         assert!(
             list.triangles
                 .iter()
-                .all(|v| v.color == theme::ACCENT_HOVER)
+                .all(|v| v.color == theme::SHAPE_HANDLE_GUIDE)
         );
     }
 }

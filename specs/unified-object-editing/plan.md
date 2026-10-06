@@ -42,12 +42,13 @@ stop and ask the lead.
 
 ## Decisions taken while planning (inside `adrs.md`)
 
-- **Press order for one selected primitive** (criterion 35): drawn handle (any
-  family, Shift or not), then a press inside the selected box starts a move,
-  then an outline hit selects, then the empty canvas clears. A Shift press and a
-  sole selected path keep today's order (outline toggle first); the spec text
-  names one primitive only and a path box often overlaps other objects.
-- **A handle that is not drawn has no hit area** (criterion 6) holds for the
+- **Press order for one selected object** (criterion 35, amended by the PO):
+  drawn handle (any family, Shift or not), then a plain press inside the sole
+  selected box starts a move, then an outline hit (4 px) selects, then the empty
+  canvas clears. With Shift the outline hit is tried first (Shift-click adds to
+  the selection over a filled shape).
+- **A handle that is not drawn has no hit area** (criterion 6, amended by the PO:
+  edge resize handles under 24 px stay hit-testable) holds for the
   parameter handles and the centre handle: `drawn_edit_handles` builds the one
   list the hit rule reads, and a knob below 72 px or a centre handle that yields
   is not in it. An edge resize handle of a box under 24 px stays hit-testable
@@ -61,10 +62,8 @@ stop and ask the lead.
   (criterion 12) even when the stored radius is larger than the effective one.
 - The radius gain `G(s)` is frozen at the press (`TransformDrag::param_gain`).
 - A fifth tolerance field `param_centre_yield_mm` (20 px) carries the centre
-  yield distance next to the four of the ADR. 20 px is `11.3 + 5 + 4` rounded
-  down, so a knob on the diagonal of the centre glyph's corner has 3.7 px of
-  clearance, not 4; the clearance property excludes the centre glyph as the
-  architect specified, a separate test asserts at least 3.6 px.
+  yield distance next to the four of the ADR. The centre glyph's rounded-square extent is 10.07 px, so a knob
+  20 px away keeps at least 4 px; a separate test asserts it.
 - **Document reads.** `Session::draw_list` reads the document once per frame and
   a Select drag keeps the snapshot it started with (`drag_objects`): the 200
   object move frame fell from 123 ms to 8.5 ms. The architect's cache by

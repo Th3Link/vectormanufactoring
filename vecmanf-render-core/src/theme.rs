@@ -254,3 +254,9 @@ pub const PARAM_KNOB_RING_PX: f64 = 1.5;
 
 /// The knob's centre dot, screen-space pixels.
 pub const PARAM_KNOB_DOT_PX: f64 = 4.0;
+
+/// `--shape-handle-guide` (`docs/design-system.md`): the dashed guide from a
+/// rectangle corner to its hovered or dragged radius handle, `--accent` at
+/// 60%. `--accent-hover` at 20% measured about 1.1:1 on the canvas and was
+/// invisible.
+pub const SHAPE_HANDLE_GUIDE: RgbaColor = ACCENT.with_alpha(153); // 60% of 255, rounded

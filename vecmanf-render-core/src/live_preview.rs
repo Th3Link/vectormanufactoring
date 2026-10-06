@@ -6,10 +6,10 @@
 //! second render path, because the document's own strokes are drawn exactly
 //! as they are.
 
-use vecmanf_document_core::{ObjectSnapshot, ViewTransform, outline_of_rotated};
+use vecmanf_document_core::{ObjectSnapshot, ViewTransform};
 
 use crate::glyphs::DrawList;
-use crate::shape_preview::outline_to_anchors;
+use crate::shape_preview::build_shape_live_preview;
 use crate::stroke;
 use crate::theme;
 
@@ -25,14 +25,7 @@ pub fn build_live_edit_preview(objects: &[ObjectSnapshot], view: ViewTransform) 
     for object in objects {
         list.extend(match object {
             ObjectSnapshot::Primitive(primitive) => {
-                let outline = outline_of_rotated(&primitive.shape, primitive.rotation);
-                stroke::path_stroke(
-                    &outline_to_anchors(&outline),
-                    true,
-                    width_mm,
-                    theme::PREVIEW_NEW,
-                    tolerance_mm,
-                )
+                build_shape_live_preview(&primitive.shape, primitive.rotation, view)
             }
             ObjectSnapshot::Path(path) => stroke::path_stroke(
                 &path.anchors,

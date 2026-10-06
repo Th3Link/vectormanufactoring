@@ -256,7 +256,10 @@ mod tests {
     const RESIZE_GLYPH_RADIUS_PX: f64 = RESIZE_GLYPH_PX * std::f64::consts::FRAC_1_SQRT_2;
     const KNOB_RADIUS_PX: f64 = KNOB_DIAMETER_PX / 2.0;
     const ROTATE_GLYPH_RADIUS_PX: f64 = ROTATE_GLYPH_PX / 2.0;
-    const CENTRE_GLYPH_RADIUS_PX: f64 = CENTRE_GLYPH_PX * std::f64::consts::FRAC_1_SQRT_2;
+    /// The 16 px centre glyph has 3 px rounded corners: its farthest point is
+    /// the corner arc's centre plus the radius, 10.07 px.
+    const CENTRE_GLYPH_RADIUS_PX: f64 =
+        (CENTRE_GLYPH_PX / 2.0 - 3.0) * std::f64::consts::SQRT_2 + 3.0;
 
     fn tolerances(px_per_mm: f64) -> TransformHandleTolerances {
         TransformHandleTolerances::at_scale(px_per_mm)
@@ -594,12 +597,10 @@ mod tests {
         }
     }
 
-    /// The centre glyph, when drawn, is at least 3.7 px from a knob measured
-    /// to its circumscribed circle: the design system's 20 px yield distance
-    /// is `11.3 + 5 + 4` rounded down, so a knob exactly on a diagonal of the
-    /// glyph's corner has 3.7 px of clearance (the axis-aligned gap is 7).
+    /// The centre glyph, when drawn, is at least 4 px from every knob, measured
+    /// from the glyph's rounded-square extent to the knob's circle.
     #[test]
-    fn the_centre_glyph_keeps_about_four_pixels_from_the_knobs() {
+    fn the_centre_glyph_keeps_four_pixels_from_the_knobs() {
         let t = tolerances(1.0);
         for rho in [0.0, 0.3, 0.6, 0.61, 0.8, 1.0] {
             let object = rect_object(72.0, 72.0, rho * 36.0, 0.0);
@@ -611,7 +612,7 @@ mod tests {
             }
             for (_, at) in &params {
                 let gap = at.vector_to(centre).length() - CENTRE_GLYPH_RADIUS_PX - KNOB_RADIUS_PX;
-                assert!(gap >= 3.6, "rho {rho}: gap {gap}");
+                assert!(gap >= MIN_GLYPH_GAP_PX, "rho {rho}: gap {gap}");
             }
         }
     }

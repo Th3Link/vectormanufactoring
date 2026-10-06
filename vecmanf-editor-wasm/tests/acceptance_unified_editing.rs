@@ -2694,16 +2694,34 @@ fn ac35_a_press_inside_the_selected_box_moves_it_even_on_another_objects_outline
     let _ = fa;
 }
 
+/// Criterion 35, amended: with Shift held the outline hit is tried first, so a
+/// Shift press on another object's outline inside the selected box adds it to
+/// the selection; a Shift press inside the box on no outline neither moves the
+/// object nor clears the selection.
 #[test]
-#[ignore = "ambiguous: criterion 35 says a press inside the box moves, Shift or not for handles only; advanced-selection later makes Shift arm the marquee. The implementation does not move."]
-fn ac35_with_shift_a_press_inside_the_box_still_moves() {
-    let (mut s, fa, _fb, k) = two_rect_scene((300.0, 0.0));
+fn ac35_with_shift_the_outline_hit_is_tried_first() {
+    let (mut s, fa, fb, k) = two_rect_scene((20.0, 10.0));
+    let (a0, b0) = (rect_of(&s, 0), rect_of(&s, 1));
+    // inside A's box on no outline and no handle: nothing happens
     let p = fa.at(-60.0, 30.0);
-    let a0 = rect_of(&s, 0);
     drag_mod(&mut s, p, pt(p.x + 30.0 / k, p.y + 20.0 / k), true, false);
-    let a1 = rect_of(&s, 0);
-    assert!(near(a1.0.origin.x - a0.0.origin.x, 30.0 / k, 1e-6), "moved");
+    assert_eq!(rect_of(&s, 0), a0, "not moved");
     assert!(s.select_bar_state().radius.is_some(), "still selected");
+    // B's outline lies inside A's box: Shift-click adds B to the selection
+    let on_b = fb.mid(0.0, -1.0);
+    shift_click(&mut s, on_b);
+    assert_eq!(rect_of(&s, 1), b0, "a click moves nothing");
+    let (a1, b1) = (rect_of(&s, 0), rect_of(&s, 1));
+    let on_b2 = pt(fb.c.x + 20.0 / k, fb.c.y - 20.0 / k);
+    drag(&mut s, on_b2, pt(on_b2.x + 10.0 / k, on_b2.y + 10.0 / k));
+    assert!(
+        near(rect_of(&s, 0).0.origin.x - a1.0.origin.x, 10.0 / k, 1e-6),
+        "A moved with B"
+    );
+    assert!(
+        near(rect_of(&s, 1).0.origin.x - b1.0.origin.x, 10.0 / k, 1e-6),
+        "B was added by the Shift press"
+    );
 }
 
 #[test]
@@ -2747,10 +2765,12 @@ fn ac35_outline_hit_radius_is_screen_pixels_at_every_zoom() {
     }
 }
 
+/// Criterion 35, amended: the outline tolerance is 4 px
+/// (`SEGMENT_TOLERANCE_PX`, unchanged since slice 4); `advanced-selection`
+/// raises it to 8 px later.
 #[test]
-#[ignore = "spec/code discrepancy: criterion 35 says an outline hit within 8 px, the code (SEGMENT_TOLERANCE_PX, unchanged since slice 4) uses 4 px"]
-fn ac35_outline_hit_radius_is_8_px_as_the_spec_text_says() {
-    for (dist, hit) in [(7.0, true), (7.9, true), (9.0, false), (12.0, false)] {
+fn ac35_outline_hit_radius_is_4_px_as_amended() {
+    for (dist, hit) in [(1.0, true), (3.5, true), (5.0, false), (9.0, false)] {
         outline_hit_case(dist, hit);
     }
 }

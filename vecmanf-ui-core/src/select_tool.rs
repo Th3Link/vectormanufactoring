@@ -197,38 +197,28 @@ impl SelectTool {
         if let Some((object, box_, handle)) =
             Self::handle_at(objects, selection, point, handle_tolerances, shift)
         {
-            self.drag = SelectDrag::Transforming(TransformDrag {
+            self.drag = SelectDrag::Transforming(self.begin_handle_drag(
                 origin,
-                start: object.clone(),
-                start_box: box_,
+                object,
+                box_,
                 handle,
-                modes: self.modes,
-                param_gain: match handle {
-                    EditHandle::Param(ParamHandle::CornerRadius(_)) => {
-                        radius_gain(box_.width().min(box_.height()), &handle_tolerances)
-                    }
-                    _ => 1.0,
-                },
-            });
+                &handle_tolerances,
+            ));
             self.last_press_handle = Some(handle);
             return SelectPointerDownOutcome::Handle;
         }
-        let from_center = matches!(
-            Self::hover_handle_at(objects, selection, point, handle_tolerances, shift),
-            Some((_, _, EditHandle::Move))
-        );
-
-        // Criterion 35 of `unified-object-editing`: with one primitive
-        // selected, a press inside its box that is on no handle is a move,
-        // before any outline hit (an outline of another object inside the
-        // box does not take the press). Shift keeps the toggle and a sole
-        // selected path keeps the outline-first order (its box often
-        // overlaps other objects).
-        if !shift
-            && sole_selected(objects, selection)
-                .is_some_and(|object| matches!(object, ObjectSnapshot::Primitive(_)))
-            && Self::is_inside_selected_box(objects, selection, point)
-        {
+        // Criterion 35 of `unified-object-editing` (amended): a plain press
+        // inside the sole selected object's box that is on no handle is a
+        // move, before any outline hit (an outline of another object inside
+        // the box does not take the press); without it a small unfilled
+        // object could not be moved at all (slice 5 criterion 23). With Shift
+        // the outline hit is tried first, so Shift-click adds to the selection
+        // over a filled shape.
+        if !shift && Self::is_inside_selected_box(objects, selection, point) {
+            let from_center = matches!(
+                Self::hover_handle_at(objects, selection, point, handle_tolerances, shift),
+                Some((_, _, EditHandle::Move))
+            );
             self.drag = SelectDrag::Moving {
                 origin,
                 from_center,
@@ -237,19 +227,6 @@ impl SelectTool {
         }
 
         let Some(hit) = hit_test_object(objects, point, tolerance) else {
-            // A press inside the sole selected object's own (oriented) box
-            // that is not on a handle is a grab of that object — its body
-            // (acceptance criterion 23 of slice 5). Without it a small
-            // unfilled object could not be moved at all: the handle radii
-            // tile its whole outline and its interior hits nothing.
-            // Unselected objects still hit only on their outline.
-            if !shift && Self::is_inside_selected_box(objects, selection, point) {
-                self.drag = SelectDrag::Moving {
-                    origin,
-                    from_center,
-                };
-                return SelectPointerDownOutcome::Selected;
-            }
             if !shift {
                 selection.clear();
             }
@@ -274,6 +251,33 @@ impl SelectTool {
             from_center: false,
         };
         SelectPointerDownOutcome::Selected
+    }
+
+    /// The drag a press on `handle` of `object` begins: its start snapshot and
+    /// box, the switches as they are now, and the radius gain frozen at the
+    /// press (`crate::radius_gain`; it depends on the screen scale).
+    fn begin_handle_drag(
+        &self,
+        origin: DragOrigin,
+        object: &ObjectSnapshot,
+        box_: crate::oriented_box::OrientedBox,
+        handle: EditHandle,
+        tolerances: &TransformHandleTolerances,
+    ) -> TransformDrag {
+        let param_gain = match handle {
+            EditHandle::Param(ParamHandle::CornerRadius(_)) => {
+                radius_gain(box_.width().min(box_.height()), tolerances)
+            }
+            _ => 1.0,
+        };
+        TransformDrag {
+            origin,
+            start: object.clone(),
+            start_box: box_,
+            handle,
+            modes: self.modes,
+            param_gain,
+        }
     }
 
     /// Records the pointer's position for the drag in flight, so the 3 px
