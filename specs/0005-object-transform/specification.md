@@ -343,11 +343,15 @@ unrequested capability smuggled in to make them compose.
     saving a project with the switch on produces a file byte-identical to
     saving it with the switch off. After closing and reopening the project,
     or restarting the app, the switch is off (criterion 27).
-30. Given the Properties panel is visible, then it contains a section
-    titled "Transform" with a switch labelled "Scale stroke width". The
-    switch is operable whatever is selected, including nothing (it is tool
-    state, not an object property), shows its current state at all times,
-    and works from the keyboard (Tab to focus, Space to toggle).
+30. Given the Select tool is active, then its top contextual bar (the bar
+    that floats over the canvas, as the Node and Shape tool bars do) shows a
+    switch labelled "Scale stroke width". It is a Select tool setting, not
+    an object property and not part of the Properties panel. The switch is
+    visible and operable whenever the Select tool is active, including with
+    nothing selected, shows its current state at all times, and works from
+    the keyboard (Tab to focus, Space to toggle). When another tool is
+    active, the Select tool's bar and the switch are not shown, and the
+    switch's state is kept until the session ends (criterion 27).
 31. Given a rectangle with a non-zero corner radius, when it is resized
     with the switch in either state, then the corner radius scales exactly
     as criterion 9 says. The switch has no effect on the radius, and no
@@ -561,37 +565,31 @@ to read while it's travelling in an arc.
   `docs/design-system.md`'s 2026-10-05 chrome section is persistent,
   selection-independent configuration, not a second copy of a transient,
   drag-duration number that's already visible at the maker's cursor.
-  Revisit placement once a future slice adds typed numeric transform entry
-  — that one plausibly does belong in the Properties panel as a "Transform"
-  section, since typed entry is exactly the kind of persistent, addressable
-  control the panel exists for. (The "Transform" section now exists for the
-  stroke switch below; typed entry would join it.)
+  Revisit placement once a future slice adds typed numeric transform entry.
+  (`object-transform-refinements` adds typed angle and size entry next to
+  the handle, on canvas.)
 
-### "Scale stroke width" switch placement (2026-10-06, for `ux-engineer` review)
+### "Scale stroke width" switch placement (customer decision 2026-10-06, for `ux-engineer` review)
 
-Proposed by the product owner, not yet reviewed.
+The customer decided: "der strichstärkenschalter kommt nicht in die
+properties, das gehört zum werkzeug und damit auch oben in die bar, die wir
+auch hovern lassen wollten." This replaces the earlier proposal of a
+"Transform" section in the Properties panel, which is dropped.
 
-- **Where:** the right-hand Properties panel (`docs/design-system.md`:
-  one scrolling column of named, stacked sections, 280px, docked), in a new
-  section titled **"Transform"**, below the "Style" section. The switch is
-  persistent tool configuration that must survive selection changes, which
-  is the panel's stated role; a floating per-selection mini-toolbar is the
-  wrong home because the switch has to be settable before anything is
-  selected and must not appear and vanish with the selection.
+- **Where:** the Select tool's top contextual bar, floating over the canvas
+  (hovering rather than docked, the pattern the Node and Shape bars follow
+  since PR #31; `ux-engineer` takes the bar's layout and tokens from
+  `docs/design-system.md` and from those bars). The switch belongs to the
+  tool, so it is shown whenever the Select tool is active and settable
+  before anything is selected; it does not appear and vanish with the
+  selection.
 - **Control:** one labelled switch, "Scale stroke width", off by default,
-  with the existing shadcn-style switch/label pairing the panel uses for
-  other booleans. No icon, no extra explanatory text beyond an optional
-  one-line hint ("Off: a resize keeps stroke thickness").
-- **Section state:** per the panel's no-collapse rule the section is always
-  present and the switch always enabled (criterion 30). It is not a
-  "disabled when nothing is selected" control, because it configures the
-  next drag, not an object.
-- **Dependency to resolve:** the Properties panel is first built by
-  `stroke-and-fill-styling` and does not exist in the app yet. If this
-  slice ships before it, the `ux-engineer` picks the interim host for the
-  same switch (the criteria only require that it exist, is reachable and
-  labelled as in criterion 30); the Transform section moves into the panel
-  when the panel lands.
+  styled like the other boolean controls in the tool bars. No icon, no extra
+  explanatory text beyond an optional tooltip ("Off: a resize keeps stroke
+  thickness"). Keyboard operable (criterion 30).
+- **Section state:** always present and enabled while the Select tool is
+  active (criterion 30). It is not a "disabled when nothing is selected"
+  control, because it configures the next drag, not an object.
 - **Feedback:** the switch's own state is the feedback; no on-canvas
   indicator. The live size readout (criterion 14) is unchanged.
 

@@ -411,11 +411,11 @@ Points the `ux-engineer` is asked to settle, from the criteria above:
 
 This spec, `specs/0007-stroke-and-fill-styling` and `specs/advanced-selection`
 all change the same select/transform code (`select_tool`, the handle layout,
-the Properties panel, modifier handling) and must be built one after the
+the Select tool's top bar, modifier handling) and must be built one after the
 other, not in parallel. The order is for the lead to set. Criterion 11
-touches `advanced-selection`'s Shift rules; the Properties panel that slice
-5's switch (slice 5 criterion 30) lives in is built by
-`stroke-and-fill-styling`.
+touches `advanced-selection`'s Shift rules; slice 5's "Scale stroke width"
+switch (slice 5 criterion 30) lives in the Select tool's top bar, not in the
+Properties panel.
 
 ## Links
 

@@ -610,6 +610,17 @@ green. This also settles the Shift+Ctrl tie-break's own legend question
 identical `−Remove`, with no further distinction, since its effect is
 identical to Ctrl held alone.
 
+### Marquee over a selected object's box (`object-transform`, 2026-10-06)
+
+Since `object-transform`, a press on empty canvas *inside the sole selected
+object's oriented box* starts a **move**, not a marquee (a small unfilled
+object could not be moved otherwise). Decision for criterion 8: a plain
+marquee arms only outside that box. Shift and Ctrl held at press bypass the
+move and arm the marquee, so additive and remove modes still work over a
+large selected frame; Alt already locks a lasso at any press point
+(criterion 16). `object-transform` bypasses for Shift only today; this story
+adds Ctrl. A plain marquee that must start inside the box needs Esc first.
+
 ### Status
 
 With these notes filled in, this spec is ready for the architect's

@@ -32,7 +32,7 @@ triggered is a bug, not a variant.
 | 2 | `path-node-editing` | Draw and edit a Bézier path with a pen tool: add/move/delete nodes, drag handles, same node/handle/segment mental model as Inkscape. | R-EDIT-001 | Must |
 | 3 | `primitive-shapes` | Rectangle (with corner radius), circle/ellipse and polygon/star tools; "object to path" converts any of them to an editable path. | R-EDIT-002, R-EDIT-004 | Must |
 | 4 | `canvas-navigation-and-selection` | Pan/zoom the canvas (zoom toward cursor), stable behaviour across window resize, and a general Select tool to click/move/delete any object without re-entering its creation tool. | R-EDIT-010, R-EDIT-011 | Must |
-| 5 | `object-transform` | Move, scale and rotate any path or primitive via on-canvas handles on the Select tool's bounding box, with proportional stroke-width/corner-radius scaling. | R-EDIT-012 | Must |
+| 5 | `object-transform` | Move, scale and rotate any path or primitive via on-canvas handles on the Select tool's bounding box; corner radius scales with the resize, stroke width only with the tool's "Scale stroke width" switch on (off by default). | R-EDIT-012 | Must |
 | 6 | `path-merge-split-and-node-types` | Join two path endpoints into one node, split a path at a node into two; a third node type (Asymmetric) alongside Corner and Symmetric. | R-EDIT-014 | Must |
 | 7 | `stroke-and-fill-styling` | Stroke width/dash/join/cap/color; solid fill and linear/radial gradient fill, on any path or primitive. | R-EDIT-005, R-EDIT-006 | Must |
 | 8 | `undo-redo` | Ctrl+Z/Ctrl+Y undoes/redoes every editing operation shipped in slices 2–3 and 5–7, one interaction = one undo step, no silent data loss. | R-EDIT-008 | Must |
