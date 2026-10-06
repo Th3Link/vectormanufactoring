@@ -1,74 +1,21 @@
-//! A primitive shape's own draw-list geometry
-//! (`specs/0003-primitive-shapes/specification.md`, acceptance criterion 16;
-//! "Selection and hover convention for primitives"): its placeholder
-//! stroke (reusing [`crate::stroke::path_stroke`] on
-//! [`vecmanf_document_core::outline_of`]'s output, so AC16's identical
-//! stroke holds by construction and AC17's "visually identical"
-//! conversion holds exactly, not just within a tolerance — `adrs.md`),
-//! its bounding-box selection/hover outline, and its shape handles.
-//!
-//! [`ShapeDecorationInput`] mirrors [`crate::DecorationInput`]'s own
-//! reason for existing: this crate cannot read `vecmanf-ui-core`'s
-//! selection or its handle-layout module directly (ADR 0011 §3), so
-//! `vecmanf-editor-wasm` builds this input from them each frame.
+//! A primitive's own draw-list geometry
+//! (`specs/0003-primitive-shapes/specification.md`, acceptance criterion 16)
+//! and the shape tools' create-drag preview: its placeholder stroke (reusing
+//! [`crate::stroke::path_stroke`] on
+//! [`vecmanf_document_core::outline_of`]'s output, so AC16's identical stroke
+//! holds by construction and AC17's "visually identical" conversion holds
+//! exactly, not just within a tolerance, `adrs.md`) and the live outline of a
+//! shape being created. Selection boxes and handles are the Select tool's
+//! (`crate::select_decoration`); the shape tools only create.
 
 use vecmanf_document_core::{
-    Angle, NodeId, Point, PrimitiveSnapshot, Shape, ViewTransform, outline_of_rotated, shape_center,
+    Angle, Point, PrimitiveSnapshot, Shape, ViewTransform, outline_of_rotated,
 };
 
 use crate::color::RgbaColor;
 use crate::glyphs::{self, DrawList};
 use crate::stroke;
 use crate::theme;
-
-/// A shape handle's kind, duplicated (narrowly) from
-/// `vecmanf_ui_core::handle_layout::HandleKind` — this crate cannot
-/// depend on `vecmanf-ui-core` (ADR 0011 §3), and the only thing
-/// rendering needs to know is "does this one get the corner-radius
-/// guide line", everything else is handled by `position`/`draggable`
-/// alone.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShapeHandleKind {
-    /// Resizes the shape.
-    Resize,
-    /// The rectangle's one draggable corner-radius handle — gets the
-    /// dashed connecting guide (acceptance criteria 4, 5, 6).
-    CornerRadius,
-    /// A rectangle's other three corners, once rounded — display-only.
-    CornerRadiusEcho,
-    /// A star's inner-radius handle (acceptance criterion 14).
-    InnerRadius,
-}
-
-/// One shape handle to draw, for one primitive.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct RenderShapeHandle {
-    /// What this handle does.
-    pub kind: ShapeHandleKind,
-    /// Where it is, in document space.
-    pub position: Point,
-    /// Whether it can be dragged at all (a `CornerRadiusEcho` cannot).
-    pub draggable: bool,
-    /// Whether it is currently being dragged — filled solid
-    /// `--accent` while so (`docs/design-system.md`).
-    pub dragging: bool,
-}
-
-/// What to decorate, built from `vecmanf-ui-core`'s
-/// `vecmanf_ui_core::ObjectSelection` and `handle_layout` module by whoever owns both
-/// it and this crate (`vecmanf-editor-wasm`).
-#[derive(Debug, Clone, Default)]
-pub struct ShapeDecorationInput {
-    /// Primitives shown selected: bounding box plus handles
-    /// (acceptance criterion 22 can select more than one at once).
-    pub selected: Vec<NodeId>,
-    /// A primitive currently hovered, not yet selected — bounding box
-    /// only, `--accent-hover`, no handles.
-    pub hovered: Option<NodeId>,
-    /// Each selected primitive's own handles, keyed by id. Only
-    /// consulted for an id also present in `selected`.
-    pub handles: Vec<(NodeId, Vec<RenderShapeHandle>)>,
-}
 
 fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
     px / view.scale()
@@ -116,17 +63,16 @@ fn primitive_stroke(snapshot: &PrimitiveSnapshot, view: ViewTransform) -> DrawLi
     )
 }
 
-/// A shape tool's live, uncommitted create/resize/radius/ratio preview
+/// A shape tool's live, uncommitted create-drag preview
 /// (`specs/0003-primitive-shapes/specification.md`'s "Live creation
 /// feedback": "a maker dragging out a rectangle sees a rectangle
 /// updating live, not a placeholder box that snaps to shape on
-/// release" — ux-engineer review: this applies to every drag kind, not
-/// only create). Hollow, `--accent` outline, screen-space-constant
+/// release"). Hollow, `--accent` outline, screen-space-constant
 /// stroke weight — distinct from this module's own placeholder stroke
 /// (acceptance criterion 16's black, document-mm-weighted one), since
 /// nothing has committed yet. `vecmanf-ui-core`'s own shape tools
 /// decide *whether* there is a live shape to preview right now
-/// (`vecmanf_ui_core::LiveShape`); this function only draws the
+/// (`vecmanf_ui_core::CreatePreview`); this function only draws the
 /// [`Shape`] it is given.
 #[must_use]
 pub fn build_shape_live_preview(shape: &Shape, rotation: Angle, view: ViewTransform) -> DrawList {
@@ -137,52 +83,9 @@ pub fn build_shape_live_preview(shape: &Shape, rotation: Angle, view: ViewTransf
     stroke::path_stroke(&anchors, true, width, theme::ACCENT, tolerance_mm)
 }
 
-fn bounding_box_outline(
-    shape: &Shape,
-    rotation: Angle,
-    width_mm: f64,
-    color: RgbaColor,
-) -> DrawList {
-    // The frame-bounds rule itself lives in `vecmanf-document-core`
-    // (`specs/0004-canvas-navigation-and-selection/adrs.md`); the box is
-    // that unrotated frame turned about the shape's own center by its
-    // `rotation` (`object-transform` acceptance criterion 25: the two
-    // handle sets and the box must agree about where the corners are).
-    let (min, max) = vecmanf_document_core::shape_frame_bounds(shape);
-    let center = shape_center(shape);
-    glyphs::quad_outline(
-        [
-            Point::new(min.x, min.y),
-            Point::new(max.x, min.y),
-            Point::new(max.x, max.y),
-            Point::new(min.x, max.y),
-        ]
-        .map(|corner| corner.rotated_around(center, rotation)),
-        width_mm,
-        color,
-    )
-}
-
-/// A hollow shape-handle glyph: `--accent` outline, white idle fill or
-/// solid `--accent` fill while being dragged (`docs/design-system.md`).
-fn shape_handle_glyph(center: Point, size_mm: f64, outline_mm: f64, dragging: bool) -> DrawList {
-    let mut list = glyphs::square(center, size_mm, theme::SHAPE_HANDLE_STROKE);
-    let fill = if dragging {
-        theme::SHAPE_HANDLE_STROKE
-    } else {
-        RgbaColor::WHITE
-    };
-    list.extend(glyphs::square(
-        center,
-        (size_mm - 2.0 * outline_mm).max(0.0),
-        fill,
-    ));
-    list
-}
-
-/// The corner-radius handle's dashed connecting guide (`docs/design-
-/// system.md`: "dashed `--accent-hover` line — visually distinct from
-/// the node tool's *solid* handle line"). A flagged simplification like
+/// A dashed guide line (`docs/design-system.md`: the radius guide and the skew
+/// fixed-line guide, visually distinct from the node tool's *solid* handle
+/// line). A flagged simplification like
 /// `pen_preview.rs`'s rubber-band line: built from short solid segments
 /// rather than a real stippled-stroke primitive, since this crate has
 /// none yet.
@@ -212,92 +115,20 @@ pub(crate) fn dashed_guide(
     list
 }
 
-/// A rectangle's own top-right corner — the corner-radius handle's
-/// guide always runs from here (`specification.md`'s "Placement").
-fn rect_top_right_corner(shape: &Shape) -> Option<Point> {
-    match *shape {
-        Shape::Rect { bounds, .. } => Some(Point::new(
-            bounds.origin.x + bounds.width.as_mm(),
-            bounds.origin.y,
-        )),
-        Shape::Ellipse { .. } | Shape::Polygon { .. } | Shape::Star { .. } => None,
-    }
-}
-
-/// Builds every primitive's own stroke, plus selection/hover/handle
-/// decorations, from `input`.
+/// Builds every primitive's own stroke.
 #[must_use]
-pub fn build(
-    primitives: &[PrimitiveSnapshot],
-    view: ViewTransform,
-    input: &ShapeDecorationInput,
-) -> DrawList {
+pub fn build_primitive_strokes(primitives: &[PrimitiveSnapshot], view: ViewTransform) -> DrawList {
     let mut list = DrawList::default();
-    let outline_width = screen_px_to_mm(view, theme::BOUNDING_BOX_OUTLINE_PX);
-    let handle_size = screen_px_to_mm(view, theme::SHAPE_HANDLE_SIZE_PX);
-    let handle_outline = screen_px_to_mm(view, theme::SHAPE_HANDLE_OUTLINE_PX);
-    let dash = screen_px_to_mm(view, theme::GUIDE_DASH_PX);
-    let gap = screen_px_to_mm(view, theme::GUIDE_GAP_PX);
-    let guide_width = screen_px_to_mm(view, 1.0);
-
     for snapshot in primitives {
         list.extend(primitive_stroke(snapshot, view));
-        let selected = input.selected.contains(&snapshot.id);
-        let hovered = input.hovered == Some(snapshot.id);
-        if selected {
-            list.extend(bounding_box_outline(
-                &snapshot.shape,
-                snapshot.rotation,
-                outline_width,
-                theme::ACCENT,
-            ));
-        } else if hovered {
-            list.extend(bounding_box_outline(
-                &snapshot.shape,
-                snapshot.rotation,
-                outline_width,
-                theme::ACCENT_HOVER,
-            ));
-        }
     }
-
-    for (id, handles) in &input.handles {
-        if !input.selected.contains(id) {
-            continue;
-        }
-        let corner = primitives.iter().find(|p| p.id == *id).and_then(|p| {
-            rect_top_right_corner(&p.shape)
-                .map(|corner| corner.rotated_around(shape_center(&p.shape), p.rotation))
-        });
-        for handle in handles {
-            if handle.kind == ShapeHandleKind::CornerRadius
-                && let Some(corner) = corner
-            {
-                list.extend(dashed_guide(
-                    corner,
-                    handle.position,
-                    guide_width,
-                    theme::ACCENT_HOVER,
-                    dash,
-                    gap,
-                ));
-            }
-            list.extend(shape_handle_glyph(
-                handle.position,
-                handle_size,
-                handle_outline,
-                handle.dragging,
-            ));
-        }
-    }
-
     list
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vecmanf_document_core::{Document, Length, RectBounds};
+    use vecmanf_document_core::{Document, Length, NodeId, Point, RectBounds};
 
     fn rect_snapshot(document: &Document) -> (NodeId, PrimitiveSnapshot) {
         let id = document.create_rect(RectBounds {
@@ -308,9 +139,8 @@ mod tests {
         (id, document.primitive(id).expect("exists"))
     }
 
-    /// ux-engineer review item 1: a live preview draws a non-empty
-    /// outline for an in-progress shape, independent of any committed
-    /// primitive.
+    /// A live preview draws a non-empty outline for an in-progress shape,
+    /// independent of any committed primitive.
     #[test]
     fn build_shape_live_preview_draws_a_rect_outline() {
         let shape = Shape::Rect {
@@ -327,8 +157,8 @@ mod tests {
     }
 
     /// Acceptance criterion 25 (and the slice's whole point): a rotated
-    /// primitive's stroke is drawn turned, not as its unrotated frame —
-    /// a 10 × 10 square rotated 45° about its center reaches the apex
+    /// primitive's stroke is drawn turned, not as its unrotated frame — a
+    /// 10 × 10 square rotated 45° about its center reaches the apex
     /// `(5, 5 - 7.07)` and leaves its unrotated corner `(0, 0)` empty.
     #[test]
     fn a_rotated_primitives_stroke_is_drawn_turned() {
@@ -341,11 +171,7 @@ mod tests {
             ))
             .expect("rotate");
         let snapshot = document.primitive(id).expect("exists");
-        let list = build(
-            &[snapshot],
-            ViewTransform::identity(),
-            &ShapeDecorationInput::default(),
-        );
+        let list = build_primitive_strokes(&[snapshot], ViewTransform::identity());
         let reaches = |target: Point| {
             list.triangles
                 .iter()
@@ -361,95 +187,17 @@ mod tests {
         );
     }
 
-    /// The shape tools' selection box turns with the primitive too, so
-    /// the box, the outline and the handles agree about the corners.
+    /// A primitive draws only its stroke: no box, no handle (those are the
+    /// Select tool's decorations).
     #[test]
-    fn a_rotated_primitives_selection_box_is_oriented() {
-        let document = Document::new(1);
-        let (id, _) = rect_snapshot(&document);
-        document
-            .rotate_object(&document.object(id).expect("object exists").rotated(
-                Point::new(5.0, 5.0),
-                Angle::from_radians(std::f64::consts::FRAC_PI_4),
-            ))
-            .expect("rotate");
-        let snapshot = document.primitive(id).expect("exists");
-        let input = ShapeDecorationInput {
-            selected: vec![id],
-            hovered: None,
-            handles: vec![],
-        };
-        let with_box = build(&[snapshot], ViewTransform::identity(), &input);
-        let without = build(
-            &[snapshot],
-            ViewTransform::identity(),
-            &ShapeDecorationInput::default(),
-        );
-        let box_only: Vec<_> = with_box.triangles[without.triangles.len()..].to_vec();
-        // The selection box's own thick lines run along the turned edges,
-        // so they reach the rotated apex too.
-        let apex = Point::new(5.0, 5.0 - 50.0_f64.sqrt());
-        assert!(
-            box_only
-                .iter()
-                .any(|v| v.position.vector_to(apex).length() < 1.0)
-        );
-    }
-
-    #[test]
-    fn an_unselected_primitive_draws_only_its_stroke() {
+    fn a_primitive_draws_only_its_stroke() {
         let document = Document::new(1);
         let (_, snapshot) = rect_snapshot(&document);
-        let list = build(
-            &[snapshot],
-            ViewTransform::identity(),
-            &ShapeDecorationInput::default(),
+        let list = build_primitive_strokes(&[snapshot], ViewTransform::identity());
+        assert!(!list.triangles.is_empty(), "the stroke itself draws");
+        assert!(
+            list.triangles.iter().all(|v| v.color == RgbaColor::BLACK),
+            "nothing but the black stroke"
         );
-        assert!(!list.triangles.is_empty(), "the stroke itself still draws");
-    }
-
-    #[test]
-    fn a_selected_primitive_adds_bounding_box_and_handle_geometry() {
-        let document = Document::new(1);
-        let (id, snapshot) = rect_snapshot(&document);
-        let without = build(
-            &[snapshot],
-            ViewTransform::identity(),
-            &ShapeDecorationInput::default(),
-        );
-
-        let input = ShapeDecorationInput {
-            selected: vec![id],
-            hovered: None,
-            handles: vec![(
-                id,
-                vec![RenderShapeHandle {
-                    kind: ShapeHandleKind::CornerRadius,
-                    position: Point::new(10.0, 0.0),
-                    draggable: true,
-                    dragging: false,
-                }],
-            )],
-        };
-        let with = build(&[snapshot], ViewTransform::identity(), &input);
-        assert!(with.triangle_count() > without.triangle_count());
-    }
-
-    #[test]
-    fn a_hovered_unselected_primitive_draws_a_bounding_box_but_no_handles() {
-        let document = Document::new(1);
-        let (id, snapshot) = rect_snapshot(&document);
-        let without = build(
-            &[snapshot],
-            ViewTransform::identity(),
-            &ShapeDecorationInput::default(),
-        );
-        let input = ShapeDecorationInput {
-            selected: vec![],
-            hovered: Some(id),
-            handles: vec![],
-        };
-        let with = build(&[snapshot], ViewTransform::identity(), &input);
-        assert!(with.triangle_count() > without.triangle_count());
     }
 }

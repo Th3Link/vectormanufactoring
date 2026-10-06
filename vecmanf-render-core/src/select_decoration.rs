@@ -4,8 +4,8 @@
 //! object type, selected or hovered, with no shape handles and no path
 //! nodes — acceptance criteria 14, 15, 20).
 //!
-//! [`SelectDecorationInput`] mirrors [`crate::DecorationInput`]/
-//! [`crate::ShapeDecorationInput`]'s own reason for existing: this crate
+//! [`SelectDecorationInput`] mirrors [`crate::DecorationInput`]'s own
+//! reason for existing: this crate
 //! cannot read `vecmanf-ui-core`'s `ObjectSelection` or `object_bounds`
 //! directly (ADR 0011 §3), so each selected/hovered object's own bounding
 //! box reaches here as four document-space corners (oriented to the

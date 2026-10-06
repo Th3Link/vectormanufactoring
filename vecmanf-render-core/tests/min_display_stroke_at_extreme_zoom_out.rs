@@ -16,7 +16,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use vecmanf_document_core::{Document, Length, Point, RectBounds, ViewTransform};
-use vecmanf_render_core::{ShapeDecorationInput, build_shape_draw_list};
+use vecmanf_render_core::build_primitive_strokes;
 
 /// 2% zoom, in the same CSS-reference-pixel terms acceptance criterion 7
 /// defines (`96.0 / 25.4` px/mm at 100%).
@@ -38,7 +38,7 @@ fn a_default_width_rect_stroke_does_not_vanish_at_2_percent_zoom() {
     let view = ViewTransform::new(SCALE_AT_2_PERCENT, Point::new(0.0, 0.0));
     // No selection/hover: only the placeholder stroke itself draws, no
     // bounding box and no handles to confound the measurement.
-    let list = build_shape_draw_list(&[snapshot], view, &ShapeDecorationInput::default());
+    let list = build_primitive_strokes(&[snapshot], view);
     assert!(
         list.triangle_count() > 0,
         "the stroke must tessellate to something"

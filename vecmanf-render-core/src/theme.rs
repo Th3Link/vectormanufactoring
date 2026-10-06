@@ -110,10 +110,6 @@ pub const SHAPE_HANDLE_STROKE: RgbaColor = ACCENT;
 /// relative size.
 pub const SHAPE_HANDLE_SIZE_PX: f64 = 8.0;
 
-/// Shape handle outline thickness, screen-space pixels — same
-/// reasoning as [`NODE_OUTLINE_PX`].
-pub const SHAPE_HANDLE_OUTLINE_PX: f64 = 1.0;
-
 /// The primitive bounding-box selection/hover outline's weight,
 /// screen-space pixels (`docs/design-system.md`'s "Bounding-box
 /// selection outline").
@@ -126,7 +122,7 @@ pub const BOUNDING_BOX_OUTLINE_PX: f64 = 1.0;
 pub const TRANSFORM_RESIZE_HANDLE_SIZE_PX: f64 = SHAPE_HANDLE_SIZE_PX;
 
 /// The transform resize handle's own outline thickness — same
-/// reasoning as [`SHAPE_HANDLE_OUTLINE_PX`].
+/// reasoning as the node glyph's outline.
 pub const TRANSFORM_RESIZE_HANDLE_OUTLINE_PX: f64 = 1.0;
 
 /// The transform resize handle's corner radius, screen-space pixels
