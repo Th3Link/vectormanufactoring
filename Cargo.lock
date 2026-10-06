@@ -5031,6 +5031,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "console_error_panic_hook",
+ "loro",
  "vecmanf-document-core",
  "vecmanf-render-core",
  "vecmanf-ui-core",
@@ -5069,6 +5070,7 @@ dependencies = [
 name = "vecmanf-ui-core"
 version = "0.1.0"
 dependencies = [
+ "proptest",
  "vecmanf-document-core",
  "vecmanf-geometry-core",
 ]

@@ -17,6 +17,11 @@ vecmanf-document-core = { path = "../vecmanf-document-core", version = "0.1.0" }
 vecmanf-ui-core = { path = "../vecmanf-ui-core", version = "0.1.0" }
 vecmanf-render-core = { path = "../vecmanf-render-core", version = "0.1.0" }
 
+[dev-dependencies]
+# `tests/acceptance_0005.rs` counts Loro changes / reads op keys to verify
+# "one interaction = one commit" and the per-register write table.
+loro.workspace = true
+
 # `session.rs` (this crate's actual orchestration logic) is plain Rust,
 # host-independent and tested by ordinary `cargo test`. Everything below
 # is wasm32-only: the `wasm-bindgen` surface and the `wgpu` device/
