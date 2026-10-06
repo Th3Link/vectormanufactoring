@@ -323,6 +323,9 @@ fn ac14_select_tool_selects_a_rect_a_path_and_an_ellipse() {
     draw_ellipse(&mut session, 100.0, 0.0, 10.0, 10.0);
 
     session.set_tool(Tool::Select);
+    // A create-drag leaves the new shape selected; start from nothing selected.
+    session.pointer_down(Point::new(500.0, 500.0), false);
+    session.pointer_up(Point::new(500.0, 500.0), false, false);
     let empty = session.draw_list().triangle_count();
 
     // Click the rect's left edge.
@@ -472,6 +475,10 @@ fn ac20_single_object_drag_moves_live_and_commits_once_on_release() {
     draw_rect(&mut session, 0.0, 0.0, 10.0, 10.0);
     session.set_tool(Tool::Select);
 
+    // A create-drag leaves the new shape selected; start from nothing selected.
+    session.pointer_down(Point::new(500.0, 500.0), false);
+    session.pointer_up(Point::new(500.0, 500.0), false, false);
+
     session.pointer_down(Point::new(0.0, 5.0), false);
     session.pointer_hover(Point::new(4.0, 8.0), false, false);
 
@@ -487,13 +494,6 @@ fn ac20_single_object_drag_moves_live_and_commits_once_on_release() {
 
 #[test]
 fn ac20_select_tool_shows_a_plain_box_while_its_own_tool_shows_handles_too() {
-    // Note: a create-drag does not leave the new rect selected (`main`'s
-    // pre-existing `shape_pointer_up`/`RectTool::pointer_up` discards the
-    // `Created(id)` outcome without ever calling `selection.select_single`
-    // — unrelated to this slice, present before it too), so this test
-    // explicitly re-selects the rect under the Rectangle tool first (a
-    // click on its outline, not a create-drag) to get a true "selected
-    // under its own tool, handles showing" baseline to compare against.
     let mut session = Session::new(1);
     draw_rect(&mut session, 0.0, 0.0, 10.0, 10.0);
 
