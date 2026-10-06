@@ -31,11 +31,13 @@ mod select_tool;
 mod selection;
 mod shape_hit_test;
 mod shape_tool_common;
+mod skew_math;
 mod transform_commit;
 mod transform_drag;
 mod transform_entry;
 mod transform_handle_layout;
 mod transform_math;
+mod transform_primitive;
 mod viewport;
 
 pub use anchor_id_minter::AnchorIdMinter;
@@ -64,6 +66,7 @@ pub use select_tool::{
 pub use selection::NodeSelection;
 pub use shape_hit_test::{hit_test_handle, hit_test_primitive};
 pub use shape_tool_common::{LiveShape, ShapeHitTolerances};
+pub use skew_math::{SkewFrame, skew_angle, skew_factor, skew_frame};
 pub use transform_drag::StrokeScaling;
 pub use transform_entry::{
     EntryField, EntryKind, EntryOutcome, InvalidReason, TransformEntry, format_degrees,
@@ -75,8 +78,8 @@ pub use transform_handle_layout::{
     skew_cursor_angle_degrees, transform_handles,
 };
 pub use transform_math::{
-    ResizedBox, SkewFrame, opposite_direction, polygon_star_resize_factor,
-    resize_anchor_local_position, resize_local_box, rotate_delta_angle, rotate_pivot,
-    scaled_and_floored, skew_angle, skew_factor, skew_frame, stroke_or_radius_factor,
+    ResizedBox, opposite_direction, polygon_star_resize_factor, resize_anchor_local_position,
+    resize_local_box, rotate_delta_angle, rotate_pivot, scaled_and_floored,
+    stroke_or_radius_factor,
 };
 pub use viewport::{PX_PER_MM_AT_100, Viewport, Zoom};

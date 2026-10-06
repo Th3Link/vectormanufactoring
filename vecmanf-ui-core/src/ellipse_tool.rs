@@ -15,7 +15,7 @@ use crate::shape_tool_common::{
     LiveShape, ShapeHitTolerances, apply_selection_click, constrained_endpoint, ellipses_only,
     is_degenerate,
 };
-use crate::transform_drag::pin_ellipse_resize;
+use crate::transform_primitive::pin_ellipse_resize;
 
 #[derive(Debug, Default)]
 enum EllipseDrag {

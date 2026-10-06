@@ -22,7 +22,7 @@ use crate::shape_tool_common::{
     LiveShape, ShapeHitTolerances, apply_selection_click, constrained_endpoint, is_degenerate,
     rects_only,
 };
-use crate::transform_drag::pin_rect_resize;
+use crate::transform_primitive::pin_rect_resize;
 
 #[derive(Debug, Default)]
 enum RectDrag {
