@@ -97,6 +97,16 @@ customer accepted.
 Parallel work: at most two implementers at once, each in its own worktree,
 on features that do not touch the same crates.
 
+**Where agents work (customer rule, 2026-10-06):** everything happens under
+`/home/marc/workbench/vecmanf-claude/`. `base/` is the main checkout and the
+session's primary directory. Every agent that needs its own copy (implementer,
+tester, fix branches) gets a git worktree next to it, at
+`/home/marc/workbench/vecmanf-claude/<slug>/`
+(`git -C /home/marc/workbench/vecmanf-claude/base worktree add ../<slug> -b <branch> origin/main`),
+and the lead removes it after the PR is merged. Nothing is ever created
+directly under `/home/marc/workbench/`, and no agent reads or writes outside
+`/home/marc/workbench/vecmanf-claude/`.
+
 ## 5. Engineering rules
 
 SOLID, KISS and YAGNI in concrete, checkable form:
