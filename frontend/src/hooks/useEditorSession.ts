@@ -435,7 +435,6 @@ export interface EditorSession {
    * criteria 12-15). No keyboard shortcut, same reasoning as Join. */
   splitSelected: () => void;
   insertSelected: () => void;
-  finishPen: () => void;
   /** Acceptance criterion 6's "remove rounding" action. */
   removeCornerRounding: () => void;
   /** The Select tool's "Scale stroke width" switch
@@ -799,11 +798,6 @@ export function useEditorSession(
 
   const insertSelected = useCallback(() => {
     sessionRef.current?.insert_selected();
-    syncFromSession();
-  }, [syncFromSession]);
-
-  const finishPen = useCallback(() => {
-    sessionRef.current?.finish_pen();
     syncFromSession();
   }, [syncFromSession]);
 
@@ -1259,7 +1253,6 @@ export function useEditorSession(
     joinSelected,
     splitSelected,
     insertSelected,
-    finishPen,
     removeCornerRounding,
     scaleStrokeWidth,
     setScaleStrokeWidth,

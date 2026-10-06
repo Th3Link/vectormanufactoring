@@ -450,6 +450,13 @@ to the PO" (criteria 21, 41, 59, 64 and four smaller ones).
   at -15° to 0° (the first tip straight right); a "rectangle drawn then R"
   opens the angle chip and Escape, R selects the Rectangle tool.
 
+- **2026-10-06 (implementer, PR 1): `Hint(SelectFirst)` was deliberately not
+  added.** Until PR 3 and PR 4 give M and K a chip, those keys are ignored
+  (`KeyOutcome::Ignored`, no `preventDefault`): a "Select an object first"
+  hint for a key that does nothing even with an object selected would mislead.
+  `KeyHint` has only `SelectOne` in PR 1; PR 3 adds `SelectFirst` and
+  `PathOnly` with the keys that need them.
+
 ### 5. Move modifiers, copy, axis lock and their indicators (Part C)
 
 - **2026-10-06: the move becomes its own small state machine in a new child

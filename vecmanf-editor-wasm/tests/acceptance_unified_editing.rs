@@ -3038,12 +3038,12 @@ fn ac16_primitives_get_centre_move_rotate_and_typed_entries() {
         // both are the shown angle here because the others start at 0.
         let shown = ObjectSnapshot::Primitive(prim_of(&sc.s, 0)).orientation();
         let deg = shown.as_radians().to_degrees();
-        let stops = [
-            0.0, 15.0, 22.5, 30.0, 45.0, 60.0, 67.5, 75.0, 90.0, 105.0, 112.5, 120.0, 135.0,
-        ];
+        // The shown angle is a fixed point of the real snap table (every stop
+        // of the 15 and 22.5 degree sets through all four quadrants).
+        let snapped = vecmanf_ui_core::snap_angle(shown).as_radians().to_degrees();
         assert!(
-            stops.iter().any(|s| (deg.abs() - s).abs() < 1e-6),
-            "kind {build}: snapped {deg}"
+            (snapped - deg).abs() < 1e-6,
+            "kind {build}: shown {deg} is not a snap stop (nearest {snapped})"
         );
         // typed angle: double-click a corner rotate handle
         let mut sc = mk(0.0);

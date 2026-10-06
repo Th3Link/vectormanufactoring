@@ -1814,7 +1814,6 @@ fn ac55_key_input_extremes_do_not_panic() {
 /// never asks for (criterion 43 names Escape only; "an unfinished path is
 /// never kept by Escape; Enter and the double-click finish it").
 #[test]
-#[ignore = "FINDING (medium): window blur discards an unfinished Pen path via pointer_cancelled"]
 fn finding_pointer_cancelled_without_a_pressed_button_keeps_the_pen_path() {
     let mut s = pen_with(&[pt(0.0, 0.0), pt(10.0, 0.0), pt(20.0, 5.0)]);
     assert!(s.pen_in_progress().is_some());

@@ -504,16 +504,6 @@ impl WasmSession {
         (self.session.zoom_percent() as i32)
     }
 
-    /// Acceptance criterion 3 / the dedicated "finish path" action.
-    pub fn finish_pen(&mut self) {
-        self.session.finish_pen();
-    }
-
-    /// Escape.
-    pub fn escape(&mut self) {
-        self.session.escape();
-    }
-
     /// Acceptance criterion 13 (Delete/Backspace, or the toolbar).
     pub fn delete_selected(&mut self) {
         self.session.delete_selected();

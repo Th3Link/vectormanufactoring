@@ -6,13 +6,24 @@
 //! layout and hit-testing; [`crate::transform_drag`] is this module's
 //! caller.
 
-use vecmanf_document_core::{Angle, Length, ObjectSnapshot, Point, Vec2};
+use vecmanf_document_core::{Angle, Length, ObjectSnapshot, Point, PrimitiveSnapshot, Shape, Vec2};
 
 use crate::ResizeDirection;
 use crate::angle_snap::snap_angle;
 use crate::oriented_box::OrientedBox;
-use crate::transform_drag::is_polygon_or_star;
 use crate::transform_handle_layout::{is_corner, resize_handle_local_position};
+
+/// Whether `object` is a polygon or a star — the one kind whose transform
+/// handles are corner-only and always-uniform (slice 5, criterion 11).
+pub(crate) fn is_polygon_or_star(object: &ObjectSnapshot) -> bool {
+    matches!(
+        object,
+        ObjectSnapshot::Primitive(PrimitiveSnapshot {
+            shape: Shape::Polygon { .. } | Shape::Star { .. },
+            ..
+        })
+    )
+}
 
 /// Whether this direction's drag changes the box's local X extent (every
 /// corner, plus E/W).

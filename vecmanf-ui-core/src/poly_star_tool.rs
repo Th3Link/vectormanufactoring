@@ -5,9 +5,7 @@
 //! and ratio persist across shapes and never change a selected shape; that is
 //! the Select bar's job.
 
-use vecmanf_document_core::{
-    Angle, Document, InnerRatio, Length, Point, PointCount, Shape, StarFrame,
-};
+use vecmanf_document_core::{Document, InnerRatio, Point, PointCount, Shape, StarFrame};
 
 use crate::angle_snap::snap_angle;
 use crate::modifiers::Modifiers;
@@ -200,8 +198,8 @@ fn created_frame(center: Point, vertex: Point, modifiers: Modifiers) -> StarFram
     }
     StarFrame {
         center,
-        radius: Length::from_mm(frame.radius.as_mm()),
-        angle: Angle::from_radians(snap_angle(frame.angle).as_radians()).normalized(),
+        radius: frame.radius,
+        angle: snap_angle(frame.angle).normalized(),
     }
 }
 

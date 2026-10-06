@@ -12,10 +12,10 @@ use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;
 use crate::transform_commit::{MAX_COORDINATE_MM, commit_gesture};
 use crate::transform_drag::{
-    ResizeOptions, ScaleModes, is_polygon_or_star, pivot_for, resize_by_local_delta, rotate_by,
+    ResizeOptions, ScaleModes, pivot_for, resize_by_local_delta, rotate_by,
 };
 use crate::transform_handle_layout::{EditHandle, is_corner};
-use crate::transform_math::{local_delta_for_radius, local_delta_for_size};
+use crate::transform_math::{is_polygon_or_star, local_delta_for_radius, local_delta_for_size};
 use vecmanf_document_core::PrimitiveSnapshot;
 
 /// A typed size within this (millimetres) of the current one is "equal":

@@ -354,9 +354,14 @@ impl Session {
     }
 
     /// The browser took the pointer away (a system gesture, an alert) or the
-    /// window lost focus: cancels any drag in flight and forgets the button.
+    /// window lost focus: with the button down, cancels any drag in flight;
+    /// either way forgets the button.
     pub fn pointer_cancelled(&mut self) {
-        self.cancel_gesture();
+        // Without a pressed button nothing was lost: a window blur must not
+        // throw away an unfinished Pen path.
+        if self.button_down {
+            self.cancel_gesture();
+        }
         self.button_down = false;
     }
 

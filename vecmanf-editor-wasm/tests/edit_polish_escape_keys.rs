@@ -650,3 +650,29 @@ fn split_selects_one_node_and_the_drag_moves_one_end() {
     assert!(ends.contains(&pt(10.0, 0.0)), "one end stayed: {ends:?}");
     assert!(ends.contains(&pt(10.0, 8.0)), "the other moved: {ends:?}");
 }
+
+/// A window blur with no button down loses nothing: an unfinished Pen path
+/// stays. A pointer lost during a Pen handle drag (button down) still
+/// discards the path, as before.
+#[test]
+fn pointer_cancelled_keeps_a_pen_path_unless_a_button_was_down() {
+    let mut session = Session::new(1);
+    session.set_tool(Tool::Pen);
+    click(&mut session, pt(10.0, 10.0));
+    click(&mut session, pt(50.0, 10.0));
+    session.pointer_cancelled();
+    assert_eq!(
+        session.pen_in_progress().map(<[_]>::len),
+        Some(2),
+        "no button was down: the path stays"
+    );
+
+    press(&mut session, pt(50.0, 40.0));
+    session.pointer_hover(pt(70.0, 60.0), false, false);
+    session.pointer_cancelled();
+    assert!(
+        session.pen_in_progress().is_none(),
+        "button down during the drag: the path is discarded"
+    );
+    assert_eq!(objects(&session).len(), 0, "nothing was written");
+}
