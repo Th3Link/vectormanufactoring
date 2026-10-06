@@ -395,6 +395,9 @@ unrequested capability smuggled in to make them compose.
   the customer wants one, it becomes a second switch in the Transform
   section next to "Scale stroke width" (criterion 30). (The stroke-width
   toggle is no longer out of scope: criteria 8 and 26–31, 2026-10-06.)
+  Customer decision 2026-10-06: the corner-radius switch is deferred to the
+  rework of the primitives; until then the radius keeps scaling as in
+  criterion 9.
 - **Saving the "Scale stroke width" switch in the project file, or making
   it per object.** It is session state (criterion 29, ADR 0009 §2:
   ephemeral); persisting it would add a document-model field nobody asked

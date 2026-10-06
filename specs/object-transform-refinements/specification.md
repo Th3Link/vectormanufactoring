@@ -39,8 +39,8 @@ point as the drag, so a typed value and a dragged value never disagree.
 ## Parts and dependencies
 
 Items 1–5 and 7 (criteria below) are ready to refine and build together.
-**Item 8 (shear/taper) is a separate part, blocked on a customer question and
-on an architect decision** — see "Part B". Items 1–5 and 7 must not wait for
+**Item 8 (shear) is a separate part, blocked only on an architect decision
+(document model: stored matrix vs baked geometry)** — see "Part B". Items 1–5 and 7 must not wait for
 it. Item 6 is out of scope; item 9 is a recorded decision.
 
 ## Part A: criteria (items 1–5, 7)
@@ -72,7 +72,7 @@ it. Item 6 is out of scope; item 9 is a recorded decision.
 5. Given one selected object, then four rotate handles are always shown,
    one outside each corner of the selection box, on the diagonal through the
    box center. They replace the single rotate handle above the top edge
-   (Proposal; see open question 3).
+   (Proposal; see open question 2).
 6. Given the Shift key is held while no handle drag is in progress, then
    four more rotate handles are shown, one outside the midpoint of each
    side, on the axis through the box center; they disappear when Shift is
@@ -109,7 +109,7 @@ The customer: "bei shift dreht es verändert sich der drehpunkt immer auf den
 unteren. mit punkt 2. und den 4/8 drehhandels nehmen wir immer die
 gegenüberliegende ecke/seite als drehpunkt." Slice 5 has Shift meaning
 "pivot on the opposite point"; with only a top handle that was always the
-bottom edge. **Proposal, to be confirmed (open question 2):** keep the
+bottom edge. **Proposal, to be confirmed (open question 1):** keep the
 meaning of Shift and generalize it to the new handles.
 
 | Grabbed handle | No modifier | Shift held |
@@ -232,16 +232,24 @@ referenz / fester punkt bleibt identisch zum händischen ziehen."
 ### 22.5° snap stop (item 7)
 
 The customer: "aus pragmatischen gründen würde ich mit 22,5 noch als grad
-stop bei strg wünschen." "noch" reads as "additionally". **Proposal, open
-question 1:** the stop set is the union of multiples of 15° and of 22.5°,
-nearest stop wins.
+stop bei strg wünschen." "noch" reads as "additionally". **Resolved 2026-10-06:** the customer
+confirmed: "22,5 zusätzlich zu den 15 grad, also auch 67,5 quasi immer die
+45/halbe konsequent durch die 360grad durch." The stop set is the union of
+multiples of 15° and of 22.5°, repeated consistently through all four
+quadrants, nearest stop wins. (They wrote "77,5", evidently a typo for
+67.5.)
 
 33. Given a rotate drag with Ctrl held, then the rotation snaps to the
     nearest stop of {k × 15°} ∪ {k × 22.5°}, measured from the object's
     angle at drag start (slice 5 criterion 17), positive and negative.
     Within one 45° period the stops are 0°, 15°, 22.5°, 30°, 45°; so in a
     half turn: 0, 15, 22.5, 30, 45, 60, 67.5, 75, 90, 105, 112.5, 120, 135,
-    150, 157.5, 165, 180.
+    150, 157.5, 165, 180. The stops repeat through all four quadrants and the
+    full 360°: the second half turn continues 195, 202.5, 210, 225, 240,
+    247.5, 255, 270, 285, 292.5, 300, 315, 330, 337.5, 345, 360 (and the same
+    set, mirrored, for negative rotation). Every quadrant has the same stops
+    relative to its axis, so 67.5° and 337.5° exist exactly like 22.5°.
+    Between any two adjacent stops the nearest one wins.
 34. Given a raw rotation of 10°, 19°, 18.5°, 26°, 26.5°, 40°, 55°, 64°,
     71° and 100° from the start angle, then Ctrl snaps to 15°, 22.5°, 15°,
     22.5°, 30°, 45°, 60°, 67.5°, 67.5° and 105°. At an exact midpoint
@@ -252,11 +260,15 @@ nearest stop wins.
 36. Given Ctrl is not held, then rotation is unsnapped as before; Ctrl has
     no effect on numeric entry (criteria 19, 31).
 
-## Part B: Shear or taper handles (item 8) — BLOCKED
+## Part B: Shear handles (item 8) — BLOCKED on the architect
 
-Status of this part: **blocked on a customer question, and needs an architect
-ADR or dated note before it can be Ready.** No acceptance criteria are
-written for it yet, on purpose.
+Status of this part: **customer question resolved 2026-10-06: option (a),
+shear like Inkscape (the parallelogram).** The customer: "ja genau ich meine
+schere wie bei inkscape". The part now needs only an architect ADR or dated
+note (document model: stored matrix vs baked geometry, see below) before it
+can be Ready. No acceptance criteria are written for it yet, on purpose;
+they follow once that note exists. The taper option (b) and "both" (c) are
+dropped.
 
 The customer: "ich hätte gerne noch wie bei inkscape und lightburn gemischt
 extra handles für 'ins trapez ziehen mit pfeilen. in x und y richtung'".
@@ -307,15 +319,20 @@ machinery.
   perpendicular local axes. After a shear the box stays tight in the
   object's `rotation` frame; the architect confirms that is sufficient.
 
-**Recommendation:** option (a), shear, for paths, with P1 for primitives; the
-arrow layout follows LightBurn (a separate small arrow handle next to each
-corner, since the edge midpoints are taken by resize handles) mixed with
-Inkscape's edge-axis meaning, which is what "gemischt" most plausibly asks
-for. Taper (b) becomes its own `Proposal` spec only if the customer says
-they want a real taper (for example for tapered cups on a rotary).
-**Default if the customer does not answer:** (a) with P1; the part stays
-blocked until the architect's note exists, and items 1–5 and 7 ship
-without it.
+**Decision:** option (a), shear, for paths; the arrow layout follows
+LightBurn (a separate small arrow handle next to each corner, since the edge
+midpoints are taken by resize handles) mixed with Inkscape's edge-axis
+meaning, which is what "gemischt" most plausibly asks for (`ux-engineer`
+confirms). Taper (b) becomes its own `Proposal` spec only if the customer
+later says they want a real taper (for example for tapered cups on a rotary).
+
+**Primitives: P1 stays the default** (refuse; the maker uses "Object to path"
+first). Note that the customer said they want to rework the primitives
+anyway ("ich möchte an die primitive eh nochmal ran"), so the primitive
+question (P1 vs P2 vs P3) can be revisited together with that work; P3 in
+particular is a document-model change that fits there. Part B does not wait
+for that rework: it is blocked only on the architect's note, and items 1–5
+and 7 ship without it.
 
 ## Accepted decisions (not criteria)
 
@@ -331,20 +348,20 @@ without it.
 
 ## Open questions for the customer
 
-1. **Snap stops (item 7).** (a) Union: stops at multiples of 15° and of
-   22.5° (default, recommended: "noch" means additionally, and with only
-   22.5° steps the 30°, 60° and 75° stops would disappear); (b) 22.5° steps
-   replace the 15° steps.
-2. **Pivot scheme (item 3).** (a) Default: no modifier = rotate about the
+Resolved 2026-10-06 (removed from this list): snap stops (item 7, union of
+15° and 22.5° multiples, see criteria 33–36); item 8 shear vs taper (option
+(a), shear like Inkscape, see Part B); corner-radius switch (deferred, see
+"Out of scope").
+
+1. **Pivot scheme (item 3).** (a) Default: no modifier = rotate about the
    center, Shift = about the opposite corner or side (slice 5's meaning of
    Shift, generalized; side handles appear with Shift, so they always start
    with the opposite pivot) — recommended; (b) always the opposite
    corner/side, and the center needs another modifier (Alt, which collides
    with window-move on many Linux window managers).
-3. **The old top rotate handle (item 2).** (a) Default: replaced by the four
+2. **The old top rotate handle (item 2).** (a) Default: replaced by the four
    corner handles; the top side handle exists only while Shift is held;
    (b) keep it always visible as a fifth handle.
-4. **Item 8** as in Part B; default (a) shear with P1.
 
 ## Out of scope
 
@@ -354,7 +371,15 @@ without it.
   Inkscape's movable rotation center is the precedent we are not following
   here. The pivot is only ever the box center or the opposite corner/side
   (criteria 12–13).
-- Shear and taper handles until Part B is unblocked.
+- Shear handles until Part B is unblocked; taper (trapezoid) handles
+  altogether.
+- **A corner-radius scaling switch (decision 2026-10-06).** The customer
+  assumed rounded corners were not implemented (they are: `0005` slice 3
+  has a rectangle corner radius, but no UI setting for how it scales) and
+  deferred the switch: "lass uns das später machen, ich möchte an die
+  primitive eh nochmal ran". No switch now; the radius keeps scaling
+  proportionally as in `0005` criterion 9, also for typed size entry
+  (criterion 27). Revisit with the primitives rework.
 - Typed entry of position (X/Y), of a percentage, of stroke width, or with
   unit suffixes ("12mm"); a Properties-panel transform form.
 - Typed entry or handles for multi-object selections (slice 5 criterion 2).
