@@ -155,6 +155,12 @@ values, not an implementation site, for those four rows.
 | `--shape-handle-guide` | `--accent-hover`, dashed | Corner-radius connecting guide — dashed, to read as distinct from the solid Bézier handle line above |
 | `--panel-bg` | `--toolbar-bg` (`#DCDCE0`) | `PropertiesPanel` (formerly `StylePanel`) and any later section it hosts — reuses the one chrome color rather than adding a second (`stroke-and-fill-styling`) |
 | `--panel-elevation-shadow` | `0 2px 8px rgba(0,0,0,0.24)` | Drop shadow on every floating chrome surface introduced 2026-10-05: the left tool panel and the per-selection contextual mini-toolbar — what makes them read as "floating over" the canvas rather than framing it. The right Properties panel is docked, not floating, and does not use this token. |
+| `--marquee-touch` | `#2FAE57` | New semantic color (`advanced-selection`), not a reuse of `--accent`: the marquee box's border and fill, and the lasso line, whenever the active mode is "touch" (crosses or fully contains selects it) — green, matching the customer's own naming. Deliberately distinct from `--accent` because this is a transient drag-mode indicator, not a selection state; don't read it as "selected." |
+| `--marquee-touch-fill` | `--marquee-touch` at 12% opacity | Marquee box interior fill in touch mode — low-opacity so canvas content underneath stays legible while the box is open, matching LightBurn's own semi-transparent-fill-plus-solid-border convention |
+| `--marquee-contain` | `#E5484D` | Marquee box border/fill color whenever the active mode is "contain" (fully-inside-only selects it) — red, matching the customer's own naming |
+| `--marquee-contain-fill` | `--marquee-contain` at 12% opacity | Marquee box interior fill in contain mode, same reasoning as `--marquee-touch-fill` |
+| `--marquee-legend-bg` | `--toolbar-bg` (`#DCDCE0`) | Background of the small on-canvas modifier-state legend shown during a marquee/lasso drag (`advanced-selection`) — reuses the existing chrome tone rather than inventing a new surface color |
+| `--marquee-legend-fg` | `--toolbar-icon` (`#3A3A3F`) | Legend text color, same pairing as the toolbar's own icon-on-chrome contrast |
 
 ## Spacing and sizing
 
@@ -186,6 +192,9 @@ values, not an implementation site, for those four rows.
 | `PropertiesPanel` width | 280px, fixed | Right-docked panel (`stroke-and-fill-styling`'s `StylePanel` is its first section); canvas fills the remaining width |
 | Contextual mini-toolbar padding | 6px | Floating per-selection toolbar (`NodeToolbar`'s actions, 2026-10-05), anchored near the current canvas selection rather than docked |
 | Status bar zoom field | integer percentage, no decimals | New center segment (`canvas-navigation-and-selection`), between the existing cursor-position (left) and document-size (right) fields `project-file-foundation` already shipped; e.g. "100%", range 2%–8000% |
+| Marquee/lasso stroke weight | 1.5px screen-space | Marquee box border and lasso line (`advanced-selection`) — deliberately heavier than the 1px bounding-box selection outline so the drag-feedback shape reads as a distinct, topmost layer over any selected objects' own 1px boxes still visible underneath (e.g. during a Ctrl-add drag) |
+| Lasso line dash pattern | 4px on / 3px off, screen-space | Distinguishes the lasso's freehand line from the marquee box's solid border at a glance, despite sharing a color family (`advanced-selection`) |
+| Marquee/lasso modifier-state legend | small on-canvas label, positioned near the live cursor position | `advanced-selection`'s drag-mode readout, same convention as `primitive-shapes`' drag-to-create numeric readout (on-canvas, not status-bar) |
 
 ## Interaction conventions (apply to every later tool, not just this one)
 

@@ -685,3 +685,17 @@ whether to take the breaking `shadcn@1.0.0` upgrade or wait for a non-major
 fix. Revisit when either lands, or when `npm audit` surfaces a *different*
 advisory against this allowlist entry (which would mean the allowlisted ID
 no longer matches what's actually there).
+
+## `Session` is one module past the size limit
+
+`vecmanf-editor-wasm/src/session/mod.rs` has about 730 lines of non-test
+code on `main` and about 800 after `object-transform`, against the ~500-line
+limit in `CLAUDE.md` §5. Each slice adds its tool's binding, readout and
+decoration input there. Per-tool files already exist (`session/select.rs`,
+`session/shapes.rs`), so the split is mechanical: move the live readout and
+the decoration-input assembly into their own submodules. Not done in a
+feature PR because it touches every tool's binding at once.
+
+**Resolution:** a `chore/` PR after `object-transform` merges and before
+the next slice that adds a tool. Revisit if a slice needs `mod.rs` above
+900 lines first.

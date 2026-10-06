@@ -22,6 +22,11 @@
 use kurbo::{CubicBez, ParamCurve, ParamCurveExtrema, ParamCurveNearest, Point as KurboPoint};
 use vecmanf_document_core::{Length, Point, Tolerance, Vec2};
 
+/// Search accuracy handed to `kurbo`'s nearest-point query, in millimetres:
+/// far below any hit radius or machine tolerance, so the reported distance
+/// is the true distance for all practical purposes.
+const NEAREST_ACCURACY_MM: f64 = 1e-6;
+
 fn to_kurbo(point: Point) -> KurboPoint {
     KurboPoint::new(point.x, point.y)
 }
@@ -43,10 +48,14 @@ fn cubic_bez(start: Point, start_handle_out: Vec2, end_handle_in: Vec2, end: Poi
 /// segment" and acceptance criterion 14's "click on a point of a
 /// segment".
 ///
-/// `tolerance` bounds the search's own internal accuracy (handed straight
-/// to `kurbo`), not a maximum-distance cutoff — callers decide whether the
-/// returned distance counts as "on the segment" themselves, against their
-/// own (typically coarser, screen-space-derived) tolerance.
+/// `tolerance` is an upper bound on the search's own internal accuracy
+/// (handed to `kurbo` as `min(tolerance, NEAREST_ACCURACY_MM)`), not a
+/// maximum-distance cutoff. A coarse caller tolerance (a hit radius of
+/// several mm) must not coarsen the search: `kurbo` may return a point up
+/// to `accuracy` away from the true nearest one, so a coarse accuracy made
+/// on-curve queries report distances of several mm. Callers decide
+/// whether the returned distance counts as "on the segment" themselves,
+/// against their own (typically coarser, screen-space-derived) tolerance.
 #[must_use]
 pub fn nearest_point_on_segment(
     start: Point,
@@ -57,7 +66,7 @@ pub fn nearest_point_on_segment(
     tolerance: Tolerance,
 ) -> (f64, Length, Point) {
     let cubic = cubic_bez(start, start_handle_out, end_handle_in, end);
-    let nearest = cubic.nearest(to_kurbo(query), tolerance.as_mm());
+    let nearest = cubic.nearest(to_kurbo(query), tolerance.as_mm().min(NEAREST_ACCURACY_MM));
     let point = from_kurbo(cubic.eval(nearest.t));
     (
         nearest.t,
@@ -186,6 +195,95 @@ mod tests {
         assert!(t.abs() < 1e-6);
         assert!(distance.as_mm() < 1e-6);
         assert_eq!(point, Point::new(0.0, 0.0));
+    }
+
+    /// Hit-test tolerances seen in practice (mm): about 1 mm at 283 % zoom
+    /// up to a coarse 5 mm, plus the old tiny test value.
+    const HIT_TOLERANCES_MM: [f64; 5] = [0.01, 0.35, 1.06, 2.5, 5.0];
+
+    /// Regression: the caller's hit tolerance used to be handed to `kurbo`
+    /// as its search accuracy, so a point exactly on a 40 mm straight
+    /// segment reported a distance of several mm unless it sat near
+    /// t = 0, 0.5 or 1.
+    #[test]
+    fn points_on_a_straight_segment_report_zero_distance_at_any_tolerance() {
+        let start = Point::new(0.0, 0.0);
+        let end = Point::new(40.0, 0.0);
+        for tolerance_mm in HIT_TOLERANCES_MM {
+            for step in 0..=39 {
+                let x = f64::from(step) + 0.37;
+                let (_, distance, point) = nearest_point_on_segment(
+                    start,
+                    Vec2::ZERO,
+                    Vec2::ZERO,
+                    end,
+                    Point::new(x, 0.0),
+                    Tolerance::from_mm(tolerance_mm),
+                );
+                assert!(
+                    distance.as_mm() < 1e-3,
+                    "x={x} tolerance={tolerance_mm}: distance {}",
+                    distance.as_mm()
+                );
+                assert!((point.x - x).abs() < 1e-3);
+            }
+        }
+    }
+
+    /// The same sweep on a curved segment: every point sampled from the
+    /// curve itself must come back at distance ~0.
+    #[test]
+    fn points_on_a_curved_segment_report_zero_distance_at_any_tolerance() {
+        let start = Point::new(0.0, 0.0);
+        let start_handle_out = Vec2::new(0.0, 15.0);
+        let end_handle_in = Vec2::new(0.0, 15.0);
+        let end = Point::new(40.0, 0.0);
+        let curve = cubic_bez(start, start_handle_out, end_handle_in, end);
+        for tolerance_mm in HIT_TOLERANCES_MM {
+            for step in 0..=40 {
+                let on_curve = from_kurbo(curve.eval(f64::from(step) / 40.0));
+                let (_, distance, _) = nearest_point_on_segment(
+                    start,
+                    start_handle_out,
+                    end_handle_in,
+                    end,
+                    on_curve,
+                    Tolerance::from_mm(tolerance_mm),
+                );
+                assert!(
+                    distance.as_mm() < 1e-3,
+                    "step={step} tolerance={tolerance_mm}: distance {}",
+                    distance.as_mm()
+                );
+            }
+        }
+    }
+
+    /// Off-curve points still report their true distance, so a caller's
+    /// "distance <= tolerance" comparison keeps rejecting them.
+    #[test]
+    fn points_off_a_straight_segment_report_their_true_distance_at_any_tolerance() {
+        let start = Point::new(0.0, 0.0);
+        let end = Point::new(40.0, 0.0);
+        for tolerance_mm in HIT_TOLERANCES_MM {
+            for step in 0..=39 {
+                let x = f64::from(step) + 0.37;
+                let off = tolerance_mm + 0.5;
+                let (_, distance, _) = nearest_point_on_segment(
+                    start,
+                    Vec2::ZERO,
+                    Vec2::ZERO,
+                    end,
+                    Point::new(x, off),
+                    Tolerance::from_mm(tolerance_mm),
+                );
+                assert!(
+                    (distance.as_mm() - off).abs() < 1e-3,
+                    "x={x} tolerance={tolerance_mm}: distance {} != {off}",
+                    distance.as_mm()
+                );
+            }
+        }
     }
 
     #[test]

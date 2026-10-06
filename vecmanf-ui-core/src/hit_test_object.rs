@@ -142,6 +142,41 @@ mod tests {
         assert_eq!(hit, Some(rect));
     }
 
+    /// Regression: on a 40x20 rect only edge points near the segment's
+    /// t = 0, 0.5 and 1 used to hit (6/39 at 100 % zoom), because the hit
+    /// tolerance doubled as the nearest-point search accuracy.
+    #[test]
+    fn hits_every_point_along_a_primitive_edge_at_any_hit_tolerance() {
+        let document = Document::new(1);
+        let rect = document.create_rect(RectBounds {
+            origin: Point::new(0.0, 0.0),
+            width: Length::from_mm(40.0),
+            height: Length::from_mm(20.0),
+        });
+        let objects = vec![document.object(rect).expect("exists")];
+        for tolerance_mm in [0.35, 1.06, 2.5] {
+            let tolerance = Tolerance::from_mm(tolerance_mm);
+            for step in 1..40 {
+                let x = f64::from(step);
+                assert_eq!(
+                    hit_test_object(&objects, Point::new(x, 0.0), tolerance),
+                    Some(rect),
+                    "top edge x={x} tolerance={tolerance_mm}"
+                );
+                assert_eq!(
+                    hit_test_object(&objects, Point::new(x, 20.0), tolerance),
+                    Some(rect),
+                    "bottom edge x={x} tolerance={tolerance_mm}"
+                );
+                assert_eq!(
+                    hit_test_object(&objects, Point::new(x, -(tolerance_mm + 0.5)), tolerance),
+                    None,
+                    "just outside the top edge x={x} tolerance={tolerance_mm}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn misses_everything_far_from_any_object() {
         let document = Document::new(1);

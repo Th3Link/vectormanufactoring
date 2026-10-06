@@ -1116,7 +1116,10 @@ mod tests {
 
         let snapshot = document.path(path).expect("exists");
         assert_eq!(snapshot.anchors.len(), 3);
-        assert_eq!(snapshot.anchors[1].point, Point::new(10.0, 0.0));
+        // The nearest-point search is accurate to a fixed small epsilon,
+        // not bit-exact: compare with an explicit tolerance.
+        let inserted = snapshot.anchors[1].point;
+        assert!((inserted.x - 10.0).abs() < 1e-4 && inserted.y.abs() < 1e-4);
         assert_eq!(snapshot.anchors[1].kind, AnchorKind::Corner);
     }
 

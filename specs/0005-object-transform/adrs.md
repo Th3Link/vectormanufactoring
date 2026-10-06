@@ -239,7 +239,9 @@ lead", each with the default this file builds against.
     snapshots, its codec and validation, the rotated outline,
     `ObjectSnapshot::rotated` and `scaled`, `Document::set_rotation`-style
     command(s) that write the table above in one commit, object to path
-    keeping `rotation`, `CURRENT_FORMAT_VERSION = 4`.
+    keeping `rotation`, `CURRENT_FORMAT_VERSION = 5` (provisional — see the
+    architect's resolution above: the merging PR takes `main`'s
+    `CURRENT_FORMAT_VERSION + 1` at merge time).
   - `vecmanf-geometry-core`: no change.
   - `vecmanf-ui-core`: `OrientedBox`, transform-handle layout and hit test,
     the scale/rotate drag state machine in `select_tool` (modifiers, pivots,

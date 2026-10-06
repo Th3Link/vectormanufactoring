@@ -323,7 +323,8 @@ mod tests {
                     handle_out: Vec2::new(5.0, 0.0),
                     kind: AnchorKind::Symmetric,
                 },
-                NewAnchor::corner(b, Point::new(20.0, 0.0)),
+                // The far anchor sits off the handle's axis so the segment curves away from the handle's end: a click there must be a handle hit or a miss, not a segment hit.
+                NewAnchor::corner(b, Point::new(0.0, -20.0)),
             ],
             false,
         );
@@ -384,7 +385,8 @@ mod tests {
                     handle_out: Vec2::new(5.0, 0.0),
                     kind: AnchorKind::Symmetric,
                 },
-                NewAnchor::corner(b, Point::new(20.0, 0.0)),
+                // The far anchor sits off the handle's axis so the segment curves away from the handle's end: a click there must be a handle hit or a miss, not a segment hit.
+                NewAnchor::corner(b, Point::new(0.0, -20.0)),
             ],
             false,
         );
