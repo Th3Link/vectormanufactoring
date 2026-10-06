@@ -151,44 +151,37 @@ unrequested capability smuggled in to make them compose.
    shrinks symmetrically around its center — matching Inkscape's own
    "Shift scales from the center" binding. Shift and Ctrl combine: Shift
    held with Ctrl on a corner handle scales proportionally from the center.
-8. Given any object with a non-zero stroke width, when it is resized by any
-   handle in criteria 4–7 with equal horizontal and vertical scale factors
-   (a proportional corner resize, criterion 5, or any free resize where the
-   drag happens to keep sx = sy), then the stroke width scales by that same
-   factor (a resize to 150% of the original size renders a stroke 150% as
-   wide) — this is SVG's own default behaviour for a scaling transform, and
-   matches Inkscape's "scale stroke width" toolbar toggle, which defaults to
-   on. Given a resize with different horizontal and vertical scale factors
-   sx and sy (a free corner resize, criterion 4, where they differ, or any
-   edge-handle single-axis resize, criterion 6), then the stroke width
-   scales by √(sx·sy) instead — Inkscape's own rule for this exact case, so
-   a stroke's rendered weight reflects the resize's overall magnitude rather
-   than either axis alone. This slice adopts Inkscape's default behaviour
-   outright, with no toggle UI to turn it off (see "Out of scope"). Given a
-   resize for which either rule above would drive the stroke width to zero
-   or below, then that resize is refused — the drag has no further effect
-   in the direction that would cross the zero line, and the stroke width
-   stays at the smallest value still above zero — consistent with
-   `stroke-and-fill-styling` already refusing to open a file with a
-   non-positive stroke width, rather than silently clamping to zero or
-   allowing a negative value through.
+8. Given any object with a non-zero stroke width and the "Scale stroke
+   width" switch off (its default, criterion 27), when it is resized by any
+   handle in criteria 4–7 — proportional, free or single-axis, anchored at
+   a corner, an edge or the center — then its stroke width afterwards is
+   exactly the value it had before the drag: the stored stroke width is not
+   rewritten, and the stroke renders at the same absolute thickness (a
+   rectangle with a 1 mm stroke resized to 300% of its size still has a
+   1 mm stroke). This is a deliberate departure from Inkscape's default
+   (its "scale stroke width" toggle defaults to on), made at the customer's
+   request on 2026-10-06 after testing: a stroke that thickens with every
+   resize is not wanted. The switch's on state is criterion 26.
 9. Given a rectangle with a non-zero corner radius, when it is resized by
    any handle in criteria 4–7 with equal horizontal and vertical scale
    factors, then the corner radius scales by that same factor (clamped per
    `primitive-shapes` criterion 5's existing half-shorter-side rule,
    evaluated after scaling). Given a resize with different horizontal and
    vertical scale factors sx and sy, then the corner radius scales by
-   √(sx·sy) instead — the same geometric-mean rule as criterion 8 and for
-   the same reason: a single circular-radius corner (`primitive-shapes`
+   √(sx·sy) instead — the same geometric-mean rule criterion 26 uses for
+   stroke width when its switch is on, and for the same reason: a single
+   circular-radius corner (`primitive-shapes`
    criterion 4's "one radius, not an independent horizontal/vertical pair")
    has no other way to represent an anisotropic resize, so its one radius
    reflects the resize's overall magnitude rather than either axis alone;
    the half-shorter-side clamp above still applies afterward, and a radius
    driven to exactly 0 this way is a valid sharp corner, not refused —
-   unlike criterion 8's stroke width, 0 is a meaningful value here
+   unlike criterion 26's stroke width, 0 is a meaningful value here
    (`primitive-shapes` criterion 6). This matches Inkscape's "scale rounded
-   corners" toolbar toggle, which also defaults to on, adopted here the
-   same way as criterion 8, again with no toggle UI. This is a deliberate
+   corners" toolbar toggle, which defaults to on. **The corner radius keeps
+   scaling in every case, whatever the "Scale stroke width" switch says**
+   (criterion 31) — the customer's 2026-10-06 change concerned stroke width
+   only, and radius scaling has no switch. This is a deliberate
    difference from `primitive-shapes`
    criterion 3, where the Rectangle tool's *own* corner-drag resize keeps
    the radius's absolute length — that criterion is unchanged and still
@@ -320,6 +313,46 @@ unrequested capability smuggled in to make them compose.
     the two handle sets never disagree about where the object's corners
     actually are.
 
+### Scale stroke width switch (added 2026-10-06, customer feedback)
+
+26. Given the "Scale stroke width" switch is on and an object with a
+    non-zero stroke width, when it is resized by any handle in criteria
+    4–7 with equal horizontal and vertical scale factors (a proportional
+    corner resize, criterion 5, or a free resize where the drag happens to
+    keep sx = sy), then the stroke width scales by that same factor (a
+    resize to 150% of the original size gives a stroke 150% as wide). Given
+    different factors sx and sy (a free corner resize, criterion 4, where
+    they differ, or any edge-handle single-axis resize, criterion 6), then
+    the stroke width scales by √(sx·sy) instead — Inkscape's rule for this
+    case, so a stroke's weight reflects the resize's overall magnitude
+    rather than either axis alone. The resulting stroke width is never
+    below 0.01 mm: where either rule would give less (including zero), it
+    is 0.01 mm, and a zero or negative width is never written
+    (`stroke-and-fill-styling` refuses to open a file that contains one).
+    This is the behaviour this slice shipped before the switch existed.
+27. Given a new editor session (every app launch, and every project opened
+    or created), then the "Scale stroke width" switch is off. It is never
+    read from a project file.
+28. Given the switch is toggled, then it governs the next resize drag
+    only: a resize drag uses the switch's state at the moment the maker
+    pressed the handle for its whole duration, so a change made while a
+    drag is in progress does not alter that drag's stroke width, live
+    preview or commit, and applies from the next drag on.
+29. Given the switch is toggled on or off, then nothing is written to the
+    document (no geometry or style change, no document-model field), and
+    saving a project with the switch on produces a file byte-identical to
+    saving it with the switch off. After closing and reopening the project,
+    or restarting the app, the switch is off (criterion 27).
+30. Given the Properties panel is visible, then it contains a section
+    titled "Transform" with a switch labelled "Scale stroke width". The
+    switch is operable whatever is selected, including nothing (it is tool
+    state, not an object property), shows its current state at all times,
+    and works from the keyboard (Tab to focus, Space to toggle).
+31. Given a rectangle with a non-zero corner radius, when it is resized
+    with the switch in either state, then the corner radius scales exactly
+    as criterion 9 says. The switch has no effect on the radius, and no
+    other property (dash lengths, stroke color, opacity) is touched by it.
+
 ## Out of scope
 
 - **The circle-to-star morph handle** the customer separately raised
@@ -330,14 +363,17 @@ unrequested capability smuggled in to make them compose.
   needs the customer's own follow-up before it is specified at all, and it
   is a different kind of feature (a shape-identity morph, not a transform)
   from everything else in this slice.
-- **Skew/shear.** Not requested, and this slice's oriented-bounding-box
+- **Skew/shear.** Not requested here, and this slice's oriented-bounding-box
   convention (criterion 18) is specifically designed so scale and rotate
-  never need it. Revisit only if a future story asks for it directly.
+  never need it. The customer has since asked for something close to it
+  (2026-10-06); that is open in `specs/object-transform-refinements/`.
 - **Numeric transform entry** (typing an exact rotation angle, width or
   height into a field instead of dragging). Same deferral
   `primitive-shapes` and `canvas-navigation-and-selection` already made for
   their own numeric entry; criteria 14 and 22's live readouts are
-  display-only.
+  display-only. (The customer asked for typed entry on 2026-10-06; it is
+  specified separately in `specs/object-transform-refinements/`, not in
+  this PR.)
 - **Multi-object transform** — scaling or rotating two or more selected
   objects together, whether as one rigid group sharing a single bounding
   box or as each object transforming independently around its own center.
@@ -354,9 +390,15 @@ unrequested capability smuggled in to make them compose.
   polygon/star") or an implicit conversion to a path, and neither is in
   scope. A maker who wants that result can invoke "object to path" first,
   then resize the resulting path per criterion 12.
-- **A toggle for stroke-width/corner-radius scaling.** Criteria 8 and 9
-  adopt Inkscape's own default-on behaviour outright; no settings UI is
-  added to turn either off in this slice.
+- **A toggle for corner-radius scaling.** Criterion 9 adopts Inkscape's
+  own default-on behaviour outright; no switch is added to turn it off. If
+  the customer wants one, it becomes a second switch in the Transform
+  section next to "Scale stroke width" (criterion 30). (The stroke-width
+  toggle is no longer out of scope: criteria 8 and 26–31, 2026-10-06.)
+- **Saving the "Scale stroke width" switch in the project file, or making
+  it per object.** It is session state (criterion 29, ADR 0009 §2:
+  ephemeral); persisting it would add a document-model field nobody asked
+  for.
 - **Snapping of any kind during a scale or rotate drag** — to grid, to
   other objects, to guides, or to any rotation angle other than Ctrl's 15°
   steps (criterion 17). Same deferral as every earlier slice.
@@ -519,7 +561,36 @@ to read while it's travelling in an arc.
   Revisit placement once a future slice adds typed numeric transform entry
   — that one plausibly does belong in the Properties panel as a "Transform"
   section, since typed entry is exactly the kind of persistent, addressable
-  control the panel exists for.
+  control the panel exists for. (The "Transform" section now exists for the
+  stroke switch below; typed entry would join it.)
+
+### "Scale stroke width" switch placement (2026-10-06, for `ux-engineer` review)
+
+Proposed by the product owner, not yet reviewed.
+
+- **Where:** the right-hand Properties panel (`docs/design-system.md`:
+  one scrolling column of named, stacked sections, 280px, docked), in a new
+  section titled **"Transform"**, below the "Style" section. The switch is
+  persistent tool configuration that must survive selection changes, which
+  is the panel's stated role; a floating per-selection mini-toolbar is the
+  wrong home because the switch has to be settable before anything is
+  selected and must not appear and vanish with the selection.
+- **Control:** one labelled switch, "Scale stroke width", off by default,
+  with the existing shadcn-style switch/label pairing the panel uses for
+  other booleans. No icon, no extra explanatory text beyond an optional
+  one-line hint ("Off: a resize keeps stroke thickness").
+- **Section state:** per the panel's no-collapse rule the section is always
+  present and the switch always enabled (criterion 30). It is not a
+  "disabled when nothing is selected" control, because it configures the
+  next drag, not an object.
+- **Dependency to resolve:** the Properties panel is first built by
+  `stroke-and-fill-styling` and does not exist in the app yet. If this
+  slice ships before it, the `ux-engineer` picks the interim host for the
+  same switch (the criteria only require that it exist, is reachable and
+  labelled as in criterion 30); the Transform section moves into the panel
+  when the panel lands.
+- **Feedback:** the switch's own state is the feedback; no on-canvas
+  indicator. The live size readout (criterion 14) is unchanged.
 
 ### Oriented bounding box: handles and cursors rotate with the object
 
