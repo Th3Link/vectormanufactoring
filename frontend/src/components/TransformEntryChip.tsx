@@ -182,7 +182,7 @@ export function TransformEntryChip({
 
   const isAngle = entry.kind === "angle";
   const isRatio = entry.kind === "inner-ratio";
-  const fieldWidth = isAngle ? 80 : isRatio ? 84 : 100;
+  const fieldWidth = isAngle ? 80 : isRatio ? 96 : 100;
   const groupName =
     entry.kind === "angle"
       ? "Rotation"
@@ -241,7 +241,7 @@ export function TransformEntryChip({
                   onChange={(event) => onChange(index, event.target.value)}
                   onKeyDown={(event) => onKeyDown(event, index)}
                   onBlur={onBlur}
-                  className={`h-7 w-full rounded-[5px] border bg-white ${isAngle ? "pr-6" : "pr-8"} pl-5 text-right text-sm tabular-nums outline-none ${
+                  className={`h-7 w-full rounded-[5px] border bg-white ${isAngle ? "pr-6" : isRatio ? "pr-2" : "pr-8"} ${field.label.length > 1 ? "pl-11" : "pl-5"} text-right text-sm tabular-nums outline-none ${
                     isInvalid
                       ? "border-[var(--field-invalid)] shadow-[inset_0_0_0_1px_var(--field-invalid)]"
                       : "border-[color-mix(in_srgb,var(--toolbar-icon)_60%,transparent)] focus:border-[var(--editor-accent)] focus:shadow-[inset_0_0_0_1px_var(--editor-accent)]"

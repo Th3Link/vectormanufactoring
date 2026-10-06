@@ -16,6 +16,13 @@ const LINES = [
   "Nodes: Object to path, then double-click",
 ];
 
+/** A polygon has no parameter handle; its Points are in the Select bar. */
+const POLYGON_LINES = [
+  "Drag a handle to resize this shape",
+  "Change Points in the bar above",
+  "Nodes: Object to path, then double-click",
+];
+
 export interface EditHint {
   /** Canvas-relative CSS pixels of the double-click. */
   x: number;
@@ -27,6 +34,8 @@ export interface EditHint {
 interface EditHintChipProps {
   hint: EditHint | null;
   containerRef: React.RefObject<HTMLDivElement | null>;
+  /** The shape is a polygon: line 2 points to the bar instead. */
+  polygon: boolean;
   onDismiss: () => void;
 }
 
@@ -37,7 +46,7 @@ interface EditHintChipProps {
  * until a press, a key or the pointer leaving. Text only, ignores pointer
  * events, writes nothing, announced politely.
  */
-export function EditHintChip({ hint, containerRef, onDismiss }: EditHintChipProps) {
+export function EditHintChip({ hint, containerRef, polygon, onDismiss }: EditHintChipProps) {
   const chipRef = useRef<HTMLDivElement>(null);
   const [sizes, setSizes] = useState({
     chip: { width: 0, height: 0 },
@@ -98,7 +107,7 @@ export function EditHintChip({ hint, containerRef, onDismiss }: EditHintChipProp
         color: "var(--toolbar-icon)",
       }}
     >
-      {LINES.map((line, index) => (
+      {(polygon ? POLYGON_LINES : LINES).map((line, index) => (
         <div key={line} className={index === 0 ? "font-medium" : undefined}>
           {line}
         </div>

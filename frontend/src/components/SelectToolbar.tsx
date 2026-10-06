@@ -182,7 +182,7 @@ function RadiusField({ bar, onSetRadius, onReturnFocus }: RadiusFieldProps) {
             }
           }}
           className={`h-7 w-full rounded-[5px] border bg-white pl-1.5 text-right text-sm tabular-nums outline-none ${
-            bar.radiusLimited ? "pr-[68px]" : "pr-8"
+            bar.radiusLimited ? "pr-[74px]" : "pr-8"
           } ${
             invalid
               ? "border-[var(--field-invalid)] shadow-[inset_0_0_0_2px_var(--field-invalid)]"
@@ -193,7 +193,7 @@ function RadiusField({ bar, onSetRadius, onReturnFocus }: RadiusFieldProps) {
         {bar.radiusLimited && (
           <span
             aria-hidden
-            className="pointer-events-none absolute top-1/2 right-7 -translate-y-1/2 text-[12px] opacity-60"
+            className="pointer-events-none absolute top-1/2 right-[30px] -translate-y-1/2 text-[12px] opacity-60"
           >
             limited
           </span>

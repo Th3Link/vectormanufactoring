@@ -125,6 +125,7 @@ export function Canvas({ editor }: CanvasProps) {
       <HandleHintChip hint={editor.handleHint} containerRef={editor.containerRef} />
       <EditHintChip
         hint={editor.editHint}
+        polygon={editor.selectBar.pointsShown && !editor.selectBar.ratioShown}
         containerRef={editor.containerRef}
         onDismiss={editor.dismissEditHint}
       />
