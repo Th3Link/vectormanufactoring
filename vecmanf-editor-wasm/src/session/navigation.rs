@@ -119,4 +119,22 @@ impl Session {
     pub fn resize_viewport(&mut self, width: f64, height: f64) {
         self.viewport.resize(width, height);
     }
+
+    /// Records the display's device pixel ratio (`window.devicePixelRatio`),
+    /// which an axis-aligned selection box snaps to
+    /// (`edit-interaction-polish` criterion 65). A value that is not a
+    /// positive finite number reads as 1.
+    pub fn set_device_pixel_ratio(&mut self, ratio: f64) {
+        self.device_pixel_ratio = if ratio.is_finite() && ratio > 0.0 {
+            ratio
+        } else {
+            1.0
+        };
+    }
+
+    /// The device pixel ratio last set, 1 before any.
+    #[must_use]
+    pub fn device_pixel_ratio(&self) -> f64 {
+        self.device_pixel_ratio
+    }
 }

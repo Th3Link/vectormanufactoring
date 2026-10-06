@@ -159,6 +159,10 @@ pub struct Session {
     /// (`specs/unified-object-editing` criterion 15). Cleared by the first
     /// [`Session::objects`] after the drag ends.
     drag_objects: std::cell::RefCell<Option<Vec<ObjectSnapshot>>>,
+    /// `window.devicePixelRatio` as of the last attach or resize, so the
+    /// selection box can snap to whole device pixels
+    /// (`edit-interaction-polish` criterion 65). Always positive and finite.
+    device_pixel_ratio: f64,
 }
 
 impl Session {
@@ -190,6 +194,7 @@ impl Session {
             select_shift_held: false,
             select_ctrl_held: false,
             drag_objects: std::cell::RefCell::new(None),
+            device_pixel_ratio: 1.0,
         }
     }
 
@@ -218,6 +223,7 @@ impl Session {
             select_shift_held: false,
             select_ctrl_held: false,
             drag_objects: std::cell::RefCell::new(None),
+            device_pixel_ratio: 1.0,
         })
     }
 

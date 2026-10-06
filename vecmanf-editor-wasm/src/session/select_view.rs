@@ -116,7 +116,11 @@ impl Session {
                     .find(|object| object.id() == id)
                     .map(|object| (id, oriented_bounds(object).document_corners()))
             });
-        SelectDecorationInput { selected, hovered }
+        SelectDecorationInput {
+            selected,
+            hovered,
+            device_pixel_ratio: self.device_pixel_ratio,
+        }
     }
 
     /// The handle under the pointer, if any, with its object and box — the
@@ -462,6 +466,46 @@ mod tests {
         session.pointer_down(Point::new(0.0, 5.0), false);
         session.pointer_up(Point::new(0.0, 5.0), false, false);
         (session, id)
+    }
+
+    /// `edit-interaction-polish` criterion 65: the device pixel ratio the host
+    /// reports reaches the selection decoration, so an axis-aligned box can
+    /// snap to whole device pixels; a ratio that is not a positive finite
+    /// number reads as 1.
+    #[test]
+    fn the_device_pixel_ratio_reaches_the_selection_decoration() {
+        let (mut session, _) = session_with_selected_rect();
+        assert!((session.select_decoration_input().device_pixel_ratio - 1.0).abs() < 1e-12);
+        session.set_device_pixel_ratio(1.5);
+        assert!((session.select_decoration_input().device_pixel_ratio - 1.5).abs() < 1e-12);
+        for bad in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            session.set_device_pixel_ratio(bad);
+            assert!((session.select_decoration_input().device_pixel_ratio - 1.0).abs() < 1e-12);
+        }
+    }
+
+    /// Criterion 63 end to end: a selected rectangle's box is dashed (more
+    /// than the four solid quads) and the hover box of another is solid.
+    #[test]
+    fn a_selected_object_draws_a_dashed_box() {
+        let (session, _) = session_with_selected_rect();
+        let solid = vecmanf_render_core::build_select_draw_list(
+            session.view(),
+            &SelectDecorationInput {
+                hovered: session.select_decoration_input().selected.first().copied(),
+                ..SelectDecorationInput::default()
+            },
+        );
+        assert_eq!(
+            solid.triangle_count(),
+            8,
+            "the hover box is four solid quads"
+        );
+        let dashed = vecmanf_render_core::build_select_draw_list(
+            session.view(),
+            &session.select_decoration_input(),
+        );
+        assert!(dashed.triangle_count() > solid.triangle_count());
     }
 
     /// Customer decision 2026-10-06 (reverses criterion 27): choosing a

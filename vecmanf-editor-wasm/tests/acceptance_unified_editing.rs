@@ -375,12 +375,25 @@ fn ellipse_scene(pct: i64, w_px: f64, h_px: f64, th: f64) -> Scene {
     Scene { s, fr, k }
 }
 
+/// Triangles of the draw list that are white: the ground of every resize,
+/// centre and parameter glyph, and nothing else the Select tool draws.
+///
+/// The count measures the handle tiers. It does not count every triangle
+/// because the dashed selection box (`edit-interaction-polish` criteria 63,
+/// 64) changes its triangle count with the box's size on screen, which would
+/// mask the tiers; the box and the arrows are never white.
 fn tri_count(s: &Session) -> usize {
-    s.draw_list().triangle_count()
+    let white = vecmanf_render_core::RgbaColor::WHITE;
+    s.draw_list()
+        .triangles
+        .iter()
+        .filter(|vertex| vertex.color == white)
+        .count()
+        / 3
 }
 
-/// Triangles of the selection decoration (box + handles): count with the
-/// object selected minus the count with nothing selected.
+/// White triangles of the selection decoration (the handle glyphs): count with
+/// the object selected minus the count with nothing selected.
 fn decor_count(sc: &mut Scene) -> usize {
     // Move the pointer far from everything so no hover state is involved.
     let far = pt(500.0, 500.0);
