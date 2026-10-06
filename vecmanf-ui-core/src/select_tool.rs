@@ -25,9 +25,10 @@ use crate::transform_drag::{
     ResizeOptions, StrokeScaling, commit_resize, compute_resize, compute_rotate,
 };
 use crate::transform_handle_layout::{
-    ALL_EIGHT, CORNERS_FOUR, TransformHandle, hit_test_transform_handle,
-    resize_anchor_local_position, resize_handle_hit, rotate_pivot, transform_handles,
+    ALL_EIGHT, CORNERS_FOUR, TransformHandle, hit_test_transform_handle, resize_handle_hit,
+    transform_handles,
 };
+use crate::transform_math::{resize_anchor_local_position, rotate_pivot};
 
 /// The three tolerances the Select tool's own transform handles need —
 /// mirrors [`crate::ShapeHitTolerances`]'s split for the shape tools.

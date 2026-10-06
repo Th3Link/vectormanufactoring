@@ -20,22 +20,24 @@
 //! methods join this type's `impl Session` the same way any other
 //! `impl` block in the same crate would.
 
+mod draw;
 mod navigation;
+mod node;
+mod open_error;
+mod pen;
 mod select;
 mod shapes;
 
 use vecmanf_document_core::{
-    AnchorKind, Document, Length, NodeId, ObjectSnapshot, OpenError, Point, SaveError, Tolerance,
-    Vec2,
-};
-use vecmanf_render_core::{
-    DecorationInput, DrawList, Hovered as RenderHovered, build_draw_list, build_pen_preview,
-    build_select_draw_list, build_transform_draw_list,
+    Document, Length, NodeId, ObjectSnapshot, OpenError, Point, SaveError, Tolerance,
 };
 use vecmanf_ui_core::{
-    AnchorIdMinter, EllipseTool, Hit, HitTolerances, NodeTool, NodeToolbarState, ObjectSelection,
-    PenTool, PolygonStarTool, RectangleTool, SelectTool, Viewport, hit_test,
+    AnchorIdMinter, EllipseTool, Hit, HitTolerances, NodeTool, ObjectSelection, PenTool,
+    PolygonStarTool, RectangleTool, SelectTool, Viewport, hit_test,
 };
+
+#[cfg(target_arch = "wasm32")]
+pub use open_error::map_open_error;
 
 // Re-exported only for `wasm_api`'s own `LiveReadout` wrapper (its only
 // consumer, and itself `wasm32`-only) — `#[cfg]`-gated the same way so
@@ -307,120 +309,6 @@ impl Session {
             .collect()
     }
 
-    /// The Select tool's own live, uncommitted move offset while a drag
-    /// is in flight (acceptance criterion 20's "live") — `None` outside
-    /// the Select tool, with no drag in flight, or before the pointer has
-    /// ever moved over the canvas.
-    fn select_live_offset(&self) -> Option<Vec2> {
-        if self.tool != Tool::Select {
-            return None;
-        }
-        let cursor = self.pointer_position?;
-        self.select.live_offset(cursor)
-    }
-
-    /// The Select tool's own live, uncommitted resize/rotate preview
-    /// while one of those drags is in flight (`specs/0005-object-
-    /// transform/specification.md`, acceptance criteria 14, 22) —
-    /// `None` outside the Select tool, with no such drag in flight, or
-    /// before the pointer has ever moved over the canvas. The cached
-    /// `select_shift_held`/`select_ctrl_held` (set by every
-    /// [`Session::pointer_hover`] call) are what let this be read at
-    /// render time, with no event of its own.
-    pub(super) fn select_live_transform(&self) -> Option<ObjectSnapshot> {
-        if self.tool != Tool::Select {
-            return None;
-        }
-        let cursor = self.pointer_position?;
-        self.select
-            .live_resize(cursor, self.select_shift_held, self.select_ctrl_held)
-            .or_else(|| {
-                self.select
-                    .live_rotate(cursor, self.select_shift_held, self.select_ctrl_held)
-            })
-    }
-
-    /// [`Session::paths`], with the node tool's in-flight drag (if any)
-    /// substituted into the relevant anchor's live, not-yet-committed
-    /// position/handle values — resolved by [`NodeTool::live_drag`]
-    /// itself (the same helpers [`NodeTool::pointer_up`] uses to commit),
-    /// so this is a pure "apply already-resolved data" step with no
-    /// geometry of its own. Falls back to the committed snapshot
-    /// unmodified outside the node tool, with no drag in flight, or with
-    /// the pointer off the canvas (`self.pointer_position` is `None`).
-    /// Also applies the Select tool's own live move offset
-    /// (`select_live_offset`) to every selected path, via the same
-    /// [`vecmanf_document_core::ObjectSnapshot::translated`] rule
-    /// [`Document::translate_objects`] commits with
-    /// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "Preview and
-    /// commit therefore share one implementation").
-    fn live_node_drag_paths(&self) -> Vec<vecmanf_document_core::PathSnapshot> {
-        let mut paths = self.paths();
-        if self.tool == Tool::Node {
-            self.apply_live_node_drag(&mut paths);
-        }
-        if let Some(offset) = self.select_live_offset() {
-            for snapshot in &mut paths {
-                if self.selection.contains(snapshot.id) {
-                    let translated = ObjectSnapshot::Path(snapshot.clone()).translated(offset);
-                    if let ObjectSnapshot::Path(path) = translated {
-                        *snapshot = path;
-                    }
-                }
-            }
-        }
-        // The Select tool's own live resize/rotate preview
-        // (`specs/0005-object-transform/specification.md`, acceptance
-        // criteria 14, 22).
-        if let Some(ObjectSnapshot::Path(live)) = self.select_live_transform() {
-            for snapshot in &mut paths {
-                if snapshot.id == live.id {
-                    *snapshot = live.clone();
-                }
-            }
-        }
-        paths
-    }
-
-    fn apply_live_node_drag(&self, paths: &mut [vecmanf_document_core::PathSnapshot]) {
-        let Some(cursor) = self.pointer_position else {
-            return;
-        };
-        let Some(live) = self.node.live_drag(cursor) else {
-            return;
-        };
-        match live {
-            vecmanf_ui_core::LiveNodeDrag::Nodes { positions } => {
-                for (path, id, point) in positions {
-                    if let Some(snapshot) = paths.iter_mut().find(|p| p.id == path)
-                        && let Some(anchor) = snapshot.anchors.iter_mut().find(|a| a.id == id)
-                    {
-                        anchor.point = point;
-                    }
-                }
-            }
-            vecmanf_ui_core::LiveNodeDrag::Handle {
-                path,
-                anchor,
-                handle_in,
-                handle_out,
-            } => {
-                // `handle_in`/`handle_out` already fully resolved by
-                // `NodeTool::live_drag` (which calls the exact same
-                // `vecmanf_document_core::resolve_handle_pair` function
-                // `Document::set_handle` itself commits with) — a plain
-                // assignment, no slot/mirror logic of its own to
-                // independently drift from the commit.
-                if let Some(snapshot) = paths.iter_mut().find(|p| p.id == path)
-                    && let Some(anchor) = snapshot.anchors.iter_mut().find(|a| a.id == anchor)
-                {
-                    anchor.handle_in = handle_in;
-                    anchor.handle_out = handle_out;
-                }
-            }
-        }
-    }
-
     /// The pointer went down at `point` (document space).
     pub fn pointer_down(&mut self, point: Point, shift: bool) {
         let Some(point) = sanitized_point(point) else {
@@ -544,16 +432,6 @@ impl Session {
         }
     }
 
-    fn drag_threshold(&self) -> Length {
-        Length::from_mm(PEN_DRAG_THRESHOLD_PX / self.view().scale())
-    }
-
-    /// Acceptance criterion 3 / the dedicated "finish path" action
-    /// (Enter, or a double-click the host has already recognized).
-    pub fn finish_pen(&mut self) {
-        self.pen.finish(&self.document);
-    }
-
     /// Escape: discards the in-progress pen path (acceptance criterion
     /// 4), clears the node tool's selection, or cancels whichever shape
     /// tool's in-progress drag, depending on the active tool — never
@@ -591,68 +469,6 @@ impl Session {
         }
     }
 
-    /// Acceptance criterion 11 (the contextual toolbar's convert
-    /// buttons). A no-op for the pen tool.
-    pub fn convert_selected(&mut self, kind: AnchorKind) {
-        if self.tool == Tool::Node {
-            self.node.convert_selected(&self.document, kind);
-        }
-    }
-
-    /// Acceptance criterion 14's "make line" (the contextual toolbar).
-    pub fn make_line(&mut self) {
-        if self.tool == Tool::Node {
-            self.node.make_line(&self.document);
-        }
-    }
-
-    /// Acceptance criterion 14's "make curve" (the contextual toolbar).
-    pub fn make_curve(&mut self) {
-        if self.tool == Tool::Node {
-            self.node.make_curve(&self.document);
-        }
-    }
-
-    /// Acceptance criteria 8-11: Join (the contextual toolbar/context
-    /// menu button). A no-op outside the node tool or when the current
-    /// selection does not qualify.
-    pub fn join_selected(&mut self) {
-        if self.tool == Tool::Node {
-            self.node.join_selected(&self.document);
-        }
-    }
-
-    /// Acceptance criteria 12-15: Split (the contextual toolbar/context
-    /// menu button). A no-op outside the node tool or when the current
-    /// selection does not qualify.
-    pub fn split_selected(&mut self) {
-        if self.tool == Tool::Node {
-            self.node.split_selected(&mut self.minter, &self.document);
-        }
-    }
-
-    /// Acceptance criterion 12: a double-click (already recognized by
-    /// the host) at `point`.
-    pub fn insert_at(&mut self, point: Point) {
-        if self.tool == Tool::Node {
-            let paths = self.paths();
-            let tolerances = self.hit_tolerances();
-            self.node
-                .insert_at(&mut self.minter, &self.document, &paths, point, tolerances);
-        }
-    }
-
-    /// The contextual toolbar's "Insert node" action: splits the
-    /// currently selected segment at its midpoint. A no-op outside the
-    /// node tool or without a segment selected.
-    pub fn insert_selected(&mut self) {
-        if self.tool == Tool::Node {
-            let paths = self.paths();
-            self.node
-                .insert_on_selected_segment(&mut self.minter, &self.document, &paths);
-        }
-    }
-
     /// The one double-click dispatch point
     /// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "the host
     /// detects a double-click... and calls `double_click(x, y)`.
@@ -674,204 +490,12 @@ impl Session {
             }
         }
     }
-
-    /// Which contextual-toolbar actions apply right now. Everything is
-    /// `false` when the node tool isn't active, since the toolbar itself
-    /// is only shown then.
-    #[must_use]
-    pub fn node_toolbar_state(&self) -> NodeToolbarState {
-        if self.tool != Tool::Node {
-            return NodeToolbarState::default();
-        }
-        self.node.toolbar_state(&self.document)
-    }
-
-    /// The in-progress pen path's placed nodes, for the host's
-    /// rubber-band/live-curve preview — `None` when idle or the node
-    /// tool is active.
-    #[must_use]
-    pub fn pen_in_progress(&self) -> Option<&[vecmanf_document_core::NewAnchor]> {
-        if self.tool == Tool::Pen {
-            self.pen.in_progress_nodes()
-        } else {
-            None
-        }
-    }
-
-    /// Acceptance criterion 5's cursor cue (`specification.md`'s
-    /// "Cursors": "cursor swaps to a pen-with-small-circle... variant"):
-    /// whether the live cursor is currently over the in-progress pen
-    /// path's own close target. The host uses this to pick the cursor
-    /// class; `false` outside the pen tool, with no path in progress, or
-    /// before the pointer has ever moved over the canvas.
-    #[must_use]
-    pub fn is_hovering_pen_close_target(&self) -> bool {
-        if self.tool != Tool::Pen {
-            return false;
-        }
-        let Some(point) = self.pointer_position else {
-            return false;
-        };
-        self.pen
-            .is_hovering_close_target(point, self.point_tolerance_as_length())
-    }
-
-    fn decoration_input(&self) -> DecorationInput {
-        if self.tool != Tool::Node {
-            return DecorationInput::default();
-        }
-        let selection = self.node.selection();
-        // `node_pairs` directly, not `nodes()` zipped with `path()`: the
-        // selection can now genuinely span several path objects
-        // (`specs/0006-path-merge-split-and-node-types/specification.md`
-        // acceptance criteria 6, 7, 15), and `path()` reports `None` for
-        // that case — zipping against it would silently render none of
-        // the selected nodes as selected instead of all of them.
-        let selected_nodes = selection.node_pairs().to_vec();
-        let selected_segment = selection.segment_with_path();
-        let hovered = self.hovered.and_then(|hit| match hit {
-            Hit::Node { path, anchor } => Some(RenderHovered::Node(path, anchor)),
-            Hit::Handle { path, anchor, slot } => Some(RenderHovered::Handle(path, anchor, slot)),
-            Hit::Segment { .. } => None,
-        });
-        DecorationInput {
-            show_nodes: true,
-            selected_nodes,
-            selected_segment,
-            hovered,
-        }
-    }
-
-    /// Builds this frame's draw list from the document's current state,
-    /// the active view transform, and the node tool's selection/hover —
-    /// plus the pen tool's in-progress preview
-    /// (`specification.md`'s UX notes) when it is active, every
-    /// primitive's own stroke/selection/handle decorations, and (when a
-    /// shape-tool drag is in flight) its own live preview outline
-    /// (`specs/0003-primitive-shapes/specification.md`, "Live creation
-    /// feedback").
-    ///
-    /// When the node tool has a node/handle drag in flight
-    /// (acceptance criteria 8, 9, 10's "update live during the drag"),
-    /// `live_node_drag_paths` (private: this module's own internal step,
-    /// not part of its public surface) substitutes that drag's live,
-    /// not-yet-committed position/handle values into the snapshot before
-    /// anything downstream ever sees it — `vecmanf-render-core` needs no
-    /// drag-specific code of its own for this: it already draws whatever
-    /// `PathSnapshot` it is handed, so a locally live-overridden one
-    /// reshapes the stroke and every decoration exactly as if it had
-    /// already committed.
-    #[must_use]
-    pub fn draw_list(&self) -> DrawList {
-        let view = self.view();
-        let paths = self.live_node_drag_paths();
-        let mut list = build_draw_list(&paths, view, &self.decoration_input());
-        let primitives = self.primitives_for_render();
-        list.extend(vecmanf_render_core::build_shape_draw_list(
-            &primitives,
-            view,
-            &self.shape_decoration_input(),
-        ));
-        list.extend(build_select_draw_list(
-            view,
-            &self.select_decoration_input(),
-        ));
-        list.extend(build_transform_draw_list(
-            view,
-            &self.select_transform_decoration_input(),
-        ));
-        if let Some((live_shape, rotation)) = self.live_preview_shape() {
-            list.extend(vecmanf_render_core::build_shape_live_preview(
-                &live_shape,
-                rotation,
-                view,
-            ));
-        }
-        if self.tool == Tool::Pen
-            && let Some(nodes) = self.pen.in_progress_nodes()
-        {
-            // The id this pending anchor would actually get if the
-            // gesture ended right now — `peek`, never `mint`: a preview
-            // must not advance the minter's own counter out of step with
-            // what might still be escaped or turn into a close gesture
-            // instead (`AnchorIdMinter::peek`'s own doc comment).
-            let pending = self.pointer_position.and_then(|cursor| {
-                self.pen
-                    .pending_anchor(self.minter.peek(), cursor, self.drag_threshold())
-            });
-            list.extend(build_pen_preview(
-                nodes,
-                self.pointer_position,
-                pending.as_ref(),
-                view,
-                self.is_hovering_pen_close_target(),
-            ));
-        }
-        list
-    }
-}
-
-/// Returns the one-sentence message the frontend's `ErrorDialog` shows
-/// for `error` — moved here from `vecmanf-app`'s native `open_error.rs`
-/// (`specs/0001-project-file-foundation/specification.md`, "Error handling —
-/// invalid/corrupt file") now that [`Session::open`] (and the
-/// `Document::open` it wraps) only ever runs inside this wasm session,
-/// never natively (`specs/0002-path-node-editing/adrs.md`'s PR review: "the
-/// host does byte I/O only"). Plain Rust, not `wasm_api`'s `wasm32`-only
-/// shell, so it stays exercised by ordinary `cargo test` — its only
-/// caller is `wasm_api::WasmSession::open`, which is itself `wasm32`-
-/// only, so this function is `cfg`-gated the same way plus `test`
-/// (otherwise a host `cargo build`/`clippy` sees it as genuinely unused
-/// dead code, since its one caller does not exist in that build).
-#[cfg(any(test, target_arch = "wasm32"))]
-#[must_use]
-pub const fn map_open_error(error: &OpenError) -> &'static str {
-    match error {
-        OpenError::NotAVmf => "This file isn't a vecmanf project (.vmf) file.",
-        OpenError::Damaged => "This file is damaged and can't be read.",
-        OpenError::FormatTooNew { .. } => {
-            "This file was saved by a newer version of vecmanf. Update the app to open it."
-        }
-    }
-}
-
-#[cfg(test)]
-mod map_open_error_tests {
-    use super::map_open_error;
-    use vecmanf_document_core::OpenError;
-
-    #[test]
-    fn not_a_vmf_names_the_specific_cause() {
-        assert_eq!(
-            map_open_error(&OpenError::NotAVmf),
-            "This file isn't a vecmanf project (.vmf) file."
-        );
-    }
-
-    #[test]
-    fn damaged_names_the_specific_cause() {
-        assert_eq!(
-            map_open_error(&OpenError::Damaged),
-            "This file is damaged and can't be read."
-        );
-    }
-
-    #[test]
-    fn format_too_new_names_the_specific_cause() {
-        let error = OpenError::FormatTooNew {
-            found: 2,
-            supported: 1,
-        };
-        assert_eq!(
-            map_open_error(&error),
-            "This file was saved by a newer version of vecmanf. Update the app to open it."
-        );
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use vecmanf_document_core::{AnchorKind, Vec2};
+    use vecmanf_ui_core::NodeToolbarState;
 
     use super::*;
 

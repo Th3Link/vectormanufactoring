@@ -7,7 +7,7 @@
 //! shares `Session`'s privacy boundary and its methods below join the
 //! same type's `impl Session` `session/mod.rs` itself defines.
 
-use vecmanf_document_core::{ObjectSnapshot, Point, Shape};
+use vecmanf_document_core::{ObjectSnapshot, Point, Shape, Vec2};
 use vecmanf_render_core::{SelectDecorationInput, TransformDecorationInput, TransformHandleGlyph};
 use vecmanf_ui_core::{
     SelectDoubleClickOutcome, SelectTool, StrokeScaling, TransformHandle,
@@ -50,6 +50,39 @@ pub(super) fn tool_for(object: &ObjectSnapshot) -> Tool {
 }
 
 impl Session {
+    /// The Select tool's own live, uncommitted move offset while a drag
+    /// is in flight (acceptance criterion 20's "live") — `None` outside
+    /// the Select tool, with no drag in flight, or before the pointer has
+    /// ever moved over the canvas.
+    pub(super) fn select_live_offset(&self) -> Option<Vec2> {
+        if self.tool != Tool::Select {
+            return None;
+        }
+        let cursor = self.pointer_position?;
+        self.select.live_offset(cursor)
+    }
+
+    /// The Select tool's own live, uncommitted resize/rotate preview
+    /// while one of those drags is in flight (`specs/0005-object-
+    /// transform/specification.md`, acceptance criteria 14, 22) —
+    /// `None` outside the Select tool, with no such drag in flight, or
+    /// before the pointer has ever moved over the canvas. The cached
+    /// `select_shift_held`/`select_ctrl_held` (set by every
+    /// [`Session::pointer_hover`] call) are what let this be read at
+    /// render time, with no event of its own.
+    pub(super) fn select_live_transform(&self) -> Option<ObjectSnapshot> {
+        if self.tool != Tool::Select {
+            return None;
+        }
+        let cursor = self.pointer_position?;
+        self.select
+            .live_resize(cursor, self.select_shift_held, self.select_ctrl_held)
+            .or_else(|| {
+                self.select
+                    .live_rotate(cursor, self.select_shift_held, self.select_ctrl_held)
+            })
+    }
+
     /// The "Scale stroke width" switch (`specs/0005-object-transform/
     /// specification.md` AC 26-31): whether a Select-tool resize scales the
     /// stroke width. Off in every new session (`Session::new`/`open` build a

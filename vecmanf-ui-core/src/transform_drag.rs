@@ -12,7 +12,7 @@ use vecmanf_document_core::{
 
 use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;
-use crate::transform_handle_layout::{
+use crate::transform_math::{
     polygon_star_resize_factor, resize_anchor_local_position, resize_local_box, rotate_delta_angle,
     rotate_pivot, scaled_and_floored, stroke_or_radius_factor,
 };

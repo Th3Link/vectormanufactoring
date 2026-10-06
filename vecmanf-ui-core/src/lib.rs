@@ -32,6 +32,7 @@ mod shape_hit_test;
 mod shape_tool_common;
 mod transform_drag;
 mod transform_handle_layout;
+mod transform_math;
 mod viewport;
 
 pub use anchor_id_minter::AnchorIdMinter;
@@ -61,10 +62,12 @@ pub use shape_hit_test::{hit_test_handle, hit_test_primitive};
 pub use shape_tool_common::{LiveShape, ShapeHitTolerances};
 pub use transform_drag::StrokeScaling;
 pub use transform_handle_layout::{
-    ALL_EIGHT, CORNERS_FOUR, ResizedBox, TransformHandle, hit_test_transform_handle, is_corner,
-    polygon_star_resize_factor, resize_anchor_local_position, resize_cursor_angle_degrees,
-    resize_handle_local_position, resize_local_box, rotate_delta_angle,
-    rotate_handle_local_position, rotate_pivot, scaled_and_floored, stroke_or_radius_factor,
+    ALL_EIGHT, CORNERS_FOUR, TransformHandle, hit_test_transform_handle, is_corner,
+    resize_cursor_angle_degrees, resize_handle_local_position, rotate_handle_local_position,
     transform_handles,
+};
+pub use transform_math::{
+    ResizedBox, polygon_star_resize_factor, resize_anchor_local_position, resize_local_box,
+    rotate_delta_angle, rotate_pivot, scaled_and_floored, stroke_or_radius_factor,
 };
 pub use viewport::{PX_PER_MM_AT_100, Viewport, Zoom};
