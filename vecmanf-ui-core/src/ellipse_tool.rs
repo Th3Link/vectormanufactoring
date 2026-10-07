@@ -5,13 +5,14 @@
 
 use vecmanf_document_core::{Document, EllipseFrame, Point, Shape};
 
-use crate::shape_tool_common::{CreateOutcome, CreatePreview, constrained_endpoint, is_degenerate};
+use crate::modifiers::Modifiers;
+use crate::shape_tool_common::{CreateDragBox, CreateOutcome, CreatePreview, create_drag_box};
 
 #[derive(Debug, Clone, Copy)]
 struct Drag {
     down_at: Point,
     current: Point,
-    constrain: bool,
+    modifiers: Modifiers,
 }
 
 /// The ellipse tool's state: the create-drag in flight, if any.
@@ -32,15 +33,17 @@ impl EllipseTool {
         self.drag = Some(Drag {
             down_at: point,
             current: point,
-            constrain: false,
+            modifiers: Modifiers::NONE,
         });
     }
 
-    /// The pointer moved with the drag in flight; writes nothing.
-    pub fn pointer_move(&mut self, point: Point, constrain: bool) {
+    /// The pointer moved, or a modifier changed with the pointer at rest
+    /// (`specs/shape-creation-from-center/` criterion 8), with the drag in
+    /// flight; writes nothing.
+    pub fn pointer_move(&mut self, point: Point, modifiers: Modifiers) {
         if let Some(drag) = &mut self.drag {
             drag.current = point;
-            drag.constrain = constrain;
+            drag.modifiers = modifiers;
         }
     }
 
@@ -48,41 +51,30 @@ impl EllipseTool {
     #[must_use]
     pub fn live_shape(&self) -> Option<CreatePreview> {
         let drag = self.drag?;
-        let end = if drag.constrain {
-            constrained_endpoint(drag.down_at, drag.current)
-        } else {
-            drag.current
-        };
-        (!is_degenerate(drag.down_at, end)).then(|| CreatePreview {
-            shape: Shape::Ellipse {
-                frame: EllipseFrame::from_corners(drag.down_at, end),
-            },
-            anchor: end,
+        let (frame, b) = created_frame(drag.down_at, drag.current, drag.modifiers)?;
+        Some(CreatePreview {
+            shape: Shape::Ellipse { frame },
+            anchor: b.anchor,
+            centre: b.centre,
         })
     }
 
-    /// Acceptance criteria 7, 8: commits the create-drag; `constrain` is
-    /// Ctrl's state at release.
+    /// Acceptance criteria 7, 8: commits the create-drag, built from the
+    /// release event's position and `modifiers` (criterion 10 of
+    /// `specs/shape-creation-from-center/`), the same computation as the
+    /// preview.
     pub fn pointer_up(
         &mut self,
         document: &Document,
         point: Point,
-        constrain: bool,
+        modifiers: Modifiers,
     ) -> CreateOutcome {
         let Some(drag) = self.drag.take() else {
             return CreateOutcome::NoOp;
         };
-        let end = if constrain {
-            constrained_endpoint(drag.down_at, point)
-        } else {
-            point
-        };
-        if is_degenerate(drag.down_at, end) {
-            return CreateOutcome::NoOp;
-        }
-        CreateOutcome::Created(
-            document.create_ellipse(EllipseFrame::from_corners(drag.down_at, end)),
-        )
+        created_frame(drag.down_at, point, modifiers).map_or(CreateOutcome::NoOp, |(frame, _)| {
+            CreateOutcome::Created(document.create_ellipse(frame))
+        })
     }
 
     /// Whether a create-drag is in flight (the button is down), also while it
@@ -99,6 +91,18 @@ impl EllipseTool {
     }
 }
 
+/// The one computation of the ellipse a drag from `down_at` to `point` makes
+/// under `modifiers`, and the box it came from (readout anchor, centre); `None` when it makes none.
+/// Preview and release both call it.
+fn created_frame(
+    down_at: Point,
+    point: Point,
+    modifiers: Modifiers,
+) -> Option<(EllipseFrame, CreateDragBox)> {
+    let b = create_drag_box(down_at, point, modifiers)?;
+    Some((EllipseFrame::from_corners(b.corner_a, b.corner_b), b))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -110,10 +114,11 @@ mod tests {
         let document = Document::new(1);
         let mut tool = EllipseTool::new();
         tool.pointer_down(Point::new(0.0, 0.0));
-        tool.pointer_move(Point::new(20.0, 10.0), false);
+        tool.pointer_move(Point::new(20.0, 10.0), Modifiers::NONE);
         let preview = tool.live_shape().expect("a preview");
         assert_eq!(preview.anchor, Point::new(20.0, 10.0));
-        let CreateOutcome::Created(id) = tool.pointer_up(&document, Point::new(20.0, 10.0), false)
+        let CreateOutcome::Created(id) =
+            tool.pointer_up(&document, Point::new(20.0, 10.0), Modifiers::NONE)
         else {
             panic!("expected Created");
         };
@@ -126,9 +131,11 @@ mod tests {
         assert_eq!(frame.ry.as_mm(), 5.0);
 
         tool.pointer_down(Point::new(0.0, 0.0));
-        let CreateOutcome::Created(circle) =
-            tool.pointer_up(&document, Point::new(20.0, 10.0), true)
-        else {
+        let CreateOutcome::Created(circle) = tool.pointer_up(
+            &document,
+            Point::new(20.0, 10.0),
+            Modifiers::new(false, true),
+        ) else {
             panic!("expected Created");
         };
         let Shape::Ellipse { frame } = document.primitive(circle).expect("exists").shape else {
@@ -138,7 +145,7 @@ mod tests {
 
         tool.pointer_down(Point::new(3.0, 3.0));
         assert_eq!(
-            tool.pointer_up(&document, Point::new(3.0, 3.0), false),
+            tool.pointer_up(&document, Point::new(3.0, 3.0), Modifiers::NONE),
             CreateOutcome::NoOp
         );
     }
@@ -150,7 +157,7 @@ mod tests {
         tool.pointer_down(Point::new(0.0, 0.0));
         assert!(tool.escape());
         assert_eq!(
-            tool.pointer_up(&document, Point::new(5.0, 5.0), false),
+            tool.pointer_up(&document, Point::new(5.0, 5.0), Modifiers::NONE),
             CreateOutcome::NoOp
         );
         assert_eq!(document.object_ids().len(), 0);

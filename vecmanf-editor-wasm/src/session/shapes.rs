@@ -43,8 +43,8 @@ impl Session {
     /// nothing to the document.
     pub(super) fn shape_pointer_move(&mut self, point: Point, modifiers: Modifiers) {
         match self.tool {
-            Tool::Rectangle => self.rectangle.pointer_move(point, modifiers.ctrl),
-            Tool::Ellipse => self.ellipse.pointer_move(point, modifiers.ctrl),
+            Tool::Rectangle => self.rectangle.pointer_move(point, modifiers),
+            Tool::Ellipse => self.ellipse.pointer_move(point, modifiers),
             Tool::PolygonStar => self.poly_star.pointer_move(point, modifiers),
             Tool::Select | Tool::Pen | Tool::Node => {}
         }
@@ -58,12 +58,8 @@ impl Session {
     /// and the selection alone (criterion 26).
     pub(super) fn shape_pointer_up(&mut self, point: Point, modifiers: Modifiers) {
         let outcome = match self.tool {
-            Tool::Rectangle => self
-                .rectangle
-                .pointer_up(&self.document, point, modifiers.ctrl),
-            Tool::Ellipse => self
-                .ellipse
-                .pointer_up(&self.document, point, modifiers.ctrl),
+            Tool::Rectangle => self.rectangle.pointer_up(&self.document, point, modifiers),
+            Tool::Ellipse => self.ellipse.pointer_up(&self.document, point, modifiers),
             Tool::PolygonStar => self.poly_star.pointer_up(&self.document, point, modifiers),
             Tool::Select | Tool::Pen | Tool::Node => CreateOutcome::NoOp,
         };
@@ -142,7 +138,7 @@ impl Session {
         if self.tool == Tool::Select {
             return self.select_live_readout();
         }
-        let CreatePreview { shape, anchor } = self.live_preview()?;
+        let CreatePreview { shape, anchor, .. } = self.live_preview()?;
         let text = match shape {
             Shape::Rect { bounds, .. } => {
                 format!(

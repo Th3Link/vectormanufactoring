@@ -345,7 +345,7 @@ impl WasmSession {
     /// The pointer moved to canvas-relative CSS pixel `(x, y)`.
     /// `constrain` is the Ctrl modifier's current state, consulted by
     /// the rectangle/ellipse tools' live create-drag preview (acceptance
-    /// criteria 2, 8) and, since `object-transform`, by the Select
+    /// criteria 2, 8; `shift` centres the box on the press point) and, since `object-transform`, by the Select
     /// tool's own live resize/rotate preview alongside `shift`
     /// (acceptance criteria 5, 7, 16, 17). Call this on every pointer
     /// move, not only while a button is held — it also feeds whatever

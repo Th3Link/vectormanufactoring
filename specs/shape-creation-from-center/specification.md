@@ -1,6 +1,6 @@
 # Shape creation from the center: Shift and Shift+Ctrl while drawing
 
-Status: Ready
+Status: In progress
 Priority: Must
 Origin: Customer
 
@@ -163,9 +163,9 @@ reports them (Ctrl is Cmd on macOS, as everywhere else in the product).
     then a create-drag behaves exactly as it does today and as before this
     spec (verified in the running app, build of `main`): the press point is
     the shape's center, the pointer is one vertex (the tip, for a star), the
-    pointer's angle from the press point sets the shape's rotation, and Shift
-    and Ctrl have no effect. This is unchanged by this spec, and the customer
-    is happy with it.
+    pointer's angle from the press point sets the shape's rotation, Shift has
+    no effect, and Ctrl snaps the angle (`edit-interaction-polish` criterion
+    4). This is unchanged by this spec, and the customer is happy with it.
 
 ## Out of scope
 
@@ -173,8 +173,8 @@ reports them (Ctrl is Cmd on macOS, as everywhere else in the product).
   the 1:1 constraint exists (`primitive-shapes` "Out of scope").
 - Any change to polygon and star creation. Current behaviour, verified in
   the app: press = the shape's center, pointer = one vertex (the tip, for a
-  star), the pointer's angle sets the rotation, Shift and Ctrl have no
-  effect. Unchanged by this spec; the customer is happy with it.
+  star), the pointer's angle sets the rotation, Shift has no effect, and
+  Ctrl snaps the angle (`edit-interaction-polish` criterion 4). Unchanged by this spec; the customer is happy with it.
 - Modifier behaviour on shape-tool handle drags (resize, corner radius,
   inner radius). The Select tool already has Ctrl and Shift for resizing.
   (Superseded: the shape tools no longer have handles,
@@ -198,6 +198,10 @@ Pre-filled by the product owner for the ux-engineer to review; nothing here
 is final.
 
 - Cursor: unchanged for all four modifier states.
+- A Shift press on an existing shape's outline in the rectangle tool starts a
+  create-drag around the press point, like any other press (criterion 16 as
+  superseded by `unified-object-editing` criterion 25; covered by test
+  `ac16`).
 - Modifier legend: the shape tools show none today (only the numeric readout
   near the pointer, per `primitive-shapes` UX notes), so none is added. The
   preview outline and the readout are the feedback, as Ctrl is today
@@ -212,6 +216,17 @@ is final.
 - Discoverability: Inkscape and LightBurn users expect the modifiers; the tool
   tooltips for Rectangle (R) and Ellipse (E) may mention them, left to
   `ux-engineer`.
+
+**UX review decisions (ux-engineer, 2026-10-07, checked in the running build):**
+
+- No legend, no hint chip and no readout wording during the drag; the outline
+  and readout change in the frame of the key and read clearly in all four modes.
+- Centre mark (supersedes "no extra center mark"): while Shift is down in a
+  rectangle or ellipse create-drag, the existing pivot marker is drawn at the
+  press point (`docs/design-system.md`, "Modifiers in a rectangle or ellipse
+  create-drag"). Same meaning as in a transform: Shift = about this point.
+- Tooltip: the Rectangle and Ellipse rail tooltips get a second line,
+  "Shift: from centre. Ctrl: square or circle".
 
 ## Sequencing
 
@@ -229,4 +244,4 @@ is (to be confirmed); default: unchanged either way.
 ## Links
 Requirements: R-EDIT-002 (`docs/requirements.md`); extends
 `specs/0003-primitive-shapes/` criteria 2 and 8.
-PR:
+PR: https://github.com/Th3Link/vectormanufactoring/pull/47

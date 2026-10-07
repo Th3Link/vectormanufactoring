@@ -63,8 +63,8 @@ reading, under "Flagged to the lead".
   - `EllipseFrame::from_corners` computes the center as a midpoint, so in
     centered mode it equals A to within a few ulps, not bit-exactly. That is
     inside any tolerance a test uses; the spec's worked examples are exact.
-  - Polygon/star is not touched (criterion 17); `Session` keeps calling it
-    without modifiers.
+  - Polygon/star is not touched by this feature (criterion 17); its
+    create-drag already takes `Modifiers` (see the 2026-10-07 note).
 
 - **2026-10-06: Shift reaches the tools as `Modifiers`, not a third
   parameter.** New `vecmanf-ui-core/src/modifiers.rs`: `pub struct Modifiers
@@ -143,8 +143,10 @@ reading, under "Flagged to the lead".
     `modifiers_changed`, whichever exists); release modifiers differing from
     the last move (criterion 10); Escape then modifier changes (criterion
     14); pan mid-drag (criterion 15); Shift-press on an existing rectangle's
-    outline toggles and creates nothing (criterion 16); polygon/star and
-    shape-tool handle drags unchanged under Shift and Ctrl (criterion 17);
+    outline toggles and creates nothing (criterion 16); polygon/star
+    create-drag unchanged under Shift, Ctrl still snapping the angle
+    (criterion 17; the handle-drag part is superseded, see the 2026-10-07
+    note);
     saved `format_version` equals `CURRENT_FORMAT_VERSION` and the object
     has no new key (criterion 13).
 
@@ -163,6 +165,17 @@ reading, under "Flagged to the lead".
   before `advanced-selection`, which then extends `Modifiers` instead of
   creating it. If it slips after `advanced-selection`, it uses that
   feature's `Modifiers` as is; nothing else changes.
+
+- **2026-10-07 (architect, after `unified-object-editing` and
+  `edit-interaction-polish`):** `Modifiers { shift, ctrl }` already exists on
+  main (`vecmanf-ui-core/src/modifiers.rs`), so no new `modifiers.rs`;
+  `Session` already builds `Modifiers` and passes it to
+  `shape_pointer_move` / `shape_pointer_up`, and the polygon/star tool already
+  takes it. This feature only changes the rectangle and ellipse tools to take
+  `Modifiers` in place of `constrain: bool`. Criterion 16 and the first
+  sentence of criterion 17 are superseded by `unified-object-editing`
+  criterion 25. Polygon/star: Shift has no effect, Ctrl still snaps the
+  create angle (`edit-interaction-polish` criterion 4).
 
 ## Flagged to the lead
 

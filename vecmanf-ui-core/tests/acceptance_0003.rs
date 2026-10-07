@@ -14,6 +14,8 @@ use vecmanf_ui_core::{
     PolygonStarTool, RectangleTool,
 };
 
+const CTRL: Modifiers = Modifiers::new(false, true);
+
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)
 }
@@ -27,7 +29,7 @@ fn ac1_drag_creates_a_rect_sized_from_a_to_b_zero_radius() {
     let document = Document::new(1);
     let mut tool = RectangleTool::new();
     tool.pointer_down(pt(10.0, 10.0));
-    let up = tool.pointer_up(&document, pt(30.0, 25.0), false);
+    let up = tool.pointer_up(&document, pt(30.0, 25.0), Modifiers::NONE);
     let CreateOutcome::Created(id) = up else {
         panic!("expected Created, got {up:?}");
     };
@@ -50,7 +52,7 @@ fn ac1_a_plain_click_with_no_movement_creates_nothing() {
     let document = Document::new(1);
     let mut tool = RectangleTool::new();
     tool.pointer_down(pt(5.0, 5.0));
-    let up = tool.pointer_up(&document, pt(5.0, 5.0), false);
+    let up = tool.pointer_up(&document, pt(5.0, 5.0), Modifiers::NONE);
     assert_eq!(up, CreateOutcome::NoOp);
     assert_eq!(document.object_ids().len(), 0, "nothing must be created");
 }
@@ -61,7 +63,7 @@ fn ac2_ctrl_constrain_makes_a_square_sized_to_the_larger_extent() {
     let mut tool = RectangleTool::new();
     tool.pointer_down(pt(0.0, 0.0));
     // Drag 10mm right, 30mm down: larger extent is 30 -> square 30x30.
-    let up = tool.pointer_up(&document, pt(10.0, 30.0), true);
+    let up = tool.pointer_up(&document, pt(10.0, 30.0), CTRL);
     let CreateOutcome::Created(id) = up else {
         panic!("expected Created")
     };
@@ -85,7 +87,7 @@ fn ac7_drag_creates_an_ellipse_with_half_extent_radii() {
     let document = Document::new(1);
     let mut tool = EllipseTool::new();
     tool.pointer_down(pt(0.0, 0.0));
-    let up = tool.pointer_up(&document, pt(20.0, 10.0), false);
+    let up = tool.pointer_up(&document, pt(20.0, 10.0), Modifiers::NONE);
     let CreateOutcome::Created(id) = up else {
         panic!("expected Created")
     };
@@ -102,7 +104,7 @@ fn ac7_a_equals_b_creates_nothing() {
     let document = Document::new(1);
     let mut tool = EllipseTool::new();
     tool.pointer_down(pt(7.0, 7.0));
-    let up = tool.pointer_up(&document, pt(7.0, 7.0), false);
+    let up = tool.pointer_up(&document, pt(7.0, 7.0), Modifiers::NONE);
     assert_eq!(up, CreateOutcome::NoOp);
     assert_eq!(document.object_ids().len(), 0);
 }
@@ -112,7 +114,7 @@ fn ac8_ctrl_constrain_makes_a_circle() {
     let document = Document::new(1);
     let mut tool = EllipseTool::new();
     tool.pointer_down(pt(0.0, 0.0));
-    let up = tool.pointer_up(&document, pt(4.0, 20.0), true);
+    let up = tool.pointer_up(&document, pt(4.0, 20.0), CTRL);
     let CreateOutcome::Created(id) = up else {
         panic!("expected Created")
     };
@@ -355,7 +357,7 @@ fn escape_during_a_create_drag_writes_nothing() {
     let mut tool = RectangleTool::new();
     tool.pointer_down(pt(0.0, 0.0));
     assert!(tool.escape());
-    let up = tool.pointer_up(&document, pt(50.0, 50.0), false);
+    let up = tool.pointer_up(&document, pt(50.0, 50.0), Modifiers::NONE);
     assert_eq!(up, CreateOutcome::NoOp);
     assert_eq!(document.object_ids().len(), 0);
 }

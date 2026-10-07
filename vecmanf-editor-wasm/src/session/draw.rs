@@ -4,7 +4,8 @@
 //! past the size limit").
 
 use vecmanf_render_core::{
-    DrawList, build_draw_list, build_pen_preview, build_select_draw_list, build_transform_draw_list,
+    DrawList, TransformDecorationInput, build_draw_list, build_pen_preview, build_select_draw_list,
+    build_transform_draw_list,
 };
 
 use vecmanf_document_core::{ObjectSnapshot, PrimitiveSnapshot};
@@ -75,6 +76,18 @@ impl Session {
                 vecmanf_document_core::Angle::from_radians(0.0),
                 view,
             ));
+            // Shift makes the press point the centre: the pivot marker says so
+            // (`docs/design-system.md`, "Modifiers in a rectangle or ellipse
+            // create-drag").
+            if preview.centre.is_some() {
+                list.extend(build_transform_draw_list(
+                    view,
+                    &TransformDecorationInput {
+                        pivot_marker: preview.centre,
+                        ..TransformDecorationInput::default()
+                    },
+                ));
+            }
         }
         if self.tool == Tool::Pen
             && let Some(nodes) = self.pen.in_progress_nodes()
