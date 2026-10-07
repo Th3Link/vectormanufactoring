@@ -11,11 +11,28 @@ use crate::wasm_api::WasmSession;
 /// Which badges the DOM shows by the pointer: `copy_badge` is the plus badge,
 /// `lock` is `""` (no lock badge), `"x"` or `"y"` (the axis the move is locked
 /// to).
-#[wasm_bindgen(getter_with_clone)]
+#[wasm_bindgen]
 #[derive(Debug, Clone)]
 pub struct MoveIndicatorsView {
-    pub copy_badge: bool,
-    pub lock: String,
+    copy_badge: bool,
+    lock: &'static str,
+}
+
+#[wasm_bindgen]
+impl MoveIndicatorsView {
+    /// Whether the plus badge shows.
+    #[must_use]
+    #[wasm_bindgen(getter)]
+    pub fn copy_badge(&self) -> bool {
+        self.copy_badge
+    }
+
+    /// The lock badge's axis: `""`, `"x"` or `"y"`.
+    #[must_use]
+    #[wasm_bindgen(getter)]
+    pub fn lock(&self) -> String {
+        self.lock.to_string()
+    }
 }
 
 #[wasm_bindgen]
@@ -33,8 +50,7 @@ impl WasmSession {
                 Some(Axis::X) => "x",
                 Some(Axis::Y) => "y",
                 None => "",
-            }
-            .to_string(),
+            },
         }
     }
 }

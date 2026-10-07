@@ -1,4 +1,5 @@
 import { ArrowLeftRight, ArrowUpDown, Plus } from "lucide-react";
+import { useLayoutEffect, useState } from "react";
 
 import type { MoveBadgeState } from "@/hooks/useEditorSession";
 
@@ -32,6 +33,15 @@ interface MoveBadgesProps {
  * event.
  */
 export function MoveBadges({ badges, containerRef }: MoveBadgesProps) {
+  // Measured in a layout effect, never read from the ref during render, so the
+  // badge is placed right on the frame it first shows.
+  const [canvasWidth, setCanvasWidth] = useState(Number.POSITIVE_INFINITY);
+  useLayoutEffect(() => {
+    const width = containerRef.current?.clientWidth;
+    if (width !== undefined) {
+      setCanvasWidth((previous) => (previous === width ? previous : width));
+    }
+  }, [badges, containerRef]);
   const shown = [
     badges.copy ? ("copy" as const) : null,
     badges.lock ? (`lock-${badges.lock}` as const) : null,
@@ -39,7 +49,6 @@ export function MoveBadges({ badges, containerRef }: MoveBadgesProps) {
   if (shown.length === 0) {
     return null;
   }
-  const canvasWidth = containerRef.current?.clientWidth ?? Number.POSITIVE_INFINITY;
   // Left of the pointer unless the outermost badge would leave the canvas.
   const outermost = BADGE_OFFSET_PX + (shown.length - 1) * SECOND_BADGE_SHIFT_PX + BADGE_PX / 2;
   const mirrored = badges.x - outermost < 0 && badges.x + outermost <= canvasWidth;

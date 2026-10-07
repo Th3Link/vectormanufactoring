@@ -120,7 +120,10 @@ impl Session {
                 Point::new(high.x.max(p.x), high.y.max(p.y)),
             )
         });
-        Some(Point::new((low.x + high.x) / 2.0, (low.y + high.y) / 2.0))
+        Some(Point::new(
+            f64::midpoint(low.x, high.x),
+            f64::midpoint(low.y, high.y),
+        ))
     }
 
     /// The readout of a move drag past the dead zone: the offset a release
