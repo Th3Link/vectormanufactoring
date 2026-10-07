@@ -15,7 +15,6 @@
 
 use vecmanf_document_core::{Document, ObjectSnapshot, Point, Tolerance};
 
-use crate::hit_test_object::hit_test_object;
 use crate::object_selection::ObjectSelection;
 use crate::param_handles::{ParamHandle, radius_gain};
 use crate::select_bar::BarPreview;
@@ -29,6 +28,7 @@ pub use crate::transform_handle_layout::TransformHandleTolerances;
 mod bar;
 mod entry;
 mod handles;
+mod press;
 mod preview;
 
 use entry::OpenEntry;
@@ -36,6 +36,7 @@ use handles::sole_selected;
 
 pub use entry::{EntryKey, KeyEntryRefusal, double_click};
 pub use handles::entry_anchor;
+pub use press::{PressTarget, classify_press};
 pub use preview::LiveEdit;
 
 /// A move offset within this (millimetres) of zero is no move.
@@ -199,66 +200,74 @@ impl SelectTool {
         selection.retain_existing(objects);
         let origin = DragOrigin::new(point, handle_tolerances.drag_threshold_mm, shift);
 
-        if let Some((object, box_, handle)) =
-            Self::handle_at(objects, selection, point, handle_tolerances, shift)
-        {
-            self.drag = SelectDrag::Transforming(self.begin_handle_drag(
-                origin,
-                object,
-                box_,
-                handle,
-                &handle_tolerances,
-            ));
-            self.last_press_handle = Some(handle);
-            return SelectPointerDownOutcome::Handle;
-        }
-        // Criterion 35 of `unified-object-editing` (amended): a plain press
-        // inside the sole selected object's box that is on no handle is a
-        // move, before any outline hit (an outline of another object inside
-        // the box does not take the press); without it a small unfilled
-        // object could not be moved at all (slice 5 criterion 23). With Shift
-        // the outline hit is tried first, so Shift-click adds to the selection
-        // over a filled shape.
-        if !shift && Self::is_inside_selected_box(objects, selection, point) {
-            let from_center = matches!(
-                Self::hover_handle_at(objects, selection, point, handle_tolerances, shift),
-                Some((_, _, EditHandle::Move))
-            );
-            self.drag = SelectDrag::Moving {
-                origin,
-                from_center,
-            };
-            // A double-click on the centre handle opens the typed move, so its
-            // first press must be recognised as a press on it (criterion 15).
-            self.last_press_handle = from_center.then_some(EditHandle::Move);
-            return SelectPointerDownOutcome::Selected;
-        }
-
-        let Some(hit) = hit_test_object(objects, point, tolerance) else {
-            if !shift {
-                selection.clear();
+        match classify_press(
+            objects,
+            selection,
+            point,
+            tolerance,
+            handle_tolerances,
+            shift,
+        ) {
+            PressTarget::Handle(handle) => {
+                if let Some((object, box_, _)) =
+                    Self::handle_at(objects, selection, point, handle_tolerances, shift)
+                {
+                    self.drag = SelectDrag::Transforming(self.begin_handle_drag(
+                        origin,
+                        object,
+                        box_,
+                        handle,
+                        &handle_tolerances,
+                    ));
+                    self.last_press_handle = Some(handle);
+                }
+                SelectPointerDownOutcome::Handle
             }
-            self.drag = SelectDrag::None;
-            return SelectPointerDownOutcome::Cleared;
-        };
-
-        if shift {
-            selection.toggle(hit);
-        } else if !selection.contains(hit) {
-            // A plain click on a *different* object is single-select,
-            // not additive (acceptance criterion 16). A plain click on an
-            // object already part of a multi-selection leaves the whole
-            // selection as it is, so the group can be dragged together
-            // (acceptance criterion 18) — matching every reference tool's
-            // own "click one of several selected objects to drag them
-            // all" convention.
-            selection.select_single(hit);
+            // A double-click on the centre handle opens the typed move, so
+            // its first press must be recognised as a press on it
+            // (criterion 15).
+            PressTarget::CentreHandle => {
+                self.drag = SelectDrag::Moving {
+                    origin,
+                    from_center: true,
+                };
+                self.last_press_handle = Some(EditHandle::Move);
+                SelectPointerDownOutcome::Selected
+            }
+            PressTarget::InsideSelectedBox => {
+                self.drag = SelectDrag::Moving {
+                    origin,
+                    from_center: false,
+                };
+                SelectPointerDownOutcome::Selected
+            }
+            PressTarget::Empty => {
+                if !shift {
+                    selection.clear();
+                }
+                self.drag = SelectDrag::None;
+                SelectPointerDownOutcome::Cleared
+            }
+            PressTarget::Object(hit) => {
+                if shift {
+                    selection.toggle(hit);
+                } else if !selection.contains(hit) {
+                    // A plain click on a *different* object is single-select,
+                    // not additive (acceptance criterion 16). A plain click on
+                    // an object already part of a multi-selection leaves the
+                    // whole selection as it is, so the group can be dragged
+                    // together (acceptance criterion 18) — matching every
+                    // reference tool's own "click one of several selected
+                    // objects to drag them all" convention.
+                    selection.select_single(hit);
+                }
+                self.drag = SelectDrag::Moving {
+                    origin,
+                    from_center: false,
+                };
+                SelectPointerDownOutcome::Selected
+            }
         }
-        self.drag = SelectDrag::Moving {
-            origin,
-            from_center: false,
-        };
-        SelectPointerDownOutcome::Selected
     }
 
     /// The drag a press on `handle` of `object` begins: its start snapshot and

@@ -79,8 +79,9 @@ pub use select_bar::{
     BarPreview, BarValue, ObjectKind, SelectBarState, ids_of_kind, select_bar_state,
 };
 pub use select_tool::{
-    EntryKey, KeyEntryRefusal, LiveEdit, SelectDoubleClickOutcome, SelectPointerDownOutcome,
-    SelectTool, TransformHandleTolerances, double_click, entry_anchor,
+    EntryKey, KeyEntryRefusal, LiveEdit, PressTarget, SelectDoubleClickOutcome,
+    SelectPointerDownOutcome, SelectTool, TransformHandleTolerances, classify_press, double_click,
+    entry_anchor,
 };
 pub use selection::NodeSelection;
 pub use shape_tool_common::{CreateOutcome, CreatePreview};
