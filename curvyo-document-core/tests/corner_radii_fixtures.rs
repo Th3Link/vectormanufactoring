@@ -7,7 +7,9 @@
 //!
 //! Fixtures are written by the `#[ignore]`d generator below
 //! (`cargo test -p curvyo-document-core --test corner_radii_fixtures
-//! generate_corner_radii_fixtures -- --ignored`); the committed bytes are what
+//! generate_corner_radii_fixtures -- --ignored`; `future_format_version.curvyo`
+//! comes from `container.rs`'s `generate_golden_fixtures`, which writes the
+//! current version plus one); the committed bytes are what
 //! the tests read.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
@@ -24,7 +26,13 @@ use loro::{LoroDoc, LoroMap};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
-const V6_FIXTURE: &str = "corner_radii_v6.curvyo";
+/// Written by the build that introduced per-corner radii; a genuine file of
+/// that format version, so its name carries no number that a renumbering at
+/// merge would change.
+const V6_FIXTURE: &str = "corner_radii_per_corner.curvyo";
+/// The `format_version` that build declared (what the fixture says, whatever
+/// `CURRENT_FORMAT_VERSION` is later).
+const PER_CORNER_FORMAT_VERSION: u64 = 6;
 const LEGACY_FIXTURE: &str = "legacy_corner_radius_v5.curvyo";
 const OUTLINE_FIXTURE: &str = "rect_outline_mixed_radii.json";
 
@@ -311,13 +319,6 @@ fn generate_corner_radii_fixtures() {
     std::fs::write(dir.join(V6_FIXTURE), build_v6_document()).unwrap();
     std::fs::write(dir.join(LEGACY_FIXTURE), build_legacy_v5_document()).unwrap();
     std::fs::write(dir.join(OUTLINE_FIXTURE), outline_fixture_json()).unwrap();
-    // A container one version newer than this build, for the "saved by a
-    // newer version" refusal (`future_format_version.curvyo`).
-    std::fs::write(
-        dir.join("future_format_version.curvyo"),
-        container(CURRENT_FORMAT_VERSION + 1, b"irrelevant", b"{}"),
-    )
-    .unwrap();
 }
 
 // ---------------------------------------------------------------------
@@ -325,12 +326,14 @@ fn generate_corner_radii_fixtures() {
 // ---------------------------------------------------------------------
 
 #[test]
-fn the_version_6_fixture_declares_the_current_version() {
-    assert_eq!(CURRENT_FORMAT_VERSION, 6);
+fn the_per_corner_fixture_declares_the_version_that_introduced_it() {
     assert_eq!(
         manifest_format_version(&fixture(V6_FIXTURE)),
-        u64::from(CURRENT_FORMAT_VERSION)
+        PER_CORNER_FORMAT_VERSION
     );
+    // A build can read it as long as it is not newer than the current one.
+    let current = u64::from(CURRENT_FORMAT_VERSION);
+    assert!(PER_CORNER_FORMAT_VERSION <= current);
 }
 
 #[test]

@@ -75,78 +75,108 @@ impl OutlineAnchor {
 #[must_use]
 pub fn rect_outline(bounds: RectBounds, radii: CornerRadii) -> Vec<OutlineAnchor> {
     let effective = effective_corner_radii(bounds, radii);
-    let [tl, tr, br, bl] = Corner::ALL.map(|corner| effective.get(corner).as_mm());
     let left = bounds.origin.x;
     let top = bounds.origin.y;
-    let right = left + bounds.width.as_mm();
-    let bottom = top + bounds.height.as_mm();
-    let sharp = |radius: f64| radius <= SHARP_CORNER_EPSILON_MM;
-    let at = OutlineAnchor::tangent;
-
-    let mut anchors = Vec::with_capacity(8);
-    // Top edge, left end: the end of the top-left arc (its start closes the loop).
-    anchors.push(if sharp(tl) {
-        OutlineAnchor::corner(Point::new(left, top))
-    } else {
-        at(
-            Point::new(left + tl, top),
-            Vec2::new(-KAPPA * tl, 0.0),
-            Vec2::ZERO,
-        )
+    let edges = Edges {
+        left,
+        top,
+        right: left + bounds.width.as_mm(),
+        bottom: top + bounds.height.as_mm(),
+    };
+    let [tl, tr, br, bl] = Corner::ALL.map(|corner| {
+        let radius = effective.get(corner).as_mm();
+        corner_nodes(corner, edges, radius)
     });
-    if sharp(tr) {
-        anchors.push(OutlineAnchor::corner(Point::new(right, top)));
-    } else {
-        let handle = KAPPA * tr;
-        anchors.push(at(
-            Point::new(right - tr, top),
-            Vec2::ZERO,
-            Vec2::new(handle, 0.0),
-        ));
-        anchors.push(at(
-            Point::new(right, top + tr),
-            Vec2::new(0.0, -handle),
-            Vec2::ZERO,
-        ));
+    let mut anchors = Vec::with_capacity(8);
+    // The top-left arc's end (or its corner point) opens the path; its start
+    // closes the loop.
+    anchors.push(tl.1.unwrap_or(tl.0));
+    for (first, second) in [tr, br, bl] {
+        anchors.push(first);
+        anchors.extend(second);
     }
-    if sharp(br) {
-        anchors.push(OutlineAnchor::corner(Point::new(right, bottom)));
-    } else {
-        let handle = KAPPA * br;
-        anchors.push(at(
-            Point::new(right, bottom - br),
-            Vec2::ZERO,
-            Vec2::new(0.0, handle),
-        ));
-        anchors.push(at(
-            Point::new(right - br, bottom),
-            Vec2::new(handle, 0.0),
-            Vec2::ZERO,
-        ));
-    }
-    if sharp(bl) {
-        anchors.push(OutlineAnchor::corner(Point::new(left, bottom)));
-    } else {
-        let handle = KAPPA * bl;
-        anchors.push(at(
-            Point::new(left + bl, bottom),
-            Vec2::ZERO,
-            Vec2::new(-handle, 0.0),
-        ));
-        anchors.push(at(
-            Point::new(left, bottom - bl),
-            Vec2::new(0.0, handle),
-            Vec2::ZERO,
-        ));
-    }
-    if !sharp(tl) {
-        anchors.push(at(
-            Point::new(left, top + tl),
-            Vec2::ZERO,
-            Vec2::new(0.0, -KAPPA * tl),
-        ));
+    if tl.1.is_some() {
+        anchors.push(tl.0);
     }
     anchors
+}
+
+/// The four edges of a rectangle's box.
+#[derive(Clone, Copy)]
+struct Edges {
+    left: f64,
+    top: f64,
+    right: f64,
+    bottom: f64,
+}
+
+/// The nodes one corner contributes in path order: `(start, Some(end))` of its
+/// arc when `radius` is positive, `(corner point, None)` when it is sharp.
+fn corner_nodes(corner: Corner, e: Edges, radius: f64) -> (OutlineAnchor, Option<OutlineAnchor>) {
+    if radius <= SHARP_CORNER_EPSILON_MM {
+        let point = match corner {
+            Corner::Tl => Point::new(e.left, e.top),
+            Corner::Tr => Point::new(e.right, e.top),
+            Corner::Br => Point::new(e.right, e.bottom),
+            Corner::Bl => Point::new(e.left, e.bottom),
+        };
+        return (OutlineAnchor::corner(point), None);
+    }
+    let handle = KAPPA * radius;
+    let at = OutlineAnchor::tangent;
+    let zero = Vec2::ZERO;
+    // (arc start, its outgoing handle) and (arc end, its incoming handle).
+    let (start, end) = match corner {
+        Corner::Tl => (
+            at(
+                Point::new(e.left, e.top + radius),
+                zero,
+                Vec2::new(0.0, -handle),
+            ),
+            at(
+                Point::new(e.left + radius, e.top),
+                Vec2::new(-handle, 0.0),
+                zero,
+            ),
+        ),
+        Corner::Tr => (
+            at(
+                Point::new(e.right - radius, e.top),
+                zero,
+                Vec2::new(handle, 0.0),
+            ),
+            at(
+                Point::new(e.right, e.top + radius),
+                Vec2::new(0.0, -handle),
+                zero,
+            ),
+        ),
+        Corner::Br => (
+            at(
+                Point::new(e.right, e.bottom - radius),
+                zero,
+                Vec2::new(0.0, handle),
+            ),
+            at(
+                Point::new(e.right - radius, e.bottom),
+                Vec2::new(handle, 0.0),
+                zero,
+            ),
+        ),
+        Corner::Bl => (
+            at(
+                Point::new(e.left + radius, e.bottom),
+                zero,
+                Vec2::new(-handle, 0.0),
+            ),
+            at(
+                Point::new(e.left, e.bottom - radius),
+                Vec2::new(0.0, handle),
+                zero,
+            ),
+        ),
+    };
+    (start, Some(end))
 }
 
 /// An ellipse's outline (acceptance criteria 7-9, 19): 4 smooth nodes,

@@ -1131,8 +1131,9 @@ fn ac02_new_files_use_the_same_stored_representation_as_before() {
     };
     let m: serde_json::Value = serde_json::from_slice(&manifest).unwrap();
     assert_eq!(
-        m["format_version"], 6,
-        "format_version unchanged by this story (6 since `rectangle-corner-radii`)"
+        m["format_version"],
+        curvyo_document_core::CURRENT_FORMAT_VERSION,
+        "the manifest declares the current format version"
     );
 }
 

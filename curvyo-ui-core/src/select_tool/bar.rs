@@ -8,15 +8,13 @@
 //! it owns `SelectTool`'s pending-edit field.
 
 use curvyo_document_core::{
-    Corner, CornerRadii, Document, Length, NodeId, ObjectSnapshot, PrimitiveSnapshot, Shape,
-    ShapeEditError,
+    Corner, CornerRadii, Document, Length, NodeId, ObjectSnapshot, PrimitiveSnapshot,
+    SHARP_CORNER_EPSILON_MM, Shape, ShapeEditError,
 };
 
 use super::SelectTool;
 use crate::object_selection::ObjectSelection;
-use crate::param_edit::{
-    PARAM_EQUAL_EPSILON, ParamValue, apply_param, commit_param_batch, max_corner_radius,
-};
+use crate::param_edit::{ParamValue, apply_param, commit_param_batch, max_corner_radius};
 use crate::select_bar::{BarPreview, ObjectKind, ids_of_kind};
 use crate::transform_commit::MAX_COORDINATE_MM;
 use crate::transform_entry::{EntryOutcome, InvalidReason, parse_entry_number};
@@ -121,7 +119,7 @@ impl SelectTool {
                                 shape: Shape::Rect { corner_radii, .. },
                                 ..
                             }) if Corner::ALL.iter().any(|&corner| {
-                                corner_radii.get(corner).as_mm() > PARAM_EQUAL_EPSILON
+                                corner_radii.get(corner).as_mm() > SHARP_CORNER_EPSILON_MM
                             })
                         )
                 })

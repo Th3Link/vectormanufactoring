@@ -40,6 +40,10 @@ pub enum ShapeEditError {
     /// inner ratio to set).
     #[error("this operation does not apply to this primitive's shape")]
     WrongShape,
+    /// A corner radius is not a finite number (NaN or infinite). Nothing is
+    /// written. A negative radius is not an error: it is floored to 0.
+    #[error("a corner radius must be a finite number")]
+    InvalidRadius,
 }
 
 impl Document {

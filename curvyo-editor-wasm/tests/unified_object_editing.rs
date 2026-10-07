@@ -183,10 +183,6 @@ fn a_radius_set_with_the_select_tool_survives_save_and_reopen_with_the_same_form
     let manifest: serde_json::Value =
         serde_json::from_reader(archive.by_name("manifest.json").unwrap()).unwrap();
     assert_eq!(manifest["format_version"], CURRENT_FORMAT_VERSION);
-    assert_eq!(
-        CURRENT_FORMAT_VERSION, 6,
-        "no format change in this story (6 since `rectangle-corner-radii`)"
-    );
 }
 
 /// Criterion 20: "r 3.5 mm" live at the pointer; the knob shows the built-in

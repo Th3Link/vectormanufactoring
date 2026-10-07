@@ -478,7 +478,10 @@ fn ac18_open_hover_select_and_handle_hover_write_nothing_to_a_legacy_file() {
     );
     let manifest: serde_json::Value =
         serde_json::from_slice(&member(&saved, "manifest.json")).unwrap();
-    assert_eq!(manifest["format_version"], 6);
+    assert_eq!(
+        manifest["format_version"],
+        curvyo_document_core::CURRENT_FORMAT_VERSION
+    );
 }
 
 #[test]

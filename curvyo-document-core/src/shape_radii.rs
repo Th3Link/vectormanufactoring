@@ -7,7 +7,7 @@
 //! could beat a concurrent edit, ADR 0009 §3), and commits nothing when no
 //! register changes.
 
-use crate::corner_radii::CornerRadii;
+use crate::corner_radii::{Corner, CornerRadii};
 use crate::corner_radii_codec::write_corner_radii_if_changed;
 use crate::document::Document;
 use crate::path_model::NodeId;
@@ -16,16 +16,24 @@ use crate::shape_codec::{self, SHAPE_RECT};
 use crate::shapes::{ShapeEditError, write_stroke_width_if_changed};
 use crate::units::Length;
 
-/// `radii` with every negative radius floored to zero (defence; nothing in the
-/// UI produces one).
-fn floored(radii: CornerRadii) -> CornerRadii {
+/// The one input rule of every radius command: a radius that is not finite is
+/// refused ([`ShapeEditError::InvalidRadius`], nothing written, so a saved
+/// file can never hold a value that reopens as damaged), a negative one is
+/// floored to zero (defence; nothing in the UI produces one).
+fn checked(radii: CornerRadii) -> Result<CornerRadii, ShapeEditError> {
     let floor = |radius: Length| Length::from_mm(radius.as_mm().max(0.0));
-    CornerRadii {
+    if !Corner::ALL
+        .iter()
+        .all(|&corner| radii.get(corner).as_mm().is_finite())
+    {
+        return Err(ShapeEditError::InvalidRadius);
+    }
+    Ok(CornerRadii {
         tl: floor(radii.tl),
         tr: floor(radii.tr),
         br: floor(radii.br),
         bl: floor(radii.bl),
-    }
+    })
 }
 
 impl Document {
@@ -38,17 +46,19 @@ impl Document {
     /// is resolved and confirmed to be a rectangle before any of them is
     /// written, so one unknown or non-rectangle id anywhere in `ids` refuses
     /// the whole call — the same contract [`Document::convert_to_paths`]
-    /// already uses. A negative value is floored to zero. A corner that
+    /// already uses. A negative value is floored to zero and a non-finite
+    /// one refuses the whole call ([`ShapeEditError::InvalidRadius`]). A corner that
     /// already holds the value is not rewritten, and nothing is committed when
     /// no register changes.
     ///
     /// # Errors
+    /// [`ShapeEditError::InvalidRadius`] for a NaN or infinite radius;
     /// [`ShapeEditError::NoSuchObject`] if any named id no longer
     /// exists; [`ShapeEditError::NotAPrimitive`] /
     /// [`ShapeEditError::WrongShape`] if any named id is not a
     /// rectangle.
     pub fn set_corner_radius(&self, ids: &[NodeId], radius: Length) -> Result<(), ShapeEditError> {
-        let radii = floored(CornerRadii::uniform(radius));
+        let radii = checked(CornerRadii::uniform(radius))?;
         let metas: Vec<_> = ids
             .iter()
             .map(|&id| self.require_shape(id, SHAPE_RECT))
@@ -71,9 +81,11 @@ impl Document {
     /// unchanged value could beat a concurrent radius edit), so two peers
     /// editing different corners both survive, and nothing is committed when
     /// no register changes. Every id is resolved and confirmed to be a
-    /// rectangle before any is written. A negative value is floored to zero.
+    /// rectangle before any is written. A negative value is floored to zero, a non-finite one
+    /// refuses the whole call.
     ///
     /// # Errors
+    /// [`ShapeEditError::InvalidRadius`] for a NaN or infinite radius;
     /// [`ShapeEditError::NoSuchObject`] if any named id no longer exists;
     /// [`ShapeEditError::NotAPrimitive`] / [`ShapeEditError::WrongShape`] if
     /// any named id is not a rectangle.
@@ -81,8 +93,8 @@ impl Document {
         let metas: Vec<_> = radii
             .iter()
             .map(|&(id, radii)| {
-                self.require_shape(id, SHAPE_RECT)
-                    .map(|meta| (meta, floored(radii)))
+                let radii = checked(radii)?;
+                self.require_shape(id, SHAPE_RECT).map(|meta| (meta, radii))
             })
             .collect::<Result<_, _>>()?;
         let mut changed = false;
@@ -109,6 +121,8 @@ impl Document {
     /// (`specs/rectangle-corner-radii/adrs.md`, decision 7).
     ///
     /// # Errors
+    /// [`ShapeEditError::InvalidRadius`] for a NaN or infinite radius (nothing
+    /// is written; a negative one is floored to zero);
     /// [`ShapeEditError::NoSuchObject`] / [`ShapeEditError::NotAPrimitive`]
     /// / [`ShapeEditError::WrongShape`] if `id` is not a rectangle.
     pub fn resize_rect(
@@ -118,6 +132,7 @@ impl Document {
         corner_radii: CornerRadii,
         stroke_width: Option<Length>,
     ) -> Result<(), ShapeEditError> {
+        let corner_radii = checked(corner_radii)?;
         let meta = self.require_shape(id, SHAPE_RECT)?;
         shape_codec::write_rect_bounds(&meta, bounds);
         write_corner_radii_if_changed(&meta, corner_radii);
@@ -359,5 +374,60 @@ mod tests {
         assert_eq!(result, Err(ShapeEditError::WrongShape));
         assert_eq!(ops(&document), operations);
         assert_eq!(stored(&document, id), radii(0.0, 0.0, 0.0, 0.0));
+    }
+
+    /// The input rule: a non-finite radius refuses the call and writes nothing
+    /// (so a saved file cannot reopen as damaged); a negative one is floored.
+    #[test]
+    fn a_non_finite_radius_is_refused_and_nothing_is_written() {
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let document = Document::new(1);
+            let id = document.create_rect(bounds(100.0, 100.0));
+            let (changes, operations) = (document.loro().len_changes(), ops(&document));
+            let bad_radii = radii(1.0, bad, 3.0, 4.0);
+            assert_eq!(
+                document.set_corner_radius(&[id], Length::from_mm(bad)),
+                Err(ShapeEditError::InvalidRadius)
+            );
+            assert_eq!(
+                document.set_corner_radii(&[(id, bad_radii)]),
+                Err(ShapeEditError::InvalidRadius)
+            );
+            assert_eq!(
+                document.resize_rect(id, bounds(50.0, 50.0), bad_radii, None),
+                Err(ShapeEditError::InvalidRadius)
+            );
+            assert_eq!(document.loro().len_changes(), changes, "{bad}");
+            assert_eq!(ops(&document), operations, "{bad}");
+            assert_eq!(stored(&document, id), radii(0.0, 0.0, 0.0, 0.0));
+            // The file the document would save still opens.
+            let bytes = crate::pack(&document, "t").expect("pack");
+            assert!(crate::unpack(2, &bytes).is_ok());
+        }
+    }
+
+    #[test]
+    fn a_non_finite_radius_in_a_batch_refuses_every_rectangle() {
+        let document = Document::new(1);
+        let a = document.create_rect(bounds(100.0, 100.0));
+        let b = document.create_rect(bounds(100.0, 100.0));
+        let operations = ops(&document);
+        let result = document.set_corner_radii(&[
+            (a, radii(5.0, 5.0, 5.0, 5.0)),
+            (b, radii(1.0, f64::NAN, 1.0, 1.0)),
+        ]);
+        assert_eq!(result, Err(ShapeEditError::InvalidRadius));
+        assert_eq!(ops(&document), operations);
+        assert_eq!(stored(&document, a), radii(0.0, 0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn resize_rect_floors_a_negative_radius() {
+        let document = Document::new(1);
+        let id = document.create_rect(bounds(100.0, 100.0));
+        document
+            .resize_rect(id, bounds(50.0, 50.0), radii(-2.0, 3.0, -1.0, 0.0), None)
+            .expect("resize");
+        assert_eq!(stored(&document, id), radii(0.0, 3.0, 0.0, 0.0));
     }
 }

@@ -3468,8 +3468,9 @@ fn ac24_ac38_format_version_and_field_names_match_the_shape_tool_route() {
         serde_json::from_str(&manifest_of(&sc.s.pack("0.1.0").unwrap())).unwrap();
     assert_eq!(va["format_version"], vc["format_version"]);
     assert_eq!(
-        vc["format_version"], 6,
-        "the project format version is the one of main (6 since `rectangle-corner-radii`)"
+        vc["format_version"],
+        curvyo_document_core::CURRENT_FORMAT_VERSION,
+        "the project format version is the current one"
     );
     // and the saved project reopens with the radius set
     let reopened = unpack(7, &sc.s.pack("0.1.0").unwrap()).unwrap();

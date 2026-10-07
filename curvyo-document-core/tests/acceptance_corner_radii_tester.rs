@@ -1140,7 +1140,7 @@ fn ac18_opening_and_saving_a_legacy_file_does_not_rewrite_the_nodes() {
 
 #[test]
 fn v6_fixture_reads_exact_values_and_round_trips_exactly() {
-    let bytes = fixture("corner_radii_v6.curvyo");
+    let bytes = fixture("corner_radii_per_corner.curvyo");
     assert_eq!(manifest_version(&bytes), 6);
     let nodes = raw_nodes(&bytes);
     // Read each node's raw expectation independently from loro.
@@ -1212,14 +1212,14 @@ fn v6_fixture_reads_exact_values_and_round_trips_exactly() {
 // ---------------------------------------------------------------------
 
 #[test]
-fn ac19_format_version_is_six_and_every_saved_file_says_so() {
-    assert_eq!(CURRENT_FORMAT_VERSION, 6);
-    // An empty document and one with only a path: still version 6 (not only per-corner files).
+fn ac19_every_saved_file_declares_the_current_format_version() {
+    let current = u64::from(CURRENT_FORMAT_VERSION);
+    // An empty document and one with a rectangle: the same version (not only per-corner files).
     let empty = Document::new(1);
-    assert_eq!(manifest_version(&pack(&empty, "t").unwrap()), 6);
+    assert_eq!(manifest_version(&pack(&empty, "t").unwrap()), current);
     let d = Document::new(1);
     let _ = d.create_rect(rb(0.0, 0.0, 10.0, 10.0));
-    assert_eq!(manifest_version(&pack(&d, "t").unwrap()), 6);
+    assert_eq!(manifest_version(&pack(&d, "t").unwrap()), current);
 }
 
 #[test]

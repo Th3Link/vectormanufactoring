@@ -7,7 +7,8 @@
 //! a pending slider edit, so the DOM holds no editing logic.
 
 use curvyo_document_core::{
-    Corner, Length, NodeId, ObjectSnapshot, PrimitiveSnapshot, Shape, effective_corner_radii,
+    Corner, Length, NodeId, ObjectSnapshot, PrimitiveSnapshot, SHARP_CORNER_EPSILON_MM, Shape,
+    effective_corner_radii,
 };
 
 use crate::object_selection::ObjectSelection;
@@ -167,7 +168,7 @@ pub fn select_bar_state(
     let radius_limited = match radius {
         Some(BarValue::Uniform(_)) => radii
             .iter()
-            .find(|(effective, stored)| stored - effective > PARAM_EQUAL_EPSILON)
+            .find(|(effective, stored)| stored - effective > SHARP_CORNER_EPSILON_MM)
             .map(|(_, stored)| Length::from_mm(*stored)),
         _ => None,
     };
@@ -206,7 +207,7 @@ pub fn select_bar_state(
         remove_rounding_shown: !rectangles.is_empty(),
         remove_rounding_enabled: radii
             .iter()
-            .any(|(_, stored)| *stored > PARAM_EQUAL_EPSILON),
+            .any(|(_, stored)| *stored > SHARP_CORNER_EPSILON_MM),
         points,
         ratio,
         object_to_path: !ids_of_kind(objects, selection, ObjectKind::Primitive).is_empty(),
