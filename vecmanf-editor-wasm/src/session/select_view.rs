@@ -312,7 +312,8 @@ impl Session {
     /// `unified-object-editing` criterion 20), as a plain string for the
     /// host's hover chip: `""` (none), `"resize-edge"`, `"resize-corner"`,
     /// `"resize-corner-uniform"` (polygon and star: no Ctrl line),
-    /// `"rotate-corner"`, `"rotate-side"`, `"skew"`, `"move"`,
+    /// `"rotate-corner"`, `"rotate-side"`, `"skew"` (top and bottom: skew x),
+    /// `"skew-y"` (left and right), `"move"`,
     /// `"param-radius"` (a rectangle's corner radius) or `"param-inner"` (a
     /// star's inner radius). Empty while a drag runs or an entry is open.
     #[must_use]
@@ -335,7 +336,8 @@ impl Session {
             EditHandle::Resize(_) => "resize-corner",
             EditHandle::Rotate(direction) if is_corner(direction) => "rotate-corner",
             EditHandle::Rotate(_) => "rotate-side",
-            EditHandle::Skew(_) => "skew",
+            EditHandle::Skew(side) if side.skews_along_u() => "skew",
+            EditHandle::Skew(_) => "skew-y",
             EditHandle::Move => "move",
             EditHandle::Param(ParamHandle::CornerRadius(_)) => "param-radius",
             EditHandle::Param(ParamHandle::InnerRadius) => "param-inner",

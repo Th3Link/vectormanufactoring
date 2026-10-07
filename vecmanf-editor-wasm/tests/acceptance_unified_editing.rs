@@ -2999,7 +2999,7 @@ fn ac17_primitives_have_no_skew_handles_but_paths_do() {
             );
             let (cur, h) = hint(&mut sc.s, p);
             assert!(
-                !cur.starts_with("skew") && h != "skew",
+                !cur.starts_with("skew") && !h.starts_with("skew"),
                 "kind {build} side ({nx},{ny}): {cur} {h}"
             );
         }

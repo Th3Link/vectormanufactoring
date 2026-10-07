@@ -132,13 +132,14 @@ impl Session {
     /// `unified-object-editing` criteria 31 to 34, and 3, 18, 25-32, 49 of the
     /// refinements: a double-click while the Select tool is active, at the
     /// second press's position with its modifiers. On a handle with a typed
-    /// entry it opens the entry; on a skew handle and on empty canvas
-    /// nothing happens; on a path (outline, or inside its selected box, the
-    /// centre handle included) the Node tool is activated with the path
-    /// selected, "ready for node editing with no nodes selected"
-    /// (`adrs.md`); on a primitive nothing changes and the host is asked to
-    /// show the edit hint (the returned `true`). No double-click switches
-    /// to a primitive's own tool: there is none.
+    /// entry (rotate, resize, skew, parameter) and on the drawn centre handle
+    /// (the typed move, `edit-interaction-polish` criterion 15) it opens the
+    /// entry; on empty canvas nothing happens; on a path (outline, or inside
+    /// its selected box away from the centre handle) the Node tool is
+    /// activated with the path selected, "ready for node editing with no
+    /// nodes selected" (`adrs.md`); on a primitive nothing changes and the
+    /// host is asked to show the edit hint (the returned `true`). No
+    /// double-click switches to a primitive's own tool: there is none.
     pub(super) fn select_double_click(&mut self, point: Point, shift: bool, ctrl: bool) -> bool {
         let objects = self.objects();
         let tolerance = self.segment_tolerance();
@@ -159,9 +160,7 @@ impl Session {
                 false
             }
             SelectDoubleClickOutcome::EditHint => true,
-            SelectDoubleClickOutcome::Miss
-            | SelectDoubleClickOutcome::EntryOpened
-            | SelectDoubleClickOutcome::Ignored => false,
+            SelectDoubleClickOutcome::Miss | SelectDoubleClickOutcome::EntryOpened => false,
         }
     }
 }

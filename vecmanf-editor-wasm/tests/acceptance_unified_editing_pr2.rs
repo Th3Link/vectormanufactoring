@@ -872,7 +872,9 @@ fn ac31_double_click_on_a_path_outline_centre_or_inside_hands_off_to_the_node_to
     for (name, p, pre_select) in [
         ("outline (unselected)", pt(40.0 + 50.0 / k, 30.0), false),
         ("outline (selected)", pt(40.0 + 50.0 / k, 30.0), true),
-        ("centre handle (selected)", c, true),
+        // The centre handle of a selected path opens the typed move since
+        // `edit-interaction-polish` PR 3 (criterion 15); its tests are in
+        // `edit_polish_typed_skew_move.rs`.
         (
             "inside the box (selected)",
             pt(c.x + 40.0 / k, c.y + 10.0 / k),
@@ -968,6 +970,12 @@ fn ac32_double_click_on_a_primitive_changes_nothing_and_asks_for_the_hint() {
             for (spot, p) in [("outline", outline), ("centre", centre), ("inside", inside)] {
                 // An unfilled, unselected shape is not hit inside its box.
                 if !selected && spot != "outline" {
+                    continue;
+                }
+                // The drawn centre handle of a selected primitive opens the typed
+                // move instead (`edit-interaction-polish` criterion 15); covered
+                // in `edit_polish_typed_skew_move.rs`.
+                if selected && spot == "centre" {
                     continue;
                 }
                 let mut s = open_session(&d);
@@ -1084,7 +1092,7 @@ fn ac33_a_double_click_on_a_handle_opens_its_entry_without_a_tool_switch() {
 }
 
 #[test]
-fn ac33_a_double_click_on_a_skew_handle_does_nothing_and_never_switches_tool() {
+fn ac33_a_double_click_on_a_skew_handle_opens_the_skew_entry_and_never_switches_tool() {
     let k = k_of(&Session::new(1));
     let mut s = open_session(&triangle_path_doc(k));
     click(&mut s, pt(40.0 + 100.0 / k, 30.0), false);
@@ -1099,7 +1107,11 @@ fn ac33_a_double_click_on_a_skew_handle_does_nothing_and_never_switches_tool() {
     let hint = dbl(&mut s, skew, skew);
     assert!(!hint, "no hint on a skew handle");
     assert_eq!(s.tool(), Tool::Select, "no tool switch");
-    assert!(s.transform_entry().is_none(), "no entry for a skew handle");
+    assert_eq!(
+        s.transform_entry().map(|entry| entry.kind),
+        Some("skew"),
+        "the skew handle opens the skew entry (`edit-interaction-polish` criterion 9)"
+    );
     assert_eq!(bytes(&s), before);
 }
 

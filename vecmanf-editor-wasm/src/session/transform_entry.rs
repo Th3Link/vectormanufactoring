@@ -10,7 +10,8 @@
 
 use vecmanf_document_core::Point;
 use vecmanf_ui_core::{
-    EditHandle, EntryKind, EntryOutcome, ParamEntry, SelectTool, TransformEntry,
+    EditHandle, EntryField, EntryKind, EntryOutcome, ParamEntry, SelectTool, SkewEntry,
+    TransformEntry, entry_anchor,
 };
 
 use super::{Session, Tool};
@@ -50,6 +51,17 @@ pub struct EntryView {
     pub glyph_reach_px: f64,
 }
 
+impl EntryFieldView {
+    fn of(field: &EntryField) -> Self {
+        Self {
+            label: field.label,
+            accessible_name: field.accessible_name,
+            prefill: field.prefill.clone(),
+            editable: field.editable,
+        }
+    }
+}
+
 impl Session {
     /// The open entry, if the Select tool is active and its object is still
     /// the sole selection.
@@ -59,6 +71,32 @@ impl Session {
         }
         let entry = self.select.entry()?;
         (self.selection.ids() == [entry.object().id()]).then_some(entry)
+    }
+
+    /// The open skew entry, with the same checks.
+    fn open_skew_entry(&self) -> Option<&SkewEntry> {
+        if self.tool != Tool::Select {
+            return None;
+        }
+        let entry = self.select.skew_entry()?;
+        (self.selection.ids() == [entry.object().id()]).then_some(entry)
+    }
+
+    /// The chip of an open skew entry: one field at the skew handle's
+    /// position, computed from the box so it is there when the handle is not
+    /// drawn (`edit-interaction-polish` criteria 9, 58, 59).
+    fn skew_entry_view(&self, entry: &SkewEntry) -> EntryView {
+        let box_ = entry.start_box();
+        let handle = entry_anchor(box_, entry.handle(), &self.transform_handle_tolerances())
+            .unwrap_or_else(|| box_.to_document(box_.local_center()));
+        EntryView {
+            kind: "skew",
+            fields: entry.fields().iter().map(EntryFieldView::of).collect(),
+            linked: false,
+            handle,
+            center: box_.to_document(box_.local_center()),
+            glyph_reach_px: 6.0,
+        }
     }
 
     /// The open corner-radius or inner-ratio entry, with the same checks.
@@ -89,16 +127,7 @@ impl Session {
                 EntryKind::CornerRadius => "corner-radius",
                 _ => "inner-ratio",
             },
-            fields: entry
-                .fields()
-                .iter()
-                .map(|field| EntryFieldView {
-                    label: field.label,
-                    accessible_name: field.accessible_name,
-                    prefill: field.prefill.clone(),
-                    editable: field.editable,
-                })
-                .collect(),
+            fields: entry.fields().iter().map(EntryFieldView::of).collect(),
             linked: false,
             handle,
             center: box_.to_document(box_.local_center()),
@@ -113,6 +142,9 @@ impl Session {
         if let Some(entry) = self.open_param_entry() {
             return self.param_entry_view(entry);
         }
+        if let Some(entry) = self.open_skew_entry() {
+            return Some(self.skew_entry_view(entry));
+        }
         let entry = self.open_entry()?;
         let objects = self.objects();
         let handles = SelectTool::transform_handles(
@@ -121,10 +153,13 @@ impl Session {
             self.transform_handle_tolerances(),
             entry.side_rotate_revealed(),
         );
-        let handle = handles
-            .iter()
-            .find(|(handle, _)| *handle == entry.handle())?
-            .1;
+        // The anchor comes from the box, not from the drawn set, so the chip
+        // of a key opens at a handle that is hidden too.
+        let handle = entry_anchor(
+            entry.start_box(),
+            entry.handle(),
+            &self.transform_handle_tolerances(),
+        )?;
         // An edge resize handle with a skew arrow on its side: the arrow
         // sits 16 px out and is 12 px deep, so the glyphs reach 22 px.
         let skew_beyond = matches!(
@@ -142,17 +177,9 @@ impl Session {
                 EntryKind::OuterRadius => "radius",
                 EntryKind::CornerRadius => "corner-radius",
                 EntryKind::InnerRatio => "inner-ratio",
+                EntryKind::Skew => "skew",
             },
-            fields: entry
-                .fields()
-                .iter()
-                .map(|field| EntryFieldView {
-                    label: field.label,
-                    accessible_name: field.accessible_name,
-                    prefill: field.prefill.clone(),
-                    editable: field.editable,
-                })
-                .collect(),
+            fields: entry.fields().iter().map(EntryFieldView::of).collect(),
             linked: entry.linked(),
             handle,
             center: box_.to_document(box_.local_center()),
@@ -179,7 +206,10 @@ impl Session {
         second: &str,
         last_edited: usize,
     ) -> EntryOutcome {
-        if self.open_entry().is_none() && self.open_param_entry().is_none() {
+        if self.open_entry().is_none()
+            && self.open_param_entry().is_none()
+            && self.open_skew_entry().is_none()
+        {
             self.select.cancel_entry();
             return EntryOutcome::Unchanged;
         }

@@ -239,7 +239,7 @@ fn cursors_and_hints_follow_the_handle_under_the_pointer() {
     );
     assert_eq!(
         probe(&mut session, pt(10.0 - px(16.0), 50.0)),
-        ("skew:90.0".into(), "skew".into())
+        ("skew:90.0".into(), "skew-y".into())
     );
     session.modifiers_changed(true, false);
     session.pointer_hover(top_side_rotate(), true, false);
@@ -328,6 +328,10 @@ fn a_double_click_inside_the_box_only_hints_and_on_a_handle_opens_the_entry() {
     let before = session.pack("0.1.0").expect("pack");
     dbl(&mut session, pt(60.0, 50.0), false, false);
     assert_eq!(session.tool(), Tool::Select, "centre handle: no handoff");
+    assert!(
+        session.move_entry().is_some(),
+        "the drawn centre handle opens the typed move (`edit-interaction-polish` criterion 15)"
+    );
 
     let mut session = selected(&rect_document());
     dbl(&mut session, pt(40.0, 60.0), false, false);
@@ -351,9 +355,10 @@ fn a_double_click_inside_the_box_only_hints_and_on_a_handle_opens_the_entry() {
     let mut session = selected(&path_document());
     dbl(&mut session, top_skew(), false, false);
     assert_eq!(session.tool(), Tool::Select, "skew handle: no handoff");
-    assert!(
-        session.transform_entry().is_none(),
-        "skew handle: nothing opens"
+    assert_eq!(
+        session.transform_entry().map(|entry| entry.kind),
+        Some("skew"),
+        "skew handle: the skew entry opens (`edit-interaction-polish` criterion 9)"
     );
 }
 

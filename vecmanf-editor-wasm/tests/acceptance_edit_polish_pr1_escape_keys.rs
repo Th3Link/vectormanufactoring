@@ -1419,9 +1419,6 @@ fn ac55_the_modifier_keys_themselves_and_unknown_keys_are_ignored_without_effect
         "\u{1f600}",
         "Insert",
         "Home",
-        "m",
-        "k",
-        "K",
         "1",
         "0",
         "-",
@@ -1430,7 +1427,7 @@ fn ac55_the_modifier_keys_themselves_and_unknown_keys_are_ignored_without_effect
         let o = press(&mut s, k);
         assert!(
             matches!(o, KeyOutcome::Ignored),
-            "{k:?} is not a key of this table (M and K come with PR 3): {o:?}"
+            "{k:?} is not a key of this table : {o:?}"
         );
         assert_eq!(bundle(&s), before, "{k:?}");
     }
