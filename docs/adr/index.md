@@ -32,6 +32,7 @@ A decision too small for a full ADR gets a short dated note in that feature's
 | [0010](0010-document-keyring-admins-and-revocation.md) | Document keyring — participants, admins and key revocation | workspace | Accepted |
 | [0011](0011-workspace-and-crate-layout.md) | Workspace and crate layout | workspace | Accepted |
 | [0012](0012-pages-in-the-document-model.md) | Pages in the document model | workspace | Rejected (2026-10-05, dropped from MVP) |
+| [0013](0013-rename-to-curvyo.md) | Rename the product to Curvyo (amends 0011 crate names, 0004 §1 file extension; [inventory](0013-rename-to-curvyo-inventory.md)) | workspace | Proposed — needs-customer |
 
 ## Customer sign-off, 2026-10-02
 
