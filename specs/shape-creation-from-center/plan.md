@@ -73,18 +73,18 @@ exists now, checked in the code:
 
 ## Tasks
 
-- [ ] 1. `create_drag_box(a, b, modifiers) -> Option<CreateDragBox>` in
+- [x] 1. `create_drag_box(a, b, modifiers) -> Option<CreateDragBox>` in
   `shape_tool_common.rs` with unit tests on the spec's golden numbers (fulfils
   AC 1, 2, 3, 4, 5, 6, 7, 12). Tests first.
-- [ ] 2. Rectangle and ellipse tools take `Modifiers`; one private
+- [x] 2. Rectangle and ellipse tools take `Modifiers`; one private
   `created_shape(down_at, point, modifiers)` is the only computation for
   `live_shape` and `pointer_up`; migrate callers and existing tests (fulfils
   AC 1 to 7, 9, 10, 11 by construction, 12, 13).
-- [ ] 3. Tool-level tests in `ui-core/tests/shape_creation_from_center.rs`:
+- [x] 3. Tool-level tests in `ui-core/tests/shape_creation_from_center.rs`:
   every criterion 1 to 7, 9, 10, 12, 13 through the public tool API, plus a
   proptest (Shift centre equals A; last preview equals the commit over random
   move/modifier sequences) (AC 1 to 7, 9, 10, 12).
-- [ ] 4. `Session` passes `Modifiers` to both tools; Session tests: readout
+- [x] 4. `Session` passes `Modifiers` to both tools; Session tests: readout
   strings, modifier change with the pointer still, release modifiers win,
   Escape then modifier changes, pan mid-drag, Shift press on an outline,
   polygon/star under Shift and Ctrl, saved `format_version` (AC 8, 11, 13, 14,
