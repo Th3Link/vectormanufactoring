@@ -8,11 +8,15 @@
 //! [`skew_by_angle`]), so each rule exists once. The primitive-specific
 //! resize arithmetic is in [`crate::transform_primitive`].
 
-use curvyo_document_core::{Angle, Document, Length, ObjectSnapshot, Point, Vec2};
+use curvyo_document_core::{
+    Angle, Corner, Document, Length, ObjectSnapshot, Point, PrimitiveSnapshot, Shape, Vec2,
+    effective_corner_radii,
+};
 
 use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;
-use crate::param_edit::{apply_param, value_from_pointer};
+use crate::param_edit::{PARAM_EQUAL_EPSILON, apply_param, radius_is_limited, value_from_pointer};
+use crate::param_handles::ParamHandle;
 use crate::skew_math::{skew_angle, skew_factor, skew_frame};
 use crate::transform_commit::{commit_gesture, sane_or};
 use crate::transform_handle_layout::{EditHandle, Side};
@@ -59,6 +63,33 @@ pub enum CornerRadiusScaling {
     /// The radius scales with the resize, √(sx·sy) like the stroke width
     /// (`0005` criterion 9).
     Proportional,
+}
+
+/// Whether a corner radius handle changes all four radii or only its own
+/// corner: the Select bar's "Link corners" switch
+/// (`specs/rectangle-corner-radii/` criteria 2 and 3). Session state of the
+/// class of [`ScaleModes`], not part of it: it acts on the corner handles, not
+/// on a resize. An enum, not a `bool`, for the same reason as
+/// [`StrokeScaling`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CornerLinking {
+    /// The default: a corner handle sets all four radii; Shift changes one
+    /// corner for that drag.
+    #[default]
+    Linked,
+    /// A corner handle changes its own corner; Shift sets all four for that
+    /// drag.
+    Unlinked,
+}
+
+impl CornerLinking {
+    /// Whether a drag or entry begun with this switch state and `shift` held
+    /// changes one corner only: the switch and Shift differ (an exclusive or,
+    /// criterion 3). Read once at the press and frozen.
+    #[must_use]
+    pub const fn is_unlinked_with(self, shift: bool) -> bool {
+        matches!(self, Self::Unlinked) != shift
+    }
 }
 
 /// The two Select-tool switches that decide what else a resize scales. Tool
@@ -147,9 +178,64 @@ pub(crate) struct TransformDrag {
     /// during the drag cannot change the mapping between frames and release
     /// equals preview. `1` for every other handle.
     pub(crate) param_gain: f64,
+    /// Whether a corner radius drag changes one corner only, decided at the
+    /// press from the "Link corners" switch and Shift
+    /// ([`CornerLinking::is_unlinked_with`]) and frozen for the whole drag.
+    /// `false` for every other handle.
+    pub(crate) unlinked: bool,
+}
+
+/// What the live readout and the follower knobs of a corner radius drag need
+/// beyond the resolved object (`specs/rectangle-corner-radii/` criteria 4, 7,
+/// 23).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ParamDragInfo {
+    /// The drag changes all four corners (linked, decided at the press): the
+    /// other three knobs follow.
+    pub all_corners: bool,
+    /// A limit stops the drag at this pointer position (the readout says "max").
+    pub limited: bool,
+    /// The press found unequal effective radii and the drag overwrites them (a
+    /// linked drag): the readout adds "all corners".
+    pub overwrites_unequal: bool,
 }
 
 impl TransformDrag {
+    /// The readout facts of a corner radius drag with the pointer at `current`;
+    /// `None` for any other handle or a value the primitive has no use for.
+    pub(crate) fn param_info(&self, current: Point) -> Option<ParamDragInfo> {
+        let EditHandle::Param(handle @ ParamHandle::CornerRadius(_)) = self.handle else {
+            return None;
+        };
+        let local_delta = local_delta_of(&self.start_box, self.origin.down_at, current);
+        let value = value_from_pointer(
+            &self.start,
+            handle,
+            local_delta,
+            self.param_gain,
+            self.unlinked,
+        )?;
+        let ObjectSnapshot::Primitive(PrimitiveSnapshot {
+            shape: Shape::Rect {
+                bounds,
+                corner_radii,
+            },
+            ..
+        }) = &self.start
+        else {
+            return None;
+        };
+        let effective = effective_corner_radii(*bounds, *corner_radii);
+        let unequal = Corner::ALL.iter().any(|&corner| {
+            (effective.get(corner).as_mm() - effective.tl.as_mm()).abs() > PARAM_EQUAL_EPSILON
+        });
+        Some(ParamDragInfo {
+            all_corners: !self.unlinked,
+            limited: radius_is_limited(&self.start, value),
+            overwrites_unequal: !self.unlinked && unequal,
+        })
+    }
+
     /// The object as it would commit with the pointer at `current` and the
     /// modifiers as given: `start` unchanged if the result would not be
     /// finite and sane, or for a handle that is not a transform handle.
@@ -194,10 +280,11 @@ impl TransformDrag {
             ),
             EditHandle::Param(handle) => {
                 let local_delta = local_delta_of(start_box, down_at, current);
-                value_from_pointer(start, handle, local_delta, self.param_gain).map_or_else(
-                    || start.clone(),
-                    |value| sane_or(start, apply_param(start, value)),
-                )
+                value_from_pointer(start, handle, local_delta, self.param_gain, self.unlinked)
+                    .map_or_else(
+                        || start.clone(),
+                        |value| sane_or(start, apply_param(start, value)),
+                    )
             }
             EditHandle::Move => start.clone(),
         }

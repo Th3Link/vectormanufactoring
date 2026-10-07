@@ -4,14 +4,16 @@
 //! and the UX notes, section 1; `adrs.md`, second-pass note).
 //!
 //! A parameter handle changes a primitive's own parameter: the four corner
-//! radius handles of a rectangle (they all write the one radius) and a star's
+//! radius handles of a rectangle (each sets its own radius, or all four when
+//! the corners are linked) and a star's
 //! inner-radius handle. They are laid out in the primitive's local frame and
 //! mapped to document space through its [`OrientedBox`], like every other
 //! handle; `specs/ellipse-arcs-and-shaping/` adds its own variants here.
 
 pub use curvyo_document_core::Corner;
 use curvyo_document_core::{
-    InnerRatio, ObjectSnapshot, Point, PointCount, Shape, StarFrame, Vec2, effective_corner_radii,
+    CornerRadii, InnerRatio, ObjectSnapshot, Point, PointCount, Shape, StarFrame, Vec2,
+    effective_corner_radii,
 };
 
 use crate::oriented_box::OrientedBox;
@@ -57,7 +59,7 @@ pub fn corner_local_position(corner: Corner, box_: &OrientedBox) -> Point {
 }
 
 /// One parameter handle: it changes a primitive's own parameter. The four
-/// corner radius handles are four hit targets that all write one radius.
+/// corner radius handles are four hit targets, one per corner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParamHandle {
     /// A rectangle's corner radius handle at `Corner`.
@@ -118,6 +120,41 @@ pub fn radius_gain(shorter_side_mm: f64, tolerances: &TransformHandleTolerances)
     }
 }
 
+/// Where a corner's knob is drawn, as a fraction `ρ` of the travel (`ρ = 1` at
+/// half the shorter side, up to 2 for a corner that alone takes the whole
+/// shorter side): its own effective radius over `s/2`, except that a knob above
+/// half the shorter side whose diagonal partner is also large is drawn nearer
+/// its corner, `ρ' = min(ρ, max(1, Σ − ρ_partner))` with
+/// `Σ = 2 + √2·(S − s)/L(s)` (`s` and `S` the shorter and the longer side of
+/// the box, `L` the travel, [`radius_travel`]), so that two diagonal knobs
+/// never overlap (`specs/rectangle-corner-radii/` criterion 1). Only the drawn
+/// position changes, never a radius: a knob at or below `ρ = 1` is always at its
+/// own radius, and one corner alone can still reach 2. On a square `Σ = 2`.
+#[must_use]
+pub fn knob_rho(
+    effective: CornerRadii,
+    shorter_side_mm: f64,
+    longer_side_mm: f64,
+    corner: Corner,
+    tolerances: &TransformHandleTolerances,
+) -> f64 {
+    let half = shorter_side_mm / 2.0;
+    let rho = |corner: Corner| {
+        if half > 0.0 {
+            effective.get(corner).as_mm() / half
+        } else {
+            0.0
+        }
+    };
+    let travel = radius_travel(shorter_side_mm, tolerances);
+    let sigma = if travel > 0.0 {
+        2.0 + std::f64::consts::SQRT_2 * (longer_side_mm - shorter_side_mm) / travel
+    } else {
+        2.0
+    };
+    rho(corner).min((sigma - rho(corner.opposite())).max(1.0))
+}
+
 /// The star's first inner vertex in its box-local frame, where the first outer
 /// vertex is at angle 0 (the box is turned by `StarFrame.angle`, so handles
 /// never add it): at `π/N` from the first outer vertex, `ratio` of the way to
@@ -159,13 +196,12 @@ pub fn param_handles(
             corner_radii,
         } => {
             let effective = effective_corner_radii(bounds, corner_radii);
-            let half = shorter / 2.0;
+            let longer = box_.width().max(box_.height());
             let travel = radius_travel(shorter, tolerances);
             Corner::ALL
                 .iter()
                 .map(|&corner| {
-                    let radius = effective.get(corner).as_mm();
-                    let rho = if half > 0.0 { radius / half } else { 0.0 };
+                    let rho = knob_rho(effective, shorter, longer, corner, tolerances);
                     let distance = tolerances.param_inset_mm + rho * travel;
                     let at = corner_local_position(corner, box_)
                         .translated(corner.inward_diagonal().scaled(distance));
@@ -604,6 +640,121 @@ mod tests {
             let bound = (shorter_px / 2.0) * (std::f64::consts::SQRT_2 - ratio)
                 - (KNOB_RADIUS_PX + RESIZE_GLYPH_RADIUS_PX);
             prop_assert!(gap >= bound.min(MIN_GLYPH_GAP_PX) - 1e-9);
+        }
+    }
+
+    fn rect_with_radii(
+        width: f64,
+        height: f64,
+        radii: CornerRadii,
+        rotation: f64,
+    ) -> ObjectSnapshot {
+        ObjectSnapshot::Primitive(PrimitiveSnapshot {
+            id: id(),
+            shape: Shape::Rect {
+                bounds: RectBounds {
+                    origin: Point::new(10.0, 20.0),
+                    width: Length::from_mm(width),
+                    height: Length::from_mm(height),
+                },
+                corner_radii: radii,
+            },
+            stroke_width: Length::from_mm(0.25),
+            stroke: curvyo_document_core::Color::BLACK,
+            fill: None,
+            rotation: Angle::from_radians(rotation),
+        })
+    }
+
+    fn radii_of(tl: f64, tr: f64, br: f64, bl: f64) -> CornerRadii {
+        CornerRadii {
+            tl: Length::from_mm(tl),
+            tr: Length::from_mm(tr),
+            br: Length::from_mm(br),
+            bl: Length::from_mm(bl),
+        }
+    }
+
+    /// Criterion 1, the fixed case: TL = BR = 0.6 s on a square at `s` = 72 px.
+    /// Both diagonal knobs would overlap, so both rest at the `ρ = 1` position.
+    #[test]
+    fn two_large_diagonal_corners_rest_at_rho_one() {
+        let t = tolerances(1.0);
+        let effective = radii_of(0.6 * 72.0, 0.0, 0.6 * 72.0, 0.0);
+        let rho = |corner| knob_rho(effective, 72.0, 72.0, corner, &t);
+        assert!((rho(Corner::Tl) - 1.0).abs() < 1e-12);
+        assert!((rho(Corner::Br) - 1.0).abs() < 1e-12);
+        assert!(rho(Corner::Tr).abs() < 1e-12);
+    }
+
+    /// Criterion 1: a knob at or below `ρ = 1` is always at its own radius; a
+    /// lone corner may reach 2; on a wide box the longer side buys room (Σ), so
+    /// two diagonal corners of 1.2 do not lag.
+    #[test]
+    fn the_cap_leaves_small_knobs_lone_knobs_and_wide_boxes_alone() {
+        let t = tolerances(1.0);
+        let half = 36.0;
+        let small_and_large = radii_of(0.9 * half, 0.0, 1.9 * half, 0.0);
+        assert!((knob_rho(small_and_large, 72.0, 72.0, Corner::Tl, &t) - 0.9).abs() < 1e-12);
+        let lone = radii_of(0.0, 0.0, 2.0 * half, 0.0);
+        assert!((knob_rho(lone, 72.0, 72.0, Corner::Br, &t) - 2.0).abs() < 1e-12);
+        // One corner at 1.6 pulls its diagonal partner in from 0.4 on.
+        let pair = radii_of(1.6 * half, 0.0, 0.5 * half, 0.0);
+        assert!((knob_rho(pair, 72.0, 72.0, Corner::Br, &t) - 0.5).abs() < 1e-12);
+        let pair = radii_of(1.6 * half, 0.0, 0.6 * half, 0.0);
+        assert!((knob_rho(pair, 72.0, 72.0, Corner::Br, &t) - 0.6).abs() < 1e-12);
+        let pair = radii_of(1.6 * half, 0.0, 1.0 * half, 0.0);
+        assert!((knob_rho(pair, 72.0, 72.0, Corner::Br, &t) - 1.0).abs() < 1e-12);
+        let wide = radii_of(1.2 * half, 0.0, 1.2 * half, 0.0);
+        assert!((knob_rho(wide, 72.0, 180.0, Corner::Tl, &t) - 1.2).abs() < 1e-12);
+    }
+
+    proptest! {
+        /// Criterion 1 and 8: for any four radii the CSS rule allows (stored radii
+        /// pushed through the clamp, so TL = BR large and one corner at the
+        /// shorter side are in the sample), any aspect, rotation and zoom from
+        /// 72 px up, no two drawn glyphs come within 4 px, and the drawn knobs
+        /// stay on their own diagonal.
+        #[test]
+        fn rectangle_glyphs_keep_four_pixels_apart_for_any_four_radii(
+            shorter_px in 72.0f64..600.0,
+            aspect in 1.0f64..8.0,
+            stored in proptest::array::uniform4(0.0f64..=2.0),
+            rotation in 0.0f64..std::f64::consts::TAU,
+            scale in 0.2f64..8.0,
+            side_rotate in proptest::bool::ANY,
+        ) {
+            let shorter = shorter_px / scale;
+            let radii = radii_of(
+                stored[0] * shorter / 2.0 * 1.4,
+                stored[1] * shorter / 2.0 * 1.4,
+                stored[2] * shorter / 2.0 * 1.4,
+                stored[3] * shorter / 2.0 * 1.4,
+            );
+            let object = rect_with_radii(shorter * aspect, shorter, radii, rotation);
+            let t = tolerances(scale);
+            let glyphs = drawn_glyphs(&object, &t, side_rotate);
+            let gap = smallest_gap_px(&glyphs, scale);
+            prop_assert!(gap >= MIN_GLYPH_GAP_PX - 1e-6, "gap {gap} at s={shorter_px} radii={radii:?}");
+        }
+    }
+
+    /// The worst-case pairs of that property, pinned: the diagonal pair of the
+    /// criterion and a lone corner at `ρ = 2`, at the 72 px threshold.
+    #[test]
+    fn the_pinned_worst_cases_keep_four_pixels() {
+        let t = tolerances(1.0);
+        for radii in [
+            radii_of(0.6 * 72.0, 0.0, 0.6 * 72.0, 0.0),
+            radii_of(72.0, 0.0, 0.0, 0.0),
+            radii_of(0.0, 72.0, 0.0, 0.0),
+            radii_of(0.0, 36.0, 36.0, 0.0),
+        ] {
+            for side_rotate in [false, true] {
+                let object = rect_with_radii(72.0, 72.0, radii, 0.0);
+                let gap = smallest_gap_px(&drawn_glyphs(&object, &t, side_rotate), 1.0);
+                assert!(gap >= MIN_GLYPH_GAP_PX - 1e-6, "{radii:?}: gap {gap}");
+            }
         }
     }
 

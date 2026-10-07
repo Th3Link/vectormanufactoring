@@ -22,7 +22,7 @@ use crate::param_handles::{ParamHandle, radius_gain};
 use crate::select_bar::BarPreview;
 use crate::transform_commit::same_within_tolerance;
 use crate::transform_drag::{
-    CornerRadiusScaling, DragOrigin, ScaleModes, StrokeScaling, TransformDrag,
+    CornerLinking, CornerRadiusScaling, DragOrigin, ScaleModes, StrokeScaling, TransformDrag,
 };
 use crate::transform_handle_layout::EditHandle;
 pub use crate::transform_handle_layout::TransformHandleTolerances;
@@ -104,6 +104,8 @@ pub enum SelectDoubleClickOutcome {
 pub struct SelectTool {
     drag: SelectDrag,
     modes: ScaleModes,
+    /// The "Link corners" switch (`specs/rectangle-corner-radii/` criterion 2).
+    corner_linking: CornerLinking,
     entry: Option<OpenEntry>,
     /// The Select bar's slider edit in flight (a Points or Ratio drag):
     /// previewed in blue, committed once.
@@ -139,6 +141,24 @@ impl SelectTool {
     #[must_use]
     pub const fn corner_radius_scaling(&self) -> CornerRadiusScaling {
         self.modes.radius
+    }
+
+    /// The "Link corners" switch (`specs/rectangle-corner-radii/` criterion 2):
+    /// whether a corner radius handle sets all four radii
+    /// ([`CornerLinking::Linked`], the default) or only its own corner. Tool
+    /// state, never written to the document; every new session starts linked.
+    #[must_use]
+    pub const fn corner_linking(&self) -> CornerLinking {
+        self.corner_linking
+    }
+
+    /// Sets the switch for the *next* corner radius drag or entry; a drag in
+    /// flight and an open entry keep the state they started with. Changes no
+    /// radius and writes nothing; closes an open numeric entry (the entry's
+    /// scope was fixed when it opened).
+    pub fn set_corner_linking(&mut self, corner_linking: CornerLinking) {
+        self.entry = None;
+        self.corner_linking = corner_linking;
     }
 
     /// Sets the stroke-scaling mode for the *next* resize drag: a drag
@@ -262,6 +282,8 @@ impl SelectTool {
             handle,
             modes: self.modes,
             param_gain,
+            unlinked: matches!(handle, EditHandle::Param(ParamHandle::CornerRadius(_)))
+                && self.corner_linking.is_unlinked_with(origin.shift_at_press),
         }
     }
 

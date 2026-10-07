@@ -12,13 +12,33 @@ use curvyo_document_core::{
 use crate::oriented_box::OrientedBox;
 use crate::param_edit::{
     MAX_INNER_RATIO, MIN_INNER_RATIO, PARAM_EQUAL_EPSILON, ParamValue, apply_param, commit_param,
+    radius_is_limited,
 };
-use crate::param_handles::ParamHandle;
+use crate::param_handles::{Corner, ParamHandle};
 use crate::transform_commit::MAX_COORDINATE_MM;
 use crate::transform_entry::{
     EntryField, EntryKind, EntryOutcome, InvalidReason, format_mm, parse_entry_number,
 };
 use crate::transform_handle_layout::EditHandle;
+
+/// The scope row of a corner radius entry (`specs/rectangle-corner-radii/`
+/// criterion 6): which corners a typed value writes.
+const SCOPE_ALL_FOUR: &str = "All four corners";
+const SCOPE_ONE_CORNER: &str = "This corner only";
+
+/// The accessible name of the radius field: "Corner radius, all corners" when
+/// the scope is all four, else the corner's own name in the rectangle's frame.
+const fn radius_field_name(corner: Corner, unlinked: bool) -> &'static str {
+    if !unlinked {
+        return "Corner radius, all corners";
+    }
+    match corner {
+        Corner::Tl => "Top-left corner radius",
+        Corner::Tr => "Top-right corner radius",
+        Corner::Br => "Bottom-right corner radius",
+        Corner::Bl => "Bottom-left corner radius",
+    }
+}
 
 /// An open entry on a parameter handle: the primitive and box as they were
 /// when it opened (an entry whose object changed or went away since writes
@@ -29,17 +49,25 @@ pub struct ParamEntry {
     start: ObjectSnapshot,
     start_box: OrientedBox,
     fields: [EntryField; 1],
+    /// Whether a typed corner radius is written to one corner only, fixed when
+    /// the field opened (criterion 6). `false` for an inner ratio.
+    unlinked: bool,
 }
 
 impl ParamEntry {
     /// An entry for `handle` of `object`, pre-filled with the current
-    /// effective radius (one decimal, millimetres) or ratio (two decimals);
-    /// `None` when the primitive has no such handle.
+    /// effective radius of that corner (one decimal, millimetres) or ratio (two
+    /// decimals); `None` when the primitive has no such handle. `unlinked` is
+    /// the scope of a corner radius, decided by the caller from the "Link
+    /// corners" switch and Shift at the second press
+    /// ([`crate::CornerLinking::is_unlinked_with`]) and kept for the life of
+    /// the entry.
     #[must_use]
     pub fn for_handle(
         object: &ObjectSnapshot,
         box_: &OrientedBox,
         handle: ParamHandle,
+        unlinked: bool,
     ) -> Option<Self> {
         let ObjectSnapshot::Primitive(PrimitiveSnapshot { shape, .. }) = object else {
             return None;
@@ -53,7 +81,7 @@ impl ParamEntry {
                 },
             ) => EntryField::for_param(
                 "r",
-                "Corner radius",
+                radius_field_name(corner, unlinked),
                 format_mm(
                     effective_corner_radii(bounds, corner_radii)
                         .get(corner)
@@ -70,6 +98,44 @@ impl ParamEntry {
             start: object.clone(),
             start_box: *box_,
             fields: [field],
+            unlinked: matches!(handle, ParamHandle::CornerRadius(_)) && unlinked,
+        })
+    }
+
+    /// The scope row under a corner radius field: "All four corners" or "This
+    /// corner only"; `None` for an inner ratio.
+    #[must_use]
+    pub const fn scope(&self) -> Option<&'static str> {
+        match self.handle {
+            ParamHandle::CornerRadius(_) if self.unlinked => Some(SCOPE_ONE_CORNER),
+            ParamHandle::CornerRadius(_) => Some(SCOPE_ALL_FOUR),
+            ParamHandle::InnerRadius => None,
+        }
+    }
+
+    /// Whether `text` asks for a radius past the limit, so that the committed
+    /// value is the limited one and the "max" readout shows (criterion 6).
+    /// `false` for text that is not a valid radius.
+    #[must_use]
+    pub fn is_limited(&self, text: &str) -> bool {
+        self.typed_radius(text)
+            .is_some_and(|value| radius_is_limited(&self.start, value))
+    }
+
+    /// The radius `text` asks for as the value of this entry's scope.
+    fn typed_radius(&self, text: &str) -> Option<ParamValue> {
+        let ParamHandle::CornerRadius(corner) = self.handle else {
+            return None;
+        };
+        let value = parse_entry_number(text, false)?;
+        if value < 0.0 {
+            return None;
+        }
+        let radius = Length::from_mm(value.min(MAX_COORDINATE_MM));
+        Some(if self.unlinked {
+            ParamValue::CornerRadius(corner, radius)
+        } else {
+            ParamValue::Radius(radius)
         })
     }
 
@@ -125,7 +191,8 @@ impl ParamEntry {
                 if value < 0.0 {
                     return Err(InvalidReason::Negative);
                 }
-                ParamValue::Radius(Length::from_mm(value.min(MAX_COORDINATE_MM)))
+                // invariant: a non-negative number is a radius.
+                self.typed_radius(text).ok_or(InvalidReason::NotANumber)?
             }
             ParamHandle::InnerRadius => {
                 if !(MIN_INNER_RATIO - PARAM_EQUAL_EPSILON..=MAX_INNER_RATIO + PARAM_EQUAL_EPSILON)
@@ -185,6 +252,7 @@ mod tests {
             &object,
             &oriented_bounds(&object),
             ParamHandle::CornerRadius(Corner::Tr),
+            false,
         )
         .unwrap();
         (document, entry)
@@ -202,9 +270,13 @@ mod tests {
             InnerRatio::new(ratio).unwrap(),
         );
         let object = document.object(id).unwrap();
-        let entry =
-            ParamEntry::for_handle(&object, &oriented_bounds(&object), ParamHandle::InnerRadius)
-                .unwrap();
+        let entry = ParamEntry::for_handle(
+            &object,
+            &oriented_bounds(&object),
+            ParamHandle::InnerRadius,
+            false,
+        )
+        .unwrap();
         (document, entry)
     }
 
@@ -230,7 +302,7 @@ mod tests {
         let field = &entry.fields()[0];
         assert_eq!(
             (field.label, field.accessible_name, field.prefill.as_str()),
-            ("r", "Corner radius", "3.5")
+            ("r", "Corner radius, all corners", "3.5")
         );
         assert_eq!(entry.kind(), EntryKind::CornerRadius);
         let (_, star) = star_entry(0.456);
@@ -335,8 +407,13 @@ mod tests {
         );
         let object = document.object(id).unwrap();
         assert!(
-            ParamEntry::for_handle(&object, &oriented_bounds(&object), ParamHandle::InnerRadius)
-                .is_none()
+            ParamEntry::for_handle(
+                &object,
+                &oriented_bounds(&object),
+                ParamHandle::InnerRadius,
+                false
+            )
+            .is_none()
         );
     }
 
@@ -351,5 +428,94 @@ mod tests {
             ParamValue::Radius(Length::from_mm(12.25)),
         );
         assert_eq!(typed, direct);
+    }
+
+    /// Criterion 6: the scope is fixed when the field opens and names the
+    /// field: all four corners, or one corner by its own name.
+    #[test]
+    fn the_scope_row_and_the_accessible_name_follow_the_link_state_at_open() {
+        let document = Document::new(1);
+        let id = document.create_rect(RectBounds {
+            origin: Point::new(0.0, 0.0),
+            width: Length::from_mm(100.0),
+            height: Length::from_mm(60.0),
+        });
+        let object = document.object(id).unwrap();
+        let box_ = oriented_bounds(&object);
+        let open = |corner, unlinked| {
+            ParamEntry::for_handle(&object, &box_, ParamHandle::CornerRadius(corner), unlinked)
+                .unwrap()
+        };
+        let linked = open(Corner::Bl, false);
+        assert_eq!(linked.scope(), Some("All four corners"));
+        assert_eq!(
+            linked.fields()[0].accessible_name,
+            "Corner radius, all corners"
+        );
+        for (corner, name) in [
+            (Corner::Tl, "Top-left corner radius"),
+            (Corner::Tr, "Top-right corner radius"),
+            (Corner::Br, "Bottom-right corner radius"),
+            (Corner::Bl, "Bottom-left corner radius"),
+        ] {
+            let entry = open(corner, true);
+            assert_eq!(entry.scope(), Some("This corner only"));
+            assert_eq!(entry.fields()[0].accessible_name, name);
+        }
+        let (_, star) = star_entry(0.4);
+        assert_eq!(star.scope(), None);
+    }
+
+    /// Criterion 6: an unlinked entry writes its own corner only and shows that
+    /// corner's effective radius; a value past the limit is limited and says so.
+    #[test]
+    fn an_unlinked_entry_writes_one_corner_and_reports_the_limit() {
+        let document = Document::new(1);
+        let id = document.create_rect(RectBounds {
+            origin: Point::new(0.0, 0.0),
+            width: Length::from_mm(100.0),
+            height: Length::from_mm(60.0),
+        });
+        document
+            .set_corner_radii(&[(
+                id,
+                CornerRadii {
+                    tl: Length::from_mm(10.0),
+                    tr: Length::from_mm(40.0),
+                    br: Length::from_mm(0.0),
+                    bl: Length::from_mm(20.0),
+                },
+            )])
+            .unwrap();
+        let object = document.object(id).unwrap();
+        let entry = ParamEntry::for_handle(
+            &object,
+            &oriented_bounds(&object),
+            ParamHandle::CornerRadius(Corner::Tl),
+            true,
+        )
+        .unwrap();
+        assert_eq!(entry.fields()[0].prefill, "10.0");
+        assert!(!entry.is_limited("30"));
+        // TL limit: min(100 - 40, 60 - 20) = 40.
+        assert!(entry.is_limited("55"));
+        assert!(!entry.is_limited("x"));
+        assert_eq!(entry.commit(&document, "55"), EntryOutcome::Committed);
+        let Some(ObjectSnapshot::Primitive(PrimitiveSnapshot {
+            shape: Shape::Rect { corner_radii, .. },
+            ..
+        })) = document.object(id)
+        else {
+            panic!("a rectangle");
+        };
+        assert_eq!(
+            corner_radii,
+            CornerRadii {
+                tl: Length::from_mm(40.0),
+                tr: Length::from_mm(40.0),
+                br: Length::from_mm(0.0),
+                bl: Length::from_mm(20.0),
+            }
+        );
     }
 }

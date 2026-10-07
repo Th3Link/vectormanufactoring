@@ -11,9 +11,10 @@ use super::{SelectDrag, SelectTool};
 use crate::object_selection::ObjectSelection;
 use crate::oriented_box::OrientedBox;
 use crate::param_edit::apply_param;
+use crate::param_handles::ParamHandle;
 use crate::skew_math::skew_frame;
 use crate::transform_commit::same_within_tolerance;
-use crate::transform_drag::pivot_for;
+use crate::transform_drag::{ParamDragInfo, pivot_for};
 use crate::transform_handle_layout::EditHandle;
 
 /// The geometry a release would commit right now, for the blue half of
@@ -167,6 +168,34 @@ impl SelectTool {
                 Some(drag.resolve(current, shift, ctrl))
             }
             SelectDrag::Transforming(_) | SelectDrag::Moving(_) | SelectDrag::None => None,
+        }
+    }
+
+    /// The facts a corner radius drag's readout and followers need with the
+    /// pointer at `current` (`specs/rectangle-corner-radii/` criteria 4, 7, 23):
+    /// `None` unless such a drag is in flight and past the dead zone.
+    #[must_use]
+    pub fn live_param_drag(&self, current: Point) -> Option<ParamDragInfo> {
+        match &self.drag {
+            SelectDrag::Transforming(drag) if drag.origin.is_active_at(current) => {
+                drag.param_info(current)
+            }
+            SelectDrag::Transforming(_) | SelectDrag::Moving(_) | SelectDrag::None => None,
+        }
+    }
+
+    /// Whether the corner radius drag in flight changes all four corners
+    /// (decided at the press): the other three knobs then take the hover
+    /// ground. `None` when no corner radius drag runs.
+    #[must_use]
+    pub fn corner_drag_changes_all(&self) -> Option<bool> {
+        match &self.drag {
+            SelectDrag::Transforming(drag)
+                if matches!(drag.handle, EditHandle::Param(ParamHandle::CornerRadius(_))) =>
+            {
+                Some(!drag.unlinked)
+            }
+            _ => None,
         }
     }
 

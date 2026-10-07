@@ -63,12 +63,12 @@ pub use object_selection::ObjectSelection;
 pub use oriented_box::{OrientedBox, oriented_bounds};
 pub use param_edit::{
     MAX_INNER_RATIO, MIN_INNER_RATIO, ParamValue, apply_param, clamped_ratio, commit_param_batch,
-    value_from_pointer,
+    radius_is_limited, value_from_pointer,
 };
 pub use param_entry::ParamEntry;
 pub use param_handles::{
     Corner, HandleTiers, KNOB_DIAMETER_PX, KNOB_INSET_PX, KNOB_PITCH_PX, PARAM_HIT_PX,
-    PARAM_MIN_SIDE_PX, ParamHandle, centre_drawn, corner_local_position, handle_tiers,
+    PARAM_MIN_SIDE_PX, ParamHandle, centre_drawn, corner_local_position, handle_tiers, knob_rho,
     param_handles, radius_gain, radius_travel,
 };
 pub use pen_tool::{PenTool, PointerUpOutcome as PenPointerUpOutcome};
@@ -87,7 +87,9 @@ pub use selection::NodeSelection;
 pub use shape_tool_common::{CreateOutcome, CreatePreview};
 pub use skew_entry::SkewEntry;
 pub use skew_math::{SkewFrame, skew_angle, skew_factor, skew_frame};
-pub use transform_drag::{CornerRadiusScaling, ScaleModes, StrokeScaling};
+pub use transform_drag::{
+    CornerLinking, CornerRadiusScaling, ParamDragInfo, ScaleModes, StrokeScaling,
+};
 pub use transform_entry::{
     EntryField, EntryKind, EntryOutcome, InvalidReason, TransformEntry, format_degrees,
     parse_entry_number,

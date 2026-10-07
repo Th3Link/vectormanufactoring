@@ -44,6 +44,44 @@ impl Corner {
         }
     }
 
+    /// The corner on the other end of the box's diagonal (top-left and
+    /// bottom-right, top-right and bottom-left).
+    #[must_use]
+    pub const fn opposite(self) -> Self {
+        match self {
+            Self::Tl => Self::Br,
+            Self::Tr => Self::Bl,
+            Self::Br => Self::Tl,
+            Self::Bl => Self::Tr,
+        }
+    }
+
+    /// The corner that shares this corner's horizontal side (top-left and
+    /// top-right, bottom-right and bottom-left): its radius and this one's
+    /// add up along the box's width.
+    #[must_use]
+    pub const fn horizontal_neighbour(self) -> Self {
+        match self {
+            Self::Tl => Self::Tr,
+            Self::Tr => Self::Tl,
+            Self::Br => Self::Bl,
+            Self::Bl => Self::Br,
+        }
+    }
+
+    /// The corner that shares this corner's vertical side (top-left and
+    /// bottom-left, top-right and bottom-right): its radius and this one's
+    /// add up along the box's height.
+    #[must_use]
+    pub const fn vertical_neighbour(self) -> Self {
+        match self {
+            Self::Tl => Self::Bl,
+            Self::Bl => Self::Tl,
+            Self::Tr => Self::Br,
+            Self::Br => Self::Tr,
+        }
+    }
+
     /// The unit vector along the corner's inward diagonal, in the local frame.
     #[must_use]
     pub fn inward_diagonal(self) -> Vec2 {
@@ -211,6 +249,27 @@ mod tests {
             assert!((d.length() - 1.0).abs() < 1e-12);
             assert!(d.x * sx > 0.0 && d.y * sy > 0.0);
         }
+    }
+
+    #[test]
+    fn opposite_and_neighbours_pair_the_corners_of_the_box() {
+        for corner in Corner::ALL {
+            assert_eq!(corner.opposite().opposite(), corner);
+            assert_eq!(corner.horizontal_neighbour().horizontal_neighbour(), corner);
+            assert_eq!(corner.vertical_neighbour().vertical_neighbour(), corner);
+            // The three others are the opposite and the two neighbours.
+            let mut others = [
+                corner.opposite(),
+                corner.horizontal_neighbour(),
+                corner.vertical_neighbour(),
+            ];
+            others.sort_by_key(|c| Corner::ALL.iter().position(|a| a == c));
+            let expected: Vec<Corner> = Corner::ALL.into_iter().filter(|c| *c != corner).collect();
+            assert_eq!(others.to_vec(), expected);
+        }
+        assert_eq!(Corner::Tl.horizontal_neighbour(), Corner::Tr);
+        assert_eq!(Corner::Tl.vertical_neighbour(), Corner::Bl);
+        assert_eq!(Corner::Br.opposite(), Corner::Tl);
     }
 
     #[test]

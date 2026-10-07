@@ -7,8 +7,8 @@
 //! a pending slider edit, so the DOM holds no editing logic.
 
 use curvyo_document_core::{
-    Corner, Length, NodeId, ObjectSnapshot, PrimitiveSnapshot, SHARP_CORNER_EPSILON_MM, Shape,
-    effective_corner_radii,
+    Corner, CornerRadii, Length, NodeId, ObjectSnapshot, PrimitiveSnapshot,
+    SHARP_CORNER_EPSILON_MM, Shape, effective_corner_radii,
 };
 
 use crate::object_selection::ObjectSelection;
@@ -92,6 +92,11 @@ pub struct SelectBarState {
     /// For a uniform "Radius": the stored value when it exceeds what the
     /// rectangle allows, so the field can tag "limited" and name it.
     pub radius_limited: Option<Length>,
+    /// For one selected rectangle whose four effective radii differ (the field
+    /// reads "Mixed"): those radii in the rectangle's own frame, for the tooltip
+    /// ("Top-left 12, top-right 0, ...", `specs/rectangle-corner-radii/`
+    /// criterion 22). `None` otherwise.
+    pub radius_corners: Option<CornerRadii>,
     /// "Remove rounding" is shown: the selection holds a rectangle.
     pub remove_rounding_shown: bool,
     /// "Remove rounding" would change something: a selected rectangle has a
@@ -173,6 +178,20 @@ pub fn select_bar_state(
         _ => None,
     };
 
+    // One selected rectangle with unequal corners: the tooltip lists the four.
+    let radius_corners = match (radius, &rectangles[..]) {
+        (Some(BarValue::Mixed), [only]) => {
+            shapes_of(objects, std::slice::from_ref(only)).find_map(|shape| match *shape {
+                Shape::Rect {
+                    bounds,
+                    corner_radii,
+                } => Some(effective_corner_radii(bounds, corner_radii)),
+                _ => None,
+            })
+        }
+        _ => None,
+    };
+
     let counts: Vec<u32> = shapes_of(objects, &polygons_and_stars)
         .filter_map(|shape| match *shape {
             Shape::Polygon { point_count, .. } | Shape::Star { point_count, .. } => {
@@ -204,6 +223,7 @@ pub fn select_bar_state(
     SelectBarState {
         radius,
         radius_limited,
+        radius_corners,
         remove_rounding_shown: !rectangles.is_empty(),
         remove_rounding_enabled: radii
             .iter()
@@ -399,6 +419,16 @@ mod tests {
         assert_eq!(state.radius, Some(BarValue::Mixed));
         assert_eq!(state.radius_limited, None);
         assert!(state.remove_rounding_enabled);
+        assert_eq!(
+            state
+                .radius_corners
+                .map(|c| [c.tl, c.tr, c.br, c.bl].map(Length::as_mm)),
+            Some([2.0, 0.0, 2.0, 2.0])
+        );
+        // Equal corners, or several rectangles: no corner list.
+        let other = scene.rect(20.0, 4.0);
+        assert_eq!(scene.state(&[id, other]).radius_corners, None);
+        assert_eq!(scene.state(&[other]).radius_corners, None);
     }
 
     /// Criterion 21a: a stored radius larger than the rectangle allows shows

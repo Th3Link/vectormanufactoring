@@ -22,7 +22,7 @@ use crate::transform_entry::{EntryOutcome, InvalidReason, parse_entry_number};
 /// The kind of object a bar `value` acts on.
 const fn kind_of(value: ParamValue) -> ObjectKind {
     match value {
-        ParamValue::Radius(_) => ObjectKind::Rectangle,
+        ParamValue::Radius(_) | ParamValue::CornerRadius(..) => ObjectKind::Rectangle,
         ParamValue::Ratio(_) => ObjectKind::Star,
         ParamValue::PointCount(_) => ObjectKind::PolygonOrStar,
     }

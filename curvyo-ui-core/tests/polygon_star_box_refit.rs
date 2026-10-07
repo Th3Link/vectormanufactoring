@@ -292,7 +292,7 @@ fn dragging_the_star_handle_changes_the_ratio_one_millimetre_per_millimetre() {
         let theta = std::f64::consts::PI / f64::from(n);
         let delta = Vec2::new(theta.cos(), theta.sin());
         let Some(ParamValue::Ratio(ratio)) =
-            value_from_pointer(&object, ParamHandle::InnerRadius, delta, 1.0)
+            value_from_pointer(&object, ParamHandle::InnerRadius, delta, 1.0, false)
         else {
             panic!("a ratio");
         };
