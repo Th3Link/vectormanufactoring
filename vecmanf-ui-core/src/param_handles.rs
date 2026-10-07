@@ -153,8 +153,10 @@ pub fn radius_gain(shorter_side_mm: f64, tolerances: &TransformHandleTolerances)
     }
 }
 
-/// The star's first inner vertex in its local frame: at `θ + π/N` from the
-/// first outer vertex, `ratio` of the way to the outer radius.
+/// The star's first inner vertex in its box-local frame, where the first outer
+/// vertex is at angle 0 (the box is turned by `StarFrame.angle`, so handles
+/// never add it): at `π/N` from the first outer vertex, `ratio` of the way to
+/// the outer radius.
 #[must_use]
 pub(crate) fn star_inner_vertex(
     frame: StarFrame,
@@ -162,7 +164,7 @@ pub(crate) fn star_inner_vertex(
     ratio: InnerRatio,
 ) -> Point {
     let step = std::f64::consts::TAU / f64::from(point_count.get());
-    let theta = frame.angle.as_radians() + step / 2.0;
+    let theta = step / 2.0;
     let radius = frame.radius.as_mm() * ratio.get();
     frame
         .center
@@ -585,19 +587,32 @@ mod tests {
     }
 
     /// The worst star case of the architect's note: the inner vertex on the
-    /// box diagonal at ratio 0.99, `s` 72: 4.6 px to the corner glyph.
+    /// box diagonal at ratio 0.99, `s` 72: 4.6 px to the corner glyph. The box
+    /// is turned by the frame angle, so the inner vertex is at `π/N` from the
+    /// box's +x axis whatever the angle: only N = 4 puts it on the diagonal, and
+    /// every other count clears the corner glyph by more.
     #[test]
     fn the_worst_star_case_clears_the_corner_glyph_by_four_point_six_pixels() {
         for points in [3u32, 4, 5, 8, 12, 1024] {
-            let angle = std::f64::consts::FRAC_PI_4 - std::f64::consts::PI / f64::from(points);
-            let object = star_object(36.0, points, 0.99, angle, 0.0);
-            let t = tolerances(1.0);
-            let box_ = oriented_bounds(&object);
-            let handles = param_handles(&object, &box_, &t);
-            let knob = handles[0].1;
-            let corner = box_.to_document(Point::new(box_.max.x, box_.max.y));
-            let gap = knob.vector_to(corner).length() - KNOB_RADIUS_PX - RESIZE_GLYPH_RADIUS_PX;
-            assert!((gap - 4.6).abs() < 0.05, "N = {points}: gap {gap}");
+            for angle in [0.0, 0.7, -2.0] {
+                let object = star_object(36.0, points, 0.99, angle, 0.0);
+                let t = tolerances(1.0);
+                let box_ = oriented_bounds(&object);
+                let handles = param_handles(&object, &box_, &t);
+                let knob = handles[0].1;
+                let gap = box_
+                    .document_corners()
+                    .iter()
+                    .map(|corner| {
+                        knob.vector_to(*corner).length() - KNOB_RADIUS_PX - RESIZE_GLYPH_RADIUS_PX
+                    })
+                    .fold(f64::INFINITY, f64::min);
+                if points == 4 {
+                    assert!((gap - 4.6).abs() < 0.05, "N = {points}: gap {gap}");
+                } else {
+                    assert!(gap > 4.6, "N = {points}: gap {gap}");
+                }
+            }
         }
     }
 

@@ -59,7 +59,9 @@ pub fn clamped_ratio(value: f64) -> InnerRatio {
     InnerRatio::new(limited).unwrap()
 }
 
-/// The pointer displacement `local_delta` (in the primitive's own frame)
+/// The pointer displacement `local_delta` (in the box-local frame, see
+/// [`crate::OrientedBox`]; for a polygon or star its +x axis points at the
+/// first outer vertex)
 /// of a drag of `handle` turned into the value it asks for, from the
 /// primitive `start` as it was at the press. `gain` is the radius gain
 /// ([`crate::radius_gain`]) frozen at the press; the inner ratio uses one
@@ -102,7 +104,7 @@ pub fn value_from_pointer(
             },
         ) => {
             let step = std::f64::consts::TAU / f64::from(point_count.get());
-            let theta = frame.angle.as_radians() + step / 2.0;
+            let theta = step / 2.0;
             let projected = local_delta.x * theta.cos() + local_delta.y * theta.sin();
             let start_distance = frame.radius.as_mm() * inner_ratio.get();
             let outer = frame.radius.as_mm().max(f64::EPSILON);
