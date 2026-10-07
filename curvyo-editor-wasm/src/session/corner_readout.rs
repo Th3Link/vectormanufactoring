@@ -2,9 +2,10 @@
 //! (`specs/rectangle-corner-radii/` criteria 7 and 23).
 
 use curvyo_document_core::{
-    ObjectSnapshot, PrimitiveSnapshot, SHARP_CORNER_EPSILON_MM, Shape, effective_corner_radii,
+    Corner, ObjectSnapshot, PrimitiveSnapshot, SHARP_CORNER_EPSILON_MM, Shape,
+    effective_corner_radii,
 };
-use curvyo_ui_core::{EditHandle, ParamDragInfo, ParamHandle};
+use curvyo_ui_core::{EditHandle, ParamDragInfo, ParamHandle, knob_rho, oriented_bounds};
 
 use super::{Session, Tool};
 
@@ -18,7 +19,10 @@ impl Session {
     /// radius is above its effective one adds a first line "Limited by the
     /// size. Stored 30 mm, shown 20 mm." and, when the next drag would be
     /// unlinked, "Editing one corner fixes the other three at their shown
-    /// size." Those two lines are muted; the host recognises them by their
+    /// size." A knob drawn short of its radius (the diagonal cap) adds "Radius 65
+    /// mm. Knob parked so it does not cover its neighbour.", and unequal corners
+    /// with the next drag linked add "Corners differ. Dragging sets all four to
+    /// one value." Those notes are muted; the host recognises them by their
     /// start.
     #[must_use]
     pub fn corner_hint_lines(&self) -> Vec<String> {
@@ -31,6 +35,7 @@ impl Session {
         else {
             return Vec::new();
         };
+        let box_ = oriented_bounds(&object);
         let ObjectSnapshot::Primitive(PrimitiveSnapshot {
             shape: Shape::Rect {
                 bounds,
@@ -43,9 +48,8 @@ impl Session {
         };
         let linked = self.link_corners();
         let stored = corner_radii.get(corner).as_mm();
-        let shown = effective_corner_radii(bounds, corner_radii)
-            .get(corner)
-            .as_mm();
+        let effective = effective_corner_radii(bounds, corner_radii);
+        let shown = effective.get(corner).as_mm();
         let mut lines = Vec::new();
         if stored - shown > SHARP_CORNER_EPSILON_MM {
             lines.push(format!(
@@ -56,6 +60,27 @@ impl Session {
             if !linked {
                 lines.push("Editing one corner fixes the other three at their shown size.".into());
             }
+        }
+        // The knob is drawn short of its radius: say so, with the real value.
+        let (shorter, longer) = (
+            box_.width().min(box_.height()),
+            box_.width().max(box_.height()),
+        );
+        let tolerances = self.transform_handle_tolerances();
+        let half = shorter / 2.0;
+        if half > 0.0
+            && knob_rho(effective, shorter, longer, corner, &tolerances) < shown / half - 1e-9
+        {
+            lines.push(format!(
+                "Radius {} mm. Knob parked so it does not cover its neighbour.",
+                trimmed_mm(shown)
+            ));
+        }
+        let differs = Corner::ALL
+            .iter()
+            .any(|&c| (effective.get(c).as_mm() - shown).abs() > SHARP_CORNER_EPSILON_MM);
+        if differs && linked {
+            lines.push("Corners differ. Dragging sets all four to one value.".into());
         }
         lines.extend(
             if linked {

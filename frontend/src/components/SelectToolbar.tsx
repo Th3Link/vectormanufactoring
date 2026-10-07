@@ -150,7 +150,10 @@ function RadiusField({ bar, onSetRadius, onReturnFocus }: RadiusFieldProps) {
   return (
     <div className="relative flex items-center gap-1.5 text-[var(--toolbar-icon)]">
       <label htmlFor={`${messageId}-field`}>Radius</label>
-      <div className="relative w-28" title={tooltip}>
+      <Tooltip.Provider>
+      <Tooltip.Root delayDuration={400}>
+      <div className="relative w-32">
+        <Tooltip.Trigger asChild>
         <input
           id={`${messageId}-field`}
           type="text"
@@ -197,6 +200,7 @@ function RadiusField({ bar, onSetRadius, onReturnFocus }: RadiusFieldProps) {
           }`}
           style={{ color: "var(--toolbar-icon)" }}
         />
+        </Tooltip.Trigger>
         {bar.radiusLimited && (
           <span
             aria-hidden
@@ -213,6 +217,19 @@ function RadiusField({ bar, onSetRadius, onReturnFocus }: RadiusFieldProps) {
           mm
         </span>
       </div>
+      <Tooltip.Portal>
+        <Tooltip.Content
+          side="bottom"
+          sideOffset={6}
+          className="z-50 max-w-[300px] rounded-md bg-popover px-2 py-1 text-xs text-popover-foreground ring-1 ring-foreground/10"
+        >
+          {tooltip.split("\n").map((line) => (
+            <div key={line}>{line}</div>
+          ))}
+        </Tooltip.Content>
+      </Tooltip.Portal>
+      </Tooltip.Root>
+      </Tooltip.Provider>
       <div
         id={messageId}
         role="status"

@@ -590,6 +590,7 @@ fn hint_lines_follow_the_switch_never_shift_and_name_no_corner() {
     assert_eq!(
         on,
         [
+            "Corners differ. Dragging sets all four to one value.",
             "Corner radius, all four",
             "Shift: this corner only",
             "Double-click: type a value"
@@ -635,7 +636,9 @@ fn a_limited_corner_adds_its_own_values_and_the_fix_note_only_when_the_next_drag
             !l.iter().any(|x| x.contains("fixes the other three")),
             "linked: {l:?}"
         );
-        assert_eq!(l.len(), 4);
+        // Limited note, the corners-differ warning (linked), then the three lines.
+        assert_eq!(l.len(), 5);
+        assert!(l[1].starts_with("Corners differ."), "{l:?}");
     }
     f.s.set_link_corners(false);
     let at = f.knob(0);
@@ -654,7 +657,10 @@ fn a_limited_corner_adds_its_own_values_and_the_fix_note_only_when_the_next_drag
     let mut f = fx([5.0, 0.0, 12.0, 3.0]);
     let at = f.knob(0);
     f.s.pointer_hover(at, false, false);
-    assert_eq!(f.s.corner_hint_lines().len(), 3);
+    let l = f.s.corner_hint_lines();
+    // Unequal corners, linked: only the corners-differ warning is added.
+    assert_eq!(l.len(), 4);
+    assert!(l[0].starts_with("Corners differ."), "{l:?}");
 }
 
 // -------------------------------- typed entry --------------------------------

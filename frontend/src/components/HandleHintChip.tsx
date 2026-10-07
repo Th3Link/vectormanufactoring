@@ -53,7 +53,12 @@ const HINT_LINES: Record<string, string[]> = {
 /** The notes a corner knob's hint can open with
  * (`specs/rectangle-corner-radii/` criterion 23): muted, and not the title. */
 function isNote(line: string): boolean {
-  return line.startsWith("Limited by the size.") || line.startsWith("Editing one corner");
+  return (
+    line.startsWith("Limited by the size.") ||
+    line.startsWith("Editing one corner") ||
+    line.startsWith("Corners differ.") ||
+    line.startsWith("Radius ")
+  );
 }
 
 interface HandleHintChipProps {

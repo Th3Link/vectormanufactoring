@@ -276,9 +276,11 @@ fn the_knob_hint_lines_follow_the_switch_and_a_limited_corner() {
     let (mut session, _) = session_with(radii(5.0, 0.0, 12.0, 3.0));
     let at = knob(&session, Corner::Tl, 5.0);
     session.pointer_hover(at, false, false);
+    // Unequal corners and a linked next drag: warn before the overwrite.
     assert_eq!(
         session.corner_hint_lines(),
         [
+            "Corners differ. Dragging sets all four to one value.",
             "Corner radius, all four",
             "Shift: this corner only",
             "Double-click: type a value"
@@ -317,8 +319,8 @@ fn the_knob_hint_lines_follow_the_switch_and_a_limited_corner() {
     assert_eq!(lines[0], "Limited by the size. Stored 50 mm, shown 30 mm.");
     assert_eq!(
         lines.len(),
-        4,
-        "linked: no 'editing one corner' note: {lines:?}"
+        5,
+        "linked: the corners-differ warning, no 'editing one corner' note: {lines:?}"
     );
     session.set_link_corners(false);
     let lines = session.corner_hint_lines();
@@ -357,4 +359,41 @@ fn remove_rounding_and_the_bar_field_ignore_the_switch() {
         EntryOutcome::Committed
     );
     assert_eq!(stored(&session), CornerRadii::uniform(Length::from_mm(7.0)));
+}
+
+/// UX review: a knob drawn short of its radius says so, with the real value.
+#[test]
+fn a_parked_knob_names_its_real_radius() {
+    let document = Document::new(1);
+    let id = document.create_rect(RectBounds {
+        origin: pt(10.0, 20.0),
+        width: Length::from_mm(60.0),
+        height: Length::from_mm(60.0),
+    });
+    // TL = BR = 0.6 s on a square: both knobs rest at rho = 1 (30 mm).
+    document
+        .set_corner_radii(&[(id, radii(36.0, 0.0, 36.0, 0.0))])
+        .unwrap();
+    let bytes = pack(&document, "0.1.0").unwrap();
+    let mut session = Session::open(2, &bytes).unwrap();
+    session.set_tool(Tool::Select);
+    click(&mut session, pt(10.0, 50.0));
+    let scale = session.view().scale();
+    let travel = (60.0 * scale - 14.0) / std::f64::consts::SQRT_2 - 15.0;
+    let along = (15.0 + travel) / scale / std::f64::consts::SQRT_2; // rho = 1
+    session.pointer_hover(pt(10.0 + along, 20.0 + along), false, false);
+    let lines = session.corner_hint_lines();
+    assert_eq!(
+        lines[0],
+        "Radius 36 mm. Knob parked so it does not cover its neighbour."
+    );
+    // A knob at its own radius says nothing of the kind.
+    let tr = pt(10.0 + 60.0 - along, 20.0 + along);
+    session.pointer_hover(tr, false, false);
+    assert!(
+        session
+            .corner_hint_lines()
+            .iter()
+            .all(|line| !line.starts_with("Radius "))
+    );
 }
