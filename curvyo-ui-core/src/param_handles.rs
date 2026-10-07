@@ -9,8 +9,9 @@
 //! mapped to document space through its [`OrientedBox`], like every other
 //! handle; `specs/ellipse-arcs-and-shaping/` adds its own variants here.
 
+pub use curvyo_document_core::Corner;
 use curvyo_document_core::{
-    InnerRatio, ObjectSnapshot, Point, PointCount, Shape, StarFrame, Vec2, effective_corner_radius,
+    InnerRatio, ObjectSnapshot, Point, PointCount, Shape, StarFrame, Vec2, effective_corner_radii,
 };
 
 use crate::oriented_box::OrientedBox;
@@ -44,50 +45,14 @@ pub const PARAM_HIT_PX: f64 = 12.0;
 /// this distance of the box centre, screen pixels (criterion 8).
 pub(crate) const CENTRE_YIELD_PX: f64 = 20.0;
 
-/// The corner a radius handle belongs to, in the primitive's local frame.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Corner {
-    /// Local minimum x and y.
-    Tl,
-    /// Local maximum x, minimum y.
-    Tr,
-    /// Local maximum x and y.
-    Br,
-    /// Local minimum x, maximum y.
-    Bl,
-}
-
-impl Corner {
-    /// Every corner, in a fixed order.
-    pub const ALL: [Self; 4] = [Self::Tl, Self::Tr, Self::Br, Self::Bl];
-
-    /// The signs `(x, y)` of the corner's inward diagonal in the local frame.
-    const fn inward(self) -> (f64, f64) {
-        match self {
-            Self::Tl => (1.0, 1.0),
-            Self::Tr => (-1.0, 1.0),
-            Self::Br => (-1.0, -1.0),
-            Self::Bl => (1.0, -1.0),
-        }
-    }
-
-    /// The unit vector along the corner's inward diagonal, in the local
-    /// frame.
-    #[must_use]
-    pub fn inward_diagonal(self) -> Vec2 {
-        let (x, y) = self.inward();
-        Vec2::new(x, y).normalized_to(1.0)
-    }
-
-    /// The corner's position in `box_`'s local frame.
-    #[must_use]
-    pub fn local_position(self, box_: &OrientedBox) -> Point {
-        match self {
-            Self::Tl => Point::new(box_.min.x, box_.min.y),
-            Self::Tr => Point::new(box_.max.x, box_.min.y),
-            Self::Br => Point::new(box_.max.x, box_.max.y),
-            Self::Bl => Point::new(box_.min.x, box_.max.y),
-        }
+/// The corner's position in `box_`'s local frame.
+#[must_use]
+pub fn corner_local_position(corner: Corner, box_: &OrientedBox) -> Point {
+    match corner {
+        Corner::Tl => Point::new(box_.min.x, box_.min.y),
+        Corner::Tr => Point::new(box_.max.x, box_.min.y),
+        Corner::Br => Point::new(box_.max.x, box_.max.y),
+        Corner::Bl => Point::new(box_.min.x, box_.max.y),
     }
 }
 
@@ -191,17 +156,18 @@ pub fn param_handles(
     match primitive.shape {
         Shape::Rect {
             bounds,
-            corner_radius,
+            corner_radii,
         } => {
-            let effective = effective_corner_radius(bounds, corner_radius).as_mm();
+            let effective = effective_corner_radii(bounds, corner_radii);
             let half = shorter / 2.0;
-            let rho = if half > 0.0 { effective / half } else { 0.0 };
-            let distance = tolerances.param_inset_mm + rho * radius_travel(shorter, tolerances);
+            let travel = radius_travel(shorter, tolerances);
             Corner::ALL
                 .iter()
                 .map(|&corner| {
-                    let at = corner
-                        .local_position(box_)
+                    let radius = effective.get(corner).as_mm();
+                    let rho = if half > 0.0 { radius / half } else { 0.0 };
+                    let distance = tolerances.param_inset_mm + rho * travel;
+                    let at = corner_local_position(corner, box_)
                         .translated(corner.inward_diagonal().scaled(distance));
                     (ParamHandle::CornerRadius(corner), box_.to_document(at))
                 })
@@ -242,7 +208,7 @@ pub fn centre_drawn(
 mod tests {
     use super::*;
     use curvyo_document_core::{
-        Angle, Document, EllipseFrame, Length, NodeId, PrimitiveSnapshot, RectBounds,
+        Angle, CornerRadii, Document, EllipseFrame, Length, NodeId, PrimitiveSnapshot, RectBounds,
     };
     use proptest::prelude::*;
 
@@ -288,13 +254,68 @@ mod tests {
                     width: Length::from_mm(width),
                     height: Length::from_mm(height),
                 },
-                corner_radius: Length::from_mm(radius),
+                corner_radii: CornerRadii::uniform(Length::from_mm(radius)),
             },
             stroke_width: Length::from_mm(0.25),
             stroke: curvyo_document_core::Color::BLACK,
             fill: None,
             rotation: Angle::from_radians(rotation),
         })
+    }
+
+    /// `rectangle-corner-radii` criterion 1: each knob sits at the position its
+    /// own effective radius implies, on its corner's diagonal.
+    #[test]
+    fn each_knob_is_placed_by_its_own_effective_radius() {
+        let object = ObjectSnapshot::Primitive(PrimitiveSnapshot {
+            id: id(),
+            shape: Shape::Rect {
+                bounds: RectBounds {
+                    origin: Point::new(0.0, 0.0),
+                    width: Length::from_mm(200.0),
+                    height: Length::from_mm(100.0),
+                },
+                corner_radii: CornerRadii {
+                    tl: Length::from_mm(0.0),
+                    tr: Length::from_mm(20.0),
+                    br: Length::from_mm(50.0),
+                    bl: Length::from_mm(0.0),
+                },
+            },
+            stroke_width: Length::from_mm(0.25),
+            stroke: curvyo_document_core::Color::BLACK,
+            fill: None,
+            rotation: Angle::from_radians(0.0),
+        });
+        let t = tolerances(1.0);
+        let handles = param_handles(&object, &oriented_bounds(&object), &t);
+        assert_eq!(handles.len(), 4);
+        let travel = radius_travel(100.0, &t);
+        for ((handle, at), (corner, radius)) in handles.into_iter().zip([
+            (Corner::Tl, 0.0),
+            (Corner::Tr, 20.0),
+            (Corner::Br, 50.0),
+            (Corner::Bl, 0.0),
+        ]) {
+            assert_eq!(handle, ParamHandle::CornerRadius(corner));
+            let distance = t.param_inset_mm + radius / 50.0 * travel;
+            let local = box_local_corner(corner, 200.0, 100.0);
+            let diagonal = corner.inward_diagonal();
+            let expected = Point::new(
+                local.x + diagonal.x * distance,
+                local.y + diagonal.y * distance,
+            );
+            assert!((at.x - expected.x).abs() < 1e-9 && (at.y - expected.y).abs() < 1e-9);
+        }
+    }
+
+    fn box_local_corner(corner: Corner, width: f64, height: f64) -> Point {
+        match corner {
+            Corner::Tl => Point::new(0.0, 0.0),
+            Corner::Tr => Point::new(width, 0.0),
+            Corner::Br => Point::new(width, height),
+            Corner::Bl => Point::new(0.0, height),
+        }
     }
 
     fn star_object(

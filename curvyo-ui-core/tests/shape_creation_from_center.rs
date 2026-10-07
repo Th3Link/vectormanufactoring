@@ -39,7 +39,7 @@ fn drag_rect(a: Point, b: Point, m: Modifiers) -> (f64, f64, f64, f64, f64) {
     assert_eq!(shape, preview, "AC 9: the commit is the last preview");
     let Shape::Rect {
         bounds,
-        corner_radius,
+        corner_radii,
     } = shape
     else {
         panic!("a rectangle");
@@ -50,7 +50,7 @@ fn drag_rect(a: Point, b: Point, m: Modifiers) -> (f64, f64, f64, f64, f64) {
         bounds.origin.y,
         bounds.width.as_mm(),
         bounds.height.as_mm(),
-        corner_radius.as_mm(),
+        uniform_mm(corner_radii),
     )
 }
 
@@ -317,4 +317,14 @@ proptest! {
             }
         }
     }
+}
+
+/// The one radius of a rectangle whose four corner radii are equal (asserted).
+fn uniform_mm(radii: curvyo_document_core::CornerRadii) -> f64 {
+    assert_eq!(
+        radii,
+        curvyo_document_core::CornerRadii::uniform(radii.tl),
+        "four equal radii"
+    );
+    radii.tl.as_mm()
 }

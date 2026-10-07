@@ -6,7 +6,7 @@
 //! [`curvyo_document_core::Document`] commit on release, a zero-movement
 //! press writes nothing and leaves the selection alone.
 
-use curvyo_document_core::{Document, Length, Point, RectBounds, Shape};
+use curvyo_document_core::{CornerRadii, Document, Length, Point, RectBounds, Shape};
 
 use crate::modifiers::Modifiers;
 use crate::shape_tool_common::{CreateDragBox, CreateOutcome, CreatePreview, create_drag_box};
@@ -114,7 +114,7 @@ fn created_bounds(
 fn rect_shape(bounds: RectBounds) -> Shape {
     Shape::Rect {
         bounds,
-        corner_radius: Length::from_mm(0.0),
+        corner_radii: CornerRadii::uniform(Length::from_mm(0.0)),
     }
 }
 

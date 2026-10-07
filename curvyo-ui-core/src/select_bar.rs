@@ -7,7 +7,7 @@
 //! a pending slider edit, so the DOM holds no editing logic.
 
 use curvyo_document_core::{
-    Length, NodeId, ObjectSnapshot, PrimitiveSnapshot, Shape, effective_corner_radius,
+    Corner, Length, NodeId, ObjectSnapshot, PrimitiveSnapshot, Shape, effective_corner_radii,
 };
 
 use crate::object_selection::ObjectSelection;
@@ -139,16 +139,23 @@ pub fn select_bar_state(
     let polygons_and_stars = ids_of_kind(objects, selection, ObjectKind::PolygonOrStar);
     let stars = ids_of_kind(objects, selection, ObjectKind::Star);
 
+    // One (effective, stored) pair per corner of every selected rectangle.
     let radii: Vec<(f64, f64)> = shapes_of(objects, &rectangles)
         .filter_map(|shape| match *shape {
             Shape::Rect {
                 bounds,
-                corner_radius,
-            } => Some((
-                effective_corner_radius(bounds, corner_radius).as_mm(),
-                corner_radius.as_mm(),
-            )),
+                corner_radii,
+            } => Some((bounds, corner_radii)),
             _ => None,
+        })
+        .flat_map(|(bounds, corner_radii)| {
+            let effective = effective_corner_radii(bounds, corner_radii);
+            Corner::ALL.map(|corner| {
+                (
+                    effective.get(corner).as_mm(),
+                    corner_radii.get(corner).as_mm(),
+                )
+            })
         })
         .collect();
     let effective: Vec<f64> = radii.iter().map(|(effective, _)| *effective).collect();
@@ -210,7 +217,8 @@ pub fn select_bar_state(
 mod tests {
     use super::*;
     use curvyo_document_core::{
-        AnchorId, Angle, Document, InnerRatio, NewAnchor, Point, PointCount, RectBounds, StarFrame,
+        AnchorId, Angle, CornerRadii, Document, InnerRatio, NewAnchor, Point, PointCount,
+        RectBounds, StarFrame,
     };
 
     struct Scene {
@@ -366,6 +374,30 @@ mod tests {
         let (s1, s2) = (scene.star(5, 0.4), scene.star(6, 0.4));
         assert_eq!(scene.state(&[s1, s2]).points, Some(BarValue::Mixed));
         assert_eq!(scene.state(&[s1, s2]).ratio, Some(BarValue::Uniform(0.4)));
+    }
+
+    /// A rectangle whose four effective radii differ (a file can hold one) reads
+    /// Mixed, and the limited tag looks at every corner.
+    #[test]
+    fn one_rectangle_with_unequal_corners_reads_mixed() {
+        let scene = Scene::new();
+        let id = scene.rect(20.0, 2.0);
+        scene
+            .document
+            .set_corner_radii(&[(
+                id,
+                CornerRadii {
+                    tl: Length::from_mm(2.0),
+                    tr: Length::from_mm(0.0),
+                    br: Length::from_mm(2.0),
+                    bl: Length::from_mm(2.0),
+                },
+            )])
+            .unwrap();
+        let state = scene.state(&[id]);
+        assert_eq!(state.radius, Some(BarValue::Mixed));
+        assert_eq!(state.radius_limited, None);
+        assert!(state.remove_rounding_enabled);
     }
 
     /// Criterion 21a: a stored radius larger than the rectangle allows shows

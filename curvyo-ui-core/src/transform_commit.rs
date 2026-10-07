@@ -92,10 +92,10 @@ pub(crate) fn commit_resize(
         ObjectSnapshot::Primitive(primitive) => match primitive.shape {
             Shape::Rect {
                 bounds,
-                corner_radius,
+                corner_radii,
             } => {
                 let _ =
-                    document.resize_rect(id, bounds, corner_radius, width(primitive.stroke_width));
+                    document.resize_rect(id, bounds, corner_radii, width(primitive.stroke_width));
             }
             Shape::Ellipse { frame } => {
                 let _ = document.resize_ellipse(id, frame, width(primitive.stroke_width));
@@ -173,13 +173,16 @@ fn numbers_of(object: &ObjectSnapshot) -> (Vec<f64>, f64) {
             match p.shape {
                 Shape::Rect {
                     bounds,
-                    corner_radius,
+                    corner_radii,
                 } => v.extend([
                     bounds.origin.x,
                     bounds.origin.y,
                     bounds.width.as_mm(),
                     bounds.height.as_mm(),
-                    corner_radius.as_mm(),
+                    corner_radii.tl.as_mm(),
+                    corner_radii.tr.as_mm(),
+                    corner_radii.br.as_mm(),
+                    corner_radii.bl.as_mm(),
                 ]),
                 Shape::Ellipse { frame } => v.extend([
                     frame.center.x,

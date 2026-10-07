@@ -8,11 +8,11 @@
 //! already used.
 
 use curvyo_document_core::{
-    Document, InnerRatio, Length, NodeId, ObjectSnapshot, PointCount, PrimitiveSnapshot,
-    RectBounds, Shape, ShapeEditError, Vec2, effective_corner_radius,
+    CornerRadii, Document, InnerRatio, Length, NodeId, ObjectSnapshot, PointCount,
+    PrimitiveSnapshot, RectBounds, Shape, ShapeEditError, Vec2, effective_corner_radii,
 };
 
-use crate::param_handles::ParamHandle;
+use crate::param_handles::{Corner, ParamHandle};
 
 /// A value within this (millimetres, or a ratio) of the current one is "equal":
 /// nothing is written (criteria 9, 12, 18).
@@ -85,12 +85,14 @@ pub fn value_from_pointer(
             ParamHandle::CornerRadius(corner),
             Shape::Rect {
                 bounds,
-                corner_radius,
+                corner_radii,
             },
         ) => {
             let diagonal = corner.inward_diagonal();
             let projected = local_delta.x * diagonal.x + local_delta.y * diagonal.y;
-            let effective = effective_corner_radius(bounds, corner_radius).as_mm();
+            let effective = effective_corner_radii(bounds, corner_radii)
+                .get(corner)
+                .as_mm();
             Some(ParamValue::Radius(Length::from_mm(
                 effective + gain * projected,
             )))
@@ -136,7 +138,7 @@ fn apply_to_primitive(start: &PrimitiveSnapshot, value: ParamValue) -> Primitive
         (
             Shape::Rect {
                 bounds,
-                corner_radius,
+                corner_radii,
             },
             ParamValue::Radius(radius),
         ) => {
@@ -146,13 +148,16 @@ fn apply_to_primitive(start: &PrimitiveSnapshot, value: ParamValue) -> Primitive
             } else {
                 return *start;
             };
-            let current = effective_corner_radius(bounds, corner_radius).as_mm();
-            if (limited - current).abs() <= PARAM_EQUAL_EPSILON {
+            let current = effective_corner_radii(bounds, corner_radii);
+            let unchanged = Corner::ALL.iter().all(|&corner| {
+                (limited - current.get(corner).as_mm()).abs() <= PARAM_EQUAL_EPSILON
+            });
+            if unchanged {
                 return *start;
             }
             Shape::Rect {
                 bounds,
-                corner_radius: Length::from_mm(limited),
+                corner_radii: CornerRadii::uniform(Length::from_mm(limited)),
             }
         }
         (
@@ -212,8 +217,8 @@ pub(crate) fn commit_param(document: &Document, handle: ParamHandle, result: &Ob
         return;
     };
     match (handle, primitive.shape) {
-        (ParamHandle::CornerRadius(_), Shape::Rect { corner_radius, .. }) => {
-            let _ = document.set_corner_radius(&[primitive.id], corner_radius);
+        (ParamHandle::CornerRadius(_), Shape::Rect { corner_radii, .. }) => {
+            let _ = document.set_corner_radii(&[(primitive.id, corner_radii)]);
         }
         (ParamHandle::InnerRadius, Shape::Star { inner_ratio, .. }) => {
             let _ = document.set_inner_ratio(&[primitive.id], inner_ratio);
@@ -248,7 +253,6 @@ pub fn commit_param_batch(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::param_handles::Corner;
     use curvyo_document_core::{Angle, Point, RectBounds, StarFrame};
 
     fn rect(document: &Document, width: f64, height: f64, radius: f64) -> ObjectSnapshot {
@@ -278,13 +282,18 @@ mod tests {
 
     fn radius_of(object: &ObjectSnapshot) -> f64 {
         let ObjectSnapshot::Primitive(PrimitiveSnapshot {
-            shape: Shape::Rect { corner_radius, .. },
+            shape: Shape::Rect { corner_radii, .. },
             ..
         }) = object
         else {
             panic!("a rectangle");
         };
-        corner_radius.as_mm()
+        assert_eq!(
+            *corner_radii,
+            CornerRadii::uniform(corner_radii.tl),
+            "four equal radii"
+        );
+        corner_radii.tl.as_mm()
     }
 
     fn ratio_of(object: &ObjectSnapshot) -> f64 {
@@ -499,19 +508,19 @@ mod tests {
 
     /// Criterion 24: a drag commits through the shape tools' own commands.
     #[test]
-    fn committing_a_radius_writes_one_commit_through_set_corner_radius() {
+    fn committing_a_radius_writes_one_commit_through_set_corner_radii() {
         let document = Document::new(1);
         let start = rect(&document, 100.0, 100.0, 0.0);
         let result = apply_param(&start, ParamValue::Radius(Length::from_mm(12.0)));
         commit_param(&document, ParamHandle::CornerRadius(Corner::Tl), &result);
         let ObjectSnapshot::Primitive(PrimitiveSnapshot {
-            shape: Shape::Rect { corner_radius, .. },
+            shape: Shape::Rect { corner_radii, .. },
             ..
         }) = document.object(start.id()).expect("exists")
         else {
             panic!("a rectangle");
         };
-        assert!((corner_radius.as_mm() - 12.0).abs() < 1e-12);
+        assert_eq!(corner_radii, CornerRadii::uniform(Length::from_mm(12.0)));
     }
 
     #[test]

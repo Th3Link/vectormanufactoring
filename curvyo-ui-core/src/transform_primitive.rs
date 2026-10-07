@@ -4,8 +4,8 @@
 //! Split out of [`crate::transform_drag`], which resolves the gestures.
 
 use curvyo_document_core::{
-    Angle, EllipseFrame, Length, Point, PrimitiveSnapshot, RectBounds, Shape, StarFrame, Vec2,
-    shape_center, translate_shape,
+    Angle, Corner, EllipseFrame, Length, Point, PrimitiveSnapshot, RectBounds, Shape, StarFrame,
+    Vec2, shape_center, translate_shape,
 };
 
 use crate::ResizeDirection;
@@ -41,15 +41,25 @@ pub(crate) fn resize_primitive(
         )
     };
     let (shape, factor) = match primitive.shape {
-        Shape::Rect { corner_radius, .. } => {
+        Shape::Rect { corner_radii, .. } => {
             let resized = box_resize();
             let factor = stroke_or_radius_factor(resized.sx, resized.sy);
-            // `Keep` hands the stored radius back untouched, so the register
-            // is not rewritten and a concurrent radius edit is not beaten.
-            let radius = match radius_scaling {
-                CornerRadiusScaling::Keep => corner_radius,
+            // `Keep` hands the stored radii back untouched, so no register is
+            // rewritten and a concurrent radius edit is not beaten.
+            // `Proportional` multiplies all four stored radii by the one factor.
+            let radii = match radius_scaling {
+                CornerRadiusScaling::Keep => corner_radii,
                 CornerRadiusScaling::Proportional => {
-                    scaled_and_floored(corner_radius, factor, Length::from_mm(0.0))
+                    Corner::ALL.iter().fold(corner_radii, |scaled, &corner| {
+                        scaled.with(
+                            corner,
+                            scaled_and_floored(
+                                corner_radii.get(corner),
+                                factor,
+                                Length::from_mm(0.0),
+                            ),
+                        )
+                    })
                 }
             };
             let shape = Shape::Rect {
@@ -58,7 +68,7 @@ pub(crate) fn resize_primitive(
                     width: Length::from_mm(resized.max.x - resized.min.x),
                     height: Length::from_mm(resized.max.y - resized.min.y),
                 },
-                corner_radius: radius,
+                corner_radii: radii,
             };
             (shape, factor)
         }

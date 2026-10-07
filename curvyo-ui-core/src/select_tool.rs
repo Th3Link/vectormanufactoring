@@ -340,6 +340,14 @@ impl SelectTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use curvyo_document_core::CornerRadii;
+
+    /// The one radius of a rectangle whose four corner radii are equal (asserted).
+    fn uniform_mm(radii: CornerRadii) -> f64 {
+        assert_eq!(radii, CornerRadii::uniform(radii.tl), "four equal radii");
+        radii.tl.as_mm()
+    }
+
     use crate::ResizeDirection;
     use crate::oriented_box::oriented_bounds;
     use curvyo_document_core::Shape;
@@ -1200,10 +1208,10 @@ mod tests {
                     t.set_stroke_scaling(mode);
                 },
             );
-            let Shape::Rect { corner_radius, .. } = document.primitive(id).unwrap().shape else {
+            let Shape::Rect { corner_radii, .. } = document.primitive(id).unwrap().shape else {
                 panic!("rect");
             };
-            corner_radius.as_mm()
+            uniform_mm(corner_radii)
         };
         assert!((radius_after(StrokeScaling::Keep) - 4.0).abs() < 1e-9);
         assert!((radius_after(StrokeScaling::Proportional) - 4.0).abs() < 1e-9);
@@ -1235,12 +1243,12 @@ mod tests {
         );
         let Shape::Rect {
             bounds,
-            corner_radius,
+            corner_radii,
         } = document.primitive(id).unwrap().shape
         else {
             panic!("rect");
         };
-        assert_eq!(corner_radius.as_mm(), 200.0, "the stored radius is raw");
+        assert_eq!(uniform_mm(corner_radii), 200.0, "the stored radius is raw");
         assert!((bounds.width.as_mm() - 20.0).abs() < 1e-9);
     }
 
@@ -1274,11 +1282,11 @@ mod tests {
             Modifiers::new(false, true),
             &mut AnchorIdMinter::new(99),
         );
-        let Shape::Rect { corner_radius, .. } = document.primitive(id).unwrap().shape else {
+        let Shape::Rect { corner_radii, .. } = document.primitive(id).unwrap().shape else {
             panic!("rect");
         };
         assert!(
-            (corner_radius.as_mm() - 2.0).abs() < 1e-9,
+            (uniform_mm(corner_radii) - 2.0).abs() < 1e-9,
             "kept: pressed with off"
         );
     }
@@ -1313,11 +1321,73 @@ mod tests {
             Modifiers::new(false, true),
             &mut AnchorIdMinter::new(99),
         );
-        let Shape::Rect { corner_radius, .. } = document.primitive(id).expect("exists").shape
-        else {
+        let Shape::Rect { corner_radii, .. } = document.primitive(id).expect("exists").shape else {
             panic!("expected rect");
         };
-        assert!((corner_radius.as_mm() - 4.0).abs() < 1e-9, "2x factor");
+        assert!((uniform_mm(corner_radii) - 4.0).abs() < 1e-9, "2x factor");
+    }
+
+    fn radii(tl: f64, tr: f64, br: f64, bl: f64) -> CornerRadii {
+        CornerRadii {
+            tl: Length::from_mm(tl),
+            tr: Length::from_mm(tr),
+            br: Length::from_mm(br),
+            bl: Length::from_mm(bl),
+        }
+    }
+
+    fn stored_radii(document: &Document, id: NodeId) -> CornerRadii {
+        let Shape::Rect { corner_radii, .. } = document.primitive(id).unwrap().shape else {
+            panic!("rect");
+        };
+        corner_radii
+    }
+
+    /// `rectangle-corner-radii` criteria 12 and 15: with the switch off all
+    /// four stored radii come back exactly as they were, whatever they are.
+    #[test]
+    fn a_resize_with_the_switch_off_keeps_four_different_radii_exactly() {
+        let document = Document::new(1);
+        let id = rect(&document, 0.0);
+        let before = radii(1.0, 0.0, 3.0, 40.0);
+        document.set_corner_radii(&[(id, before)]).unwrap();
+        resize_drag(
+            &document,
+            id,
+            EditHandle::Resize(ResizeDirection::Se),
+            Point::new(20.0, 30.0),
+            |_| {},
+        );
+        assert_eq!(stored_radii(&document, id), before);
+    }
+
+    /// Criterion 12: with the switch on all four stored radii are multiplied by
+    /// the one factor `√(sx·sy)`, so they keep their ratios and a 0 stays 0.
+    #[test]
+    fn a_proportional_resize_scales_all_four_radii_by_one_factor() {
+        let document = Document::new(1);
+        let id = rect(&document, 0.0);
+        document
+            .set_corner_radii(&[(id, radii(1.0, 0.0, 3.0, 2.0))])
+            .unwrap();
+        // 10 x 10 to 20 x 40: sx 2, sy 4, factor sqrt(8).
+        resize_drag(
+            &document,
+            id,
+            EditHandle::Resize(ResizeDirection::Se),
+            Point::new(20.0, 40.0),
+            |t| t.set_corner_radius_scaling(CornerRadiusScaling::Proportional),
+        );
+        let factor = 8.0_f64.sqrt();
+        let after = stored_radii(&document, id);
+        for (actual, expected) in [
+            (after.tl, 1.0 * factor),
+            (after.tr, 0.0),
+            (after.br, 3.0 * factor),
+            (after.bl, 2.0 * factor),
+        ] {
+            assert!((actual.as_mm() - expected).abs() < 1e-9, "{after:?}");
+        }
     }
 
     /// Acceptance criterion 11: a star's corner-handle drag is always a

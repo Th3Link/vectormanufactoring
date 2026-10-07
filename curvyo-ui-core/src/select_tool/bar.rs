@@ -8,7 +8,8 @@
 //! it owns `SelectTool`'s pending-edit field.
 
 use curvyo_document_core::{
-    Document, Length, NodeId, ObjectSnapshot, PrimitiveSnapshot, Shape, ShapeEditError,
+    Corner, CornerRadii, Document, Length, NodeId, ObjectSnapshot, PrimitiveSnapshot, Shape,
+    ShapeEditError,
 };
 
 use super::SelectTool;
@@ -117,9 +118,11 @@ impl SelectTool {
                         && matches!(
                             object,
                             ObjectSnapshot::Primitive(PrimitiveSnapshot {
-                                shape: Shape::Rect { corner_radius, .. },
+                                shape: Shape::Rect { corner_radii, .. },
                                 ..
-                            }) if corner_radius.as_mm() > PARAM_EQUAL_EPSILON
+                            }) if Corner::ALL.iter().any(|&corner| {
+                                corner_radii.get(corner).as_mm() > PARAM_EQUAL_EPSILON
+                            })
                         )
                 })
             })
@@ -148,22 +151,23 @@ impl SelectTool {
             return invalid(InvalidReason::Negative);
         }
         let value = value.min(MAX_COORDINATE_MM);
-        let radii: Vec<(NodeId, Length)> = ids_of_kind(objects, selection, ObjectKind::Rectangle)
-            .into_iter()
-            .filter_map(|id| {
-                let object = objects.iter().find(|object| object.id() == id)?;
-                let ObjectSnapshot::Primitive(PrimitiveSnapshot {
-                    shape: Shape::Rect { bounds, .. },
-                    ..
-                }) = object
-                else {
-                    return None;
-                };
-                let limited = Length::from_mm(value.min(max_corner_radius(*bounds)));
-                (apply_param(object, ParamValue::Radius(limited)) != *object)
-                    .then_some((id, limited))
-            })
-            .collect();
+        let radii: Vec<(NodeId, CornerRadii)> =
+            ids_of_kind(objects, selection, ObjectKind::Rectangle)
+                .into_iter()
+                .filter_map(|id| {
+                    let object = objects.iter().find(|object| object.id() == id)?;
+                    let ObjectSnapshot::Primitive(PrimitiveSnapshot {
+                        shape: Shape::Rect { bounds, .. },
+                        ..
+                    }) = object
+                    else {
+                        return None;
+                    };
+                    let limited = Length::from_mm(value.min(max_corner_radius(*bounds)));
+                    (apply_param(object, ParamValue::Radius(limited)) != *object)
+                        .then_some((id, CornerRadii::uniform(limited)))
+                })
+                .collect();
         if radii.is_empty() {
             return EntryOutcome::Unchanged;
         }
@@ -231,13 +235,18 @@ mod tests {
 
         fn radius(&self, id: NodeId) -> f64 {
             let Some(ObjectSnapshot::Primitive(PrimitiveSnapshot {
-                shape: Shape::Rect { corner_radius, .. },
+                shape: Shape::Rect { corner_radii, .. },
                 ..
             })) = self.document.object(id)
             else {
                 panic!("a rectangle");
             };
-            corner_radius.as_mm()
+            assert_eq!(
+                corner_radii,
+                CornerRadii::uniform(corner_radii.tl),
+                "four equal radii"
+            );
+            corner_radii.tl.as_mm()
         }
 
         fn ratio(&self, id: NodeId) -> f64 {

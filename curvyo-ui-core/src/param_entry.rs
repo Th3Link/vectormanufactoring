@@ -6,7 +6,7 @@
 //! every close path of the refinements entry writes nothing here too.
 
 use curvyo_document_core::{
-    Document, Length, ObjectSnapshot, PrimitiveSnapshot, Shape, effective_corner_radius,
+    Document, Length, ObjectSnapshot, PrimitiveSnapshot, Shape, effective_corner_radii,
 };
 
 use crate::oriented_box::OrientedBox;
@@ -46,15 +46,19 @@ impl ParamEntry {
         };
         let field = match (handle, *shape) {
             (
-                ParamHandle::CornerRadius(_),
+                ParamHandle::CornerRadius(corner),
                 Shape::Rect {
                     bounds,
-                    corner_radius,
+                    corner_radii,
                 },
             ) => EntryField::for_param(
                 "r",
                 "Corner radius",
-                format_mm(effective_corner_radius(bounds, corner_radius).as_mm()),
+                format_mm(
+                    effective_corner_radii(bounds, corner_radii)
+                        .get(corner)
+                        .as_mm(),
+                ),
             ),
             (ParamHandle::InnerRadius, Shape::Star { inner_ratio, .. }) => {
                 EntryField::for_param("ratio", "Inner ratio", format!("{:.2}", inner_ratio.get()))
@@ -162,7 +166,9 @@ mod tests {
     use super::*;
     use crate::oriented_box::oriented_bounds;
     use crate::param_handles::Corner;
-    use curvyo_document_core::{Angle, InnerRatio, Point, PointCount, RectBounds, StarFrame};
+    use curvyo_document_core::{
+        Angle, CornerRadii, InnerRatio, Point, PointCount, RectBounds, StarFrame,
+    };
 
     fn rect_entry(radius: f64) -> (Document, ParamEntry) {
         let document = Document::new(1);
@@ -204,13 +210,18 @@ mod tests {
 
     fn radius(document: &Document, entry: &ParamEntry) -> f64 {
         let ObjectSnapshot::Primitive(PrimitiveSnapshot {
-            shape: Shape::Rect { corner_radius, .. },
+            shape: Shape::Rect { corner_radii, .. },
             ..
         }) = document.object(entry.object().id()).unwrap()
         else {
             panic!("a rectangle");
         };
-        corner_radius.as_mm()
+        assert_eq!(
+            corner_radii,
+            CornerRadii::uniform(corner_radii.tl),
+            "four equal radii"
+        );
+        corner_radii.tl.as_mm()
     }
 
     #[test]
