@@ -29,6 +29,7 @@ mod paths;
 mod primitive_model;
 mod primitive_outline;
 mod shape_codec;
+mod shape_radii;
 mod shapes;
 mod units;
 
