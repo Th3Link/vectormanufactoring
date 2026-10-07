@@ -35,7 +35,7 @@ mod units;
 pub use container::{CURRENT_LORO_SNAPSHOT_VERSION, pack, unpack};
 pub use document::{CURRENT_FORMAT_VERSION, Document};
 pub use error::{OpenError, SaveError};
-pub use objects::ObjectEditError;
+pub use objects::{CopySource, ObjectEditError};
 pub use path_model::{
     AnchorId, AnchorKind, AnchorSnapshot, Color, HandleSlot, NewAnchor, NodeId, PathEditError,
     PathSnapshot,

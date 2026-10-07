@@ -9,14 +9,14 @@
 
 use std::collections::HashSet;
 
-use loro::TreeID;
+use loro::{Container, TreeID, ValueOrContainer};
 
 use crate::document::{Document, OBJECTS_TREE};
 use crate::path_codec::{
-    self, KEY_HANDLE_IN, KEY_HANDLE_OUT, KEY_POINT, anchor_map_at, anchors_container, node_exists,
-    write_point, write_vec2,
+    self, KEY_HANDLE_IN, KEY_HANDLE_OUT, KEY_ID, KEY_POINT, anchor_map_at, anchors_container,
+    node_exists, write_point, write_vec2,
 };
-use crate::path_model::NodeId;
+use crate::path_model::{AnchorId, NodeId};
 use crate::primitive_model::{ObjectSnapshot, translate_shape};
 use crate::shape_codec;
 use crate::units::Vec2;
@@ -31,6 +31,26 @@ pub enum ObjectEditError {
     /// collaborator since the caller last read a snapshot).
     #[error("no such object")]
     NoSuchObject,
+    /// A path source of [`Document::duplicate_objects`] came with a number of
+    /// fresh [`AnchorId`]s that differs from its anchor count (a primitive
+    /// takes none).
+    #[error("the fresh anchor ids do not match the source's anchor count")]
+    AnchorIds,
+}
+
+/// One object to duplicate with [`Document::duplicate_objects`], and the
+/// fresh anchor ids its copy takes: a path needs exactly one per anchor, in
+/// anchor order; a primitive needs none. The caller mints them (this crate
+/// never does): an anchor id names a node across the whole document, so a copy
+/// that shared its original's ids would put two equal ids into one path the
+/// first time a maker joined one to the other.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopySource {
+    /// The object to copy.
+    pub id: NodeId,
+    /// The copy's anchor ids, one per anchor of a path source; empty for a
+    /// primitive.
+    pub anchor_ids: Vec<AnchorId>,
 }
 
 fn tree_id_of(id: NodeId) -> TreeID {
@@ -89,6 +109,86 @@ impl Document {
         }
         self.commit_with_label("translate_objects");
         Ok(())
+    }
+
+    /// Copies every named object, displaced by `offset`, in **one commit**
+    /// (`specs/edit-interaction-polish/adrs.md`, decision 2), and returns the
+    /// new ids in source order. The copy takes **every key of its source's
+    /// meta map** as it is (a register a later story adds, or one a newer
+    /// build wrote that this build does not know, comes along with no change
+    /// here) and, for a path, every key of every anchor map except the id,
+    /// which is the caller's fresh one from [`CopySource::anchor_ids`]. It
+    /// sits directly above its own original in z-order, so a selection of
+    /// several keeps its relative order (A, B becomes A, A', B, B'). The
+    /// displacement is the one [`Document::translate_objects`] writes, so a
+    /// copy lies exactly where the blue outline of its preview was.
+    ///
+    /// A copy is a new tree node with no link to its original: a peer's
+    /// concurrent edit of the original does not touch it. A zero `offset` is
+    /// the caller's refusal to make, not this function's.
+    ///
+    /// Every source is resolved and checked before the first write, so one
+    /// stale id or one wrong id count refuses the whole call and writes
+    /// nothing. A source named twice is copied once.
+    ///
+    /// # Errors
+    /// [`ObjectEditError::NoSuchObject`] if a source no longer exists;
+    /// [`ObjectEditError::AnchorIds`] if a path source's `anchor_ids` are not
+    /// exactly one per anchor and all different, or a primitive source has
+    /// any.
+    ///
+    /// # Panics
+    /// Does not panic in practice: every write below goes to a tree node and
+    /// meta map this call just created, or to one it just resolved.
+    pub fn duplicate_objects(
+        &self,
+        sources: &[CopySource],
+        offset: Vec2,
+    ) -> Result<Vec<NodeId>, ObjectEditError> {
+        let mut seen = HashSet::with_capacity(sources.len());
+        let sources: Vec<&CopySource> = sources.iter().filter(|s| seen.insert(s.id)).collect();
+        let tree = self.loro().get_tree(OBJECTS_TREE);
+        let metas: Vec<loro::LoroMap> = sources
+            .iter()
+            .map(|source| {
+                let tree_id = tree_id_of(source.id);
+                if !node_exists(&tree, tree_id) {
+                    return Err(ObjectEditError::NoSuchObject);
+                }
+                let meta = tree
+                    .get_meta(tree_id)
+                    .map_err(|_| ObjectEditError::NoSuchObject)?;
+                check_anchor_ids(&meta, &source.anchor_ids)?;
+                Ok(meta)
+            })
+            .collect::<Result<_, _>>()?;
+
+        // `mov_after` needs the fractional-index feature on for this tree;
+        // enabled on every call, as `split_at_anchor` does.
+        tree.enable_fractional_index(0);
+        let mut created = Vec::with_capacity(sources.len());
+        for (source, source_meta) in sources.iter().zip(&metas) {
+            // invariant: a root-level create on a live tree cannot fail, and
+            // reading the meta map of the node just created cannot fail.
+            #[allow(clippy::unwrap_used)]
+            let new_tree_id = tree.create(loro::TreeParentId::Root).unwrap();
+            #[allow(clippy::unwrap_used)]
+            let meta = tree.get_meta(new_tree_id).unwrap();
+            copy_map(source_meta, &meta);
+            if let Some(tag) = shape_codec::read_shape_tag(&meta) {
+                translate_primitive_meta(&meta, &tag, offset);
+            } else {
+                renumber_anchors(&meta, &source.anchor_ids);
+                translate_path_meta(&meta, offset);
+            }
+            // invariant: the source was resolved above and the new node was
+            // just created: both are live root siblings.
+            #[allow(clippy::unwrap_used)]
+            tree.mov_after(new_tree_id, tree_id_of(source.id)).unwrap();
+            created.push(NodeId::from_parts(new_tree_id.peer, new_tree_id.counter));
+        }
+        self.commit_with_label("duplicate_objects");
+        Ok(created)
     }
 
     /// Writes a resolved rotation — the object after
@@ -196,6 +296,75 @@ impl Document {
     }
 }
 
+/// Checks a copy source's fresh anchor ids against its meta map: a primitive
+/// takes none, a path exactly one per anchor, all different.
+fn check_anchor_ids(meta: &loro::LoroMap, anchor_ids: &[AnchorId]) -> Result<(), ObjectEditError> {
+    let expected = if shape_codec::read_shape_tag(meta).is_some() {
+        0
+    } else {
+        anchors_container(meta).len()
+    };
+    let distinct = anchor_ids.iter().collect::<HashSet<_>>().len();
+    if anchor_ids.len() == expected && distinct == expected {
+        Ok(())
+    } else {
+        Err(ObjectEditError::AnchorIds)
+    }
+}
+
+/// Copies every key of `from` into `into` as it is: a plain value as the same
+/// value, a nested map or movable list (a path's anchors) entry by entry. No
+/// key is named here, so a register added later is copied with no change.
+fn copy_map(from: &loro::LoroMap, into: &loro::LoroMap) {
+    for key in from.keys() {
+        let Some(value) = from.get(&key) else {
+            continue;
+        };
+        // invariant: every insert below goes to a map that is attached to the
+        // document and takes a fresh key or an own container.
+        #[allow(clippy::unwrap_used)]
+        match &value {
+            ValueOrContainer::Value(plain) => into.insert(&key, plain.clone()).unwrap(),
+            ValueOrContainer::Container(Container::Map(map)) => {
+                let nested = into.insert_container(&key, loro::LoroMap::new()).unwrap();
+                copy_map(map, &nested);
+            }
+            ValueOrContainer::Container(Container::MovableList(list)) => {
+                let nested = into
+                    .insert_container(&key, loro::LoroMovableList::new())
+                    .unwrap();
+                for index in 0..list.len() {
+                    match list.get(index) {
+                        Some(ValueOrContainer::Container(Container::Map(map))) => {
+                            let element = nested.push_container(loro::LoroMap::new()).unwrap();
+                            copy_map(&map, &element);
+                        }
+                        Some(ValueOrContainer::Value(plain)) => nested.push(plain).unwrap(),
+                        _ => {}
+                    }
+                }
+            }
+            // No other container kind is stored today; its plain value keeps
+            // the data, and the deep-value test of a copy would show the loss.
+            ValueOrContainer::Container(_) => {
+                into.insert(&key, value.get_deep_value()).unwrap();
+            }
+        }
+    }
+}
+
+/// Gives a freshly copied path its own anchor ids, one per anchor in order.
+fn renumber_anchors(meta: &loro::LoroMap, anchor_ids: &[AnchorId]) {
+    let anchors = anchors_container(meta);
+    for (index, id) in anchor_ids.iter().enumerate() {
+        let map = anchor_map_at(&anchors, index);
+        // invariant: the anchor map is attached and `id` is a plain string.
+        #[allow(clippy::unwrap_used)]
+        map.insert(KEY_ID, path_codec::anchor_id_to_value(*id))
+            .unwrap();
+    }
+}
+
 /// Shifts every one of a path's anchor `point`s by `offset`, leaving
 /// handles (relative to their own anchor) untouched.
 fn translate_path_meta(meta: &loro::LoroMap, offset: Vec2) {
@@ -225,6 +394,7 @@ mod tests {
     use crate::path_model::{AnchorId, NewAnchor};
     use crate::primitive_model::Shape;
     use crate::units::{Angle, Length, Point};
+    use loro::ToJson;
 
     fn two_node_path(document: &Document) -> NodeId {
         document.create_path(
@@ -466,6 +636,57 @@ mod tests {
         };
         assert_eq!(p.shape, before.shape, "frame not rewritten");
         assert!((p.rotation.as_radians() - 0.7).abs() < 1e-12);
+    }
+
+    /// Decision 2: the copy is a copy of the meta map, so it holds every key,
+    /// including one this build does not know. A zero offset makes the two
+    /// deep values equal apart from the anchor ids.
+    #[test]
+    fn a_copy_holds_every_key_of_the_original_including_an_unknown_one() {
+        let document = Document::new(1);
+        let path = two_node_path(&document);
+        let rect = document.create_rect(crate::primitive_model::RectBounds {
+            origin: Point::new(1.0, 2.0),
+            width: Length::from_mm(10.0),
+            height: Length::from_mm(4.0),
+        });
+        let tree = document.loro().get_tree(OBJECTS_TREE);
+        for id in [path, rect] {
+            let meta = tree.get_meta(tree_id_of(id)).expect("meta");
+            meta.insert("future_register", 42_i64).expect("insert");
+        }
+        let copies = document
+            .duplicate_objects(
+                &[
+                    CopySource {
+                        id: path,
+                        anchor_ids: vec![AnchorId::new(9, 1), AnchorId::new(9, 2)],
+                    },
+                    CopySource {
+                        id: rect,
+                        anchor_ids: vec![],
+                    },
+                ],
+                Vec2::ZERO,
+            )
+            .expect("duplicate");
+        for (original, copy) in [path, rect].into_iter().zip(copies) {
+            let deep = |id: NodeId| {
+                let mut value = tree
+                    .get_meta(tree_id_of(id))
+                    .expect("meta")
+                    .get_deep_value()
+                    .to_json_value();
+                if let Some(anchors) = value.get_mut("anchors").and_then(|a| a.as_array_mut()) {
+                    for anchor in anchors {
+                        anchor["id"] = serde_json::Value::Null;
+                    }
+                }
+                value
+            };
+            assert_eq!(deep(original), deep(copy));
+            assert_eq!(deep(copy)["future_register"], 42);
+        }
     }
 
     /// Architect item 1: peer A resizes while peer B rotates about the
