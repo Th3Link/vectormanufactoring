@@ -551,6 +551,36 @@ to the PO" (criteria 21, 41, 59, 64 and four smaller ones).
   the badge/press property above; the origin-axes input is absent before the
   dead zone is left and gone when Shift is released.
 
+- **2026-10-07 (PR 4 build): five refinements of this decision.**
+  - **The origin axes are their own render-core call, not a field of
+    `SelectDecorationInput`.** `build_select_draw_list` is drawn after the blue
+    outline, the axes must lie under it (criterion 27), so `render-core` gets
+    `MoveAxes` and `build_move_axes(view, &MoveAxes)` in a new `move_axes.rs`,
+    and `session/draw.rs` calls it before the blue outline. `MoveAxes` carries a
+    `LockedAxis` of its own (render-core cannot name a `ui-core` type), the two
+    end-point pairs and the device pixel ratio (the 1 px lines snap to whole
+    device pixels with the box's `snap_guide_line`). `Viewport::canvas_size()`
+    is the one new `ui-core` getter, so `Session` can span the viewport.
+  - **The start centre of the axes is the centre of the box around the selected
+    objects' oriented boxes as committed** (the centre handle's position for
+    one object; there is no handle for several). It is read at draw time from the
+    committed objects the drag cache holds, so it needs no field in `MoveDrag`
+    and is right after an unselected object joined by Shift.
+  - **`commit_move(document, ids, offset, copy, minter) -> Option<Vec<NodeId>>`**
+    returns the copies' ids after a copy and `None` after a move or a refusal;
+    the caller selects them (`ObjectSelection::set`). `SelectTool::pointer_up`
+    takes `Modifiers` and `&mut AnchorIdMinter`, `pointer_moved` takes
+    `Modifiers` and `&mut ObjectSelection`. `SelectTool::commit_move_entry`
+    takes the selection, the minter and a `MoveEntryMode { absolute, copy }`
+    (the DOM holds both and passes them with the commit, as for the mode alone
+    in PR 3); `MoveEntry::with_copy_preset` carries Ctrl at the second press.
+  - **`classify_press` has a `begins_move()` helper and is public** (the badge
+    in `Session::move_indicators` calls it); a press on the centre handle is
+    `CentreHandle` whatever the Shift state (criterion 38), where it used to fall
+    through to the outline hit with Shift down.
+  - **`live_offset` is deleted** (folded into `SelectTool::live_move`, which also
+    reports the copy flag and the axis); `LiveEdit` gains `copy`.
+
 ### 6. The Escape cascade, the Node tool and Split selection (Part D)
 
 - **2026-10-06: `Session::escape() -> EscapeStep`, one step per call, written

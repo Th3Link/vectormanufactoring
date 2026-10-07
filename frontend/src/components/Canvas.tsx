@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { EditHintChip } from "@/components/EditHintChip";
 import { HandleHintChip } from "@/components/HandleHintChip";
 import { KeyHintChip } from "@/components/KeyHintChip";
+import { MoveBadges } from "@/components/MoveBadges";
 import { NodeContextMenu } from "@/components/NodeToolbar";
 import { MoveEntryChip } from "@/components/MoveEntryChip";
 import { TransformEntryChip } from "@/components/TransformEntryChip";
@@ -140,6 +141,7 @@ export function Canvas({ editor }: CanvasProps) {
         containerRef={editor.containerRef}
         onDismiss={editor.dismissEditHint}
       />
+      <MoveBadges badges={editor.moveBadges} containerRef={editor.containerRef} />
       {editor.liveReadout && (
         <ReadoutChip
           text={editor.liveReadout.text}

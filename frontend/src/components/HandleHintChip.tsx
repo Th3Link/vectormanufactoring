@@ -43,7 +43,7 @@ const HINT_LINES: Record<string, string[]> = {
     "Ctrl: snap",
     "Double-click or Shift+K: type an angle",
   ],
-  move: ["Move", "Double-click or M: type an offset"],
+  move: ["Move", "Shift: keep one axis", "Ctrl: copy", "Double-click or M: type an offset"],
   "param-radius": ["Corner radius", "Double-click: type a value"],
   "param-inner": ["Inner radius", "Double-click: type a ratio"],
 };
