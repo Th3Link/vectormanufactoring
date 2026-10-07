@@ -6,6 +6,9 @@ style both slices store (`stroke_width`, `stroke`, an unstored `fill`) with
 one style schema that every object node carries, whatever its `shape`. That
 is the document model again, so the schema is written out in full below.
 
+**Read the 2026-10-07 readiness check at the end first: it supersedes the
+parts of the notes below that main's merged changes made stale.**
+
 All 25 acceptance criteria can be built against ADR 0002 §5 and ADR 0009 §3
 as they read today. **No new crate, no new external dependency, no ADR
 amendment.** `curvyo-geometry-core` gains one function, for AC 23's
@@ -459,6 +462,439 @@ already there.
   - "Resize commands refuse a width ≤ 0" is never reached by the entry:
     sizes ≤ 0 are refused before resolution and the factor `√(sx·sy)` is
     then > 0.
+
+## 2026-10-07 readiness check (architect)
+
+Reference state: `main` at `e285c2d` (slices 5 and 6, `object-transform-
+refinements`, `unified-object-editing`, `edit-interaction-polish` PR 1 to 4,
+`shape-creation-from-center`, `polygon-star-box-refit`, the Curvyo rename).
+Everything below was read in that tree. **Where this section differs from an
+earlier note in this file, this section wins.** Crate names are `curvyo-*`.
+
+**Verdict: NOT READY. NEEDS PO CHANGES first (small, listed in 12), then
+NEEDS UX (listed in 11). Architecture is buildable. PR 1 and PR 2 (10) can
+start as soon as the PO changes land; the UX gaps block PR 3 and PR 4 only.**
+
+### 1. `format_version`
+
+`CURRENT_FORMAT_VERSION` on `main` is 5 (`document.rs`), so this slice
+**takes 6**. Still provisional: the PR that merges first takes `main`'s
+value + 1 (`rectangle-corner-radii` and `ellipse-arcs-and-shaping`, both
+Draft, also want a bump). The bump goes into PR 1, and **PR 1 defines the
+complete v6 format** (every key, the stop list and the open-file
+validation), so a build from between the PRs never writes a v6 file that
+another v6 build misreads. In the PR: change `document.rs`'s doc comment;
+`curvyo-editor-wasm/tests/edit_polish_orientation.rs:346` asserts
+`CURRENT_FORMAT_VERSION == 5` and must follow; add a `styles_v6.curvyo`
+golden fixture (all keys, a 3-stop gradient with coincident stops); keep
+`rotation_v5.curvyo` and add the test that it opens with every style
+reading its frozen default. `document.json`'s `ObjectJson` (flat
+`stroke_width`/`stroke`/`fill` today) gets one `style` object instead.
+
+### 2. Stale or in conflict with merged behaviour
+
+1. **"Build order" paragraph** (starts after `object-transform`): met,
+   everything merged. Obsolete.
+2. **Version numbers 4, 5, 6 in the 2026-10-04 and 2026-10-05 notes:**
+   superseded by section 1.
+3. **`build_shape_draw_list`** (crate-boundary note) does not exist.
+   Today: `build_draw_list(&[PathSnapshot], view, &DecorationInput)` draws
+   path strokes **and** the Node tool's decorations; `build_primitive_strokes`
+   draws primitives afterwards; `Session::draw_list` (`session/draw.rs`) glues
+   them. The one-pass-in-tree-order decision stands, but the seam is: a new
+   `render-core` artwork entry over `&[ObjectSnapshot]` (new module
+   `artwork.rs`) and decorations split out of `build_draw_list`. The Node
+   tool's live node drag (`live_node_drag_paths_in`) overrides paths, so
+   `Session` hands the artwork pass `objects` with those paths substituted.
+   `stroke::path_stroke` stays the plain width-and-colour helper that the
+   pen preview, the live preview, the guides and `shape_preview` use. Style-aware
+   drawing is new code beside it, not a change to it.
+4. **`PrimitiveSnapshot` is `Copy`** (`primitive_model.rs`; `primitives_in`
+   dereferences it). `Style` carries `Vec<GradientStop>`, so it is `Clone`,
+   not `Copy`. **Decision: `PrimitiveSnapshot` drops `Copy`; `Style::clone` of an object with no gradient does
+   not allocate (empty `Vec`).** Mechanical `.clone()` fixes at the use
+   sites. `Style` derives `Serialize` and `Deserialize` (`PathSnapshot`
+   derives both).
+5. **Snapshot field replacement touches about 25 test and source files** across the five
+   crates (`.stroke_width`, `.stroke`, `.fill`). Mechanical, but part of PR 1.
+6. **Hit-testing note, two errors.** (a) It says the outline "is always
+   closed with a straight segment". That is right for an **open** path (AC 15)
+   and wrong for a **closed** one: a closed path's closing segment is the
+   cubic through its own handles (`stroke::build_path`, `segment_pairs`). The
+   winding test must close an open path with a chord and a closed path with
+   its real closing segment, the same as the fill tessellation. (b) "Hits are
+   resolved topmost first, first hit wins" is replaced by the rule in
+   section 6.
+7. **2026-10-05 note "Split must copy `fill_stops` with fresh `StopId`s,
+   never the original's": reversed.** See section 4.
+8. **2026-10-05 and 2026-10-06 resize notes:** still right, the call sites are
+   now `transform_drag::scale_stroke`, `transform_commit::commit_resize` and
+   `numbers_of` (read in section 3). "`select_tool` scales the width" is
+   obsolete (the refinements note already says so).
+9. **`ui-core::hit_test_object` has three callers**, not one: the press
+   (`select_tool/press.rs::classify_press`, which the copy badge also asks),
+   the double-click hand-off (`select_tool/entry.rs::double_click`) and the
+   hover (`session/select.rs::select_hover`). The 2026-10-04 note names none.
+10. **`gradient frame = oriented_bounds` (2026-10-06):** confirmed and
+    built (`polygon-star-box-refit` is merged, `oriented_bounds` uses
+    `orientation()`). Consequence to state plainly: for a **polygon or star**
+    the box is the circumscribed square `C +- (R, R)`, not tight, so a triangle's
+    ramp starts at t about 0.25 where the shape begins. **Decision: keep it.**
+    The gradient spans the box the maker sees; a tight box is the separate
+    story `polygon-star-box-refit` already names. It also means a polygon or
+    star turned into a path by "Object to path" gets a tight box, so its gradient
+    **re-fits on conversion**. Rectangles and ellipses do not visibly change.
+    Known limit, one test, and one line added to the existing
+    `docs/technical-debt.md` item on "Object to path" and the shown angle.
+11. **Specification, stale or silent** (the PO owns the edits, list in 12).
+
+### 3. What `Style` must do, per merged operation
+
+- **Shape of the type.** `Style { stroke: Stroke, fill: Fill }`;
+  `Stroke { enabled, width: Length, color: Color, opacity: Opacity, dash:
+  DashPattern, join: LineJoin, cap: LineCap }`; `Fill { enabled, kind:
+  FillKind, color: Color, opacity: Opacity, stops: Vec<GradientStop> }`;
+  `GradientStop { id: StopId, position: StopPosition, color: Color, opacity:
+  Opacity }`. Reuse the existing `Color`. Absent keys read as the frozen
+  defaults of the 2026-10-04 note; creation still writes `stroke_width` and
+  `stroke` explicitly, nothing else.
+- **Resize writes (`resize_rect`, `resize_ellipse`, `resize_star_frame`,
+  `resize_path`).** They **already** take `stroke_width: Option<Length>` and
+  write only a `Some` that differs from the stored value
+  (`shapes.rs::write_stroke_width_if_changed`). Re-pointing is therefore a
+  body change, not a signature change: the same key `stroke_width`, now
+  through `style_codec`, with the new refusal of a width `<= 0` or not finite.
+  `commit_resize` passes `Some(style.stroke.width)` only with "Scale stroke
+  width" on (`StrokeScaling::Proportional`, read at press or entry open) and
+  `None` otherwise; a resize with the switch off, every skew
+  (`resize_path(.., None)`) and every typed size with the switch off write
+  **no style key at all**. Dashes are width ratios and follow with no write.
+  A stroke that is switched off (`enabled == false`) still has its stored
+  width scaled, so turning it on later restores the proportion. Existing tests
+  (`resize_with_no_stroke_width_leaves_a_peers_concurrent_stroke_edit_alone`,
+  `resize_does_not_rewrite_an_unchanged_stroke_width_or_corner_radius`) stay
+  as they are and are the regression net. `transform_drag::scale_stroke`
+  and `numbers_of` read `style.stroke.width`.
+- **`duplicate_objects`.** It copies the meta map structurally (`copy_map`
+  recurses into a nested map and a movable list of maps, no key named), so
+  every style key and the whole `fill_stops` list copy **with no change in
+  `document-core` and no new field on `CopySource`**. The copied stops keep
+  their `StopId`s. **Decision, reversing the 2026-10-05 note: a `StopId` is
+  unique within one object's stop list, not across the document.** Every
+  command and the panel's selected-stop state address a stop as
+  `(NodeId, StopId)`. Fresh ids on copy would need a renumber pass and a
+  `CopySource.stop_ids` the caller mints, to protect an invariant nothing
+  reads (an `AnchorId` must be global because the node selection holds it
+  alone; a stop selection holds the pair). A stop add mints from the same
+  minter, so it never collides inside a list. Tests: a copy holds the
+  original's style and stops (extend
+  `a_copy_holds_every_key_of_the_original_including_an_unknown_one`); editing
+  the copy's stop leaves the original untouched and the reverse; both a path
+  and a primitive.
+- **`split_at_anchor`.** The open-path split writes the new object through
+  `create_path_uncommitted(.., stroke_width_mm, stroke, rotation)`, which only
+  carries width and colour today. It takes `&Style` instead and writes every
+  key through `style_codec::write_style`, `fill_stops` verbatim (same ids,
+  section above). Both halves of an open filled path keep their fill and each
+  gets its own gradient box (the ramp restarts per half, a known look, no
+  stored geometry to carry). The closed-path split keeps the same object and
+  changes nothing in its style. Test: split a gradient-filled, dashed,
+  round-capped path; both objects read back identical style.
+- **`join_endpoints`.** The surviving path `a` keeps every register,
+  style included; `b`'s tree node is deleted and its style is discarded, a
+  filled `b` joined to an unfilled `a` becomes unfilled. No code change beyond
+  the field rename; one test pins it. A same-path join (closing a path) keeps
+  the style.
+- **"Object to path" (`convert_to_paths`).** It deletes only
+  `ALL_PRIMITIVE_KEYS` and writes `closed` and `anchors`; no style key is in
+  that list, so the style carries over unchanged. Add a test that no style
+  key is ever added to `ALL_PRIMITIVE_KEYS` and that a converted gradient path
+  keeps its stops. Look change: section 2, item 10.
+- **`rotate_object`, `translate_objects`.** Untouched. A rotated object's
+  gradient turns with it (the box turns, no key written).
+- **The live preview, two different previews, two answers.**
+  (a) The Select tool's geometry preview (resize, rotate, skew, move, bar
+  edits; `build_live_edit_preview`) stays what `unified-object-editing`
+  criteria 10 to 15 say: a hollow 1.5 px `--preview-new` outline of the new
+  geometry over the committed object in its own committed style, no fill and
+  no stroke-width preview (the criterion's own note: "no fill preview yet,
+  revisit with `0007`"). **Decision: revisit = keep.** The gradient box and the
+  stroke scale are recomputed from the final geometry on commit; drawing
+  them live would draw the object itself, which is the opposite of
+  blue-new, black-old. The PO confirms (12); no code change.
+  (b) The panel's slider, picker and stop drags are a different preview: the
+  object itself, drawn in the new style. It is ephemeral, never in the
+  document (ADR 0009 section 2): `ui-core` holds a `StyleOverride`
+  (`NodeId` set plus the one pending `StyleEdit`) that `Session::objects` applies
+  to the snapshots before the artwork pass, the way `live_node_drag_paths_in`
+  substitutes a drag. One commit on release, per the specification. It cannot
+  coexist with a Select drag (one pointer).
+- **Selection box, hover box, blue outline over filled artwork.** All three are
+  drawn after the artwork, so they are on top; no render-order change. Their
+  **colour** is a UX gap (section 11): a 1 px `--accent` dashed box on a blue
+  fill, and the 20 % `--accent-hover` hover box on any dark fill, are
+  invisible, and every measurement in `design-system.md` was taken on the
+  canvas colour only.
+
+### 4. Gradient stops across multi-selection (a command-shape correction)
+
+The specification shows the stop list for a multi-selection only when all
+objects have the same fill mode and stop count (UX notes). The objects have
+different `StopId`s, so a stop edit in that case cannot carry one id. **The
+command is per object:** `ui-core` maps the stop at rank `k` (position order,
+list order breaks ties, as in the stop-model note) to each object's own
+`StopId` from the snapshot it just read and hands `document-core` a list of
+`(NodeId, StopId, change)`. A stale `NodeId` or `StopId` refuses the whole
+batch (the existing rule). `document-core` still never addresses a stop by
+rank or list position.
+
+### 5. Rendering decisions that the earlier notes left open
+
+- **Display floor and dashes.** `MIN_DISPLAY_STROKE_WIDTH_PX` still floors the
+  drawn width (`min_display_stroke_at_extreme_zoom_out.rs` pins it). Dash
+  lengths come from the **document** width times the ratio, not the floored
+  width. A pattern whose period (on + off) is under 2 screen px, or one that
+  would produce more than the per-object dash cap, renders **solid**. The cap
+  of 10^4 per object is too high for a per-frame, uncached tessellation of
+  hundreds of objects: **use 2000 per object** and a fixed per-frame total
+  (50 000), solid beyond either. Preset dashes need `on > 0` so that they show
+  under butt caps (a zero-length "Dot" is invisible); the preset numbers are
+  a UX item.
+- **Single coverage via depth.** The decision stands but has three costs
+  the 2026-10-04 note did not state. (1) It needs a depth attachment with the
+  **same MSAA sample count** as the colour target (`gpu.rs`
+  `depth_stencil: None` today): the memory in the existing debt item
+  "MSAA x HiDPI memory" about doubles. Measure in PR 2 on the customer's
+  machine; the fallback lever is the existing `PREFERRED_SAMPLE_COUNTS`.
+  (2) `gpu.rs` compiles only for wasm32 and is 695 lines, so the layering,
+  the ramp texture and the shader cannot be tested natively. Everything that
+  can be pure is: the layer assignment and the ramp/colour-at-t function in
+  `render-core` with native tests; for the GPU, a recorded browser
+  pixel-read check (a translucent self-crossing stroke has no dark spots at
+  nodes). (3) `Vertex` has 9 construction sites, so widening it is small,
+  **but it widens only in PR 4**, when a gradient needs it; PR 2 adds depth
+  layers and keeps colour-only vertices.
+- **Cost of reading.** A frame at rest reads every object (about 12 ms of
+  the measured 18 ms for 200 objects, `docs/technical-debt.md`, canvas
+  performance). Each object now reads about 13 more keys, and fills and
+  dashes are tessellated every frame. **PR 1 re-runs the `#[ignore]`
+  benchmark with styled objects; if a 200-object frame at rest passes 25 ms,
+  the draw-list cache keyed by document version (that debt item's
+  resolution) moves into PR 2.** Otherwise it stays deferred.
+
+### 6. Hit-testing and the press order (AC 23)
+
+`hit_test_object` is the one ordering function (all three callers use it),
+`advanced-selection`'s `hit_test_objects` does not exist yet, and `0007` ships
+first, so this section fixes the order and `advanced-selection` follows.
+
+- **Interior test.** `curvyo-geometry-core` gets one function (`kurbo`
+  `BezPath::winding`, exact on cubics, no `Tolerance`): the anchors, a
+  `closed` flag, a point. Closed: the closing segment is the real cubic.
+  Open: a straight chord. `ui-core` rejects by `object_bounds` first, so a
+  hover over thousands of objects does not run the winding test on every
+  one. An object takes part exactly when `render-core` would paint a fill
+  (`fill_enabled` and, for a gradient, at least one stop); opacity 0 counts.
+- **Rule for one point.** Let F be the topmost object whose filled interior
+  contains the point. Among the objects at or above F (all objects if there
+  is no F), the nearest outline within tolerance wins, an exact tie going to
+  the topmost (the slice 4 rule, **unchanged when nothing is filled**). If no
+  outline is hit, F wins. An object below F cannot win: F covers it. This
+  keeps slice 4's nearest-outline behaviour and stops a hidden outline under
+  an opaque fill from beating the fill. For `advanced-selection`: the
+  cycle list starts with this result and continues with the remaining
+  outline hits nearest first, then the remaining interior-only hits topmost
+  first. Its flag 2 is resolved by this.
+- **Press order, as it stands and how fill changes it.** Today
+  (`classify_press`): handle, centre handle, then (no Shift) inside the sole
+  selected object's box = move, then `hit_test_object`, then empty = marquee
+  or deselect. This slice changes only the fourth step: it now returns an
+  object whose outline **or filled interior** is under the point.
+  Consequences, all intended: a drag that starts inside an unselected filled
+  shape moves it (it no longer starts a marquee); a Shift press on any
+  filled interior toggles that object (this is what criterion 35 means by
+  "add-to-selection works over a filled shape"); a Shift press inside the
+  sole selected box away from every object still finds nothing. **Criterion
+  35's text must say "outline or filled interior" in its last two clauses
+  (PO edit, 12).**
+- **Hover and double-click.** Hover (`select_hover`) and the double-click
+  hand-off (`double_click`) call the same function, so a filled interior
+  lights up the hover box and a double-click on a filled path's interior
+  hands it off to the Node tool. Hover should also follow `classify_press`
+  (inside the sole selected box lights nothing else, because a press there
+  moves the selected object): today it does not, and fills make the
+  mismatch visible. A small fix inside this slice, with a test.
+- **One customer question (CLAUDE.md section 3: it changes accepted
+  behaviour, so ask).** With fills, "inside the sole selected box moves"
+  (`unified-object-editing` 35, slice 5 criterion 23) has a trap: select a
+  large filled rectangle, and a click on a smaller filled shape lying on it
+  moves the rectangle instead of selecting the shape. Option A: keep the
+  order (the only way to the shape is deselecting first, or Alt-click once
+  `advanced-selection` ships). Option B: the move yields to a **different
+  object above the selected one whose filled interior contains the point**
+  (outlines of other objects still do not take the press, as slice 5 says).
+  **Recommendation B; default if unanswered: A** (no accepted behaviour
+  changes, and B is a one-condition change in `classify_press` later).
+
+### 7. Properties panel against the floating Select bar
+
+- No conflict of purpose: the bar is the Select tool's **permanent** bar
+  (customer, 2026-10-06; the switches, Radius, Points, Ratio, Object to
+  path); the panel is the docked, tool-independent Style section. Neither
+  absorbs the other in this slice.
+- **Layout conflict to fix.** `App.tsx` anchors the bars' overlay row at the
+  window edge (`absolute right-3 left-[72px]`). With a 280 px docked panel the
+  bar would run underneath it. The overlay moves into the canvas region (a
+  `relative` wrapper around `Canvas`) and keeps `left-[72px]`; the bar wraps
+  within the narrower canvas (it already wraps). The rail stays floating
+  over the canvas. Collapsing the panel resizes the canvas through the
+  existing `ResizeObserver` path, which slice 4 already requires to be stable.
+- `design-system.md` (2026-10-05) says the shape tool's persistent options
+  (point count, ratio) move into the panel as a "Shape tool options" section.
+  `unified-object-editing` made the shape tools creation-only and the
+  polygon/star tool keeps its floating bar. **This slice builds the panel with
+  the Style section only.** UX corrects that paragraph.
+- **Selection scope per tool is unspecified.** The panel edits the object
+  selection (`Session.selection`), which the Select tool and the shape tools
+  share. Under the Node tool the nodes of a path are selected, not the
+  object; under the Pen tool nothing is. PO/UX state it. Recommendation: the
+  Node tool edits the paths owning the selected nodes, the Pen tool and an
+  empty selection show the disabled state. "Last-used value" for a disabled
+  panel is dropped (nothing to edit, so show the frozen defaults).
+- Focus: the other bars return focus to the canvas after an action
+  (`onReturnFocus`). A form that is tabbed through should not. UX decides
+  per control. Letter shortcuts are already ignored while a control has focus
+  (design-system, "Any letter shortcut"), so typing in a field cannot trigger
+  a tool. Test: Backspace and Delete in the width field and the hex field do
+  not delete the selected object.
+- **Frontend gaps.** `components/ui/` holds only `alert-dialog` and `button`.
+  The panel needs Popover, Select, ToggleGroup, Slider and Tooltip wrappers
+  (the `radix-ui` umbrella package is already a dependency; `shadcn`'s CLI
+  is the one the debt item "`shadcn` pulls a vulnerable `braces`" is about) and
+  a colour area. Default: the wrappers by hand over `radix-ui`, the
+  saturation/hue area from `react-colorful` (MIT, no dependencies, keyboard
+  support), the lead justifies it in the PR. The panel's state goes in a new
+  `useStylePanel.ts`: `useEditorSession.ts` is 1409 lines and does not grow.
+
+### 8. Module size debts: does this slice need to split first?
+
+**No pre-split is required.** Non-test sizes measured: `select_tool.rs` 379,
+`session/mod.rs` 499, `wasm_api.rs` 743 (the only file over the limit among
+the three), `gpu.rs` 695. The new code goes into new modules:
+- `document-core`: `style_model.rs`, `style_codec.rs`, `styles.rs`. The old
+  `read_stroke*`/`write_stroke*` leave `path_codec.rs` (524, shrinks).
+- `geometry-core`: the winding function beside `nearest_point_on_segment`.
+- `ui-core`: `style_panel.rs` (the state, reusing `BarValue` for mixed),
+  `style_edit.rs` (the override and the dispatch). `hit_test_object.rs` and
+  `select_tool/press.rs` change in place (274 and 133 lines).
+- `render-core`: `artwork.rs`, `dash.rs`, `fill.rs`, later `gradient.rs`.
+- `editor-wasm`: **`wasm_style.rs`** (the pattern of `wasm_select_bar.rs`), so
+  `wasm_api.rs` does not grow; `session/style.rs`. `session/mod.rs` is at
+  499: a new `Session` field pushes it over, so PR 3 task 1 is a pure move of
+  the tolerance helpers (about 40 lines) to `session/tolerances.rs`.
+- `gpu.rs` (695, over the limit): **PR 2 task 1 is a pure move of the
+  pipeline and shader set-up into `gpu_pipeline.rs`**; the depth attachment
+  and (PR 4) the ramp texture go there and in `gpu_paint.rs`, not into
+  `gpu.rs`. A dated line is added to the `Session` size item in
+  `docs/technical-debt.md`.
+`wasm_api.rs` stays with `advanced-selection` as the debt item says.
+
+### 9. What is not buildable as written
+
+1. The hit-test order "topmost first, first wins" (occlusion and slice 4's
+   nearest rule): replaced, section 6.
+2. "Closed with a straight segment" for closed paths: replaced, 2.6.
+3. A stop addressed by `StopId` alone in a multi-selection: replaced, 4.
+4. Fresh `StopId` on split and copy: reversed, 3.
+5. `Copy` on `PrimitiveSnapshot` with a stop list inside: dropped, 2.4.
+6. The 10^4 dash cap for per-frame tessellation, and dashes at the display
+   floor: replaced, 5.
+7. AC 21, 22: "bounding box" is the oriented box (the selection box); stated in
+   the amendment in 12.
+8. The panel at the window edge under the bars, and the shape-options
+   section: section 7.
+Nothing here needs a new crate, trait, generic or dependency beyond
+`react-colorful` (frontend, justified in the PR). **No ADR amendment, nothing
+`needs-customer` except the one question in section 6.**
+
+### 10. PR split (4 PRs, stacked; PR 1 alone is invisible)
+
+1. **Model, no visible change.** `document-core` (`Style`, codec, all keys
+   and the stop list, validation, the stop commands, `format_version` 6,
+   fixtures, `document.json`), the snapshot replacement and the 25 test
+   files, the resize/duplicate/split/join/convert tests, `ui-core`
+   re-pointing (`scale_stroke`, `commit_resize`, `numbers_of`), and
+   `render-core` reading `style.stroke.width` and `.color` only (so AC 3
+   holds). Benchmark re-run. AC 2 to 6, 9, 13, 16 to 20 (storage and
+   commands), 24, 25.
+2. **Rendering and hit-testing.** Task 1: `gpu.rs` pure move. The artwork
+   pass in tree order, stroke on/off, alpha, dash, join, cap, solid fill with
+   the closing chord, depth layers, the winding function, the new
+   `hit_test_object` rule, press, hover and double-click, the box and
+   outline contrast the UX note fixes. AC 6 to 8, 10 to 15, 23. Tested by
+   draw-list and native tests plus the recorded browser pixel check.
+3. **Panel (the first demo).** Task 1: `session/tolerances.rs` pure move.
+   `PropertiesPanel` with the Style section (stroke and solid fill),
+   `wasm_style.rs`, `style_panel.rs`, mixed state, the override preview,
+   colour-alpha picker, `Shift+Ctrl+F`, `App.tsx` re-anchoring,
+   `design-system.md` rows. AC 1, 2, 4 to 9, 13, 14, 24 through the UI.
+4. **Gradient.** `Vertex` widening, ramp texture, shader (`gpu_paint.rs`),
+   `gradient.rs` (stop sort, 0 and 1 stop rules, colour at t, sRGB-encoded
+   interpolation, pinned by a golden ramp), `editor-wasm` passing the
+   `OrientedBox` values in the fill command, the stop editor, linear and
+   radial. AC 16 to 22. Tester cases: rotated 90 degrees, skewed 30 degrees
+   path, "Object to path" re-fit of a polygon, coincident stops, zero-size box.
+If the lead wants three PRs, merge 1 and 2; do not merge 3 and 4.
+
+### 11. What the UX engineer must specify before Ready (missing from the specification)
+
+1. **Default colours of a new gradient and of an added stop.** AC 17 and the
+   UX notes each point at the other; neither says. Also the "Add stop"
+   position rule ("1.0 minus a small offset": which offset) against the
+   position-order insert in this file.
+2. **Dash presets**: the on/off ratios of Dash, Dot, Dash-Dot (`on > 0`,
+   section 5) and the line-sample icons.
+3. **Contrast of the dashed selection box, the hover box, the blue preview
+   outline and the handles over filled artwork** (section 3). One proposal to
+   test: a 1 px white under-line below the `--accent` line, or a mixed-blend
+   line. No measurement exists on anything but the canvas colour.
+4. **Panel layout** inside 280 px: rows, label column, control heights (the bars
+   use 28 px), section header, the checkerboard and "Mixed" tokens with
+   their contrast, the `ColorAlphaPicker` popover placement and size inside a
+   docked panel, alpha as an integer percent (stored as a fraction; rounding
+   rule for "reads back as set").
+5. **Gradient stop list**: multi-selection by rank (section 4); display when
+   a merged document holds 0, 1 or more than 16 stops (add disabled at 16,
+   remove disabled at 2 or fewer, a list of 0 or 1 still shows and edits);
+   selected-stop state.
+6. **Selection scope under the Node and Pen tools**, focus return after a
+   commit, and the panel in a narrow window.
+7. **Correct `design-system.md`** (shape options section, the permanent bar
+   and panel together, the overlay anchor).
+
+### 12. What the PO must change in `specification.md` (small, blocking)
+
+1. **New criterion, draw order:** objects draw in tree order, paths and
+   primitives together. This is a visible change for existing files (a path
+   above a rectangle drew *under* it until now).
+2. **New criterion, hit order with fills:** the press order of section 6,
+   the hover and double-click on a filled interior, and the customer's answer
+   to the section 6 question. Reword `unified-object-editing` 35 (last two
+   clauses) and `advanced-selection` AC 3 to 5 and flag 2 to match.
+3. **New criteria for duplicate, split, join and "Object to path":** the
+   style is kept as section 3 says (copy keeps style and stops, Split copies
+   it to the new object, Join keeps the survivor's, conversion keeps it).
+4. **AC 21 and 22:** "the object's own bounding box" becomes "the object's
+   selection box (the oriented box the Select tool draws)", turning with a
+   rotation, re-fitting after a skew; add the polygon/star look and the
+   "Object to path" re-fit as stated limits.
+5. **AC 16** (a stop is edited in a multi-selection by rank) and the
+   0/1/more-than-16 stop display rule go with the UX note, 11.5.
+6. **Confirm** that a geometry drag keeps showing no fill or stroke
+   preview (section 3), and that the shape tools keep their floating bar.
+7. **Statuses:** `0005`, `0006`, `edit-interaction-polish`, `unified-object-
+   editing` and others read "Ready" but are merged; the PO sets them to Done
+   with the PR links (the index in `specs/index.md` is the PO's).
 
 ## Flagged to the lead
 

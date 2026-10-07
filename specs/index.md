@@ -34,7 +34,7 @@ triggered is a bug, not a variant.
 | 4 | `canvas-navigation-and-selection` | Pan/zoom the canvas (zoom toward cursor), stable behaviour across window resize, and a general Select tool to click/move/delete any object without re-entering its creation tool. | R-EDIT-010, R-EDIT-011 | Must | Done |
 | 5 | `object-transform` | Move, scale and rotate any path or primitive via on-canvas handles on the Select tool's bounding box; stroke width and (since `unified-object-editing`) corner radius scale with a resize only when the Select tool's "Scale stroke width" / "Scale corner radius" switches are on (both off by default). | R-EDIT-012 | Must | Done |
 | 6 | `path-merge-split-and-node-types` | Join two path endpoints into one node, split a path at a node into two; a third node type (Asymmetric) alongside Corner and Symmetric. | R-EDIT-014 | Must | Done |
-| 7 | `stroke-and-fill-styling` | Stroke width/dash/join/cap/color; solid fill and linear/radial gradient fill, on any path or primitive. | R-EDIT-005, R-EDIT-006 | Must | Ready (architect refresh) |
+| 7 | `stroke-and-fill-styling` | Stroke width/dash/join/cap/color; solid fill and linear/radial gradient fill, on any path or primitive. | R-EDIT-005, R-EDIT-006 | Must | Ready (architect check and UX notes done 2026-10-07) |
 | 8 | `undo-redo` | Ctrl+Z/Ctrl+Y undoes/redoes every editing operation shipped in slices 2–3 and 5–7, one interaction = one undo step, no silent data loss. | R-EDIT-008 | Must | Not started |
 | 9 | `boolean-operations` | Union, difference, intersection on closed paths. | R-EDIT-003 | Must | Not started |
 | 10 | `layers-and-grouping` | Group/ungroup objects; layers with per-layer visibility and lock, to separate cut/engrave/reference geometry. | R-EDIT-009 | Must | Not started |

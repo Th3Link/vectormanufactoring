@@ -627,6 +627,13 @@ unchanged. An unlinked corner (`specs/rectangle-corner-radii/`) may exceed
 limit keeps the two radii on one side summing to at most that side's length and
 the map is linear.
 
+*Note, 2026-10-07, corrected by `rectangle-corner-radii`:* the clearance claim
+above holds for adjacent corners only. Two diagonal corners (TL/BR, TR/BL) have
+no radius limit between them, so their knobs can overlap. The radius knob is
+therefore drawn at a capped position (criterion 1 and UX note 2 of
+`specs/rectangle-corner-radii/`); stored and effective radii are not affected.
+The sentence is left as accepted at the time.
+
 **The centre handle yields.** It is not drawn while any parameter handle centre
 is within 20 px of the box centre (11.3 half-diagonal of the 16 px glyph, plus 5
 handle radius, plus 4 clear, rounded up), and not while a parameter handle is
