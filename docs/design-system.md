@@ -438,7 +438,9 @@ values, not an implementation site, for those four rows.
   - **A key that opens an entry opens the same chip as a double-click on one
     named handle**, with that handle's pivot rules (never the Shift pivot):
     M the centre handle, R the top-right corner rotate handle, S the
-    bottom-right corner resize handle, K the top skew handle (skew x),
+    bottom-right corner resize handle (the one exception to the rule: S
+    scales about the box centre, as a Shift drag would, because no handle was
+    chosen; the double-click keeps the drag's fixed point), K the top skew handle (skew x),
     Shift+K the right skew handle (skew y). It works when that handle is
     hidden by size or by a neighbouring glyph (the chip goes where the handle
     would be), which closes the small-object gap of the typed move. The
@@ -608,7 +610,7 @@ values, not an implementation site, for those four rows.
 | Object to path | none; the "Object to path" button of the Select bar | `unified-object-editing`; no shortcut until undo exists (Shift+Ctrl+C opens the inspector in a browser build) |
 | Type a move | **Planned, PR 3:** `M` (Select tool, one object selected), or double-click the centre handle | `edit-interaction-polish`; X, Tab, Y, Enter is relative; Tab to the mode control, Space, Enter is absolute; works for any object size. `M` is not bound in PR 1 and PR 2: it does nothing and shows no hint |
 | Type an angle | `R` (Select tool, one object selected), or double-click a rotate handle | Built in PR 1. Opens as the top-right corner rotate handle's chip, placed there even when the handle is not drawn (small object) or hidden; for a polygon or star the prefill is its real orientation, and 0 stands the first vertex to the right. Several objects selected: hint "Select one object to type a value" for 2s, nothing changes |
-| Type a size | `S` (Select tool, one object selected), or double-click a resize handle | Built in PR 1. Opens as the bottom-right corner resize handle's chip (W and H, or "r" for a polygon or star), also for a hidden handle. Same hint for several objects |
+| Type a size | `S` (Select tool, one object selected), or double-click a resize handle | Built in PR 1. Opens as the bottom-right corner resize handle's chip (W and H, or "r" for a polygon or star), also for a hidden handle, and scales about the box centre (as a Shift drag would; customer, 2026-10-07): the pivot marker shows at the centre, and the fields are independent (Ctrl+S is gated). A double-click on a resize handle keeps the drag's fixed point. Same hint for several objects |
 | Type a skew | **Planned, PR 3:** `K` (skew x) and `Shift+K` (skew y), one path selected, or double-click a skew handle | Fixed line is the opposite side's, never the Shift pivot. `K` is not bound in PR 1 and PR 2; the skew handle's hint chip names no key yet |
 | Copy while moving | hold Ctrl (before the press or during the drag), release the pointer with it down | Plus badge, "Copy" in the readout; Ctrl released before the release makes it a move again |
 | Keep a move on one axis | hold Shift (before the press or during the drag) | Axis re-chosen on every pointer event; origin axes shown; a Shift-click without movement still toggles the selection |

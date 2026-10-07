@@ -890,6 +890,43 @@ mod tests {
         );
     }
 
+    /// Criteria 57a and 59: while the chip of the key S is open the pivot
+    /// marker shows at the box centre, the fixed point of the typed size; the
+    /// chip of a double-click on the same handle shows the opposite corner.
+    #[test]
+    fn the_s_chip_shows_the_pivot_marker_at_the_box_centre() {
+        let mut session = big_rect_session();
+        assert_eq!(
+            session.key_down(crate::KeyInput {
+                key: "s",
+                ..crate::KeyInput::default()
+            }),
+            crate::KeyOutcome::EntryOpened
+        );
+        let marker = session
+            .select_transform_decoration_input()
+            .pivot_marker
+            .expect("a marker while the chip is open");
+        assert!((marker.x - 60.0).abs() < 1e-9 && (marker.y - 50.0).abs() < 1e-9);
+        session.cancel_transform_entry();
+        assert!(
+            session
+                .select_transform_decoration_input()
+                .pivot_marker
+                .is_none()
+        );
+        let corner = Point::new(110.0, 80.0);
+        session.pointer_hover(corner, false, false);
+        session.pointer_down(corner, false);
+        session.pointer_up(corner, false, false);
+        session.double_click(corner, false, false);
+        let marker = session
+            .select_transform_decoration_input()
+            .pivot_marker
+            .expect("a marker while the chip is open");
+        assert!((marker.x - 10.0).abs() < 1e-9 && (marker.y - 20.0).abs() < 1e-9);
+    }
+
     /// Criterion 56: a skew drag draws a dashed guide along the fixed line
     /// (the bottom edge for a top handle, the centre line under Shift),
     /// 16 px past each end of the box; it is gone after Escape.

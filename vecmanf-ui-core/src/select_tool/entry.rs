@@ -118,10 +118,12 @@ impl SelectTool {
     }
 
     /// Criterion 57: opens the angle entry (R) or the size entry (S) for the
-    /// sole selected object, exactly as a double-click on its top-right
-    /// corner rotate handle or bottom-right corner resize handle does, with
-    /// no Shift pivot and no Ctrl link: those are read only from a
-    /// double-click. Both corner handles always exist, whatever the box size,
+    /// sole selected object, as a double-click on its top-right corner rotate
+    /// handle or bottom-right corner resize handle does, with no Shift pivot
+    /// and no Ctrl link: those are read only from a double-click. One
+    /// difference, set by the customer on 2026-10-07 (criterion 57a): S
+    /// scales about the box centre, as a Shift drag would, because no handle
+    /// was chosen. Both corner handles always exist, whatever the box size,
     /// so the entry opens for an object of any size.
     ///
     /// # Errors
@@ -143,11 +145,14 @@ impl SelectTool {
             EntryKey::Angle => {
                 TransformEntry::for_rotate(object, &box_, ResizeDirection::Ne, false)
             }
+            // No handle was chosen: the typed size scales about the box centre,
+            // as a drag with Shift held would (criterion 57a), and reads no
+            // modifier (Ctrl+S is gated, so no Ctrl link either).
             EntryKey::Size => TransformEntry::for_resize(
                 object,
                 &box_,
                 ResizeDirection::Se,
-                (false, false),
+                (true, false),
                 self.modes,
             ),
         };
@@ -240,10 +245,12 @@ fn hit_outcome(object: &ObjectSnapshot) -> SelectDoubleClickOutcome {
 #[cfg(test)]
 mod tests {
     use vecmanf_document_core::{
-        AnchorId, Angle, Document, InnerRatio, Length, NewAnchor, PointCount, RectBounds, StarFrame,
+        AnchorId, Angle, Document, InnerRatio, Length, NewAnchor, PointCount, RectBounds, Shape,
+        StarFrame,
     };
 
     use super::*;
+    use crate::transform_drag::ScaleModes;
     use crate::transform_entry::EntryKind;
 
     fn rect_at(document: &Document, x: f64, size: f64) -> vecmanf_document_core::NodeId {
@@ -339,6 +346,95 @@ mod tests {
             assert_eq!(result, Err(KeyEntryRefusal::SeveralSelected));
             assert!(!tool.has_entry());
         }
+    }
+
+    fn rect_of(document: &Document, id: vecmanf_document_core::NodeId) -> (Point, Point) {
+        let ObjectSnapshot::Primitive(primitive) = document.object(id).expect("exists") else {
+            panic!("a primitive");
+        };
+        let Shape::Rect { bounds, .. } = primitive.shape else {
+            panic!("a rectangle");
+        };
+        (
+            bounds.origin,
+            Point::new(
+                bounds.origin.x + bounds.width.as_mm(),
+                bounds.origin.y + bounds.height.as_mm(),
+            ),
+        )
+    }
+
+    /// Criteria 57, 57a (customer, 2026-10-07): the key S scales about the box
+    /// centre, never about the corner opposite the bottom-right handle: a 40 x
+    /// 20 mm rectangle at (10, 10) typed to 60 x 30 ends at (0, 5)..(60, 35).
+    #[test]
+    fn s_scales_about_the_box_centre() {
+        let document = Document::new(1);
+        let id = document.create_rect(RectBounds {
+            origin: Point::new(10.0, 10.0),
+            width: Length::from_mm(40.0),
+            height: Length::from_mm(20.0),
+        });
+        let (mut tool, result) = open(&document, &[id], EntryKey::Size);
+        assert_eq!(result, Ok(()));
+        let pivot = tool.entry().expect("an entry").pivot();
+        assert!((pivot.x - 30.0).abs() < 1e-9 && (pivot.y - 20.0).abs() < 1e-9);
+        assert_eq!(
+            tool.commit_entry(&document, ["60", "30"], 1),
+            EntryOutcome::Committed
+        );
+        let (min, max) = rect_of(&document, id);
+        for (got, want) in [(min.x, 0.0), (min.y, 5.0), (max.x, 60.0), (max.y, 35.0)] {
+            assert!((got - want).abs() < 1e-9, "{got} vs {want}");
+        }
+    }
+
+    /// Criterion 57a: the S route and a double-click on the same handle differ
+    /// only in the fixed point; the double-click keeps the opposite corner, and
+    /// with Shift at the second press the centre (so S equals that Shift route).
+    #[test]
+    fn the_double_click_route_keeps_the_dragged_handles_fixed_point() {
+        let document = Document::new(1);
+        let id = document.create_rect(RectBounds {
+            origin: Point::new(10.0, 10.0),
+            width: Length::from_mm(40.0),
+            height: Length::from_mm(20.0),
+        });
+        let object = document.object(id).expect("exists");
+        let box_ = oriented_bounds(&object);
+        let plain = TransformEntry::for_resize(
+            &object,
+            &box_,
+            ResizeDirection::Se,
+            (false, false),
+            ScaleModes::default(),
+        );
+        assert_eq!(plain.pivot(), Point::new(10.0, 10.0), "opposite corner");
+        let by_key = {
+            let (tool, _) = open(&document, &[id], EntryKey::Size);
+            tool.entry().expect("an entry").clone()
+        };
+        let shifted = TransformEntry::for_resize(
+            &object,
+            &box_,
+            ResizeDirection::Se,
+            (true, false),
+            ScaleModes::default(),
+        );
+        assert_eq!(by_key.pivot(), shifted.pivot());
+        assert!(
+            !by_key.linked(),
+            "Ctrl+S is gated: the fields are independent"
+        );
+        let corner = plain
+            .resolve(["60", "30"], 1)
+            .expect("valid")
+            .expect("changes");
+        let centre = by_key
+            .resolve(["60", "30"], 1)
+            .expect("valid")
+            .expect("changes");
+        assert_ne!(corner, centre);
     }
 
     /// A path opens the same entries.
