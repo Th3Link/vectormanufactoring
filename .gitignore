@@ -8,4 +8,4 @@ frontend/dist/
 frontend/.vite/
 
 # Tauri
-vecmanf-app/gen/
+curvyo-app/gen/

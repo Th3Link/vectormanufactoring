@@ -1,6 +1,6 @@
 # ADR 0004: Persistence, collaboration and cross-machine sync
 
-**Status:** Accepted (customer sign-off, 2026-10-02)
+**Status:** Accepted (customer sign-off, 2026-10-02); file extension amended by [ADR 0013](0013-rename-to-curvyo.md) (`.vmf` is now `.curvyo`)
 
 Supersedes the "no sync engine of ours" decision in the first draft. The
 customer's direction: *"not just sync — cooperative work from the start,

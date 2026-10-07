@@ -2,7 +2,7 @@
 
 **Verdict (architect, 2026-10-07): buildable as one small PR. No stored field,
 no new key, no `format_version` change (stays 5), no change in
-`vecmanf-document-core`, no new crate, trait, generic or dependency, no new ADR.
+`curvyo-document-core`, no new crate, trait, generic or dependency, no new ADR.
 Nothing here is `needs-customer`** (`CLAUDE.md` §3: no platform, UI framework,
 document-model, persistence, plugin, license or account decision; the box size
 stays, only its direction changes, and `edit-interaction-polish` criterion 1
@@ -26,7 +26,7 @@ Reference state: `main` at `6f7bf99`, everything below read in that tree.
   (`ObjectSnapshot::orientation()`) and records the "Known limit" this feature
   removes. Its option (b) stays rejected, see below.
 - [`specs/0005-object-transform/adrs.md`](../0005-object-transform/adrs.md): the
-  oriented box lives in `vecmanf-ui-core`, a primitive's local frame is its
+  oriented box lives in `curvyo-ui-core`, a primitive's local frame is its
   stored frame. This feature changes that last sentence for polygon and star
   only.
 
@@ -79,7 +79,7 @@ Reference state: `main` at `6f7bf99`, everything below read in that tree.
 
 ### 2. Every reader of `rotation` and `StarFrame.angle` (audited on `main`)
 
-**Must change (five sites, all in `vecmanf-ui-core` or `vecmanf-editor-wasm`):**
+**Must change (five sites, all in `curvyo-ui-core` or `curvyo-editor-wasm`):**
 
 | Site | Today | Change |
 |---|---|---|
@@ -150,8 +150,8 @@ vertex, and every outline vertex must lie inside the box.
 
 ### 4. Test plan (tests first; new files, so no test module grows past 500 lines)
 
-New `vecmanf-ui-core/tests/polygon_star_box_refit.rs` and
-`vecmanf-editor-wasm/tests/polygon_star_box_refit.rs`. The proptest dev
+New `curvyo-ui-core/tests/polygon_star_box_refit.rs` and
+`curvyo-editor-wasm/tests/polygon_star_box_refit.rs`. The proptest dev
 dependency already exists in `ui-core`.
 
 1. **Box table** (spec 1, 3, 4). `oriented_bounds` of polygon and star over
@@ -190,7 +190,7 @@ dependency already exists in `ui-core`.
 8. **No write, no format change** (spec 13, 14): over the old-style
    documents `acceptance_edit_polish_pr1_orientation.rs` already builds (a
    generated one with a star at 10°/30° and a polygon at 78.7°/0, plus
-   `vecmanf-document-core/tests/fixtures/primitives_v3.vmf` and `rotation_v5.vmf`):
+   `curvyo-document-core/tests/fixtures/primitives_v3.curvyo` and `rotation_v5.curvyo`):
    open, select, hover, close without an
    edit leaves the document's version vector and the registers' bytes equal; a
    rotate about C changes `rotation` only; a resize changes the frame radius
@@ -207,10 +207,10 @@ dependency already exists in `ui-core`.
 with a non-zero `StarFrame.angle` and then names a box direction or reads a
 handle position of the box: a star at frame angle -π/2 now has its `Ne` handle
 where the box's turned corner is. Grep `angle: Angle::from_radians(` with a
-non-zero value in `vecmanf-editor-wasm/tests/` (`acceptance_0005.rs` 177, 190;
+non-zero value in `curvyo-editor-wasm/tests/` (`acceptance_0005.rs` 177, 190;
 `acceptance_0005_switch.rs` 157, 870; `acceptance_otr_tester.rs` 99;
 `acceptance_otr_dblclick.rs` 56; `acceptance_unified_editing.rs` 61;
-`acceptance_edit_polish_pr1_escape_keys.rs` 580, 997) and `vecmanf-ui-core/tests/acceptance_0005.rs`
+`acceptance_edit_polish_pr1_escape_keys.rs` 580, 997) and `curvyo-ui-core/tests/acceptance_0005.rs`
 260. A square box turned by a multiple of 90° is the same set of points, so
 such a test usually only needs its handle name or corner order updated; the
 implementer fixes the expectation to the new rule and lists each in the PR. A
@@ -222,8 +222,8 @@ an update.
 - **One PR, `story/polygon-star-box-refit`.** Production code: about 25 changed
   lines in four files (`oriented_box.rs`, `param_handles.rs`, `param_edit.rs`,
   `transform_primitive.rs`) plus `session/select_view.rs`; the rest is tests and
-  docs. Crates touched: `vecmanf-ui-core`, `vecmanf-editor-wasm`. Not touched:
-  `vecmanf-document-core`, `render-core`, `app`, the frontend, any `Cargo.toml`.
+  docs. Crates touched: `curvyo-ui-core`, `curvyo-editor-wasm`. Not touched:
+  `curvyo-document-core`, `render-core`, `app`, the frontend, any `Cargo.toml`.
 - **Modules.** `oriented_box.rs` is 332 lines with tests (about 180 without) and
   keeps its one sentence ("the oriented selection box of one object"). No
   module nears 500 lines because of this change; no function grows past a few

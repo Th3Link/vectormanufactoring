@@ -2,7 +2,7 @@
 
 ## Affected crates/modules
 
-- `vecmanf-document-core`: `units.rs` (+`Angle`); new `primitive_model.rs`
+- `curvyo-document-core`: `units.rs` (+`Angle`); new `primitive_model.rs`
   (Shape data, validated newtypes, snapshots), `primitive_outline.rs`
   (closed-form outline math), `shape_codec.rs` (Loro value shapes/keys +
   open-file validation), `shapes.rs` (Document command methods).
@@ -10,21 +10,21 @@
   `paths.rs` (`path()` returns `None` for a primitive node), `document.rs`
   (rename `PATHS_TREE`→`OBJECTS_TREE`, `format_version`→3, `document.json`
   `paths`→`objects`), `lib.rs` (new public exports).
-- `vecmanf-ui-core`: new `primitive_selection.rs` (shared selection across
+- `curvyo-ui-core`: new `primitive_selection.rs` (shared selection across
   the three shape tools), `shape_hit_test.rs`, `handle_layout.rs`,
   `shape_tools.rs` (`RectangleTool`, `EllipseTool`, `PolygonStarTool`),
   `lib.rs` exports.
-- `vecmanf-render-core`: rename `primitives.rs`→`glyphs.rs`; new
+- `curvyo-render-core`: rename `primitives.rs`→`glyphs.rs`; new
   `shape_preview.rs` (primitive stroke + bbox + handle decorations,
   pen_preview.rs's pattern); `lib.rs` wiring.
-- `vecmanf-editor-wasm`: `session.rs` grows the three shape tools +
+- `curvyo-editor-wasm`: `session.rs` grows the three shape tools +
   object-to-path + decoration input; `wasm_api.rs` thin pass-through.
 - `frontend/`: `ToolRail.tsx` (+3 buttons), new `ShapeToolbar.tsx`
   (point-count/ratio/mode), `Canvas.tsx` (cursor/keyboard wiring),
   `useEditorSession.ts` (+shape-tool state/actions), `editorSession.ts`
   (type re-exports).
-- `vecmanf-document-core/tests/fixtures/`: new `primitives_v3.vmf` golden
-  fixture + reuse of the existing genuine `paths_v2.vmf` to prove the
+- `curvyo-document-core/tests/fixtures/`: new `primitives_v3.curvyo` golden
+  fixture + reuse of the existing genuine `paths_v2.curvyo` to prove the
   empty migration.
 
 No new crate, no new external dependency (per `adrs.md`).
@@ -62,7 +62,7 @@ No new crate, no new external dependency (per `adrs.md`).
       (tagged by shape), `from_loro_snapshot` unchanged call site (renamed
       constant only).
 - [x] 8. `lib.rs`: export the new public types/functions.
-- [x] 9. `vecmanf-ui-core`: `primitive_selection.rs` (`PrimitiveSelection`,
+- [x] 9. `curvyo-ui-core`: `primitive_selection.rs` (`PrimitiveSelection`,
       multi-id, same shape as `NodeSelection` minus the per-path scoping).
 - [x] 10. `shape_hit_test.rs`: hit-test a point against a primitive's own
       outline (reusing `geometry-core::nearest_point_on_segment` per
@@ -79,8 +79,8 @@ No new crate, no new external dependency (per `adrs.md`).
       `pointer_up` for create-drag and for select+resize+param-handle
       drags, one commit per gesture, a zero-movement create writes
       nothing (AC 1, 7, 11, 12).
-- [x] 13. `vecmanf-ui-core::lib.rs` exports.
-- [x] 14. `vecmanf-render-core`: rename `primitives.rs`→`glyphs.rs`
+- [x] 13. `curvyo-ui-core::lib.rs` exports.
+- [x] 14. `curvyo-render-core`: rename `primitives.rs`→`glyphs.rs`
       (update `lib.rs`/`decorations.rs`/`pen_preview.rs`/`stroke.rs`
       imports), confirming the module now only means UI glyphs.
 - [x] 15. `shape_preview.rs`: primitive stroke (outline → existing lyon
@@ -88,7 +88,7 @@ No new crate, no new external dependency (per `adrs.md`).
       selection outline, shape-handle glyphs (8px hollow square /
       filled-on-drag), dashed corner-radius guide. Reuses
       `docs/design-system.md`'s tokens (added to `theme.rs`).
-- [x] 16. `vecmanf-editor-wasm::session.rs`: `Tool::Rectangle/Ellipse/
+- [x] 16. `curvyo-editor-wasm::session.rs`: `Tool::Rectangle/Ellipse/
       PolygonStar`; dispatch pointer events to the active shape tool;
       `convert_selected_to_paths` (AC 17, 22); decoration input for shape
       handles; polygon/star tool-options getters/setters.
@@ -98,29 +98,29 @@ No new crate, no new external dependency (per `adrs.md`).
       in `useEditorSession.ts`'s `onKeyDown`, a `ShapeToolbar.tsx`
       (mode/point-count/ratio, node-toolbar's pattern) incl. an
       "Object to path" action, `Canvas.tsx` wiring unchanged pattern.
-- [x] 19. `vecmanf-document-core` golden fixtures: regenerate
-      `tests/fixtures/*.vmf` including a genuine `format_version=3` file
-      with one of each primitive kind (`primitives_v3.vmf`), and reuse the
-      existing genuine `paths_v2.vmf` (slice 2) unchanged to prove the
+- [x] 19. `curvyo-document-core` golden fixtures: regenerate
+      `tests/fixtures/*.curvyo` including a genuine `format_version=3` file
+      with one of each primitive kind (`primitives_v3.curvyo`), and reuse the
+      existing genuine `paths_v2.curvyo` (slice 2) unchanged to prove the
       empty-migration path still opens under the new `CURRENT_FORMAT_
       VERSION = 3` build. Golden tests in `container_fixtures.rs`.
 - [x] 20. Run the full `CLAUDE.md` §7 gate; fix findings.
 
 ## Validation
 
-- Unit tests in `vecmanf-document-core` pin the exact node
+- Unit tests in `curvyo-document-core` pin the exact node
   count/kind/segment-type for AC 18-20, the kappa-based 0.1%-of-larger-
   radius tolerance for AC 19, the half-shorter-side clamp for AC 5
   (including the "clamped on read, not on write" round-trip), and the
   3..=1024 / 0<R<1 newtype boundaries for AC 10/12.
-- Unit tests in `vecmanf-ui-core` exercise each tool's create-drag
+- Unit tests in `curvyo-ui-core` exercise each tool's create-drag
   (zero-movement writes nothing), handle-drag arithmetic (resize keeps
   radius/ratio/count; radius/ratio/count-only edits keep the frame), and
   multi-select "object to path" (AC 22) converting each primitive
   independently in one call.
-- Golden-file round trip: `primitives_v3.vmf` (pack → unpack → re-pack
+- Golden-file round trip: `primitives_v3.curvyo` (pack → unpack → re-pack
   byte-for-byte document.json fields) plus the existing genuine
-  `paths_v2.vmf` opening unchanged under the new `CURRENT_FORMAT_VERSION`.
+  `paths_v2.curvyo` opening unchanged under the new `CURRENT_FORMAT_VERSION`.
 - `cargo nextest run --workspace`, `cargo clippy --workspace --all-targets`,
   `cargo fmt --all --check`, wasm32 build of every `*-core` crate,
   `cargo deny check`, `cargo doc` with `-D warnings` — `CLAUDE.md` §7.

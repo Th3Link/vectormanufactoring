@@ -45,7 +45,7 @@ interface TransformEntryChipProps {
  * entry chip"): a DOM text overlay next to the double-clicked handle,
  * upright whatever the object's rotation. It holds only the text, the caret
  * and the focus — validation, linking and resolution are Rust's
- * (`vecmanf-ui-core::transform_entry`). Enter commits (an invalid value
+ * (`curvyo-ui-core::transform_entry`). Enter commits (an invalid value
  * keeps it open, marked, with a message line); Escape, a press elsewhere
  * (which is not swallowed: the canvas processes it too), a tool switch or a
  * window blur cancels and writes nothing.

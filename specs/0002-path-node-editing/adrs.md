@@ -54,23 +54,23 @@ spelled out under ADR 0002 and ADR 0009 rather than assumed.
   crate boundary for this slice, in the direction §3's edge list already
   fixes. See "the path/node crate boundary" below. **No crate is needed that
   ADR 0011 §1 does not already name**; four of its named-but-not-yet-created
-  crates are stood up here (`vecmanf-geometry-core`, `vecmanf-render-core`,
-  `vecmanf-ui-core`, `vecmanf-editor-wasm`).
+  crates are stood up here (`curvyo-geometry-core`, `curvyo-render-core`,
+  `curvyo-ui-core`, `curvyo-editor-wasm`).
 - [ADR 0003 §1, §2, §7](../../docs/adr/0003-geometry-kernel-booleans-offsetting-vcarving.md):
-  `vecmanf-geometry-core` is required by this slice, and for the reason
+  `curvyo-geometry-core` is required by this slice, and for the reason
   ADR 0011 §3 already names — **hit-testing**. Deciding whether a click landed
   on a curved segment (AC 12, AC 14) means flattening that curve to a
   tolerance, which is §2's `kurbo`, in §1's kernel. Its contents here are
   three narrow things: flatten-for-hit-test, nearest-point-on-segment
   (returning the parameter), and subdivide-at-parameter for AC 12. §7's
-  separate, coarser display tolerance in `vecmanf-render-core` must not be
+  separate, coarser display tolerance in `curvyo-render-core` must not be
   reused for any of them.
 - [ADR 0001 §1, §2, §4, §5](../../docs/adr/0001-ui-framework-and-canvas-rendering.md):
   pen- and node-tool state machines, selection, hit-testing and command
-  dispatch are plain state and pure functions in `vecmanf-ui-core`; the
+  dispatch are plain state and pure functions in `curvyo-ui-core`; the
   frontend renders state and forwards input events and holds no editing logic.
   The path is drawn in the WebGL2 canvas via `wgpu` from
-  `vecmanf-render-core`'s draw list, and §5 binds every live drag: per-frame
+  `curvyo-render-core`'s draw list, and §5 binds every live drag: per-frame
   data crosses as typed arrays, never as JSON of the document or the
   selection. **ADR 0001's owed WebKitGTK measurement comes due here** — see
   the prerequisite below.
@@ -97,8 +97,8 @@ spelled out under ADR 0002 and ADR 0009 rather than assumed.
   `kurbo` fitting pass. Confirmed as a correct scope line, not an oversight:
   Inkscape's refitting delete is an ADR 0003 §6 simplification problem.
 - **Collaboration ships nothing here.** No relay socket, no awareness
-  transport, no `vecmanf-crypto-core`, no `keyring.log` (ADR 0008 §7: local
-  `.vmf` is plaintext at rest by decision). The *data model* underneath is
+  transport, no `curvyo-crypto-core`, no `keyring.log` (ADR 0008 §7: local
+  `.curvyo` is plaintext at rest by decision). The *data model* underneath is
   collaboration-safe as of this slice — that is the point of the anchor schema
   below — but the only channel is a local file.
 - **Undo ships nothing here** (`undo-redo`, slice 5). Every operation in this
@@ -106,8 +106,8 @@ spelled out under ADR 0002 and ADR 0009 rather than assumed.
   able to revert without changes to this slice's commands, because ADR 0002 §9
   commands carry no inverse. AC 4's Escape is **not** an undo and must not be
   built as one.
-- **`vecmanf-vectorize-core`, `vecmanf-library-core`, `vecmanf-plugin`,
-  `vecmanf-sync-server`** get no code. ADR 0011 §3's `ui-core → vectorize-core`
+- **`curvyo-vectorize-core`, `curvyo-library-core`, `curvyo-plugin`,
+  `curvyo-sync-server`** get no code. ADR 0011 §3's `ui-core → vectorize-core`
   edge is not exercised; declare it when `raster-trace` (slice 9) needs it.
 
 ## Prerequisite this slice inherits
@@ -212,14 +212,14 @@ spelled out under ADR 0002 and ADR 0009 rather than assumed.
   multi-selection and AC 12's neighbour updates refer to, and it must stay
   valid across a concurrent insert or delete elsewhere in the list. Like the
   peer id (slice 1, amended 2026-10-03), it is **passed into**
-  `vecmanf-document-core`, never minted there — a `*-core` crate reaches no
+  `curvyo-document-core`, never minted there — a `*-core` crate reaches no
   entropy source (`CLAUDE.md` §6, ADR 0011 §6).
 
 - **2026-10-03: the path/node crate boundary, and the rule that sets the
   precedent for every later editing slice.** The dividing question is *does
   this code need to know what a cubic Bézier is?*
 
-  - `vecmanf-document-core` — the schema above, the `Command` variants that
+  - `curvyo-document-core` — the schema above, the `Command` variants that
     write it, and **elementary arithmetic on its own newtypes**: add, subtract,
     scale, negate, normalize, length on `Point`/`Vec2`. On that basis AC 1, 2,
     8, 9, 10, 11, 13 and 14 are document-model bookkeeping and need no kernel.
@@ -230,38 +230,38 @@ spelled out under ADR 0002 and ADR 0009 rather than assumed.
     evaluates a curve. ADR 0003 §1's "the only place geometric algorithms
     live" is not read as forbidding `impl Add for Vec2` in the crate that
     owns `Vec2`.
-  - `vecmanf-geometry-core` — anything that does need the curve: flattening a
+  - `curvyo-geometry-core` — anything that does need the curve: flattening a
     segment for hit-testing, nearest-point-on-segment, and de Casteljau
     subdivision for AC 12. `kurbo` per ADR 0003 §2.
   - **Commands carry resolved geometry, never geometric intent.** ADR 0011 §3
     is explicit that `document-core` cannot reach the kernel and that
-    `vecmanf-ui-core` executes commands. So AC 12 is: `ui-core` hit-tests the
+    `curvyo-ui-core` executes commands. So AC 12 is: `ui-core` hit-tests the
     click and asks `geometry-core` for the parameter and the subdivision, then
     dispatches `InsertAnchor { after, anchor, prev_out, next_in }` carrying
     numbers. An `InsertAnchorAt { segment, t }` command would force
     `document-core` to subdivide and invert ADR 0011 §3's edge. Every later
     slice follows this shape — slice 6's boolean result is a path computed in
     `geometry-core` and handed to `document-core` as data.
-  - `vecmanf-ui-core` — pen and node tool state machines, the in-progress
+  - `curvyo-ui-core` — pen and node tool state machines, the in-progress
     path, selection of nodes/handles/segments, hit-testing with an explicit
     `Tolerance`, command dispatch. A **segment has no document identity**:
     AC 14's selected segment is the local pair of adjacent `AnchorId`s, which
     is why "segment selected" needs no field and no merge rule.
-  - `vecmanf-render-core` — the path's draw list, and the node/handle/segment
+  - `curvyo-render-core` — the path's draw list, and the node/handle/segment
     decorations. ADR 0011 §3 gives it `→ document-core` only, so it **cannot
     read selection from `ui-core`**: its entry point takes (version snapshot,
     view transform, a decoration input of `AnchorId`s and flags built from
-    `document-core` types), and `vecmanf-editor-wasm` passes `ui-core`'s
+    `document-core` types), and `curvyo-editor-wasm` passes `ui-core`'s
     selection across as binding, not logic (ADR 0001 §3). Decorations are
     drawn in the GPU draw list rather than as DOM overlays, so pan/zoom has
     one coordinate system; ADR 0001 §4's DOM-overlay allowance stays reserved
     for the accessibility story, which is the `ux-engineer`'s to shape.
-  - `vecmanf-app` / `frontend/` — tool palette, the node-tool action surface
+  - `curvyo-app` / `frontend/` — tool palette, the node-tool action surface
     for AC 11 and AC 14, keyboard routing (Escape, Delete), and nothing else.
 
 - **2026-10-03: a pen session is one commit, and that is what makes AC 4
   buildable at all.** From the first click to the double-click, close-path or
-  Escape, the in-progress path lives **only** in `vecmanf-ui-core` as
+  Escape, the in-progress path lives **only** in `curvyo-ui-core` as
   ephemeral state (ADR 0009 §2). The document gains exactly one commit, at
   AC 3's finish or AC 5's close; AC 4's Escape drops local state and writes
   nothing. Writing each clicked node into the document as it is placed would
@@ -286,11 +286,11 @@ spelled out under ADR 0002 and ADR 0009 rather than assumed.
   node carries its own transform yet (ADR 0002 §5's per-node affine transform
   is not implemented here — this slice's anchor schema above has no
   `transform` field), so a 6-component matrix would be unexercised generality
-  (`CLAUDE.md` §5 YAGNI). `vecmanf-document-core::ViewTransform` is a `scale`
+  (`CLAUDE.md` §5 YAGNI). `curvyo-document-core::ViewTransform` is a `scale`
   (screen pixels per document mm) and an `origin` (`Point`), with
   `document_to_screen`/`screen_to_document`. `render-core` uses it for
   acceptance criterion 6/7's screen-space-constant decoration sizing; the
-  host (not `vecmanf-ui-core` itself) uses it to turn a raw pointer event
+  host (not `curvyo-ui-core` itself) uses it to turn a raw pointer event
   into the document `Point` the tools in this slice already take. A later
   slice that needs real per-node rotation is free to generalize this type or
   add a separate one — this name and shape are not a commitment past this
@@ -307,11 +307,11 @@ spelled out under ADR 0002 and ADR 0009 rather than assumed.
    pointer to correct for readers, not a conflict and not a change the
    product-owner needs to make. **No AC conflicts with any ADR.**
 2. **No new crate is needed.** Everything fits the twelve of ADR 0011 §1, and
-   this slice does not trip §8's `vecmanf-model-core` trigger either — though
+   this slice does not trip §8's `curvyo-model-core` trigger either — though
    the slice-1 review note (Loro needs a JS host on `wasm32`) still stands and
    still points at that extraction.
 3. **One observation for the plugin-host story, no action now.** ADR 0011 §3
-   gives `vecmanf-plugin → document-core` and no geometry edge, so under the
+   gives `curvyo-plugin → document-core` and no geometry edge, so under the
    "commands carry resolved geometry" rule above a plugin cannot author an
    AC 12-style split: it has no kernel to compute it with. That is a real gap
    in ADR 0005's model, and it belongs to the plugin-host story (ADR 0011 §8),
@@ -333,7 +333,7 @@ spelled out under ADR 0002 and ADR 0009 rather than assumed.
   nothing.
 - **`fill` is not stored while it is always `None`.** An absent key reads as
   `None`, so slice 4 adds the register without a format change.
-- **`flatten_segment` leaves `vecmanf-geometry-core`.** Hit-testing landed on
+- **`flatten_segment` leaves `curvyo-geometry-core`.** Hit-testing landed on
   nearest-point-on-segment, so flattening had no production caller (`CLAUDE.md`
   §5). The crate's scope for this slice is nearest-point and subdivision.
 - **`document.json` writes ids as strings.** `AnchorId` (128 bit) and the
@@ -341,7 +341,7 @@ spelled out under ADR 0002 and ADR 0009 rather than assumed.
   JavaScript and `jq` keep exactly, and ADR 0004 names scripted reading and
   recovery as this file's purpose. `AnchorId` uses the same 32-digit hex form
   as the Loro value. `kind` is lowercase to match.
-- **Opening a `.vmf` validates the path tree before it returns a `Document`.**
+- **Opening a `.curvyo` validates the path tree before it returns a `Document`.**
   A container whose path data does not match the schema above is refused with
   `OpenError::Damaged` (project-file-foundation AC 7: a named error, not a
   crash). After that check, the read helpers' `// invariant:` comments hold

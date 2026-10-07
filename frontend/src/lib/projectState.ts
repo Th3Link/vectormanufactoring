@@ -1,5 +1,5 @@
-// Mirrors the payloads vecmanf-app (src-tauri) sends across the IPC
-// boundary: the various `...Payload` structs in vecmanf-app/src/main.rs.
+// Mirrors the payloads curvyo-app (src-tauri) sends across the IPC
+// boundary: the various `...Payload` structs in curvyo-app/src/main.rs.
 // Keep these in sync with that file — there is no shared schema generator
 // for this slice.
 //
@@ -24,7 +24,7 @@ export interface ProjectStatePayload {
 /**
  * A host-level failure to even read a file's bytes (missing, permissions,
  * not a file) — what an `open-error` event carries. Distinct from a
- * `.vmf` whose *content* is invalid: that refusal is the frontend's own,
+ * `.curvyo` whose *content* is invalid: that refusal is the frontend's own,
  * thrown by `WasmSession.open` itself once it has the bytes.
  */
 export interface OpenErrorPayload {

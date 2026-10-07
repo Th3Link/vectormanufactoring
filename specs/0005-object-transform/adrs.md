@@ -5,7 +5,7 @@ protected ground (a stored format and its merge behaviour), so the field and
 every reader that must honour it are written out below. Everything else
 (scale, the stroke and corner-radius scaling, the oriented box, the handles)
 rewrites registers that already exist or is ephemeral UI state.
-**No new crate, no new external dependency, no new `vecmanf-geometry-core`
+**No new crate, no new external dependency, no new `curvyo-geometry-core`
 function, no ADR amendment. `format_version` goes to 5** (was 4; see the
 2026-10-05 architect note below).
 
@@ -179,7 +179,7 @@ lead", each with the default this file builds against.
     No criterion names this, but without it a rotated shape's own handles are
     in the wrong place (flag 3).
 
-- **2026-10-05: the oriented box lives in `vecmanf-ui-core`.** The dividing
+- **2026-10-05: the oriented box lives in `curvyo-ui-core`.** The dividing
   question is unchanged: does it evaluate a curve? `object_bounds` returns an
   `OrientedBox` (a rectangle in the object's local frame plus the angle)
   instead of slice 4's axis-aligned rectangle, which is the angle-0 case:
@@ -268,14 +268,14 @@ lead", each with the default this file builds against.
     stores the value (no `localStorage`). No new crate, no new
     dependency, no format change, and `format_version` is unaffected.
   - **Tests to update** (they assert the old always-on scaling):
-    `vecmanf-editor-wasm/tests/acceptance_0005.rs` `ac8_*` (lines
+    `curvyo-editor-wasm/tests/acceptance_0005.rs` `ac8_*` (lines
     730-826; switch them on, and add AC 8 off-state, AC 27 and AC 28
-    tests); `vecmanf-ui-core/src/select_tool.rs` unit tests
+    tests); `curvyo-ui-core/src/select_tool.rs` unit tests
     `ac8_proportional_resize_scales_stroke_width`,
     `ac8_non_proportional_resize_scales_stroke_width_by_the_geometric_mean`
     and `ac8_stroke_width_is_floored_above_zero_when_a_resize_collapses_the_object`
     (set `Proportional`); every call site of the four resize commands
-    for the `Option` signature: `vecmanf-document-core` unit tests in
+    for the `Option` signature: `curvyo-document-core` unit tests in
     `shapes.rs`, `paths.rs` and `objects.rs:486`,
     `tests/acceptance_0005.rs:127-172` and `tests/acceptance_0005_peers.rs:60-84`. The `ui-core` property tests
     on `stroke_or_radius_factor` and the editor-wasm reverify
@@ -307,21 +307,21 @@ lead", each with the default this file builds against.
   `CURRENT_FORMAT_VERSION + 1`.
 
 - **2026-10-05: the crate boundary.**
-  - `vecmanf-document-core`: the `rotation` field on primitive and path
+  - `curvyo-document-core`: the `rotation` field on primitive and path
     snapshots, its codec and validation, the rotated outline,
     `ObjectSnapshot::rotated` and `scaled`, `Document::set_rotation`-style
     command(s) that write the table above in one commit, object to path
     keeping `rotation`, `CURRENT_FORMAT_VERSION = 5` (provisional — see the
     architect's resolution above: the merging PR takes `main`'s
     `CURRENT_FORMAT_VERSION + 1` at merge time).
-  - `vecmanf-geometry-core`: no change.
-  - `vecmanf-ui-core`: `OrientedBox`, transform-handle layout and hit test,
+  - `curvyo-geometry-core`: no change.
+  - `curvyo-ui-core`: `OrientedBox`, transform-handle layout and hit test,
     the scale/rotate drag state machine in `select_tool` (modifiers, pivots,
     15° snap, zero clamp), stroke/radius factor arithmetic, the local-frame
     mapping for the shape tools.
-  - `vecmanf-render-core`: oriented quads, transform handles and the rotate
+  - `curvyo-render-core`: oriented quads, transform handles and the rotate
     handle from `DecorationInput`. No angle logic.
-  - `vecmanf-editor-wasm` / `frontend/`: binding, modifier state, the two
+  - `curvyo-editor-wasm` / `frontend/`: binding, modifier state, the two
     live readouts (positioned from values `Session` returns already in screen
     pixels, slice 4's rule).
 

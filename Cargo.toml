@@ -1,13 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-    "vecmanf-document-core",
-    "vecmanf-geometry-core",
-    "vecmanf-ui-core",
-    "vecmanf-render-core",
-    "vecmanf-editor-wasm",
-    "vecmanf-storage-io",
-    "vecmanf-app",
+    "curvyo-document-core",
+    "curvyo-geometry-core",
+    "curvyo-ui-core",
+    "curvyo-render-core",
+    "curvyo-editor-wasm",
+    "curvyo-storage-io",
+    "curvyo-app",
 ]
 
 [workspace.package]

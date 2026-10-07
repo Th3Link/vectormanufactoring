@@ -8,24 +8,24 @@ Two production requirements fall out of it and are tasks below (6, 10):
 
 ## Affected crates/modules
 
-- `vecmanf-document-core` — widen the document model: `Path` tree nodes,
+- `curvyo-document-core` — widen the document model: `Path` tree nodes,
   `Anchor` movable-list entries, `NodeId`/`AnchorId`, the path `Command`s,
   `format_version` → 2, `document.json` view widened.
-- `vecmanf-geometry-core` (**new crate**, authorized by ADR 0003 §1 and named
+- `curvyo-geometry-core` (**new crate**, authorized by ADR 0003 §1 and named
   in ADR 0011 §1; stood up here per `adrs.md`) — `kurbo`-backed
   flatten-for-hit-test, nearest-point-on-segment, subdivide-at-parameter.
   Nothing else.
-- `vecmanf-ui-core` (**new crate**, ADR 0001 §1, ADR 0011 §1) — pen/node tool
+- `curvyo-ui-core` (**new crate**, ADR 0001 §1, ADR 0011 §1) — pen/node tool
   state machines, hit-testing, selection, command dispatch. The in-progress
   pen path is ephemeral state here only (ADR 0009 §2) — ADR 0002 §9's
   "a pen session is one commit" lives in this crate, not in document-core.
-- `vecmanf-render-core` (**new crate**, ADR 0001 §4, ADR 0011 §1) — document
+- `curvyo-render-core` (**new crate**, ADR 0001 §4, ADR 0011 §1) — document
   snapshot + view transform + decoration input → flat draw list, tessellated
   with `lyon`.
-- `vecmanf-editor-wasm` (**new crate**, ADR 0001 §3, ADR 0011 §1) — thin
+- `curvyo-editor-wasm` (**new crate**, ADR 0001 §3, ADR 0011 §1) — thin
   `wasm-bindgen` facade: binds the above three crates, owns the `wgpu`
   device/surface and GPU submission. No logic of its own.
-- `vecmanf-app` — Linux startup sets `WEBKIT_DISABLE_DMABUF_RENDERER=1`
+- `curvyo-app` — Linux startup sets `WEBKIT_DISABLE_DMABUF_RENDERER=1`
   before the webview is built (task 10).
 - `frontend/` — tool rail (Pen/Node), canvas rewritten to host the wasm
   module's `<canvas>`, keyboard shortcuts (`B`/`N`/Enter/Escape/Delete), the
@@ -40,7 +40,7 @@ already named.
 
 - [x] 1. `NodeId` (wraps a Loro `TreeID` privately, ADR 0002 §5) and
       `AnchorId` (opaque `u128` from a caller-supplied `(peer, counter)`
-      pair — minted by `vecmanf-ui-core`, never inside this crate, per
+      pair — minted by `curvyo-ui-core`, never inside this crate, per
       `adrs.md`). `Point`, `Vec2` newtypes (ADR 0002 §3) with the
       elementary arithmetic `adrs.md`'s crate-boundary decision assigns here
       (add/sub/scale/negate/normalize/length). (infra for all ACs)
@@ -80,7 +80,7 @@ already named.
       multi-path, multi-handle-type document; existing fixtures regenerated.
       (`adrs.md`, "format_version goes to 2")
 
-### Geometry kernel (new `vecmanf-geometry-core`), test-first
+### Geometry kernel (new `curvyo-geometry-core`), test-first
 
 - [x] 12. `flatten_segment(start, handle_out, handle_in, end, tolerance) ->
       Vec<Point>` via `kurbo::CubicBez` — used for segment hit-testing
@@ -94,7 +94,7 @@ already named.
       "commands carry resolved geometry, never geometric intent").
 - [x] 15. `cargo build --target wasm32-unknown-unknown` clean, no `unsafe`.
 
-### Interaction layer (new `vecmanf-ui-core`), test-first
+### Interaction layer (new `curvyo-ui-core`), test-first
 
 - [x] 16. `PenTool` state machine: idle → placing (node-by-node) → finished/
       discarded. Ephemeral in-progress path (points + handles + per-node
@@ -117,7 +117,7 @@ already named.
       on a selected segment (AC 14).
 - [x] 20. `cargo build --target wasm32-unknown-unknown` clean.
 
-### Rendering (new `vecmanf-render-core`), test-first where the data shape allows it
+### Rendering (new `curvyo-render-core`), test-first where the data shape allows it
 
 - [x] 21. Draw-list builder: path snapshot + view transform → flattened
       stroke geometry (0.25 mm, black, no fill — AC 6) via `lyon`, plus
@@ -131,7 +131,7 @@ already named.
       baked into document units.
 - [x] 23. `cargo build --target wasm32-unknown-unknown` clean.
 
-### wasm facade (new `vecmanf-editor-wasm`)
+### wasm facade (new `curvyo-editor-wasm`)
 
 - [x] 24. `wasm-bindgen` bindings: open/create document, dispatch pointer/
       keyboard input to `ui-core`, pull the draw list each frame, own the
@@ -160,7 +160,7 @@ already named.
       Make corner, Make smooth, Make line, Make curve, disabled when
       inapplicable; same actions on a right-click context menu; Delete/
       Backspace keys bound; Escape clears selection (not a pen discard).
-- [x] 30. `vecmanf-app`: `WEBKIT_DISABLE_DMABUF_RENDERER=1` set on Linux
+- [x] 30. `curvyo-app`: `WEBKIT_DISABLE_DMABUF_RENDERER=1` set on Linux
       before `tauri::Builder` runs, with a unit test that the setup
       function actually sets it (`adrs.md`'s PASS note, requirement 1 — the
       failure mode is a silent blank canvas, not an error, so this needs a
@@ -174,25 +174,25 @@ already named.
       of both anchor kinds, open and closed, in `tests/fixtures/`. A
       fixture at the old `format_version = 1` still opens (empty path list,
       the written migration policy). (Done alongside task 11:
-      `tests/fixtures/paths_v2.vmf` and `tests/fixtures/format_version_1.vmf`,
-      pinned by `vecmanf-document-core/tests/container_fixtures.rs`.)
+      `tests/fixtures/paths_v2.curvyo` and `tests/fixtures/format_version_1.curvyo`,
+      pinned by `curvyo-document-core/tests/container_fixtures.rs`.)
 
 ## Validation
 
-- Unit tests in `vecmanf-document-core` for every `Document` method above,
+- Unit tests in `curvyo-document-core` for every `Document` method above,
   including the three merge-relevant behaviours `adrs.md` calls out (point
   as one register, handle mirroring, `kind` surviving a geometry-alike
   state).
-- Unit tests in `vecmanf-geometry-core` against known closed-form Bézier
+- Unit tests in `curvyo-geometry-core` against known closed-form Bézier
   points (e.g. a quarter-circle approximation) for flatten/nearest/
   subdivide.
-- Unit tests in `vecmanf-ui-core` driving each tool's state machine through
+- Unit tests in `curvyo-ui-core` driving each tool's state machine through
   every acceptance criterion's Given/When/Then as a sequence of input
   events, asserting the resulting ephemeral state and the exact commands
   dispatched (no document-core or geometry-core mocking needed — real
   instances, since both are pure and fast).
-- Golden-file tests for the widened `.vmf` container in
-  `vecmanf-document-core/tests/`.
+- Golden-file tests for the widened `.curvyo` container in
+  `curvyo-document-core/tests/`.
 - `cargo build --target wasm32-unknown-unknown` for all four `*-core`
   crates (gate requirement, also tasks 15/20/23/26 above).
 - Manual check in the Tauri dev build: draw an open and a closed path,

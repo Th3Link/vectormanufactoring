@@ -17,7 +17,7 @@ extremes (AC 7). They are under "Flagged to the lead".
 - [ADR 0009 §2](../../docs/adr/0009-concurrent-editing-semantics.md): pan,
   zoom, canvas size, the pan gesture in flight, the Select tool's selection,
   hover and in-flight move offset are **ephemeral**. None of them is an
-  operation, none is written to `.vmf`, and none is undoable. A New or Open
+  operation, none is written to `.curvyo`, and none is undoable. A New or Open
   starts with the default view. Selection holds `NodeId`s and resolves them
   lazily, dropping ids that no longer exist.
 - [ADR 0002 §2, §3, §9](../../docs/adr/0002-document-model-units-and-svg-round-trip.md):
@@ -36,13 +36,13 @@ extremes (AC 7). They are under "Flagged to the lead".
   `point` (slice 2) and `rect_bounds` / `ellipse_frame` / `star_frame`
   (slice 3). A delete is a tree delete.
 - [ADR 0001 §1, §3, §4, §5](../../docs/adr/0001-ui-framework-and-canvas-rendering.md):
-  navigation and the Select tool are plain state in `vecmanf-ui-core`. The
+  navigation and the Select tool are plain state in `curvyo-ui-core`. The
   facade forwards input and holds no logic. The selection box is drawn in
   the WebGL draw list, not the DOM. Pointer and wheel input crosses as
   scalars and the view as one uniform, never as JSON.
 - [ADR 0003 §1, §2, §7](../../docs/adr/0003-geometry-kernel-booleans-offsetting-vcarving.md):
   the tight bounds of a cubic segment evaluate the curve (extrema), so they
-  belong in `vecmanf-geometry-core` via `kurbo`. Display tessellation stays in
+  belong in `curvyo-geometry-core` via `kurbo`. Display tessellation stays in
   `render-core` at its own tolerance. This slice changes that tolerance from
   fixed mm to screen pixels.
 - [ADR 0011 §2, §3](../../docs/adr/0011-workspace-and-crate-layout.md):
@@ -82,7 +82,7 @@ extremes (AC 7). They are under "Flagged to the lead".
 ## Feature-local decisions
 
 - **2026-10-05: navigation state lives in a `viewport` module in
-  `vecmanf-ui-core`. `ViewTransform` keeps its shape.** The existing type
+  `curvyo-ui-core`. `ViewTransform` keeps its shape.** The existing type
   (`document-core/src/units.rs`: `scale` px/mm plus `origin`, the document
   point at screen (0, 0)) is enough for everything here. Nothing in it
   needs to change:
@@ -217,7 +217,7 @@ extremes (AC 7). They are under "Flagged to the lead".
   AC 14 extends the primitive selection box to paths. A path's box must be
   tight (a control-point hull floats visibly off a curve with long handles),
   and tight means curve extrema.
-  - `vecmanf-geometry-core` gains `segment_bounds` (`kurbo`'s
+  - `curvyo-geometry-core` gains `segment_bounds` (`kurbo`'s
     `ParamCurveExtrema::bounding_box`). It is a small, exact function.
   - The primitive box that `render-core/src/shape_preview.rs` computes
     privately (`bounding_box(shape)`, the frame box the shape tools' handles
@@ -293,18 +293,18 @@ extremes (AC 7). They are under "Flagged to the lead".
   replaced.
 
 - **2026-10-05: the crate boundary.**
-  - `vecmanf-document-core`: `ObjectSnapshot::translated`, the primitive
+  - `curvyo-document-core`: `ObjectSnapshot::translated`, the primitive
     frame box (moved from `render-core`), `translate_objects`,
     `delete_objects`. `ViewTransform` is unchanged.
-  - `vecmanf-geometry-core`: `segment_bounds`.
-  - `vecmanf-ui-core`: `viewport` (`Zoom`, pan gesture, zoom about a point,
+  - `curvyo-geometry-core`: `segment_bounds`.
+  - `curvyo-ui-core`: `viewport` (`Zoom`, pan gesture, zoom about a point,
     resize), `select_tool` (click, shift-toggle, drag, delete, double-click
     outcome), `ObjectSelection` (renamed), `hit_test_object` and its shared
     helper, `object_bounds`.
-  - `vecmanf-render-core`: screen-space display tolerance, selection box
+  - `curvyo-render-core`: screen-space display tolerance, selection box
     rectangles taken from the decoration input, and the minimum displayed
     stroke width if the `ux-engineer` adopts it (flag 2).
-  - `vecmanf-editor-wasm`: `Tool::Select`, a `session/select.rs` glue module
+  - `curvyo-editor-wasm`: `Tool::Select`, a `session/select.rs` glue module
     (as `session/shapes.rs` is for the shape tools, so `session/mod.rs`
     stays one responsibility), screen-pixel pointer methods, `wheel`,
     `double_click`, `zoom_percent`, a resize that also renders, and the

@@ -1,0 +1,105 @@
+//! The Curvyo interaction layer (ADR 0001 §1, §2): pen- and node-tool
+//! state machines, hit-testing, selection and command dispatch, as plain
+//! state and pure functions (`specs/0002-path-node-editing/adrs.md`).
+//!
+//! Pure and wasm-compatible (`CLAUDE.md` §6): no filesystem, network,
+//! clock, threads or UI. The frontend renders this crate's state and
+//! forwards input events into it; it holds no editing logic of its own.
+//! Depends on `curvyo-document-core` (the commands these tools dispatch)
+//! and `curvyo-geometry-core` (hit-testing a curved segment, subdividing
+//! one for an insert) — never on `curvyo-render-core` or the wasm
+//! facade (ADR 0011 §3).
+
+#![forbid(unsafe_code)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+
+mod anchor_id_minter;
+mod angle_snap;
+mod conversion;
+mod ellipse_tool;
+mod hit_test;
+mod hit_test_object;
+mod modifiers;
+mod move_entry;
+mod node_tool;
+mod object_bounds;
+mod object_selection;
+mod oriented_box;
+mod param_edit;
+mod param_entry;
+mod param_handles;
+mod pen_tool;
+mod poly_star_tool;
+mod rectangle_tool;
+mod resize_direction;
+mod select_bar;
+mod select_tool;
+mod selection;
+mod shape_tool_common;
+mod skew_entry;
+mod skew_math;
+mod transform_commit;
+mod transform_drag;
+mod transform_entry;
+mod transform_handle_layout;
+mod transform_math;
+mod transform_primitive;
+mod viewport;
+
+pub use anchor_id_minter::AnchorIdMinter;
+pub use angle_snap::{MAX_SKEW_SNAP_DEG, snap_angle, snap_skew_angle};
+pub use conversion::build_primitive_conversions;
+pub use ellipse_tool::EllipseTool;
+pub use hit_test::{Hit, hit_test};
+pub use hit_test_object::hit_test_object;
+pub use modifiers::Modifiers;
+pub use move_entry::MoveEntry;
+pub use node_tool::{
+    HitTolerances, LiveNodeDrag, NodeTool, NodeToolbarState,
+    PointerDownOutcome as NodePointerDownOutcome, PointerUpOutcome as NodePointerUpOutcome,
+};
+pub use object_bounds::{object_bounds, object_outline_bounds};
+pub use object_selection::ObjectSelection;
+pub use oriented_box::{OrientedBox, oriented_bounds};
+pub use param_edit::{
+    MAX_INNER_RATIO, MIN_INNER_RATIO, ParamValue, apply_param, clamped_ratio, commit_param_batch,
+    value_from_pointer,
+};
+pub use param_entry::ParamEntry;
+pub use param_handles::{
+    Corner, HandleTiers, KNOB_DIAMETER_PX, KNOB_INSET_PX, KNOB_PITCH_PX, PARAM_HIT_PX,
+    PARAM_MIN_SIDE_PX, ParamHandle, centre_drawn, handle_tiers, param_handles, radius_gain,
+    radius_travel,
+};
+pub use pen_tool::{PenTool, PointerUpOutcome as PenPointerUpOutcome};
+pub use poly_star_tool::{PolyStarMode, PolygonStarTool};
+pub use rectangle_tool::RectangleTool;
+pub use resize_direction::ResizeDirection;
+pub use select_bar::{
+    BarPreview, BarValue, ObjectKind, SelectBarState, ids_of_kind, select_bar_state,
+};
+pub use select_tool::{
+    Axis, EntryKey, KeyEntryRefusal, LiveEdit, MoveEntryMode, MoveResolution, PressTarget,
+    SelectDoubleClickOutcome, SelectPointerDownOutcome, SelectTool, TransformHandleTolerances,
+    classify_press, double_click, entry_anchor,
+};
+pub use selection::NodeSelection;
+pub use shape_tool_common::{CreateOutcome, CreatePreview};
+pub use skew_entry::SkewEntry;
+pub use skew_math::{SkewFrame, skew_angle, skew_factor, skew_frame};
+pub use transform_drag::{CornerRadiusScaling, ScaleModes, StrokeScaling};
+pub use transform_entry::{
+    EntryField, EntryKind, EntryOutcome, InvalidReason, TransformEntry, format_degrees,
+    parse_entry_number,
+};
+pub use transform_handle_layout::{
+    ALL_EIGHT, CORNERS_FOUR, EditHandle, HandleSpec, Side, hit_transform_handle, is_corner,
+    is_drawn_handle, resize_cursor_angle_degrees, resize_handle_local_position,
+    skew_cursor_angle_degrees, transform_handles,
+};
+pub use transform_math::{
+    ResizedBox, opposite_direction, polygon_star_resize_factor, resize_anchor_local_position,
+    resize_local_box, rotate_delta_angle, rotate_delta_for, rotate_pivot, scaled_and_floored,
+    stroke_or_radius_factor,
+};
+pub use viewport::{PX_PER_MM_AT_100, Viewport, Zoom};

@@ -120,7 +120,7 @@ function App() {
         } catch {
           // Mirrors the native host's own previous wording for this
           // exact failure, now thrown by the frontend's own `pack`
-          // instead of a native `vecmanf_document_core::pack`.
+          // instead of a native `curvyo_document_core::pack`.
           setSaveErrorMessage("This project couldn't be saved.");
           return;
         }

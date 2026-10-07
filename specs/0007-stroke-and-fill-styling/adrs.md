@@ -8,13 +8,13 @@ is the document model again, so the schema is written out in full below.
 
 All 25 acceptance criteria can be built against ADR 0002 §5 and ADR 0009 §3
 as they read today. **No new crate, no new external dependency, no ADR
-amendment.** `vecmanf-geometry-core` gains one function, for AC 23's
+amendment.** `curvyo-geometry-core` gains one function, for AC 23's
 interior hit-testing. The draft's one conflict (AC 9's dash storage) and
 its two open points (AC 16's stop count, interior selection) were resolved
 in the specification on 2026-10-04; see "Flagged to the lead".
 
-**Build order:** this slice touches `vecmanf-document-core`,
-`vecmanf-render-core` and `vecmanf-ui-core`. `primitive-shapes` and
+**Build order:** this slice touches `curvyo-document-core`,
+`curvyo-render-core` and `curvyo-ui-core`. `primitive-shapes` and
 `path-merge-split-and-node-types` are both merged. **2026-10-05 (architect):
 `object-transform` (slice 5) also touches these same crates and this
 slice's `style: Style` replaces the `stroke_width` field slice 5's resize
@@ -176,7 +176,7 @@ already there.
 - **2026-10-04: the gradient stop model.** `fill_stops` is a **Loro movable
   list of stop maps**, the same pattern as a path's anchors, with a
   caller-minted `StopId` per stop. This follows `AnchorId`: it is minted in
-  `vecmanf-ui-core` (by the existing minter mechanism, which now serves two
+  `curvyo-ui-core` (by the existing minter mechanism, which now serves two
   id types) and is never minted in `document-core`.
 
   - **Why per-stop registers inside a list** (AC 20): editing one stop's
@@ -241,7 +241,7 @@ already there.
   this slice needs the kernel, and `render-core` cannot reach the kernel
   anyway (ADR 0011 §3).
 
-  - `vecmanf-document-core`: new `style_model.rs` with `Style` (one
+  - `curvyo-document-core`: new `style_model.rs` with `Style` (one
     `Stroke` part and one `Fill` part), the `LineJoin`/`LineCap`/`FillKind`
     enums, and the newtypes `Opacity`, `StopPosition`, `DashPattern` and
     `StopId`. New `style_codec.rs` with the keys and absent defaults above;
@@ -253,7 +253,7 @@ already there.
     each carry one `style: Style` field, replacing `stroke_width`/`stroke`/
     `fill`. No trait, because the set of shapes is closed. Open-file
     validation is extended (see the format decision below).
-  - `vecmanf-render-core`:
+  - `curvyo-render-core`:
     - `stroke.rs` maps `Style` to `lyon` `StrokeOptions` for width, join
       and cap. The miter limit is a fixed constant of 4 with
       `LineJoin::Miter`, which falls back to bevel as SVG does (AC 11).
@@ -281,7 +281,7 @@ already there.
       `build_shape_draw_list` draws all primitives. That split was
       invisible with thin black strokes. With fills, a path below a filled
       rectangle would draw on top of it. Decorations stay as they are.
-  - `vecmanf-editor-wasm` (`gpu.rs`), as binding plus GPU plumbing:
+  - `curvyo-editor-wasm` (`gpu.rs`), as binding plus GPU plumbing:
     - The vertex gains paint data: a solid colour, or a gradient coordinate
       plus a ramp index and a linear/radial flag. The fragment shader
       computes t (linear: the coordinate's x; radial: the length of the
@@ -300,18 +300,18 @@ already there.
       reference per object, which costs one draw call per object, and an
       offscreen layer per translucent object, which costs one render pass
       each.
-  - `vecmanf-ui-core`: dispatching a style edit to the current object
+  - `curvyo-ui-core`: dispatching a style edit to the current object
     selection (AC 24), the stop-editing state, minting `StopId`s, building
     the default stops for AC 17, the ephemeral preview override that a
     colour-picker or slider drag renders through before it commits on
     release (AC 20's "live"), and the object hit-test order for AC 23 (see
     the hit-testing decision below).
-  - `vecmanf-geometry-core`: one new function for AC 23, described
+  - `curvyo-geometry-core`: one new function for AC 23, described
     below.
   - `frontend/`: the Fill & Stroke panel. Binding only.
 
 - **2026-10-04: interior hit-testing (AC 23) is a winding test in
-  `vecmanf-geometry-core`.** Whether a point lies inside a curved outline
+  `curvyo-geometry-core`.** Whether a point lies inside a curved outline
   means evaluating the curve, which is the slice-2 dividing question
   answered "kernel". `ui-core` already depends on `geometry-core` for
   `nearest_point_on_segment`, so this needs no new edge. The new function
@@ -392,7 +392,7 @@ already there.
 
 - **2026-10-05 (architect): gradient box orientation vs. rotation — open,
   decide once `object-transform` merges.** This slice computes the linear/
-  radial gradient box from the object's outline in `vecmanf-render-core`.
+  radial gradient box from the object's outline in `curvyo-render-core`.
   Once `object-transform` ships rotation, that outline is already rotated,
   so the question is whether the gradient box is derived from the object's
   own (oriented) local frame — so the gradient turns with the object, like
@@ -408,7 +408,7 @@ already there.
 - **2026-10-06 (architect): gradient box decided; resize-path writes
   re-pointed.** Resolves the note above, after reviewing PR #29.
   - **The gradient box is the object's oriented box**, the same one the
-    Select tool draws: `vecmanf-ui-core::oriented_bounds` (local-frame
+    Select tool draws: `curvyo-ui-core::oriented_bounds` (local-frame
     `min`/`max`, `angle`, `pivot`; geometry only, stroke excluded). A
     rotated object's gradient turns with it, for paths and primitives
     alike. `render-core` does not recompute it: `editor-wasm` passes the

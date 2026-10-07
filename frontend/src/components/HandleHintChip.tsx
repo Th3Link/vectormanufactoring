@@ -51,7 +51,7 @@ const HINT_LINES: Record<string, string[]> = {
 };
 
 interface HandleHintChipProps {
-  /** `vecmanf-editor-wasm`'s `handle_hint()`: which handle the pointer is on. */
+  /** `curvyo-editor-wasm`'s `handle_hint()`: which handle the pointer is on. */
   hint: string;
   containerRef: React.RefObject<HTMLDivElement | null>;
 }

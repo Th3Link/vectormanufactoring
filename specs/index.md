@@ -28,7 +28,7 @@ triggered is a bug, not a variant.
 
 | # | Feature slug | Delivers | Requirements | Priority |
 |---|---|---|---|---|
-| 1 | `project-file-foundation` | Create, open and save a local `.vmf` project with an empty canvas; survives close/reopen, same result on relaunch. | R-SYS-001, R-SYS-002 | Must |
+| 1 | `project-file-foundation` | Create, open and save a local `.curvyo` project with an empty canvas; survives close/reopen, same result on relaunch. | R-SYS-001, R-SYS-002 | Must |
 | 2 | `path-node-editing` | Draw and edit a Bézier path with a pen tool: add/move/delete nodes, drag handles, same node/handle/segment mental model as Inkscape. | R-EDIT-001 | Must |
 | 3 | `primitive-shapes` | Rectangle (with corner radius), circle/ellipse and polygon/star tools; "object to path" converts any of them to an editable path. | R-EDIT-002, R-EDIT-004 | Must |
 | 4 | `canvas-navigation-and-selection` | Pan/zoom the canvas (zoom toward cursor), stable behaviour across window resize, and a general Select tool to click/move/delete any object without re-entering its creation tool. | R-EDIT-010, R-EDIT-011 | Must |
@@ -48,7 +48,7 @@ triggered is a bug, not a variant.
 ## Notes on ordering
 
 - **1 before everything**: there is nowhere to draw and nothing to persist
-  without a project file and a canvas. Uses the `.vmf` container and
+  without a project file and a canvas. Uses the `.curvyo` container and
   `document.loro` backing already decided in ADR 0004 §1 — this slice does
   not reopen that decision, it is the first thing to exercise it.
 - **2 before 3**: primitives are specified as "editable as paths after

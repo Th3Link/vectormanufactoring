@@ -1,7 +1,7 @@
-// Loads the vecmanf-editor-wasm facade (ADR 0001 §3) and mints the fresh
+// Loads the curvyo-editor-wasm facade (ADR 0001 §3) and mints the fresh
 // Loro peer id each open editing session needs
 // (specs/0001-project-file-foundation/adrs.md, "a fresh Loro peer id per open
-// session" — vecmanf-app/src/state.rs::mint_peer_id() mints the native
+// session" — curvyo-app/src/state.rs::mint_peer_id() mints the native
 // side's copy the same way; this is the wasm facade's own session, not
 // the same Document, so it mints its own).
 //
@@ -11,7 +11,7 @@
 import init, {
   WasmSession,
   init_panic_hook,
-} from "@/wasm-bindings/vecmanf_editor_wasm.js";
+} from "@/wasm-bindings/curvyo_editor_wasm.js";
 
 let ready: Promise<void> | null = null;
 
@@ -25,7 +25,7 @@ function loadOnce(): Promise<void> {
 }
 
 /** A fresh Loro peer id for one open editing session — the browser's own
- * CSPRNG, since `vecmanf-document-core`/`vecmanf-ui-core` cannot draw one
+ * CSPRNG, since `curvyo-document-core`/`curvyo-ui-core` cannot draw one
  * themselves (`CLAUDE.md` §6: a `*-core` crate reaches no entropy
  * source). The top bit is cleared so every consumer along the way (a
  * Rust `u64`, a JS `bigint`, `wasm-bindgen`'s own marshalling) agrees on
@@ -47,21 +47,21 @@ export async function createSession(): Promise<WasmSession> {
   return new WasmSession(mintPeerId());
 }
 
-/** Reopens a previously saved `.vmf` container's bytes as a fresh editing
+/** Reopens a previously saved `.curvyo` container's bytes as a fresh editing
  * session (File → Open / the OS file association), bound to a freshly
  * minted peer id the same way `createSession` is.
  *
  * `specs/0002-path-node-editing/adrs.md`'s PR review: "Open reads bytes and
- * calls `WasmSession::open`" — the host (`vecmanf-app`) only ever reads
+ * calls `WasmSession::open`" — the host (`curvyo-app`) only ever reads
  * these bytes off disk; this is the one place they are actually parsed.
  *
  * @throws the exact user-facing sentence
  * `specs/0001-project-file-foundation/specification.md`'s "Error handling —
- * invalid/corrupt file" names, if `bytes` is not a `.vmf` this build can
- * open (`vecmanf-editor-wasm`'s `map_open_error`). */
+ * invalid/corrupt file" names, if `bytes` is not a `.curvyo` this build can
+ * open (`curvyo-editor-wasm`'s `map_open_error`). */
 export async function openSession(bytes: Uint8Array): Promise<WasmSession> {
   await loadOnce();
   return WasmSession.open(mintPeerId(), bytes);
 }
 
-export type { WasmSession, NodeToolbarState } from "@/wasm-bindings/vecmanf_editor_wasm.js";
+export type { WasmSession, NodeToolbarState } from "@/wasm-bindings/curvyo_editor_wasm.js";

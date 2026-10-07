@@ -8,16 +8,16 @@
 #   frontend          — frontend/'s own gate (tsc, oxlint, npm audit/license),
 #                        ubuntu only (plain JS/TS tooling, nothing
 #                        platform-specific). Also produces frontend/dist,
-#                        which vecmanf-app's build needs (tauri::
+#                        which curvyo-app's build needs (tauri::
 #                        generate_context! fails without it — confirmed
 #                        locally; see rust-host-gate/doc below), so every job
-#                        that builds vecmanf-app depends on this one and
+#                        that builds curvyo-app depends on this one and
 #                        downloads its dist/ artifact instead of rebuilding
 #                        the frontend per OS.
 #   rust-host-gate    — the full host gate (fmt, clippy, nextest) over the
 #                        *whole workspace*, matrixed over ubuntu/windows/
 #                        macos. Originally this was meant to be scoped to just
-#                        vecmanf-app's dependency closure (ADR 0011 §7), with
+#                        curvyo-app's dependency closure (ADR 0011 §7), with
 #                        a separate ubuntu-only `core-host` job for the rest —
 #                        dropped: hand-maintained crate lists silently go
 #                        stale, and `--workspace` isn't actually more
@@ -27,7 +27,7 @@
 #                        CPU-minutes on two platforms Tauri's own code
 #                        dominates the runtime of anyway).
 #   core-wasm32       — one job per workspace member whose name ends in
-#                        `-core`, plus `vecmanf-editor-wasm` (see its own
+#                        `-core`, plus `curvyo-editor-wasm` (see its own
 #                        comment) — discovered via `cargo metadata`, not
 #                        hardcoded, so a new `*-core` crate is picked up with
 #                        no workflow edit at all. Builds for
@@ -41,7 +41,7 @@
 #   doc               — `cargo doc`, once, over the whole workspace, same
 #                        reasoning as `deny`. Needs frontend/dist for the
 #                        same reason rust-host-gate does: cargo doc expands
-#                        vecmanf-app's proc macros too.
+#                        curvyo-app's proc macros too.
 #
 # Toolchain: every job reads the exact version pinned in the repo's
 # `rust-toolchain.toml` (currently 1.99.0, with the `rustfmt`/`clippy`
@@ -88,10 +88,10 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      # Needed to build vecmanf-editor-wasm for the browser (build:wasm
+      # Needed to build curvyo-editor-wasm for the browser (build:wasm
       # below) — the frontend imports its wasm-bindgen output as an ES
       # module, so this job's gate (tsc, oxlint) would otherwise fail on a
-      # missing module, same as building vecmanf-app without this job's
+      # missing module, same as building curvyo-app without this job's
       # dist/ output. `rustup show` installs/activates the toolchain pinned
       # in rust-toolchain.toml (components and wasm32 target included) —
       # see the file header on why no separate toolchain action is used.
@@ -172,9 +172,9 @@ jobs:
           retention-days: 7
 
   # The full host gate (fmt, clippy, nextest) over the whole workspace,
-  # matrixed across the three desktop OSes because vecmanf-app (Tauri)
+  # matrixed across the three desktop OSes because curvyo-app (Tauri)
   # carries platform-specific webview/windowing code. See the file header
-  # for why this replaced a narrower vecmanf-app-only job plus a separate
+  # for why this replaced a narrower curvyo-app-only job plus a separate
   # core-host job.
   rust-host-gate:
     name: rust-host-gate (${{ matrix.os }})
@@ -187,7 +187,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # vecmanf-app (Tauri) links against the system GTK/WebKitGTK stack on
+      # curvyo-app (Tauri) links against the system GTK/WebKitGTK stack on
       # Linux at build time — `cargo clippy`/`cargo build` need it present
       # even though this job never packages a bundle. Not needed on
       # windows-latest/macos-latest, which use the OS's own native webview.
@@ -223,7 +223,7 @@ jobs:
 
   # Discovers the crates core-wasm32 below runs against, instead of a
   # hand-maintained list that silently misses a new crate: every workspace
-  # member whose name ends in `-core`, plus `vecmanf-editor-wasm` (see that
+  # member whose name ends in `-core`, plus `curvyo-editor-wasm` (see that
   # job's comment for why it's included by name rather than by suffix).
   discover-core-crates:
     name: discover core crates
@@ -238,7 +238,7 @@ jobs:
         run: |
           set -euo pipefail
           crates=$(cargo metadata --no-deps --format-version=1 \
-            | jq -c '[.packages[].name | select(endswith("-core") or . == "vecmanf-editor-wasm")]')
+            | jq -c '[.packages[].name | select(endswith("-core") or . == "curvyo-editor-wasm")]')
           echo "Discovered: $crates"
           echo "crates=$crates" >> "$GITHUB_OUTPUT"
 
@@ -246,7 +246,7 @@ jobs:
   # asserts *which* dependency would silently break that build rather than
   # only noticing that it broke. Ubuntu only, per ADR 0011 §7.
   #
-  # vecmanf-editor-wasm is included alongside the `*-core` crates (added to
+  # curvyo-editor-wasm is included alongside the `*-core` crates (added to
   # discover-core-crates' output by exact name, since it doesn't end in
   # `-core`) even though it is explicitly allowed to depend on
   # wasm-bindgen/browser APIs (ADR 0001 §3): wasm32 is its only real target
@@ -259,9 +259,9 @@ jobs:
   # (host clippy skips `cfg(target_arch = "wasm32")` code), which is why this
   # job lints on this target instead of only building.
   #
-  # Known, deliberately out of scope here: `vecmanf-document-core` pulls
+  # Known, deliberately out of scope here: `curvyo-document-core` pulls
   # `getrandom`'s `js`-enabled path via `loro` (docs/technical-debt.md,
-  # "`vecmanf-document-core` needs a JavaScript host on `wasm32`"). That
+  # "`curvyo-document-core` needs a JavaScript host on `wasm32`"). That
   # entry's own text says this ban-list is "the wrong instrument" for it —
   # the build succeeds, so a tree-presence check for a *different*,
   # undecided set of names is a separate piece of work for the plugin-host
@@ -342,7 +342,7 @@ jobs:
 
   # `cargo doc` over the whole workspace, once (ADR 0011 §7, same reasoning
   # as `deny`). Needs frontend/dist for the same reason rust-host-gate
-  # does — `cargo doc` expands `vecmanf-app`'s `tauri::generate_context!`
+  # does — `cargo doc` expands `curvyo-app`'s `tauri::generate_context!`
   # too, confirmed locally (it is not exempt just because it doesn't link) —
   # and the same Linux system libraries for the same reason.
   doc:

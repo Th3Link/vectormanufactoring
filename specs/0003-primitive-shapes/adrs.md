@@ -9,7 +9,7 @@ schema.
 
 All 22 acceptance criteria can be built against ADR 0002 §5/§6 and ADR 0009 §3
 as they read today. **No new crate, no new external dependency and no new
-`vecmanf-geometry-core` function** is needed (see the boundary decision below).
+`curvyo-geometry-core` function** is needed (see the boundary decision below).
 One acceptance criterion conflicts with crash safety (AC 10, under "Flagged to
 the lead"). No acceptance criterion conflicts with an ADR.
 
@@ -56,11 +56,11 @@ the lead"). No acceptance criterion conflicts with an ADR.
   `render-core → document-core` only is the constraint that decides where
   outline construction lives (below).
 - [ADR 0003 §1, §2, §7](../../docs/adr/0003-geometry-kernel-booleans-offsetting-vcarving.md):
-  `vecmanf-geometry-core` is used, not extended. Hit-testing a primitive's
+  `curvyo-geometry-core` is used, not extended. Hit-testing a primitive's
   outline uses slice 2's `nearest_point_on_segment`. Display tessellation
   stays in `render-core` at its own tolerance.
 - [ADR 0001 §1, §3, §5](../../docs/adr/0001-ui-framework-and-canvas-rendering.md):
-  the three tools are state machines in `vecmanf-ui-core`. The frontend adds
+  the three tools are state machines in `curvyo-ui-core`. The frontend adds
   tool-rail entries and the polygon/star controls and holds no editing logic.
   Live drags cross the wasm boundary as typed arrays.
 - [ADR 0004 §9](../../docs/adr/0004-persistence-and-cross-machine-sync.md):
@@ -221,7 +221,7 @@ the lead"). No acceptance criterion conflicts with an ADR.
   primitives first, so a mixed selection converts its primitives and leaves
   its paths alone.
 
-- **2026-10-04: outline construction lives in `vecmanf-document-core`.**
+- **2026-10-04: outline construction lives in `curvyo-document-core`.**
   This sharpens slice 2's dividing question. The operative test, as slice 2
   applied it, is *does this code evaluate a curve* (flatten, project,
   subdivide, intersect)? Placing control points with a closed-form formula
@@ -277,13 +277,13 @@ the lead"). No acceptance criterion conflicts with an ADR.
   0.1 %.
 
 - **2026-10-04: the crate boundary for the tools.** No new crate.
-  - `vecmanf-document-core`: the schema above, `Angle`, the two validated
+  - `curvyo-document-core`: the schema above, `Angle`, the two validated
     newtypes, the object-level snapshot, the outline module, and the command
     methods. The methods are create primitive, set frame, set corner radius,
     set point count, set inner ratio and convert to paths. Each makes one
     commit, and each refuses with a typed error when the id is stale or the
     shape is wrong (AC 14: a polygon has no inner ratio to set).
-  - `vecmanf-ui-core`: the rectangle, ellipse and polygon/star tool state
+  - `curvyo-ui-core`: the rectangle, ellipse and polygon/star tool state
     machines; object selection; **handle layout** (which handles a selected
     primitive shows and where, from its snapshot and effective radius);
     handle-drag → parameter arithmetic; and hit-testing for objects and
@@ -294,14 +294,14 @@ the lead"). No acceptance criterion conflicts with an ADR.
     anchor selection. That gives one source for handle positions, used by
     both hit-testing and drawing. No `Tool` trait is required: rectangle and
     ellipse may share their drag-out state machine through an `enum`.
-  - `vecmanf-render-core`: object snapshots → outline → the existing stroke
+  - `curvyo-render-core`: object snapshots → outline → the existing stroke
     path; handle glyphs from `DecorationInput`. **Rename the existing
     `primitives.rs` (decoration glyphs: squares, diamonds, rings) to
     `glyphs.rs`** in this slice. After this slice, "primitive" means a
     document shape, and a module of that name holding UI glyphs would
     mislead (`CLAUDE.md` §5, one responsibility, stated plainly).
-  - `vecmanf-geometry-core`: no change.
-  - `vecmanf-editor-wasm` / `frontend/`: tool-rail entries, the polygon/star
+  - `curvyo-geometry-core`: no change.
+  - `curvyo-editor-wasm` / `frontend/`: tool-rail entries, the polygon/star
     point-count, ratio and mode controls, and "object to path" / "remove
     rounding" actions. Binding only.
 

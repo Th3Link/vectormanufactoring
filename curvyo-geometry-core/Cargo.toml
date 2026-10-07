@@ -1,0 +1,20 @@
+[package]
+name = "curvyo-geometry-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The Curvyo geometry kernel: flatten-for-hit-test, nearest-point-on-segment and subdivide-at-parameter over cubic Bézier segments (pure, wasm-compatible)."
+
+[lints]
+workspace = true
+
+[dependencies]
+curvyo-document-core = { path = "../curvyo-document-core", version = "0.1.0" }
+kurbo.workspace = true
+
+[dev-dependencies]
+# Test-only (tester-added, `specs/0002-path-node-editing` verification): property
+# tests for the geometry kernel's flatten/nearest-point/subdivide invariants
+# (`CLAUDE.md`'s tester role, "Geometry ... property tests with proptest").
+proptest = "1"

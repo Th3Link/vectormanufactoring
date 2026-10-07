@@ -19,7 +19,7 @@ depends on any of them.
 **What we do differently from the tools this replaces:** Inkscape has no
 project container — the file *is* the SVG, so nothing but geometry can live
 in it. LightBurn has a project container (`.lbrn2`) but it is Windows-only
-and keeps no path to syncing or sharing that container later. Our `.vmf`
+and keeps no path to syncing or sharing that container later. Our `.curvyo`
 project file (ADR 0004 §1) is a real container from the first save — a zip
 holding the document plus room for jobs, assets and (later, unused in this
 slice) a sharing keyring — so nothing about today's "just save a file"
@@ -35,14 +35,14 @@ story has to be redesigned when sync or collaboration slices land.
    with rulers/status bar reporting position and size in millimetres (the
    canonical unit, ADR 0002 §2), and no file has yet been written to disk.
 3. Given an unsaved new project, when the maker chooses "Save As" and picks
-   a filename and folder, then a file with extension `.vmf` is written at
+   a filename and folder, then a file with extension `.curvyo` is written at
    that exact path; the file is a valid zip archive that contains at least
    `document.loro` and `document.json`; and the app's title bar shows the
    chosen filename with no "unsaved" marker immediately after.
 4. Given a project already saved once, when the maker chooses "Save" again
    having made no further changes, then the app completes without error and
    without re-prompting for a filename or location.
-5. Given a `.vmf` file previously saved by this slice, when the maker opens
+5. Given a `.curvyo` file previously saved by this slice, when the maker opens
    it (via "Open Project" or the OS file association/double-click), then the
    app shows an empty canvas with no error, within 3 seconds, and the title
    bar shows that file's name.
@@ -50,7 +50,7 @@ story has to be redesigned when sync or collaboration slices land.
    relaunches it, then opening that same file reproduces the same empty
    canvas with no error — proving the round trip survives a full process
    restart, not just an in-session close.
-7. Given a file that is not a valid `.vmf` project (e.g. a renamed empty
+7. Given a file that is not a valid `.curvyo` project (e.g. a renamed empty
    text file, a truncated zip, or a `format_version` newer than this build
    supports), when the maker tries to open it, then the app refuses with a
    specific, named error message (not a silent no-op, not a crash) and any
@@ -63,7 +63,7 @@ story has to be redesigned when sync or collaboration slices land.
    online, when network traffic is monitored for the duration, then zero
    outbound connections are made — proving no telemetry leaves the machine
    by default (R-SYS-007) even though nothing stops it from being online.
-10. Given the same `.vmf` file produced by criterion 3, when it is opened on
+10. Given the same `.curvyo` file produced by criterion 3, when it is opened on
     a Linux, a Windows and a macOS build of the app, then each one opens it
     without error and shows an empty canvas (R-SYS-001: one shared
     codebase, all three platforms). Pixel/geometry-exact parity across OSes
@@ -86,7 +86,7 @@ story has to be redesigned when sync or collaboration slices land.
 - Any machine or material binding for the project (work-area size, etc.) —
   `machine-profile` (slice 10).
 - Collaboration, cloud sync, folder sync, and the `keyring.log` sharing
-  mechanism inside the `.vmf` container. The container format already has
+  mechanism inside the `.curvyo` container. The container format already has
   room for these (ADR 0004 §1, ADR 0010) so later slices are additive, but
   none of it is exercised, wired up, or user-visible here.
 - The explicit "recover from `document.json` snapshot" action named in
@@ -145,10 +145,10 @@ inventing tokens inline the way this spec does for its one colour.
 
 ### Title bar states
 
-- No project open / unsaved new project: title is **"vecmanf"** (app name
+- No project open / unsaved new project: title is **"Curvyo"** (app name
   only — not "Untitled", there's no recent-files or template concept to
   distinguish it from yet).
-- After Save As or Open: **"<filename> — vecmanf"** (em dash). Never show
+- After Save As or Open: **"<filename> — Curvyo"** (em dash). Never show
   the full path in the title bar — path lives only in the native file
   dialog and, later, a recent-files list.
 - No unsaved-changes marker anywhere in this slice (AC3 requires its
@@ -172,10 +172,10 @@ app-level keymap table) so OS-standard discoverability comes for free:
 - Open and Save As use the **OS-native file picker** (Tauri's `dialog`
   plugin), not a custom in-app browser — gives platform-correct recent
   locations and search for free, matches every reference tool.
-- Save As default filename: `Untitled.vmf` when the project has never been
+- Save As default filename: `Untitled.curvyo` when the project has never been
   saved.
-- Register the `.vmf` file association and the native picker's filter as
-  "vecmanf project (*.vmf)" (needed for AC5's double-click/open-with path).
+- Register the `.curvyo` file association and the native picker's filter as
+  "Curvyo project (*.curvyo)" (needed for AC5's double-click/open-with path).
 
 ### Error handling — invalid/corrupt file (AC7)
 
@@ -185,12 +185,12 @@ app-level keymap table) so OS-standard discoverability comes for free:
   dismiss on outside-click.
 - Title: **"Can't open project"**. Body is one plain-language sentence
   naming the specific cause, never the raw error type:
-  - Not a `.vmf` at all / not a zip: *"This file isn't a vecmanf project
-    (.vmf) file."*
+  - Not a `.curvyo` at all / not a zip: *"This file isn't a Curvyo project
+    (.curvyo) file."*
   - Truncated/corrupt zip or missing required members: *"This file is
     damaged and can't be read."*
   - `format_version` newer than this build: *"This file was saved by a
-    newer version of vecmanf. Update the app to open it."*
+    newer version of Curvyo. Update the app to open it."*
 - Single "OK" action, default-focused; Escape and Enter both dismiss.
 - The dialog is modal only to the open attempt. If another project is
   already open behind it, dismissing the dialog must leave that project's
@@ -203,7 +203,7 @@ app-level keymap table) so OS-standard discoverability comes for free:
 ### First launch, no recent files
 
 - First launch is visually identical to "new project" (AC1 reduces to
-  AC2): empty canvas, status bar, title "vecmanf". No welcome screen, no
+  AC2): empty canvas, status bar, title "Curvyo". No welcome screen, no
   empty-state illustration, and no greyed-out "Open Recent" stub — recent
   files are explicitly out of scope; don't build a disabled placeholder for
   a feature that doesn't exist.
@@ -212,12 +212,12 @@ app-level keymap table) so OS-standard discoverability comes for free:
 
 Native OS menu over custom menu/title bar; canvas always edge-to-edge under
 chrome; status bar as the one permanent chrome element; shadcn `AlertDialog`
-as the house style for blocking errors; `"<filename> — vecmanf"` title
+as the house style for blocking errors; `"<filename> — Curvyo"` title
 format. Later feature UX notes should follow these unless they explicitly
 supersede one.
 
 ## Links
 Requirements: R-SYS-001, R-SYS-002, R-SYS-007 (`docs/requirements.md`)
-ADRs: ADR 0002 (document model, units), ADR 0004 §1 (`.vmf` container
+ADRs: ADR 0002 (document model, units), ADR 0004 §1 (`.curvyo` container
 format)
 PR: https://github.com/Th3Link/vectormanufactoring/pull/3

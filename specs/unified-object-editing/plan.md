@@ -11,23 +11,23 @@ and deletes the editing code that PR 1 made redundant. The two merge in one
 window (the lead's decision).
 
 No new crate, no new dependency, no new trait, no document-model change, no
-`format_version` change (stays 5), no new `vecmanf-document-core` or
-`vecmanf-geometry-core` function. If the build finds it needs one of these,
+`format_version` change (stays 5), no new `curvyo-document-core` or
+`curvyo-geometry-core` function. If the build finds it needs one of these,
 stop and ask the lead.
 
 ## Affected crates/modules
 
-- `vecmanf-ui-core`: new `param_handles.rs`, `param_edit.rs`, `param_entry.rs`,
+- `curvyo-ui-core`: new `param_handles.rs`, `param_edit.rs`, `param_entry.rs`,
   `select_bar.rs`, `transform_primitive.rs`, `skew_math.rs`,
   `select_tool/preview.rs`; changed `transform_handle_layout.rs`
   (`TransformHandle` becomes `EditHandle`, tier function, tolerance fields,
   param arm of the hit rule), `transform_drag.rs`, `transform_commit.rs`,
   `transform_entry.rs`, `transform_math.rs`, `select_tool.rs`,
   `select_tool/entry.rs`, `lib.rs`.
-- `vecmanf-render-core`: new `live_preview.rs` (`build_live_edit_preview`);
+- `curvyo-render-core`: new `live_preview.rs` (`build_live_edit_preview`);
   `select_decoration.rs` (`TransformGlyphKind::Parameter`, guide line),
   `theme.rs` (knob glyph constants, `PREVIEW_NEW`), `lib.rs`.
-- `vecmanf-editor-wasm`: `session/select.rs`, `session/select_view.rs`,
+- `curvyo-editor-wasm`: `session/select.rs`, `session/select_view.rs`,
   `session/draw.rs`, `session/mod.rs`, `session/node.rs`
   (`live_node_drag_paths` loses the Select branches),
   `session/shapes.rs` (`primitives_for_render` loses the Select branches),
@@ -105,7 +105,7 @@ stop and ask the lead.
       criteria 9 and 31 tests run with the switch on, new tests assert the off
       default (AC 23)
 - [x] 7. `LiveEdit` and `SelectTool::live_edit`, `build_live_edit_preview` in
-      `vecmanf-render-core`, `Session` substitution removal (`live_objects` is
+      `curvyo-render-core`, `Session` substitution removal (`live_objects` is
       the only substitution, for decorations), zero-offset move guard,
       release-equals-preview property test for every handle kind, `#[ignore]`
       benchmark of `Session::draw_list()` for a 200-object move (AC 10, 11, 12,
@@ -126,7 +126,7 @@ stop and ask the lead.
 
 ### PR 2
 
-- [x] 11. `vecmanf-ui-core`: `ResizeDirection` to `resize_direction.rs`;
+- [x] 11. `curvyo-ui-core`: `ResizeDirection` to `resize_direction.rs`;
       `shape_tool_common.rs` becomes `CreatePreview` and `CreateOutcome` plus
       `is_degenerate` and `constrained_endpoint`; the rectangle, ellipse and
       polygon/star tools become creation-only (`pointer_down(point)`,
@@ -137,10 +137,10 @@ stop and ask the lead.
 - [x] 12. `SelectTool::double_click` on a primitive returns `EditHint` and never
       a handoff (paths still hand off to the Node tool); a double-click on a
       parameter handle still opens its entry (AC 31, 32, 33)
-- [x] 13. `vecmanf-render-core`: `ShapeDecorationInput`, the shape handle glyphs
+- [x] 13. `curvyo-render-core`: `ShapeDecorationInput`, the shape handle glyphs
       and the primitive bounding box outline deleted; `build_primitive_strokes`
       and `build_shape_live_preview` stay (AC 27)
-- [x] 14. `vecmanf-editor-wasm`: `Session::shape_pointer_up` sets `Tool::Select`
+- [x] 14. `curvyo-editor-wasm`: `Session::shape_pointer_up` sets `Tool::Select`
       and selects the new id; creation tools draw each selected object's plain
       box, no hover, no handles; `convert_selected_to_paths` and
       `remove_corner_rounding` live in `session/select_bar.rs`; the old
@@ -167,9 +167,9 @@ objects is drawn and hover does not change the cursor. Tests: `select_view.rs`
 
 | Deleted | Replaced by |
 |---|---|
-| `rectangle_tool.rs` unit tests: resize, radius drag (rotated, shrunken, zero at the diagonal), remove rounding, selection click | `tests/unified_object_editing.rs` `ported_ac3_*`, `ported_all_four_radius_handles_*` and the `param_edit.rs` tests of PR 1; the Remove rounding tests in `vecmanf-editor-wasm/tests/unified_object_editing.rs` and `acceptance_unified_editing.rs`; the creation-only unit tests in `rectangle_tool.rs`; `session/shapes.rs` `a_press_without_movement_creates_nothing_and_keeps_the_selection` |
+| `rectangle_tool.rs` unit tests: resize, radius drag (rotated, shrunken, zero at the diagonal), remove rounding, selection click | `tests/unified_object_editing.rs` `ported_ac3_*`, `ported_all_four_radius_handles_*` and the `param_edit.rs` tests of PR 1; the Remove rounding tests in `curvyo-editor-wasm/tests/unified_object_editing.rs` and `acceptance_unified_editing.rs`; the creation-only unit tests in `rectangle_tool.rs`; `session/shapes.rs` `a_press_without_movement_creates_nothing_and_keeps_the_selection` |
 | `ellipse_tool.rs` unit tests: resize | `ported_ac9_resizing_an_ellipse_can_break_rx_eq_ry` |
-| `poly_star_tool.rs` unit tests: resize, inner radius, point count, ratio preview | `ported_ac13_*`, `ported_ac14_*`, `ported_ac15_*`; the bar Points tests in `vecmanf-editor-wasm/tests/unified_object_editing.rs` and `acceptance_unified_editing.rs` |
+| `poly_star_tool.rs` unit tests: resize, inner radius, point count, ratio preview | `ported_ac13_*`, `ported_ac14_*`, `ported_ac15_*`; the bar Points tests in `curvyo-editor-wasm/tests/unified_object_editing.rs` and `acceptance_unified_editing.rs` |
 | `handle_layout.rs`, `shape_hit_test.rs` tests | the PR 1 `param_handles.rs` and `transform_handle_layout.rs` tests; `hit_test_object.rs` tests for the outline rule |
 | `acceptance_0003.rs` AC3, AC9, AC13, AC14, AC15, `hit_test_handle_ignores_non_draggable_echo_handles` | the `ported_*` tests above (same numbers) |
 | wasm `acceptance_0005.rs` `ac25_*` shape-tool handle tests | eight `ac25_*` tests rewritten against the Select tool with the old numbers (`radius_knob`, `inward_step` helpers) |
@@ -204,17 +204,17 @@ on purpose: `hit_test::hit_test_handle` (the Node tool's own node/handle test) a
 
 ## Validation
 
-- Core logic test first in `vecmanf-ui-core` and `vecmanf-render-core`; session
-  behaviour in `vecmanf-editor-wasm` unit and integration tests; the frontend
+- Core logic test first in `curvyo-ui-core` and `curvyo-render-core`; session
+  behaviour in `curvyo-editor-wasm` unit and integration tests; the frontend
   has no test runner (`docs/technical-debt.md`), so bar, switches, chips and
   cursors are checked in the Browser pane against a build served from this
   worktree.
-- Property tests (`proptest`, already a dev-dependency of `vecmanf-ui-core`): the
+- Property tests (`proptest`, already a dev-dependency of `curvyo-ui-core`): the
   4 px clearance of every drawn glyph pair (rectangle: aspect, radius, rotation,
   zoom; star: every point count, ratio 0.01 to 0.99, orientation, with one fixed
   worst case), release equals preview for every handle kind, drag equals typed
   entry equals bar value.
-- The gate of `CLAUDE.md` §7 plus `cd frontend && npm run build`, with `vecmanf-app`
+- The gate of `CLAUDE.md` §7 plus `cd frontend && npm run build`, with `curvyo-app`
   in the workspace.
 - Shape-tool tests were not touched in PR 1; every Select-tool equivalent of a
   shape-tool test was added with the old test's numbers (ADR: "port in PR 1,

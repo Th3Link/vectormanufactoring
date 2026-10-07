@@ -1,0 +1,17 @@
+[package]
+name = "curvyo-document-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The Curvyo document model: units, the document root record, and the .curvyo project container (pure, wasm-compatible)."
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+zip.workspace = true
+loro.workspace = true

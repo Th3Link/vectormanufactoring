@@ -130,7 +130,7 @@ implemented in `frontend/src/index.css` as `--editor-accent`/
 reserves plain `--accent`/`--accent-foreground` for its own component hover
 states (menus, dropdowns); redefining it here would silently recolor those
 too. `--node-fill`/`--node-stroke`/`--handle-fill`/`--handle-stroke` need no
-CSS variable at all — the canvas is WebGL, not DOM, so `vecmanf-render-core`'s
+CSS variable at all — the canvas is WebGL, not DOM, so `curvyo-render-core`'s
 `theme.rs` is where these values actually live; this table documents the
 values, not an implementation site, for those four rows.
 
@@ -180,7 +180,7 @@ values, not an implementation site, for those four rows.
 | Handle hover ring | 16px diameter screen-space | Faint outer ring on a hovered handle (2026-10-05: split from the node hover ring, sized relative to the handle's own 12px glyph, and drawn after it — once the handle doubled past the old shared 10px ring, the ring drew fully behind, and so fully hidden by, the handle's own opaque fill). Kept as its own independent token rather than re-merged with the node hover ring now that both exist — the two glyphs can resize independently again in future, same reasoning as the hit-test radii's independent tokens |
 | Segment selection overlay | +2px screen-space over the geometry's own stroke | Drawn on top, doesn't replace the real stroke |
 | Node hit-test radius | 16px screen-space | Minimum clickable radius around a node, even though the visual glyph is smaller (Fitts's-law margin for mouse precision) (2026-10-05: doubled from 8px alongside the node glyph's own doubling, same request) |
-| Handle hit-test radius | 16px screen-space | Same margin rule as the node radius, doubled alongside the handle's own doubled visual size (2026-10-05) — a visual-only size change would look right but still feel exactly as hard to hit, which is the opposite of the request. Now numerically equal to the node hit-test radius above (coincidence of two independent doublings, not a merge) — harmless: `vecmanf-ui-core::hit_test` picks the nearer candidate regardless of either tolerance's value, a handle winning only an exact tie |
+| Handle hit-test radius | 16px screen-space | Same margin rule as the node radius, doubled alongside the handle's own doubled visual size (2026-10-05) — a visual-only size change would look right but still feel exactly as hard to hit, which is the opposite of the request. Now numerically equal to the node hit-test radius above (coincidence of two independent doublings, not a merge) — harmless: `curvyo-ui-core::hit_test` picks the nearer candidate regardless of either tolerance's value, a handle winning only an exact tie |
 | Segment hit-test tolerance | 4px screen-space perpendicular distance | Clicking "on" a curve/line segment |
 | Shape handle | **Superseded 2026-10-06 (`unified-object-editing`): the shape tools no longer have handles; resize is the Transform resize handle, radius and inner radius are the Parameter handle below.** Former value: 8×8px screen-space | Hollow square, `primitive-shapes`: bounding-box resize, rectangle corner-radius, polygon/star inner-radius — deliberately square (never circular or diamond) so the two vocabularies never read as the same control, regardless of either one's size; no longer the larger of the two since the handle endpoint's 2026-10-05 doubling (12px), and now the *smaller* of the two since the node glyph's own 2026-10-05 doubling (14px) — this token's own size was not revisited either time |
 | Shape handle hit-test radius | **Superseded 2026-10-06** (see "Parameter handle hit-test radius"). Former value: 16px screen-space | Same margin rule as the node radius (reused rather than invented fresh — `Session::shape_tolerances()` passes `self.point_tolerance()` straight through) — doubled from 8px as a direct, automatic consequence of the node hit-test radius doubling above, not a deliberate shape-handle-specific change. Now equal to the handle hit-test radius too (same coincidence as above) |
@@ -226,7 +226,7 @@ values, not an implementation site, for those four rows.
 - **All canvas editing-UI** — node/handle glyphs, handle lines, selection and
   hover highlights, and anything like them a later tool adds (primitive
   resize handles, alignment guides) — is drawn in the WebGL draw list
-  (`vecmanf-render-core`, ADR 0001 §4), sized in constant screen pixels
+  (`curvyo-render-core`, ADR 0001 §4), sized in constant screen pixels
   regardless of zoom level, and is never part of the document's exported
   content. DOM overlays are reserved for text input and for the
   accessibility cases ADR 0001 §4 names; none of this slice's UI needs one

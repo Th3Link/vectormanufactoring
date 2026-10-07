@@ -1,0 +1,21 @@
+[package]
+name = "curvyo-ui-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The Curvyo interaction layer: pen/node tool state machines, hit-testing, selection and command dispatch (pure, wasm-compatible)."
+
+[lints]
+workspace = true
+
+[dependencies]
+curvyo-document-core = { path = "../curvyo-document-core", version = "0.1.0" }
+curvyo-geometry-core = { path = "../curvyo-geometry-core", version = "0.1.0" }
+
+[dev-dependencies]
+# Test-only (tester-added, `specs/0005-object-transform` verification): property
+# tests for the resize/rotate drag arithmetic (`CLAUDE.md`'s tester role,
+# "Geometry ... property tests with proptest"). Same crate and version
+# `curvyo-geometry-core` already uses.
+proptest = "1"

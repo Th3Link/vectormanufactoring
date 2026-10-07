@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds vecmanf-editor-wasm for the browser and runs wasm-bindgen over it,
+# Builds curvyo-editor-wasm for the browser and runs wasm-bindgen over it,
 # producing the ES module frontend/src/wasm-bindings/ imports
 # (specs/0002-path-node-editing/adrs.md, ADR 0001 §3's wasm facade). Generated
 # output, not committed — see frontend/.gitignore.
@@ -19,10 +19,10 @@ cargo build \
   --manifest-path "${repo_root}/Cargo.toml" \
   --target wasm32-unknown-unknown \
   --release \
-  -p vecmanf-editor-wasm
+  -p curvyo-editor-wasm
 
 wasm-bindgen \
-  "${repo_root}/target/wasm32-unknown-unknown/release/vecmanf_editor_wasm.wasm" \
+  "${repo_root}/target/wasm32-unknown-unknown/release/curvyo_editor_wasm.wasm" \
   --target web \
   --out-dir "${out_dir}" \
-  --out-name vecmanf_editor_wasm
+  --out-name curvyo_editor_wasm

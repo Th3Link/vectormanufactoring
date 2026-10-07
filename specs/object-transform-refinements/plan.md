@@ -3,7 +3,7 @@
 Branch `story/object-transform-refinements`, worktree
 `/home/marc/workbench/vecmanf-claude-object-transform-refinements`, from
 `origin/main` at `e67dea7`. No new crate, no new dependency, no
-`format_version` change (stays 5), no `vecmanf-geometry-core` change.
+`format_version` change (stays 5), no `curvyo-geometry-core` change.
 
 Decisions taken while planning (inside the architect's `adrs.md`):
 
@@ -20,15 +20,15 @@ Decisions taken while planning (inside the architect's `adrs.md`):
 
 ## Affected crates/modules
 
-- `vecmanf-document-core`: `path_model.rs` (`PathSnapshot::sheared`).
-- `vecmanf-ui-core`: new `angle_snap.rs`, new `transform_entry.rs`;
+- `curvyo-document-core`: `path_model.rs` (`PathSnapshot::sheared`).
+- `curvyo-ui-core`: new `angle_snap.rs`, new `transform_entry.rs`;
   `transform_math.rs` (pivot, snap, skew arithmetic, size-to-delta),
   `transform_handle_layout.rs` (handle enum, positions, tiers, one hit rule),
   `transform_drag.rs` (`resolve` per gesture, `compute_skew`),
   `select_tool.rs` (dead zone, modifiers, entry, double-click rule).
-- `vecmanf-render-core`: `select_decoration.rs`, `glyphs.rs`, `theme.rs`
+- `curvyo-render-core`: `select_decoration.rs`, `glyphs.rs`, `theme.rs`
   (glyph kinds, skew guide, tokens).
-- `vecmanf-editor-wasm`: `session/select.rs` (+ new
+- `curvyo-editor-wasm`: `session/select.rs` (+ new
   `session/transform_entry.rs`), `wasm_api.rs`.
 - `frontend/`: `useEditorSession.ts`, `Canvas.tsx`, `lib/cursors.ts`, new
   `TransformEntryChip.tsx`, `HandleHintChip.tsx`.
@@ -81,8 +81,8 @@ Decisions taken while planning (inside the architect's `adrs.md`):
       rely on a sub-3-px drag, or expect an inside double-click to do
       nothing (spec "Changes to shipped behaviour" item 6)
 - [x] 13. Acceptance tests for every criterion (kept in
-      `vecmanf-ui-core/tests/acceptance_object_transform_refinements.rs` and
-      `vecmanf-editor-wasm/tests/acceptance_object_transform_refinements.rs`),
+      `curvyo-ui-core/tests/acceptance_object_transform_refinements.rs` and
+      `curvyo-editor-wasm/tests/acceptance_object_transform_refinements.rs`),
       docs, PR
 
 Optional criteria 54 (hint chip), 55 (pivot preview) and 56 (skew guide) are
@@ -97,7 +97,7 @@ built (tasks 9-11). Task 13's PR step: draft PR #35, not marked ready.
 - Session-level acceptance tests drive `Session` with screen-derived points
   (dead zone, double-click table, Shift reveal, entry open/commit/cancel,
   undo/redo counts, save/reopen of a typed rotation).
-- Full gate from `CLAUDE.md` §7, including `vecmanf-app` and
+- Full gate from `CLAUDE.md` §7, including `curvyo-app` and
   `cd frontend && npm install && npm run build`.
 - Manual check in the Browser pane against a served build of this worktree.
 

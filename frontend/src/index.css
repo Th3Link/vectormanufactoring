@@ -171,7 +171,7 @@
    is_hovering_pen_close_target()` decides which class applies; the
    first node's own hover ring (a second, independent cue the UX notes
    ask for alongside the cursor swap) is a separate, still-open gap in
-   vecmanf-render-core's pen preview (it always rings the most-recently-
+   curvyo-render-core's pen preview (it always rings the most-recently-
    placed node, never conditionally the first one), not something this
    cursor rule can provide on its own. */
 .canvas-cursor-pen {
