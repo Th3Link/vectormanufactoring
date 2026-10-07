@@ -40,6 +40,14 @@ pub(crate) fn commit_gesture(
     }
 }
 
+/// Writes a move of `ids` by `offset` as one commit (shared by a drag's
+/// release and the typed move's Enter, so a typed offset and a dragged one
+/// leave the same registers). A stale id refuses the whole call, which writes
+/// nothing.
+pub(crate) fn commit_move(document: &Document, ids: &[NodeId], offset: Vec2) {
+    let _ = document.translate_objects(ids, offset);
+}
+
 /// Writes a resize's resulting geometry, dispatching on the object's own
 /// kind to the matching one-commit `Document` method. With
 /// [`StrokeScaling::Keep`] the stroke width is passed as `None`, so the

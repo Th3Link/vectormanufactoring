@@ -58,7 +58,7 @@ pub fn skew_frame(box_: &OrientedBox, side: Side, shift: bool) -> SkewFrame {
 
 /// The smallest lever (millimetres) a skew resolves against: below it the
 /// drag is "no change" (the UI hides such handles at 24 px anyway).
-const MIN_SKEW_LEVER_MM: f64 = 1e-6;
+pub(crate) const MIN_SKEW_LEVER_MM: f64 = 1e-6;
 
 /// The skew angle of a drag (criteria 38, 40, 47): `atan(d / |lever|)` with
 /// `d` the pointer's local displacement along the grabbed side's direction,

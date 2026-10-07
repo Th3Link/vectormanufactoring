@@ -20,6 +20,7 @@ mod ellipse_tool;
 mod hit_test;
 mod hit_test_object;
 mod modifiers;
+mod move_entry;
 mod node_tool;
 mod object_bounds;
 mod object_selection;
@@ -35,6 +36,7 @@ mod select_bar;
 mod select_tool;
 mod selection;
 mod shape_tool_common;
+mod skew_entry;
 mod skew_math;
 mod transform_commit;
 mod transform_drag;
@@ -51,11 +53,12 @@ pub use ellipse_tool::EllipseTool;
 pub use hit_test::{Hit, hit_test};
 pub use hit_test_object::hit_test_object;
 pub use modifiers::Modifiers;
+pub use move_entry::MoveEntry;
 pub use node_tool::{
     HitTolerances, LiveNodeDrag, NodeTool, NodeToolbarState,
     PointerDownOutcome as NodePointerDownOutcome, PointerUpOutcome as NodePointerUpOutcome,
 };
-pub use object_bounds::object_bounds;
+pub use object_bounds::{object_bounds, object_outline_bounds};
 pub use object_selection::ObjectSelection;
 pub use oriented_box::{OrientedBox, oriented_bounds};
 pub use param_edit::{
@@ -77,10 +80,11 @@ pub use select_bar::{
 };
 pub use select_tool::{
     EntryKey, KeyEntryRefusal, LiveEdit, SelectDoubleClickOutcome, SelectPointerDownOutcome,
-    SelectTool, TransformHandleTolerances, double_click,
+    SelectTool, TransformHandleTolerances, double_click, entry_anchor,
 };
 pub use selection::NodeSelection;
 pub use shape_tool_common::{CreateOutcome, CreatePreview};
+pub use skew_entry::SkewEntry;
 pub use skew_math::{SkewFrame, skew_angle, skew_factor, skew_frame};
 pub use transform_drag::{CornerRadiusScaling, ScaleModes, StrokeScaling};
 pub use transform_entry::{

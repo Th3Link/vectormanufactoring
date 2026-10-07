@@ -10,21 +10,28 @@ use vecmanf_document_core::{Document, ObjectSnapshot, Point, Tolerance};
 use super::{SelectDoubleClickOutcome, SelectDrag, SelectTool, sole_selected};
 use crate::ResizeDirection;
 use crate::hit_test_object::hit_test_object;
+use crate::move_entry::MoveEntry;
 use crate::object_selection::ObjectSelection;
 use crate::oriented_box::oriented_bounds;
 use crate::param_entry::ParamEntry;
+use crate::skew_entry::SkewEntry;
 use crate::transform_entry::{EntryOutcome, TransformEntry};
-use crate::transform_handle_layout::{EditHandle, TransformHandleTolerances};
+use crate::transform_handle_layout::{EditHandle, Side, TransformHandleTolerances};
 
-/// The one open numeric entry: a transform entry (angle, size, outer radius)
-/// or a parameter entry (corner radius, inner ratio). Two concrete types use
-/// the enum.
+/// The one open numeric entry: a transform entry (angle, size, outer radius),
+/// a parameter entry (corner radius, inner ratio), a skew entry or a move
+/// entry. Four concrete types use the enum, each with its own fields and
+/// commit.
 #[derive(Debug, Clone)]
 pub(super) enum OpenEntry {
     /// An angle, size or outer-radius entry.
     Transform(TransformEntry),
     /// A corner-radius or inner-ratio entry.
     Param(ParamEntry),
+    /// A path's skew angle entry.
+    Skew(SkewEntry),
+    /// A typed move (relative or absolute).
+    Move(MoveEntry),
 }
 
 /// The typed entry a key opens (`specs/edit-interaction-polish/` criteria
@@ -35,6 +42,12 @@ pub enum EntryKey {
     Angle,
     /// S: the size entry of the bottom-right corner resize handle.
     Size,
+    /// M: the typed move of the centre handle.
+    Move,
+    /// K: the skew-x entry of the top skew handle (a path).
+    SkewX,
+    /// Shift+K: the skew-y entry of the right skew handle (a path).
+    SkewY,
 }
 
 /// Why an entry key could not act (criterion 59): the text of the hint chip
@@ -45,6 +58,8 @@ pub enum KeyEntryRefusal {
     NothingSelected,
     /// Several objects are selected; a typed value needs exactly one.
     SeveralSelected,
+    /// K or Shift+K with one selected object that is not a path.
+    SkewNeedsPath,
 }
 
 impl OpenEntry {
@@ -52,6 +67,8 @@ impl OpenEntry {
         match self {
             Self::Transform(entry) => entry.handle(),
             Self::Param(entry) => entry.handle(),
+            Self::Skew(entry) => entry.handle(),
+            Self::Move(_) => EditHandle::Move,
         }
     }
 }
@@ -62,7 +79,7 @@ impl SelectTool {
     pub const fn entry(&self) -> Option<&TransformEntry> {
         match &self.entry {
             Some(OpenEntry::Transform(entry)) => Some(entry),
-            Some(OpenEntry::Param(_)) | None => None,
+            _ => None,
         }
     }
 
@@ -71,7 +88,25 @@ impl SelectTool {
     pub const fn param_entry(&self) -> Option<&ParamEntry> {
         match &self.entry {
             Some(OpenEntry::Param(entry)) => Some(entry),
-            Some(OpenEntry::Transform(_)) | None => None,
+            _ => None,
+        }
+    }
+
+    /// The open skew-angle entry, if any.
+    #[must_use]
+    pub const fn skew_entry(&self) -> Option<&SkewEntry> {
+        match &self.entry {
+            Some(OpenEntry::Skew(entry)) => Some(entry),
+            _ => None,
+        }
+    }
+
+    /// The open typed move, if any.
+    #[must_use]
+    pub const fn move_entry(&self) -> Option<&MoveEntry> {
+        match &self.entry {
+            Some(OpenEntry::Move(entry)) => Some(entry),
+            _ => None,
         }
     }
 
@@ -110,6 +145,9 @@ impl SelectTool {
         let outcome = match entry {
             OpenEntry::Transform(entry) => entry.commit(document, texts, last_edited),
             OpenEntry::Param(entry) => entry.commit(document, texts[0]),
+            OpenEntry::Skew(entry) => entry.commit(document, texts[0]),
+            // The typed move has its own commit: it needs the mode.
+            OpenEntry::Move(_) => EntryOutcome::Unchanged,
         };
         if !matches!(outcome, EntryOutcome::Invalid { .. }) {
             self.entry = None;
@@ -117,18 +155,40 @@ impl SelectTool {
         outcome
     }
 
-    /// Criterion 57: opens the angle entry (R) or the size entry (S) for the
-    /// sole selected object, as a double-click on its top-right corner rotate
-    /// handle or bottom-right corner resize handle does, with no Shift pivot
-    /// and no Ctrl link: those are read only from a double-click. One
-    /// difference, set by the customer on 2026-10-07 (criterion 57a): S
-    /// scales about the box centre, as a Shift drag would, because no handle
-    /// was chosen. Both corner handles always exist, whatever the box size,
-    /// so the entry opens for an object of any size.
+    /// Enter in the move chip (criteria 20, 21, 22, 25): `texts` are the X and
+    /// Y texts, `absolute` the chip's mode. A committed or unchanged entry
+    /// closes; an invalid one stays open.
+    pub fn commit_move_entry(
+        &mut self,
+        document: &Document,
+        texts: [&str; 2],
+        absolute: bool,
+    ) -> EntryOutcome {
+        let Some(OpenEntry::Move(entry)) = self.entry.as_ref() else {
+            return EntryOutcome::Unchanged;
+        };
+        let outcome = entry.commit(document, texts, absolute);
+        if !matches!(outcome, EntryOutcome::Invalid { .. }) {
+            self.entry = None;
+        }
+        outcome
+    }
+
+    /// Criteria 56 to 58: opens the typed move (M), the angle entry (R), the
+    /// size entry (S) or the skew entry (K, Shift+K) for the sole selected
+    /// object, as a double-click on the centre handle, the top-right corner
+    /// rotate handle, the bottom-right corner resize handle, the top or the
+    /// right skew handle does, with no Shift pivot and no Ctrl link: those
+    /// are read only from a double-click. One more difference, set by the
+    /// customer on 2026-10-07 (criterion 57a): S scales about the box centre,
+    /// as a Shift drag would, because no handle was chosen. The entries do not
+    /// depend on the handle being drawn (`entry_anchor` places the chip), so
+    /// they open for an object of any size.
     ///
     /// # Errors
-    /// [`KeyEntryRefusal`] when the selection is not exactly one object;
-    /// nothing changes then.
+    /// [`KeyEntryRefusal`] when the selection is not exactly one object, or
+    /// when K or Shift+K meets a selected object that is not a path; nothing
+    /// changes then.
     pub fn open_entry_for_key(
         &mut self,
         objects: &[ObjectSnapshot],
@@ -141,33 +201,44 @@ impl SelectTool {
             _ => return Err(KeyEntryRefusal::SeveralSelected),
         };
         let box_ = oriented_bounds(object);
+        let skew = |side| {
+            SkewEntry::for_handle(object, &box_, side, false)
+                .map(OpenEntry::Skew)
+                .ok_or(KeyEntryRefusal::SkewNeedsPath)
+        };
         let entry = match key {
-            EntryKey::Angle => {
-                TransformEntry::for_rotate(object, &box_, ResizeDirection::Ne, false)
-            }
+            EntryKey::Angle => OpenEntry::Transform(TransformEntry::for_rotate(
+                object,
+                &box_,
+                ResizeDirection::Ne,
+                false,
+            )),
             // No handle was chosen: the typed size scales about the box centre,
             // as a drag with Shift held would (criterion 57a), and reads no
             // modifier (Ctrl+S is gated, so no Ctrl link either).
-            EntryKey::Size => TransformEntry::for_resize(
+            EntryKey::Size => OpenEntry::Transform(TransformEntry::for_resize(
                 object,
                 &box_,
                 ResizeDirection::Se,
                 (true, false),
                 self.modes,
-            ),
+            )),
+            EntryKey::Move => OpenEntry::Move(MoveEntry::new(object, &box_)),
+            EntryKey::SkewX => skew(Side::Top)?,
+            EntryKey::SkewY => skew(Side::Right)?,
         };
-        self.entry = Some(OpenEntry::Transform(entry));
+        self.entry = Some(entry);
         Ok(())
     }
 
-    /// Acceptance criteria 3, 18, 22, 23, 25-28, 32, 49: the double-click
+    /// Acceptance criteria 3, 15, 16, 18, 22, 23, 25-28, 32: the double-click
     /// dispatch. A double-click on a handle (at the *second press's*
     /// position and modifiers, and only if the first press grabbed the same
-    /// handle) opens the numeric entry for a rotate or
-    /// resize handle and does nothing for a skew handle — neither hands
-    /// off to the object's own tool. Anywhere else inside the box of the
-    /// sole selected object, the centre handle included, hands off to it;
-    /// outside, slice 4's outline hit decides.
+    /// handle) opens the numeric entry for a rotate, resize, skew or
+    /// parameter handle, and the typed move for the centre handle, where it
+    /// is drawn: no handoff to the object's own tool. Anywhere else inside the
+    /// box of the sole selected object, the centre handle's region excluded,
+    /// hands off to it; outside, slice 4's outline hit decides.
     pub fn double_click(
         &mut self,
         objects: &[ObjectSnapshot],
@@ -182,10 +253,11 @@ impl SelectTool {
         // Kept (not consumed): a rapid third press is another double-click on
         // the same handle and keeps its entry.
         let first_press_handle = self.last_press_handle;
-        if let Some((object, box_, handle)) =
-            Self::handle_at(objects, selection, point, handle_tolerances, shift)
-                .filter(|(_, _, handle)| first_press_handle == Some(*handle))
-        {
+        // The centre handle is hit last, only inside its hover region, so it
+        // never wins against another handle (criterion 16).
+        let hit = Self::hover_handle_at(objects, selection, point, handle_tolerances, shift)
+            .filter(|(_, _, handle)| first_press_handle == Some(*handle));
+        if let Some((object, box_, handle)) = hit {
             let entry = match handle {
                 EditHandle::Rotate(direction) => Some(OpenEntry::Transform(
                     TransformEntry::for_rotate(object, &box_, direction, shift),
@@ -196,14 +268,17 @@ impl SelectTool {
                 EditHandle::Param(param) => {
                     ParamEntry::for_handle(object, &box_, param).map(OpenEntry::Param)
                 }
-                EditHandle::Skew(_) | EditHandle::Move => None,
+                EditHandle::Skew(side) => {
+                    SkewEntry::for_handle(object, &box_, side, shift).map(OpenEntry::Skew)
+                }
+                EditHandle::Move => Some(OpenEntry::Move(MoveEntry::new(object, &box_))),
             };
             return match entry {
                 Some(entry) => {
                     self.entry = Some(entry);
                     SelectDoubleClickOutcome::EntryOpened
                 }
-                None => SelectDoubleClickOutcome::Ignored,
+                None => SelectDoubleClickOutcome::Miss,
             };
         }
         if Self::is_inside_selected_box(objects, selection, point)

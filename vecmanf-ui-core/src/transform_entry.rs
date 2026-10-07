@@ -27,7 +27,8 @@ const SIZE_EQUAL_EPSILON_MM: f64 = 1e-9;
 const ANGLE_EQUAL_EPSILON_RAD: f64 = 1e-12;
 
 impl EntryField {
-    /// The single field of a parameter-handle entry (`crate::ParamEntry`).
+    /// The single field of a parameter-handle entry (`crate::ParamEntry`) and of
+    /// a skew entry (`crate::SkewEntry`), which sets `editable` itself.
     pub(crate) fn for_param(
         label: &'static str,
         accessible_name: &'static str,
@@ -59,6 +60,9 @@ pub enum EntryKind {
     CornerRadius,
     /// One field: a star's inner ratio (criterion 19).
     InnerRatio,
+    /// One field: a path's skew angle in degrees
+    /// (`specs/edit-interaction-polish/`, criterion 9).
+    Skew,
 }
 
 /// What a field edits.
@@ -98,6 +102,11 @@ pub enum InvalidReason {
     Negative,
     /// An inner ratio outside 0.01 to 0.99 ("Must be 0.01 to 0.99").
     RatioRange,
+    /// A skew angle of 90° or more in size ("Must be between -90 and 90").
+    SkewRange,
+    /// A skew whose result would lie beyond the document's coordinate limit
+    /// ("Too large").
+    TooLarge,
 }
 
 /// What [`TransformEntry::commit`] did.
