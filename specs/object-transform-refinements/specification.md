@@ -279,7 +279,12 @@ referenz / fester punkt bleibt identisch zum händischen ziehen."
     at the second press of the double-click, the box center. For a polygon
     or star it is always the shape's center, with or without Shift, because
     slice 5 scales them about their center (criterion 26). It is fixed when
-    the entry opens and shown with the pivot marker while it is open.
+    the entry opens and shown with the pivot marker while it is open. This rule
+    is for the double-click on a resize handle only. The key S opens the same
+    entry with the box centre as the fixed point for every kind and reads no
+    modifier (`edit-interaction-polish` criteria 57 and 57a, amended 2026-10-07);
+    criteria 25 to 27 and 29 to 32 otherwise apply to it unchanged, except that
+    Ctrl cannot be held for the link of criterion 29.
 29. Given the second press of a corner-handle double-click happens with Ctrl
     held (rectangle, ellipse, path only), then Width and Height are linked:
     changing one updates the other to keep the aspect ratio the box had when

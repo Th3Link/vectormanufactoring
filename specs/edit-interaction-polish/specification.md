@@ -738,8 +738,8 @@ system are in "UX notes round 2", section 1.
       typed angle (criterion 57); in every other state (nothing selected, or any
       other tool) it selects the Rectangle tool.
     - S: in the Select tool with at least one object selected, it opens the
-      typed size (criterion 57); in every other state it selects the Select
-      tool.
+      typed size about the object's centre (criterion 57); in every other state
+      it selects the Select tool.
     - M: in the Select tool with one object selected, it opens the typed move
       (criterion 56); otherwise criterion 59 applies.
     - K, and Shift+K: in the Select tool with one path selected, they open the
@@ -780,12 +780,52 @@ system are in "UX notes round 2", section 1.
     21). A Copy check (criterion 23) is reachable by Tab.
 57. Given the Select tool with one object selected, when the maker presses R or S,
     then the angle entry or the size entry of `object-transform-refinements`
-    (criteria 18 to 32) opens exactly as a double-click on a rotate or a resize
-    handle opens it, at the top-right corner rotate handle (R) or the bottom-
-    right corner resize handle (S) of the object's oriented box, whether that
-    handle is drawn or not. For a polygon or star the angle prefill is the angle
-    of criterion 1. Example: a star shown at -15° stands with its first tip
-    straight right after R, 0, Enter.
+    (criteria 18 to 32) opens as a double-click on a rotate or a resize handle
+    opens it, at the top-right corner rotate handle (R) or the bottom-right
+    corner resize handle (S) of the object's oriented box, whether that handle
+    is drawn or not, with one difference for S, set by the customer on
+    2026-10-07 ("wenn man einfach S drückt soll es zentrisch skalieren"): **the
+    fixed point of the typed size is the centre of the object's oriented box**
+    (criterion 57a), not the corner opposite the handle the chip sits at. For a
+    polygon or star the angle prefill is the angle of criterion 1. Example: a
+    star shown at -15° stands with its first tip straight right after R, 0,
+    Enter. Example for S: a 40 x 20 mm rectangle at (10, 10), S, 60, Tab, 30,
+    Enter, leaves a 60 x 30 mm rectangle at (0, 5): the centre (30, 20) stays.
+57a. Given the typed size, then two rules apply, side by side, and no other:
+    | Route | Fixed point of the typed size | Why |
+    |---|---|---|
+    | Double-click on a resize handle (`object-transform-refinements` criteria 25 to 32, unchanged) | exactly what a hand-drag of that handle holds: the opposite corner of a corner handle, the opposite edge of an edge handle, the box centre if Shift is held at the second press; the shape centre for a polygon or star | the maker chose a handle, so the typed size continues that drag |
+    | The key S (criterion 57) | the box centre, as if Shift were held on a drag, always | no handle was chosen; the chip sits at the hidden bottom-right handle only as a place on screen |
+
+    The S route never reads a modifier (criterion 59). Details:
+    - **Rectangle, ellipse, path:** the oriented box grows or shrinks about its
+      centre, each side by half the change of W and H; the document ends in the
+      same state as a Shift-drag of the bottom-right corner handle ending at
+      that size (the same resolving function, refinements criterion 27 with
+      the centre as the fixed point). The "Scale stroke width" switch is
+      honoured as in refinements criterion 27. A path is scaled in its own
+      oriented frame about the box centre, like the other kinds.
+    - **Polygon and star:** unchanged. The single field "r" scales about the
+      shape's centre, as it does on every route.
+    - **Ctrl linked W and H** (refinements criterion 29) is a Ctrl held at the
+      second press of a double-click. The key S cannot carry it (Ctrl+S is
+      gated by criterion 55), so after S the fields are independent. A link
+      switch in the chip is not added (Out of scope).
+    - **Pivot marker:** while the S chip is open the marker shows at the box
+      centre (the fixed point). The double-click route keeps its marker where
+      its fixed point is.
+    - **Placement of the chip:** unchanged by default, at the bottom-right
+      corner resize handle's position (criterion 59). The `ux-engineer`
+      judges whether the S chip should rather open at the centre handle's
+      position, where the fixed point now is; if so it moves there and
+      criterion 59's "where that handle is or would be" names the centre for
+      S. Constraint if it moves: it must not cover the pivot marker (the move
+      chip opens 16 px right of and below the centre glyph for the same
+      reason, criterion 18).
+    - **Hint chip:** the resize hint line reads "Double-click or S: type a
+      size" (criterion 24). It names no fixed point, so no wording changes. If
+      the `ux-engineer` wants the difference visible, a second line "S: from
+      the centre" is allowed; the default adds none.
 58. Given the Select tool with one path selected, when the maker presses K, then
     the skew entry of criterion 9 for the top handle opens, accessible name "Skew
     angle x"; with Shift+K the one for the right handle, "Skew angle y". Both
@@ -793,7 +833,8 @@ system are in "UX notes round 2", section 1.
     criterion 10: the line held fixed is the opposite side's line.
 59. Given a chip opened by an entry key, then it behaves in every respect as the
     chip of the double-click route (fields, prefill, validation, Enter writes one
-    commit, Escape, a click elsewhere or a tool switch write nothing), it opens
+    commit, Escape, a click elsewhere or a tool switch write nothing), except the
+    fixed point of S and the missing Ctrl link (criterion 57a), it opens
     where that handle is or would be, the handle if drawn shows its dragging
     look, focus returns to the canvas when it closes, and while a chip is open
     the Shift-revealed side rotate handles other than the open chip's own are
@@ -857,6 +898,9 @@ skew guide (criterion 68).
   polygon by the smallest angle that puts an edge on an axis; UX optional).
   Decided out of scope, 2026-10-06: typing the angle and the Ctrl stops of
   criterion 7 cover it.
+- A Ctrl link or aspect-lock switch for the S key's chip (Ctrl+S is gated); a
+  typed size that uses the opposite corner from the keyboard (the double-click
+  route does it).
 - Storing a skew, or any skew of primitives (`object-transform-refinements`
   decision P1 stands).
 - Any other angle behaviour of polygon and star creation (the press-centre,
@@ -929,6 +973,10 @@ one German message. Resolved questions stay for the record.
    (criterion 54), and the plus and lock badges and the origin axes of criteria
    27 and 33. The fallback (tool letters unchanged, the four entries on
    Shift+M, R, S, K) is no longer needed.
+   *Amended 2026-10-07 after testing PR 1:* the customer: "wenn man einfach S
+   drückt soll es zentrisch skalieren". The typed size of the key S scales about
+   the box centre; the double-click on a resize handle keeps the drag's fixed
+   point (criteria 57, 57a). A criterion 57 amendment, no new scope.
 
 10. **Architect flags, resolved 2026-10-06 on the architect's defaults**
    (`adrs.md`, "Flagged to the PO"; no customer answer needed):
@@ -992,7 +1040,7 @@ that changes a letter is "Select tool with an object selected".
 |---|---|---|
 | M | typed move (centre handle's chip) | nothing; hint "Select an object first" |
 | R | typed angle (top-right corner rotate handle's chip) | Rectangle tool |
-| S | typed size (bottom-right corner resize handle's chip) | Select tool |
+| S | typed size about the centre (chip at the bottom-right corner resize handle's position) | Select tool |
 | K, Shift+K | typed skew x, skew y (one path; hint otherwise) | nothing; hint |
 | B, N, E, `*` | Pen, Node, Ellipse, Polygon/star | the same |
 | Delete, Backspace | delete the selection | Node: delete nodes; Pen: nothing |
@@ -1037,6 +1085,14 @@ be, if it is hidden by size: this closes criterion 17's gap for every object),
 the handle shows its dragging look, Enter commits, Escape cancels, focus returns
 to the canvas. The key route never uses the Shift pivot (it does not read Shift
 at all, apart from Shift+K meaning skew y); the double-click route keeps it.
+*Amended 2026-10-07 (customer: "wenn man einfach S drückt soll es zentrisch
+skalieren"):* S is the one entry whose fixed point is not that of its handle. No
+handle was chosen, so the typed size scales about the box centre, as a drag
+with Shift held would; the double-click on a resize handle keeps the drag's
+fixed point (criterion 57a). Open for the `ux-engineer`: whether the S chip
+should open at the centre handle's position instead of the hidden bottom-right
+handle's (default: unchanged); the pivot marker shows at the centre while it is
+open.
 While a chip is open the Shift-revealed side rotate handles other than the open
 chip's own are hidden, so the Shift+K chip never sits on one. With several objects selected, or K on a
 non-path, the key shows a one-line hint-chip message for 2 s and writes
