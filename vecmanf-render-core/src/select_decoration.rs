@@ -476,7 +476,7 @@ mod tests {
                 .all(|c| *c == theme::TRANSFORM_PIVOT_MARKER_COLOR)
         );
         assert!(colours(&full).iter().all(|c| *c == theme::ACCENT));
-        assert!(!colours(&full).is_empty());
+        assert_eq!(colours(&full).first(), Some(&theme::ACCENT));
     }
 
     /// UX review item 4: a handle sitting exactly on the pivot is not
