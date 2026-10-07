@@ -393,6 +393,11 @@ already there.
   an `adrs.md` is provisional: the PR that merges takes `main`'s
   `CURRENT_FORMAT_VERSION + 1`.
 
+- **2026-10-07 (architect): ordering note.** Of the pending bumps, this slice
+  stays at 6 only if it merges before `rectangle-corner-radii`; the
+  number is 7 if `rectangle-corner-radii` merges first (`specs/rectangle-
+  corner-radii/adrs.md`, decision 3). The merge rule above decides.
+
 - **2026-10-05 (architect): gradient box orientation vs. rotation — open,
   decide once `object-transform` merges.** This slice computes the linear/
   radial gradient box from the object's outline in `curvyo-render-core`.

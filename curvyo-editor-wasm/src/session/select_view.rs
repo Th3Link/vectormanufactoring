@@ -6,16 +6,13 @@
 //! the pointer, and the live numeric readout of a drag. Split out of
 //! `session/select.rs`, which dispatches the events.
 
-use curvyo_document_core::{
-    Angle, ObjectSnapshot, PrimitiveSnapshot, SHARP_CORNER_EPSILON_MM, Shape, Vec2,
-    effective_corner_radii,
-};
+use curvyo_document_core::{Angle, ObjectSnapshot, Shape, Vec2};
 use curvyo_render_core::{
     SelectDecorationInput, TransformDecorationInput, TransformGlyphKind, TransformHandleGlyph,
 };
 use curvyo_ui_core::{
-    EditHandle, LiveEdit, ParamDragInfo, ParamHandle, SelectTool, Side, corner_local_position,
-    format_degrees, is_corner, is_drawn_handle, oriented_bounds, resize_cursor_angle_degrees,
+    EditHandle, LiveEdit, ParamHandle, SelectTool, Side, corner_local_position, format_degrees,
+    is_corner, is_drawn_handle, oriented_bounds, resize_cursor_angle_degrees,
     skew_cursor_angle_degrees,
 };
 
@@ -142,7 +139,7 @@ impl Session {
     /// one hit rule a press would use, plus the centre handle for hover
     /// (`SelectTool::hover_handle_at`). Only while no drag runs and no
     /// entry is open.
-    fn select_hovered_handle(
+    pub(super) fn select_hovered_handle(
         &self,
         objects: &[ObjectSnapshot],
     ) -> Option<(ObjectSnapshot, curvyo_ui_core::OrientedBox, EditHandle)> {
@@ -360,73 +357,6 @@ impl Session {
         .to_string()
     }
 
-    /// The lines of the hint chip of a corner radius knob under the pointer
-    /// (`specs/rectangle-corner-radii/` criterion 23), empty on any other
-    /// handle. Which lines show depends on the "Link corners" switch (Shift is
-    /// not tracked live): linked, "Corner radius, all four" and "Shift: this
-    /// corner only"; unlinked, "Corner radius, this corner" and "Shift: all four
-    /// corners"; always "Double-click: type a value". A corner whose stored
-    /// radius is above its effective one adds a first line "Limited by the
-    /// size. Stored 30 mm, shown 20 mm." and, when the next drag would be
-    /// unlinked, "Editing one corner fixes the other three at their shown
-    /// size." Those two lines are muted; the host recognises them by their
-    /// start.
-    #[must_use]
-    pub fn corner_hint_lines(&self) -> Vec<String> {
-        if self.tool != Tool::Select {
-            return Vec::new();
-        }
-        let objects = self.objects();
-        let Some((object, _, EditHandle::Param(ParamHandle::CornerRadius(corner)))) =
-            self.select_hovered_handle(&objects)
-        else {
-            return Vec::new();
-        };
-        let ObjectSnapshot::Primitive(PrimitiveSnapshot {
-            shape: Shape::Rect {
-                bounds,
-                corner_radii,
-            },
-            ..
-        }) = object
-        else {
-            return Vec::new();
-        };
-        let linked = self.link_corners();
-        let stored = corner_radii.get(corner).as_mm();
-        let shown = effective_corner_radii(bounds, corner_radii)
-            .get(corner)
-            .as_mm();
-        let mut lines = Vec::new();
-        if stored - shown > SHARP_CORNER_EPSILON_MM {
-            lines.push(format!(
-                "Limited by the size. Stored {} mm, shown {} mm.",
-                trimmed_mm(stored),
-                trimmed_mm(shown)
-            ));
-            if !linked {
-                lines.push("Editing one corner fixes the other three at their shown size.".into());
-            }
-        }
-        lines.extend(
-            if linked {
-                [
-                    "Corner radius, all four",
-                    "Shift: this corner only",
-                    "Double-click: type a value",
-                ]
-            } else {
-                [
-                    "Corner radius, this corner",
-                    "Shift: all four corners",
-                    "Double-click: type a value",
-                ]
-            }
-            .map(String::from),
-        );
-        lines
-    }
-
     /// The Select tool's live resolved object for the drag in flight, even
     /// where it equals the committed one (a readout still shows the value at
     /// the start of a drag that has left the dead zone). `None` outside such
@@ -488,7 +418,7 @@ impl Session {
                     format!("{:.1} × {:.1} mm", b.width(), b.height())
                 }
             },
-            EditHandle::Param(param) => param_readout(
+            EditHandle::Param(param) => super::corner_readout::param_readout(
                 &self.select_live_transform()?,
                 param,
                 self.select.live_param_drag(anchor),
@@ -516,59 +446,6 @@ fn glyph_kind(handle: EditHandle, box_: &curvyo_ui_core::OrientedBox) -> Transfo
         EditHandle::Move => TransformGlyphKind::Move,
         EditHandle::Param(_) => TransformGlyphKind::Parameter,
     }
-}
-
-/// `r 3.5 mm` for the dragged corner's effective radius of a rectangle,
-/// `ratio 0.45` for a star's inner ratio. A corner radius readout says " max"
-/// while a limit stops the drag and, for a linked drag that overwrites unequal
-/// radii, " · all corners" after it (`specs/rectangle-corner-radii/` criterion
-/// 7): "r 12.0 mm max · all corners".
-pub(super) fn param_readout(
-    object: &ObjectSnapshot,
-    handle: ParamHandle,
-    info: Option<ParamDragInfo>,
-) -> Option<String> {
-    let ObjectSnapshot::Primitive(PrimitiveSnapshot { shape, .. }) = object else {
-        return None;
-    };
-    match (*shape, handle) {
-        (
-            Shape::Rect {
-                bounds,
-                corner_radii,
-            },
-            ParamHandle::CornerRadius(corner),
-        ) => {
-            let radius = effective_corner_radii(bounds, corner_radii)
-                .get(corner)
-                .as_mm();
-            let info = info.unwrap_or(ParamDragInfo {
-                all_corners: false,
-                limited: false,
-                overwrites_unequal: false,
-            });
-            Some(format!(
-                "r {radius:.1} mm{}{}",
-                if info.limited { " max" } else { "" },
-                if info.overwrites_unequal {
-                    " \u{b7} all corners"
-                } else {
-                    ""
-                }
-            ))
-        }
-        (Shape::Star { inner_ratio, .. }, ParamHandle::InnerRadius) => {
-            Some(format!("ratio {:.2}", inner_ratio.get()))
-        }
-        _ => None,
-    }
-}
-
-/// A length in millimetres with up to two decimals and no trailing zeros
-/// ("30", "3.5", "0.25"), the bar field's precision.
-fn trimmed_mm(value: f64) -> String {
-    let text = format!("{value:.2}");
-    text.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
 /// `Skew x +12.5°`: the axis (x for the top and bottom handles, y for left

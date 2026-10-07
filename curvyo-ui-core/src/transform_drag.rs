@@ -185,14 +185,11 @@ pub(crate) struct TransformDrag {
     pub(crate) unlinked: bool,
 }
 
-/// What the live readout and the follower knobs of a corner radius drag need
-/// beyond the resolved object (`specs/rectangle-corner-radii/` criteria 4, 7,
+/// What the live readout of a corner radius drag needs beyond the resolved
+/// object (who follows is [`crate::SelectTool::corner_drag_changes_all`]) (`specs/rectangle-corner-radii/` criteria 4, 7,
 /// 23).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ParamDragInfo {
-    /// The drag changes all four corners (linked, decided at the press): the
-    /// other three knobs follow.
-    pub all_corners: bool,
     /// A limit stops the drag at this pointer position (the readout says "max").
     pub limited: bool,
     /// The press found unequal effective radii and the drag overwrites them (a
@@ -230,7 +227,6 @@ impl TransformDrag {
             (effective.get(corner).as_mm() - effective.tl.as_mm()).abs() > PARAM_EQUAL_EPSILON
         });
         Some(ParamDragInfo {
-            all_corners: !self.unlinked,
             limited: radius_is_limited(&self.start, value),
             overwrites_unequal: !self.unlinked && unequal,
         })

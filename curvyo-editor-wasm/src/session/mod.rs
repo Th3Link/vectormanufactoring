@@ -22,6 +22,7 @@
 
 #[cfg(test)]
 mod box_refit_tests;
+mod corner_readout;
 mod draw;
 mod keys;
 mod move_entry;

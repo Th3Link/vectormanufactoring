@@ -14,7 +14,7 @@ use curvyo_document_core::{
 
 use super::SelectTool;
 use crate::object_selection::ObjectSelection;
-use crate::param_edit::{ParamValue, apply_param, commit_param_batch, max_corner_radius};
+use crate::param_edit::{ParamValue, apply_param, commit_param_batch};
 use crate::select_bar::{BarPreview, ObjectKind, ids_of_kind};
 use crate::transform_commit::MAX_COORDINATE_MM;
 use crate::transform_entry::{EntryOutcome, InvalidReason, parse_entry_number};
@@ -154,16 +154,16 @@ impl SelectTool {
                 .into_iter()
                 .filter_map(|id| {
                     let object = objects.iter().find(|object| object.id() == id)?;
+                    // The one limit rule is `apply_param`'s: write what it resolves.
+                    let resolved = apply_param(object, ParamValue::Radius(Length::from_mm(value)));
                     let ObjectSnapshot::Primitive(PrimitiveSnapshot {
-                        shape: Shape::Rect { bounds, .. },
+                        shape: Shape::Rect { corner_radii, .. },
                         ..
-                    }) = object
+                    }) = resolved
                     else {
                         return None;
                     };
-                    let limited = Length::from_mm(value.min(max_corner_radius(*bounds)));
-                    (apply_param(object, ParamValue::Radius(limited)) != *object)
-                        .then_some((id, CornerRadii::uniform(limited)))
+                    (resolved != *object).then_some((id, corner_radii))
                 })
                 .collect();
         if radii.is_empty() {

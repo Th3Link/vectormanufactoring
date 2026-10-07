@@ -63,7 +63,7 @@ pub use object_selection::ObjectSelection;
 pub use oriented_box::{OrientedBox, oriented_bounds};
 pub use param_edit::{
     MAX_INNER_RATIO, MIN_INNER_RATIO, ParamValue, apply_param, clamped_ratio, commit_param_batch,
-    radius_is_limited, value_from_pointer,
+    value_from_pointer,
 };
 pub use param_entry::ParamEntry;
 pub use param_handles::{

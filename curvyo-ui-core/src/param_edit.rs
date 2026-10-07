@@ -65,7 +65,7 @@ pub(crate) fn corner_radius_limit(
 /// corners, `min(W - r_h, H - r_v)` for one). The readout then says "max"
 /// (criteria 4, 6, 7). `false` for a value that is not a corner radius.
 #[must_use]
-pub fn radius_is_limited(start: &ObjectSnapshot, value: ParamValue) -> bool {
+pub(crate) fn radius_is_limited(start: &ObjectSnapshot, value: ParamValue) -> bool {
     let ObjectSnapshot::Primitive(PrimitiveSnapshot {
         shape: Shape::Rect {
             bounds,
@@ -190,6 +190,43 @@ pub fn apply_param(start: &ObjectSnapshot, value: ParamValue) -> ObjectSnapshot 
     ObjectSnapshot::Primitive(apply_to_primitive(primitive, value))
 }
 
+/// All four corners set to `radius`, limited to half the shorter side; `None`
+/// when that equals what every corner already shows (nothing to write) or the
+/// value is not finite.
+fn apply_radius(bounds: RectBounds, radii: CornerRadii, radius: Length) -> Option<CornerRadii> {
+    if !radius.as_mm().is_finite() {
+        return None;
+    }
+    let limited = radius.as_mm().clamp(0.0, max_corner_radius(bounds));
+    let current = effective_corner_radii(bounds, radii);
+    let unchanged = Corner::ALL
+        .iter()
+        .all(|&corner| (limited - current.get(corner).as_mm()).abs() <= PARAM_EQUAL_EPSILON);
+    (!unchanged).then(|| CornerRadii::uniform(Length::from_mm(limited)))
+}
+
+/// One corner set to `radius`, limited by [`corner_radius_limit`]'s rule; the
+/// other three keep their effective values (and are written at them). `None`
+/// when the corner already shows that value or the value is not finite.
+fn apply_corner_radius(
+    bounds: RectBounds,
+    radii: CornerRadii,
+    corner: Corner,
+    radius: Length,
+) -> Option<CornerRadii> {
+    if !radius.as_mm().is_finite() {
+        return None;
+    }
+    let current = effective_corner_radii(bounds, radii);
+    let limited = radius
+        .as_mm()
+        .clamp(0.0, corner_radius_limit(bounds, current, corner));
+    if (limited - current.get(corner).as_mm()).abs() <= PARAM_EQUAL_EPSILON {
+        return None;
+    }
+    Some(current.with(corner, Length::from_mm(limited)))
+}
+
 fn apply_to_primitive(start: &PrimitiveSnapshot, value: ParamValue) -> PrimitiveSnapshot {
     let shape = match (start.shape, value) {
         (
@@ -199,22 +236,12 @@ fn apply_to_primitive(start: &PrimitiveSnapshot, value: ParamValue) -> Primitive
             },
             ParamValue::Radius(radius),
         ) => {
-            let half = max_corner_radius(bounds);
-            let limited = if radius.as_mm().is_finite() {
-                radius.as_mm().clamp(0.0, half)
-            } else {
+            let Some(corner_radii) = apply_radius(bounds, corner_radii, radius) else {
                 return *start;
             };
-            let current = effective_corner_radii(bounds, corner_radii);
-            let unchanged = Corner::ALL.iter().all(|&corner| {
-                (limited - current.get(corner).as_mm()).abs() <= PARAM_EQUAL_EPSILON
-            });
-            if unchanged {
-                return *start;
-            }
             Shape::Rect {
                 bounds,
-                corner_radii: CornerRadii::uniform(Length::from_mm(limited)),
+                corner_radii,
             }
         }
         (
@@ -224,19 +251,13 @@ fn apply_to_primitive(start: &PrimitiveSnapshot, value: ParamValue) -> Primitive
             },
             ParamValue::CornerRadius(corner, radius),
         ) => {
-            let current = effective_corner_radii(bounds, corner_radii);
-            let limit = corner_radius_limit(bounds, current, corner);
-            let limited = if radius.as_mm().is_finite() {
-                radius.as_mm().clamp(0.0, limit)
-            } else {
+            let Some(corner_radii) = apply_corner_radius(bounds, corner_radii, corner, radius)
+            else {
                 return *start;
             };
-            if (limited - current.get(corner).as_mm()).abs() <= PARAM_EQUAL_EPSILON {
-                return *start;
-            }
             Shape::Rect {
                 bounds,
-                corner_radii: current.with(corner, Length::from_mm(limited)),
+                corner_radii,
             }
         }
         (

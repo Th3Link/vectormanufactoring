@@ -295,7 +295,7 @@ fn the_drag_facts_say_max_all_corners_and_who_follows() {
         .tool
         .live_param_drag(along(from, Corner::Tl, 6.0))
         .unwrap();
-    assert!(info.all_corners && info.overwrites_unequal && !info.limited);
+    assert!(info.overwrites_unequal && !info.limited);
     let info = rig
         .tool
         .live_param_drag(along(from, Corner::Tl, 500.0))
@@ -324,7 +324,7 @@ fn the_drag_facts_say_max_all_corners_and_who_follows() {
         .tool
         .live_param_drag(along(from, Corner::Tl, 500.0))
         .unwrap();
-    assert!(info.limited && !info.all_corners && !info.overwrites_unequal);
+    assert!(info.limited && !info.overwrites_unequal);
     rig.tool.escape();
     assert_eq!(rig.tool.corner_drag_changes_all(), None);
 }

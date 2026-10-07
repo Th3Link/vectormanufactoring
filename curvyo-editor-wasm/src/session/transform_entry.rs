@@ -14,7 +14,7 @@ use curvyo_ui_core::{
     SkewEntry, TransformEntry, entry_anchor,
 };
 
-use super::select_view::param_readout;
+use super::corner_readout::param_readout;
 use super::{Session, Tool};
 
 /// One field of the entry chip, as the host renders it.
@@ -255,7 +255,6 @@ impl Session {
                 &object,
                 param,
                 Some(ParamDragInfo {
-                    all_corners: false,
                     limited: true,
                     overwrites_unequal: false,
                 }),

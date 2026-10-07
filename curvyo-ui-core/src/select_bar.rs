@@ -7,7 +7,7 @@
 //! a pending slider edit, so the DOM holds no editing logic.
 
 use curvyo_document_core::{
-    Corner, CornerRadii, Length, NodeId, ObjectSnapshot, PrimitiveSnapshot,
+    Corner, CornerRadii, Length, NodeId, ObjectSnapshot, PrimitiveSnapshot, RectBounds,
     SHARP_CORNER_EPSILON_MM, Shape, effective_corner_radii,
 };
 
@@ -133,6 +133,71 @@ fn shapes_of<'a>(
         })
 }
 
+/// What the bar's rectangle controls show for the selected rectangles `ids`.
+struct RadiusState {
+    value: Option<BarValue<Length>>,
+    limited: Option<Length>,
+    corners: Option<CornerRadii>,
+    /// Some stored corner radius is above the sharp tolerance.
+    rounded: bool,
+}
+
+/// The "Radius" field and "Remove rounding" state of the rectangles `ids`
+/// (criteria 21a, 22): Uniform when every effective radius of every rectangle
+/// (four each) is equal, Mixed otherwise; the "limited" tag for a Uniform value
+/// only; the four effective radii for one rectangle that reads Mixed.
+fn radius_state(objects: &[ObjectSnapshot], ids: &[NodeId]) -> RadiusState {
+    let rectangles: Vec<(RectBounds, CornerRadii)> = shapes_of(objects, ids)
+        .filter_map(|shape| match *shape {
+            Shape::Rect {
+                bounds,
+                corner_radii,
+            } => Some((bounds, corner_radii)),
+            _ => None,
+        })
+        .collect();
+    // One (effective, stored) pair per corner of every selected rectangle.
+    let pairs: Vec<(f64, f64)> = rectangles
+        .iter()
+        .flat_map(|&(bounds, corner_radii)| {
+            let effective = effective_corner_radii(bounds, corner_radii);
+            Corner::ALL.map(|corner| {
+                (
+                    effective.get(corner).as_mm(),
+                    corner_radii.get(corner).as_mm(),
+                )
+            })
+        })
+        .collect();
+    let effective: Vec<f64> = pairs.iter().map(|(effective, _)| *effective).collect();
+    let value =
+        uniform(&effective, |a, b| (a - b).abs() <= PARAM_EQUAL_EPSILON).map(|value| match value {
+            BarValue::Uniform(mm) => BarValue::Uniform(Length::from_mm(mm)),
+            BarValue::Mixed => BarValue::Mixed,
+        });
+    let limited = match value {
+        Some(BarValue::Uniform(_)) => pairs
+            .iter()
+            .find(|(effective, stored)| stored - effective > SHARP_CORNER_EPSILON_MM)
+            .map(|(_, stored)| Length::from_mm(*stored)),
+        _ => None,
+    };
+    let corners = match (value, &rectangles[..]) {
+        (Some(BarValue::Mixed), &[(bounds, corner_radii)]) => {
+            Some(effective_corner_radii(bounds, corner_radii))
+        }
+        _ => None,
+    };
+    RadiusState {
+        value,
+        limited,
+        corners,
+        rounded: pairs
+            .iter()
+            .any(|(_, stored)| *stored > SHARP_CORNER_EPSILON_MM),
+    }
+}
+
 /// The Select bar's state for `selection`, showing a pending slider edit
 /// `preview` as if it were committed.
 #[must_use]
@@ -145,52 +210,7 @@ pub fn select_bar_state(
     let polygons_and_stars = ids_of_kind(objects, selection, ObjectKind::PolygonOrStar);
     let stars = ids_of_kind(objects, selection, ObjectKind::Star);
 
-    // One (effective, stored) pair per corner of every selected rectangle.
-    let radii: Vec<(f64, f64)> = shapes_of(objects, &rectangles)
-        .filter_map(|shape| match *shape {
-            Shape::Rect {
-                bounds,
-                corner_radii,
-            } => Some((bounds, corner_radii)),
-            _ => None,
-        })
-        .flat_map(|(bounds, corner_radii)| {
-            let effective = effective_corner_radii(bounds, corner_radii);
-            Corner::ALL.map(|corner| {
-                (
-                    effective.get(corner).as_mm(),
-                    corner_radii.get(corner).as_mm(),
-                )
-            })
-        })
-        .collect();
-    let effective: Vec<f64> = radii.iter().map(|(effective, _)| *effective).collect();
-    let radius =
-        uniform(&effective, |a, b| (a - b).abs() <= PARAM_EQUAL_EPSILON).map(|value| match value {
-            BarValue::Uniform(mm) => BarValue::Uniform(Length::from_mm(mm)),
-            BarValue::Mixed => BarValue::Mixed,
-        });
-    let radius_limited = match radius {
-        Some(BarValue::Uniform(_)) => radii
-            .iter()
-            .find(|(effective, stored)| stored - effective > SHARP_CORNER_EPSILON_MM)
-            .map(|(_, stored)| Length::from_mm(*stored)),
-        _ => None,
-    };
-
-    // One selected rectangle with unequal corners: the tooltip lists the four.
-    let radius_corners = match (radius, &rectangles[..]) {
-        (Some(BarValue::Mixed), [only]) => {
-            shapes_of(objects, std::slice::from_ref(only)).find_map(|shape| match *shape {
-                Shape::Rect {
-                    bounds,
-                    corner_radii,
-                } => Some(effective_corner_radii(bounds, corner_radii)),
-                _ => None,
-            })
-        }
-        _ => None,
-    };
+    let radius = radius_state(objects, &rectangles);
 
     let counts: Vec<u32> = shapes_of(objects, &polygons_and_stars)
         .filter_map(|shape| match *shape {
@@ -221,13 +241,11 @@ pub fn select_bar_state(
     }
 
     SelectBarState {
-        radius,
-        radius_limited,
-        radius_corners,
+        radius: radius.value,
+        radius_limited: radius.limited,
+        radius_corners: radius.corners,
         remove_rounding_shown: !rectangles.is_empty(),
-        remove_rounding_enabled: radii
-            .iter()
-            .any(|(_, stored)| *stored > SHARP_CORNER_EPSILON_MM),
+        remove_rounding_enabled: radius.rounded,
         points,
         ratio,
         object_to_path: !ids_of_kind(objects, selection, ObjectKind::Primitive).is_empty(),

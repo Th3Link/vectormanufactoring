@@ -800,7 +800,7 @@ fn the_drag_reports_limit_overwrite_and_followers() {
     assert_eq!(rig.tool.corner_drag_changes_all(), Some(true));
     let near = rig.target(Corner::Tl, 3.0);
     let info = rig.tool.live_param_drag(near).unwrap();
-    assert!(info.all_corners && info.overwrites_unequal && !info.limited);
+    assert!(info.overwrites_unequal && !info.limited);
     let far = rig.target(Corner::Tl, 10_000.0);
     let info = rig.tool.live_param_drag(far).unwrap();
     assert!(info.limited);
@@ -827,7 +827,8 @@ fn the_drag_reports_limit_overwrite_and_followers() {
         .tool
         .live_param_drag(rig.target(Corner::Tl, 10_000.0))
         .unwrap();
-    assert!(!info.all_corners && !info.overwrites_unequal && info.limited);
+    assert!(!info.overwrites_unequal && info.limited);
+    assert_eq!(rig.tool.corner_drag_changes_all(), Some(false));
     rig.escape_drag();
 
     // Switch off, Shift: all four (decided at the press).
@@ -1105,30 +1106,6 @@ fn a_wide_rectangle_can_always_be_moved_by_pressing_its_body_somewhere() {
             }
         }
     }
-}
-
-/// The claim of `adrs.md` decision 9, restated literally: a press halfway
-/// between the centre and each edge midpoint is a move. The implementer flags
-/// that it is false on wide boxes (aspect 1.8 at rho 1).
-#[test]
-#[ignore = "documents a known false claim of adrs.md decision 9; see the tester report"]
-fn the_adr_claim_halfway_between_centre_and_edge_midpoint_is_a_move() {
-    let mut failures = Vec::new();
-    for aspect in [1.0, 1.4, 1.8, 2.5, 4.0] {
-        for s_px in [72.0, 100.0, 150.0] {
-            for rho in [0.0, 0.5, 1.0] {
-                let (_, probes) = scan(s_px, aspect, [rho; 4]);
-                for (name, kind) in probes {
-                    if kind != "body" {
-                        failures.push(format!(
-                            "aspect {aspect} s {s_px} rho {rho}: {name} is a {kind} press"
-                        ));
-                    }
-                }
-            }
-        }
-    }
-    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 // ---------------------------------------------------------------------------
