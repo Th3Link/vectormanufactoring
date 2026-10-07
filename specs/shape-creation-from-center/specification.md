@@ -1,6 +1,7 @@
 # Shape creation from the center: Shift and Shift+Ctrl while drawing
 
-Status: In progress
+Status: Done
+Done, with: criteria 16 and the first sentence of 17 are superseded by `unified-object-editing` (criterion 25); the shape tools are creation-only.
 Priority: Must
 Origin: Customer
 
@@ -244,4 +245,4 @@ is (to be confirmed); default: unchanged either way.
 ## Links
 Requirements: R-EDIT-002 (`docs/requirements.md`); extends
 `specs/0003-primitive-shapes/` criteria 2 and 8.
-PR: https://github.com/Th3Link/vectormanufactoring/pull/47
+PR: https://github.com/curvyo/curvyo/pull/47

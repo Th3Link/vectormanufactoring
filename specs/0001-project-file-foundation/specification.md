@@ -220,4 +220,4 @@ supersede one.
 Requirements: R-SYS-001, R-SYS-002, R-SYS-007 (`docs/requirements.md`)
 ADRs: ADR 0002 (document model, units), ADR 0004 §1 (`.curvyo` container
 format)
-PR: https://github.com/Th3Link/vectormanufactoring/pull/3
+PR: https://github.com/curvyo/curvyo/pull/3

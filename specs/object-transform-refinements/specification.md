@@ -1,6 +1,7 @@
 # Object transform refinements: handles, pivots, numeric entry, 22.5° snap
 
-Status: Ready
+Status: Done
+Done, with: criterion 49 and the typed-skew out-of-scope line are superseded by `edit-interaction-polish` criteria 9 to 14; the optional criteria 54 to 56 were built.
 Priority: Must
 Origin: Customer
 
@@ -960,4 +961,4 @@ Builds on: `specs/0005-object-transform/specification.md` (criteria 1–3,
 5, 7–9, 11, 13–14, 17–18, 22–24, 26–31) and its `adrs.md`;
 `specs/0004-canvas-navigation-and-selection/specification.md` (criteria 20,
 23); `specs/advanced-selection/specification.md`
-PR:
+PR: https://github.com/curvyo/curvyo/pull/35

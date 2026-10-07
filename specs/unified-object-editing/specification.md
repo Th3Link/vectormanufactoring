@@ -1,6 +1,7 @@
 # Unified object editing: one Select tool for every object and its own handles
 
-Status: Ready
+Status: Done
+Done, with: the advanced-selection clauses of criterion 35 are not built (`advanced-selection` is not built); `shape-creation-from-center` criteria 16 and 17 (first sentence) are superseded by this spec.
 Priority: Must
 Origin: Customer
 
@@ -914,4 +915,4 @@ refinements/`, `specs/advanced-selection/`, `specs/shape-creation-from-
 center/`
 Followed by: `specs/rectangle-corner-radii/`, `specs/ellipse-arcs-and-
 shaping/`
-PR:
+PR: https://github.com/curvyo/curvyo/pull/38 (docs amendment https://github.com/curvyo/curvyo/pull/40, fix https://github.com/curvyo/curvyo/pull/39)
