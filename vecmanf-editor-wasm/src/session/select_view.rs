@@ -498,7 +498,8 @@ mod tests {
     fn the_selection_box_stays_on_the_original_in_a_copy() {
         let (mut session, _) = session_with_selected_rect();
         let original = session.select_decoration_input().selected[0].1;
-        let start = Point::new(0.0, 5.0);
+        // Inside the box and on no handle: a move press.
+        let start = Point::new(5.0, 5.0);
         let to = Point::new(30.0, 12.0);
         session.pointer_down(start, false);
         session.pointer_hover(to, false, false);

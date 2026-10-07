@@ -335,43 +335,43 @@ on `main`, `origin/main` is merged too. No new crate, no new dependency, no
 
 ### Tasks
 
-- [ ] 1. `Document::duplicate_objects(&[CopySource], Vec2)`: one commit, every
+- [x] 1. `Document::duplicate_objects(&[CopySource], Vec2)`: one commit, every
   key of the source meta map copied, caller-minted `AnchorId`s, the copy
   directly above its original, `AnchorIds` and `NoSuchObject` refusals that
   write nothing. Tests first: copy equals original except ids and offset for
   every kind, preview equals commit, z-order A, A', B, B', fresh unique ids and
   a join with the copy, refusals, one commit, save and reopen, a merge with a
   concurrent move. (34, 35)
-- [ ] 2. `classify_press`: pure extraction from `pointer_down`
+- [x] 2. `classify_press`: pure extraction from `pointer_down`
   (`PressTarget`), behaviour unchanged, the existing tests stay green. (37)
-- [ ] 3. `MoveDrag` and `resolve`: pure move of the move arms out of
+- [x] 3. `MoveDrag` and `resolve`: pure move of the move arms out of
   `select_tool.rs` and `preview.rs` first (`live_offset` is folded into
   `resolve`), then the modifiers: the Shift lock re-chosen on every event
   without a latch, Ctrl copy read live, `pointer_moved(point, modifiers,
   selection)`. The worked example of criterion 30 is a test. (26, 28 to 32)
-- [ ] 4. Shift at the press: the press does not toggle; the object joins the
+- [x] 4. Shift at the press: the press does not toggle; the object joins the
   selection when the drag leaves the dead zone; a release inside the dead zone
   toggles; the centre handle never toggles. The slice 4 tests that asserted
   the toggle at the press are rewritten to the release. (29, 38)
-- [ ] 5. `commit_move(document, ids, offset, copy, minter)`: a drag, a Ctrl
+- [x] 5. `commit_move(document, ids, offset, copy, minter)`: a drag, a Ctrl
   release and the typed move share it; the selection after a copy is the
   copies; a zero offset (also with Ctrl) writes nothing. (33, 34, 35, 36)
-- [ ] 6. `LiveEdit.copy`: in copy mode the blue outline travels alone and the
+- [x] 6. `LiveEdit.copy`: in copy mode the blue outline travels alone and the
   box and handles stay on the originals (`live_objects_in`); the centre handle
   keeps its dragging look at the original. (33)
-- [ ] 7. render-core `MoveAxes` (two full-viewport lines through the start
+- [x] 7. render-core `MoveAxes` (two full-viewport lines through the start
   centre, `--axis-guide` / `--axis-guide-idle`), the move readout ("\u{394}
   12.5, \u{2212}3.0 mm", " Copy"), `Session::move_indicators`
   (`MoveIndicators { copy_badge, lock }`, a pure read of the cached modifiers,
   the hover position, `classify_press` and the drag) and `wasm_move.rs`. A
   property test: `badge_shows == (pointer_down with Ctrl begins a move)` over a
   grid of points. (26, 27, 33, 37)
-- [ ] 8. The typed move's Copy check: `MoveEntry::commit(.., copy)` through
+- [x] 8. The typed move's Copy check: `MoveEntry::commit(.., copy)` through
   `commit_move`, `copy_preset` from Ctrl at the second press, the selection is
   the copy after a typed copy (flag 5), `parse_entry_number` accepts U+2212
   (flag 6), the centre handle hint gains "Shift: keep one axis" and "Ctrl:
   copy". (23, 24)
-- [ ] 9. Frontend: `MoveBadges.tsx` (plus and lock badge from window key events
+- [x] 9. Frontend: `MoveBadges.tsx` (plus and lock badge from window key events
   and every pointer event, gone in the frame the key is released), the Copy
   check as the last Tab stop of the move chip, hint lines. (23, 26, 27, 33)
 - [ ] 10. The 200-object preview benchmark (`#[ignore]`, release) and the
@@ -384,7 +384,25 @@ on `main`, `origin/main` is merged too. No new crate, no new dependency, no
 
 ### Decisions taken here (inside the ADR)
 
-(Added as they are taken.)
+- The origin axes are their own render-core call (`build_move_axes`), not a
+  field of `SelectDecorationInput`: that list is drawn after the blue outline,
+  the axes must lie under it. Noted in `adrs.md` decision 5 with four other
+  refinements (the axes' start centre, the `commit_move` and `pointer_up`
+  signatures, `classify_press` public, `live_offset` deleted).
+- A press on the drawn centre handle starts a move whatever the Shift state
+  (criterion 38). Before this PR a Shift press there fell through to the
+  outline hit and toggled.
+- `parse_entry_number` already accepted U+2212 (PR 3 review fix), so flag 6
+  needed no change here beyond the test over the move readout's minus.
+- The Shift-revealed side rotate handles stay frozen as they were at the press
+  during a move (`side_rotate_revealed`, unchanged): a Shift press on an
+  object's outline can now start a move, so those four glyphs can show on the
+  travelling box. Not one of the spec's criteria; noted for the UX review.
+- `acceptance_unified_editing`'s `ac13_preview_equals_release_*` sweeps pressed
+  the move handles with Ctrl at random and asserted the original moved; a move
+  released with Ctrl is now a copy, so the sweep compares the blue preview with
+  the copy (index 1, directly above its original). Same assertion on the
+  committed outline, one more case covered.
 
 ### Validation
 
