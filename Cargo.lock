@@ -594,6 +594,82 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "914a755b7c2d4af2bdcff7ce1739e2db9a1b81a9b07123d8015786ae03c0980d"
 
 [[package]]
+name = "curvyo-app"
+version = "0.1.0"
+dependencies = [
+ "curvyo-document-core",
+ "curvyo-storage-io",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+]
+
+[[package]]
+name = "curvyo-document-core"
+version = "0.1.0"
+dependencies = [
+ "loro",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "zip",
+]
+
+[[package]]
+name = "curvyo-editor-wasm"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "console_error_panic_hook",
+ "curvyo-document-core",
+ "curvyo-render-core",
+ "curvyo-ui-core",
+ "loro",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "wgpu",
+ "zip",
+]
+
+[[package]]
+name = "curvyo-geometry-core"
+version = "0.1.0"
+dependencies = [
+ "curvyo-document-core",
+ "kurbo",
+ "proptest",
+]
+
+[[package]]
+name = "curvyo-render-core"
+version = "0.1.0"
+dependencies = [
+ "curvyo-document-core",
+ "lyon",
+]
+
+[[package]]
+name = "curvyo-storage-io"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "curvyo-ui-core"
+version = "0.1.0"
+dependencies = [
+ "curvyo-document-core",
+ "curvyo-geometry-core",
+ "proptest",
+]
+
+[[package]]
 name = "darling"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5000,82 +5076,6 @@ name = "valuable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
-
-[[package]]
-name = "curvyo-app"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "curvyo-document-core",
- "curvyo-storage-io",
-]
-
-[[package]]
-name = "curvyo-document-core"
-version = "0.1.0"
-dependencies = [
- "loro",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "zip",
-]
-
-[[package]]
-name = "curvyo-editor-wasm"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "loro",
- "serde_json",
- "curvyo-document-core",
- "curvyo-render-core",
- "curvyo-ui-core",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "wgpu",
- "zip",
-]
-
-[[package]]
-name = "curvyo-geometry-core"
-version = "0.1.0"
-dependencies = [
- "kurbo",
- "proptest",
- "curvyo-document-core",
-]
-
-[[package]]
-name = "curvyo-render-core"
-version = "0.1.0"
-dependencies = [
- "lyon",
- "curvyo-document-core",
-]
-
-[[package]]
-name = "curvyo-storage-io"
-version = "0.1.0"
-dependencies = [
- "tempfile",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "curvyo-ui-core"
-version = "0.1.0"
-dependencies = [
- "proptest",
- "curvyo-document-core",
- "curvyo-geometry-core",
-]
 
 [[package]]
 name = "version-compare"
