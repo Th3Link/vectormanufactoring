@@ -20,6 +20,8 @@
 //! methods join this type's `impl Session` the same way any other
 //! `impl` block in the same crate would.
 
+#[cfg(test)]
+mod box_refit_tests;
 mod draw;
 mod keys;
 mod move_entry;
