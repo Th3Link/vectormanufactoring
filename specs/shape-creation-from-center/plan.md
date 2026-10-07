@@ -89,8 +89,8 @@ exists now, checked in the code:
   Escape then modifier changes, pan mid-drag, Shift press on an outline,
   polygon/star under Shift and Ctrl, saved `format_version` (AC 8, 11, 13, 14,
   15, 16, 17).
-- [ ] 5. Full gate (`CLAUDE.md` section 7 plus everything `ci.yml` runs).
-- [ ] 6. Check in the browser: Shift, Shift+Ctrl, Ctrl, mid-drag modifier
+- [x] 5. Full gate (`CLAUDE.md` section 7 plus everything `ci.yml` runs).
+- [x] 6. Check in the browser: Shift, Shift+Ctrl, Ctrl, mid-drag modifier
   changes without mouse movement; polygon/star unchanged (AC 8, 9, 11, 14).
 - [ ] 7. Draft PR, CI green on the exact head sha.
 

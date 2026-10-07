@@ -1,6 +1,6 @@
 # Shape creation from the center: Shift and Shift+Ctrl while drawing
 
-Status: Ready
+Status: In progress
 Priority: Must
 Origin: Customer
 
@@ -229,4 +229,4 @@ is (to be confirmed); default: unchanged either way.
 ## Links
 Requirements: R-EDIT-002 (`docs/requirements.md`); extends
 `specs/0003-primitive-shapes/` criteria 2 and 8.
-PR:
+PR: https://github.com/Th3Link/vectormanufactoring/pull/47
