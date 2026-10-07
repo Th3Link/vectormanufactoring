@@ -46,6 +46,7 @@ export function MoveEntryChip({ entry, containerRef, onCommit, onCancel }: MoveE
   const chipRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const switchRef = useRef<HTMLButtonElement>(null);
   const messageId = useId();
   const [absolute, setAbsolute] = useState(false);
   const [edited, setEdited] = useState<[boolean, boolean]>([false, false]);
@@ -106,6 +107,23 @@ export function MoveEntryChip({ entry, containerRef, onCommit, onCancel }: MoveE
     returnFocusToCanvas();
   };
 
+  /** Tab order X, Y, the mode switch and back to X (Shift+Tab reverses): the
+   * chip is a closed loop, so Tab never leaves it and cancels it by a blur
+   * (`edit-interaction-polish` criterion 18). The two ends are handled here;
+   * the steps in between are the browser's own. */
+  const loopFocus = (event: React.KeyboardEvent<HTMLElement>, first: boolean) => {
+    if (event.key !== "Tab" || event.shiftKey !== first) {
+      return false;
+    }
+    event.preventDefault();
+    const target = first ? switchRef.current : inputRefs.current[0];
+    target?.focus();
+    if (target instanceof HTMLInputElement) {
+      target.select();
+    }
+    return true;
+  };
+
   const onKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -124,6 +142,9 @@ export function MoveEntryChip({ entry, containerRef, onCommit, onCancel }: MoveE
   };
 
   const onSwitchKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (loopFocus(event, false)) {
+      return;
+    }
     if (event.key === " " || event.key === "ArrowLeft" || event.key === "ArrowRight") {
       event.preventDefault();
       setAbsolute((previous) => !previous);
@@ -188,7 +209,11 @@ export function MoveEntryChip({ entry, containerRef, onCommit, onCancel }: MoveE
                   aria-describedby={isInvalid ? messageId : undefined}
                   value={textOf(axis)}
                   onChange={(event) => onChange(axis, event.target.value)}
-                  onKeyDown={onKeyDown}
+                  onKeyDown={(event) => {
+                    if (!(axis === 0 && loopFocus(event, true))) {
+                      onKeyDown(event);
+                    }
+                  }}
                   onBlur={onBlur}
                   className={`h-7 w-full rounded-[5px] border bg-white pr-8 pl-5 text-right text-sm tabular-nums outline-none ${
                     isInvalid
@@ -209,6 +234,7 @@ export function MoveEntryChip({ entry, containerRef, onCommit, onCancel }: MoveE
           })}
         </div>
         <button
+          ref={switchRef}
           type="button"
           role="switch"
           aria-checked={absolute}
