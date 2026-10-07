@@ -511,7 +511,11 @@ mod tests {
                 }],
             )
             .unwrap();
-        assert_eq!(counters(&document), before, "same mode again writes nothing");
+        assert_eq!(
+            counters(&document),
+            before,
+            "same mode again writes nothing"
+        );
     }
 
     #[test]

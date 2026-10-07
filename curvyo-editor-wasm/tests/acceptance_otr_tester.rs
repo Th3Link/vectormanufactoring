@@ -1625,7 +1625,11 @@ fn same_rect_state(a: &Session, b: &Session, eps: f64, ctx: &str) {
         "{ctx}: rotation"
     );
     assert!(
-        near(pa.style.stroke.width.as_mm(), pb.style.stroke.width.as_mm(), eps),
+        near(
+            pa.style.stroke.width.as_mm(),
+            pb.style.stroke.width.as_mm(),
+            eps
+        ),
         "{ctx}: stroke"
     );
 }
@@ -2893,7 +2897,10 @@ fn ac38_skew_matches_the_reference_for_every_side_rotation_and_shift() {
                         assert_eq!(a.id, o.id, "node order/identity");
                         assert_eq!(a.kind, o.kind, "node kind");
                     }
-                    assert_eq!(after.style.stroke.width.as_mm(), before.style.stroke.width.as_mm());
+                    assert_eq!(
+                        after.style.stroke.width.as_mm(),
+                        before.style.stroke.width.as_mm()
+                    );
                     assert_eq!(
                         after.rotation.as_radians(),
                         before.rotation.as_radians(),
@@ -3871,7 +3878,11 @@ fn ac27_path_size_entry_equals_a_drag_on_a_rotated_path_with_the_stroke_switch_o
                 );
             }
             assert!(
-                near(pa.style.stroke.width.as_mm(), pd.style.stroke.width.as_mm(), 1e-9),
+                near(
+                    pa.style.stroke.width.as_mm(),
+                    pd.style.stroke.width.as_mm(),
+                    1e-9
+                ),
                 "stroke th {th} on {on}"
             );
             let want = if on {

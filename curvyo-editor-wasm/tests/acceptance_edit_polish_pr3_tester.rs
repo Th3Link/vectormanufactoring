@@ -664,7 +664,11 @@ fn same_object(a: &ObjectSnapshot, b: &ObjectSnapshot, eps: f64, ctx: &str) {
                 "{ctx}: rot"
             );
             assert!(
-                near(x.style.stroke.width.as_mm(), y.style.stroke.width.as_mm(), eps),
+                near(
+                    x.style.stroke.width.as_mm(),
+                    y.style.stroke.width.as_mm(),
+                    eps
+                ),
                 "{ctx}: stroke"
             );
         }
@@ -674,7 +678,11 @@ fn same_object(a: &ObjectSnapshot, b: &ObjectSnapshot, eps: f64, ctx: &str) {
                 "{ctx}: rotation"
             );
             assert!(
-                near(x.style.stroke.width.as_mm(), y.style.stroke.width.as_mm(), eps),
+                near(
+                    x.style.stroke.width.as_mm(),
+                    y.style.stroke.width.as_mm(),
+                    eps
+                ),
                 "{ctx}: stroke"
             );
             let (tx, ty) = (tight_of(a), tight_of(b));
@@ -837,7 +845,10 @@ fn c10_typed_skew_equals_the_reference_and_a_drag_for_every_side_rotation_and_sh
                         assert_eq!(a.id, o.id);
                         assert_eq!(a.kind, o.kind);
                     }
-                    assert_eq!(after.style.stroke.width.as_mm(), before.style.stroke.width.as_mm());
+                    assert_eq!(
+                        after.style.stroke.width.as_mm(),
+                        before.style.stroke.width.as_mm()
+                    );
                     assert_eq!(after.rotation.as_radians(), before.rotation.as_radians());
                     assert_eq!(s.tool(), Tool::Select);
                     assert_eq!(s.selected_object_count(), 1);

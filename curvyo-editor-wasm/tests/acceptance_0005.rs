@@ -2799,7 +2799,9 @@ fn assert_all_finite_and_reopenable(session: &Session) {
         match doc.object(id).unwrap() {
             ObjectSnapshot::Primitive(p) => {
                 assert!(p.rotation.as_radians().is_finite());
-                assert!(p.style.stroke.width.as_mm().is_finite() && p.style.stroke.width.as_mm() > 0.0);
+                assert!(
+                    p.style.stroke.width.as_mm().is_finite() && p.style.stroke.width.as_mm() > 0.0
+                );
                 match p.shape {
                     Shape::Rect {
                         bounds,
@@ -2834,7 +2836,9 @@ fn assert_all_finite_and_reopenable(session: &Session) {
             }
             ObjectSnapshot::Path(p) => {
                 assert!(p.rotation.as_radians().is_finite());
-                assert!(p.style.stroke.width.as_mm().is_finite() && p.style.stroke.width.as_mm() > 0.0);
+                assert!(
+                    p.style.stroke.width.as_mm().is_finite() && p.style.stroke.width.as_mm() > 0.0
+                );
                 for a in &p.anchors {
                     for v in [
                         a.point.x,

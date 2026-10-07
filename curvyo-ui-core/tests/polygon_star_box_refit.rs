@@ -8,9 +8,8 @@
 #![allow(clippy::too_many_lines, clippy::similar_names)]
 
 use curvyo_document_core::{
-    AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, NodeId,
-    ObjectSnapshot, Point, PointCount, PrimitiveSnapshot, RectBounds, Shape, StarFrame, Vec2,
-    outline_of_rotated,
+    AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, NodeId, ObjectSnapshot,
+    Point, PointCount, PrimitiveSnapshot, RectBounds, Shape, StarFrame, Vec2, outline_of_rotated,
 };
 use curvyo_ui_core::{
     ParamHandle, ParamValue, TransformHandleTolerances, oriented_bounds, param_handles,

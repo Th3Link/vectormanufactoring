@@ -408,7 +408,10 @@ fn poly_ratios(kind: Kind, width: f64, hi: usize, shift: bool, f: f64) -> (f64, 
     let (Shape::Polygon { frame, .. } | Shape::Star { frame, .. }) = p.shape else {
         panic!()
     };
-    (p.style.stroke.width.as_mm() / width, frame.radius.as_mm() / 10.0)
+    (
+        p.style.stroke.width.as_mm() / width,
+        frame.radius.as_mm() / 10.0,
+    )
 }
 
 #[test]

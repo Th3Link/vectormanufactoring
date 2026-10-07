@@ -66,7 +66,7 @@ use crate::units::{DocumentSize, Length};
 ///
 /// Bumped to 7 in `stroke-and-fill-styling` (`specs/0007-stroke-and-fill-
 /// styling/adrs.md`, "`format_version`" and the 2026-10-07 readiness check):
-/// every object node may carry the style keys of [`crate::style_codec`]
+/// every object node may carry the style keys of `crate::style_codec`
 /// (`stroke_enabled`, `stroke_opacity`, `stroke_dash`, `stroke_join`,
 /// `stroke_cap`, `fill_enabled`, `fill_kind`, `fill`, `fill_opacity` and the
 /// `fill_stops` list), and `document.json` writes one `style` object per

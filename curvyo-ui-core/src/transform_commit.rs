@@ -94,8 +94,12 @@ pub(crate) fn commit_resize(
                 bounds,
                 corner_radii,
             } => {
-                let _ =
-                    document.resize_rect(id, bounds, corner_radii, width(primitive.style.stroke.width));
+                let _ = document.resize_rect(
+                    id,
+                    bounds,
+                    corner_radii,
+                    width(primitive.style.stroke.width),
+                );
             }
             Shape::Ellipse { frame } => {
                 let _ = document.resize_ellipse(id, frame, width(primitive.style.stroke.width));

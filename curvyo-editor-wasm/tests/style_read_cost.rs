@@ -54,7 +54,9 @@ fn style_everything(document: &Document, ids: &[NodeId]) {
         let edit = |edit: StyleEdit| document.edit_style(&[*id], &edit).unwrap();
         edit(StyleEdit::StrokeWidth(Length::from_mm(0.5)));
         edit(StyleEdit::StrokeColor(red));
-        edit(StyleEdit::StrokeDash(DashPattern::new(vec![6.0, 4.0]).unwrap()));
+        edit(StyleEdit::StrokeDash(
+            DashPattern::new(vec![6.0, 4.0]).unwrap(),
+        ));
         edit(StyleEdit::StrokeJoin(LineJoin::Round));
         edit(StyleEdit::StrokeCap(LineCap::Round));
         let counter = n as u64 * 2;
@@ -91,7 +93,13 @@ fn at_rest(document: &Document) -> std::time::Duration {
 #[ignore = "benchmark: run in release with --ignored --nocapture"]
 fn a_200_object_frame_at_rest_with_default_and_with_full_styles() {
     let (document, ids) = document_with_200_objects();
-    println!("at rest, default styles: {:?} per frame", at_rest(&document));
+    println!(
+        "at rest, default styles: {:?} per frame",
+        at_rest(&document)
+    );
     style_everything(&document, &ids);
-    println!("at rest, every key set:  {:?} per frame", at_rest(&document));
+    println!(
+        "at rest, every key set:  {:?} per frame",
+        at_rest(&document)
+    );
 }

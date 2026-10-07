@@ -226,10 +226,7 @@ fn ac13_format_version_unchanged_and_no_modifier_trace_in_the_file() {
     drag(&mut b, pt(25.0, 25.0), pt(40.0, 40.0), true, false);
     close(rect_box(&prims(&a)[0]), rect_box(&prims(&b)[0]));
     let (pa, pb) = (&prims(&a)[0], &prims(&b)[0]);
-    assert_eq!(
-        (&pa.style, pa.rotation),
-        (&pb.style, pb.rotation)
-    );
+    assert_eq!((&pa.style, pa.rotation), (&pb.style, pb.rotation));
 }
 
 // ---------------------------------------------------------------------

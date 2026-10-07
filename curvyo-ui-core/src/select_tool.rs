@@ -1093,7 +1093,9 @@ mod tests {
             Point::new(20.0, -20.0),
             |_| {},
         );
-        assert!((document.primitive(star).unwrap().style.stroke.width.as_mm() - 0.25).abs() < 1e-12);
+        assert!(
+            (document.primitive(star).unwrap().style.stroke.width.as_mm() - 0.25).abs() < 1e-12
+        );
     }
 
     /// AC 26: with the switch on a proportional resize scales the width by
