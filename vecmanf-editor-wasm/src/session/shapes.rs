@@ -10,7 +10,7 @@
 //! `impl Session`.
 
 use vecmanf_document_core::{InnerRatio, Point, PointCount, Shape};
-use vecmanf_ui_core::{CreateOutcome, CreatePreview, PolyStarMode};
+use vecmanf_ui_core::{CreateOutcome, CreatePreview, Modifiers, PolyStarMode, format_degrees};
 
 use super::{Session, Tool};
 
@@ -41,11 +41,11 @@ impl Session {
 
     /// Feeds whatever create-drag is in flight for the live preview; writes
     /// nothing to the document.
-    pub(super) fn shape_pointer_move(&mut self, point: Point, constrain: bool) {
+    pub(super) fn shape_pointer_move(&mut self, point: Point, modifiers: Modifiers) {
         match self.tool {
-            Tool::Rectangle => self.rectangle.pointer_move(point, constrain),
-            Tool::Ellipse => self.ellipse.pointer_move(point, constrain),
-            Tool::PolygonStar => self.poly_star.pointer_move(point),
+            Tool::Rectangle => self.rectangle.pointer_move(point, modifiers.ctrl),
+            Tool::Ellipse => self.ellipse.pointer_move(point, modifiers.ctrl),
+            Tool::PolygonStar => self.poly_star.pointer_move(point, modifiers),
             Tool::Select | Tool::Pen | Tool::Node => {}
         }
     }
@@ -56,11 +56,15 @@ impl Session {
     /// (criterion 28; `0003` criterion 1, "it becomes the selected object").
     /// Every other outcome, a press without movement included, leaves the tool
     /// and the selection alone (criterion 26).
-    pub(super) fn shape_pointer_up(&mut self, point: Point, constrain: bool) {
+    pub(super) fn shape_pointer_up(&mut self, point: Point, modifiers: Modifiers) {
         let outcome = match self.tool {
-            Tool::Rectangle => self.rectangle.pointer_up(&self.document, point, constrain),
-            Tool::Ellipse => self.ellipse.pointer_up(&self.document, point, constrain),
-            Tool::PolygonStar => self.poly_star.pointer_up(&self.document, point),
+            Tool::Rectangle => self
+                .rectangle
+                .pointer_up(&self.document, point, modifiers.ctrl),
+            Tool::Ellipse => self
+                .ellipse
+                .pointer_up(&self.document, point, modifiers.ctrl),
+            Tool::PolygonStar => self.poly_star.pointer_up(&self.document, point, modifiers),
             Tool::Select | Tool::Pen | Tool::Node => CreateOutcome::NoOp,
         };
         if let CreateOutcome::Created(id) = outcome {
@@ -70,18 +74,13 @@ impl Session {
     }
 
     /// Cancels whichever creation tool's in-progress drag, writing nothing.
-    pub(super) fn shape_escape(&mut self) {
+    /// Returns whether there was one.
+    pub(super) fn shape_escape(&mut self) -> bool {
         match self.tool {
-            Tool::Rectangle => {
-                self.rectangle.escape();
-            }
-            Tool::Ellipse => {
-                self.ellipse.escape();
-            }
-            Tool::PolygonStar => {
-                self.poly_star.escape();
-            }
-            Tool::Select | Tool::Pen | Tool::Node => {}
+            Tool::Rectangle => self.rectangle.escape(),
+            Tool::Ellipse => self.ellipse.escape(),
+            Tool::PolygonStar => self.poly_star.escape(),
+            Tool::Select | Tool::Pen | Tool::Node => false,
         }
     }
 
@@ -155,13 +154,18 @@ impl Session {
             Shape::Ellipse { frame } => {
                 format!("{:.1} × {:.1} mm", frame.rx.as_mm(), frame.ry.as_mm())
             }
-            Shape::Polygon { frame, .. } => format!("r {:.1} mm", frame.radius.as_mm()),
+            Shape::Polygon { frame, .. } => format!(
+                "r {:.1} mm, {}",
+                frame.radius.as_mm(),
+                format_degrees(frame.angle.normalized().as_radians().to_degrees())
+            ),
             Shape::Star {
                 frame, inner_ratio, ..
             } => format!(
-                "r {:.1} mm, ratio {:.2}",
+                "r {:.1} mm, ratio {:.2}, {}",
                 frame.radius.as_mm(),
-                inner_ratio.get()
+                inner_ratio.get(),
+                format_degrees(frame.angle.normalized().as_radians().to_degrees())
             ),
         };
         Some(LiveReadout { text, anchor })

@@ -18,6 +18,7 @@ mod decorations;
 mod glyphs;
 mod live_preview;
 mod pen_preview;
+mod select_box;
 mod select_decoration;
 mod shape_preview;
 mod stroke;
@@ -28,10 +29,8 @@ pub use decorations::{DecorationInput, Hovered};
 pub use glyphs::{DrawList, Vertex};
 pub use live_preview::build_live_edit_preview;
 pub use pen_preview::build_pen_preview;
-pub use select_decoration::{
-    SelectDecorationInput, SelectionBox, TransformDecorationInput, TransformGlyphKind,
-    TransformHandleGlyph,
-};
+pub use select_box::{SelectDecorationInput, SelectionBox};
+pub use select_decoration::{TransformDecorationInput, TransformGlyphKind, TransformHandleGlyph};
 pub use shape_preview::{build_primitive_strokes, build_shape_live_preview};
 
 use vecmanf_document_core::{PathSnapshot, ViewTransform};
@@ -72,7 +71,7 @@ pub fn build_draw_list(
 /// unified 'selected' indicator").
 #[must_use]
 pub fn build_select_draw_list(view: ViewTransform, input: &SelectDecorationInput) -> DrawList {
-    select_decoration::build(view, input)
+    select_box::build(view, input)
 }
 
 /// Builds the Select tool's own transform-handle overlay for this frame

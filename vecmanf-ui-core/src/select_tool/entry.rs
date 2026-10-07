@@ -8,8 +8,10 @@
 use vecmanf_document_core::{Document, ObjectSnapshot, Point, Tolerance};
 
 use super::{SelectDoubleClickOutcome, SelectDrag, SelectTool, sole_selected};
+use crate::ResizeDirection;
 use crate::hit_test_object::hit_test_object;
 use crate::object_selection::ObjectSelection;
+use crate::oriented_box::oriented_bounds;
 use crate::param_entry::ParamEntry;
 use crate::transform_entry::{EntryOutcome, TransformEntry};
 use crate::transform_handle_layout::{EditHandle, TransformHandleTolerances};
@@ -23,6 +25,26 @@ pub(super) enum OpenEntry {
     Transform(TransformEntry),
     /// A corner-radius or inner-ratio entry.
     Param(ParamEntry),
+}
+
+/// The typed entry a key opens (`specs/edit-interaction-polish/` criteria
+/// 54, 57): the same entry a double-click on the matching handle opens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntryKey {
+    /// R: the angle entry of the top-right corner rotate handle.
+    Angle,
+    /// S: the size entry of the bottom-right corner resize handle.
+    Size,
+}
+
+/// Why an entry key could not act (criterion 59): the text of the hint chip
+/// is the frontend's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KeyEntryRefusal {
+    /// Nothing is selected.
+    NothingSelected,
+    /// Several objects are selected; a typed value needs exactly one.
+    SeveralSelected,
 }
 
 impl OpenEntry {
@@ -93,6 +115,44 @@ impl SelectTool {
             self.entry = None;
         }
         outcome
+    }
+
+    /// Criterion 57: opens the angle entry (R) or the size entry (S) for the
+    /// sole selected object, exactly as a double-click on its top-right
+    /// corner rotate handle or bottom-right corner resize handle does, with
+    /// no Shift pivot and no Ctrl link: those are read only from a
+    /// double-click. Both corner handles always exist, whatever the box size,
+    /// so the entry opens for an object of any size.
+    ///
+    /// # Errors
+    /// [`KeyEntryRefusal`] when the selection is not exactly one object;
+    /// nothing changes then.
+    pub fn open_entry_for_key(
+        &mut self,
+        objects: &[ObjectSnapshot],
+        selection: &ObjectSelection,
+        key: EntryKey,
+    ) -> Result<(), KeyEntryRefusal> {
+        let object = match selection.ids() {
+            [] => return Err(KeyEntryRefusal::NothingSelected),
+            [_] => sole_selected(objects, selection).ok_or(KeyEntryRefusal::NothingSelected)?,
+            _ => return Err(KeyEntryRefusal::SeveralSelected),
+        };
+        let box_ = oriented_bounds(object);
+        let entry = match key {
+            EntryKey::Angle => {
+                TransformEntry::for_rotate(object, &box_, ResizeDirection::Ne, false)
+            }
+            EntryKey::Size => TransformEntry::for_resize(
+                object,
+                &box_,
+                ResizeDirection::Se,
+                (false, false),
+                self.modes,
+            ),
+        };
+        self.entry = Some(OpenEntry::Transform(entry));
+        Ok(())
     }
 
     /// Acceptance criteria 3, 18, 22, 23, 25-28, 32, 49: the double-click
@@ -174,5 +234,126 @@ fn hit_outcome(object: &ObjectSnapshot) -> SelectDoubleClickOutcome {
     match object {
         ObjectSnapshot::Path(_) => SelectDoubleClickOutcome::Hit(object.clone()),
         ObjectSnapshot::Primitive(_) => SelectDoubleClickOutcome::EditHint,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use vecmanf_document_core::{
+        AnchorId, Angle, Document, InnerRatio, Length, NewAnchor, PointCount, RectBounds, StarFrame,
+    };
+
+    use super::*;
+    use crate::transform_entry::EntryKind;
+
+    fn rect_at(document: &Document, x: f64, size: f64) -> vecmanf_document_core::NodeId {
+        document.create_rect(RectBounds {
+            origin: Point::new(x, 0.0),
+            width: Length::from_mm(size),
+            height: Length::from_mm(size / 2.0),
+        })
+    }
+
+    fn open(
+        document: &Document,
+        ids: &[vecmanf_document_core::NodeId],
+        key: EntryKey,
+    ) -> (SelectTool, Result<(), KeyEntryRefusal>) {
+        let objects: Vec<ObjectSnapshot> = document
+            .object_ids()
+            .into_iter()
+            .filter_map(|id| document.object(id))
+            .collect();
+        let mut selection = ObjectSelection::new();
+        for id in ids {
+            selection.toggle(*id);
+        }
+        let mut tool = SelectTool::new();
+        let result = tool.open_entry_for_key(&objects, &selection, key);
+        (tool, result)
+    }
+
+    /// Criterion 57: R opens the angle entry of the top-right corner rotate
+    /// handle, S the size entry of the bottom-right corner resize handle, for
+    /// any object and any size, with the box centre as pivot.
+    #[test]
+    fn r_and_s_open_the_entries_of_the_two_corner_handles() {
+        let document = Document::new(1);
+        for size in [0.5, 4.0, 400.0] {
+            let id = rect_at(&document, 0.0, size);
+            let (tool, result) = open(&document, &[id], EntryKey::Angle);
+            assert_eq!(result, Ok(()));
+            let entry = tool.entry().expect("an entry");
+            assert_eq!(entry.kind(), EntryKind::Angle);
+            assert_eq!(entry.handle(), EditHandle::Rotate(ResizeDirection::Ne));
+            assert_eq!(
+                tool.entry_handle(),
+                Some(EditHandle::Rotate(ResizeDirection::Ne))
+            );
+            let (tool, result) = open(&document, &[id], EntryKey::Size);
+            assert_eq!(result, Ok(()));
+            let entry = tool.entry().expect("an entry");
+            assert_eq!(entry.kind(), EntryKind::Size);
+            assert_eq!(entry.handle(), EditHandle::Resize(ResizeDirection::Se));
+            assert_eq!(entry.fields().len(), 2, "width and height");
+            assert!(tool.has_entry());
+        }
+    }
+
+    /// The size entry of a polygon or star is the outer radius, as for the
+    /// double-click route.
+    #[test]
+    fn s_on_a_polygon_or_star_opens_the_outer_radius() {
+        let document = Document::new(1);
+        let frame = StarFrame {
+            center: Point::new(0.0, 0.0),
+            radius: Length::from_mm(12.0),
+            angle: Angle::from_radians(0.0),
+        };
+        let polygon = document.create_polygon(frame, PointCount::new(5).expect("count"));
+        let star = document.create_star(
+            frame,
+            PointCount::new(5).expect("count"),
+            InnerRatio::new(0.5).expect("ratio"),
+        );
+        for id in [polygon, star] {
+            let (tool, result) = open(&document, &[id], EntryKey::Size);
+            assert_eq!(result, Ok(()));
+            let entry = tool.entry().expect("an entry");
+            assert_eq!(entry.kind(), EntryKind::OuterRadius);
+            assert_eq!(entry.fields()[0].prefill, "12.0");
+        }
+    }
+
+    /// Criterion 59: nothing or several selected refuse and open nothing.
+    #[test]
+    fn nothing_or_several_selected_refuse_and_open_nothing() {
+        let document = Document::new(1);
+        let a = rect_at(&document, 0.0, 10.0);
+        let b = rect_at(&document, 20.0, 10.0);
+        for key in [EntryKey::Angle, EntryKey::Size] {
+            let (tool, result) = open(&document, &[], key);
+            assert_eq!(result, Err(KeyEntryRefusal::NothingSelected));
+            assert!(!tool.has_entry());
+            let (tool, result) = open(&document, &[a, b], key);
+            assert_eq!(result, Err(KeyEntryRefusal::SeveralSelected));
+            assert!(!tool.has_entry());
+        }
+    }
+
+    /// A path opens the same entries.
+    #[test]
+    fn a_path_opens_an_angle_entry() {
+        let document = Document::new(1);
+        let id = document.create_path(
+            &[
+                NewAnchor::corner(AnchorId::new(1, 1), Point::new(0.0, 0.0)),
+                NewAnchor::corner(AnchorId::new(1, 2), Point::new(10.0, 5.0)),
+            ],
+            false,
+        );
+        let (tool, result) = open(&document, &[id], EntryKey::Angle);
+        assert_eq!(result, Ok(()));
+        assert_eq!(tool.entry().expect("an entry").kind(), EntryKind::Angle);
     }
 }

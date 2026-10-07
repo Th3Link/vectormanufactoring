@@ -8,9 +8,7 @@
 //! [`skew_by_angle`]), so each rule exists once. The primitive-specific
 //! resize arithmetic is in [`crate::transform_primitive`].
 
-use vecmanf_document_core::{
-    Angle, Document, Length, ObjectSnapshot, Point, PrimitiveSnapshot, Shape, Vec2,
-};
+use vecmanf_document_core::{Angle, Document, Length, ObjectSnapshot, Point, Vec2};
 
 use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;
@@ -19,8 +17,8 @@ use crate::skew_math::{skew_angle, skew_factor, skew_frame};
 use crate::transform_commit::{commit_gesture, sane_or};
 use crate::transform_handle_layout::{EditHandle, Side};
 use crate::transform_math::{
-    resize_anchor_local_position, resize_local_box, rotate_delta_angle, rotate_pivot,
-    scaled_and_floored, stroke_or_radius_factor,
+    is_polygon_or_star, resize_anchor_local_position, resize_local_box, rotate_delta_for,
+    rotate_pivot, scaled_and_floored, stroke_or_radius_factor,
 };
 use crate::transform_primitive::resize_primitive;
 
@@ -184,7 +182,7 @@ impl TransformDrag {
                 rotate_by(
                     start,
                     pivot,
-                    rotate_delta_angle(pivot, down_at, current, ctrl),
+                    rotate_delta_for(start, pivot, down_at, current, ctrl),
                 )
             }
             EditHandle::Skew(side) => skew_by_angle(
@@ -256,18 +254,6 @@ pub(crate) fn pivot_for(
         EditHandle::Skew(side) => Some(skew_frame(box_, side, shift).fixed_point),
         EditHandle::Move | EditHandle::Param(_) => None,
     }
-}
-
-/// Whether `object` is a polygon or a star — the one kind whose transform
-/// handles are corner-only and always-uniform (slice 5, criterion 11).
-pub(crate) fn is_polygon_or_star(object: &ObjectSnapshot) -> bool {
-    matches!(
-        object,
-        ObjectSnapshot::Primitive(PrimitiveSnapshot {
-            shape: Shape::Polygon { .. } | Shape::Star { .. },
-            ..
-        })
-    )
 }
 
 /// The pointer's displacement from `down_at` to `current`, in the box's own

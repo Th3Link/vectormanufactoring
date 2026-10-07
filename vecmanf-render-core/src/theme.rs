@@ -185,9 +185,8 @@ pub const TRANSFORM_SKEW_HANDLE_CORNER_RADIUS_PX: f64 = 3.0;
 /// canvas, `docs/design-system.md`).
 pub const TRANSFORM_SKEW_GUIDE_COLOR: RgbaColor = ACCENT;
 
-/// The skew fixed-line guide's weight, screen-space pixels (1 px dashed in
-/// `docs/design-system.md`).
-pub const TRANSFORM_SKEW_GUIDE_WIDTH_PX: f64 = 1.0;
+// The skew fixed-line guide's weight is `BOUNDING_BOX_OUTLINE_PX`: the guide
+// takes the box's own line and snap (`edit-interaction-polish` criterion 68).
 
 /// The pivot marker's diameter, screen-space pixels (`docs/design-
 /// system.md`'s "Transform pivot marker").
@@ -205,6 +204,46 @@ pub const GUIDE_DASH_PX: f64 = 4.0;
 
 /// The gap between two dashes, screen-space pixels.
 pub const GUIDE_GAP_PX: f64 = 3.0;
+
+/// One dash's length of the skew fixed-line guide, screen-space pixels
+/// (`edit-interaction-polish` criterion 68: 2 on / 2 off, so the guide does
+/// not look like the 4 / 3 selection box it runs along).
+pub const SKEW_GUIDE_DASH_PX: f64 = 2.0;
+
+/// The gap between two dashes of the skew fixed-line guide, screen-space
+/// pixels.
+pub const SKEW_GUIDE_GAP_PX: f64 = 2.0;
+
+/// The selection box's nominal dash length, screen-space pixels
+/// (`edit-interaction-polish` criterion 63, the customer's V1). A dash is
+/// never longer than this.
+pub const SELECTION_BOX_DASH_PX: f64 = 4.0;
+
+/// The selection box's nominal gap, screen-space pixels. The fit picks the
+/// gap nearest this within [`SELECTION_BOX_GAP_MIN_PX`] and
+/// [`SELECTION_BOX_GAP_MAX_PX`].
+pub const SELECTION_BOX_GAP_PX: f64 = 3.0;
+
+/// The smallest gap of a fitted selection-box edge, screen-space pixels.
+/// Where no exact fit exists the gap is this and the dash flexes
+/// (`edit-interaction-polish` criterion 64).
+pub const SELECTION_BOX_GAP_MIN_PX: f64 = 2.0;
+
+/// The largest gap of a fitted selection-box edge, screen-space pixels.
+pub const SELECTION_BOX_GAP_MAX_PX: f64 = 4.0;
+
+/// An edge shorter than this has room for no two dashes and a gap and is
+/// drawn solid, screen-space pixels (`edit-interaction-polish` criterion 64).
+pub const SELECTION_BOX_MIN_DASHED_EDGE_PX: f64 = 10.0;
+
+/// How far from the skew guide's line both ends of a selection-box edge may
+/// lie for the edge to count as on it, screen pixels (the snap moves a box
+/// edge by at most half a device pixel).
+pub const SELECTION_BOX_GUIDE_TOLERANCE_PX: f64 = 1.0;
+
+/// An edge longer than this is drawn solid, screen-space pixels: it bounds
+/// the draw list at an absurd zoom, where the edge is far off screen anyway.
+pub const SELECTION_BOX_MAX_DASHED_EDGE_PX: f64 = 50_000.0;
 
 /// The curve-approximation display tolerance for stroking, in screen
 /// pixels (`specs/0004-canvas-navigation-and-selection/adrs.md`: "Display

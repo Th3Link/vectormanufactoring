@@ -12,10 +12,10 @@ use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;
 use crate::transform_commit::{MAX_COORDINATE_MM, commit_gesture};
 use crate::transform_drag::{
-    ResizeOptions, ScaleModes, is_polygon_or_star, pivot_for, resize_by_local_delta, rotate_by,
+    ResizeOptions, ScaleModes, pivot_for, resize_by_local_delta, rotate_by,
 };
 use crate::transform_handle_layout::{EditHandle, is_corner};
-use crate::transform_math::{local_delta_for_radius, local_delta_for_size};
+use crate::transform_math::{is_polygon_or_star, local_delta_for_radius, local_delta_for_size};
 use vecmanf_document_core::PrimitiveSnapshot;
 
 /// A typed size within this (millimetres) of the current one is "equal":
@@ -213,7 +213,7 @@ impl TransformEntry {
             fields: vec![EntryField {
                 label: "",
                 accessible_name: "Angle",
-                prefill: format_degrees(object.rotation().as_radians().to_degrees())
+                prefill: format_degrees(object.orientation().as_radians().to_degrees())
                     .trim_end_matches('°')
                     .to_string(),
                 editable: true,
@@ -364,7 +364,7 @@ impl TransformEntry {
     /// millimetres).
     fn start_value(&self, axis: FieldAxis) -> f64 {
         match axis {
-            FieldAxis::Angle => self.start.rotation().as_radians().to_degrees(),
+            FieldAxis::Angle => self.start.orientation().as_radians().to_degrees(),
             FieldAxis::Width => self.start_box.width(),
             FieldAxis::Height => self.start_box.height(),
             FieldAxis::Radius => outer_radius(&self.start).unwrap_or(0.0),
@@ -444,7 +444,7 @@ impl TransformEntry {
                 let Some(degrees) = target(FieldAxis::Angle) else {
                     return self.start.clone();
                 };
-                let change = degrees.to_radians() - self.start.rotation().as_radians();
+                let change = degrees.to_radians() - self.start.orientation().as_radians();
                 rotate_by(
                     &self.start,
                     self.pivot,
@@ -512,5 +512,136 @@ fn outer_radius(object: &ObjectSnapshot) -> Option<f64> {
             ..
         }) => Some(frame.radius.as_mm()),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use vecmanf_document_core::{InnerRatio, Length, PointCount, StarFrame};
+
+    use super::*;
+    use crate::oriented_box::oriented_bounds;
+
+    fn created(frame_angle_deg: f64, rotation_deg: f64, star: bool) -> (Document, ObjectSnapshot) {
+        let document = Document::new(1);
+        let frame = StarFrame {
+            center: Point::new(100.0, 50.0),
+            radius: Length::from_mm(10.0),
+            angle: Angle::from_radians(frame_angle_deg.to_radians()),
+        };
+        let count = PointCount::new(5).expect("count");
+        let id = if star {
+            document.create_star(frame, count, InnerRatio::new(0.5).expect("ratio"))
+        } else {
+            document.create_polygon(frame, count)
+        };
+        if rotation_deg != 0.0 {
+            let turned = document
+                .object(id)
+                .expect("exists")
+                .rotated(frame.center, Angle::from_radians(rotation_deg.to_radians()));
+            document.rotate_object(&turned).expect("rotates");
+        }
+        let object = document.object(id).expect("exists");
+        (document, object)
+    }
+
+    fn angle_entry(object: &ObjectSnapshot) -> TransformEntry {
+        TransformEntry::for_rotate(object, &oriented_bounds(object), ResizeDirection::Ne, false)
+    }
+
+    /// The first vertex of the drawn outline, in document space.
+    fn first_vertex(object: &ObjectSnapshot) -> Point {
+        let ObjectSnapshot::Primitive(primitive) = object else {
+            panic!("a primitive");
+        };
+        vecmanf_document_core::outline_of_rotated(&primitive.shape, primitive.rotation)[0].point
+    }
+
+    /// Criteria 1 and 7: the angle entry opens on the shape's real
+    /// orientation (frame angle plus rotation), not on the register alone.
+    #[test]
+    fn the_angle_prefill_of_a_polygon_or_star_is_its_orientation() {
+        for star in [false, true] {
+            let (_, object) = created(78.7, 0.0, star);
+            assert_eq!(angle_entry(&object).fields()[0].prefill, "78.7");
+            let (_, object) = created(10.0, 30.0, star);
+            assert_eq!(angle_entry(&object).fields()[0].prefill, "40");
+            let (_, object) = created(-15.0, 0.0, star);
+            assert_eq!(angle_entry(&object).fields()[0].prefill, "-15");
+        }
+    }
+
+    /// Criterion 7: typing an angle A makes the shown angle A, and 0 puts the
+    /// first vertex straight right of the centre, from any starting angle.
+    #[test]
+    fn a_typed_angle_becomes_the_shown_angle_and_zero_points_the_first_vertex_right() {
+        for star in [false, true] {
+            for (frame_angle, rotation) in [(78.7, 0.0), (10.0, 30.0), (-170.0, 25.0)] {
+                for (typed, expected) in
+                    [("0", 0.0), ("45", 45.0), ("-120", -120.0), ("180", 180.0)]
+                {
+                    let (document, object) = created(frame_angle, rotation, star);
+                    let entry = angle_entry(&object);
+                    assert_eq!(
+                        entry.commit(&document, [typed, ""], 0),
+                        EntryOutcome::Committed,
+                        "{frame_angle}/{rotation} typed {typed}"
+                    );
+                    let after = document.object(object.id()).expect("exists");
+                    let shown = after.orientation().as_radians().to_degrees();
+                    assert!(
+                        (shown - expected).abs() < 1e-9,
+                        "{frame_angle}/{rotation} typed {typed}: shown {shown}"
+                    );
+                    let vertex = first_vertex(&after);
+                    let want = Point::new(
+                        100.0 + 10.0 * expected.to_radians().cos(),
+                        50.0 + 10.0 * expected.to_radians().sin(),
+                    );
+                    assert!(
+                        (vertex.x - want.x).abs() < 1e-9 && (vertex.y - want.y).abs() < 1e-9,
+                        "{frame_angle}/{rotation} typed {typed}: vertex {vertex:?}, want {want:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Typing the angle already shown writes nothing (criterion 19 of the
+    /// refinements, now measured on the shown angle).
+    #[test]
+    fn typing_the_shown_angle_writes_nothing() {
+        let (document, object) = created(78.7, 0.0, false);
+        let entry = angle_entry(&object);
+        assert_eq!(
+            entry.commit(&document, ["78.7", ""], 0),
+            EntryOutcome::Unchanged
+        );
+        let (document, object) = created(10.0, 30.0, false);
+        let entry = angle_entry(&object);
+        assert_eq!(
+            entry.commit(&document, ["40", ""], 0),
+            EntryOutcome::Unchanged
+        );
+        assert_eq!(document.object(object.id()), Some(object));
+    }
+
+    /// Rectangles, ellipses and paths still show their register.
+    #[test]
+    fn a_rectangle_still_shows_its_rotation_register() {
+        use vecmanf_document_core::RectBounds;
+        let document = Document::new(1);
+        let id = document.create_rect(RectBounds::from_corners(
+            Point::new(0.0, 0.0),
+            Point::new(20.0, 10.0),
+        ));
+        let turned = document.object(id).expect("exists").rotated(
+            Point::new(10.0, 5.0),
+            Angle::from_radians(30.0_f64.to_radians()),
+        );
+        document.rotate_object(&turned).expect("rotates");
+        let object = document.object(id).expect("exists");
+        assert_eq!(angle_entry(&object).fields()[0].prefill, "30");
     }
 }

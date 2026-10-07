@@ -6,12 +6,24 @@
 //! layout and hit-testing; [`crate::transform_drag`] is this module's
 //! caller.
 
-use vecmanf_document_core::{Angle, Length, Point, Vec2};
+use vecmanf_document_core::{Angle, Length, ObjectSnapshot, Point, PrimitiveSnapshot, Shape, Vec2};
 
 use crate::ResizeDirection;
 use crate::angle_snap::snap_angle;
 use crate::oriented_box::OrientedBox;
 use crate::transform_handle_layout::{is_corner, resize_handle_local_position};
+
+/// Whether `object` is a polygon or a star — the one kind whose transform
+/// handles are corner-only and always-uniform (slice 5, criterion 11).
+pub(crate) fn is_polygon_or_star(object: &ObjectSnapshot) -> bool {
+    matches!(
+        object,
+        ObjectSnapshot::Primitive(PrimitiveSnapshot {
+            shape: Shape::Polygon { .. } | Shape::Star { .. },
+            ..
+        })
+    )
+}
 
 /// Whether this direction's drag changes the box's local X extent (every
 /// corner, plus E/W).
@@ -354,22 +366,56 @@ pub fn rotate_pivot(box_: &OrientedBox, grabbed: ResizeDirection, shift: bool) -
 /// coincides with `pivot` (no direction to turn through).
 #[must_use]
 pub fn rotate_delta_angle(pivot: Point, down_at: Point, current: Point, ctrl: bool) -> Angle {
+    let Some(raw) = swept_angle(pivot, down_at, current) else {
+        return Angle::from_radians(0.0);
+    };
+    if ctrl {
+        snap_angle(raw).normalized()
+    } else {
+        raw
+    }
+}
+
+/// The rotate drag's delta angle for `object`
+/// (`specs/edit-interaction-polish/` criterion 7): [`rotate_delta_angle`],
+/// except that Ctrl on a polygon or star snaps the angle the maker *sees*
+/// ([`ObjectSnapshot::orientation`]) to the table instead of the turn since
+/// the drag began, so a shape created at a free angle reaches clean angles.
+/// Every other kind, and every drag without Ctrl, keeps the relative rule.
+#[must_use]
+pub fn rotate_delta_for(
+    object: &ObjectSnapshot,
+    pivot: Point,
+    down_at: Point,
+    current: Point,
+    ctrl: bool,
+) -> Angle {
+    if !(ctrl && is_polygon_or_star(object)) {
+        return rotate_delta_angle(pivot, down_at, current, ctrl);
+    }
+    let Some(raw) = swept_angle(pivot, down_at, current) else {
+        return Angle::from_radians(0.0);
+    };
+    let shown = object.orientation().as_radians();
+    let landed = snap_angle(Angle::from_radians(shown + raw.as_radians()).normalized());
+    Angle::from_radians(landed.as_radians() - shown).normalized()
+}
+
+/// The signed angle swept from `pivot`→`down_at` to `pivot`→`current`,
+/// wrapped to `(-π, π]`; `None` when either point is (numerically) at the
+/// pivot or not finite.
+fn swept_angle(pivot: Point, down_at: Point, current: Point) -> Option<Angle> {
     let from = pivot.vector_to(down_at);
     let to = pivot.vector_to(current);
     // `!(x > eps)` also rules out NaN: a non-finite pointer sweeps no
     // angle rather than leaking NaN into `rotation`.
     let usable = |v: Vec2| v.length() > f64::EPSILON && v.length().is_finite();
     if !usable(from) || !usable(to) {
-        return Angle::from_radians(0.0);
+        return None;
     }
     let from_angle = from.y.atan2(from.x);
     let to_angle = to.y.atan2(to.x);
-    let raw = Angle::from_radians(to_angle - from_angle).normalized();
-    if ctrl {
-        snap_angle(raw).normalized()
-    } else {
-        raw
-    }
+    Some(Angle::from_radians(to_angle - from_angle).normalized())
 }
 
 /// The local displacement of `direction`'s handle that makes the box reach
@@ -725,6 +771,106 @@ mod tests {
             "got {} degrees",
             delta.as_radians().to_degrees()
         );
+    }
+
+    fn polygon_at(frame_angle_deg: f64, rotation_deg: f64) -> ObjectSnapshot {
+        use vecmanf_document_core::{Document, PointCount, StarFrame};
+        let document = Document::new(1);
+        let id = document.create_polygon(
+            StarFrame {
+                center: Point::new(0.0, 0.0),
+                radius: Length::from_mm(10.0),
+                angle: Angle::from_radians(frame_angle_deg.to_radians()),
+            },
+            PointCount::new(5).expect("count"),
+        );
+        let turned = document.object(id).expect("exists").rotated(
+            Point::new(0.0, 0.0),
+            Angle::from_radians(rotation_deg.to_radians()),
+        );
+        document.rotate_object(&turned).expect("rotates");
+        document.object(id).expect("exists")
+    }
+
+    /// The point `degrees` clockwise from straight right, one unit from the
+    /// origin.
+    fn at_degrees(degrees: f64) -> Point {
+        let radians = degrees.to_radians();
+        Point::new(radians.cos(), radians.sin())
+    }
+
+    /// `edit-interaction-polish` criterion 7: Ctrl rotate of a polygon snaps
+    /// the shown angle (absolute). Created at 45 and turned by a raw 10 the
+    /// shape ends at 60 (shown 55, nearest stop 60); at 78.7 and a raw 1 it
+    /// ends at 75.
+    #[test]
+    fn ctrl_rotate_of_a_polygon_snaps_the_shown_angle() {
+        let pivot = Point::new(0.0, 0.0);
+        for (orientation, raw, expected) in
+            [(45.0, 10.0, 60.0), (78.7, 1.0, 75.0), (-15.0, 3.0, -15.0)]
+        {
+            let object = polygon_at(orientation, 0.0);
+            let delta = rotate_delta_for(&object, pivot, at_degrees(0.0), at_degrees(raw), true);
+            let landed = Angle::from_radians(orientation.to_radians() + delta.as_radians())
+                .normalized()
+                .as_radians()
+                .to_degrees();
+            assert!(
+                (landed - expected).abs() < 1e-9,
+                "orientation {orientation}, raw {raw}: landed {landed}, expected {expected}"
+            );
+        }
+    }
+
+    /// The shown angle is the sum of the frame angle and the register, so a
+    /// shape with a frame angle of 10 and a rotation of 30 snaps from 40.
+    #[test]
+    fn ctrl_rotate_reads_the_frame_angle_and_the_register_together() {
+        let pivot = Point::new(0.0, 0.0);
+        let object = polygon_at(10.0, 30.0);
+        // Raw 3: shown 43, nearest stop 45.
+        let delta = rotate_delta_for(&object, pivot, at_degrees(0.0), at_degrees(3.0), true);
+        assert!((delta.as_radians().to_degrees() - 5.0).abs() < 1e-9);
+    }
+
+    /// Without Ctrl, and for every other kind, the delta is the relative
+    /// swept angle as before (`object-transform-refinements` criterion 33).
+    #[test]
+    fn rotate_delta_for_keeps_the_relative_rule_without_ctrl_and_for_other_kinds() {
+        use vecmanf_document_core::{AnchorId, AnchorKind, Document, NewAnchor};
+        let pivot = Point::new(0.0, 0.0);
+        let polygon = polygon_at(78.7, 0.0);
+        let free = rotate_delta_for(&polygon, pivot, at_degrees(0.0), at_degrees(37.0), false);
+        assert!((free.as_radians().to_degrees() - 37.0).abs() < 1e-9);
+        let document = Document::new(1);
+        let id = document.create_path(
+            &[NewAnchor {
+                id: AnchorId::new(1, 1),
+                point: Point::new(0.0, 0.0),
+                handle_in: Vec2::ZERO,
+                handle_out: Vec2::ZERO,
+                kind: AnchorKind::Corner,
+            }],
+            false,
+        );
+        let turned = document
+            .object(id)
+            .expect("exists")
+            .rotated(pivot, Angle::from_radians(10.0_f64.to_radians()));
+        document.rotate_object(&turned).expect("rotates");
+        let path = document.object(id).expect("exists");
+        let relative = rotate_delta_for(&path, pivot, at_degrees(0.0), at_degrees(10.0), true);
+        assert!((relative.as_radians().to_degrees() - 15.0).abs() < 1e-9);
+    }
+
+    /// A press at the pivot has no direction to turn through: no snap to an
+    /// absolute angle either, so nothing moves.
+    #[test]
+    fn ctrl_rotate_of_a_polygon_with_no_sweep_stays_put() {
+        let pivot = Point::new(0.0, 0.0);
+        let object = polygon_at(78.7, 0.0);
+        let delta = rotate_delta_for(&object, pivot, at_degrees(0.0), pivot, true);
+        assert!(delta.as_radians().abs() < 1e-12);
     }
     /// Criterion 27 / flag 1: the typed size's local delta, fed back through
     /// the drag's own box arithmetic, reaches exactly that size, for every

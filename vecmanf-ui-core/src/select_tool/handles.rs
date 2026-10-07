@@ -11,11 +11,11 @@ use super::SelectTool;
 use crate::object_selection::ObjectSelection;
 use crate::oriented_box::{OrientedBox, oriented_bounds};
 use crate::param_handles::{centre_drawn, handle_tiers, param_handles};
-use crate::transform_drag::is_polygon_or_star;
 use crate::transform_handle_layout::{
     ALL_EIGHT, CORNERS_FOUR, EditHandle, HandleSpec, TransformHandleTolerances,
     hit_transform_handle, transform_handles,
 };
+use crate::transform_math::is_polygon_or_star;
 
 /// The handle kinds `object` shows (criteria 11, 37, 50): corner resize
 /// only for a polygon or star; skew handles only for a path; the side

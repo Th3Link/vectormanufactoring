@@ -504,16 +504,6 @@ impl WasmSession {
         (self.session.zoom_percent() as i32)
     }
 
-    /// Acceptance criterion 3 / the dedicated "finish path" action.
-    pub fn finish_pen(&mut self) {
-        self.session.finish_pen();
-    }
-
-    /// Escape.
-    pub fn escape(&mut self) {
-        self.session.escape();
-    }
-
     /// Acceptance criterion 13 (Delete/Backspace, or the toolbar).
     pub fn delete_selected(&mut self) {
         self.session.delete_selected();
@@ -700,12 +690,11 @@ impl WasmSession {
     /// buffer (physical) pixel size this method's two callers both
     /// receive; dividing by `device_pixel_ratio` recovers the CSS size
     /// pointer events and `Session::screen_to_document` already agree on.
+    /// Also hands the ratio to the session, which snaps the selection box
+    /// to device pixels with it.
     fn set_viewport_css_size(&mut self, width: u32, height: u32, device_pixel_ratio: f64) {
-        let ratio = if device_pixel_ratio > 0.0 {
-            device_pixel_ratio
-        } else {
-            1.0
-        };
+        self.session.set_device_pixel_ratio(device_pixel_ratio);
+        let ratio = self.session.device_pixel_ratio();
         self.session
             .resize_viewport(f64::from(width) / ratio, f64::from(height) / ratio);
     }

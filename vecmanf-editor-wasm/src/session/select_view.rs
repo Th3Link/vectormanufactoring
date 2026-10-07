@@ -116,7 +116,24 @@ impl Session {
                     .find(|object| object.id() == id)
                     .map(|object| (id, oriented_bounds(object).document_corners()))
             });
-        SelectDecorationInput { selected, hovered }
+        SelectDecorationInput {
+            selected,
+            hovered,
+            device_pixel_ratio: self.device_pixel_ratio,
+            skew_guide: self.skew_guide_now(),
+        }
+    }
+
+    /// The skew fixed-line guide of the drag in flight, if it is a skew drag:
+    /// drawn by the transform overlay, and the box leaves its own dashes off
+    /// the edge it covers.
+    fn skew_guide_now(
+        &self,
+    ) -> Option<(vecmanf_document_core::Point, vecmanf_document_core::Point)> {
+        self.select.skew_guide(
+            self.select_shift_held,
+            SKEW_GUIDE_EXTEND_PX / self.view().scale(),
+        )
     }
 
     /// The handle under the pointer, if any, with its object and box — the
@@ -232,15 +249,12 @@ impl Session {
         } else {
             None
         };
-        let skew_guide = self.select.skew_guide(
-            self.select_shift_held,
-            SKEW_GUIDE_EXTEND_PX / self.view().scale(),
-        );
         TransformDecorationInput {
             handles,
             pivot_marker: live_pivot.or(preview),
-            skew_guide,
+            skew_guide: self.skew_guide_now(),
             param_guides,
+            device_pixel_ratio: self.device_pixel_ratio,
         }
     }
 
@@ -368,7 +382,7 @@ impl Session {
             }
             EditHandle::Rotate(_) => {
                 let live = self.select_live_transform()?;
-                format_degrees(live.rotation().as_radians().to_degrees())
+                format_degrees(live.orientation().as_radians().to_degrees())
             }
             EditHandle::Resize(_) => match &self.select_live_transform()? {
                 ObjectSnapshot::Primitive(p)
@@ -462,6 +476,46 @@ mod tests {
         session.pointer_down(Point::new(0.0, 5.0), false);
         session.pointer_up(Point::new(0.0, 5.0), false, false);
         (session, id)
+    }
+
+    /// `edit-interaction-polish` criterion 65: the device pixel ratio the host
+    /// reports reaches the selection decoration, so an axis-aligned box can
+    /// snap to whole device pixels; a ratio that is not a positive finite
+    /// number reads as 1.
+    #[test]
+    fn the_device_pixel_ratio_reaches_the_selection_decoration() {
+        let (mut session, _) = session_with_selected_rect();
+        assert!((session.select_decoration_input().device_pixel_ratio - 1.0).abs() < 1e-12);
+        session.set_device_pixel_ratio(1.5);
+        assert!((session.select_decoration_input().device_pixel_ratio - 1.5).abs() < 1e-12);
+        for bad in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            session.set_device_pixel_ratio(bad);
+            assert!((session.select_decoration_input().device_pixel_ratio - 1.0).abs() < 1e-12);
+        }
+    }
+
+    /// Criterion 63 end to end: a selected rectangle's box is dashed (more
+    /// than the four solid quads) and the hover box of another is solid.
+    #[test]
+    fn a_selected_object_draws_a_dashed_box() {
+        let (session, _) = session_with_selected_rect();
+        let solid = vecmanf_render_core::build_select_draw_list(
+            session.view(),
+            &SelectDecorationInput {
+                hovered: session.select_decoration_input().selected.first().copied(),
+                ..SelectDecorationInput::default()
+            },
+        );
+        assert_eq!(
+            solid.triangle_count(),
+            8,
+            "the hover box is four solid quads"
+        );
+        let dashed = vecmanf_render_core::build_select_draw_list(
+            session.view(),
+            &session.select_decoration_input(),
+        );
+        assert!(dashed.triangle_count() > solid.triangle_count());
     }
 
     /// Customer decision 2026-10-06 (reverses criterion 27): choosing a
@@ -872,6 +926,25 @@ mod tests {
             .skew_guide
             .unwrap();
         assert!((guide.0.y - 50.0).abs() < 1e-9, "Shift: through the centre");
+        // Criterion 68: the box learns the guide, and under a fixed-edge guide
+        // leaves its own dashes off that edge (fewer triangles); the centre
+        // line under Shift covers none of its edges.
+        let box_triangles = |session: &Session| {
+            vecmanf_render_core::build_select_draw_list(
+                session.view(),
+                &session.select_decoration_input(),
+            )
+            .triangle_count()
+        };
+        assert_eq!(session.select_decoration_input().skew_guide, Some(guide));
+        let centre_line = box_triangles(&session);
+        session.modifiers_changed(false, false);
+        let fixed_edge = box_triangles(&session);
+        session.escape();
+        assert!(session.select_decoration_input().skew_guide.is_none());
+        let at_rest = box_triangles(&session);
+        assert_eq!(centre_line, at_rest, "Shift: the centre line cuts no edge");
+        assert!(fixed_edge < at_rest, "{fixed_edge} vs {at_rest}");
         session.escape();
         assert!(
             session

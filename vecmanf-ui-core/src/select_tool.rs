@@ -34,7 +34,7 @@ mod preview;
 use entry::OpenEntry;
 use handles::sole_selected;
 
-pub use entry::double_click;
+pub use entry::{EntryKey, KeyEntryRefusal, double_click};
 pub use preview::LiveEdit;
 
 /// A move offset within this (millimetres) of zero is no move.

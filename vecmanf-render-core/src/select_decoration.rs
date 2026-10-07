@@ -1,65 +1,17 @@
-//! The Select tool's own decoration geometry
-//! (`specs/0004-canvas-navigation-and-selection/specification.md`'s "a new,
-//! unified 'selected' indicator": a plain bounding-box outline on every
-//! object type, selected or hovered, with no shape handles and no path
-//! nodes — acceptance criteria 14, 15, 20).
+//! Draws the Select tool's transform handles, pivot marker and guides.
 //!
-//! [`SelectDecorationInput`] mirrors [`crate::DecorationInput`]'s own
-//! reason for existing: this crate
-//! cannot read `vecmanf-ui-core`'s `ObjectSelection` or `object_bounds`
-//! directly (ADR 0011 §3), so each selected/hovered object's own bounding
-//! box reaches here as four document-space corners (oriented to the
-//! object's own rotation, `object-transform` acceptance criterion 18),
-//! computed by `vecmanf_ui_core::oriented_bounds` and passed through by
-//! `vecmanf-editor-wasm` — the same way `primitive-shapes` already passes
-//! shape-handle positions.
+//! The selection and hover boxes live in [`crate::select_box`]. The handles
+//! reach here as this crate's own minimal [`TransformHandleGlyph`] values,
+//! because it cannot read `vecmanf-ui-core`'s `EditHandle` (ADR 0011 §3).
 
-use vecmanf_document_core::{Angle, NodeId, Point, Vec2, ViewTransform};
+use vecmanf_document_core::{Angle, Point, Vec2, ViewTransform};
 
 use crate::color::RgbaColor;
-use crate::glyphs::{self, DrawList, quad_outline};
+use crate::glyphs::{self, DrawList};
+use crate::screen_px_to_mm;
+use crate::select_box;
 use crate::shape_preview;
 use crate::theme;
-
-/// One object's selection box: its four corners in document space, in
-/// order around the perimeter — oriented to the object's own rotation
-/// (`vecmanf_ui_core::OrientedBox::document_corners`), which for an
-/// unrotated object is the plain axis-aligned box slice 4 shipped.
-pub type SelectionBox = [Point; 4];
-
-/// What the Select tool decorates this frame: every currently selected
-/// object's own box (plural — a heterogeneous multi-select shows each
-/// object's own real box simultaneously, never one merged box,
-/// `docs/design-system.md`'s "Mixed-state display on multi-select"
-/// extension), plus a hovered-but-not-yet-selected object's box.
-#[derive(Debug, Clone, Default)]
-pub struct SelectDecorationInput {
-    /// Selected objects, each with its own id and box.
-    pub selected: Vec<(NodeId, SelectionBox)>,
-    /// A hovered, not-yet-selected object's id and box, if any.
-    pub hovered: Option<(NodeId, SelectionBox)>,
-}
-
-fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
-    px / view.scale()
-}
-
-/// Builds the Select tool's decoration geometry for this frame: one
-/// `--accent` box per selected object, plus a `--accent-hover` box for a
-/// hovered-but-unselected one (`docs/design-system.md`'s "Bounding-box
-/// selection outline").
-#[must_use]
-pub fn build(view: ViewTransform, input: &SelectDecorationInput) -> DrawList {
-    let width_mm = screen_px_to_mm(view, theme::BOUNDING_BOX_OUTLINE_PX);
-    let mut list = DrawList::default();
-    for &(_, corners) in &input.selected {
-        list.extend(quad_outline(corners, width_mm, theme::ACCENT));
-    }
-    if let Some((_, corners)) = input.hovered {
-        list.extend(quad_outline(corners, width_mm, theme::ACCENT_HOVER));
-    }
-    list
-}
 
 /// Which glyph a transform handle draws.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -124,6 +76,10 @@ pub struct TransformDecorationInput {
     /// radius handle (`docs/design-system.md`, "Parameter handle guide"):
     /// corner first, handle second.
     pub param_guides: Vec<(Point, Point)>,
+    /// `window.devicePixelRatio`: the skew guide snaps to whole device pixels
+    /// with it, as the selection box does. Not a positive finite number (and
+    /// the default 0) reads as 1.
+    pub device_pixel_ratio: f64,
 }
 
 /// A hollow resize-handle glyph: `--accent` outline on a rounded square
@@ -395,13 +351,15 @@ pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationI
         ));
     }
     if let Some((from, to)) = input.skew_guide {
+        let (from, to, width_px) =
+            select_box::snap_guide_line(view, from, to, input.device_pixel_ratio);
         list.extend(shape_preview::dashed_guide(
             from,
             to,
-            screen_px_to_mm(view, theme::TRANSFORM_SKEW_GUIDE_WIDTH_PX),
+            screen_px_to_mm(view, width_px),
             theme::TRANSFORM_SKEW_GUIDE_COLOR,
-            screen_px_to_mm(view, theme::GUIDE_DASH_PX),
-            screen_px_to_mm(view, theme::GUIDE_GAP_PX),
+            screen_px_to_mm(view, theme::SKEW_GUIDE_DASH_PX),
+            screen_px_to_mm(view, theme::SKEW_GUIDE_GAP_PX),
         ));
     }
     if let Some(pivot) = input.pivot_marker {
@@ -417,105 +375,6 @@ pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationI
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vecmanf_document_core::NodeId;
-
-    fn fixture_id() -> NodeId {
-        // `NodeId` has no public constructor outside `document-core`; any
-        // real one round-tripped through a `Document` is fine here, since
-        // these tests never read the id back, only the geometry it keys.
-        let document = vecmanf_document_core::Document::new(1);
-        document.create_rect(vecmanf_document_core::RectBounds {
-            origin: Point::new(0.0, 0.0),
-            width: vecmanf_document_core::Length::from_mm(1.0),
-            height: vecmanf_document_core::Length::from_mm(1.0),
-        })
-    }
-
-    fn axis_box(x0: f64, y0: f64, x1: f64, y1: f64) -> SelectionBox {
-        [
-            Point::new(x0, y0),
-            Point::new(x1, y0),
-            Point::new(x1, y1),
-            Point::new(x0, y1),
-        ]
-    }
-
-    /// Acceptance criterion 18 / UX notes: a rotated object's outline is
-    /// drawn through its own four (turned) corners, not their axis-
-    /// aligned bounds — a 45° diamond's outline reaches its apex at
-    /// `(0, -r)` and never the bounding square's corner `(r, -r)`.
-    #[test]
-    fn a_rotated_selection_box_draws_through_its_own_corners_not_its_bounds() {
-        let r = 10.0;
-        let diamond: SelectionBox = [
-            Point::new(0.0, -r),
-            Point::new(r, 0.0),
-            Point::new(0.0, r),
-            Point::new(-r, 0.0),
-        ];
-        let input = SelectDecorationInput {
-            selected: vec![(fixture_id(), diamond)],
-            hovered: None,
-        };
-        let list = build(ViewTransform::identity(), &input);
-        let reaches = |target: Point| {
-            list.triangles
-                .iter()
-                .any(|v| v.position.vector_to(target).length() < 1.0)
-        };
-        assert!(reaches(Point::new(0.0, -r)), "apex drawn");
-        assert!(
-            !reaches(Point::new(r, -r)),
-            "bounding-square corner not drawn"
-        );
-    }
-
-    #[test]
-    fn no_selection_and_no_hover_draws_nothing() {
-        let list = build(ViewTransform::identity(), &SelectDecorationInput::default());
-        assert_eq!(list.triangles.len(), 0);
-    }
-
-    #[test]
-    fn a_selected_object_draws_a_box() {
-        let input = SelectDecorationInput {
-            selected: vec![(fixture_id(), axis_box(0.0, 0.0, 10.0, 10.0))],
-            hovered: None,
-        };
-        let list = build(ViewTransform::identity(), &input);
-        assert_ne!(list.triangles.len(), 0);
-    }
-
-    #[test]
-    fn a_hovered_object_draws_a_box_too() {
-        let input = SelectDecorationInput {
-            selected: vec![],
-            hovered: Some((fixture_id(), axis_box(0.0, 0.0, 10.0, 10.0))),
-        };
-        let list = build(ViewTransform::identity(), &input);
-        assert_ne!(list.triangles.len(), 0);
-    }
-
-    /// Acceptance criterion 17's multi-select UX note: two selected
-    /// objects draw two independent boxes, not one merged box — strictly
-    /// more geometry than either alone.
-    #[test]
-    fn two_selected_objects_each_draw_their_own_box() {
-        let one = SelectDecorationInput {
-            selected: vec![(fixture_id(), axis_box(0.0, 0.0, 10.0, 10.0))],
-            hovered: None,
-        };
-        let two = SelectDecorationInput {
-            selected: vec![
-                (fixture_id(), axis_box(0.0, 0.0, 10.0, 10.0)),
-                (fixture_id(), axis_box(50.0, 50.0, 60.0, 60.0)),
-            ],
-            hovered: None,
-        };
-        let one_list = build(ViewTransform::identity(), &one);
-        let two_list = build(ViewTransform::identity(), &two);
-        assert!(two_list.triangle_count() > one_list.triangle_count());
-    }
 
     /// No handles and no pivot marker draws nothing (acceptance
     /// criterion 2: multi/no selection shows no transform handles).
@@ -550,6 +409,7 @@ mod tests {
             pivot_marker: None,
             skew_guide: None,
             param_guides: Vec::new(),
+            ..TransformDecorationInput::default()
         };
         let list = build_transform_handles(ViewTransform::identity(), &input);
         assert_ne!(list.triangles.len(), 0);
@@ -571,6 +431,7 @@ mod tests {
                 pivot_marker: None,
                 skew_guide: None,
                 param_guides: Vec::new(),
+                ..TransformDecorationInput::default()
             };
             build_transform_handles(ViewTransform::identity(), &input)
         };
@@ -600,12 +461,14 @@ mod tests {
             pivot_marker: Some(Point::new(50.0, 50.0)),
             skew_guide: None,
             param_guides: Vec::new(),
+            ..TransformDecorationInput::default()
         };
         let at_handle = TransformDecorationInput {
             handles: vec![handle(0.0, 0.0), handle(10.0, 10.0)],
             pivot_marker: Some(Point::new(0.0, 0.0)),
             skew_guide: None,
             param_guides: Vec::new(),
+            ..TransformDecorationInput::default()
         };
         let view = ViewTransform::identity();
         let elsewhere = build_transform_handles(view, &with_pivot_elsewhere);
@@ -621,6 +484,7 @@ mod tests {
                 pivot_marker: None,
                 skew_guide: None,
                 param_guides: Vec::new(),
+                ..TransformDecorationInput::default()
             },
         );
         assert_eq!(
@@ -637,6 +501,7 @@ mod tests {
             pivot_marker: Some(Point::new(5.0, 5.0)),
             skew_guide: None,
             param_guides: Vec::new(),
+            ..TransformDecorationInput::default()
         };
         let list = build_transform_handles(ViewTransform::identity(), &input);
         assert_ne!(list.triangles.len(), 0);
@@ -658,6 +523,7 @@ mod tests {
                 pivot_marker: None,
                 skew_guide: None,
                 param_guides: Vec::new(),
+                ..TransformDecorationInput::default()
             },
         )
     }
@@ -736,10 +602,11 @@ mod tests {
             pivot_marker: None,
             skew_guide: Some((Point::new(0.0, 0.0), Point::new(70.0, 0.0))),
             param_guides: Vec::new(),
+            ..TransformDecorationInput::default()
         };
         let list = build_transform_handles(ViewTransform::identity(), &input);
-        // 70 px at 4 on / 3 off: ten dashes of two triangles each.
-        assert_eq!(list.triangle_count(), 20);
+        // 70 px at 2 on / 2 off (criterion 68): eighteen dashes of two triangles each.
+        assert_eq!(list.triangle_count(), 36);
     }
 
     fn glyph_list(kind: TransformGlyphKind, dragging: bool, hovered: bool) -> DrawList {
@@ -870,5 +737,80 @@ mod tests {
                 .iter()
                 .all(|v| v.color == theme::SHAPE_HANDLE_GUIDE)
         );
+    }
+
+    /// Criterion 68: the axis-aligned guide is pixel-snapped like the box (one
+    /// whole device row or column, full accent), so it no longer renders as
+    /// pale blocks; the ends sit on whole device pixels.
+    #[test]
+    fn the_skew_guide_sits_on_whole_device_pixels() {
+        for ratio in [1.0, 1.5, 2.0, 3.0] {
+            let input = TransformDecorationInput {
+                skew_guide: Some((Point::new(-5.3, 40.7), Point::new(126.2, 40.7))),
+                device_pixel_ratio: ratio,
+                ..TransformDecorationInput::default()
+            };
+            let list = build_transform_handles(ViewTransform::identity(), &input);
+            assert_ne!(list.triangle_count(), 0);
+            let width = crate::select_box::device_line_width(ratio);
+            for v in &list.triangles {
+                assert_eq!(v.color, theme::TRANSFORM_SKEW_GUIDE_COLOR);
+                let y = v.position.y * ratio;
+                // Across the line the edges are whole device pixel boundaries.
+                assert!((y - y.round()).abs() < 1e-6, "ratio {ratio}: y {y}");
+            }
+            let ys: Vec<f64> = list
+                .triangles
+                .iter()
+                .map(|v| v.position.y * ratio)
+                .collect();
+            let span = ys.iter().copied().fold(f64::MIN, f64::max)
+                - ys.iter().copied().fold(f64::MAX, f64::min);
+            assert!(
+                (span - width).abs() < 1e-6,
+                "ratio {ratio}: {span} device px thick"
+            );
+        }
+    }
+
+    /// At ratio 1 every dash of the guide is two whole pixels with two whole
+    /// pixels between, so none renders as a half-covered block.
+    #[test]
+    fn the_snapped_guide_dashes_are_whole_pixels_at_ratio_one() {
+        let input = TransformDecorationInput {
+            skew_guide: Some((Point::new(-5.3, 40.7), Point::new(126.2, 40.7))),
+            device_pixel_ratio: 1.0,
+            ..TransformDecorationInput::default()
+        };
+        let list = build_transform_handles(ViewTransform::identity(), &input);
+        for v in &list.triangles {
+            assert!(
+                (v.position.x - v.position.x.round()).abs() < 1e-6,
+                "{}",
+                v.position.x
+            );
+        }
+    }
+
+    /// A rotated guide is not snapped: the same dashes the guide drew before.
+    #[test]
+    fn a_rotated_skew_guide_keeps_its_true_line() {
+        let (from, to) = (Point::new(3.3, 4.4), Point::new(90.1, 52.7));
+        let input = TransformDecorationInput {
+            skew_guide: Some((from, to)),
+            device_pixel_ratio: 2.0,
+            ..TransformDecorationInput::default()
+        };
+        let view = ViewTransform::identity();
+        let got = build_transform_handles(view, &input);
+        let want = shape_preview::dashed_guide(
+            from,
+            to,
+            1.0,
+            theme::TRANSFORM_SKEW_GUIDE_COLOR,
+            theme::SKEW_GUIDE_DASH_PX,
+            theme::SKEW_GUIDE_GAP_PX,
+        );
+        assert_eq!(got.triangles, want.triangles);
     }
 }

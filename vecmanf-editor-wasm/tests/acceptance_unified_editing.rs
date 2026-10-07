@@ -375,12 +375,25 @@ fn ellipse_scene(pct: i64, w_px: f64, h_px: f64, th: f64) -> Scene {
     Scene { s, fr, k }
 }
 
+/// Triangles of the draw list that are white: the ground of every resize,
+/// centre and parameter glyph, and nothing else the Select tool draws.
+///
+/// The count measures the handle tiers. It does not count every triangle
+/// because the dashed selection box (`edit-interaction-polish` criteria 63,
+/// 64) changes its triangle count with the box's size on screen, which would
+/// mask the tiers; the box and the arrows are never white.
 fn tri_count(s: &Session) -> usize {
-    s.draw_list().triangle_count()
+    let white = vecmanf_render_core::RgbaColor::WHITE;
+    s.draw_list()
+        .triangles
+        .iter()
+        .filter(|vertex| vertex.color == white)
+        .count()
+        / 3
 }
 
-/// Triangles of the selection decoration (box + handles): count with the
-/// object selected minus the count with nothing selected.
+/// White triangles of the selection decoration (the handle glyphs): count with
+/// the object selected minus the count with nothing selected.
 fn decor_count(sc: &mut Scene) -> usize {
     // Move the pointer far from everything so no hover state is involved.
     let far = pt(500.0, 500.0);
@@ -3033,12 +3046,17 @@ fn ac16_primitives_get_centre_move_rotate_and_typed_entries() {
         let from = sc.fr.rot_corner(1.0, -1.0);
         let to = sc.fr.polar(150.0, -FRAC_PI_2 + 0.50);
         drag_mod(&mut sc.s, from, to, false, true);
-        let rot = prim_of(&sc.s, 0).rotation.as_radians();
-        let deg = rot.to_degrees();
-        let stops = [0.0, 15.0, 22.5, 30.0, 45.0, 60.0, 67.5, 75.0, 90.0];
+        // `edit-interaction-polish` criterion 7: a polygon or star snaps the
+        // shown angle (absolute), every other kind the turn since the press;
+        // both are the shown angle here because the others start at 0.
+        let shown = ObjectSnapshot::Primitive(prim_of(&sc.s, 0)).orientation();
+        let deg = shown.as_radians().to_degrees();
+        // The shown angle is a fixed point of the real snap table (every stop
+        // of the 15 and 22.5 degree sets through all four quadrants).
+        let snapped = vecmanf_ui_core::snap_angle(shown).as_radians().to_degrees();
         assert!(
-            stops.iter().any(|s| (deg.abs() - s).abs() < 1e-6),
-            "kind {build}: snapped {deg}"
+            (snapped - deg).abs() < 1e-6,
+            "kind {build}: shown {deg} is not a snap stop (nearest {snapped})"
         );
         // typed angle: double-click a corner rotate handle
         let mut sc = mk(0.0);
@@ -3049,9 +3067,14 @@ fn ac16_primitives_get_centre_move_rotate_and_typed_entries() {
             sc.s.commit_transform_entry("37", "", 0),
             EntryOutcome::Committed
         );
+        // The typed angle is the shown angle (`edit-interaction-polish`
+        // criterion 7): for a star it is the frame angle plus the register.
         assert!(
             near(
-                prim_of(&sc.s, 0).rotation.as_radians().to_degrees(),
+                ObjectSnapshot::Primitive(prim_of(&sc.s, 0))
+                    .orientation()
+                    .as_radians()
+                    .to_degrees(),
                 37.0,
                 1e-6
             ),

@@ -10,8 +10,8 @@
 
 use vecmanf_document_core::{Document, InnerRatio, NodeId, PathSnapshot, Point, PointCount, Shape};
 use vecmanf_ui_core::{
-    CreateOutcome, EllipseTool, NodeTool, ObjectSelection, PolyStarMode, PolygonStarTool,
-    RectangleTool,
+    CreateOutcome, EllipseTool, Modifiers, NodeTool, ObjectSelection, PolyStarMode,
+    PolygonStarTool, RectangleTool,
 };
 
 fn pt(x: f64, y: f64) -> Point {
@@ -134,13 +134,13 @@ fn ac10_point_count_control_persists_across_shapes_not_reset() {
     tool.set_point_count(PointCount::new(9).unwrap());
 
     tool.pointer_down(pt(0.0, 0.0));
-    let up1 = tool.pointer_up(&document, pt(10.0, 0.0));
+    let up1 = tool.pointer_up(&document, pt(10.0, 0.0), Modifiers::NONE);
     let CreateOutcome::Created(id1) = up1 else {
         panic!("expected Created")
     };
 
     tool.pointer_down(pt(100.0, 0.0));
-    let up2 = tool.pointer_up(&document, pt(110.0, 0.0));
+    let up2 = tool.pointer_up(&document, pt(110.0, 0.0), Modifiers::NONE);
     let CreateOutcome::Created(id2) = up2 else {
         panic!("expected Created")
     };
@@ -167,7 +167,7 @@ fn ac11_polygon_drag_centers_at_a_one_vertex_at_b() {
     let mut tool = PolygonStarTool::new();
     tool.set_mode(PolyStarMode::Polygon);
     tool.pointer_down(pt(0.0, 0.0));
-    let up = tool.pointer_up(&document, pt(10.0, 0.0));
+    let up = tool.pointer_up(&document, pt(10.0, 0.0), Modifiers::NONE);
     let CreateOutcome::Created(id) = up else {
         panic!("expected Created")
     };
@@ -183,7 +183,7 @@ fn ac11_zero_movement_polygon_drag_creates_nothing() {
     let document = Document::new(1);
     let mut tool = PolygonStarTool::new();
     tool.pointer_down(pt(3.0, 3.0));
-    let up = tool.pointer_up(&document, pt(3.0, 3.0));
+    let up = tool.pointer_up(&document, pt(3.0, 3.0), Modifiers::NONE);
     assert_eq!(up, CreateOutcome::NoOp);
     assert_eq!(document.object_ids().len(), 0);
 }
@@ -195,7 +195,7 @@ fn ac12_star_drag_creates_outer_and_inner_vertices_at_the_set_ratio() {
     tool.set_mode(PolyStarMode::Star);
     tool.set_ratio(InnerRatio::new(0.3).unwrap());
     tool.pointer_down(pt(0.0, 0.0));
-    let up = tool.pointer_up(&document, pt(10.0, 0.0));
+    let up = tool.pointer_up(&document, pt(10.0, 0.0), Modifiers::NONE);
     let CreateOutcome::Created(id) = up else {
         panic!("expected Created")
     };
@@ -215,7 +215,7 @@ fn ac12_zero_movement_star_drag_creates_nothing() {
     let mut tool = PolygonStarTool::new();
     tool.set_mode(PolyStarMode::Star);
     tool.pointer_down(pt(9.0, 9.0));
-    let up = tool.pointer_up(&document, pt(9.0, 9.0));
+    let up = tool.pointer_up(&document, pt(9.0, 9.0), Modifiers::NONE);
     assert_eq!(up, CreateOutcome::NoOp);
     assert_eq!(document.object_ids().len(), 0);
 }

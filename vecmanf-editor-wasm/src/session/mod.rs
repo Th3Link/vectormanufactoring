@@ -21,6 +21,7 @@
 //! `impl` block in the same crate would.
 
 mod draw;
+mod keys;
 mod navigation;
 mod node;
 mod open_error;
@@ -35,9 +36,11 @@ use vecmanf_document_core::{
     Document, Length, NodeId, ObjectSnapshot, OpenError, Point, SaveError, Tolerance,
 };
 use vecmanf_ui_core::{
-    AnchorIdMinter, EllipseTool, Hit, HitTolerances, NodeTool, ObjectSelection, PenTool,
+    AnchorIdMinter, EllipseTool, Hit, HitTolerances, Modifiers, NodeTool, ObjectSelection, PenTool,
     PolygonStarTool, RectangleTool, SelectTool, Viewport, hit_test,
 };
+
+pub use keys::{EscapeStep, KeyHint, KeyInput, KeyOutcome};
 
 #[cfg(target_arch = "wasm32")]
 pub use open_error::map_open_error;
@@ -159,6 +162,16 @@ pub struct Session {
     /// (`specs/unified-object-editing` criterion 15). Cleared by the first
     /// [`Session::objects`] after the drag ends.
     drag_objects: std::cell::RefCell<Option<Vec<ObjectSnapshot>>>,
+    /// `window.devicePixelRatio` as of the last attach or resize, so the
+    /// selection box can snap to whole device pixels
+    /// (`edit-interaction-polish` criterion 65). Always positive and finite.
+    device_pixel_ratio: f64,
+    /// Whether the pointer button is down: set by a press, cleared by a
+    /// release or [`Session::pointer_cancelled`]. Only the Escape cascade
+    /// reads it, to stop at the drag while the button is held
+    /// (`specs/edit-interaction-polish/` criterion 49); the key gate reads
+    /// each tool's own drag state instead.
+    button_down: bool,
 }
 
 impl Session {
@@ -190,6 +203,8 @@ impl Session {
             select_shift_held: false,
             select_ctrl_held: false,
             drag_objects: std::cell::RefCell::new(None),
+            device_pixel_ratio: 1.0,
+            button_down: false,
         }
     }
 
@@ -218,6 +233,8 @@ impl Session {
             select_shift_held: false,
             select_ctrl_held: false,
             drag_objects: std::cell::RefCell::new(None),
+            device_pixel_ratio: 1.0,
+            button_down: false,
         })
     }
 
@@ -331,6 +348,7 @@ impl Session {
         // chance to commit against the selection it was previewed
         // against, if the mouse was released outside the slider itself.
         self.flush_select_bar_preview();
+        self.button_down = true;
         match self.tool {
             Tool::Select => {
                 self.select_pointer_down(point, shift);
@@ -394,7 +412,7 @@ impl Session {
                 );
             }
             Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
-                self.shape_pointer_move(point, constrain);
+                self.shape_pointer_move(point, Modifiers::new(shift, constrain));
             }
             Tool::Pen => {}
         }
@@ -415,10 +433,11 @@ impl Session {
     /// `object-transform`, by the Select tool's own resize/rotate commit
     /// alongside `shift` (acceptance criteria 5, 7, 16, 17).
     pub fn pointer_up(&mut self, point: Point, shift: bool, constrain: bool) {
+        self.button_down = false;
         let Some(point) = sanitized_point(point) else {
             // A release at a non-finite position cannot be committed to
             // anything; cancel the gesture rather than write NaN.
-            self.escape();
+            self.cancel_gesture();
             return;
         };
         match self.tool {
@@ -434,47 +453,8 @@ impl Session {
                 self.node.pointer_up(&self.document, point);
             }
             Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
-                self.shape_pointer_up(point, constrain);
+                self.shape_pointer_up(point, Modifiers::new(shift, constrain));
             }
-        }
-    }
-
-    /// Escape: discards the in-progress pen path (acceptance criterion
-    /// 4), clears the node tool's selection, or cancels whichever shape
-    /// tool's in-progress drag, depending on the active tool — never
-    /// more than one, matching `specification.md`'s own rule that
-    /// Escape only ever touches the active tool's own state.
-    pub fn escape(&mut self) {
-        match self.tool {
-            Tool::Select => {
-                self.select.escape();
-                self.select.cancel_entry();
-            }
-            Tool::Pen => {
-                self.pen.escape();
-            }
-            Tool::Node => {
-                self.node.escape();
-            }
-            Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
-                self.shape_escape();
-            }
-        }
-    }
-
-    /// Acceptance criteria 19, 21 (Delete/Backspace, or the contextual
-    /// toolbar's Delete button): removes every selected object when the
-    /// Select or Node tool is active. A no-op for every other tool.
-    pub fn delete_selected(&mut self) {
-        self.flush_select_bar_preview();
-        match self.tool {
-            Tool::Select => {
-                let objects = self.objects();
-                self.select
-                    .delete_selected(&self.document, &objects, &mut self.selection);
-            }
-            Tool::Node => self.node.delete_selected(&self.document),
-            Tool::Pen | Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {}
         }
     }
 
@@ -1015,6 +995,29 @@ mod tests {
         session.split_selected();
 
         assert_eq!(session.paths().len(), 2, "two separate objects now");
+        // `edit-interaction-polish` criteria 50 and 52 (superseding `0006`
+        // criterion 15): exactly one of the two coincident nodes is selected,
+        // so Join (needs two) and Split (needs an interior node) are off.
+        let state = session.node_toolbar_state();
+        assert!(!state.can_join && !state.can_split);
+        assert!(state.can_delete, "one node is selected");
+        // A drag from the shared point moves one end only.
+        session.pointer_down(Point::new(10.0, 0.0), false);
+        session.pointer_up(Point::new(10.0, 8.0), false, false);
+        let ends: Vec<Point> = session
+            .paths()
+            .iter()
+            .flat_map(|path| {
+                [
+                    path.anchors[0].point,
+                    path.anchors[path.anchors.len() - 1].point,
+                ]
+            })
+            .filter(|p| (p.x - 10.0).abs() < 1e-9)
+            .collect();
+        assert_eq!(ends.len(), 2, "both pieces still end at x = 10");
+        assert!(ends.contains(&Point::new(10.0, 0.0)));
+        assert!(ends.contains(&Point::new(10.0, 8.0)));
     }
 
     /// `specs/0006-path-merge-split-and-node-types/specification.md`

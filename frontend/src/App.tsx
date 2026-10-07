@@ -154,7 +154,12 @@ function App() {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
       <div className="relative flex min-h-0 flex-1">
-        <ToolRail tool={editor.tool} onSelect={editor.setTool} />
+        <ToolRail
+          tool={editor.tool}
+          selectionCount={editor.selectionCount}
+          onSelect={editor.setTool}
+          onReturnFocus={() => editor.containerRef.current?.focus()}
+        />
         <Canvas editor={editor} />
         {/* Contextual tool bar: floats over the canvas, right of the tool
          * rail, so showing/hiding it never resizes the canvas
