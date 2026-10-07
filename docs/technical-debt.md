@@ -494,6 +494,18 @@ frame, not only from drag frames. The `Session.drag_objects` snapshot assumes
 the document does not change under a Select drag: no remote merge and no undo
 may run during one. Revisit it when sync or undo reaches the session.
 
+**Measured 2026-10-07 (`stroke-and-fill-styling` PR 1, release build, same
+machine, same document):** every object now reads about 13 more keys (the style
+schema, `curvyo-document-core/src/style_codec.rs`). The `unified_object_editing`
+benchmark gives 16.5 to 21.6 ms per frame at rest (main: 16.6 to 17.4 ms on
+this machine) and 13.8 to 15.6 ms for the 200-object move frame (main: 12.1 to
+14.1 ms). A new `#[ignore]` benchmark, `curvyo-editor-wasm/tests/style_read_cost.rs`,
+gives 14 ms per frame at rest for the 200 default-styled objects and 16 ms with
+every style key set on every object (dash, join, cap, a 2-stop gradient). That
+is below the 25 ms line the architect set (readiness check, section 5), so the
+draw-list cache stays deferred for now; PR 2 adds fills and dashes, which are
+tessellated every frame, and measures again.
+
 ## The canvas does not react to a `devicePixelRatio` change with no resize event
 
 The fix below sizes the backing store once, at attach and on every
