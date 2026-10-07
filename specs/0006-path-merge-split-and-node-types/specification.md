@@ -1,6 +1,7 @@
 # Path merge/split and a third node type
 
-Status: Ready
+Status: Done
+Done, with: criterion 15 (both nodes selected after Split) is superseded by `edit-interaction-polish` criteria 50 to 52 (one node selected).
 Priority: Must
 Origin: Customer
 
@@ -439,4 +440,4 @@ mechanism (rename-in-place vs. new variant plus a reader fixup) is the
 architect's and implementer's call, not decided here. Flagging only that the
 weight exists, matching how `path-node-editing`'s own `adrs.md` flagged its
 anchor-schema decisions to the lead.
-PR: (none yet)
+PR: https://github.com/curvyo/curvyo/pull/26

@@ -402,4 +402,4 @@ same no-layout-shift rule already established 2026-10-05).
 
 ## Links
 Requirements: R-EDIT-010, R-EDIT-011 (`docs/requirements.md`)
-PR: https://github.com/Th3Link/vectormanufactoring/pull/25
+PR: https://github.com/curvyo/curvyo/pull/25

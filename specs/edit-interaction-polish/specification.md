@@ -1,6 +1,7 @@
 # Edit interaction polish: star and polygon angle, typed skew and move, copy and one-axis move, Escape, Split selection, keyboard shortcuts
 
-Status: Ready
+Status: Done
+Done, with: the selection box of a polygon or star shipped without turning with the shape (criterion 1's box part, completed by `polygon-star-box-refit`, #49); the optional "Edge to axis" button was decided out of scope; Ctrl+A, Ctrl+D, Ctrl+Z, Ctrl+Y, Ctrl+K, H and V stay reserved, arrow-key move and the `?` overlay are follow-up stories.
 Priority: Must
 Origin: Customer
 
@@ -1247,4 +1248,4 @@ Builds on: `specs/unified-object-editing/`, `specs/object-transform-refinements/
 `specs/shape-creation-from-center/`, `specs/0002-path-node-editing/`,
 `specs/0006-path-merge-split-and-node-types/`, `specs/advanced-selection/`,
 `docs/design-system.md`
-PR:
+PR: https://github.com/curvyo/curvyo/pull/42 (parts 1 and 2), https://github.com/curvyo/curvyo/pull/45 (part 3), https://github.com/curvyo/curvyo/pull/46 (part 4); https://github.com/curvyo/curvyo/pull/43 was closed as superseded by #42

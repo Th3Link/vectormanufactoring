@@ -432,4 +432,4 @@ outline, and the `R`/`E`/`*` shortcuts and rail order above.
 
 ## Links
 Requirements: R-EDIT-002, R-EDIT-004 (`docs/requirements.md`)
-PR: https://github.com/Th3Link/vectormanufactoring/pull/10
+PR: https://github.com/curvyo/curvyo/pull/10

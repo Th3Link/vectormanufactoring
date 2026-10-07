@@ -149,6 +149,12 @@ and box direction can differ from the shape's before the conversion. Fix that
 with one more argument to `convert_to_paths` (write `orientation()` as the path's
 `rotation`) when someone asks. See `specs/polygon-star-box-refit/adrs.md`.
 
+*2026-10-07 (architect, `0007-stroke-and-fill-styling`):* a gradient makes this
+visible. A polygon's or star's gradient box is its circumscribed square, a path's
+is tight, so "Object to path" re-fits the gradient of a polygon or star (a
+rectangle or ellipse does not change). Accepted as a known limit of `0007`; a
+shrink-wrapped polygon box and the `rotation` carry-over above close it together.
+
 ## Undo cannot reach a collaborator's change
 
 Undo and redo are scoped to the local peer
@@ -789,3 +795,12 @@ expected 80: the Select bar's calls were already in `wasm_select_bar.rs`, and th
 two new surfaces `double_click -> bool` and the polygon/star setters stayed),
 `select_tool.rs` 379, `transform_drag.rs` 379. Only `wasm_api.rs` is still over
 the ~500-line limit; splitting it by tool stays with `advanced-selection`.
+
+*2026-10-07 (architect, `0007-stroke-and-fill-styling` readiness check):* two
+more files are over the limit and are not in the list above:
+`curvyo-editor-wasm/src/gpu.rs` (695 non-test lines, wasm32-only so untestable
+natively) and `frontend/src/hooks/useEditorSession.ts` (1409 lines). `0007`
+does not grow either: its pipeline and depth code goes into `gpu_pipeline.rs`
+and `gpu_paint.rs` after a pure-move first task, and its panel state into a new
+`useStylePanel.ts`. `session/mod.rs` is at 499, so `0007` PR 3 starts with a
+pure move of the tolerance helpers to `session/tolerances.rs`.

@@ -26,24 +26,24 @@ Each slice's acceptance criteria assume both; a slice that needs network
 access or phones home for anything beyond what the maker explicitly
 triggered is a bug, not a variant.
 
-| # | Feature slug | Delivers | Requirements | Priority |
-|---|---|---|---|---|
-| 1 | `project-file-foundation` | Create, open and save a local `.curvyo` project with an empty canvas; survives close/reopen, same result on relaunch. | R-SYS-001, R-SYS-002 | Must |
-| 2 | `path-node-editing` | Draw and edit a Bézier path with a pen tool: add/move/delete nodes, drag handles, same node/handle/segment mental model as Inkscape. | R-EDIT-001 | Must |
-| 3 | `primitive-shapes` | Rectangle (with corner radius), circle/ellipse and polygon/star tools; "object to path" converts any of them to an editable path. | R-EDIT-002, R-EDIT-004 | Must |
-| 4 | `canvas-navigation-and-selection` | Pan/zoom the canvas (zoom toward cursor), stable behaviour across window resize, and a general Select tool to click/move/delete any object without re-entering its creation tool. | R-EDIT-010, R-EDIT-011 | Must |
-| 5 | `object-transform` | Move, scale and rotate any path or primitive via on-canvas handles on the Select tool's bounding box; corner radius scales with the resize, stroke width only with the tool's "Scale stroke width" switch on (off by default). | R-EDIT-012 | Must |
-| 6 | `path-merge-split-and-node-types` | Join two path endpoints into one node, split a path at a node into two; a third node type (Asymmetric) alongside Corner and Symmetric. | R-EDIT-014 | Must |
-| 7 | `stroke-and-fill-styling` | Stroke width/dash/join/cap/color; solid fill and linear/radial gradient fill, on any path or primitive. | R-EDIT-005, R-EDIT-006 | Must |
-| 8 | `undo-redo` | Ctrl+Z/Ctrl+Y undoes/redoes every editing operation shipped in slices 2–3 and 5–7, one interaction = one undo step, no silent data loss. | R-EDIT-008 | Must |
-| 9 | `boolean-operations` | Union, difference, intersection on closed paths. | R-EDIT-003 | Must |
-| 10 | `layers-and-grouping` | Group/ungroup objects; layers with per-layer visibility and lock, to separate cut/engrave/reference geometry. | R-EDIT-009 | Must |
-| 11 | `svg-import-export` | Open a plain SVG from Inkscape and re-export it without hand-fixing geometry; named, listed loss report for anything outside our supported subset. | R-SYS-006 | Must |
-| 12 | `raster-trace` | Trace a raster image to vector paths with adjustable threshold/color-count, parity with Inkscape's "Trace Bitmap". | R-VEC-001 | Must |
-| 13 | `machine-profile` | Define and reuse a machine profile (work area, connection, limits) for a laser cutter; select it for a project. | R-MFG-001 | Must |
-| 14 | `manufacturing-roles` | Assign cut/engrave role to geometry (by layer) within one file. | R-MFG-002 | Must |
-| 15 | `material-test-library` | Generate a power/speed test-cut grid for the selected machine, record which cell worked, store it as a reusable material record. | R-MAT-001, R-MAT-002, R-MAT-003 | Must |
-| 16 | `laser-job-preview-and-output` | Toolpath/time preview, an explicit machine+material gate before export, and GRBL G-code export for cut + engrave geometry. The MVP's capstone: a maker's own design goes from drawing to a file their laser runs. | R-MFG-003, R-MFG-LASER-001, R-SYS-008 | Must |
+| # | Feature slug | Delivers | Requirements | Priority | Status |
+|---|---|---|---|---|---|
+| 1 | `project-file-foundation` | Create, open and save a local `.curvyo` project with an empty canvas; survives close/reopen, same result on relaunch. | R-SYS-001, R-SYS-002 | Must | Done |
+| 2 | `path-node-editing` | Draw and edit a Bézier path with a pen tool: add/move/delete nodes, drag handles, same node/handle/segment mental model as Inkscape. | R-EDIT-001 | Must | Done |
+| 3 | `primitive-shapes` | Rectangle (with corner radius), circle/ellipse and polygon/star tools; "object to path" converts any of them to an editable path. | R-EDIT-002, R-EDIT-004 | Must | Done |
+| 4 | `canvas-navigation-and-selection` | Pan/zoom the canvas (zoom toward cursor), stable behaviour across window resize, and a general Select tool to click/move/delete any object without re-entering its creation tool. | R-EDIT-010, R-EDIT-011 | Must | Done |
+| 5 | `object-transform` | Move, scale and rotate any path or primitive via on-canvas handles on the Select tool's bounding box; stroke width and (since `unified-object-editing`) corner radius scale with a resize only when the Select tool's "Scale stroke width" / "Scale corner radius" switches are on (both off by default). | R-EDIT-012 | Must | Done |
+| 6 | `path-merge-split-and-node-types` | Join two path endpoints into one node, split a path at a node into two; a third node type (Asymmetric) alongside Corner and Symmetric. | R-EDIT-014 | Must | Done |
+| 7 | `stroke-and-fill-styling` | Stroke width/dash/join/cap/color; solid fill and linear/radial gradient fill, on any path or primitive. | R-EDIT-005, R-EDIT-006 | Must | Ready (architect check and UX notes done 2026-10-07) |
+| 8 | `undo-redo` | Ctrl+Z/Ctrl+Y undoes/redoes every editing operation shipped in slices 2–3 and 5–7, one interaction = one undo step, no silent data loss. | R-EDIT-008 | Must | Not started |
+| 9 | `boolean-operations` | Union, difference, intersection on closed paths. | R-EDIT-003 | Must | Not started |
+| 10 | `layers-and-grouping` | Group/ungroup objects; layers with per-layer visibility and lock, to separate cut/engrave/reference geometry. | R-EDIT-009 | Must | Not started |
+| 11 | `svg-import-export` | Open a plain SVG from Inkscape and re-export it without hand-fixing geometry; named, listed loss report for anything outside our supported subset. | R-SYS-006 | Must | Not started |
+| 12 | `raster-trace` | Trace a raster image to vector paths with adjustable threshold/color-count, parity with Inkscape's "Trace Bitmap". | R-VEC-001 | Must | Not started |
+| 13 | `machine-profile` | Define and reuse a machine profile (work area, connection, limits) for a laser cutter; select it for a project. | R-MFG-001 | Must | Not started |
+| 14 | `manufacturing-roles` | Assign cut/engrave role to geometry (by layer) within one file. | R-MFG-002 | Must | Not started |
+| 15 | `material-test-library` | Generate a power/speed test-cut grid for the selected machine, record which cell worked, store it as a reusable material record. | R-MAT-001, R-MAT-002, R-MAT-003 | Must | Not started |
+| 16 | `laser-job-preview-and-output` | Toolpath/time preview, an explicit machine+material gate before export, and GRBL G-code export for cut + engrave geometry. The MVP's capstone: a maker's own design goes from drawing to a file their laser runs. | R-MFG-003, R-MFG-LASER-001, R-SYS-008 | Must | Not started |
 
 ## Notes on ordering
 
@@ -107,6 +107,31 @@ triggered is a bug, not a variant.
   test is worth running (15), and all three before the capstone job-preview
   export story (16) — which is where R-SYS-008's "no job without a machine
   profile" gate actually bites.
+
+## Not in the MVP sequence but built (customer requests)
+
+Specs that came from the customer's feedback after trying slices 1 to 6, not
+from the MVP list. All Done and merged:
+
+- `object-transform-refinements` (#35): centre move, rotate corners, pivots,
+  typed entry, 22.5° snap, skew.
+- `unified-object-editing` (#38): one Select tool with parameter handles for
+  every object, blue/black preview, creation-only shape tools.
+- `edit-interaction-polish` (#42, #45, #46): polygon/star angle, Escape cascade,
+  keyboard shortcuts, dashed selection box, typed skew and move, Shift axis
+  lock, Ctrl copy of a move.
+- `shape-creation-from-center` (#47): Shift while drawing creates from the centre.
+- `polygon-star-box-refit` (#49): the selection box of a polygon or star follows
+  its shown orientation.
+
+## Specified but not built yet
+
+Not part of the MVP sequence above; each waits for the customer to schedule it.
+
+- `advanced-selection` (Ready)
+- `rectangle-corner-radii` (Draft)
+- `ellipse-arcs-and-shaping` (Draft)
+- `document-size-and-rulers` (Draft)
 
 ## Out of sequence (tracked in `docs/requirements.md`, not listed above)
 
