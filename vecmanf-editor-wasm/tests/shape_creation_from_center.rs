@@ -291,3 +291,72 @@ fn ac17_shift_changes_nothing_for_polygon_and_star() {
         assert_ne!(make(false, false), make(false, true), "Ctrl still snaps");
     }
 }
+
+/// UX review: while Shift is down in a rectangle or ellipse create-drag the
+/// pivot marker is drawn at the press point (`docs/design-system.md`,
+/// "Modifiers in a rectangle or ellipse create-drag"), and only then. The
+/// reference is the same outline made by a plain corner-to-corner drag, which
+/// has no marker.
+#[test]
+fn the_press_point_is_marked_while_shift_is_down_in_a_rectangle_or_ellipse_create_drag() {
+    let b = pt(130.0, 40.0);
+    let corner_drag = |tool: Tool, from: Point, to: Point| {
+        let mut session = Session::new(1);
+        session.set_tool(tool);
+        session.pointer_down(from, false);
+        session.pointer_hover(to, false, false);
+        session.draw_list().triangle_count()
+    };
+    for tool in [Tool::Rectangle, Tool::Ellipse] {
+        let mut session = started(tool);
+        // (shift, ctrl, the equivalent plain corner drag, marker expected)
+        let cases = [
+            (false, false, (pt(100.0, 50.0), pt(130.0, 40.0)), false),
+            (false, true, (pt(100.0, 50.0), pt(130.0, 20.0)), false),
+            (true, false, (pt(70.0, 60.0), pt(130.0, 40.0)), true),
+            (true, true, (pt(70.0, 80.0), pt(130.0, 20.0)), true),
+            (false, false, (pt(100.0, 50.0), pt(130.0, 40.0)), false),
+        ];
+        for (shift, ctrl, (from, to), marker) in cases {
+            key_change(&mut session, b, shift, ctrl);
+            let reference = corner_drag(tool, from, to);
+            let drawn = session.draw_list().triangle_count();
+            assert_eq!(
+                drawn > reference,
+                marker,
+                "{tool:?} shift {shift} ctrl {ctrl}: {drawn} vs {reference}"
+            );
+        }
+        key_change(&mut session, b, true, false);
+        assert_eq!(session.escape(), EscapeStep::CancelledDrag);
+        assert_eq!(
+            session.draw_list(),
+            Session::new(1).draw_list(),
+            "Escape: nothing drawn"
+        );
+    }
+}
+
+/// The marker goes with the release: the committed shape is drawn exactly as
+/// the same shape made without Shift, and polygon/star never get the marker.
+#[test]
+fn the_marker_is_gone_after_release_and_never_drawn_for_polygon_and_star() {
+    let b = pt(130.0, 40.0);
+    let mut centred = started(Tool::Rectangle);
+    key_change(&mut centred, b, true, false);
+    centred.pointer_up(b, true, false);
+    let mut plain = Session::new(1);
+    plain.set_tool(Tool::Rectangle);
+    plain.pointer_down(pt(70.0, 40.0), false);
+    plain.pointer_up(pt(130.0, 60.0), false, false);
+    // Same pointer position and keys afterwards, so only the marker could differ.
+    key_change(&mut centred, b, false, false);
+    key_change(&mut plain, b, false, false);
+    assert_eq!(centred.draw_list(), plain.draw_list());
+
+    let mut star = started(Tool::PolygonStar);
+    key_change(&mut star, b, false, false);
+    let without = star.draw_list();
+    key_change(&mut star, b, true, false);
+    assert_eq!(star.draw_list(), without);
+}

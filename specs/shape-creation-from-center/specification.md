@@ -217,6 +217,17 @@ is final.
   tooltips for Rectangle (R) and Ellipse (E) may mention them, left to
   `ux-engineer`.
 
+**UX review decisions (ux-engineer, 2026-10-07, checked in the running build):**
+
+- No legend, no hint chip and no readout wording during the drag; the outline
+  and readout change in the frame of the key and read clearly in all four modes.
+- Centre mark (supersedes "no extra center mark"): while Shift is down in a
+  rectangle or ellipse create-drag, the existing pivot marker is drawn at the
+  press point (`docs/design-system.md`, "Modifiers in a rectangle or ellipse
+  create-drag"). Same meaning as in a transform: Shift = about this point.
+- Tooltip: the Rectangle and Ellipse rail tooltips get a second line,
+  "Shift: from centre. Ctrl: square or circle".
+
 ## Sequencing
 
 Touches the shape tools in `vecmanf-ui-core` (`rectangle_tool.rs`,

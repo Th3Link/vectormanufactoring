@@ -353,8 +353,18 @@ fn ac09_preview_outline_equals_the_equivalent_corner_drag_and_the_commit() {
             r.pointer_hover(p, false, false);
             r.pointer_down(p, false);
             r.pointer_hover(q, false, false);
+            let reference = r.draw_list();
+            // Under Shift the UX review adds the pivot marker at the press
+            // point after the outline: the outline itself is the corner
+            // drag's, the marker is the only extra.
+            let same_outline = if sh {
+                live.triangles.len() > reference.triangles.len()
+                    && live.triangles[..reference.triangles.len()] == reference.triangles[..]
+            } else {
+                live == reference
+            };
             assert!(
-                live == r.draw_list(),
+                same_outline,
                 "preview (shift={sh} ctrl={ct}, b={b:?}) is not the box {p:?}..{q:?}"
             );
             s.pointer_up(b, sh, ct);

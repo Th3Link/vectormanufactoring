@@ -59,6 +59,12 @@ exists now, checked in the code:
    gains nothing but the changed `pointer_move` / `pointer_up` parameter type.
 7. **Tolerance:** 1e-9 mm, per ADR flag 1.
 
+8. **UX review (2026-10-07).** `CreatePreview` gains `centre: Option<Point>`
+   (the press point under Shift for rectangle and ellipse, `None` for
+   polygon/star); `Session::draw_list` draws the existing pivot marker there.
+   The Rectangle and Ellipse rail tooltips get a second line. A small public
+   field addition in `vecmanf-ui-core`, requested by the UX review.
+
 ## Affected crates/modules
 
 - `vecmanf-ui-core`: `shape_tool_common.rs` (`CreateDragBox`,

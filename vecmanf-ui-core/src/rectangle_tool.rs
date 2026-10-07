@@ -9,7 +9,7 @@
 use vecmanf_document_core::{Document, Length, Point, RectBounds, Shape};
 
 use crate::modifiers::Modifiers;
-use crate::shape_tool_common::{CreateOutcome, CreatePreview, create_drag_box};
+use crate::shape_tool_common::{CreateDragBox, CreateOutcome, CreatePreview, create_drag_box};
 
 #[derive(Debug, Clone, Copy)]
 struct Drag {
@@ -59,10 +59,11 @@ impl RectangleTool {
     #[must_use]
     pub fn live_shape(&self) -> Option<CreatePreview> {
         let drag = self.drag?;
-        let (bounds, anchor) = created_bounds(drag.down_at, drag.current, drag.modifiers)?;
+        let (bounds, b) = created_bounds(drag.down_at, drag.current, drag.modifiers)?;
         Some(CreatePreview {
             shape: rect_shape(bounds),
-            anchor,
+            anchor: b.anchor,
+            centre: b.centre,
         })
     }
 
@@ -99,15 +100,15 @@ impl RectangleTool {
 }
 
 /// The one computation of the rectangle a drag from `down_at` to `point`
-/// makes under `modifiers`, and the readout anchor; `None` when it makes none.
+/// makes under `modifiers`, and the box it came from (readout anchor, centre); `None` when it makes none.
 /// Preview and release both call it.
 fn created_bounds(
     down_at: Point,
     point: Point,
     modifiers: Modifiers,
-) -> Option<(RectBounds, Point)> {
+) -> Option<(RectBounds, CreateDragBox)> {
     let b = create_drag_box(down_at, point, modifiers)?;
-    Some((RectBounds::from_corners(b.corner_a, b.corner_b), b.anchor))
+    Some((RectBounds::from_corners(b.corner_a, b.corner_b), b))
 }
 
 fn rect_shape(bounds: RectBounds) -> Shape {

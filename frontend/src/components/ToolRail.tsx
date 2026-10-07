@@ -28,6 +28,8 @@ interface ToolButtonProps {
   active: boolean;
   label: string;
   shortcut: string;
+  /** An optional second tooltip line (the modifiers of the tool). */
+  hint?: string;
   icon: React.ReactNode;
   onSelect: (tool: Tool) => void;
   onReturnFocus: () => void;
@@ -43,6 +45,7 @@ function ToolButton({
   active,
   label,
   shortcut,
+  hint,
   icon,
   onSelect,
   onReturnFocus,
@@ -76,7 +79,10 @@ function ToolButton({
           sideOffset={6}
           className="z-50 rounded-md bg-popover px-2 py-1 text-xs text-popover-foreground ring-1 ring-foreground/10"
         >
-          {label} ({shortcut})
+          <div>
+            {label} ({shortcut})
+          </div>
+          {hint && <div>{hint}</div>}
         </Tooltip.Content>
       </Tooltip.Portal>
     </Tooltip.Root>
@@ -138,6 +144,7 @@ export function ToolRail({ tool, selectionCount, onSelect, onReturnFocus }: Tool
           active={tool === "rectangle"}
           label="Rectangle tool"
           shortcut={letterActsOnSelection ? "Esc, R" : "R"}
+          hint="Shift: from centre. Ctrl: square or circle"
           icon={<Square size={20} />}
           onSelect={onSelect}
           onReturnFocus={onReturnFocus}
@@ -147,6 +154,7 @@ export function ToolRail({ tool, selectionCount, onSelect, onReturnFocus }: Tool
           active={tool === "ellipse"}
           label="Ellipse tool"
           shortcut="E"
+          hint="Shift: from centre. Ctrl: square or circle"
           icon={<CircleIcon size={20} />}
           onSelect={onSelect}
           onReturnFocus={onReturnFocus}

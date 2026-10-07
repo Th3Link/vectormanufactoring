@@ -495,6 +495,22 @@ values, not an implementation site, for those four rows.
     is an axis-locked move of the selection (an unselected pressed object
     joins the selection at that moment). Shift or Ctrl at a press on the
     drawn centre handle is always a move modifier and never toggles.
+- **Modifiers in a rectangle or ellipse create-drag**
+  (`shape-creation-from-center`, UX review 2026-10-07). One rule across the
+  product: **Ctrl = 1:1, Shift = about the centre** (resize, create), plus the
+  move's Shift = one axis and Ctrl = copy. Held before the press, pressed or
+  released at any moment of the drag, with the pointer at rest: the blue
+  outline and the readout follow in the frame of the key. The outline and the
+  readout are the feedback (no badge, no legend, no word in the readout: the
+  geometry already shows both effects, unlike a copy). While **Shift** is
+  down in a create-drag the **pivot marker** (row "Transform pivot marker")
+  is drawn at the press point, because that point is the centre and nothing
+  else shows it (at small sizes and when the far side leaves the canvas the
+  outline does not). Gone in the frame Shift is released, the drag ends or
+  Escape cancels. Discovery is the rail tooltip of Rectangle and Ellipse, a
+  second line "Shift: from centre. Ctrl: square or circle". The ellipse
+  readout shows radii ("rx × ry mm"), the rectangle's the full size, as
+  shipped; both unchanged by the modifiers.
 - **Polygon/star angle** (`edit-interaction-polish`): a polygon or star's
   rotation is its real orientation, not a register that reads 0 whatever it
   looks like. The Select tool's rotate readout, the angle chip prefill and the

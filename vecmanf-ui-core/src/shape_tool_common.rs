@@ -23,6 +23,11 @@ pub struct CreatePreview {
     /// The live pointer position (point B) the numeric readout is anchored
     /// near.
     pub anchor: Point,
+    /// The press point when Shift makes it the centre of a rectangle or
+    /// ellipse: the host marks it with the pivot marker
+    /// (`docs/design-system.md`, "Modifiers in a rectangle or ellipse
+    /// create-drag"). `None` otherwise, and always for a polygon or star.
+    pub centre: Option<Point>,
 }
 
 /// What a creation tool's `pointer_up` did.
@@ -66,6 +71,8 @@ pub(crate) struct CreateDragBox {
     /// The effective endpoint E, the readout's anchor: the pointer, or the
     /// constrained corner under Ctrl.
     pub(crate) anchor: Point,
+    /// `a` when Shift makes it the centre.
+    pub(crate) centre: Option<Point>,
 }
 
 /// The one computation of a rectangle or ellipse create-drag from press point
@@ -92,6 +99,7 @@ pub(crate) fn create_drag_box(a: Point, b: Point, modifiers: Modifiers) -> Optio
         corner_a,
         corner_b: end,
         anchor: end,
+        centre: modifiers.shift.then_some(a),
     })
 }
 

@@ -148,6 +148,7 @@ impl PolygonStarTool {
         (!is_degenerate(drag.center, drag.current)).then(|| CreatePreview {
             shape: self.shape_at(drag.center, drag.current, drag.modifiers),
             anchor: drag.current,
+            centre: None,
         })
     }
 

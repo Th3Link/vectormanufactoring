@@ -138,7 +138,7 @@ impl Session {
         if self.tool == Tool::Select {
             return self.select_live_readout();
         }
-        let CreatePreview { shape, anchor } = self.live_preview()?;
+        let CreatePreview { shape, anchor, .. } = self.live_preview()?;
         let text = match shape {
             Shape::Rect { bounds, .. } => {
                 format!(
