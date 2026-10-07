@@ -127,6 +127,7 @@ pub enum EntryOutcome {
 /// switch's value), so later Shift, Ctrl or switch changes change nothing
 /// (criteria 22, 28, 31).
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)] // one flag per fact the entry fixes when it opens
 pub struct TransformEntry {
     kind: EntryKind,
     start: ObjectSnapshot,
