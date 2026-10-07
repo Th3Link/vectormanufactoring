@@ -152,12 +152,14 @@ pub struct TransformEntryView {
     pub center_x: f64,
     pub center_y: f64,
     pub glyph_reach: f64,
+    /// The chip goes by the box centre instead of outward from the handle.
+    pub at_centre: bool,
 }
 
 #[wasm_bindgen]
 impl TransformEntryView {
     /// `"angle"`, `"size"`, `"radius"` (a polygon or star's outer radius),
-    /// `"corner-radius"` or `"inner-ratio"`.
+    /// `"corner-radius"`, `"inner-ratio"` or `"skew"`.
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn kind(&self) -> String {
@@ -222,6 +224,7 @@ impl TransformEntryView {
             center_x,
             center_y,
             glyph_reach: entry.glyph_reach_px,
+            at_centre: entry.at_centre,
         }
     }
 }
@@ -431,9 +434,10 @@ impl WasmSession {
 
     /// Enter in the entry chip: `"committed"`, `"unchanged"` (both close the
     /// chip), or `"invalid:<field>:<reason>"` with the reason `number`,
-    /// `positive`, `negative` or `ratio-range` (the chip stays open; criteria
-    /// 19, 21, 27, 30, 31; 18, 19 of `unified-object-editing`). `last_edited` is
-    /// the index of the field edited last.
+    /// `positive`, `negative`, `ratio-range`, `skew-range` or `too-large` (the
+    /// chip stays open; criteria 19, 21, 27, 30, 31; 18, 19 of
+    /// `unified-object-editing`; 11 of `edit-interaction-polish`).
+    /// `last_edited` is the index of the field edited last.
     pub fn commit_transform_entry(
         &mut self,
         first: &str,
@@ -441,19 +445,9 @@ impl WasmSession {
         last_edited: u32,
     ) -> String {
         let last = usize::try_from(last_edited).unwrap_or(0);
-        match self.session.commit_transform_entry(first, second, last) {
-            vecmanf_ui_core::EntryOutcome::Committed => "committed".to_string(),
-            vecmanf_ui_core::EntryOutcome::Unchanged => "unchanged".to_string(),
-            vecmanf_ui_core::EntryOutcome::Invalid { field, reason } => format!(
-                "invalid:{field}:{}",
-                match reason {
-                    vecmanf_ui_core::InvalidReason::NotANumber => "number",
-                    vecmanf_ui_core::InvalidReason::NotPositive => "positive",
-                    vecmanf_ui_core::InvalidReason::Negative => "negative",
-                    vecmanf_ui_core::InvalidReason::RatioRange => "ratio-range",
-                }
-            ),
-        }
+        crate::wasm_move_entry::outcome_code(
+            self.session.commit_transform_entry(first, second, last),
+        )
     }
 
     /// Closes the numeric entry without writing (criterion 20): Escape, a

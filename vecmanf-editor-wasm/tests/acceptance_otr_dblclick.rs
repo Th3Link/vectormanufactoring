@@ -313,7 +313,7 @@ fn a_press_elsewhere_clears_the_remembered_handle() {
 }
 
 #[test]
-fn double_click_on_a_skew_handle_is_ignored_without_handoff_for_a_path() {
+fn double_click_on_a_skew_handle_opens_the_skew_entry_without_handoff_for_a_path() {
     let mut s = open(&path_doc());
     click(&mut s, pt(60.0, 0.0));
     let before = bytes(&s);
@@ -332,8 +332,13 @@ fn double_click_on_a_skew_handle_is_ignored_without_handoff_for_a_path() {
         );
         dbl(&mut s, at, at, false, false);
         assert_eq!(s.tool(), Tool::Select, "{at:?}: no handoff");
-        assert!(s.transform_entry().is_none(), "{at:?}: no entry");
+        assert_eq!(
+            s.transform_entry().map(|entry| entry.kind),
+            Some("skew"),
+            "{at:?}: the skew entry opens (`edit-interaction-polish` criterion 9)"
+        );
         assert_eq!(bytes(&s), before, "{at:?}: nothing written");
+        s.cancel_transform_entry();
         // The cursor still describes the skew handle after the double-click.
         assert!(
             s.cursor_hint().contains("skew"),
@@ -365,7 +370,9 @@ fn handle_double_click_then_a_normal_press_elsewhere_closes_the_entry_and_the_ne
     assert!(s.transform_entry().is_some());
     click(&mut s, pt(70.0, 60.0));
     assert!(s.transform_entry().is_none());
-    assert!(dbl(&mut s, pt(70.0, 60.0), pt(70.0, 60.0), false, false));
+    // Inside the box, away from the centre handle (which opens the typed move
+    // since `edit-interaction-polish` PR 3): only the hint.
+    assert!(dbl(&mut s, pt(40.0, 50.0), pt(40.0, 50.0), false, false));
     assert_eq!(s.tool(), Tool::Select);
 }
 

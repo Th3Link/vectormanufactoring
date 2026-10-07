@@ -18,11 +18,13 @@ const HINT_LINES: Record<string, string[]> = {
     "Shift: from center",
     "Ctrl: keep proportions",
     "Double-click or S: type a size",
+    "S: from the center; double-click: opposite corner",
   ],
   "resize-corner-uniform": [
     "Resize",
     "Shift: from center",
     "Double-click or S: type a size",
+    "S: from the center; double-click: opposite corner",
   ],
   "rotate-corner": [
     "Rotate",
@@ -36,8 +38,14 @@ const HINT_LINES: Record<string, string[]> = {
     "Ctrl: snap",
     "Double-click: type an angle",
   ],
-  skew: ["Skew", "Shift: from the center line", "Ctrl: snap"],
-  move: ["Move"],
+  skew: ["Skew", "Shift: from the center line", "Ctrl: snap", "Double-click or K: type an angle"],
+  "skew-y": [
+    "Skew",
+    "Shift: from the center line",
+    "Ctrl: snap",
+    "Double-click or Shift+K: type an angle",
+  ],
+  move: ["Move", "Double-click or M: type an offset"],
   "param-radius": ["Corner radius", "Double-click: type a value"],
   "param-inner": ["Inner radius", "Double-click: type a ratio"],
 };

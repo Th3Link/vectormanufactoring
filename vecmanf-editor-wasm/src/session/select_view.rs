@@ -201,7 +201,9 @@ impl Session {
         // The centre handle hides while a resize, rotate, skew or parameter
         // drag runs or an entry is open: the pivot marker may live there, and
         // a parameter drag has it yield (criterion 8).
-        let hide_center = highlighted.is_some_and(|handle| handle != EditHandle::Move);
+        let centre_chip = self.select.centre_chip_open();
+        let hide_center =
+            centre_chip || highlighted.is_some_and(|handle| handle != EditHandle::Move);
         let params_visible = self.select.param_handles_visible();
         let radius_in_use = matches!(
             highlighted,
@@ -252,6 +254,9 @@ impl Session {
         TransformDecorationInput {
             handles,
             pivot_marker: live_pivot.or(preview),
+            // The S chip highlights no handle: its marker at the centre is
+            // the one sign of the fixed point, so it is drawn solid.
+            pivot_marker_full: centre_chip,
             skew_guide: self.skew_guide_now(),
             param_guides,
             device_pixel_ratio: self.device_pixel_ratio,
@@ -312,7 +317,8 @@ impl Session {
     /// `unified-object-editing` criterion 20), as a plain string for the
     /// host's hover chip: `""` (none), `"resize-edge"`, `"resize-corner"`,
     /// `"resize-corner-uniform"` (polygon and star: no Ctrl line),
-    /// `"rotate-corner"`, `"rotate-side"`, `"skew"`, `"move"`,
+    /// `"rotate-corner"`, `"rotate-side"`, `"skew"` (top and bottom: skew x),
+    /// `"skew-y"` (left and right), `"move"`,
     /// `"param-radius"` (a rectangle's corner radius) or `"param-inner"` (a
     /// star's inner radius). Empty while a drag runs or an entry is open.
     #[must_use]
@@ -335,7 +341,8 @@ impl Session {
             EditHandle::Resize(_) => "resize-corner",
             EditHandle::Rotate(direction) if is_corner(direction) => "rotate-corner",
             EditHandle::Rotate(_) => "rotate-side",
-            EditHandle::Skew(_) => "skew",
+            EditHandle::Skew(side) if side.skews_along_u() => "skew",
+            EditHandle::Skew(_) => "skew-y",
             EditHandle::Move => "move",
             EditHandle::Param(ParamHandle::CornerRadius(_)) => "param-radius",
             EditHandle::Param(ParamHandle::InnerRadius) => "param-inner",
@@ -888,6 +895,65 @@ mod tests {
                 .skew_guide
                 .is_none()
         );
+    }
+
+    /// Criteria 57a and 59: while the chip of the key S is open the pivot
+    /// marker shows at the box centre, the fixed point of the typed size; the
+    /// chip of a double-click on the same handle shows the opposite corner.
+    #[test]
+    fn the_s_chip_shows_the_pivot_marker_at_the_box_centre() {
+        let mut session = big_rect_session();
+        assert_eq!(
+            session.key_down(crate::KeyInput {
+                key: "s",
+                ..crate::KeyInput::default()
+            }),
+            crate::KeyOutcome::EntryOpened
+        );
+        let marker = session
+            .select_transform_decoration_input()
+            .pivot_marker
+            .expect("a marker while the chip is open");
+        assert!((marker.x - 60.0).abs() < 1e-9 && (marker.y - 50.0).abs() < 1e-9);
+        // The S chip: the marker is solid, no handle is in its dragging look,
+        // the centre glyph makes way for the marker, and the chip is placed
+        // by the centre (criterion 59).
+        let input = session.select_transform_decoration_input();
+        assert!(input.pivot_marker_full);
+        assert!(input.handles.iter().all(|glyph| !glyph.dragging));
+        let handles_with_chip = input.handles.len();
+        let view = session.transform_entry().expect("the chip");
+        assert!(view.at_centre);
+        assert!((view.handle.x - 60.0).abs() < 1e-9 && (view.handle.y - 50.0).abs() < 1e-9);
+        session.cancel_transform_entry();
+        let input = session.select_transform_decoration_input();
+        assert!(input.pivot_marker.is_none());
+        assert_eq!(
+            input.handles.len(),
+            handles_with_chip + 1,
+            "the centre handle is drawn again"
+        );
+        let corner = Point::new(110.0, 80.0);
+        session.pointer_hover(corner, false, false);
+        session.pointer_down(corner, false);
+        session.pointer_up(corner, false, false);
+        session.double_click(corner, false, false);
+        let marker = session
+            .select_transform_decoration_input()
+            .pivot_marker
+            .expect("a marker while the chip is open");
+        assert!((marker.x - 10.0).abs() < 1e-9 && (marker.y - 20.0).abs() < 1e-9);
+        // The double-click route keeps the handle's dragging look, the chip at
+        // the handle and the dimmer marker.
+        let input = session.select_transform_decoration_input();
+        assert!(!input.pivot_marker_full);
+        assert_eq!(
+            input.handles.iter().filter(|glyph| glyph.dragging).count(),
+            1
+        );
+        let view = session.transform_entry().expect("the chip");
+        assert!(!view.at_centre);
+        assert!((view.handle.x - 110.0).abs() < 1e-9 && (view.handle.y - 80.0).abs() < 1e-9);
     }
 
     /// Criterion 56: a skew drag draws a dashed guide along the fixed line

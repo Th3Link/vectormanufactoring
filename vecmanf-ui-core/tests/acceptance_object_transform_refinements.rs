@@ -581,24 +581,33 @@ fn the_centre_handle_needs_a_forty_eight_pixel_box_and_never_covers_a_resize_han
 
 #[test]
 fn a_double_click_dispatches_by_what_is_under_the_second_press() {
-    // Inside the box, centre handle included, and not on a handle: a path hands
-    // off to the Node tool; a primitive only asks for the edit hint
-    // (`unified-object-editing` criteria 31, 32).
+    // Inside the box and not on a handle: a path hands off to the Node tool; a
+    // primitive only asks for the edit hint (`unified-object-editing` criteria
+    // 31, 32). The drawn centre handle is the exception: a double-click on it
+    // opens the typed move (`edit-interaction-polish` criteria 15, 16).
     for kind in ALL_KINDS {
         let mut rig = Rig::new(kind);
         let before = rig.object();
         let b = oriented_bounds(&before);
         let centre = b.to_document(b.local_center());
-        for at in [centre, centre.translated(Vec2::new(8.0, 5.0))] {
-            let outcome = rig.double_click(at, false, false);
-            let expected = if is_path(kind) {
-                SelectDoubleClickOutcome::Hit(before.clone())
-            } else {
-                SelectDoubleClickOutcome::EditHint
-            };
-            assert_eq!(outcome, expected, "{kind:?}");
-        }
+        assert_eq!(
+            rig.double_click(centre, false, false),
+            SelectDoubleClickOutcome::EntryOpened,
+            "{kind:?}: the centre handle opens the typed move"
+        );
+        assert!(rig.tool.move_entry().is_some(), "{kind:?}");
         assert!(rig.tool.entry().is_none());
+        rig.tool.cancel_entry();
+        let elsewhere = centre.translated(Vec2::new(8.0, 5.0));
+        let outcome = rig.double_click(elsewhere, false, false);
+        let expected = if is_path(kind) {
+            SelectDoubleClickOutcome::Hit(before.clone())
+        } else {
+            SelectDoubleClickOutcome::EditHint
+        };
+        assert_eq!(outcome, expected, "{kind:?}");
+        assert!(rig.tool.entry().is_none());
+        assert!(rig.tool.move_entry().is_none());
 
         // Rotate and resize handles open the entry, no handoff.
         let rotate = rig.handle(EditHandle::Rotate(ResizeDirection::Ne), false);
@@ -617,14 +626,15 @@ fn a_double_click_dispatches_by_what_is_under_the_second_press() {
         );
         rig.tool.cancel_entry();
 
-        // A skew handle: nothing, no handoff.
+        // A skew handle opens the skew entry, no handoff (criterion 9).
         if is_path(kind) {
             let skew = rig.handle(EditHandle::Skew(Side::Top), false);
             assert_eq!(
                 rig.double_click(skew, false, false),
-                SelectDoubleClickOutcome::Ignored
+                SelectDoubleClickOutcome::EntryOpened
             );
-            assert!(rig.tool.entry().is_none());
+            assert_eq!(rig.tool.skew_entry().unwrap().kind(), EntryKind::Skew);
+            rig.tool.cancel_entry();
         }
         assert_eq!(rig.object(), before, "{kind:?}: nothing written");
     }

@@ -328,6 +328,13 @@ impl Bx {
 const CORNERS: [(f64, f64); 4] = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)];
 const SIDES: [(f64, f64); 4] = [(0.0, -1.0), (1.0, 0.0), (0.0, 1.0), (-1.0, 0.0)];
 
+/// The hint a skew handle on `side` earns: the top and bottom handles skew x
+/// ("Double-click or K"), the left and right ones skew y ("Shift+K",
+/// `edit-interaction-polish` criterion 24).
+fn skew_hint_of(side: (f64, f64)) -> &'static str {
+    if side.1 == 0.0 { "skew-y" } else { "skew" }
+}
+
 /// The pointer position `deg` (clockwise) from `handle` as seen from `pivot`.
 fn swept_to(handle: Point, pivot: Point, deg: f64) -> Point {
     let v = (handle.x - pivot.x, handle.y - pivot.y);
@@ -583,7 +590,7 @@ fn ac03_double_click_inside_the_box_hands_a_path_off_and_only_hints_for_a_primit
     // `unified-object-editing` criteria 31, 32: a primitive has no tool of its
     // own to hand off to; the double-click changes nothing and asks for the
     // edit hint. A path still hands off to the Node tool.
-    for p in [pt(20.0, 10.0), pt(10.0, 12.0), pt(30.0, 6.0)] {
+    for p in [pt(10.0, 12.0), pt(30.0, 6.0)] {
         let mut s2 = selected_rect();
         click(&mut s2, p);
         let before = snapshot_bytes(&s2);
@@ -591,23 +598,34 @@ fn ac03_double_click_inside_the_box_hands_a_path_off_and_only_hints_for_a_primit
         assert_eq!(s2.tool(), Tool::Select, "double-click at {p:?}");
         assert_eq!(snapshot_bytes(&s2), before);
     }
-    // the centre handle too
+    // The drawn centre handle opens the typed move instead of the hint
+    // (`edit-interaction-polish` criterion 15): no hint, no tool change, nothing
+    // written.
     let mut s = selected_rect();
-    assert!(s.double_click(pt(20.0, 10.0), false, false));
+    click(&mut s, pt(20.0, 10.0));
+    let before = snapshot_bytes(&s);
+    assert!(!s.double_click(pt(20.0, 10.0), false, false));
     assert_eq!(s.tool(), Tool::Select);
+    assert!(s.move_entry().is_some());
+    assert_eq!(snapshot_bytes(&s), before);
 
     let mut e = open_in_session(&ellipse_doc(20.0, 10.0, 20.0, 10.0));
     click(&mut e, pt(20.0 + 20.0 * 0.7071, 10.0 + 10.0 * 0.7071));
     click(&mut e, pt(20.0, 10.0));
-    assert!(e.double_click(pt(20.0, 10.0), false, false));
+    assert!(!e.double_click(pt(20.0, 10.0), false, false));
     assert_eq!(e.tool(), Tool::Select);
+    assert!(e.move_entry().is_some(), "the ellipse's centre handle");
 
     let mut p = open_in_session(&polygon_doc(30.0, 30.0, 20.0, 5));
     // select by the outline: first vertex (top) is at (30, 10)
     click(&mut p, pt(30.0, 10.0));
     click(&mut p, pt(30.0, 32.0));
-    assert!(p.double_click(pt(30.0, 32.0), false, false));
+    assert!(!p.double_click(pt(30.0, 32.0), false, false));
     assert_eq!(p.tool(), Tool::Select);
+    assert!(
+        p.move_entry().is_some(),
+        "2 mm from the centre is on its handle"
+    );
 
     let (mut t, b) = selected_triangle();
     click(&mut t, b.at(5.0, 2.0));
@@ -635,14 +653,18 @@ fn ac03_double_click_inside_an_unselected_unfilled_object_does_nothing() {
 }
 
 #[test]
-fn ac03_a_slightly_unsteady_double_click_does_not_edit_and_only_hints() {
+fn ac03_a_slightly_unsteady_double_click_does_not_edit_and_opens_the_typed_move() {
+    // A 2 px wobble stays inside the dead zone: the press on the centre handle
+    // writes nothing and the double-click opens the typed move
+    // (`edit-interaction-polish` criterion 15), not the hint.
     let mut s = selected_rect();
     let before = snapshot_bytes(&s);
     let kk = k(&s);
     let p = pt(20.0, 10.0);
     // press, 2 px wobble, release, second press suppressed, double_click
     drag(&mut s, p, pt(p.x + 2.0 / kk, p.y + 1.0 / kk));
-    assert!(s.double_click(p, false, false));
+    assert!(!s.double_click(p, false, false));
+    assert!(s.move_entry().is_some());
     assert_eq!(snapshot_bytes(&s), before);
     assert_eq!(s.tool(), Tool::Select);
 }
@@ -807,7 +829,10 @@ fn ac07_polygon_and_star_have_all_eight_rotate_positions() {
                 let p = pt(b.c.x + r * a.cos(), b.c.y + r * a.sin());
                 s.pointer_hover(p, true, false);
                 let h = s.handle_hint();
-                assert!(h != "resize-edge" && h != "skew", "{h} on a polygon/star");
+                assert!(
+                    h != "resize-edge" && !h.starts_with("skew"),
+                    "{h} on a polygon/star"
+                );
             }
         }
     }
@@ -917,14 +942,14 @@ fn model_hint(
         }
         if 2.0 * hw >= 24.0 {
             c.push(Cand {
-                class: "skew",
+                class: "skew-y",
                 pos: (-(hw + 16.0), 0.0),
                 radius: 12.0,
                 order: 1,
                 param: false,
             });
             c.push(Cand {
-                class: "skew",
+                class: "skew-y",
                 pos: (hw + 16.0, 0.0),
                 radius: 12.0,
                 order: 1,
@@ -1026,7 +1051,7 @@ fn run_hit_rule(kind: Kind, w_mm: f64, h_mm: f64, th: f64, shift: bool) {
                     "" => got_c == "default",
                     "move" => got_c == "move",
                     h if h.starts_with("rotate") => got_c == "rotate",
-                    "skew" => got_c.starts_with("skew:"),
+                    "skew" | "skew-y" => got_c.starts_with("skew:"),
                     "param-radius" => got_c == "pointer",
                     _ => got_c.starts_with("resize:"),
                 };
@@ -1155,12 +1180,12 @@ fn ac09_press_hover_and_cursor_use_the_same_test() {
                         "({x},{y}) shift={shift} hint {hint} but no rotation"
                     ));
                 }
-                if (hint.starts_with("resize") || hint == "skew") && !changed {
+                if (hint.starts_with("resize") || hint.starts_with("skew")) && !changed {
                     mism.push(format!(
                         "({x},{y}) shift={shift} hint {hint} but nothing changed"
                     ));
                 }
-                if (hint.starts_with("resize") || hint == "skew") && rotated {
+                if (hint.starts_with("resize") || hint.starts_with("skew")) && rotated {
                     mism.push(format!(
                         "({x},{y}) shift={shift} hint {hint} but rotation changed"
                     ));
@@ -2769,7 +2794,7 @@ fn ac37_skew_handles_exist_on_all_four_sides_of_a_path_and_follow_the_oriented_b
             let p = b.side_out(kk, side.0, side.1, 16.0);
             // the pointer is closer to the skew handle than any other
             let (c, h) = kind_at(&mut s, p, true);
-            assert_eq!(h, "skew", "th {th} side {side:?}");
+            assert_eq!(h, skew_hint_of(side), "th {th} side {side:?}");
             assert!(c.starts_with("skew:"), "{c}");
         }
     }
@@ -2795,12 +2820,12 @@ fn ac37_zero_extent_and_small_boxes_hide_the_affected_skew_handles() {
     assert_ne!(hint_bot, "skew");
     assert_eq!(
         kind_at(&mut s, b.side_out(kk, 1.0, 0.0, 16.0), true).1,
-        "skew",
+        "skew-y",
         "left/right remain"
     );
     assert_eq!(
         kind_at(&mut s, b.side_out(kk, -1.0, 0.0, 16.0), true).1,
-        "skew"
+        "skew-y"
     );
 
     // height thresholds: 24 px = 6.35 mm
@@ -2824,7 +2849,7 @@ fn ac37_zero_extent_and_small_boxes_hide_the_affected_skew_handles() {
         // the left/right arrows depend on the WIDTH only
         assert_eq!(
             kind_at(&mut s, b.side_out(kk, 1.0, 0.0, 16.0), true).1,
-            "skew",
+            "skew-y",
             "width 40 mm is plenty"
         );
     }
@@ -3067,7 +3092,7 @@ fn ac44_ac45_rotation_is_untouched_and_the_box_is_the_tight_rectangle_in_the_sam
     for side in SIDES {
         assert_eq!(
             kind_at(&mut s, nb.side_out(kk, side.0, side.1, 16.0), true).1,
-            "skew",
+            skew_hint_of(side),
             "{side:?}"
         );
     }
@@ -3283,15 +3308,28 @@ fn ac48_skew_cursor_is_rotated_with_the_box() {
 }
 
 #[test]
-fn ac49_double_click_on_a_skew_handle_does_nothing_and_does_not_hand_off() {
+fn ac49_double_click_on_a_skew_handle_opens_the_skew_chip_and_does_not_hand_off() {
+    // Superseded by `edit-interaction-polish` criterion 9: the skew handle now
+    // has a typed entry; there is still no handoff and nothing is written.
     let (mut s, b) = selected_triangle();
     let before = snapshot_bytes(&s);
     for side in SIDES {
         let h = skew_handle_pos(&s, &b, side);
         click(&mut s, h);
         s.double_click(h, false, false);
+        assert_eq!(
+            s.transform_entry().map(|e| e.kind),
+            Some("skew"),
+            "{side:?}"
+        );
+        s.cancel_transform_entry();
         s.double_click(h, true, true);
-        assert!(s.transform_entry().is_none(), "no chip");
+        assert_eq!(
+            s.transform_entry().map(|e| e.kind),
+            Some("skew"),
+            "{side:?}"
+        );
+        s.cancel_transform_entry();
         assert_eq!(s.tool(), Tool::Select, "no handoff");
         assert_eq!(snapshot_bytes(&s), before);
     }
@@ -3322,7 +3360,10 @@ fn ac50_ac51_primitives_show_no_skew_and_nothing_happens_where_one_would_be() {
                 let mut x = -40.0;
                 while x <= 100.0 {
                     s.pointer_hover(pt(x, y), shift, false);
-                    assert_ne!(s.handle_hint(), "skew", "kind {i} at ({x},{y})");
+                    assert!(
+                        !s.handle_hint().starts_with("skew"),
+                        "kind {i} at ({x},{y})"
+                    );
                     assert!(!s.cursor_hint().starts_with("skew"));
                     x += 1.3;
                 }
@@ -3408,9 +3449,10 @@ fn ac53_no_skew_handles_on_a_multi_selection() {
         Bx::rect(200.0, 0.0, 40.0, 20.0, 0.0),
     ] {
         for side in SIDES {
-            assert_ne!(
-                kind_at(&mut s, b.side_out(kk, side.0, side.1, 16.0), true).1,
-                "skew"
+            assert!(
+                !kind_at(&mut s, b.side_out(kk, side.0, side.1, 16.0), true)
+                    .1
+                    .starts_with("skew")
             );
         }
     }
@@ -3493,7 +3535,7 @@ fn ac54_hint_names_follow_the_handle_kind_and_object_kind() {
         "resize-corner"
     );
     let p_skew = b.side_out(k(&s), 1.0, 0.0, 16.0);
-    assert_eq!(kind_at(&mut s, p_skew, false).1, "skew");
+    assert_eq!(kind_at(&mut s, p_skew, false).1, "skew-y");
 }
 
 #[test]

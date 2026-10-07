@@ -336,6 +336,22 @@ pub(crate) fn skew_by_angle(
     shift: bool,
     angle: Angle,
 ) -> ObjectSnapshot {
+    sane_or(
+        start,
+        skewed_unchecked(start, start_box, side, shift, angle),
+    )
+}
+
+/// [`skew_by_angle`] before the sanity check: the sheared path whatever its
+/// coordinates are, `start` for a primitive or a zero angle. The typed skew
+/// uses it to tell a result refused for its size from one that did not change.
+pub(crate) fn skewed_unchecked(
+    start: &ObjectSnapshot,
+    start_box: &OrientedBox,
+    side: Side,
+    shift: bool,
+    angle: Angle,
+) -> ObjectSnapshot {
     let ObjectSnapshot::Path(path) = start else {
         return start.clone();
     };
@@ -345,10 +361,7 @@ pub(crate) fn skew_by_angle(
         return start.clone();
     }
     let (ku, kv) = if frame.along_u { (k, 0.0) } else { (0.0, k) };
-    sane_or(
-        start,
-        ObjectSnapshot::Path(path.sheared(frame.fixed_point, ku, kv)),
-    )
+    ObjectSnapshot::Path(path.sheared(frame.fixed_point, ku, kv))
 }
 
 /// Scales `object`'s stroke width by `factor`, floored above zero.

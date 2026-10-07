@@ -34,6 +34,12 @@ pub struct KeyInput<'a> {
 pub enum KeyHint {
     /// Several objects are selected: "Select one object to type a value".
     SelectOne,
+    /// Nothing is selected, or M or K was pressed outside the Select tool:
+    /// "Select an object first".
+    SelectFirst,
+    /// K or Shift+K with one selected object that is not a path: "Skew works
+    /// on paths only".
+    PathOnly,
 }
 
 /// What `Session::key_down` did.
@@ -74,6 +80,8 @@ impl KeyOutcome {
             Self::Escape(EscapeStep::LeftTool) => "escape-tool",
             Self::Escape(EscapeStep::Nothing) => "escape-none",
             Self::Hint(KeyHint::SelectOne) => "hint-select-one",
+            Self::Hint(KeyHint::SelectFirst) => "hint-select-first",
+            Self::Hint(KeyHint::PathOnly) => "hint-path-only",
         }
     }
 }
@@ -166,11 +174,17 @@ fn decide(input: &KeyInput<'_>, state: KeyState) -> KeyAction {
         (_, "*") => Binding::Tool(Tool::PolygonStar),
         (Some('r'), _) => Binding::Entry(EntryKey::Angle, Tool::Rectangle),
         (Some('s'), _) => Binding::Entry(EntryKey::Size, Tool::Select),
+        (Some('m'), _) => Binding::EntryOnly(EntryKey::Move),
+        (Some('k'), _) => Binding::EntryOnly(if input.shift {
+            EntryKey::SkewY
+        } else {
+            EntryKey::SkewX
+        }),
         (_, "Delete" | "Backspace") => Binding::Delete,
         _ => return KeyAction::Ignore,
     };
-    // Shift is allowed only for `*`.
-    if input.shift && input.key != "*" {
+    // Shift is allowed only for `*` and Shift+K.
+    if input.shift && input.key != "*" && letter != Some('k') {
         return KeyAction::Ignore;
     }
     if state.operation_in_flight || state.pen_open || state.entry_open {
@@ -186,6 +200,13 @@ fn decide(input: &KeyInput<'_>, state: KeyState) -> KeyAction {
             (Tool::Select, Selected::Many) => KeyAction::Hint(KeyHint::SelectOne),
             _ => KeyAction::SetTool(tool),
         },
+        // M and K have no tool to fall back to: outside the Select tool, or
+        // with nothing selected, they only explain themselves.
+        Binding::EntryOnly(entry) => match (state.tool, state.selected) {
+            (Tool::Select, Selected::One) => KeyAction::OpenEntry(entry),
+            (Tool::Select, Selected::Many) => KeyAction::Hint(KeyHint::SelectOne),
+            _ => KeyAction::Hint(KeyHint::SelectFirst),
+        },
     }
 }
 
@@ -195,6 +216,8 @@ enum Binding {
     Tool(Tool),
     /// The typed entry in the Select tool with a selection, else the tool.
     Entry(EntryKey, Tool),
+    /// The typed entry in the Select tool with a selection, else a hint.
+    EntryOnly(EntryKey),
     Delete,
 }
 
@@ -265,7 +288,8 @@ impl Session {
                 {
                     Ok(()) => KeyOutcome::EntryOpened,
                     Err(KeyEntryRefusal::SeveralSelected) => KeyOutcome::Hint(KeyHint::SelectOne),
-                    Err(KeyEntryRefusal::NothingSelected) => KeyOutcome::Ignored,
+                    Err(KeyEntryRefusal::NothingSelected) => KeyOutcome::Hint(KeyHint::SelectFirst),
+                    Err(KeyEntryRefusal::SkewNeedsPath) => KeyOutcome::Hint(KeyHint::PathOnly),
                 }
             }
             KeyAction::Delete => {
@@ -498,22 +522,10 @@ mod tests {
         }
     }
 
-    /// Keys that are not bound do nothing; M and K have no entry yet.
+    /// Keys that are not bound do nothing.
     #[test]
     fn unbound_keys_do_nothing() {
-        for k in [
-            "m",
-            "M",
-            "k",
-            "K",
-            "x",
-            "1",
-            "ArrowLeft",
-            "Tab",
-            "F5",
-            " ",
-            "Shift",
-        ] {
+        for k in ["x", "1", "ArrowLeft", "Tab", "F5", " ", "Shift"] {
             assert_eq!(
                 decide(&key(k), state(Tool::Select, Selected::One)),
                 KeyAction::Ignore,
@@ -526,7 +538,18 @@ mod tests {
     /// every key it covers in every tool: no effect at all.
     #[test]
     fn every_gate_condition_blocks_every_gated_key() {
-        let gated = ["b", "n", "e", "r", "s", "*", "Delete", "Backspace"];
+        let gated = [
+            "b",
+            "n",
+            "e",
+            "r",
+            "s",
+            "m",
+            "k",
+            "*",
+            "Delete",
+            "Backspace",
+        ];
         let mut blockers: Vec<(&str, Blocker)> = vec![
             ("ctrl", Box::new(|i, _| i.ctrl = true)),
             ("alt", Box::new(|i, _| i.alt = true)),
@@ -536,7 +559,7 @@ mod tests {
             ("pen path", Box::new(|_, s| s.pen_open = true)),
             ("entry", Box::new(|_, s| s.entry_open = true)),
         ];
-        // Shift blocks everything but `*`.
+        // Shift blocks everything but `*` and K.
         blockers.push(("shift", Box::new(|i, _| i.shift = true)));
         for tool in TOOLS {
             for selected in SELECTIONS {
@@ -550,9 +573,9 @@ mod tests {
                             let mut st = state(tool, selected);
                             block_a(&mut input, &mut st);
                             block_b(&mut input, &mut st);
-                            // `*` with only Shift is the one allowed pair.
+                            // `*` and K with only Shift are the allowed pairs.
                             let only_shift_on_star =
-                                k == "*" && *name_a == "shift" && *name_b == "shift";
+                                matches!(k, "*" | "k") && *name_a == "shift" && *name_b == "shift";
                             if only_shift_on_star {
                                 continue;
                             }
@@ -566,6 +589,51 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// Criteria 54 and 59: M and K open their entry in the Select tool with
+    /// one object selected (K is skew x, Shift+K skew y); several objects give
+    /// the hint "select one"; every other state (nothing selected, any other
+    /// tool) gives "select first" and changes no tool.
+    #[test]
+    fn m_and_k_open_an_entry_or_explain_themselves() {
+        for tool in TOOLS {
+            for selected in SELECTIONS {
+                for (k, shift, entry) in [
+                    ("m", false, EntryKey::Move),
+                    ("M", false, EntryKey::Move),
+                    ("k", false, EntryKey::SkewX),
+                    ("K", true, EntryKey::SkewY),
+                    ("k", true, EntryKey::SkewY),
+                ] {
+                    let input = KeyInput {
+                        key: k,
+                        shift,
+                        ..KeyInput::default()
+                    };
+                    let expected = match (tool, selected) {
+                        (Tool::Select, Selected::One) => KeyAction::OpenEntry(entry),
+                        (Tool::Select, Selected::Many) => KeyAction::Hint(KeyHint::SelectOne),
+                        _ => KeyAction::Hint(KeyHint::SelectFirst),
+                    };
+                    assert_eq!(
+                        decide(&input, state(tool, selected)),
+                        expected,
+                        "{k} shift {shift} in {tool:?} with {selected:?}"
+                    );
+                }
+            }
+        }
+        // Shift+M is nothing.
+        let shifted_m = KeyInput {
+            key: "M",
+            shift: true,
+            ..KeyInput::default()
+        };
+        assert_eq!(
+            decide(&shifted_m, state(Tool::Select, Selected::One)),
+            KeyAction::Ignore
+        );
     }
 
     /// Shift is allowed for `*` (it is Shift+8 on many layouts).

@@ -15,7 +15,9 @@ use crate::transform_drag::{
     ResizeOptions, ScaleModes, pivot_for, resize_by_local_delta, rotate_by,
 };
 use crate::transform_handle_layout::{EditHandle, is_corner};
-use crate::transform_math::{is_polygon_or_star, local_delta_for_radius, local_delta_for_size};
+use crate::transform_math::{
+    ANGLE_EQUAL_EPSILON_RAD, is_polygon_or_star, local_delta_for_radius, local_delta_for_size,
+};
 use vecmanf_document_core::PrimitiveSnapshot;
 
 /// A typed size within this (millimetres) of the current one is "equal":
@@ -23,11 +25,8 @@ use vecmanf_document_core::PrimitiveSnapshot;
 /// rounded value, so this and the untouched-text rule are both needed.
 const SIZE_EQUAL_EPSILON_MM: f64 = 1e-9;
 
-/// A typed angle within this (radians) of the current rotation is equal.
-const ANGLE_EQUAL_EPSILON_RAD: f64 = 1e-12;
-
 impl EntryField {
-    /// The single field of a parameter-handle entry (`crate::ParamEntry`).
+    /// The single field of a parameter or skew entry.
     pub(crate) fn for_param(
         label: &'static str,
         accessible_name: &'static str,
@@ -59,6 +58,8 @@ pub enum EntryKind {
     CornerRadius,
     /// One field: a star's inner ratio (criterion 19).
     InnerRatio,
+    /// One field: a path's skew angle in degrees.
+    Skew,
 }
 
 /// What a field edits.
@@ -98,6 +99,10 @@ pub enum InvalidReason {
     Negative,
     /// An inner ratio outside 0.01 to 0.99 ("Must be 0.01 to 0.99").
     RatioRange,
+    /// A skew angle of 90° or more in size ("Must be between -90 and 90").
+    SkewRange,
+    /// A skew that would pass the coordinate limit ("Too large").
+    TooLarge,
 }
 
 /// What [`TransformEntry::commit`] did.
@@ -122,6 +127,7 @@ pub enum EntryOutcome {
 /// switch's value), so later Shift, Ctrl or switch changes change nothing
 /// (criteria 22, 28, 31).
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)] // one flag per fact the entry fixes when it opens
 pub struct TransformEntry {
     kind: EntryKind,
     start: ObjectSnapshot,
@@ -134,6 +140,10 @@ pub struct TransformEntry {
     linked: bool,
     modes: ScaleModes,
     side_rotate_revealed: bool,
+    /// Opened by the key S (`edit-interaction-polish` criterion 59): no handle
+    /// was chosen, so the chip sits by the box centre, where the fixed point
+    /// is, and no handle takes its dragging look.
+    centre_chip: bool,
     pivot: Point,
     fields: Vec<EntryField>,
 }
@@ -159,13 +169,16 @@ pub(crate) fn format_mm(value: f64) -> String {
 }
 
 /// Parses the text of an entry field (criteria 19, 21, 30): trimmed, an
-/// optional sign, digits with at most one separator ("." or ","), and on
+/// optional sign ("+", "-" or the real minus U+2212), digits with at most one separator ("." or ","), and on
 /// the angle field one optional trailing "°". Anything else (empty,
 /// letters, "1,2,3", exponents, unit suffixes) is `None`, as is a value
 /// that is not finite.
 #[must_use]
 pub fn parse_entry_number(text: &str, allow_degree: bool) -> Option<f64> {
-    let mut rest = text.trim();
+    // The move readout prints a real minus sign (U+2212): a value copied from
+    // it parses (`edit-interaction-polish`, flag 6).
+    let normalized = text.replace('\u{2212}', "-");
+    let mut rest = normalized.trim();
     if allow_degree {
         rest = rest.strip_suffix('°').unwrap_or(rest).trim_end();
     }
@@ -208,6 +221,7 @@ impl TransformEntry {
             linked: false,
             modes: ScaleModes::default(),
             side_rotate_revealed: !is_corner(direction),
+            centre_chip: false,
             pivot: pivot_for(handle, object, box_, shift)
                 .unwrap_or_else(|| box_.to_document(box_.local_center())),
             fields: vec![EntryField {
@@ -284,6 +298,7 @@ impl TransformEntry {
             linked,
             modes,
             side_rotate_revealed: false,
+            centre_chip: false,
             pivot: pivot_for(handle, object, box_, shift)
                 .unwrap_or_else(|| box_.to_document(box_.local_center())),
             fields,
@@ -294,6 +309,21 @@ impl TransformEntry {
     #[must_use]
     pub const fn kind(&self) -> EntryKind {
         self.kind
+    }
+
+    /// Marks the entry as opened by the key S: its chip goes by the box
+    /// centre and no handle is highlighted.
+    #[must_use]
+    pub(crate) const fn with_centre_chip(mut self) -> Self {
+        self.centre_chip = true;
+        self
+    }
+
+    /// Whether the chip sits by the box centre instead of at the handle
+    /// (the key S).
+    #[must_use]
+    pub const fn centre_chip(&self) -> bool {
+        self.centre_chip
     }
 
     /// The handle the entry belongs to (it keeps its dragging look while
@@ -517,6 +547,27 @@ fn outer_radius(object: &ObjectSnapshot) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
+    /// A value copied from the move readout (real minus U+2212) parses like
+    /// the ASCII sign; exponent notation and a minus inside the number stay
+    /// rejected.
+    #[test]
+    fn the_real_minus_sign_parses_and_exponents_do_not() {
+        assert_eq!(parse_entry_number("\u{2212}3.5", false), Some(-3.5));
+        assert_eq!(parse_entry_number(" \u{2212} 3,5 ", false), Some(-3.5));
+        assert_eq!(parse_entry_number("\u{2212}12\u{b0}", true), Some(-12.0));
+        assert_eq!(parse_entry_number("-3.5", false), Some(-3.5));
+        for bad in [
+            "1e3",
+            "1E-3",
+            "3\u{2212}5",
+            "\u{2212}\u{2212}3",
+            "\u{2212}",
+            "3-",
+        ] {
+            assert_eq!(parse_entry_number(bad, false), None, "{bad:?}");
+        }
+    }
+
     use vecmanf_document_core::{InnerRatio, Length, PointCount, StarFrame};
 
     use super::*;

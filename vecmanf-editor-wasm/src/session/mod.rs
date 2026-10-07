@@ -22,6 +22,7 @@
 
 mod draw;
 mod keys;
+mod move_entry;
 mod navigation;
 mod node;
 mod open_error;
@@ -48,6 +49,8 @@ pub use open_error::map_open_error;
 // Re-exported only for `wasm_api`'s own `LiveReadout` wrapper (its only
 // consumer, and itself `wasm32`-only) — `#[cfg]`-gated the same way so
 // a host build does not see an unused public re-export.
+#[cfg(target_arch = "wasm32")]
+pub use move_entry::MoveEntryView;
 #[cfg(target_arch = "wasm32")]
 pub use shapes::LiveReadout;
 #[cfg(target_arch = "wasm32")]

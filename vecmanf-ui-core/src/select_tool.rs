@@ -19,7 +19,7 @@ use crate::hit_test_object::hit_test_object;
 use crate::object_selection::ObjectSelection;
 use crate::param_handles::{ParamHandle, radius_gain};
 use crate::select_bar::BarPreview;
-use crate::transform_commit::same_within_tolerance;
+use crate::transform_commit::{MOVE_EQUAL_EPSILON_MM, commit_move, same_within_tolerance};
 use crate::transform_drag::{
     CornerRadiusScaling, DragOrigin, ScaleModes, StrokeScaling, TransformDrag,
 };
@@ -35,10 +35,8 @@ use entry::OpenEntry;
 use handles::sole_selected;
 
 pub use entry::{EntryKey, KeyEntryRefusal, double_click};
+pub use handles::entry_anchor;
 pub use preview::LiveEdit;
-
-/// A move offset within this (millimetres) of zero is no move.
-const MOVE_EQUAL_EPSILON_MM: f64 = 1e-9;
 
 #[derive(Debug, Clone, Default)]
 enum SelectDrag {
@@ -87,13 +85,10 @@ pub enum SelectDoubleClickOutcome {
     /// handoff and nothing changes; the caller shows the edit hint chip
     /// (criterion 32, which replaces criterion 23 of slice 4).
     EditHint,
-    /// A rotate or resize handle was double-clicked: the numeric entry is
-    /// open (criteria 18, 25, 26), and there is no handoff (criteria 23,
-    /// 32).
+    /// A rotate, resize, skew or parameter handle, or the centre handle, was
+    /// double-clicked: the numeric entry is open (criteria 18, 25, 26; 9 and
+    /// 15 of `edit-interaction-polish`), and there is no handoff.
     EntryOpened,
-    /// A skew handle was double-clicked: nothing happens, and there is no
-    /// handoff (criterion 49).
-    Ignored,
 }
 
 /// The Select tool's state: no shape handles, no path nodes
@@ -169,7 +164,10 @@ impl SelectTool {
             SelectDrag::Transforming(drag) => drag.origin.shift_at_press,
             SelectDrag::None => match &self.entry {
                 Some(OpenEntry::Transform(entry)) => entry.side_rotate_revealed(),
-                Some(OpenEntry::Param(_)) | None => live_shift,
+                // No other chip owns a side rotate handle, and none may sit
+                // on one (criterion 59).
+                Some(OpenEntry::Param(_) | OpenEntry::Skew(_) | OpenEntry::Move(_)) => false,
+                None => live_shift,
             },
         }
     }
@@ -227,6 +225,9 @@ impl SelectTool {
                 origin,
                 from_center,
             };
+            // A double-click on the centre handle opens the typed move, so its
+            // first press must be recognised as a press on it (criterion 15).
+            self.last_press_handle = from_center.then_some(EditHandle::Move);
             return SelectPointerDownOutcome::Selected;
         }
 
@@ -327,7 +328,7 @@ impl SelectTool {
                 if selection.is_empty() {
                     return;
                 }
-                let _ = document.translate_objects(selection.ids(), offset);
+                commit_move(document, selection.ids(), offset);
             }
             SelectDrag::Transforming(drag) => {
                 if !drag.origin.is_active_at(point) {

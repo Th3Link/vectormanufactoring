@@ -69,6 +69,11 @@ pub struct TransformDecorationInput {
     /// is open), or the preview of the pivot the hovered handle would use
     /// (`docs/design-system.md`'s "Transform pivot marker").
     pub pivot_marker: Option<Point>,
+    /// Draw the pivot marker at full `--accent` instead of 60 percent: the
+    /// size chip of the key S has no highlighted handle, so the marker at the
+    /// box centre is its one sign of the fixed point (`edit-interaction-polish`
+    /// criterion 59).
+    pub pivot_marker_full: bool,
     /// The two end points of the dashed guide along the skew's fixed line,
     /// during a skew drag only.
     pub skew_guide: Option<(Point, Point)>,
@@ -366,7 +371,11 @@ pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationI
         list.extend(glyphs::circle(
             pivot,
             screen_px_to_mm(view, theme::TRANSFORM_PIVOT_MARKER_SIZE_PX),
-            theme::TRANSFORM_PIVOT_MARKER_COLOR,
+            if input.pivot_marker_full {
+                theme::ACCENT
+            } else {
+                theme::TRANSFORM_PIVOT_MARKER_COLOR
+            },
         ));
     }
     list
@@ -444,6 +453,30 @@ mod tests {
             drag.triangles.iter().any(|v| v.color == RgbaColor::WHITE),
             "the dragging glyph is white on a solid ground"
         );
+    }
+
+    #[test]
+    fn the_pivot_marker_is_full_accent_when_asked() {
+        let view = ViewTransform::identity();
+        let dim = TransformDecorationInput {
+            pivot_marker: Some(Point::new(0.0, 0.0)),
+            ..TransformDecorationInput::default()
+        };
+        let full = TransformDecorationInput {
+            pivot_marker_full: true,
+            ..dim.clone()
+        };
+        let colours = |input: &TransformDecorationInput| {
+            let list = build_transform_handles(view, input);
+            list.triangles.iter().map(|v| v.color).collect::<Vec<_>>()
+        };
+        assert!(
+            colours(&dim)
+                .iter()
+                .all(|c| *c == theme::TRANSFORM_PIVOT_MARKER_COLOR)
+        );
+        assert!(colours(&full).iter().all(|c| *c == theme::ACCENT));
+        assert_eq!(colours(&full).first(), Some(&theme::ACCENT));
     }
 
     /// UX review item 4: a handle sitting exactly on the pivot is not

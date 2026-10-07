@@ -13,7 +13,8 @@ use crate::oriented_box::{OrientedBox, oriented_bounds};
 use crate::param_handles::{centre_drawn, handle_tiers, param_handles};
 use crate::transform_handle_layout::{
     ALL_EIGHT, CORNERS_FOUR, EditHandle, HandleSpec, TransformHandleTolerances,
-    hit_transform_handle, transform_handles,
+    hit_transform_handle, resize_handle_local_position, rotate_handle_local_position,
+    skew_handle_local_position, transform_handles,
 };
 use crate::transform_math::is_polygon_or_star;
 
@@ -58,6 +59,31 @@ fn drawn_edit_handles(
             .map(|(param, at)| (EditHandle::Param(param), at)),
     );
     handles
+}
+
+/// Where the typed-entry chip of `handle` is anchored, in document space
+/// (`specs/edit-interaction-polish/adrs.md`, decision 3): the handle's own
+/// position computed from the box, not looked up in the drawn set, so a key
+/// can open the chip of a handle that is hidden by size (a skew handle on a
+/// narrow path, the centre handle on a small object). `None` for a parameter
+/// handle, whose position depends on the object and is looked up where it is
+/// drawn.
+#[must_use]
+pub fn entry_anchor(
+    box_: &OrientedBox,
+    handle: EditHandle,
+    tolerances: &TransformHandleTolerances,
+) -> Option<Point> {
+    let local = match handle {
+        EditHandle::Resize(direction) => resize_handle_local_position(box_, direction),
+        EditHandle::Rotate(direction) => {
+            rotate_handle_local_position(box_, direction, tolerances.rotate_offset_mm)
+        }
+        EditHandle::Skew(side) => skew_handle_local_position(box_, side, tolerances.skew_offset_mm),
+        EditHandle::Move => box_.local_center(),
+        EditHandle::Param(_) => return None,
+    };
+    Some(box_.to_document(local))
 }
 
 /// The sole selected object in `objects`, if the selection is exactly one.
@@ -154,5 +180,69 @@ impl SelectTool {
             && local.x <= box_.max.x
             && local.y >= box_.min.y
             && local.y <= box_.max.y
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use vecmanf_document_core::{Angle, Document, Length, RectBounds};
+
+    use super::*;
+    use crate::ResizeDirection;
+    use crate::transform_handle_layout::Side;
+
+    /// The anchor equals the drawn handle's position wherever the handle is
+    /// drawn, for every handle kind, on a rotated box.
+    #[test]
+    fn the_anchor_equals_the_drawn_handle_position() {
+        let document = Document::new(1);
+        let id = document.create_rect(RectBounds {
+            origin: Point::new(10.0, 20.0),
+            width: Length::from_mm(100.0),
+            height: Length::from_mm(60.0),
+        });
+        let turned = document
+            .object(id)
+            .expect("exists")
+            .rotated(Point::new(60.0, 50.0), Angle::from_radians(0.4));
+        document.rotate_object(&turned).expect("rotates");
+        let object = document.object(id).expect("exists");
+        let box_ = oriented_bounds(&object);
+        let tolerances = TransformHandleTolerances::at_scale(3.78);
+        for (handle, at) in drawn_edit_handles(&object, &box_, &tolerances, true) {
+            if let Some(anchor) = entry_anchor(&box_, handle, &tolerances) {
+                assert!(
+                    (anchor.x - at.x).abs() < 1e-9 && (anchor.y - at.y).abs() < 1e-9,
+                    "{handle:?}: {anchor:?} vs {at:?}"
+                );
+            } else {
+                assert!(matches!(handle, EditHandle::Param(_)));
+            }
+        }
+    }
+
+    /// A handle that is not drawn still has an anchor: the centre of a small
+    /// box and a skew handle of a narrow one.
+    #[test]
+    fn a_hidden_handle_still_has_an_anchor() {
+        let document = Document::new(1);
+        let id = document.create_rect(RectBounds {
+            origin: Point::new(0.0, 0.0),
+            width: Length::from_mm(2.0),
+            height: Length::from_mm(1.0),
+        });
+        let object = document.object(id).expect("exists");
+        let box_ = oriented_bounds(&object);
+        let tolerances = TransformHandleTolerances::at_scale(3.78);
+        let drawn = drawn_edit_handles(&object, &box_, &tolerances, false);
+        assert!(drawn.iter().all(|(h, _)| *h != EditHandle::Move));
+        let centre = entry_anchor(&box_, EditHandle::Move, &tolerances).expect("an anchor");
+        assert!((centre.x - 1.0).abs() < 1e-9 && (centre.y - 0.5).abs() < 1e-9);
+        let skew = entry_anchor(&box_, EditHandle::Skew(Side::Top), &tolerances).expect("anchor");
+        assert!((skew.x - 1.0).abs() < 1e-9);
+        assert!((skew.y - (0.0 - tolerances.skew_offset_mm)).abs() < 1e-9);
+        let rotate = entry_anchor(&box_, EditHandle::Rotate(ResizeDirection::Ne), &tolerances)
+            .expect("anchor");
+        assert!(rotate.x > 2.0 && rotate.y < 0.0);
     }
 }

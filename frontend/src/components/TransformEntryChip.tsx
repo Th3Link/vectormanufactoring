@@ -2,7 +2,7 @@ import { CircleAlert, Link2 } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import type { TransformEntryState } from "@/hooks/useEditorSession";
-import { placeEntryChip } from "@/lib/readoutPlacement";
+import { placeEntryChip, placeMoveChip } from "@/lib/readoutPlacement";
 
 /** The tool rail's clearance from the canvas's left edge, px (`App.tsx`'s
  * `left-[72px]` for the contextual bars). */
@@ -18,6 +18,8 @@ const MESSAGES = {
   positive: "Must be above 0",
   negative: "Must be 0 or more",
   "ratio-range": "Must be 0.01 to 0.99",
+  "skew-range": "Must be between -90 and 90",
+  "too-large": "Too large",
 } as const;
 
 type Reason = keyof typeof MESSAGES;
@@ -101,7 +103,11 @@ export function TransformEntryChip({
     );
   }, [entry, invalid, containerRef]);
 
-  const placed = placeEntryChip(entry.handle, entry.center, sizes.chip, sizes.canvas, entry.glyphReach);
+  // The key S opens its chip by the centre, placed as the move chip is; every
+  // other chip goes outward from its handle.
+  const placed = entry.atCentre
+    ? placeMoveChip(entry.center, sizes.chip, sizes.canvas)
+    : placeEntryChip(entry.handle, entry.center, sizes.chip, sizes.canvas, entry.glyphReach);
   // The tool rail floats over the canvas's left edge: a chip clamped to the
   // edge, with its error message, would cover the lower end of the rail.
   const placement = { ...placed, left: Math.max(placed.left, TOOL_RAIL_CLEAR_PX) };
@@ -180,13 +186,20 @@ export function TransformEntryChip({
     onCancel();
   };
 
-  const isAngle = entry.kind === "angle";
+  const isAngle = entry.kind === "angle" || entry.kind === "skew";
+  const visibleLabel = (field: { label: string; name: string }) =>
+    entry.kind === "skew" ? field.name.replace("Skew angle ", "Skew ") : field.label;
   const isRatio = entry.kind === "inner-ratio";
-  const fieldWidth = isAngle ? 80 : isRatio ? 96 : 100;
+  const isSkew = entry.kind === "skew";
+  // The skew chip names its axis inside the field ("Skew x"), so it differs
+  // from the angle chip even where the handle itself is hidden.
+  const fieldWidth = isSkew ? 120 : isAngle ? 80 : isRatio ? 96 : 100;
   const groupName =
     entry.kind === "angle"
       ? "Rotation"
-      : entry.kind === "corner-radius"
+      : entry.kind === "skew"
+        ? "Skew"
+        : entry.kind === "corner-radius"
         ? "Corner radius"
         : isRatio
           ? "Inner ratio"
@@ -217,12 +230,12 @@ export function TransformEntryChip({
                 <Link2 aria-hidden className="size-3" style={{ color: "var(--toolbar-icon)" }} />
               )}
               <div className="relative" style={{ width: fieldWidth }}>
-                {field.label !== "" && (
+                {visibleLabel(field) !== "" && (
                   <span
                     aria-hidden
                     className="pointer-events-none absolute top-1/2 left-1.5 -translate-y-1/2 text-xs"
                   >
-                    {field.label}
+                    {visibleLabel(field)}
                   </span>
                 )}
                 <input
@@ -241,7 +254,7 @@ export function TransformEntryChip({
                   onChange={(event) => onChange(index, event.target.value)}
                   onKeyDown={(event) => onKeyDown(event, index)}
                   onBlur={onBlur}
-                  className={`h-7 w-full rounded-[5px] border bg-white ${isAngle ? "pr-6" : isRatio ? "pr-2" : "pr-8"} ${field.label.length > 1 ? "pl-11" : "pl-5"} text-right text-sm tabular-nums outline-none ${
+                  className={`h-7 w-full rounded-[5px] border bg-white ${isAngle ? "pr-6" : isRatio ? "pr-2" : "pr-8"} ${visibleLabel(field).length > 1 ? "pl-12" : "pl-5"} text-right text-sm tabular-nums outline-none ${
                     isInvalid
                       ? "border-[var(--field-invalid)] shadow-[inset_0_0_0_1px_var(--field-invalid)]"
                       : "border-[color-mix(in_srgb,var(--toolbar-icon)_60%,transparent)] focus:border-[var(--editor-accent)] focus:shadow-[inset_0_0_0_1px_var(--editor-accent)]"

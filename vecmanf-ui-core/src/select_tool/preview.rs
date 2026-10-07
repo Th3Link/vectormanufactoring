@@ -122,7 +122,8 @@ impl SelectTool {
             SelectDrag::Moving { .. } => None,
             SelectDrag::None => match &self.entry {
                 Some(OpenEntry::Transform(entry)) => Some(entry.pivot()),
-                Some(OpenEntry::Param(_)) | None => None,
+                Some(OpenEntry::Skew(entry)) => Some(entry.pivot()),
+                Some(OpenEntry::Param(_) | OpenEntry::Move(_)) | None => None,
             },
         }
     }

@@ -19,6 +19,9 @@ use crate::transform_handle_layout::EditHandle;
 /// become unopenable from a drag").
 pub(crate) const MAX_COORDINATE_MM: f64 = 1e7;
 
+/// A move offset within this (millimetres) of zero is no move.
+pub(crate) const MOVE_EQUAL_EPSILON_MM: f64 = 1e-9;
+
 /// Writes a gesture's resulting snapshot (shared by a drag's release and a
 /// typed entry's Enter).
 pub(crate) fn commit_gesture(
@@ -38,6 +41,14 @@ pub(crate) fn commit_gesture(
         EditHandle::Param(param) => commit_param(document, param, result),
         EditHandle::Move => {}
     }
+}
+
+/// Writes a move of `ids` by `offset` as one commit (shared by a drag's
+/// release and the typed move's Enter, so a typed offset and a dragged one
+/// leave the same registers). A stale id refuses the whole call, which writes
+/// nothing.
+pub(crate) fn commit_move(document: &Document, ids: &[NodeId], offset: Vec2) {
+    let _ = document.translate_objects(ids, offset);
 }
 
 /// Writes a resize's resulting geometry, dispatching on the object's own
@@ -88,7 +99,7 @@ pub(crate) fn sane_or(start: &ObjectSnapshot, resolved: ObjectSnapshot) -> Objec
     }
 }
 
-fn is_sane(object: &ObjectSnapshot) -> bool {
+pub(crate) fn is_sane(object: &ObjectSnapshot) -> bool {
     let ok = |v: f64| v.is_finite() && v.abs() <= MAX_COORDINATE_MM;
     let (numbers, rotation) = numbers_of(object);
     ok(rotation) && numbers.into_iter().all(ok)

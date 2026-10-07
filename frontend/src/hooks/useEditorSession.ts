@@ -284,7 +284,7 @@ export interface TransformEntryField {
 /** The open numeric entry: what to show and where. Positions are canvas-
  * relative CSS pixels, already converted by Rust. */
 export interface TransformEntryState {
-  kind: "angle" | "size" | "radius" | "corner-radius" | "inner-ratio";
+  kind: "angle" | "size" | "radius" | "corner-radius" | "inner-ratio" | "skew";
   fields: TransformEntryField[];
   /** Whether the two fields are linked (Ctrl at the second press). */
   linked: boolean;
@@ -294,6 +294,10 @@ export interface TransformEntryState {
    * CSS pixels: 6 normally, 22 for an edge resize handle with a skew arrow
    * on the same side (the chip must clear the arrow). */
   glyphReach: number;
+  /** The chip goes 16 px right of and below the box centre, as the move chip
+   * does, instead of outward from the handle: the key S, whose fixed point is
+   * the centre (`edit-interaction-polish` criterion 59). */
+  atCentre: boolean;
 }
 
 /** Reads the wasm-bindgen `TransformEntryView` once, immediately, so it can
@@ -313,6 +317,7 @@ function readTransformEntry(
         center_x: number;
         center_y: number;
         glyph_reach: number;
+        at_centre: boolean;
         free(): void;
       }
     | undefined,
@@ -336,13 +341,51 @@ function readTransformEntry(
     handle: { x: raw.handle_x, y: raw.handle_y },
     center: { x: raw.center_x, y: raw.center_y },
     glyphReach: raw.glyph_reach,
+    atCentre: raw.at_centre,
   };
   raw.free();
   return entry;
 }
 
-function sameEntry(a: TransformEntryState | null, b: TransformEntryState | null): boolean {
+function sameEntry<T>(a: T | null, b: T | null): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** The open typed move (`specs/edit-interaction-polish/` criteria 15 to 25):
+ * where to put the chip and what an untouched field shows in each mode.
+ * Positions are canvas-relative CSS pixels, already converted by Rust. */
+export interface MoveEntryState {
+  /** The box centre: the centre handle is there, or would be. */
+  center: { x: number; y: number };
+  /** What an untouched X and Y show in Relative mode. */
+  relative: [string, string];
+  /** What an untouched X and Y show in Absolute mode (the current top-left). */
+  absolute: [string, string];
+}
+
+/** Reads the wasm-bindgen `MoveEntryChip` once, immediately, so it can be
+ * `free()`d rather than held onto. */
+function readMoveEntry(
+  raw:
+    | {
+        center_x: number;
+        center_y: number;
+        relative_prefill(axis: number): string;
+        absolute_prefill(axis: number): string;
+        free(): void;
+      }
+    | undefined,
+): MoveEntryState | null {
+  if (!raw) {
+    return null;
+  }
+  const entry: MoveEntryState = {
+    center: { x: raw.center_x, y: raw.center_y },
+    relative: [raw.relative_prefill(0), raw.relative_prefill(1)],
+    absolute: [raw.absolute_prefill(0), raw.absolute_prefill(1)],
+  };
+  raw.free();
+  return entry;
 }
 
 /** A key that could not act, shown for 2 s next to the pointer
@@ -356,6 +399,8 @@ export interface KeyHint {
 /** What `WasmSession.key_down` returns for a refused key. */
 const KEY_HINT_TEXT: Record<string, string> = {
   "hint-select-one": "Select one object to type a value",
+  "hint-select-first": "Select an object first",
+  "hint-path-only": "Skew works on paths only",
 };
 
 /** How long a key hint stays. */
@@ -388,13 +433,20 @@ export interface EditorSession {
   cursorHint: string;
   /** Which hint the handle under the pointer earns (`""`, `"resize-edge"`,
    * `"resize-corner"`, `"resize-corner-uniform"`, `"rotate-corner"`,
-   * `"rotate-side"`, `"skew"`, `"move"`): the hover chip's content
+   * `"rotate-side"`, `"skew"` (top and bottom handle), `"skew-y"` (left and
+   * right), `"move"`, `"param-radius"`, `"param-inner"`): the hover chip's content
    * (`object-transform-refinements` criterion 54). */
   handleHint: string;
   /** The typed numeric entry to show, or `null`. */
   transformEntry: TransformEntryState | null;
+  /** The open typed move, if any. */
+  moveEntry: MoveEntryState | null;
+  /** Enter in the move chip: `"committed"`, `"unchanged"` or
+   * `"invalid:<field>:number"` (the chip stays open). */
+  commitMoveEntry: (first: string, second: string, absolute: boolean) => string;
   /** Enter in the entry chip: `"committed"`, `"unchanged"` (both close it)
-   * or `"invalid:<field>:number|positive|negative|ratio-range"` (it stays
+   * or `"invalid:<field>:number|positive|negative|ratio-range|skew-range|too-large"`
+   * (it stays
    * open). */
   commitTransformEntry: (first: string, second: string, lastEdited: number) => string;
   /** Closes the entry without writing (Escape, blur). Idempotent. */
@@ -555,6 +607,7 @@ export function useEditorSession(
   const editHintCounter = useRef(0);
   const [handleHint, setHandleHint] = useState("");
   const [transformEntry, setTransformEntry] = useState<TransformEntryState | null>(null);
+  const [moveEntry, setMoveEntry] = useState<MoveEntryState | null>(null);
   const entryOpenRef = useRef(false);
   /** The last pointer position over the canvas (CSS px) — lets a
    * modifier key press/release re-run the hover, so the Select tool's
@@ -572,8 +625,10 @@ export function useEditorSession(
    * closes on a tool switch or a selection change). */
   const syncEntry = useCallback((session: WasmSession) => {
     const next = readTransformEntry(session.transform_entry());
-    entryOpenRef.current = next !== null;
+    const nextMove = readMoveEntry(session.move_entry());
+    entryOpenRef.current = next !== null || nextMove !== null;
     setTransformEntry((previous) => (sameEntry(previous, next) ? previous : next));
+    setMoveEntry((previous) => (sameEntry(previous, nextMove) ? previous : nextMove));
   }, []);
 
   /** Re-reads every bit of session-owned UI state after any call that
@@ -1206,6 +1261,19 @@ export function useEditorSession(
     [syncFromSession],
   );
 
+  const commitMoveEntry = useCallback(
+    (first: string, second: string, absolute: boolean): string => {
+      const session = sessionRef.current;
+      if (!session) {
+        return "unchanged";
+      }
+      const outcome = session.commit_move_entry(first, second, absolute);
+      syncFromSession();
+      return outcome;
+    },
+    [syncFromSession],
+  );
+
   const cancelTransformEntry = useCallback(() => {
     const session = sessionRef.current;
     if (!session || !entryOpenRef.current) {
@@ -1235,6 +1303,8 @@ export function useEditorSession(
     dismissEditHint,
     handleHint,
     transformEntry,
+    moveEntry,
+    commitMoveEntry,
     commitTransformEntry,
     cancelTransformEntry,
     transformEntryLinked,

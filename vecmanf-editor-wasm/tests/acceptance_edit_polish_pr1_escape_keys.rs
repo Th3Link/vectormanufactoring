@@ -164,12 +164,20 @@ fn select_rect() -> Session {
     s
 }
 
-/// The handle position of the typed angle (R) or size (S) chip.
+/// The handle position of the typed angle (R) or size (S) chip, for the 40 x
+/// 20 rectangle of `select_rect`. The S chip is placed by the centre
+/// (criterion 59), so the bottom-right resize handle is half the box away
+/// from it.
 fn chip_handle(s: &mut Session, k: &str) -> Point {
     assert_eq!(press(s, k), KeyOutcome::EntryOpened);
-    let h = s.transform_entry().unwrap().handle;
+    let view = s.transform_entry().unwrap();
     s.cancel_transform_entry();
-    h
+    if k == "s" {
+        assert!(view.at_centre);
+        pt(view.center.x + 20.0, view.center.y + 10.0)
+    } else {
+        view.handle
+    }
 }
 
 const TOOLS: [Tool; 6] = [
@@ -983,9 +991,9 @@ fn ac54_several_selected_objects_r_and_s_give_the_hint_and_change_nothing() {
 
 #[test]
 fn ac57_r_and_s_open_exactly_the_double_click_entries_for_every_kind() {
-    let kinds: Vec<(&str, Document, Point)> = vec![
-        ("rect", rect_doc(), pt(20.0, 0.0)),
-        ("path", closed_path_doc(), pt(10.0, 0.0)),
+    let kinds: Vec<(&str, Document, Point, Point)> = vec![
+        ("rect", rect_doc(), pt(20.0, 0.0), pt(40.0, 20.0)),
+        ("path", closed_path_doc(), pt(10.0, 0.0), pt(20.0, 15.0)),
         (
             "polygon",
             {
@@ -1001,9 +1009,10 @@ fn ac57_r_and_s_open_exactly_the_double_click_entries_for_every_kind() {
                 d
             },
             pt(30.0 + 20.0 * 0.3_f64.cos(), 30.0 + 20.0 * 0.3_f64.sin()),
+            pt(50.0, 50.0),
         ),
     ];
-    for (name, doc, grab) in kinds {
+    for (name, doc, grab, south_east) in kinds {
         for (k, kind) in [
             ("r", "angle"),
             ("s", if name == "polygon" { "radius" } else { "size" }),
@@ -1015,7 +1024,9 @@ fn ac57_r_and_s_open_exactly_the_double_click_entries_for_every_kind() {
             assert_eq!(via_key.kind, kind, "{name} {k}");
             s.cancel_transform_entry();
             // the double-click route at the same handle
-            let h = via_key.handle;
+            // The key S opens its chip by the centre (criterion 59), so the
+            // double-click route is tried on the bottom-right handle itself.
+            let h = if k == "s" { south_east } else { via_key.handle };
             s.pointer_hover(h, false, false);
             s.pointer_down(h, false);
             s.pointer_up(h, false, false);
@@ -1026,10 +1037,19 @@ fn ac57_r_and_s_open_exactly_the_double_click_entries_for_every_kind() {
                 .unwrap_or_else(|| panic!("{name} {k}: double click opens a chip"));
             assert_eq!(via_dbl.kind, via_key.kind, "{name} {k}");
             assert_eq!(via_dbl.fields, via_key.fields, "{name} {k}: same prefill");
-            assert!(
-                near(via_dbl.handle, via_key.handle),
-                "{name} {k}: same anchor"
-            );
+            if k == "s" {
+                // The one difference: the key's chip is placed by the centre,
+                // the double-click's at the handle.
+                assert!(near(via_key.handle, via_key.center), "{name} {k}");
+                assert!(via_key.at_centre && !via_dbl.at_centre, "{name} {k}");
+                assert!(near(via_dbl.handle, south_east), "{name} {k}");
+            } else {
+                assert!(
+                    near(via_dbl.handle, via_key.handle),
+                    "{name} {k}: same anchor"
+                );
+                assert!(!via_key.at_centre && !via_dbl.at_centre);
+            }
             assert!(near(via_dbl.center, via_key.center), "{name} {k}");
         }
     }
@@ -1419,9 +1439,6 @@ fn ac55_the_modifier_keys_themselves_and_unknown_keys_are_ignored_without_effect
         "\u{1f600}",
         "Insert",
         "Home",
-        "m",
-        "k",
-        "K",
         "1",
         "0",
         "-",
@@ -1430,7 +1447,7 @@ fn ac55_the_modifier_keys_themselves_and_unknown_keys_are_ignored_without_effect
         let o = press(&mut s, k);
         assert!(
             matches!(o, KeyOutcome::Ignored),
-            "{k:?} is not a key of this table (M and K come with PR 3): {o:?}"
+            "{k:?} is not a key of this table: {o:?}"
         );
         assert_eq!(bundle(&s), before, "{k:?}");
     }
