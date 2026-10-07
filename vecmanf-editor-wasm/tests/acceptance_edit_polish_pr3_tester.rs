@@ -2561,25 +2561,52 @@ fn c57a_double_click_on_a_resize_handle_keeps_the_dragged_handles_fixed_point() 
         s.transform_entry().unwrap().linked,
         "Ctrl link on the double-click route is unchanged"
     );
-    // polygon: centre fixed on the double-click route
-    let mut s = select_at(&polygon_doc(70.0, 60.0, 40.0, 5), pt(70.0, 20.0));
-    dbl(&mut s, pt(110.0, 100.0), pt(110.0, 100.0), false, false);
-    if s.transform_entry().map(|e| e.kind) == Some("size") {
+    // polygon and star: centre fixed on the double-click route, whichever
+    // corner (found by scanning for the uniform resize handle)
+    for (name, d) in [
+        ("polygon", polygon_doc(70.0, 60.0, 40.0, 5)),
+        ("star", star_doc(70.0, 60.0, 40.0, 5, 0.5)),
+    ] {
+        let mut s = select_at(&d, pt(70.0, 20.0));
+        let kk = k(&s);
+        let mut found = None;
+        let mut y = 40.0;
+        'scan: while y <= 130.0 {
+            let mut x = 70.0;
+            while x <= 140.0 {
+                s.pointer_hover(pt(x, y), false, false);
+                if s.handle_hint() == "resize-corner-uniform" {
+                    found = Some(pt(x, y));
+                    break 'scan;
+                }
+                x += 1.0 / kk;
+            }
+            y += 1.0 / kk;
+        }
+        let at = found.unwrap_or_else(|| panic!("{name}: a corner resize handle exists"));
+        dbl(&mut s, at, at, false, false);
+        assert_eq!(
+            s.transform_entry().map(|e| e.kind),
+            Some("radius"),
+            "{name}"
+        );
         assert_eq!(
             s.commit_transform_entry("60", "", 0),
-            EntryOutcome::Committed
+            EntryOutcome::Committed,
+            "{name}"
         );
         let ObjectSnapshot::Primitive(p) = obj_of(&s, 0) else {
             panic!()
         };
-        let Shape::Polygon { frame, .. } = p.shape else {
+        let (Shape::Polygon { frame, .. } | Shape::Star { frame, .. }) = p.shape else {
             panic!()
         };
         assert!(
             pnear(frame.center, pt(70.0, 60.0), 1e-9),
-            "{:?}",
+            "{name}: {:?}",
             frame.center
         );
+        assert!(near(frame.radius.as_mm(), 60.0, 1e-9), "{name}");
     }
 }
 
