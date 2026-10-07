@@ -385,7 +385,8 @@ impl Session {
     /// hover state (`unified-object-editing` criterion 25).
     /// `constrain` is the Ctrl modifier's current state, consulted only
     /// by the rectangle/ellipse tools' create-drag preview (acceptance
-    /// criteria 2, 8) and — since `object-transform` — by the Select
+    /// criteria 2, 8; `shift` centres the box on the press point,
+    /// `shape-creation-from-center`) and — since `object-transform` — by the Select
     /// tool's own live resize/rotate preview, alongside `shift`
     /// (acceptance criteria 5, 7, 16, 17); both are cached
     /// (`select_shift_held`/`select_ctrl_held`) so [`Session::draw_list`]

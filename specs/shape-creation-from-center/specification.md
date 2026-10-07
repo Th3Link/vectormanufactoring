@@ -163,9 +163,9 @@ reports them (Ctrl is Cmd on macOS, as everywhere else in the product).
     then a create-drag behaves exactly as it does today and as before this
     spec (verified in the running app, build of `main`): the press point is
     the shape's center, the pointer is one vertex (the tip, for a star), the
-    pointer's angle from the press point sets the shape's rotation, and Shift
-    and Ctrl have no effect. This is unchanged by this spec, and the customer
-    is happy with it.
+    pointer's angle from the press point sets the shape's rotation, Shift has
+    no effect, and Ctrl snaps the angle (`edit-interaction-polish` criterion
+    4). This is unchanged by this spec, and the customer is happy with it.
 
 ## Out of scope
 
@@ -173,8 +173,8 @@ reports them (Ctrl is Cmd on macOS, as everywhere else in the product).
   the 1:1 constraint exists (`primitive-shapes` "Out of scope").
 - Any change to polygon and star creation. Current behaviour, verified in
   the app: press = the shape's center, pointer = one vertex (the tip, for a
-  star), the pointer's angle sets the rotation, Shift and Ctrl have no
-  effect. Unchanged by this spec; the customer is happy with it.
+  star), the pointer's angle sets the rotation, Shift has no effect, and
+  Ctrl snaps the angle (`edit-interaction-polish` criterion 4). Unchanged by this spec; the customer is happy with it.
 - Modifier behaviour on shape-tool handle drags (resize, corner radius,
   inner radius). The Select tool already has Ctrl and Shift for resizing.
   (Superseded: the shape tools no longer have handles,
@@ -198,6 +198,10 @@ Pre-filled by the product owner for the ux-engineer to review; nothing here
 is final.
 
 - Cursor: unchanged for all four modifier states.
+- A Shift press on an existing shape's outline in the rectangle tool starts a
+  create-drag around the press point, like any other press (criterion 16 as
+  superseded by `unified-object-editing` criterion 25; covered by test
+  `ac16`).
 - Modifier legend: the shape tools show none today (only the numeric readout
   near the pointer, per `primitive-shapes` UX notes), so none is added. The
   preview outline and the readout are the feedback, as Ctrl is today

@@ -9,12 +9,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use vecmanf_document_core::{Document, InnerRatio, NodeId, PathSnapshot, Point, PointCount, Shape};
-
-const CTRL: Modifiers = Modifiers::new(false, true);
 use vecmanf_ui_core::{
     CreateOutcome, EllipseTool, Modifiers, NodeTool, ObjectSelection, PolyStarMode,
     PolygonStarTool, RectangleTool,
 };
+
+const CTRL: Modifiers = Modifiers::new(false, true);
 
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)

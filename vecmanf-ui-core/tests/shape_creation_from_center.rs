@@ -24,7 +24,8 @@ fn near(a: f64, b: f64) -> bool {
 }
 
 /// Drags a rectangle from `a` to `b` under `m` and returns (origin x, origin
-/// y, width, height, corner radius, preview shape just before release).
+/// y, width, height, corner radius); asserts that the commit equals the last
+/// preview.
 fn drag_rect(a: Point, b: Point, m: Modifiers) -> (f64, f64, f64, f64, f64) {
     let document = Document::new(1);
     let mut tool = RectangleTool::new();
