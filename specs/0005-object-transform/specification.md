@@ -1,6 +1,7 @@
 # Object transform: move, scale and rotate via on-canvas handles
 
-Status: Ready
+Status: Done
+Done, with: the corner-radius switch was deferred by the customer (2026-10-06, see Out of scope) and built later in `unified-object-editing` (#38); primitives' handles and radius behaviour were reworked there.
 Priority: Must
 Origin: Customer
 
@@ -692,4 +693,4 @@ Requirements: R-EDIT-012 (`docs/requirements.md`, added by this spec);
 cross-references R-EDIT-010/011 (`specs/0004-canvas-navigation-and-selection/
 specification.md`) and R-EDIT-002/004 (`specs/0003-primitive-shapes/
 specification.md`)
-PR:
+PR: https://github.com/curvyo/curvyo/pull/29

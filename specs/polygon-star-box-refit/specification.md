@@ -1,6 +1,6 @@
 # Polygon and star: the selection box turns with the shape
 
-Status: Ready
+Status: Done
 Priority: Should
 Origin: Customer (completes `specs/edit-interaction-polish/` criterion 1, "its
 selection box with it"; the shipped part A kept the old box as a known limit,
@@ -169,4 +169,4 @@ Builds on: `specs/edit-interaction-polish/` (part A, decision 1),
 `specs/0005-object-transform/`, `specs/object-transform-refinements/`,
 `specs/unified-object-editing/`
 Debt: `docs/technical-debt.md`, "Rotation is a stored angle"
-PR:
+PR: https://github.com/curvyo/curvyo/pull/49
