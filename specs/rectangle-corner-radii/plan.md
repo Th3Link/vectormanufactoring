@@ -63,7 +63,7 @@ no customer question).
       (Keep) or multiplies all four by the one factor (Proportional); the UI
       writes `CornerRadii::uniform`. Behaviour identical for equal radii
       (fulfils AC 12, 14, 21).
-- [ ] 7. Gate (CLAUDE.md §7 plus everything `.github/workflows/ci.yml` runs),
+- [x] 7. Gate (CLAUDE.md §7 plus everything `.github/workflows/ci.yml` runs),
       draft PR, CI on the head sha.
 
 ## Decisions taken while planning (inside `adrs.md`)
