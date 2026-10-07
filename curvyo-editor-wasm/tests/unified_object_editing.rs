@@ -69,6 +69,25 @@ fn radius_of(session: &Session) -> f64 {
     uniform_mm(corner_radii)
 }
 
+/// The largest of a rectangle's four corner radii.
+fn largest_radius_mm(session: &Session) -> f64 {
+    let ObjectSnapshot::Primitive(p) = first_object(session) else {
+        panic!("a primitive");
+    };
+    let Shape::Rect { corner_radii, .. } = p.shape else {
+        panic!("a rectangle");
+    };
+    [
+        corner_radii.tl,
+        corner_radii.tr,
+        corner_radii.br,
+        corner_radii.bl,
+    ]
+    .into_iter()
+    .map(curvyo_document_core::Length::as_mm)
+    .fold(0.0, f64::max)
+}
+
 fn ratio_of(session: &Session, index: usize) -> f64 {
     let document = state_of(session);
     let ObjectSnapshot::Primitive(p) = document.object(document.object_ids()[index]).unwrap()
@@ -367,7 +386,10 @@ fn a_double_click_on_a_radius_handle_opens_the_corner_radius_field() {
     assert_eq!(entry.kind, "corner-radius");
     assert_eq!(entry.fields.len(), 1);
     assert_eq!(entry.fields[0].label, "r");
-    assert_eq!(entry.fields[0].accessible_name, "Corner radius");
+    assert_eq!(
+        entry.fields[0].accessible_name,
+        "Corner radius, all corners"
+    );
     assert_eq!(entry.fields[0].prefill, "3.5");
     assert_eq!(
         session.tool(),
@@ -856,7 +878,9 @@ fn a_press_on_a_radius_handle_starts_that_drag_with_or_without_shift() {
         let to = pt(knob.x - 4.0, knob.y + 4.0);
         session.pointer_hover(to, shift, false);
         session.pointer_up(to, shift, false);
-        assert!(radius_of(&session) > 0.0, "shift {shift}");
+        // With Shift the drag changes its own corner only (the switch is on):
+        // the dragged corner grew either way.
+        assert!(largest_radius_mm(&session) > 0.0, "shift {shift}");
     }
 }
 

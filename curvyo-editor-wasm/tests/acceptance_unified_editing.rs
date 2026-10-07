@@ -874,12 +874,14 @@ fn ac02_shift_on_a_parameter_handle_still_drags_the_handle_and_cursor_stays_poin
         sc.s.pointer_hover(q, shift, ctrl);
         assert_eq!(sc.s.cursor_hint(), "pointer", "drag {shift} {ctrl}");
         sc.s.pointer_up(q, shift, ctrl);
-        let got = rect_of(&sc.s, 0).1.as_mm() * sc.k;
+        // With Shift the drag changes its own corner only: the dragged corner
+        // (top-left) gets the same value either way.
+        let got = largest_radius_mm(&sc.s, 0) * sc.k;
         assert!(
             near(got, radius_from_q(120.0, 45.0), 0.02),
             "{shift} {ctrl}: {got}"
         );
-        assert_eq!(rect_of(&sc.s, 0).0.origin, {
+        assert_eq!(bounds_of(&sc.s, 0).origin, {
             let k = sc.k;
             pt(60.0 - 60.0 / k, 45.0 - 60.0 / k)
         });
@@ -1116,7 +1118,7 @@ fn ac18_double_click_on_a_radius_handle_opens_the_corner_radius_field() {
     assert_eq!(e.kind, "corner-radius");
     assert_eq!(e.fields.len(), 1);
     assert_eq!(e.fields[0].label, "r");
-    assert_eq!(e.fields[0].accessible_name, "Corner radius");
+    assert_eq!(e.fields[0].accessible_name, "Corner radius, all corners");
     let shown = num(&e.fields[0].prefill);
     assert!(
         near(shown, 20.0 / sc.k, 0.06),
@@ -1430,7 +1432,10 @@ fn ac19_three_accessible_names_never_collide_on_one_selected_kind() {
         let h = sc.fr.corner(1.0, -1.0);
         names.push(open_entry(&mut sc.s, h, false, false).unwrap().fields[0].accessible_name);
     }
-    assert_eq!(names, ["Corner radius", "Inner ratio", "Outer radius"]);
+    assert_eq!(
+        names,
+        ["Corner radius, all corners", "Inner ratio", "Outer radius"]
+    );
 }
 
 // =====================================================================
@@ -2846,11 +2851,11 @@ fn ac35_a_handle_wins_over_the_inside_move_with_or_without_shift() {
             false,
         );
         assert!(
-            rect_of(&sc.s, 0).1.as_mm() > 0.0,
+            largest_radius_mm(&sc.s, 0) > 0.0,
             "shift={shift}: radius changed"
         );
         assert_eq!(
-            rect_of(&sc.s, 0).0.origin,
+            bounds_of(&sc.s, 0).origin,
             pt(60.0 - 80.0 / sc.k, 45.0 - 80.0 / sc.k),
             "not moved"
         );
@@ -2858,7 +2863,7 @@ fn ac35_a_handle_wins_over_the_inside_move_with_or_without_shift() {
         let c = handle_point(&sc, H::ResizeCorner(0));
         drag_mod(&mut sc.s, c, pt(c.x - 30.0 / sc.k, c.y), shift, false);
         assert!(
-            rect_of(&sc.s, 0).0.width.as_mm() * sc.k > 160.0 + 20.0,
+            bounds_of(&sc.s, 0).width.as_mm() * sc.k > 160.0 + 20.0,
             "shift={shift}: resized"
         );
     }
@@ -3828,4 +3833,29 @@ fn uniform_mm(radii: curvyo_document_core::CornerRadii) -> f64 {
 /// The effective radius of a rectangle with one radius at all four corners.
 fn effective_corner_radius(bounds: RectBounds, radius: Length) -> Length {
     effective_corner_radii(bounds, curvyo_document_core::CornerRadii::uniform(radius)).tl
+}
+
+/// The largest of a rectangle's four corner radii (Shift on a radius handle
+/// changes one corner only).
+fn largest_radius_mm(s: &Session, index: usize) -> f64 {
+    let Shape::Rect { corner_radii, .. } = prim_of(s, index).shape else {
+        panic!("a rectangle");
+    };
+    [
+        corner_radii.tl,
+        corner_radii.tr,
+        corner_radii.br,
+        corner_radii.bl,
+    ]
+    .into_iter()
+    .map(Length::as_mm)
+    .fold(0.0, f64::max)
+}
+
+/// A rectangle's bounds, whatever its corner radii are.
+fn bounds_of(s: &Session, index: usize) -> RectBounds {
+    let Shape::Rect { bounds, .. } = prim_of(s, index).shape else {
+        panic!("a rectangle");
+    };
+    bounds
 }
