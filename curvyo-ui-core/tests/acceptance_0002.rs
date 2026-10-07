@@ -710,9 +710,8 @@ fn ac6_every_path_shape_gets_the_identical_placeholder_style() {
     );
     for id in [straight, curved, closed] {
         let snapshot = document.path(id).unwrap();
-        assert!((snapshot.stroke_width.as_mm() - 0.25).abs() < 1e-9);
-        assert_eq!(snapshot.stroke, curvyo_document_core::Color::BLACK);
-        assert_eq!(snapshot.fill, None);
+        assert!((snapshot.style.stroke.width.as_mm() - 0.25).abs() < 1e-9);
+        assert_eq!(snapshot.style, curvyo_document_core::Style::default());
     }
 }
 

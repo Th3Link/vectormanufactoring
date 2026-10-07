@@ -7,7 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::units::{Angle, Length, Point, Vec2};
+use crate::style_model::Style;
+use crate::units::{Angle, Point, Vec2};
 
 /// A path's identity — one tree node (ADR 0002 §5).
 ///
@@ -174,10 +175,8 @@ pub enum HandleSlot {
 
 /// An RGB color, 8 bits per channel.
 ///
-/// Minimal on purpose: this slice writes exactly one stroke color (black,
-/// acceptance criterion 6) and no fill. Gradients, alpha and the maker's
-/// own color choice are `stroke-and-fill-styling` (slice 4,
-/// `specs/index.md`) and grow this type then, not now.
+/// Alpha is not part of it: stroke, fill and each gradient stop carry their
+/// own [`crate::Opacity`] (`specs/0007-stroke-and-fill-styling/adrs.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Color {
     /// Red channel.
@@ -189,8 +188,7 @@ pub struct Color {
 }
 
 impl Color {
-    /// Solid black — this slice's one stroke color (acceptance criterion
-    /// 6).
+    /// Solid black, the default stroke and fill colour.
     pub const BLACK: Self = Self { r: 0, g: 0, b: 0 };
 }
 
@@ -239,14 +237,9 @@ pub struct PathSnapshot {
     pub id: NodeId,
     /// Whether the last anchor connects back to the first.
     pub closed: bool,
-    /// Stroke width — this slice's one placeholder default is 0.25 mm
-    /// (acceptance criterion 6); no command here changes it.
-    pub stroke_width: Length,
-    /// Stroke color — this slice's one placeholder default is solid black
-    /// (acceptance criterion 6).
-    pub stroke: Color,
-    /// Fill — always `None` in this slice (acceptance criterion 6).
-    pub fill: Option<Color>,
+    /// This path's whole style: stroke and fill (`specs/0007-stroke-and-fill-
+    /// styling/adrs.md`). The same type a primitive carries.
+    pub style: Style,
     /// Anchors in traversal order (ADR 0009 §3's movable-list order, never
     /// an array index — `specs/0002-path-node-editing/adrs.md`).
     pub anchors: Vec<AnchorSnapshot>,
@@ -410,6 +403,11 @@ pub enum PathEditError {
     /// split off (acceptance criterion 12).
     #[error("the given anchor cannot be split")]
     NotSplittable,
+    /// `Document::resize_path` carried a stroke width that is not a finite
+    /// number greater than zero. Nothing is written: a stored width of zero
+    /// or less would make the file refuse to open.
+    #[error("a stroke width must be a finite number greater than zero")]
+    InvalidStrokeWidth,
 }
 
 #[cfg(test)]
@@ -420,9 +418,7 @@ mod tests {
         PathSnapshot {
             id: NodeId::from_parts(1, 1),
             closed: false,
-            stroke_width: Length::from_mm(0.25),
-            stroke: Color::BLACK,
-            fill: None,
+            style: Style::default(),
             anchors: vec![
                 NewAnchor::corner(AnchorId::new(1, 1), a),
                 NewAnchor {
@@ -584,7 +580,7 @@ mod tests {
             assert_eq!(a.id, b.id);
             assert_eq!(a.kind, b.kind);
         }
-        assert_eq!(sheared.stroke_width, path.stroke_width);
+        assert_eq!(sheared.style, path.style);
         assert_eq!(sheared.closed, path.closed);
     }
 }

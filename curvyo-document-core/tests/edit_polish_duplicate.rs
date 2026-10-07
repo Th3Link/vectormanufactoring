@@ -136,7 +136,7 @@ fn reidentified(object: &ObjectSnapshot, id: NodeId, anchor_ids: &[AnchorId]) ->
             ObjectSnapshot::Path(path)
         }
         ObjectSnapshot::Primitive(primitive) => {
-            let mut primitive = *primitive;
+            let mut primitive = primitive.clone();
             primitive.id = id;
             ObjectSnapshot::Primitive(primitive)
         }

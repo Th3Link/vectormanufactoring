@@ -96,7 +96,7 @@ fn rect_of(session: &Session) -> (RectBounds, Length, f64, f64) {
     (
         bounds,
         Length::from_mm(uniform_mm(corner_radii)),
-        p.stroke_width.as_mm(),
+        p.style.stroke.width.as_mm(),
         p.rotation.as_radians(),
     )
 }
@@ -758,7 +758,7 @@ fn ac7_shift_on_an_ellipse_and_a_path_pivots_on_the_box_center() {
 fn ac8_proportional_resize_scales_stroke_by_the_same_factor() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 0.0));
     s.set_scale_stroke_width(true);
-    let start = prim(&s).stroke_width.as_mm();
+    let start = prim(&s).style.stroke.width.as_mm();
     select_at(&mut s, pt(20.0, 0.0));
     drag(&mut s, pt(40.0, 20.0), pt(60.0, 30.0), false, false); // sx = sy = 1.5
     let (.., stroke, _) = rect_of(&s);
@@ -769,7 +769,7 @@ fn ac8_proportional_resize_scales_stroke_by_the_same_factor() {
 fn ac8_ctrl_proportional_resize_scales_stroke_by_the_factor() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 0.0));
     s.set_scale_stroke_width(true);
-    let start = prim(&s).stroke_width.as_mm();
+    let start = prim(&s).style.stroke.width.as_mm();
     select_at(&mut s, pt(20.0, 0.0));
     drag(&mut s, pt(40.0, 20.0), pt(60.0, 21.0), false, true); // factor 1.5
     let (.., stroke, _) = rect_of(&s);
@@ -780,7 +780,7 @@ fn ac8_ctrl_proportional_resize_scales_stroke_by_the_factor() {
 fn ac8_non_uniform_resize_uses_the_geometric_mean() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 0.0));
     s.set_scale_stroke_width(true);
-    let start = prim(&s).stroke_width.as_mm();
+    let start = prim(&s).style.stroke.width.as_mm();
     select_at(&mut s, pt(20.0, 0.0));
     drag(&mut s, pt(40.0, 20.0), pt(60.0, 50.0), false, false); // sx 1.5, sy 2.5
     let (.., stroke, _) = rect_of(&s);
@@ -791,7 +791,7 @@ fn ac8_non_uniform_resize_uses_the_geometric_mean() {
 fn ac8_edge_handle_resize_uses_the_geometric_mean_with_one_axis_unscaled() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 0.0));
     s.set_scale_stroke_width(true);
-    let start = prim(&s).stroke_width.as_mm();
+    let start = prim(&s).style.stroke.width.as_mm();
     select_at(&mut s, pt(20.0, 0.0));
     drag(&mut s, pt(40.0, 10.0), pt(80.0, 10.0), false, false); // sx 2, sy 1
     let (.., stroke, _) = rect_of(&s);
@@ -803,27 +803,27 @@ fn ac8_stroke_scales_for_ellipse_path_polygon_and_star_too() {
     // ellipse, sx = sy = 1.5
     let mut s = open_in_session(&ellipse_doc(20.0, 10.0, 20.0, 10.0));
     s.set_scale_stroke_width(true);
-    let start = prim(&s).stroke_width.as_mm();
+    let start = prim(&s).style.stroke.width.as_mm();
     select_at(&mut s, ell());
     drag(&mut s, pt(40.0, 20.0), pt(60.0, 30.0), false, false);
-    assert!(close(prim(&s).stroke_width.as_mm(), start * 1.5));
+    assert!(close(prim(&s).style.stroke.width.as_mm(), start * 1.5));
 
     // path, sx 1.5 sy 1.5
     let mut s = open_in_session(&s_curve_doc());
     s.set_scale_stroke_width(true);
-    let start = path_of(&s).stroke_width.as_mm();
+    let start = path_of(&s).style.stroke.width.as_mm();
     select_at(&mut s, pt(20.0, 10.0));
     drag(&mut s, pt(40.0, 20.0), pt(60.0, 30.0), false, false);
-    assert!(close(path_of(&s).stroke_width.as_mm(), start * 1.5));
+    assert!(close(path_of(&s).style.stroke.width.as_mm(), start * 1.5));
 
     // path, one axis: sqrt
     let mut s = open_in_session(&s_curve_doc());
     s.set_scale_stroke_width(true);
-    let start = path_of(&s).stroke_width.as_mm();
+    let start = path_of(&s).style.stroke.width.as_mm();
     select_at(&mut s, pt(20.0, 10.0));
     drag(&mut s, pt(40.0, 10.0), pt(80.0, 10.0), false, false);
     assert!(close(
-        path_of(&s).stroke_width.as_mm(),
+        path_of(&s).style.stroke.width.as_mm(),
         start * 2.0_f64.sqrt()
     ));
 }
@@ -838,7 +838,7 @@ fn ac8_stroke_never_becomes_zero_or_negative_when_collapsing_a_resize() {
     ] {
         let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0, 0.0));
         s.set_scale_stroke_width(true);
-        let start = prim(&s).stroke_width.as_mm();
+        let start = prim(&s).style.stroke.width.as_mm();
         select_at(&mut s, pt(20.0, 0.0));
         drag(&mut s, grab, to, false, false);
         let (b, _, stroke, _) = rect_of(&s);
@@ -876,8 +876,8 @@ fn ac8_stroke_stays_positive_for_every_object_kind_when_collapsed() {
         let id = only_id(&s);
         let d = document_of(&s);
         let stroke = match d.object(id).unwrap() {
-            ObjectSnapshot::Path(p) => p.stroke_width.as_mm(),
-            ObjectSnapshot::Primitive(p) => p.stroke_width.as_mm(),
+            ObjectSnapshot::Path(p) => p.style.stroke.width.as_mm(),
+            ObjectSnapshot::Primitive(p) => p.style.stroke.width.as_mm(),
         };
         assert!(stroke > 0.0 && stroke.is_finite(), "{stroke}");
         assert!(Session::open(5, &s.pack("0.1.0").unwrap()).is_ok());
@@ -983,7 +983,7 @@ fn star_like(session: &Session) -> (StarFrame, PointCount, Option<InnerRatio>, f
             frame,
             point_count,
             None,
-            p.stroke_width.as_mm(),
+            p.style.stroke.width.as_mm(),
             p.rotation.as_radians(),
         ),
         Shape::Star {
@@ -994,7 +994,7 @@ fn star_like(session: &Session) -> (StarFrame, PointCount, Option<InnerRatio>, f
             frame,
             point_count,
             Some(inner_ratio),
-            p.stroke_width.as_mm(),
+            p.style.stroke.width.as_mm(),
             p.rotation.as_radians(),
         ),
         other => panic!("not a polygon/star: {other:?}"),
@@ -2097,7 +2097,7 @@ fn ac23_moving_a_rotated_and_scaled_object_is_a_pure_translation() {
     assert!(close(b1.origin.x, b0.origin.x + 7.0) && close(b1.origin.y, b0.origin.y - 3.0));
     assert_eq!((b1.width, b1.height, r1), (b0.width, b0.height, r0));
     assert_eq!(after.rotation, before.rotation);
-    assert_eq!(after.stroke_width, before.stroke_width);
+    assert_eq!(after.style.stroke.width, before.style.stroke.width);
 }
 
 #[test]
@@ -2799,7 +2799,7 @@ fn assert_all_finite_and_reopenable(session: &Session) {
         match doc.object(id).unwrap() {
             ObjectSnapshot::Primitive(p) => {
                 assert!(p.rotation.as_radians().is_finite());
-                assert!(p.stroke_width.as_mm().is_finite() && p.stroke_width.as_mm() > 0.0);
+                assert!(p.style.stroke.width.as_mm().is_finite() && p.style.stroke.width.as_mm() > 0.0);
                 match p.shape {
                     Shape::Rect {
                         bounds,
@@ -2834,7 +2834,7 @@ fn assert_all_finite_and_reopenable(session: &Session) {
             }
             ObjectSnapshot::Path(p) => {
                 assert!(p.rotation.as_radians().is_finite());
-                assert!(p.stroke_width.as_mm().is_finite() && p.stroke_width.as_mm() > 0.0);
+                assert!(p.style.stroke.width.as_mm().is_finite() && p.style.stroke.width.as_mm() > 0.0);
                 for a in &p.anchors {
                     for v in [
                         a.point.x,

@@ -81,7 +81,7 @@ fn a_peer_resize_and_a_peer_rotate_about_the_centre_both_survive_the_merge() {
         };
         assert_eq!(bounds.width.as_mm(), 25.0, "resize survived (flip {flip})");
         assert_eq!(bounds.height.as_mm(), 9.0);
-        assert_eq!(p.stroke_width.as_mm(), 2.0);
+        assert_eq!(p.style.stroke.width.as_mm(), 2.0);
         assert!(
             (p.rotation.as_radians() - 0.6).abs() < 1e-12,
             "rotation survived (flip {flip}): {}",

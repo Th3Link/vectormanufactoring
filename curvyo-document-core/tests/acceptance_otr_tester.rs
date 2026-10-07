@@ -79,7 +79,7 @@ fn sheared_applies_the_linear_map_about_the_pivot_to_points_and_only_the_linear_
     }
     assert_eq!(s.rotation.as_radians(), p.rotation.as_radians());
     assert_eq!(s.closed, p.closed);
-    assert_eq!(s.stroke_width, p.stroke_width);
+    assert_eq!(s.style.stroke.width, p.style.stroke.width);
     // y skew
     let s = p.sheared(pivot, 0.0, -0.7);
     for (a, o) in s.anchors.iter().zip(&p.anchors) {

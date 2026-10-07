@@ -794,8 +794,7 @@ fn c34_every_kind_is_copied_with_every_field_and_the_selection_is_the_copies() {
         match (orig, copy) {
             (ObjectSnapshot::Path(a), ObjectSnapshot::Path(b)) => {
                 assert_eq!(a.closed, b.closed);
-                assert_eq!(a.stroke_width, b.stroke_width);
-                assert_eq!(a.stroke, b.stroke);
+                assert_eq!(a.style, b.style);
                 assert_eq!(a.rotation, b.rotation);
                 for (x, y) in a.anchors.iter().zip(&b.anchors) {
                     assert_ne!(x.id, y.id);
@@ -807,9 +806,8 @@ fn c34_every_kind_is_copied_with_every_field_and_the_selection_is_the_copies() {
                 }
             }
             (ObjectSnapshot::Primitive(a), ObjectSnapshot::Primitive(b)) => {
-                assert_eq!(a.stroke_width, b.stroke_width);
+                assert_eq!(a.style, b.style);
                 assert_eq!(a.rotation, b.rotation, "rotation copied");
-                assert_eq!(a.fill, b.fill);
                 match (&a.shape, &b.shape) {
                     (
                         Shape::Rect {

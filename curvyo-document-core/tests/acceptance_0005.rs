@@ -169,7 +169,7 @@ fn ac24_a_resized_rect_and_path_persist_exactly() {
     let ObjectSnapshot::Primitive(p) = after.object(rect).unwrap() else {
         panic!("rect stays a primitive");
     };
-    assert!((p.stroke_width.as_mm() - 0.375).abs() < 1e-12);
+    assert!((p.style.stroke.width.as_mm() - 0.375).abs() < 1e-12);
 }
 
 /// Rotation is normalized to (-π, π] when written, so repeated rotate

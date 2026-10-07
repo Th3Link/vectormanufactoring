@@ -8,7 +8,7 @@
 #![allow(clippy::too_many_lines, clippy::similar_names)]
 
 use curvyo_document_core::{
-    AnchorId, Angle, Color, Document, EllipseFrame, InnerRatio, Length, NewAnchor, NodeId,
+    AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, NodeId,
     ObjectSnapshot, Point, PointCount, PrimitiveSnapshot, RectBounds, Shape, StarFrame, Vec2,
     outline_of_rotated,
 };
@@ -46,9 +46,7 @@ fn primitive(shape: Shape, rotation: Angle) -> ObjectSnapshot {
     ObjectSnapshot::Primitive(PrimitiveSnapshot {
         id: id(),
         shape,
-        stroke_width: Length::from_mm(0.25),
-        stroke: Color::BLACK,
-        fill: None,
+        style: curvyo_document_core::Style::default(),
         rotation,
     })
 }

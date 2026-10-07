@@ -527,7 +527,7 @@ fn small_rotated_rect_resize_and_rotate_behave() {
             drag(&mut s, handle, to);
             let after = prim(&s);
             assert_eq!(after.shape, before.shape, "frame untouched {size} {deg}");
-            assert_eq!(after.stroke_width, before.stroke_width);
+            assert_eq!(after.style.stroke.width, before.style.stroke.width);
             let _ = w;
             let expect = Angle::from_radians(a + 20.0_f64.to_radians()).normalized();
             assert!(
@@ -663,7 +663,7 @@ fn drags_that_end_far_outside_the_canvas_commit_finite_values() {
                 b.origin.y,
                 b.width.as_mm(),
                 b.height.as_mm(),
-                p.stroke_width.as_mm(),
+                p.style.stroke.width.as_mm(),
             ] {
                 assert!(v.is_finite(), "{gesture} to {far}: {b:?}");
             }
@@ -730,7 +730,7 @@ fn hostile_pointer_values_never_corrupt_the_document() {
                         bounds.width.as_mm(),
                         bounds.height.as_mm(),
                         uniform_mm(corner_radii),
-                        p.stroke_width.as_mm(),
+                        p.style.stroke.width.as_mm(),
                         p.rotation.as_radians(),
                     ] {
                         assert!(v.is_finite(), "{gesture} {stage} {bad:?}: {p:?}");

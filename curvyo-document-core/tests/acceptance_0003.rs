@@ -743,10 +743,8 @@ fn ac16_a_freshly_created_primitive_has_the_same_stroke_default_as_a_path() {
     let ObjectSnapshot::Path(path_snapshot) = path_snapshot else {
         panic!("expected path")
     };
-    assert_eq!(rect_snapshot.stroke, path_snapshot.stroke);
-    assert_eq!(rect_snapshot.stroke_width, path_snapshot.stroke_width);
-    assert_eq!(rect_snapshot.fill, None);
-    assert_eq!(path_snapshot.fill, None);
+    assert_eq!(rect_snapshot.style, path_snapshot.style);
+    assert_eq!(rect_snapshot.style, curvyo_document_core::Style::default());
 }
 
 // ---------------------------------------------------------------------

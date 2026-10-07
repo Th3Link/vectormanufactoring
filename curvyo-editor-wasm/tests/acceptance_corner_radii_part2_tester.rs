@@ -1558,12 +1558,12 @@ fn a_stars_inner_radius_drag_ignores_the_link_switch_and_shift() {
     );
 }
 
-/// Criterion 19: the format version increased once, to 6 (provisional: the
-/// merge renumbers it to `main`'s number plus one, and this pin with it). The
-/// earlier "bumped past main" pins were turned into "equals
-/// `CURRENT_FORMAT_VERSION`" by part 1, so this is the one test that fails if
-/// the number moves by accident.
+/// Criterion 19: the format version increased once, to 6; `stroke-and-fill-
+/// styling` took it to 7 (provisional: the merge renumbers it to `main`'s
+/// number plus one, and this pin with it). The earlier "bumped past main" pins
+/// were turned into "equals `CURRENT_FORMAT_VERSION`" by part 1, so this is the
+/// one test that fails if the number moves by accident.
 #[test]
-fn the_format_version_is_six_until_the_merge_renumbers_it() {
-    assert_eq!(CURRENT_FORMAT_VERSION, 6);
+fn the_format_version_is_seven_until_the_merge_renumbers_it() {
+    assert_eq!(CURRENT_FORMAT_VERSION, 7);
 }

@@ -124,7 +124,9 @@ impl Document {
     /// [`ShapeEditError::InvalidRadius`] for a NaN or infinite radius (nothing
     /// is written; a negative one is floored to zero);
     /// [`ShapeEditError::NoSuchObject`] / [`ShapeEditError::NotAPrimitive`]
-    /// / [`ShapeEditError::WrongShape`] if `id` is not a rectangle.
+    /// / [`ShapeEditError::WrongShape`] if `id` is not a rectangle;
+    /// [`ShapeEditError::InvalidStrokeWidth`] for a width that is not above
+    /// zero.
     pub fn resize_rect(
         &self,
         id: NodeId,
@@ -133,6 +135,7 @@ impl Document {
         stroke_width: Option<Length>,
     ) -> Result<(), ShapeEditError> {
         let corner_radii = checked(corner_radii)?;
+        crate::shapes::check_stroke_width(stroke_width)?;
         let meta = self.require_shape(id, SHAPE_RECT)?;
         shape_codec::write_rect_bounds(&meta, bounds);
         write_corner_radii_if_changed(&meta, corner_radii);

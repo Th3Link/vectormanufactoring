@@ -213,7 +213,7 @@ fn selected_segment_overlay(
     let start_anchor = snapshot.anchors.iter().find(|a| a.id == start)?;
     let end_anchor = snapshot.anchors.iter().find(|a| a.id == end)?;
     let min_width_mm = screen_px_to_mm(view, theme::MIN_DISPLAY_STROKE_WIDTH_PX);
-    let overlay_width = snapshot.stroke_width.as_mm().max(min_width_mm)
+    let overlay_width = snapshot.style.stroke.width.as_mm().max(min_width_mm)
         + screen_px_to_mm(view, theme::SEGMENT_OVERLAY_EXTRA_PX);
     let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
     Some(crate::stroke::segment_stroke(

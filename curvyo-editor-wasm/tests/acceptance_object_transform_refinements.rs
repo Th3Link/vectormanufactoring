@@ -552,7 +552,7 @@ fn a_skew_writes_anchors_only_and_shows_its_readout() {
     let (ObjectSnapshot::Path(a), ObjectSnapshot::Path(b)) = (&after, &before) else {
         panic!()
     };
-    assert_eq!(a.stroke_width, b.stroke_width);
+    assert_eq!(a.style.stroke.width, b.style.stroke.width);
     assert_eq!(a.closed, b.closed);
     assert_eq!(a.anchors.len(), b.anchors.len());
 }

@@ -1228,13 +1228,17 @@ fn ac19_a_newer_file_is_refused_and_this_version_and_older_are_accepted() {
     l.set_peer_id(1).unwrap();
     l.commit();
     let snap = l.export(loro::ExportMode::Snapshot).unwrap();
-    for v in [1, 5, 6] {
+    for v in [1, 5, 6, CURRENT_FORMAT_VERSION] {
         assert!(unpack(2, &zip_with(v, &snap, b"{}")).is_ok(), "version {v}");
     }
-    for v in [7, 8, 100] {
+    for v in [
+        CURRENT_FORMAT_VERSION + 1,
+        CURRENT_FORMAT_VERSION + 2,
+        CURRENT_FORMAT_VERSION + 100,
+    ] {
         match unpack(2, &zip_with(v, &snap, b"{}")) {
             Err(OpenError::FormatTooNew { found, supported }) => {
-                assert_eq!((found, supported), (v, 6));
+                assert_eq!((found, supported), (v, CURRENT_FORMAT_VERSION));
             }
             other => panic!("version {v}: {:?}", other.err()),
         }

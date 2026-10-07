@@ -18,8 +18,9 @@ use crate::path_codec::{
     write_kind, write_point, write_vec2,
 };
 use crate::path_model::{
-    AnchorId, AnchorKind, Color, HandleSlot, NewAnchor, NodeId, PathEditError, PathSnapshot,
+    AnchorId, AnchorKind, HandleSlot, NewAnchor, NodeId, PathEditError, PathSnapshot,
 };
+use crate::style_model::Style;
 use crate::units::{Length, Point, Vec2};
 
 /// Default handle length a corner→symmetric/asymmetric conversion pulls
@@ -130,8 +131,7 @@ impl Document {
         let id = self.create_path_uncommitted(
             anchors,
             closed,
-            path_codec::DEFAULT_STROKE_WIDTH_MM,
-            Color::BLACK,
+            &Style::default(),
             crate::units::Angle::from_radians(0.0),
         );
         self.commit_with_label("create_path");
@@ -223,13 +223,17 @@ impl Document {
     /// # Errors
     /// [`PathEditError::NoSuchPath`] if `path` no longer exists;
     /// [`PathEditError::NoSuchAnchor`] if any named anchor no longer
-    /// exists.
+    /// exists; [`PathEditError::InvalidStrokeWidth`] for a width that is not
+    /// above zero.
     pub fn resize_path(
         &self,
         path: NodeId,
         anchors: &[(AnchorId, Point, Vec2, Vec2)],
         stroke_width: Option<Length>,
     ) -> Result<(), PathEditError> {
+        if !crate::style_codec::stroke_width_is_writable(stroke_width) {
+            return Err(PathEditError::InvalidStrokeWidth);
+        }
         let (meta, anchor_list) = self.path_parts(path)?;
         let resolved: Vec<(usize, Point, Vec2, Vec2)> = anchors
             .iter()
@@ -568,9 +572,9 @@ impl Document {
     /// which needs the new object's creation folded into Split's own
     /// single commit (`specs/0002-path-node-editing/adrs.md`'s "each
     /// mutating method ends in exactly one Loro commit") rather than a
-    /// second, separate one. Also takes an explicit stroke width/color
-    /// rather than always writing the placeholder default, so Split can
-    /// copy the original path's own style instead of resetting it.
+    /// second, separate one. Also takes an explicit style rather than always
+    /// writing the creation default, so Split can copy the original path's
+    /// own style (stops included) instead of resetting it.
     /// `pub(crate)` for `path_topology` to call.
     ///
     /// # Panics
@@ -585,8 +589,7 @@ impl Document {
         &self,
         anchors: &[NewAnchor],
         closed: bool,
-        stroke_width_mm: f64,
-        stroke: Color,
+        style: &Style,
         rotation: crate::units::Angle,
     ) -> NodeId {
         let tree = self.loro().get_tree(OBJECTS_TREE);
@@ -598,7 +601,7 @@ impl Document {
         // created cannot fail.
         #[allow(clippy::unwrap_used)]
         let meta = tree.get_meta(tree_id).unwrap();
-        path_codec::write_path_style(&meta, closed, stroke_width_mm, stroke);
+        path_codec::write_path_style(&meta, closed, style);
         if rotation.as_radians() != 0.0 {
             path_codec::write_rotation(&meta, rotation);
         }
@@ -670,9 +673,8 @@ mod tests {
         let document = Document::new(1);
         let id = document.create_path(&[anchor(1, 0.0, 0.0), anchor(2, 1.0, 1.0)], false);
         let snapshot = document.path(id).expect("path exists");
-        assert!((snapshot.stroke_width.as_mm() - 0.25).abs() < f64::EPSILON);
-        assert_eq!(snapshot.stroke, Color::BLACK);
-        assert_eq!(snapshot.fill, None);
+        assert!((snapshot.style.stroke.width.as_mm() - 0.25).abs() < f64::EPSILON);
+        assert_eq!(snapshot.style, Style::default());
     }
 
     #[test]
@@ -871,7 +873,7 @@ mod tests {
         let snapshot = document.path(id).expect("exists");
         assert_eq!(snapshot.anchors[1].point, Point::new(20.0, 0.0));
         assert_eq!(snapshot.anchors[0].handle_out, Vec2::new(1.0, 0.0));
-        assert!((snapshot.stroke_width.as_mm() - 0.5).abs() < 1e-9);
+        assert!((snapshot.style.stroke.width.as_mm() - 0.5).abs() < 1e-9);
     }
 
     /// A refused `resize_path` (one stale anchor id) must not leave the

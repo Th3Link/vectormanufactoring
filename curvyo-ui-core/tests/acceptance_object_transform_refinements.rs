@@ -1110,9 +1110,9 @@ fn the_stroke_switch_is_read_when_the_entry_opens() {
         panic!()
     };
     assert!(
-        close(p.stroke_width.as_mm(), 4.0),
+        close(p.style.stroke.width.as_mm(), 4.0),
         "scaled by the factor 2: {}",
-        p.stroke_width.as_mm()
+        p.style.stroke.width.as_mm()
     );
 
     let mut keep = Rig::new(Kind::Rect);
@@ -1121,7 +1121,7 @@ fn the_stroke_switch_is_read_when_the_entry_opens() {
         let ObjectSnapshot::Primitive(p) = keep.object() else {
             panic!()
         };
-        p.stroke_width
+        p.style.stroke.width
     };
     assert_eq!(
         commit(&mut keep, ["200", "120"], 0),
@@ -1130,7 +1130,7 @@ fn the_stroke_switch_is_read_when_the_entry_opens() {
     let ObjectSnapshot::Primitive(p) = keep.object() else {
         panic!()
     };
-    assert_eq!(p.stroke_width, before, "switch off: stroke untouched");
+    assert_eq!(p.style.stroke.width, before, "switch off: stroke untouched");
 }
 
 /// Criteria 16, 27: a drag to the pointer that yields size S and an entry

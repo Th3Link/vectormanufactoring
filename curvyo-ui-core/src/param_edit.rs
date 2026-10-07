@@ -237,7 +237,7 @@ fn apply_to_primitive(start: &PrimitiveSnapshot, value: ParamValue) -> Primitive
             ParamValue::Radius(radius),
         ) => {
             let Some(corner_radii) = apply_radius(bounds, corner_radii, radius) else {
-                return *start;
+                return start.clone();
             };
             Shape::Rect {
                 bounds,
@@ -253,7 +253,7 @@ fn apply_to_primitive(start: &PrimitiveSnapshot, value: ParamValue) -> Primitive
         ) => {
             let Some(corner_radii) = apply_corner_radius(bounds, corner_radii, corner, radius)
             else {
-                return *start;
+                return start.clone();
             };
             Shape::Rect {
                 bounds,
@@ -270,7 +270,7 @@ fn apply_to_primitive(start: &PrimitiveSnapshot, value: ParamValue) -> Primitive
         ) => {
             let limited = clamped_ratio(ratio.get());
             if (limited.get() - inner_ratio.get()).abs() <= PARAM_EQUAL_EPSILON {
-                return *start;
+                return start.clone();
             }
             Shape::Star {
                 frame,
@@ -280,7 +280,7 @@ fn apply_to_primitive(start: &PrimitiveSnapshot, value: ParamValue) -> Primitive
         }
         (Shape::Polygon { frame, point_count }, ParamValue::PointCount(count)) => {
             if count == point_count {
-                return *start;
+                return start.clone();
             }
             Shape::Polygon {
                 frame,
@@ -296,7 +296,7 @@ fn apply_to_primitive(start: &PrimitiveSnapshot, value: ParamValue) -> Primitive
             ParamValue::PointCount(count),
         ) => {
             if count == point_count {
-                return *start;
+                return start.clone();
             }
             Shape::Star {
                 frame,
@@ -304,9 +304,12 @@ fn apply_to_primitive(start: &PrimitiveSnapshot, value: ParamValue) -> Primitive
                 inner_ratio,
             }
         }
-        _ => return *start,
+        _ => return start.clone(),
     };
-    PrimitiveSnapshot { shape, ..*start }
+    PrimitiveSnapshot {
+        shape,
+        ..start.clone()
+    }
 }
 
 /// Writes a parameter drag's or entry's `result` (from [`apply_param`]) for
