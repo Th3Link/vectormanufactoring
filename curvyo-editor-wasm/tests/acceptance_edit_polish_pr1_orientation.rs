@@ -1130,7 +1130,10 @@ fn ac02_new_files_use_the_same_stored_representation_as_before() {
         z.0.remove("manifest.json").unwrap()
     };
     let m: serde_json::Value = serde_json::from_slice(&manifest).unwrap();
-    assert_eq!(m["format_version"], 5, "format_version unchanged");
+    assert_eq!(
+        m["format_version"], 6,
+        "format_version unchanged by this story (6 since `rectangle-corner-radii`)"
+    );
 }
 
 fn zip_reader(bytes: &[u8]) -> (std::collections::HashMap<String, Vec<u8>>,) {

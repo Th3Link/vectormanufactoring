@@ -523,18 +523,18 @@ fn tight_of(o: &ObjectSnapshot) -> (f64, f64, f64, f64) {
             match p.shape {
                 Shape::Rect {
                     bounds: b,
-                    corner_radius,
-                } if corner_radius.as_mm() > 0.0 => {
+                    corner_radii,
+                } if uniform_mm(corner_radii) > 0.0 => {
                     let _ = b;
                     tight_drawn(&p.shape, p.rotation)
                 }
                 Shape::Rect {
                     bounds: b,
-                    corner_radius,
+                    corner_radii,
                 } => {
                     let (w, h) = (b.width.as_mm(), b.height.as_mm());
                     let c = pt(b.origin.x + w / 2.0, b.origin.y + h / 2.0);
-                    let r = corner_radius.as_mm().max(0.0).min(w / 2.0).min(h / 2.0);
+                    let r = uniform_mm(corner_radii).max(0.0).min(w / 2.0).min(h / 2.0);
                     let (cs, sn) = (th.cos().abs(), th.sin().abs());
                     let hx = f64::midpoint((w - 2.0 * r) * cs, (h - 2.0 * r) * sn) + r;
                     let hy = f64::midpoint((w - 2.0 * r) * sn, (h - 2.0 * r) * cs) + r;
@@ -689,11 +689,11 @@ fn same_object(a: &ObjectSnapshot, b: &ObjectSnapshot, eps: f64, ctx: &str) {
                 (
                     Shape::Rect {
                         bounds: bx,
-                        corner_radius: rx,
+                        corner_radii: rx,
                     },
                     Shape::Rect {
                         bounds: by,
-                        corner_radius: ry,
+                        corner_radii: ry,
                     },
                 ) => {
                     assert!(
@@ -704,7 +704,10 @@ fn same_object(a: &ObjectSnapshot, b: &ObjectSnapshot, eps: f64, ctx: &str) {
                     );
                     assert!(near(bx.width.as_mm(), by.width.as_mm(), eps), "{ctx}: w");
                     assert!(near(bx.height.as_mm(), by.height.as_mm(), eps), "{ctx}: h");
-                    assert!(near(rx.as_mm(), ry.as_mm(), eps), "{ctx}: corner radius");
+                    assert!(
+                        near(uniform_mm(rx), uniform_mm(ry), eps),
+                        "{ctx}: corner radius"
+                    );
                 }
                 (Shape::Ellipse { frame: fx }, Shape::Ellipse { frame: fy }) => {
                     assert!(pnear(fx.center, fy.center, eps), "{ctx}: centre");
@@ -3175,4 +3178,14 @@ fn x09_the_s_pivot_marker_draw_list_differs_from_the_chip_closed_state() {
         pos(&with_dbl),
         "different fixed points, different marker"
     );
+}
+
+/// The one radius of a rectangle whose four corner radii are equal (asserted).
+fn uniform_mm(radii: curvyo_document_core::CornerRadii) -> f64 {
+    assert_eq!(
+        radii,
+        curvyo_document_core::CornerRadii::uniform(radii.tl),
+        "four equal radii"
+    );
+    radii.tl.as_mm()
 }

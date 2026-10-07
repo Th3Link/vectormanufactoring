@@ -719,7 +719,7 @@ fn hostile_pointer_values_never_corrupt_the_document() {
                     let p = prim(&s);
                     let Shape::Rect {
                         bounds,
-                        corner_radius,
+                        corner_radii,
                     } = p.shape
                     else {
                         panic!()
@@ -729,7 +729,7 @@ fn hostile_pointer_values_never_corrupt_the_document() {
                         bounds.origin.y,
                         bounds.width.as_mm(),
                         bounds.height.as_mm(),
-                        corner_radius.as_mm(),
+                        uniform_mm(corner_radii),
                         p.stroke_width.as_mm(),
                         p.rotation.as_radians(),
                     ] {
@@ -890,4 +890,14 @@ fn a_selected_elongated_rect_and_a_small_ellipse_can_be_moved_by_an_outline_pres
     let k = std::f64::consts::FRAC_1_SQRT_2;
     let p = pt(c.x + w / 2.0 * k, c.y + h / 2.0 * k);
     assert_eq!(hint_at(&mut s, p), "default");
+}
+
+/// The one radius of a rectangle whose four corner radii are equal (asserted).
+fn uniform_mm(radii: curvyo_document_core::CornerRadii) -> f64 {
+    assert_eq!(
+        radii,
+        curvyo_document_core::CornerRadii::uniform(radii.tl),
+        "four equal radii"
+    );
+    radii.tl.as_mm()
 }

@@ -21,7 +21,7 @@ use std::f64::consts::{FRAC_PI_2, PI, SQRT_2};
 
 use curvyo_document_core::{
     AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, ObjectSnapshot, Point,
-    PointCount, RectBounds, Shape, StarFrame, effective_corner_radius, outline_of_rotated, pack,
+    PointCount, RectBounds, Shape, StarFrame, effective_corner_radii, outline_of_rotated, pack,
     unpack,
 };
 use curvyo_editor_wasm::{Session, Tool};
@@ -129,8 +129,8 @@ fn rect_of(s: &Session, index: usize) -> (RectBounds, Length) {
     match prim_of(s, index).shape {
         Shape::Rect {
             bounds,
-            corner_radius,
-        } => (bounds, corner_radius),
+            corner_radii,
+        } => (bounds, Length::from_mm(uniform_mm(corner_radii))),
         other => panic!("rect expected, got {other:?}"),
     }
 }
@@ -3381,7 +3381,14 @@ fn manifest_of(bytes: &[u8]) -> String {
 #[test]
 fn ac24_the_stored_fields_are_the_ones_the_shape_tools_wrote() {
     // Radius drag, entry, bar field, ratio drag, entry, slider, points: only
-    // corner_radius / inner_ratio / point_count are written.
+    // the four corner radius registers (all four, equal) / inner_ratio /
+    // point_count are written.
+    const CORNER_RADIUS_KEYS: [&str; 4] = [
+        "corner_radius_bl",
+        "corner_radius_br",
+        "corner_radius_tl",
+        "corner_radius_tr",
+    ];
     let keys_of = |s: &Session, v0: &loro::VersionVector| -> Vec<String> {
         let json = ops_since_json(s, v0);
         let mut keys: Vec<String> = json
@@ -3402,13 +3409,13 @@ fn ac24_the_stored_fields_are_the_ones_the_shape_tools_wrote() {
         from,
         pt(from.x + 20.0 / sc.k, from.y + 20.0 / sc.k),
     );
-    assert_eq!(keys_of(&sc.s, &v0), ["corner_radius"]);
+    assert_eq!(keys_of(&sc.s, &v0), CORNER_RADIUS_KEYS);
     let v1 = vv_of(&sc.s);
     assert_eq!(sc.s.set_selected_radius_text("3"), EntryOutcome::Committed);
-    assert_eq!(keys_of(&sc.s, &v1), ["corner_radius"]);
+    assert_eq!(keys_of(&sc.s, &v1), CORNER_RADIUS_KEYS);
     let v2 = vv_of(&sc.s);
     sc.s.remove_corner_rounding();
-    assert_eq!(keys_of(&sc.s, &v2), ["corner_radius"]);
+    assert_eq!(keys_of(&sc.s, &v2), CORNER_RADIUS_KEYS);
     // star
     let mut sc = star_scene(100, 60.0, 8, Some(0.5), 0.0);
     let v0 = vv_of(&sc.s);
@@ -3461,14 +3468,14 @@ fn ac24_ac38_format_version_and_field_names_match_the_shape_tool_route() {
         serde_json::from_str(&manifest_of(&sc.s.pack("0.1.0").unwrap())).unwrap();
     assert_eq!(va["format_version"], vc["format_version"]);
     assert_eq!(
-        vc["format_version"], 5,
-        "the project format version is the one of main (document-core is untouched)"
+        vc["format_version"], 6,
+        "the project format version is the one of main (6 since `rectangle-corner-radii`)"
     );
     // and the saved project reopens with the radius set
     let reopened = unpack(7, &sc.s.pack("0.1.0").unwrap()).unwrap();
     let id = reopened.object_ids()[0];
     match reopened.primitive(id).unwrap().shape {
-        Shape::Rect { corner_radius, .. } => assert!(corner_radius.as_mm() > 0.0),
+        Shape::Rect { corner_radii, .. } => assert!(uniform_mm(corner_radii) > 0.0),
         _ => panic!(),
     }
 }
@@ -3805,4 +3812,19 @@ fn ac16_live_readouts_during_primitive_drags() {
         let text = sc.s.live_readout().expect("rotate readout").text;
         assert!(text.contains('°'), "kind {build}: {text}");
     }
+}
+
+/// The one radius of a rectangle whose four corner radii are equal (asserted).
+fn uniform_mm(radii: curvyo_document_core::CornerRadii) -> f64 {
+    assert_eq!(
+        radii,
+        curvyo_document_core::CornerRadii::uniform(radii.tl),
+        "four equal radii"
+    );
+    radii.tl.as_mm()
+}
+
+/// The effective radius of a rectangle with one radius at all four corners.
+fn effective_corner_radius(bounds: RectBounds, radius: Length) -> Length {
+    effective_corner_radii(bounds, curvyo_document_core::CornerRadii::uniform(radius)).tl
 }

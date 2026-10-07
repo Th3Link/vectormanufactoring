@@ -7,14 +7,15 @@
 //! `session/select.rs`, which dispatches the events.
 
 use curvyo_document_core::{
-    Angle, ObjectSnapshot, PrimitiveSnapshot, Shape, Vec2, effective_corner_radius,
+    Angle, ObjectSnapshot, PrimitiveSnapshot, Shape, Vec2, effective_corner_radii,
 };
 use curvyo_render_core::{
     SelectDecorationInput, TransformDecorationInput, TransformGlyphKind, TransformHandleGlyph,
 };
 use curvyo_ui_core::{
-    EditHandle, LiveEdit, ParamHandle, SelectTool, Side, format_degrees, is_corner,
-    is_drawn_handle, oriented_bounds, resize_cursor_angle_degrees, skew_cursor_angle_degrees,
+    EditHandle, LiveEdit, ParamHandle, SelectTool, Side, corner_local_position, format_degrees,
+    is_corner, is_drawn_handle, oriented_bounds, resize_cursor_angle_degrees,
+    skew_cursor_angle_degrees,
 };
 
 use super::Session;
@@ -226,7 +227,10 @@ impl Session {
                 if let (EditHandle::Param(ParamHandle::CornerRadius(corner)), true) =
                     (handle, active)
                 {
-                    param_guides.push((box_.to_document(corner.local_position(&box_)), position));
+                    param_guides.push((
+                        box_.to_document(corner_local_position(corner, &box_)),
+                        position,
+                    ));
                 }
                 TransformHandleGlyph {
                     position,
@@ -411,7 +415,7 @@ impl Session {
                     format!("{:.1} × {:.1} mm", b.width(), b.height())
                 }
             },
-            EditHandle::Param(_) => param_readout(&self.select_live_transform()?)?,
+            EditHandle::Param(param) => param_readout(&self.select_live_transform()?, param)?,
             EditHandle::Move => return None,
         };
         Some(super::shapes::LiveReadout { text, anchor })
@@ -437,22 +441,29 @@ fn glyph_kind(handle: EditHandle, box_: &curvyo_ui_core::OrientedBox) -> Transfo
     }
 }
 
-/// `r 3.5 mm` for a rectangle's effective corner radius, `ratio 0.45` for a
-/// star's inner ratio.
-fn param_readout(object: &ObjectSnapshot) -> Option<String> {
+/// `r 3.5 mm` for the dragged corner's effective radius of a rectangle,
+/// `ratio 0.45` for a star's inner ratio.
+fn param_readout(object: &ObjectSnapshot, handle: ParamHandle) -> Option<String> {
     let ObjectSnapshot::Primitive(PrimitiveSnapshot { shape, .. }) = object else {
         return None;
     };
-    match *shape {
-        Shape::Rect {
-            bounds,
-            corner_radius,
-        } => Some(format!(
+    match (*shape, handle) {
+        (
+            Shape::Rect {
+                bounds,
+                corner_radii,
+            },
+            ParamHandle::CornerRadius(corner),
+        ) => Some(format!(
             "r {:.1} mm",
-            effective_corner_radius(bounds, corner_radius).as_mm()
+            effective_corner_radii(bounds, corner_radii)
+                .get(corner)
+                .as_mm()
         )),
-        Shape::Star { inner_ratio, .. } => Some(format!("ratio {:.2}", inner_ratio.get())),
-        Shape::Ellipse { .. } | Shape::Polygon { .. } => None,
+        (Shape::Star { inner_ratio, .. }, ParamHandle::InnerRadius) => {
+            Some(format!("ratio {:.2}", inner_ratio.get()))
+        }
+        _ => None,
     }
 }
 

@@ -389,7 +389,10 @@ fn the_angle_entry_commits_one_change_and_survives_save_and_reopen() {
         panic!("still a primitive")
     };
     assert!(matches!(p.shape, curvyo_document_core::Shape::Rect { .. }));
-    assert_eq!(CURRENT_FORMAT_VERSION, 5, "no format change");
+    assert_eq!(
+        CURRENT_FORMAT_VERSION, 6,
+        "no format change by this story (6 since `rectangle-corner-radii`)"
+    );
 }
 
 #[test]

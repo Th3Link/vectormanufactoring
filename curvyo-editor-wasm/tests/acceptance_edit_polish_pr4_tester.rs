@@ -814,11 +814,11 @@ fn c34_every_kind_is_copied_with_every_field_and_the_selection_is_the_copies() {
                     (
                         Shape::Rect {
                             bounds: x,
-                            corner_radius: r1,
+                            corner_radii: r1,
                         },
                         Shape::Rect {
                             bounds: y,
-                            corner_radius: r2,
+                            corner_radii: r2,
                         },
                     ) => {
                         assert_eq!(r1, r2, "corner radius copied");

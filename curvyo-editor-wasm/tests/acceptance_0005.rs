@@ -17,7 +17,7 @@ use std::f64::consts::{FRAC_PI_2, PI};
 
 use curvyo_document_core::{
     AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, NodeId, ObjectSnapshot,
-    OpenError, Point, PointCount, RectBounds, Shape, StarFrame, Vec2, effective_corner_radius,
+    OpenError, Point, PointCount, RectBounds, Shape, StarFrame, Vec2, effective_corner_radii,
     outline_of_rotated, pack, shape_frame_bounds, unpack,
 };
 use curvyo_editor_wasm::{Session, Tool};
@@ -88,14 +88,14 @@ fn rect_of(session: &Session) -> (RectBounds, Length, f64, f64) {
     let p = prim(session);
     let Shape::Rect {
         bounds,
-        corner_radius,
+        corner_radii,
     } = p.shape
     else {
         panic!("expected rect, got {:?}", p.shape);
     };
     (
         bounds,
-        corner_radius,
+        Length::from_mm(uniform_mm(corner_radii)),
         p.stroke_width.as_mm(),
         p.rotation.as_radians(),
     )
@@ -2056,7 +2056,7 @@ fn ac23_moving_a_rotated_and_scaled_object_is_a_pure_translation() {
     let before = prim(&s);
     let Shape::Rect {
         bounds: b0,
-        corner_radius: r0,
+        corner_radii: r0,
     } = before.shape
     else {
         panic!()
@@ -2089,7 +2089,7 @@ fn ac23_moving_a_rotated_and_scaled_object_is_a_pure_translation() {
     let after = prim(&s);
     let Shape::Rect {
         bounds: b1,
-        corner_radius: r1,
+        corner_radii: r1,
     } = after.shape
     else {
         panic!()
@@ -2803,14 +2803,14 @@ fn assert_all_finite_and_reopenable(session: &Session) {
                 match p.shape {
                     Shape::Rect {
                         bounds,
-                        corner_radius,
+                        corner_radii,
                     } => {
                         for v in [
                             bounds.origin.x,
                             bounds.origin.y,
                             bounds.width.as_mm(),
                             bounds.height.as_mm(),
-                            corner_radius.as_mm(),
+                            uniform_mm(corner_radii),
                         ] {
                             assert!(v.is_finite(), "non-finite rect value {v}");
                         }
@@ -3160,4 +3160,19 @@ fn live_rotation_preview_draws_the_rotated_geometry_at_the_rotated_position() {
         );
     }
     s.pointer_up(to, false, false);
+}
+
+/// The one radius of a rectangle whose four corner radii are equal (asserted).
+fn uniform_mm(radii: curvyo_document_core::CornerRadii) -> f64 {
+    assert_eq!(
+        radii,
+        curvyo_document_core::CornerRadii::uniform(radii.tl),
+        "four equal radii"
+    );
+    radii.tl.as_mm()
+}
+
+/// The effective radius of a rectangle with one radius at all four corners.
+fn effective_corner_radius(bounds: RectBounds, radius: Length) -> Length {
+    effective_corner_radii(bounds, curvyo_document_core::CornerRadii::uniform(radius)).tl
 }

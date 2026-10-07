@@ -135,10 +135,10 @@ fn ac01_ac13_rect_shift_through_session_one_object_rotation_zero() {
     let ps = prims(&s);
     assert_eq!(ps.len(), 1, "exactly one object");
     close(rect_box(&ps[0]), (70.0, 40.0, 60.0, 20.0));
-    let Shape::Rect { corner_radius, .. } = ps[0].shape else {
+    let Shape::Rect { corner_radii, .. } = ps[0].shape else {
         panic!()
     };
-    assert!(corner_radius.as_mm().abs() < EPS);
+    assert!(uniform_mm(corner_radii).abs() < EPS);
     assert_eq!(ps[0].rotation.as_radians(), 0.0);
 }
 
@@ -214,7 +214,8 @@ fn ac13_format_version_unchanged_and_no_modifier_trace_in_the_file() {
         v["format_version"].clone()
     };
     let base = version_and_objects(false, false);
-    assert_eq!(base, 5);
+    // 6 since `rectangle-corner-radii`; this story itself changed no format.
+    assert_eq!(base, 6);
     for (sh, ct) in ALL {
         assert_eq!(version_and_objects(sh, ct), base);
     }
@@ -691,4 +692,14 @@ fn probe_modifiers_changed_alone_does_not_move_the_preview() {
     // the next hover (frontend re-sends it) picks the state up
     s.pointer_hover(b, true, false);
     assert_eq!(readout(&s).unwrap().0, "60.0 × 20.0 mm");
+}
+
+/// The one radius of a rectangle whose four corner radii are equal (asserted).
+fn uniform_mm(radii: curvyo_document_core::CornerRadii) -> f64 {
+    assert_eq!(
+        radii,
+        curvyo_document_core::CornerRadii::uniform(radii.tl),
+        "four equal radii"
+    );
+    radii.tl.as_mm()
 }

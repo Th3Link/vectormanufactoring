@@ -100,7 +100,8 @@ fn wrap(d: f64) -> f64 {
 
 #[test]
 fn the_format_version_is_unchanged() {
-    assert_eq!(CURRENT_FORMAT_VERSION, 5);
+    // Unchanged by this story; 6 since `rectangle-corner-radii`.
+    assert_eq!(CURRENT_FORMAT_VERSION, 6);
 }
 
 /// Criterion 13: old outlines, shown angles 78.7 and 40, boxes in those

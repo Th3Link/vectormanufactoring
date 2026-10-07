@@ -1330,7 +1330,9 @@ fn ac13_golden_fixtures_open_select_and_hover_write_nothing_and_keep_outlines() 
 
 #[test]
 fn ac14_no_new_stored_key_format_version_5_and_one_commit_per_gesture() {
-    assert_eq!(CURRENT_FORMAT_VERSION, 5);
+    // No new key and no bump by this story: the version is 6 since
+    // `rectangle-corner-radii`.
+    assert_eq!(CURRENT_FORMAT_VERSION, 6);
     let c = pt(100.0, 50.0);
     let r = 30.0;
     let mut s = scene(PolyStarMode::Star, 5, 0.5, c, r, 78.7);
