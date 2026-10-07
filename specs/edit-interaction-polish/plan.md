@@ -254,10 +254,13 @@ change, no `format_version` change.
   move), the `skew` hint (now `skew` for top and bottom, `skew-y` for left
   and right; negative assertions use `starts_with("skew")` so they do not get
   weaker), the "M and K are unbound" assertions.
-- [ ] 10. Gate: fmt, clippy (host, wasm32 per core crate and editor-wasm),
-  nextest, rustdoc, deny, banned-dependency check, `npm run build`, `tsc -b
-  --noEmit`, `npm run lint`, license check, `npm audit`; the CI result of the
-  head commit; the Browser-pane check.
+- [x] 10. Gate: fmt, clippy (host, wasm32 per core crate and editor-wasm),
+  nextest (1601 tests), rustdoc, deny, banned-dependency check, `npm run build`,
+  `tsc -b --noEmit`, `npm run lint` (5 warnings, the same as `main`), license
+  check, `npm audit`; the Browser-pane check (M relative and absolute, K, the
+  double-click on the centre and skew handles, S about the centre, the hint
+  chips, the Tab loop of the move chip); the CI result of the head commit is
+  recorded in the PR.
 
 ### Decisions taken here (inside the ADR)
 
