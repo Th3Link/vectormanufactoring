@@ -34,30 +34,30 @@ no customer question).
 
 ## Tasks
 
-- [ ] 1. Pure move: the radius commands (`set_corner_radius`,
+- [x] 1. Pure move: the radius commands (`set_corner_radius`,
       `set_corner_radii`, `resize_rect`) from `shapes.rs` to `shape_radii.rs`;
       no behaviour change (fulfils AC 17-21 structurally, size rule of
       CLAUDE.md §5).
-- [ ] 2. `corner_radii.rs`, test first: `Corner` (moved from ui-core),
+- [x] 2. `corner_radii.rs`, test first: `Corner` (moved from ui-core),
       `CornerRadii`, `effective_corner_radii` (CSS factor, unchanged when
       `f = 1`, floors negatives, skips zero denominators), sharp tolerance
       (fulfils AC 9, 10, 11).
-- [ ] 3. `corner_radii_codec.rs`, `validate_rect`, `create_rect`,
+- [x] 3. `corner_radii_codec.rs`, `validate_rect`, `create_rect`,
       `ALL_PRIMITIVE_KEYS`, `Shape::Rect { corner_radii }`, `document.json`,
       `CURRENT_FORMAT_VERSION` 6 with its doc paragraph; legacy fixture
       `legacy_corner_radius_v5.curvyo`, new fixture
       `corner_radii_v6.curvyo`, regenerated `future_format_version.curvyo`
       (fulfils AC 17, 18, 19, 20).
-- [ ] 4. `rect_outline(bounds, CornerRadii)` for 4 to 8 nodes; golden anchors
+- [x] 4. `rect_outline(bounds, CornerRadii)` for 4 to 8 nodes; golden anchors
       fixture `rect_outline_mixed_radii.json`; an exact-equality regression test
       for four equal radii against a copy of the old function's expected
       output (fulfils AC 11, 16, 21).
-- [ ] 5. `set_corner_radius` (all four, per register guard),
+- [x] 5. `set_corner_radius` (all four, per register guard),
       `set_corner_radii(CornerRadii)`, `resize_rect` per register; merge tests
       (different corners survive, same corner LWW, legacy node edited at two
       corners, resize Keep against a corner edit, operation counts)
       (fulfils AC 10, 12, 15 for the model side).
-- [ ] 6. Compile-driven adaptation of `curvyo-ui-core`, `curvyo-editor-wasm`,
+- [x] 6. Compile-driven adaptation of `curvyo-ui-core`, `curvyo-editor-wasm`,
       `curvyo-render-core`: every consumer reads the radii through
       `effective_corner_radii`; `resize_primitive` hands `CornerRadii` back
       (Keep) or multiplies all four by the one factor (Proportional); the UI
