@@ -374,13 +374,32 @@ on `main`, `origin/main` is merged too. No new crate, no new dependency, no
 - [x] 9. Frontend: `MoveBadges.tsx` (plus and lock badge from window key events
   and every pointer event, gone in the frame the key is released), the Copy
   check as the last Tab stop of the move chip, hint lines. (23, 26, 27, 33)
-- [ ] 10. The 200-object preview benchmark (`#[ignore]`, release) and the
+- [x] 10. The 200-object preview benchmark (`#[ignore]`, release) and the
   measured commit time, noted for the PR and the demo. (41)
 - [ ] 11. Gate: fmt, clippy (host and wasm32 per core crate, editor-wasm in CI
   form), nextest, rustdoc, deny, banned-dependency check, `npm run build`,
   `tsc -b --noEmit`, `npm run lint`, license check, `npm audit`; CI of the head
   sha. The Browser-pane checks are listed for a reviewer (the Browser pane was
   not used by this PR's implementer).
+
+### Measured (criterion 41, flag 3)
+
+Release build, 200 selected objects (100 paths of 50 nodes, 100 rectangles), on a
+machine that was busy with other builds (the same run of the existing move
+benchmark gives "at rest" 18 ms per frame):
+
+| | per `draw_list()` | 8 ms budget |
+|---|---|---|
+| copy preview (`a_200_object_copy_previews_within_the_frame_budget...`) | 10.9 ms | missed |
+| plain move preview (`unified_object_editing`, same machine, same minute) | 10.8 ms | missed |
+
+The copy preview costs the same as the move preview, so criterion 41's first
+clause holds as far as it is "within the budget of `unified-object-editing`
+criterion 15" (that budget is missed by both on this machine; the 20 ms
+(50 fps) gate the benchmarks assert is met). The cost is the existing full
+rebuild per frame plus 200 dashed boxes, not the copy. The commit of the 200
+copies (about 30,000 keys, 200 tree nodes) took **79 ms** in a native release
+build; in WebAssembly it will be slower. It writes once, on release.
 
 ### Decisions taken here (inside the ADR)
 
