@@ -1,6 +1,13 @@
 # ADR 0013: Rename the product to Curvyo
 
-**Status:** Proposed — needs-customer (architect, 2026-10-07)
+**Status:** Accepted (customer, 2026-10-07)
+
+Customer decisions, 2026-10-07: D1 option A (`curvyo-*`); D2 option A as a
+**hard switch** (`.curvyo` only, no `.vmf` alias and no dialog fallback); D3
+identifier `org.curvyo.desktop`, confirmed by the implementer (see D3); D4, D5
+and D8 as written; D6 amended (the repository moves to the GitHub organisation
+`curvyo`, see D6); D7 and D9 as written. Executed in the PR "chore: rename the
+product to Curvyo".
 
 The customer chose the name and registered `curvyo.org`: "since we are largely
 through here, we rename to curvyo afterwards." This ADR fixes what the rename
@@ -103,7 +110,10 @@ change touches one constant.
 
 - `productName` `"Curvyo"`; window title `"Curvyo"`; file association name
   `"Curvyo project"`, description `"Curvyo project (*.curvyo)"`.
-- **Identifier: `org.curvyo.desktop`** (default) rather than `org.curvyo.app`.
+- **Identifier: `org.curvyo.desktop`** (decided) rather than `org.curvyo.app`.
+  Checked with `cargo tauri build --no-bundle` on Tauri CLI 2.12.1:
+  `dev.vecmanf.app` and `org.curvyo.app` both print "The bundle identifier ...
+  ends with `.app`" and `org.curvyo.desktop` prints no warning.
   The current `dev.vecmanf.app` already ends in `.app`, which Tauri's bundler
   warns about because it clashes with the macOS bundle extension (from the
   Tauri docs as I recall them; the implementer confirms with one
@@ -142,11 +152,12 @@ occurrences of the word are reviewed by hand, not by script.
 
 ### D6. GitHub repository
 
-Rename `Th3Link/vectormanufactoring` to **`Th3Link/curvyo`** (default), done by
-the customer in GitHub settings *after* the rename PR is merged. Web, `git` and
+Amended 2026-10-07: the repository moves to the GitHub organisation `curvyo`
+and is named **`curvyo/curvyo`**. The customer transfers and renames it in
+GitHub settings *after* the rename PR is merged. Web, `git` and
 API redirects keep old URLs working until a new repo takes the old name.
-Afterwards: `git remote set-url origin https://github.com/Th3Link/curvyo.git`
-in `base` (worktrees share it); the first CI run has cold caches; if branch
+Afterwards: `git remote set-url origin https://github.com/curvyo/curvyo.git`
+in `base` (worktrees share it); the first CI run has cold caches; re-check CI permissions and the Renovate installation on the organisation; if branch
 protection requires status checks by name, update them (the matrix job
 `core-wasm32 (<crate>)` is named after the crates, so those names change); if
 Renovate runs as the GitHub app it follows the rename, otherwise point it at

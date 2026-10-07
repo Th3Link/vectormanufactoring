@@ -15,6 +15,10 @@ ADR. ADR 0012 was rejected before acceptance, so that rule never applied to it.
 them and was accepted by the architect — see its own preamble for why
 `CLAUDE.md` §3 does not require a customer round for it.)
 
+**Name map (ADR 0013, 2026-10-07):** the product is called Curvyo. Read
+`vecmanf-*` as `curvyo-*` (crates and directories) and `.vmf` as `.curvyo`
+(file extension) in ADRs 0001–0012, whose text keeps the old names.
+
 A decision too small for a full ADR gets a short dated note in that feature's
 `specs/<feature-slug>/adrs.md` instead.
 
@@ -32,7 +36,7 @@ A decision too small for a full ADR gets a short dated note in that feature's
 | [0010](0010-document-keyring-admins-and-revocation.md) | Document keyring — participants, admins and key revocation | workspace | Accepted |
 | [0011](0011-workspace-and-crate-layout.md) | Workspace and crate layout | workspace | Accepted |
 | [0012](0012-pages-in-the-document-model.md) | Pages in the document model | workspace | Rejected (2026-10-05, dropped from MVP) |
-| [0013](0013-rename-to-curvyo.md) | Rename the product to Curvyo (amends 0011 crate names, 0004 §1 file extension; [inventory](0013-rename-to-curvyo-inventory.md)) | workspace | Proposed — needs-customer |
+| [0013](0013-rename-to-curvyo.md) | Rename the product to Curvyo (amends 0011 crate names, 0004 §1 file extension; [inventory](0013-rename-to-curvyo-inventory.md)) | workspace | Accepted |
 
 ## Customer sign-off, 2026-10-02
 

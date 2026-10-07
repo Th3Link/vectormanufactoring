@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Vector design and manufacturing application: one tool for drawing, preparing
+Curvyo is a vector design and manufacturing application: one tool for drawing, preparing
 and producing vector work on laser cutters, cutting plotters, embroidery
 machines and CNC mills. Desktop first (Linux, Windows, macOS), browser second,
 Android/iOS companion later.

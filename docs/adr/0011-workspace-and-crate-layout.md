@@ -1,6 +1,6 @@
 # ADR 0011: Workspace and crate layout
 
-**Status:** Accepted (architect, 2026-10-02 — no customer sign-off required)
+**Status:** Accepted (architect, 2026-10-02 — no customer sign-off required); crate and directory names amended by [ADR 0013](0013-rename-to-curvyo.md) (`vecmanf-*` is now `curvyo-*`)
 
 This ADR invents no architecture. ADRs 0001–0010 each authorized the crates
 their own decision needed, in the ADR that needed them; this one pulls those
