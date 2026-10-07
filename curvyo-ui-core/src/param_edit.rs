@@ -62,7 +62,7 @@ pub(crate) fn corner_radius_limit(
 
 /// Whether `value`, applied to `start`, runs into a limit: the radius asked for
 /// is at or past the largest one allowed (half the shorter side for all four
-/// corners, [`corner_radius_limit`] for one). The readout then says "max"
+/// corners, `min(W - r_h, H - r_v)` for one). The readout then says "max"
 /// (criteria 4, 6, 7). `false` for a value that is not a corner radius.
 #[must_use]
 pub fn radius_is_limited(start: &ObjectSnapshot, value: ParamValue) -> bool {
@@ -175,7 +175,7 @@ pub fn value_from_pointer(
 
 /// `start` with `value` applied, the one rule drag, entry and bar share. A
 /// radius for all four corners is limited to `0..=half the shorter side`, one
-/// corner's radius to `0..=`[`corner_radius_limit`] (the other three effective
+/// corner's radius to `0..=min(W - r_h, H - r_v)` (the other three effective
 /// radii stay as they are, and are written at those values, which is what
 /// freezes a shrunk rectangle's three neighbours), a ratio to `0.01..=0.99`.
 /// The start is returned unchanged when the limited value equals the start's
