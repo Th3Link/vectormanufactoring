@@ -145,6 +145,11 @@ to the PO" (criteria 21, 41, 59, 64 and four smaller ones).
   criterion 1. `docs/technical-debt.md` ("Rotation is a stored angle") gets a
   dated note: the primitives rework can fold `StarFrame.angle` into `rotation`
   with a real migration if the box turning with the shape is ever wanted.
+  *2026-10-07 (architect): superseded.* The review of PR 1 found the limit
+  contradicts the readout after a typed rotation (R, 0 leaves a tilted box around
+  an upright shape). [`specs/polygon-star-box-refit/`](../polygon-star-box-refit/adrs.md)
+  derives the box direction from `orientation()` at `oriented_bounds`, with no
+  stored change and no migration; option (b) above stays rejected.
 - **Tests (first).** `orientation()` over both registers and the wrap at ±180°
   (a first vertex left shows 180, not -180); a version-5 fixture with a star at
   frame angle 78.7° / rotation 0 and one at frame angle 10° / rotation 30°

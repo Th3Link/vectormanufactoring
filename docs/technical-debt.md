@@ -137,6 +137,18 @@ created at 78.7° has an axis-aligned box. The primitives rework can fold
 `StarFrame.angle` into `rotation` with a real migration if the box should turn
 with the shape. See `specs/edit-interaction-polish/adrs.md`, decision 1.
 
+*2026-10-07 (architect, `polygon-star-box-refit`):* the box limit above is
+removed without a migration: the oriented box of a polygon or star turns by
+`orientation()` (the same sum), derived in `oriented_bounds`, so the box direction
+is the number in the readout. The two registers stay; `StarFrame.angle` plus
+`rotation` is still the stored form until the affine story. Two consequences stay
+open: in box-local coordinates the first outer vertex of a polygon or star is at
+angle 0 (handles never add `StarFrame.angle`), and "Object to path" drops the frame
+angle, so the converted path's `rotation` is the register alone and its readout
+and box direction can differ from the shape's before the conversion. Fix that
+with one more argument to `convert_to_paths` (write `orientation()` as the path's
+`rotation`) when someone asks. See `specs/polygon-star-box-refit/adrs.md`.
+
 ## Undo cannot reach a collaborator's change
 
 Undo and redo are scoped to the local peer
