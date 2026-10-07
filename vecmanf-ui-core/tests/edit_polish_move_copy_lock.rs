@@ -707,3 +707,20 @@ fn a_release_with_no_move_event_still_joins_the_pressed_object() {
         }
     }
 }
+
+/// UX review of PR 4: in a move drag Shift means "lock", so the four
+/// Shift-revealed side rotate handles are not shown, whatever the Shift state
+/// at the press; idle they still follow Shift.
+#[test]
+fn no_side_rotate_handles_show_during_a_move_drag() {
+    let mut rig = Rig::new();
+    rig.selection.select_single(rig.a);
+    assert!(rig.tool.side_rotate_revealed(true), "idle: Shift reveals");
+    assert!(!rig.tool.side_rotate_revealed(false));
+    rig.press(pt(100.0, 0.0), true);
+    rig.moved(pt(140.0, 3.0), SHIFT);
+    assert!(rig.tool.move_in_flight());
+    assert!(!rig.tool.side_rotate_revealed(true), "Shift at the press");
+    rig.release(pt(140.0, 3.0), SHIFT);
+    assert!(rig.tool.side_rotate_revealed(true), "idle again");
+}

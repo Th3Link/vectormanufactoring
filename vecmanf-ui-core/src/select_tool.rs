@@ -162,7 +162,9 @@ impl SelectTool {
     #[must_use]
     pub fn side_rotate_revealed(&self, live_shift: bool) -> bool {
         match &self.drag {
-            SelectDrag::Moving(drag) => drag.origin.shift_at_press,
+            // In a move drag Shift means "lock": no side rotate handles
+            // (`edit-interaction-polish`, UX review of PR 4).
+            SelectDrag::Moving(_) => false,
             SelectDrag::Transforming(drag) => drag.origin.shift_at_press,
             SelectDrag::None => match &self.entry {
                 Some(OpenEntry::Transform(entry)) => entry.side_rotate_revealed(),

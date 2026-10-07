@@ -17,6 +17,10 @@ import { placeReadout } from "@/lib/readoutPlacement";
  * swings the handle through an arc). */
 const READOUT_OFFSET_PX = 12;
 
+/** The tool rail's clearance from the canvas's left edge, px: the readout is
+ * never drawn under it. */
+const TOOL_RAIL_CLEAR_PX = 64;
+
 interface CanvasProps {
   editor: EditorSession;
 }
@@ -210,9 +214,9 @@ function ReadoutChip({ text, x, y, containerRef }: ReadoutChipProps) {
   return (
     <div
       ref={chipRef}
-      className="pointer-events-none absolute z-10 whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs"
+      className="pointer-events-none absolute z-40 whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs"
       style={{
-        left: placement.left,
+        left: Math.max(placement.left, TOOL_RAIL_CLEAR_PX),
         top: placement.top,
         background: "var(--toolbar-bg)",
         color: "var(--toolbar-icon)",

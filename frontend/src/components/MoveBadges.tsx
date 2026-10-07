@@ -1,4 +1,4 @@
-import { ArrowLeftRight, ArrowUpDown, Plus } from "lucide-react";
+import { MoveHorizontal, MoveVertical, Plus } from "lucide-react";
 import { useLayoutEffect, useState } from "react";
 
 import type { MoveBadgeState } from "@/hooks/useEditorSession";
@@ -7,6 +7,9 @@ import type { MoveBadgeState } from "@/hooks/useEditorSession";
 const BADGE_PX = 16;
 /** The badge centre's distance left of and below the pointer hotspot, px. */
 const BADGE_OFFSET_PX = 16;
+/** The first badge's distance when it mirrors to the right of the pointer: the
+ * arrow cursor's body lies there, so it keeps further clear, px. */
+const MIRRORED_OFFSET_PX = 24;
 /** The second badge goes this far further out, px. */
 const SECOND_BADGE_SHIFT_PX = 20;
 /** How far a badge drops when it mirrors to the right of the pointer and the
@@ -57,7 +60,8 @@ export function MoveBadges({ badges, containerRef }: MoveBadgesProps) {
   return (
     <>
       {shown.map((kind, index) => {
-        const reach = BADGE_OFFSET_PX + index * SECOND_BADGE_SHIFT_PX;
+        const reach =
+          (mirrored ? MIRRORED_OFFSET_PX : BADGE_OFFSET_PX) + index * SECOND_BADGE_SHIFT_PX;
         const centreX = badges.x + (mirrored ? reach : -reach);
         const centreY = badges.y + BADGE_OFFSET_PX + drop;
         const isCopy = kind === "copy";
@@ -66,7 +70,7 @@ export function MoveBadges({ badges, containerRef }: MoveBadgesProps) {
             key={kind}
             aria-hidden
             data-move-badge={kind}
-            className="pointer-events-none absolute z-20 flex items-center justify-center rounded-full"
+            className="pointer-events-none absolute z-40 flex items-center justify-center rounded-full"
             style={{
               left: centreX - BADGE_PX / 2,
               top: centreY - BADGE_PX / 2,
@@ -82,9 +86,9 @@ export function MoveBadges({ badges, containerRef }: MoveBadgesProps) {
             {isCopy ? (
               <Plus size={8} strokeWidth={1.5} absoluteStrokeWidth />
             ) : kind === "lock-x" ? (
-              <ArrowLeftRight size={10} strokeWidth={1.5} absoluteStrokeWidth />
+              <MoveHorizontal size={12} strokeWidth={1.5} absoluteStrokeWidth />
             ) : (
-              <ArrowUpDown size={10} strokeWidth={1.5} absoluteStrokeWidth />
+              <MoveVertical size={12} strokeWidth={1.5} absoluteStrokeWidth />
             )}
           </div>
         );
