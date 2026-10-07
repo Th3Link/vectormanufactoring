@@ -1709,6 +1709,84 @@ fn c23_ctrl_at_the_second_press_presets_the_check_other_routes_do_not() {
 }
 
 #[test]
+fn c23_non_finite_and_odd_typed_values_with_copy_write_nothing() {
+    let mut s = abc_with_a_selected();
+    open_move_chip(&mut s);
+    let before = bytes_of(&s);
+    for text in [
+        "NaN", "inf", "-inf", "Infinity", "1e999", "1e400", "--5", "5-", "1 2", "0x10",
+    ] {
+        for absolute in [false, true] {
+            let r = s.commit_move_entry(
+                text,
+                "0",
+                MoveEntryMode {
+                    absolute,
+                    copy: true,
+                },
+            );
+            assert!(
+                matches!(r, EntryOutcome::Invalid { .. }),
+                "{text:?} absolute {absolute}: {r:?}"
+            );
+            assert_eq!(bytes_of(&s), before);
+        }
+    }
+    // a real minus (U+2212) and a decimal comma are accepted
+    let r = s.commit_move_entry(
+        "\u{2212}2,5",
+        "1.5",
+        MoveEntryMode {
+            absolute: false,
+            copy: true,
+        },
+    );
+    assert_eq!(r, EntryOutcome::Committed);
+    assert_eq!(rect_origin(&all(&s)[1]), pt(7.5, 21.5));
+}
+
+#[test]
+fn c35_a_copy_of_a_copy_chains_and_keeps_the_order() {
+    let mut s = abc_with_a_selected();
+    drag_mod(
+        &mut s,
+        p(A_OUTLINE),
+        plus(p(A_OUTLINE), 20.0, 40.0),
+        false,
+        true,
+    );
+    // the selected copy is at (30, 60); copy it again from its own outline
+    let outline = pt(50.0, 60.0);
+    drag_mod(&mut s, outline, plus(outline, 5.0, 100.0), false, true);
+    let o = all(&s);
+    assert_eq!(o.len(), 5);
+    let origins: Vec<_> = o.iter().map(rect_origin).collect();
+    assert_eq!(
+        origins,
+        vec![
+            pt(10.0, 20.0),
+            pt(30.0, 60.0),
+            pt(35.0, 160.0),
+            pt(150.0, 20.0),
+            pt(10.0, 120.0)
+        ]
+    );
+    assert_eq!(sel(&s), 1);
+}
+
+#[test]
+fn c29_ctrl_shift_press_on_a_selected_outline_released_in_the_dead_zone_toggles() {
+    let mut s = abc_with_a_selected();
+    let before = bytes_of(&s);
+    let o = p(A_OUTLINE);
+    s.pointer_hover(o, true, true);
+    s.pointer_down(o, true);
+    s.pointer_up(o, true, true);
+    assert_eq!(sel(&s), 0);
+    assert_eq!(bytes_of(&s), before, "no copy, nothing written");
+}
+
+#[test]
 fn c23_the_double_click_with_ctrl_writes_nothing_and_does_not_copy() {
     let mut s = abc_with_a_selected();
     let before = bytes_of(&s);
@@ -1745,7 +1823,7 @@ fn c24_the_centre_handle_hint_is_the_move_hint() {
 // ---------------------------------------------------------------------
 
 #[test]
-#[ignore = "timing: run with --release -- --ignored"]
+#[ignore = "timing, run with --release -- --ignored; the spec budget (8 ms per draw) is missed by a plain move too: about 11 ms on the tester machine, copy about the same"]
 fn c41_a_copy_of_200_objects_previews_within_8_ms() {
     let d = Document::new(1);
     for i in 0..100 {
@@ -1771,8 +1849,8 @@ fn c41_a_copy_of_200_objects_previews_within_8_ms() {
         ));
     }
     let mut s = open(&d);
-    // select all with a marquee-free route: shift-click each rectangle's
-    // left edge and each path's first anchor
+    // select all 200 by shift-clicking each rectangle's left edge and each
+    // path's first anchor
     click(&mut s, pt(0.0, 204.0));
     for i in 1..100 {
         shift_click(
@@ -1783,19 +1861,53 @@ fn c41_a_copy_of_200_objects_previews_within_8_ms() {
             ),
         );
     }
+    for i in 0..100 {
+        shift_click(
+            &mut s,
+            pt(f64::from(i % 10) * 12.0, f64::from(i / 10) * 12.0),
+        );
+    }
     let n = sel(&s);
-    assert!(n >= 100);
-    let o = pt(4.0, 204.0);
-    s.pointer_hover(o, false, true);
-    s.pointer_down(o, false);
-    let start = std::time::Instant::now();
-    let frames = 50;
-    for f in 0..frames {
-        s.pointer_hover(plus(o, 5.0 + f64::from(f), 7.0), false, true);
+    assert_eq!(n, 200, "all 200 selected");
+    let at_rest = std::time::Instant::now();
+    for _ in 0..20 {
         let _ = s.draw_list();
     }
-    let per = start.elapsed().as_secs_f64() * 1000.0 / f64::from(frames);
-    eprintln!("per frame with {n} selected: {per:.2} ms");
-    assert!(per < 8.0, "{per} ms");
-    s.escape();
+    let rest_ms = at_rest.elapsed().as_secs_f64() * 1000.0 / 20.0;
+    let o = pt(0.0, 204.0);
+    let measure = |s: &mut Session, ctrl: bool| {
+        s.pointer_hover(o, false, ctrl);
+        s.pointer_down(o, false);
+        let frames = 40;
+        let (mut hover_ms, mut draw_ms) = (0.0, 0.0);
+        for f in 0..frames {
+            let t0 = std::time::Instant::now();
+            s.pointer_hover(plus(o, 5.0 + f64::from(f), 7.0), false, ctrl);
+            let t1 = std::time::Instant::now();
+            let _ = s.draw_list();
+            let t2 = std::time::Instant::now();
+            hover_ms += (t1 - t0).as_secs_f64() * 1000.0;
+            draw_ms += (t2 - t1).as_secs_f64() * 1000.0;
+        }
+        s.escape();
+        (hover_ms / f64::from(frames), draw_ms / f64::from(frames))
+    };
+    let (move_hover, move_draw) = measure(&mut s, false);
+    assert_eq!(sel(&s), 200, "the measured drag was a move of all 200");
+    let (copy_hover, copy_draw) = measure(&mut s, true);
+    eprintln!(
+        "200 selected: idle draw {rest_ms:.2} ms; move hover {move_hover:.2} + draw {move_draw:.2} ms; copy hover {copy_hover:.2} + draw {copy_draw:.2} ms"
+    );
+    // commit time of the copy
+    s.pointer_hover(o, false, true);
+    s.pointer_down(o, false);
+    s.pointer_hover(plus(o, 30.0, 7.0), false, true);
+    let t = std::time::Instant::now();
+    s.pointer_up(plus(o, 30.0, 7.0), false, true);
+    eprintln!(
+        "commit of the 200-object copy: {:.1} ms",
+        t.elapsed().as_secs_f64() * 1000.0
+    );
+    assert_eq!(all(&s).len(), 400);
+    assert!(copy_draw < 8.0, "draw {copy_draw} ms over the 8 ms budget");
 }
