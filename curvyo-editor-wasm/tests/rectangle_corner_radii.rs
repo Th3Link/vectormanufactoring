@@ -295,7 +295,7 @@ fn the_knob_hint_lines_follow_the_switch_and_a_limited_corner() {
     );
     // Off the knob: no lines.
     session.pointer_hover(pt(60.0, 50.0), false, false);
-    assert!(session.corner_hint_lines().is_empty());
+    assert_eq!(session.corner_hint_lines(), Vec::<String>::new());
 
     // A shrunk rectangle: TL 30 + BL 30 + TR 30 on 100 x 40 -> shown 20.
     let document = Document::new(1);
