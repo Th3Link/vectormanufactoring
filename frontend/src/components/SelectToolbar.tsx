@@ -1,4 +1,5 @@
-import { CircleAlert } from "lucide-react";
+import { CircleAlert, Link, Unlink } from "lucide-react";
+import { Toggle, Tooltip } from "radix-ui";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { ToolbarSwitch } from "@/components/ToolbarSwitch";
@@ -9,6 +10,9 @@ export interface SelectToolbarProps {
   onSetScaleStrokeWidth: (on: boolean) => void;
   scaleCornerRadius: boolean;
   onSetScaleCornerRadius: (on: boolean) => void;
+  /** The "Link corners" switch (`specs/rectangle-corner-radii/` criterion 2). */
+  linkCorners: boolean;
+  onSetLinkCorners: (on: boolean) => void;
   /** What the bar shows for the current selection (rule of
    * `specs/unified-object-editing/` criteria 21, 21a, 22). */
   bar: SelectBarState;
@@ -136,9 +140,12 @@ function RadiusField({ bar, onSetRadius, onReturnFocus }: RadiusFieldProps) {
     onReturnFocus();
   };
 
+  const corners = bar.radiusCorners;
   const tooltip = bar.radiusLimited
     ? `Stored ${formatMm(bar.radiusStored)} mm, limited to ${formatMm(bar.radius)} mm by the size; enlarging brings it back.`
-    : "Corner radius. The corner handles appear on the canvas when the rectangle is at least 72 px across on screen; zoom in or type a value.";
+    : corners
+      ? `Corner radius. Typing sets all four.\nTop-left ${formatMm(corners[0])}, top-right ${formatMm(corners[1])}, bottom-right ${formatMm(corners[2])}, bottom-left ${formatMm(corners[3])} mm.\nZoom in to change one corner.`
+      : "Corner radius. The corner handles appear on the canvas when the rectangle is at least 72 px across on screen; zoom in or type a value.";
 
   return (
     <div className="relative flex items-center gap-1.5 text-[var(--toolbar-icon)]">
@@ -318,6 +325,61 @@ function PointsField({ bar, onSetPointCount }: PointsFieldProps) {
   );
 }
 
+interface LinkCornersToggleProps {
+  linked: boolean;
+  onLinkedChange: (on: boolean) => void;
+}
+
+/**
+ * The "Link corners" toggle (`specs/rectangle-corner-radii/` criteria 2 and 3;
+ * `docs/design-system.md`, row "Link corners toggle"): a 28 px icon button, no
+ * label, between the Radius field and "Remove rounding". On (the default) the
+ * glyph is a closed chain on the active fill, off a broken chain on no fill, so
+ * the state never rests on colour alone. A Radix `Toggle` (`aria-pressed`,
+ * Space and Enter toggle), named "Link corners". The tooltip follows the state.
+ * The state is owned by `useEditorSession` (session state, on per session and
+ * after New or Open, never saved), not here.
+ */
+function LinkCornersToggle({ linked, onLinkedChange }: LinkCornersToggleProps) {
+  return (
+    <Tooltip.Provider>
+      <Tooltip.Root delayDuration={400}>
+        <Tooltip.Trigger asChild>
+          <Toggle.Root
+            pressed={linked}
+            onPressedChange={onLinkedChange}
+            aria-label="Link corners"
+            className="flex size-7 shrink-0 items-center justify-center rounded-md text-[var(--toolbar-icon)] outline-none hover:bg-[var(--editor-accent-hover)] focus-visible:ring-2 focus-visible:ring-[var(--editor-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--toolbar-bg)] aria-pressed:bg-[var(--toolbar-icon-active-bg)] aria-pressed:text-[var(--toolbar-icon-active-fg)] aria-pressed:hover:bg-[var(--toolbar-icon-active-bg)]"
+          >
+            {linked ? (
+              <Link aria-hidden size={16} strokeWidth={1.5} absoluteStrokeWidth />
+            ) : (
+              <Unlink aria-hidden size={16} strokeWidth={1.5} absoluteStrokeWidth />
+            )}
+          </Toggle.Root>
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content
+            side="bottom"
+            sideOffset={6}
+            className="z-50 max-w-[280px] rounded-md bg-popover px-2 py-1 text-xs text-popover-foreground ring-1 ring-foreground/10"
+          >
+            <div>
+              {linked
+                ? "Link corners: on. A corner handle sets all four radii. Hold Shift to change one corner."
+                : "Link corners: off. A corner handle changes its own corner. Hold Shift to set all four."}
+            </div>
+            <div className="opacity-70">
+              Applies to the corner handles of one selected rectangle. The Radius field always sets all
+              four.
+            </div>
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+    </Tooltip.Provider>
+  );
+}
+
 /**
  * The Select tool's contextual bar (`docs/design-system.md`, "Select bar
  * layout"; `specs/unified-object-editing/` criteria 21 to 23): left-aligned
@@ -334,6 +396,8 @@ export function SelectToolbar({
   onSetScaleStrokeWidth,
   scaleCornerRadius,
   onSetScaleCornerRadius,
+  linkCorners,
+  onSetLinkCorners,
   bar,
   onSetRadius,
   onRemoveRounding,
@@ -350,10 +414,11 @@ export function SelectToolbar({
     groups.push(
       <div key="rectangle" className="flex items-center gap-3">
         <RadiusField bar={bar} onSetRadius={onSetRadius} onReturnFocus={onReturnFocus} />
+        <LinkCornersToggle linked={linkCorners} onLinkedChange={onSetLinkCorners} />
         <button
           type="button"
           aria-disabled={!bar.removeRoundingEnabled}
-          title="Remove rounding of the selected rectangles"
+          title="Remove rounding of the selected rectangles (all corners)"
           onClick={() => {
             if (bar.removeRoundingEnabled) {
               onRemoveRounding();

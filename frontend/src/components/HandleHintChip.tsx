@@ -50,9 +50,18 @@ const HINT_LINES: Record<string, string[]> = {
   "param-inner": ["Inner radius", "Double-click: type a ratio"],
 };
 
+/** The notes a corner knob's hint can open with
+ * (`specs/rectangle-corner-radii/` criterion 23): muted, and not the title. */
+function isNote(line: string): boolean {
+  return line.startsWith("Limited by the size.") || line.startsWith("Editing one corner");
+}
+
 interface HandleHintChipProps {
   /** `curvyo-editor-wasm`'s `handle_hint()`: which handle the pointer is on. */
   hint: string;
+  /** `corner_hint_lines()`: the state-dependent lines of a corner radius knob
+   * (empty for any other handle, then the fixed lines of `hint` show). */
+  cornerLines: string[];
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -64,8 +73,9 @@ interface HandleHintChipProps {
  * right, the readout's placement and flipping), never following it, taking
  * no pointer events, gone on a press, on leaving the handle or on any key.
  */
-export function HandleHintChip({ hint, containerRef }: HandleHintChipProps) {
-  const lines = HINT_LINES[hint];
+export function HandleHintChip({ hint, cornerLines, containerRef }: HandleHintChipProps) {
+  const lines =
+    hint === "param-radius" && cornerLines.length > 0 ? cornerLines : HINT_LINES[hint];
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const chipRef = useRef<HTMLDivElement>(null);
@@ -162,8 +172,17 @@ export function HandleHintChip({ hint, containerRef }: HandleHintChipProps) {
         color: "var(--toolbar-icon)",
       }}
     >
-      {lines.map((line, index) => (
-        <div key={line} className={index === 0 ? "font-medium" : undefined}>
+      {lines.map((line) => (
+        <div
+          key={line}
+          className={
+            isNote(line)
+              ? "opacity-70"
+              : line === lines.find((candidate) => !isNote(candidate))
+                ? "font-medium"
+                : undefined
+          }
+        >
           {line}
         </div>
       ))}

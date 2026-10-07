@@ -79,6 +79,11 @@ export interface SelectBarState {
   radiusLimited: boolean;
   /** The stored radius, millimetres, for the tooltip of "limited". */
   radiusStored: number;
+  /** One rectangle with unequal corners: its four effective radii in its own
+   * frame, millimetres (top-left, top-right, bottom-right, bottom-left) for the
+   * "Mixed" tooltip (`specs/rectangle-corner-radii/` criterion 22); `null`
+   * otherwise. */
+  radiusCorners: [number, number, number, number] | null;
   removeRoundingShown: boolean;
   removeRoundingEnabled: boolean;
   pointsShown: boolean;
@@ -96,6 +101,7 @@ const EMPTY_SELECT_BAR_STATE: SelectBarState = {
   radius: 0,
   radiusLimited: false,
   radiusStored: 0,
+  radiusCorners: null,
   removeRoundingShown: false,
   removeRoundingEnabled: false,
   pointsShown: false,
@@ -113,6 +119,11 @@ function readSelectBar(raw: {
   radius: number;
   radius_limited: boolean;
   radius_stored: number;
+  radius_corners_shown: boolean;
+  radius_tl: number;
+  radius_tr: number;
+  radius_br: number;
+  radius_bl: number;
   remove_rounding_shown: boolean;
   remove_rounding_enabled: boolean;
   points_shown: boolean;
@@ -130,6 +141,9 @@ function readSelectBar(raw: {
     radius: raw.radius,
     radiusLimited: raw.radius_limited,
     radiusStored: raw.radius_stored,
+    radiusCorners: raw.radius_corners_shown
+      ? [raw.radius_tl, raw.radius_tr, raw.radius_br, raw.radius_bl]
+      : null,
     removeRoundingShown: raw.remove_rounding_shown,
     removeRoundingEnabled: raw.remove_rounding_enabled,
     pointsShown: raw.points_shown,
@@ -164,6 +178,10 @@ function sameSelectBar(a: SelectBarState, b: SelectBarState): boolean {
  * still committed normally — exactly the node the maker expects to end
  * up with (matching Inkscape).
  */
+/** How long the "max" notice of a limited typed corner radius stays at its knob
+ * (`specs/rectangle-corner-radii/` criterion 6). */
+const LIMIT_NOTICE_MS = 1500;
+
 const DOUBLE_CLICK_MS = 400;
 /** Canvas-relative CSS pixels now (`canvas-navigation-and-selection`: all
  * screen↔document conversion moved into Rust), not document millimetres
@@ -286,6 +304,10 @@ export interface TransformEntryField {
 export interface TransformEntryState {
   kind: "angle" | "size" | "radius" | "corner-radius" | "inner-ratio" | "skew";
   fields: TransformEntryField[];
+  /** The muted second row of a corner radius entry ("All four corners" or "This
+   * corner only", `specs/rectangle-corner-radii/` criterion 6); empty for every
+   * other entry. */
+  scope: string;
   /** Whether the two fields are linked (Ctrl at the second press). */
   linked: boolean;
   handle: { x: number; y: number };
@@ -312,6 +334,7 @@ function readTransformEntry(
         field_prefill(index: number): string;
         field_editable(index: number): boolean;
         linked: boolean;
+        scope: string;
         handle_x: number;
         handle_y: number;
         center_x: number;
@@ -338,6 +361,7 @@ function readTransformEntry(
     kind: raw.kind as TransformEntryState["kind"],
     fields,
     linked: raw.linked,
+    scope: raw.scope,
     handle: { x: raw.handle_x, y: raw.handle_y },
     center: { x: raw.center_x, y: raw.center_y },
     glyphReach: raw.glyph_reach,
@@ -457,6 +481,10 @@ export interface EditorSession {
    * right), `"move"`, `"param-radius"`, `"param-inner"`): the hover chip's content
    * (`object-transform-refinements` criterion 54). */
   handleHint: string;
+  /** The lines of the hint chip of a corner radius knob under the pointer
+   * (they depend on the "Link corners" switch and on a limited corner, see
+   * `Session::corner_hint_lines`); empty on any other handle. */
+  cornerHintLines: string[];
   /** The typed numeric entry to show, or `null`. */
   transformEntry: TransformEntryState | null;
   /** The open typed move, if any. */
@@ -527,6 +555,10 @@ export interface EditorSession {
    * rectangle's corner radius. Session state, off in every new session. */
   scaleCornerRadius: boolean;
   setScaleCornerRadius: (on: boolean) => void;
+  /** The "Link corners" switch (`specs/rectangle-corner-radii/` criterion 2):
+   * on, a corner handle sets all four radii. On in every new or opened project. */
+  linkCorners: boolean;
+  setLinkCorners: (on: boolean) => void;
   /** What the Select bar shows for the current selection (criteria 21-22). */
   selectBar: SelectBarState;
   /** Enter in the bar's "Radius" field: `"committed"`, `"unchanged"`,
@@ -629,11 +661,14 @@ export function useEditorSession(
   const [liveReadout, setLiveReadout] = useState<LiveReadout | null>(null);
   const [scaleStrokeWidth, setScaleStrokeWidthState] = useState(false);
   const [scaleCornerRadius, setScaleCornerRadiusState] = useState(false);
+  const [linkCorners, setLinkCornersState] = useState(true);
   const [selectBar, setSelectBar] = useState<SelectBarState>(EMPTY_SELECT_BAR_STATE);
   const [cursorHint, setCursorHint] = useState("default");
   const [editHint, setEditHint] = useState<EditHint | null>(null);
   const editHintCounter = useRef(0);
   const [handleHint, setHandleHint] = useState("");
+  const [cornerHintLines, setCornerHintLines] = useState<string[]>([]);
+  const limitNoticeTimer = useRef<number | undefined>(undefined);
   const [transformEntry, setTransformEntry] = useState<TransformEntryState | null>(null);
   const [moveEntry, setMoveEntry] = useState<MoveEntryState | null>(null);
   const [moveBadges, setMoveBadges] = useState<MoveBadgeState>(NO_BADGES);
@@ -700,6 +735,7 @@ export function useEditorSession(
     // (criterion 27); reading it back here is what resets the UI.
     setScaleStrokeWidthState(session.scale_stroke_width());
     setScaleCornerRadiusState(session.scale_corner_radius());
+    setLinkCornersState(session.link_corners());
     const nextBar = readSelectBar(session.select_bar_state());
     setSelectBar((previous) => (sameSelectBar(previous, nextBar) ? previous : nextBar));
     setZoomPercent(session.zoom_percent());
@@ -929,6 +965,14 @@ export function useEditorSession(
     [syncFromSession],
   );
 
+  const setLinkCorners = useCallback(
+    (on: boolean) => {
+      sessionRef.current?.set_link_corners(on);
+      syncFromSession();
+    },
+    [syncFromSession],
+  );
+
   const setSelectedRadius = useCallback(
     (text: string): string => {
       const session = sessionRef.current;
@@ -1094,6 +1138,7 @@ export function useEditorSession(
       setLiveReadout(readLiveReadout(session?.live_readout()));
       setCursorHint(session?.cursor_hint() ?? "default");
       setHandleHint(session?.handle_hint() ?? "");
+      setCornerHintLines(session?.corner_hint_lines() ?? []);
       if (session) {
         syncBadges(session);
       }
@@ -1313,6 +1358,17 @@ export function useEditorSession(
       }
       const outcome = session.commit_transform_entry(first, second, lastEdited);
       syncFromSession();
+      // A typed corner radius past its limit is committed limited and says
+      // "r 12.0 mm max" at the knob for 1.5 s: a limit is never silent.
+      const notice = readLiveReadout(session.live_readout());
+      if (outcome === "committed" && notice) {
+        setLiveReadout(notice);
+        window.clearTimeout(limitNoticeTimer.current);
+        limitNoticeTimer.current = window.setTimeout(() => {
+          sessionRef.current?.clear_limit_notice();
+          setLiveReadout(null);
+        }, LIMIT_NOTICE_MS);
+      }
       return outcome;
     },
     [syncFromSession],
@@ -1359,6 +1415,7 @@ export function useEditorSession(
     editHint,
     dismissEditHint,
     handleHint,
+    cornerHintLines,
     transformEntry,
     moveEntry,
     moveBadges,
@@ -1386,6 +1443,8 @@ export function useEditorSession(
     setScaleStrokeWidth,
     scaleCornerRadius,
     setScaleCornerRadius,
+    linkCorners,
+    setLinkCorners,
     selectBar,
     setSelectedRadius,
     setSelectedPointCount,

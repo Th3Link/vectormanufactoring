@@ -137,7 +137,11 @@ export function Canvas({ editor }: CanvasProps) {
           onCancel={editor.cancelTransformEntry}
         />
       )}
-      <HandleHintChip hint={editor.handleHint} containerRef={editor.containerRef} />
+      <HandleHintChip
+        hint={editor.handleHint}
+        cornerLines={editor.cornerHintLines}
+        containerRef={editor.containerRef}
+      />
       <KeyHintChip hint={editor.keyHint} containerRef={editor.containerRef} />
       <EditHintChip
         hint={editor.editHint}

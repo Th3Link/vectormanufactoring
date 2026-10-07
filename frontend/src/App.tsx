@@ -178,6 +178,8 @@ function App() {
               onSetScaleStrokeWidth={editor.setScaleStrokeWidth}
               scaleCornerRadius={editor.scaleCornerRadius}
               onSetScaleCornerRadius={editor.setScaleCornerRadius}
+              linkCorners={editor.linkCorners}
+              onSetLinkCorners={editor.setLinkCorners}
               bar={editor.selectBar}
               onSetRadius={editor.setSelectedRadius}
               onRemoveRounding={editor.removeCornerRounding}

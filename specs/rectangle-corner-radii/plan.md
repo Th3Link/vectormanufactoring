@@ -91,3 +91,57 @@ no customer question).
   to `corner_radii` and keep their assertions.
 - Full gate and every CI job on the exact head sha; no UI change, so no
   screenshot review.
+
+---
+
+# PR 2: the editing
+
+Same branch and the same draft PR #53 (one PR for the customer). PR 1 is
+verified (tester PASS, architect items A to E done). This part is the ADR's
+PR 2: criteria 1 to 8, 12 to 15 (12 to 15 for rectangles with different radii),
+22 and 23.
+
+## Affected crates/modules
+
+- `curvyo-document-core`: `Corner::opposite`, `horizontal_neighbour`,
+  `vertical_neighbour` (pure helpers).
+- `curvyo-ui-core`: `CornerLinking` (`transform_drag.rs`), `SelectTool`
+  field and accessors, `TransformDrag::unlinked` and `ParamDragInfo`,
+  `ParamValue::CornerRadius`, `value_from_pointer`/`apply_param`/
+  `radius_is_limited` (`param_edit.rs`), `knob_rho` and the capped
+  `param_handles`, `ParamEntry` scope and names, `SelectBarState::radius_corners`.
+- `curvyo-editor-wasm`: `link_corners`/`set_link_corners`, readout texts,
+  followers, entry `scope`, the "max" notice, `corner_hint_lines`, bar view
+  fields.
+- `frontend/`: `LinkCornersToggle` and the Radius tooltip in
+  `SelectToolbar.tsx`, the scope row in `TransformEntryChip.tsx`, the knob
+  hint lines in `HandleHintChip.tsx`, state in `useEditorSession.ts`.
+- Docs: the "Select bar layout" width in `docs/design-system.md`.
+
+## Tasks
+
+- [x] 8. Part 1 review items A to E (fixture writer, sharp epsilon, outline
+      helper, non-finite refusal, version pins).
+- [x] 9. `Corner` helpers; `CornerLinking`, Shift as an exclusive or frozen at the
+      press, `ParamValue::CornerRadius`, per-corner limit
+      `min(W - r_h, H - r_v)`, writes of the three neighbours at their effective
+      values from a shrunk rectangle (AC 2, 3, 4, 5, 10).
+- [x] 10. `knob_rho` diagonal cap, clearance property over four independent
+      radii (AC 1).
+- [x] 11. Typed entry per scope, accessible names, scope row, "max" notice
+      (AC 6).
+- [x] 12. Mixed Radius field with the four values, Remove rounding independent
+      of switch and Shift (AC 8, 22).
+- [x] 13. Readout texts, followers, knob hint lines (AC 7, 23).
+- [x] 14. Link toggle in the Select bar, tooltips, `aria-pressed`; "Select bar
+      layout" width measured (AC 2, UX 1, 7).
+- [x] 15. Gate, push, CI on the head sha.
+
+## Validation
+
+Unit tests for the value rules (`param_edit.rs`, `param_handles.rs`),
+integration tests through the real tool (`curvyo-ui-core/tests/
+rectangle_corner_radii.rs`) and `Session` (`curvyo-editor-wasm/tests/
+rectangle_corner_radii.rs`), a clearance property test over four independent
+effective radii, and a manual run in the browser (own tab): linked drag, unlinked
+drag, entry with scope row, "max" notice, hint chip, toggle fill and bar width.
