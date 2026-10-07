@@ -581,6 +581,13 @@ to the PO" (criteria 21, 41, 59, 64 and four smaller ones).
   - **`live_offset` is deleted** (folded into `SelectTool::live_move`, which also
     reports the copy flag and the axis); `LiveEdit` gains `copy`.
 
+- **2026-10-07 (architect, PR 4 review): accepted.** `build_move_axes` is its
+  own render-core call, composed once in `session/draw.rs` before the blue
+  outline, so the draw order (artwork, axes, blue outline, box, handles) is
+  stated in one place. `LockedAxis` keeps render-core free of `ui-core` types.
+  The release applies `MoveDrag::joins` itself, so a release outside the dead
+  zone with no `pointer_moved` before it still joins the pressed object.
+
 ### 6. The Escape cascade, the Node tool and Split selection (Part D)
 
 - **2026-10-06: `Session::escape() -> EscapeStep`, one step per call, written

@@ -6,9 +6,13 @@
 
 use vecmanf_document_core::{NodeId, ObjectSnapshot, Point, Tolerance};
 
-use super::SelectTool;
+use super::handles::sole_selected;
+use super::move_drag::MoveDrag;
+use super::{SelectDrag, SelectTool};
 use crate::hit_test_object::hit_test_object;
 use crate::object_selection::ObjectSelection;
+use crate::oriented_box::oriented_bounds;
+use crate::transform_drag::DragOrigin;
 use crate::transform_handle_layout::{EditHandle, TransformHandleTolerances};
 
 /// What a press lands on, in the order [`classify_press`] tries them.
@@ -77,4 +81,53 @@ pub fn classify_press(
         return PressTarget::InsideSelectedBox;
     }
     hit_test_object(objects, point, tolerance).map_or(PressTarget::Empty, PressTarget::Object)
+}
+
+/// The move a press on `hit`'s outline or body begins, with the selection
+/// change its modifier asks for. Without Shift a different object becomes the
+/// single selection (criterion 16) and a selected one keeps the group so it
+/// can be dragged together (criterion 18). With Shift the selection does not
+/// change at the press (criterion 29): a release inside the dead zone toggles
+/// `hit`, a drag that leaves it moves the selection along one axis, and an
+/// unselected `hit` joins it then.
+pub(super) fn begin_object_press(
+    selection: &mut ObjectSelection,
+    hit: NodeId,
+    shift: bool,
+    origin: DragOrigin,
+) -> MoveDrag {
+    let mut drag = MoveDrag::new(origin, false);
+    if shift {
+        drag.pending_toggle = Some(hit);
+        if !selection.contains(hit) {
+            drag.joins = Some(hit);
+        }
+    } else if !selection.contains(hit) {
+        selection.select_single(hit);
+    }
+    drag
+}
+
+impl SelectTool {
+    /// Begins the resize, rotate, skew or parameter drag of `handle`, which
+    /// [`classify_press`] found on the sole selected object, and records it as
+    /// the handle the press grabbed (a double-click acts only on that one).
+    pub(super) fn begin_handle_press(
+        &mut self,
+        objects: &[ObjectSnapshot],
+        selection: &ObjectSelection,
+        origin: DragOrigin,
+        handle: EditHandle,
+        tolerances: &TransformHandleTolerances,
+    ) {
+        // A handle belongs to the sole selected object, so it exists here.
+        let Some(object) = sole_selected(objects, selection) else {
+            return;
+        };
+        let box_ = oriented_bounds(object);
+        self.drag = SelectDrag::Transforming(
+            self.begin_handle_drag(origin, object, box_, handle, tolerances),
+        );
+        self.last_press_handle = Some(handle);
+    }
 }

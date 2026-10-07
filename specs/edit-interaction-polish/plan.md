@@ -401,6 +401,16 @@ rebuild per frame plus 200 dashed boxes, not the copy. The commit of the 200
 copies (about 30,000 keys, 200 tree nodes) took **79 ms** in a native release
 build; in WebAssembly it will be slower. It writes once, on release.
 
+### Review notes (PR 4)
+
+- The radius knobs disappear during any move drag, copy included: the existing
+  rule "parameter handles are not drawn during other drags".
+- Preview 11 ms against the 8 ms budget equals a plain move; the commit of 200
+  copies took 78 ms native. The browser (WASM) commit time is unmeasured.
+- Fixed after review: the release applies `joins` itself (a release with no
+  preceding `pointer_moved` joined nothing); `pointer_down` shrank by moving the
+  Object arm and the handle begin into `press.rs`.
+
 ### Decisions taken here (inside the ADR)
 
 - The origin axes are their own render-core call (`build_move_axes`), not a

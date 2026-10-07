@@ -173,6 +173,11 @@ impl SelectTool {
             }
             return;
         }
+        // The drag left the dead zone with no `pointer_moved` in between (a
+        // flick, a touch): the pressed object still joins the selection.
+        if let Some(id) = drag.joins {
+            selection.add(id);
+        }
         let MoveResolution { offset, copy, .. } = drag.resolve(point, modifiers);
         if offset.length() <= MOVE_EQUAL_EPSILON_MM {
             return;

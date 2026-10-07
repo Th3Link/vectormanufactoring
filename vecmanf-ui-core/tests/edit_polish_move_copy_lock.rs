@@ -680,3 +680,30 @@ fn the_real_minus_sign_of_the_readout_parses() {
     assert_eq!(parse_entry_number("\u{2212}\u{2212}1", false), None);
     assert_eq!(parse_entry_number("\u{2212}15\u{b0}", true), Some(-15.0));
 }
+
+/// Criterion 29: a release outside the dead zone with no `pointer_moved`
+/// before it (a flick, a touch, a pen) still joins the Shift-pressed
+/// unselected object, for a move and for a copy.
+#[test]
+fn a_release_with_no_move_event_still_joins_the_pressed_object() {
+    for modifiers in [SHIFT, BOTH] {
+        let mut rig = Rig::new();
+        rig.selection.select_single(rig.b);
+        rig.press(pt(100.0, 0.0), true);
+        rig.release(pt(130.0, 4.0), modifiers);
+        if modifiers.ctrl {
+            let copies = rig.selection.ids().to_vec();
+            assert_eq!(copies.len(), 2, "both objects were copied");
+            assert_eq!(rig.origin_of(rig.a), pt(0.0, 0.0));
+            assert_eq!(rig.origin_of(rig.b), pt(400.0, 0.0));
+        } else {
+            assert_eq!(rig.selection.ids(), &[rig.b, rig.a]);
+            assert_eq!(rig.origin_of(rig.a), pt(30.0, 0.0), "the pressed one moved");
+            assert_eq!(
+                rig.origin_of(rig.b),
+                pt(430.0, 0.0),
+                "the old selection too"
+            );
+        }
+    }
+}

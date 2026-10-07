@@ -41,6 +41,7 @@ pub use entry::{EntryKey, KeyEntryRefusal, MoveEntryMode, double_click};
 pub use handles::entry_anchor;
 use move_drag::MoveDrag;
 pub use move_drag::{Axis, MoveResolution};
+use press::begin_object_press;
 pub use press::{PressTarget, classify_press};
 pub use preview::LiveEdit;
 
@@ -206,18 +207,7 @@ impl SelectTool {
             shift,
         ) {
             PressTarget::Handle(handle) => {
-                if let Some((object, box_, _)) =
-                    Self::handle_at(objects, selection, point, handle_tolerances, shift)
-                {
-                    self.drag = SelectDrag::Transforming(self.begin_handle_drag(
-                        origin,
-                        object,
-                        box_,
-                        handle,
-                        &handle_tolerances,
-                    ));
-                    self.last_press_handle = Some(handle);
-                }
+                self.begin_handle_press(objects, selection, origin, handle, &handle_tolerances);
                 SelectPointerDownOutcome::Handle
             }
             // A double-click on the centre handle opens the typed move, so
@@ -240,27 +230,7 @@ impl SelectTool {
                 SelectPointerDownOutcome::Cleared
             }
             PressTarget::Object(hit) => {
-                let mut drag = MoveDrag::new(origin, false);
-                if shift {
-                    // Shift does not change the selection at the press
-                    // (criterion 29): a release inside the dead zone toggles
-                    // the object, a drag that leaves it moves the selection
-                    // along one axis and an unselected object joins it then.
-                    drag.pending_toggle = Some(hit);
-                    if !selection.contains(hit) {
-                        drag.joins = Some(hit);
-                    }
-                } else if !selection.contains(hit) {
-                    // A plain click on a *different* object is single-select,
-                    // not additive (acceptance criterion 16). A plain click on
-                    // an object already part of a multi-selection leaves the
-                    // whole selection as it is, so the group can be dragged
-                    // together (acceptance criterion 18) — matching every
-                    // reference tool's own "click one of several selected
-                    // objects to drag them all" convention.
-                    selection.select_single(hit);
-                }
-                self.drag = SelectDrag::Moving(drag);
+                self.drag = SelectDrag::Moving(begin_object_press(selection, hit, shift, origin));
                 SelectPointerDownOutcome::Selected
             }
         }

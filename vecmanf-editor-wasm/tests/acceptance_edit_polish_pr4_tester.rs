@@ -432,7 +432,7 @@ fn c29_shift_press_on_an_unselected_object_joins_it_when_the_drag_leaves_the_dea
 /// flick, a synthetic event) is still "a drag that left the dead zone": the
 /// Shift-pressed unselected object joins and moves with the selection.
 #[test]
-#[ignore = "DEFECT (tester report, PR 4): the join of a Shift-pressed unselected object happens in pointer_moved only; remove this ignore when fixed"]
+
 fn c29_a_release_with_no_preceding_move_event_still_joins_the_pressed_object() {
     let mut s = abc_with_a_selected();
     let b = p(B_OUTLINE);
