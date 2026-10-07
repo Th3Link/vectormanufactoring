@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { EditHintChip } from "@/components/EditHintChip";
 import { HandleHintChip } from "@/components/HandleHintChip";
 import { KeyHintChip } from "@/components/KeyHintChip";
+import { MoveBadges } from "@/components/MoveBadges";
 import { NodeContextMenu } from "@/components/NodeToolbar";
 import { MoveEntryChip } from "@/components/MoveEntryChip";
 import { TransformEntryChip } from "@/components/TransformEntryChip";
@@ -15,6 +16,10 @@ import { placeReadout } from "@/lib/readoutPlacement";
  * 12px, anchored to the pointer so it stays readable while a rotate drag
  * swings the handle through an arc). */
 const READOUT_OFFSET_PX = 12;
+
+/** The tool rail's clearance from the canvas's left edge, px: the readout is
+ * never drawn under it. */
+const TOOL_RAIL_CLEAR_PX = 64;
 
 interface CanvasProps {
   editor: EditorSession;
@@ -140,6 +145,7 @@ export function Canvas({ editor }: CanvasProps) {
         containerRef={editor.containerRef}
         onDismiss={editor.dismissEditHint}
       />
+      <MoveBadges badges={editor.moveBadges} containerRef={editor.containerRef} />
       {editor.liveReadout && (
         <ReadoutChip
           text={editor.liveReadout.text}
@@ -208,9 +214,9 @@ function ReadoutChip({ text, x, y, containerRef }: ReadoutChipProps) {
   return (
     <div
       ref={chipRef}
-      className="pointer-events-none absolute z-10 whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs"
+      className="pointer-events-none absolute z-40 whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs"
       style={{
-        left: placement.left,
+        left: Math.max(placement.left, TOOL_RAIL_CLEAR_PX),
         top: placement.top,
         background: "var(--toolbar-bg)",
         color: "var(--toolbar-icon)",

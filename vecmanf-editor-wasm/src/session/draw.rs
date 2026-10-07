@@ -46,6 +46,11 @@ impl Session {
             &primitives,
             view,
         ));
+        // The origin axes of an axis-locked move: above the artwork, below the
+        // blue outline, the boxes and the handles (criterion 27).
+        if let Some(axes) = self.move_axes_in(&objects) {
+            list.extend(vecmanf_render_core::build_move_axes(view, &axes));
+        }
         // The blue half of blue-new, black-old: the geometry a release would
         // commit, over the committed objects drawn above and under the boxes
         // and handles below (`specs/unified-object-editing` criterion 10).

@@ -11,7 +11,7 @@ use vecmanf_document_core::{
     AnchorId, Document, Length, NewAnchor, ObjectSnapshot, Point, RectBounds, pack, unpack,
 };
 use vecmanf_editor_wasm::{EscapeStep, KeyHint, KeyInput, KeyOutcome, Session, Tool};
-use vecmanf_ui_core::{EntryOutcome, object_outline_bounds};
+use vecmanf_ui_core::{EntryOutcome, MoveEntryMode, object_outline_bounds};
 
 /// Screen pixels per millimetre of a fresh session (96 dpi at 100 %).
 const SCALE: f64 = 96.0 / 25.4;
@@ -120,7 +120,14 @@ fn m_opens_the_move_chip_and_a_relative_entry_is_one_commit() {
     assert!(session.transform_entry().is_none());
     let commits = change_count(&session);
     assert_eq!(
-        session.commit_move_entry("5", "-3", false),
+        session.commit_move_entry(
+            "5",
+            "-3",
+            MoveEntryMode {
+                absolute: false,
+                copy: false
+            }
+        ),
         EntryOutcome::Committed
     );
     assert_eq!(change_count(&session), commits + 1);
@@ -137,7 +144,14 @@ fn an_absolute_entry_puts_the_top_left_of_the_bounds_there() {
     let mut session = selected(&rect_document(), pt(40.0, 20.0));
     key(&mut session, "m", false);
     assert_eq!(
-        session.commit_move_entry("100", "50", true),
+        session.commit_move_entry(
+            "100",
+            "50",
+            MoveEntryMode {
+                absolute: true,
+                copy: false
+            }
+        ),
         EntryOutcome::Committed
     );
     assert!(near(top_left(&session), 100.0, 50.0));
@@ -152,18 +166,39 @@ fn invalid_and_no_op_entries_write_nothing() {
     let before = session.pack("0.1.0").unwrap();
     key(&mut session, "m", false);
     assert!(matches!(
-        session.commit_move_entry("1,2,3", "0", false),
+        session.commit_move_entry(
+            "1,2,3",
+            "0",
+            MoveEntryMode {
+                absolute: false,
+                copy: false
+            }
+        ),
         EntryOutcome::Invalid { field: 0, .. }
     ));
     assert!(session.move_entry().is_some(), "an invalid chip stays open");
     assert_eq!(
-        session.commit_move_entry("0", "0", false),
+        session.commit_move_entry(
+            "0",
+            "0",
+            MoveEntryMode {
+                absolute: false,
+                copy: false
+            }
+        ),
         EntryOutcome::Unchanged
     );
     assert!(session.move_entry().is_none());
     key(&mut session, "m", false);
     assert_eq!(
-        session.commit_move_entry("10.0", "20.0", true),
+        session.commit_move_entry(
+            "10.0",
+            "20.0",
+            MoveEntryMode {
+                absolute: true,
+                copy: false
+            }
+        ),
         EntryOutcome::Unchanged
     );
     assert_eq!(session.pack("0.1.0").unwrap(), before);

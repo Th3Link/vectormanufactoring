@@ -361,6 +361,8 @@ export interface MoveEntryState {
   relative: [string, string];
   /** What an untouched X and Y show in Absolute mode (the current top-left). */
   absolute: [string, string];
+  /** Whether the Copy check opens on (Ctrl at the second press). */
+  copyPreset: boolean;
 }
 
 /** Reads the wasm-bindgen `MoveEntryChip` once, immediately, so it can be
@@ -372,6 +374,7 @@ function readMoveEntry(
         center_y: number;
         relative_prefill(axis: number): string;
         absolute_prefill(axis: number): string;
+        copy_preset(): boolean;
         free(): void;
       }
     | undefined,
@@ -383,10 +386,27 @@ function readMoveEntry(
     center: { x: raw.center_x, y: raw.center_y },
     relative: [raw.relative_prefill(0), raw.relative_prefill(1)],
     absolute: [raw.absolute_prefill(0), raw.absolute_prefill(1)],
+    copyPreset: raw.copy_preset(),
   };
   raw.free();
   return entry;
 }
+
+/** The modifier badges of a move (`specs/edit-interaction-polish/` criteria
+ * 26, 27, 33): which show, and where the pointer is, canvas-relative CSS
+ * pixels. Rust decides everything but the placement
+ * (`Session::move_indicators`). */
+export interface MoveBadgeState {
+  /** The plus badge: a copy drag runs, or a press with Ctrl would start a move. */
+  copy: boolean;
+  /** The lock badge's axis: `""` (none), `"x"` or `"y"`. */
+  lock: "" | "x" | "y";
+  /** The pointer hotspot. */
+  x: number;
+  y: number;
+}
+
+const NO_BADGES: MoveBadgeState = { copy: false, lock: "", x: 0, y: 0 };
 
 /** A key that could not act, shown for 2 s next to the pointer
  * (`specs/edit-interaction-polish/` criterion 59). */
@@ -441,9 +461,17 @@ export interface EditorSession {
   transformEntry: TransformEntryState | null;
   /** The open typed move, if any. */
   moveEntry: MoveEntryState | null;
+  /** The plus and lock badges by the pointer. */
+  moveBadges: MoveBadgeState;
   /** Enter in the move chip: `"committed"`, `"unchanged"` or
-   * `"invalid:<field>:number"` (the chip stays open). */
-  commitMoveEntry: (first: string, second: string, absolute: boolean) => string;
+   * `"invalid:<field>:number"` (the chip stays open). `copy` is the state of
+   * the chip's Copy check. */
+  commitMoveEntry: (
+    first: string,
+    second: string,
+    absolute: boolean,
+    copy: boolean,
+  ) => string;
   /** Enter in the entry chip: `"committed"`, `"unchanged"` (both close it)
    * or `"invalid:<field>:number|positive|negative|ratio-range|skew-range|too-large"`
    * (it stays
@@ -608,6 +636,7 @@ export function useEditorSession(
   const [handleHint, setHandleHint] = useState("");
   const [transformEntry, setTransformEntry] = useState<TransformEntryState | null>(null);
   const [moveEntry, setMoveEntry] = useState<MoveEntryState | null>(null);
+  const [moveBadges, setMoveBadges] = useState<MoveBadgeState>(NO_BADGES);
   const entryOpenRef = useRef(false);
   /** The last pointer position over the canvas (CSS px) — lets a
    * modifier key press/release re-run the hover, so the Select tool's
@@ -629,6 +658,28 @@ export function useEditorSession(
     entryOpenRef.current = next !== null || nextMove !== null;
     setTransformEntry((previous) => (sameEntry(previous, next) ? previous : next));
     setMoveEntry((previous) => (sameEntry(previous, nextMove) ? previous : nextMove));
+  }, []);
+
+  /** Re-reads the modifier badges: a pure read of Rust's state, called after
+   * every pointer event and every modifier change so a badge follows its key
+   * in the same frame, with the pointer at rest. */
+  const syncBadges = useCallback((session: WasmSession) => {
+    const last = lastPointerRef.current;
+    const raw = session.move_indicators();
+    const next: MoveBadgeState = {
+      copy: last !== null && raw.copy_badge,
+      lock: last !== null && (raw.lock === "x" || raw.lock === "y") ? raw.lock : "",
+      x: last?.x ?? 0,
+      y: last?.y ?? 0,
+    };
+    raw.free();
+    setMoveBadges((previous) =>
+      previous.copy === next.copy &&
+      previous.lock === next.lock &&
+      (!next.copy && next.lock === "" ? true : previous.x === next.x && previous.y === next.y)
+        ? previous
+        : next,
+    );
   }, []);
 
   /** Re-reads every bit of session-owned UI state after any call that
@@ -654,7 +705,8 @@ export function useEditorSession(
     setZoomPercent(session.zoom_percent());
     setSelectionCount(session.selection_count());
     syncEntry(session);
-  }, [syncEntry]);
+    syncBadges(session);
+  }, [syncEntry, syncBadges]);
 
   /** Frees whatever session is currently attached (if any), makes
    * `session` the live one, and attaches it to the host's `<canvas>` —
@@ -1042,8 +1094,11 @@ export function useEditorSession(
       setLiveReadout(readLiveReadout(session?.live_readout()));
       setCursorHint(session?.cursor_hint() ?? "default");
       setHandleHint(session?.handle_hint() ?? "");
+      if (session) {
+        syncBadges(session);
+      }
     },
-    [canvasPoint, onCursorMove, syncEntry],
+    [canvasPoint, onCursorMove, syncEntry, syncBadges],
   );
 
   const onPointerUp = useCallback(
@@ -1121,6 +1176,7 @@ export function useEditorSession(
     setCursorHint("default");
     setHandleHint("");
     lastPointerRef.current = null;
+    setMoveBadges(NO_BADGES);
   }, []);
 
   /** Tells the session the modifier state changed — from window-level key
@@ -1142,7 +1198,8 @@ export function useEditorSession(
       setHandleHint("");
     }
     setCursorHint(session.cursor_hint());
-  }, []);
+    syncBadges(session);
+  }, [syncBadges]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -1262,12 +1319,12 @@ export function useEditorSession(
   );
 
   const commitMoveEntry = useCallback(
-    (first: string, second: string, absolute: boolean): string => {
+    (first: string, second: string, absolute: boolean, copy: boolean): string => {
       const session = sessionRef.current;
       if (!session) {
         return "unchanged";
       }
-      const outcome = session.commit_move_entry(first, second, absolute);
+      const outcome = session.commit_move_entry(first, second, absolute, copy);
       syncFromSession();
       return outcome;
     },
@@ -1304,6 +1361,7 @@ export function useEditorSession(
     handleHint,
     transformEntry,
     moveEntry,
+    moveBadges,
     commitMoveEntry,
     commitTransformEntry,
     cancelTransformEntry,

@@ -11,7 +11,8 @@
 
 use vecmanf_document_core::Point;
 use vecmanf_ui_core::{
-    CornerRadiusScaling, SelectDoubleClickOutcome, StrokeScaling, TransformHandleTolerances,
+    CornerRadiusScaling, Modifiers, SelectDoubleClickOutcome, StrokeScaling,
+    TransformHandleTolerances,
 };
 
 use super::{Session, Tool};
@@ -108,8 +109,8 @@ impl Session {
             &objects,
             &mut self.selection,
             point,
-            shift,
-            ctrl,
+            Modifiers::new(shift, ctrl),
+            &mut self.minter,
         );
     }
 
@@ -117,8 +118,9 @@ impl Session {
     /// not yet clicked into selection: same box at `--accent-hover`") and
     /// lets a drag in flight note the pointer (the dead zone, once left,
     /// stays left).
-    pub(super) fn select_hover(&mut self, point: Point) {
-        self.select.pointer_moved(point);
+    pub(super) fn select_hover(&mut self, point: Point, modifiers: Modifiers) {
+        self.select
+            .pointer_moved(point, modifiers, &mut self.selection);
         let objects = self.objects();
         let tolerance = self.segment_tolerance();
         // Nothing lights up while a drag runs; hover returns after release.

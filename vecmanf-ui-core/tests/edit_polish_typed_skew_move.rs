@@ -12,9 +12,9 @@ use vecmanf_document_core::{
     Point, PointCount, RectBounds, StarFrame, Tolerance, Vec2,
 };
 use vecmanf_ui_core::{
-    EditHandle, EntryKey, EntryKind, EntryOutcome, InvalidReason, KeyEntryRefusal, ObjectSelection,
-    SelectDoubleClickOutcome, SelectTool, Side, TransformHandleTolerances, object_outline_bounds,
-    oriented_bounds,
+    AnchorIdMinter, EditHandle, EntryKey, EntryKind, EntryOutcome, InvalidReason, KeyEntryRefusal,
+    Modifiers, MoveEntryMode, ObjectSelection, SelectDoubleClickOutcome, SelectTool, Side,
+    TransformHandleTolerances, object_outline_bounds, oriented_bounds,
 };
 
 const SEGMENT_TOLERANCE: Tolerance = Tolerance::from_mm(1.0);
@@ -146,8 +146,8 @@ impl Rig {
             &objects,
             &mut self.selection,
             at,
-            false,
-            false,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
         );
     }
 
@@ -269,7 +269,8 @@ fn a_drag_from_the_centre_handle_still_moves() {
     let centre = rig.centre();
     rig.press(centre, false);
     let to = centre.translated(Vec2::new(20.0, 10.0));
-    rig.tool.pointer_moved(to);
+    rig.tool
+        .pointer_moved(to, Modifiers::NONE, &mut rig.selection);
     rig.release(to);
     let (after, _) = object_outline_bounds(&rig.object());
     assert!((after.x - before.x - 20.0).abs() < 1e-9);
@@ -435,8 +436,16 @@ fn the_move_entry_commits_through_the_tool() {
     let (top_left, _) = object_outline_bounds(&rig.object());
     rig.key(EntryKey::Move).unwrap();
     assert_eq!(
-        rig.tool
-            .commit_move_entry(&rig.document, ["5", "-3"], false),
+        rig.tool.commit_move_entry(
+            &rig.document,
+            &mut rig.selection,
+            &mut AnchorIdMinter::new(99),
+            ["5", "-3"],
+            MoveEntryMode {
+                absolute: false,
+                copy: false
+            },
+        ),
         EntryOutcome::Committed
     );
     assert!(!rig.tool.has_entry(), "a committed entry closes");
@@ -446,8 +455,16 @@ fn the_move_entry_commits_through_the_tool() {
 
     rig.key(EntryKey::Move).unwrap();
     assert_eq!(
-        rig.tool
-            .commit_move_entry(&rig.document, ["abc", "0"], false),
+        rig.tool.commit_move_entry(
+            &rig.document,
+            &mut rig.selection,
+            &mut AnchorIdMinter::new(99),
+            ["abc", "0"],
+            MoveEntryMode {
+                absolute: false,
+                copy: false
+            },
+        ),
         EntryOutcome::Invalid {
             field: 0,
             reason: InvalidReason::NotANumber
@@ -455,8 +472,16 @@ fn the_move_entry_commits_through_the_tool() {
     );
     assert!(rig.tool.has_entry(), "an invalid entry stays open");
     assert_eq!(
-        rig.tool
-            .commit_move_entry(&rig.document, ["100", "50"], true),
+        rig.tool.commit_move_entry(
+            &rig.document,
+            &mut rig.selection,
+            &mut AnchorIdMinter::new(99),
+            ["100", "50"],
+            MoveEntryMode {
+                absolute: true,
+                copy: false
+            },
+        ),
         EntryOutcome::Committed
     );
     let (placed, _) = object_outline_bounds(&rig.object());
@@ -465,7 +490,16 @@ fn the_move_entry_commits_through_the_tool() {
     let before = rig.object();
     rig.key(EntryKey::Move).unwrap();
     assert_eq!(
-        rig.tool.commit_move_entry(&rig.document, ["0", "0"], false),
+        rig.tool.commit_move_entry(
+            &rig.document,
+            &mut rig.selection,
+            &mut AnchorIdMinter::new(99),
+            ["0", "0"],
+            MoveEntryMode {
+                absolute: false,
+                copy: false
+            },
+        ),
         EntryOutcome::Unchanged
     );
     assert!(!rig.tool.has_entry());

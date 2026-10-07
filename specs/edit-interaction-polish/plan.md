@@ -304,4 +304,140 @@ worktree build.
 
 ## PR 4: `story/edit-polish-move-copy-lock`
 
-Part C and the Copy check of criterion 23. Tasks are added when PR 4 starts.
+Part C (move modifiers: Shift axis lock, Ctrl copy, their indicators) and the
+Copy check of criterion 23. Criteria 23 (Copy check), 26 to 41. Worktree
+`/home/marc/workbench/vecmanf-claude/edit-polish-4`, branch
+`story/edit-polish-move-copy-lock`, **stacked on PR 3**
+(`story/edit-polish-typed-skew-move`, #45): both edit `select_tool/entry.rs`.
+PR 3 review fixes are merged into this branch (merge, no rebase); once #45 is
+on `main`, `origin/main` is merged too. No new crate, no new dependency, no
+`format_version` change (the duplicate op copies the meta map by key).
+
+### Affected crates and modules
+
+- `vecmanf-document-core`: `objects.rs` (`duplicate_objects`, `CopySource`,
+  `ObjectEditError::AnchorIds`).
+- `vecmanf-ui-core`: new `select_tool/press.rs` (`classify_press`), new
+  `select_tool/move_drag.rs` (`MoveDrag::resolve`); `select_tool.rs` (the move
+  arms and the press classification leave it), `select_tool/preview.rs`
+  (`LiveEdit.copy`, `live_offset` folded into `resolve`), `select_tool/entry.rs`
+  (Ctrl at the second press), `transform_commit.rs` (`commit_move(copy,
+  minter)`), `move_entry.rs` (Copy), `transform_entry.rs` (U+2212).
+- `vecmanf-render-core`: new `move_axes.rs` (`MoveAxes`, drawn before the blue
+  outline), `theme.rs` (two tokens).
+- `vecmanf-editor-wasm`: `session/select.rs` (modifiers into the drag,
+  minter), `session/select_view.rs` (move readout, `live_objects_in` copy
+  rule, handle hint), `session/draw.rs` (axes), new `session/move_indicators.rs`,
+  new `wasm_move.rs` (`move_indicators`), `session/move_entry.rs` and
+  `wasm_move_entry.rs` (`copy`, `copy_preset`).
+- `frontend/`: new `MoveBadges.tsx`, `MoveEntryChip.tsx` (Copy check),
+  `HandleHintChip.tsx` (the two new lines), `useEditorSession.ts`, `Canvas.tsx`.
+
+### Tasks
+
+- [x] 1. `Document::duplicate_objects(&[CopySource], Vec2)`: one commit, every
+  key of the source meta map copied, caller-minted `AnchorId`s, the copy
+  directly above its original, `AnchorIds` and `NoSuchObject` refusals that
+  write nothing. Tests first: copy equals original except ids and offset for
+  every kind, preview equals commit, z-order A, A', B, B', fresh unique ids and
+  a join with the copy, refusals, one commit, save and reopen, a merge with a
+  concurrent move. (34, 35)
+- [x] 2. `classify_press`: pure extraction from `pointer_down`
+  (`PressTarget`), behaviour unchanged, the existing tests stay green. (37)
+- [x] 3. `MoveDrag` and `resolve`: pure move of the move arms out of
+  `select_tool.rs` and `preview.rs` first (`live_offset` is folded into
+  `resolve`), then the modifiers: the Shift lock re-chosen on every event
+  without a latch, Ctrl copy read live, `pointer_moved(point, modifiers,
+  selection)`. The worked example of criterion 30 is a test. (26, 28 to 32)
+- [x] 4. Shift at the press: the press does not toggle; the object joins the
+  selection when the drag leaves the dead zone; a release inside the dead zone
+  toggles; the centre handle never toggles. The slice 4 tests that asserted
+  the toggle at the press are rewritten to the release. (29, 38)
+- [x] 5. `commit_move(document, ids, offset, copy, minter)`: a drag, a Ctrl
+  release and the typed move share it; the selection after a copy is the
+  copies; a zero offset (also with Ctrl) writes nothing. (33, 34, 35, 36)
+- [x] 6. `LiveEdit.copy`: in copy mode the blue outline travels alone and the
+  box and handles stay on the originals (`live_objects_in`); the centre handle
+  keeps its dragging look at the original. (33)
+- [x] 7. render-core `MoveAxes` (two full-viewport lines through the start
+  centre, `--axis-guide` / `--axis-guide-idle`), the move readout ("\u{394}
+  12.5, \u{2212}3.0 mm", " Copy"), `Session::move_indicators`
+  (`MoveIndicators { copy_badge, lock }`, a pure read of the cached modifiers,
+  the hover position, `classify_press` and the drag) and `wasm_move.rs`. A
+  property test: `badge_shows == (pointer_down with Ctrl begins a move)` over a
+  grid of points. (26, 27, 33, 37)
+- [x] 8. The typed move's Copy check: `MoveEntry::commit(.., copy)` through
+  `commit_move`, `copy_preset` from Ctrl at the second press, the selection is
+  the copy after a typed copy (flag 5), `parse_entry_number` accepts U+2212
+  (flag 6), the centre handle hint gains "Shift: keep one axis" and "Ctrl:
+  copy". (23, 24)
+- [x] 9. Frontend: `MoveBadges.tsx` (plus and lock badge from window key events
+  and every pointer event, gone in the frame the key is released), the Copy
+  check as the last Tab stop of the move chip, hint lines. (23, 26, 27, 33)
+- [x] 10. The 200-object preview benchmark (`#[ignore]`, release) and the
+  measured commit time, noted for the PR and the demo. (41)
+- [ ] 11. Gate: fmt, clippy (host and wasm32 per core crate, editor-wasm in CI
+  form), nextest, rustdoc, deny, banned-dependency check, `npm run build`,
+  `tsc -b --noEmit`, `npm run lint`, license check, `npm audit`; CI of the head
+  sha. The Browser-pane checks are listed for a reviewer (the Browser pane was
+  not used by this PR's implementer).
+
+### Measured (criterion 41, flag 3)
+
+Release build, 200 selected objects (100 paths of 50 nodes, 100 rectangles), on a
+machine that was busy with other builds (the same run of the existing move
+benchmark gives "at rest" 18 ms per frame):
+
+| | per `draw_list()` | 8 ms budget |
+|---|---|---|
+| copy preview (`a_200_object_copy_previews_within_the_frame_budget...`) | 10.9 ms | missed |
+| plain move preview (`unified_object_editing`, same machine, same minute) | 10.8 ms | missed |
+
+The copy preview costs the same as the move preview, so criterion 41's first
+clause holds as far as it is "within the budget of `unified-object-editing`
+criterion 15" (that budget is missed by both on this machine; the 20 ms
+(50 fps) gate the benchmarks assert is met). The cost is the existing full
+rebuild per frame plus 200 dashed boxes, not the copy. The commit of the 200
+copies (about 30,000 keys, 200 tree nodes) took **79 ms** in a native release
+build; in WebAssembly it will be slower. It writes once, on release.
+
+### Review notes (PR 4)
+
+- The radius knobs disappear during any move drag, copy included: the existing
+  rule "parameter handles are not drawn during other drags".
+- Preview 11 ms against the 8 ms budget equals a plain move; the commit of 200
+  copies took 78 ms native. The browser (WASM) commit time is unmeasured.
+- Fixed after review: the release applies `joins` itself (a release with no
+  preceding `pointer_moved` joined nothing); `pointer_down` shrank by moving the
+  Object arm and the handle begin into `press.rs`.
+
+### Decisions taken here (inside the ADR)
+
+- The origin axes are their own render-core call (`build_move_axes`), not a
+  field of `SelectDecorationInput`: that list is drawn after the blue outline,
+  the axes must lie under it. Noted in `adrs.md` decision 5 with four other
+  refinements (the axes' start centre, the `commit_move` and `pointer_up`
+  signatures, `classify_press` public, `live_offset` deleted).
+- A press on the drawn centre handle starts a move whatever the Shift state
+  (criterion 38). Before this PR a Shift press there fell through to the
+  outline hit and toggled.
+- `parse_entry_number` already accepted U+2212 (PR 3 review fix), so flag 6
+  needed no change here beyond the test over the move readout's minus.
+- The Shift-revealed side rotate handles stay frozen as they were at the press
+  during a move (`side_rotate_revealed`, unchanged): a Shift press on an
+  object's outline can now start a move, so those four glyphs can show on the
+  travelling box. Not one of the spec's criteria; noted for the UX review.
+- `acceptance_unified_editing`'s `ac13_preview_equals_release_*` sweeps pressed
+  the move handles with Ctrl at random and asserted the original moved; a move
+  released with Ctrl is now a copy, so the sweep compares the blue preview with
+  the copy (index 1, directly above its original). Same assertion on the
+  committed outline, one more case covered.
+
+### Validation
+
+Every rule is in Rust and tested there: `duplicate_objects` against the
+original, `MoveDrag::resolve` as a table (criterion 30 step by step),
+`classify_press` against `pointer_down`, the badge against the press, the
+Escape-then-Ctrl case, the copy commit. The frontend has no test runner
+(`docs/technical-debt.md`); the badges, the Copy check and the draw order of the
+axes need a reviewer in the Browser pane.

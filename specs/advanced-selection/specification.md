@@ -621,6 +621,17 @@ large selected frame; Alt already locks a lasso at any press point
 (criterion 16). `object-transform` bypasses for Shift only today; this story
 adds Ctrl. A plain marquee that must start inside the box needs Esc first.
 
+### Modifier badge of the Ctrl marquee (2026-10-07, from the `edit-interaction-polish` UX review)
+
+`edit-interaction-polish` adds a plus badge (`MoveBadges.tsx`, "Modifier badge"
+in `docs/design-system.md`) wherever a press with Ctrl would start a move: it
+means "copy". The Ctrl marquee of this spec (it removes from the selection)
+gets a **minus badge from the same component**, at the same place by the
+pointer, so a Ctrl press never shows the copy plus where it would remove. The
+badge shows wherever a Ctrl press would arm that marquee (the same press
+classification, `PressTarget`), so the plus and the minus never show for the
+same press.
+
 ### Status
 
 With these notes filled in, this spec is ready for the architect's

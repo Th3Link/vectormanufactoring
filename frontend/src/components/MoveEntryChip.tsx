@@ -26,8 +26,9 @@ interface MoveEntryChipProps {
   /** The canvas container: the chip's coordinate space, and where focus
    * returns to. */
   containerRef: React.RefObject<HTMLDivElement | null>;
-  /** Enter: `"committed"`, `"unchanged"` or `"invalid:<field>:number"`. */
-  onCommit: (first: string, second: string, absolute: boolean) => string;
+  /** Enter: `"committed"`, `"unchanged"` or `"invalid:<field>:number"`.
+   * `copy` is the state of the Copy check. */
+  onCommit: (first: string, second: string, absolute: boolean, copy: boolean) => string;
   onCancel: () => void;
 }
 
@@ -38,7 +39,9 @@ interface MoveEntryChipProps {
  * double-click on the centre handle or by the key M. It holds only the text,
  * the mode, which fields the maker has edited and the focus: parsing, the
  * two readings, the tight bounds and the limits are Rust's
- * (`vecmanf-ui-core::move_entry`). It opens in Relative every time. A field
+ * (`vecmanf-ui-core::move_entry`). It opens in Relative every time, with the
+ * Copy check off unless Ctrl was held at the second press of the double-click
+ * (criterion 23; the key M cannot carry a Ctrl). A field
  * the maker has not edited shows the prefill of the current mode and means
  * "no change on that axis"; an edited field keeps its text across a mode
  * switch and is read in the mode current at Enter. Enter in any control
@@ -50,8 +53,10 @@ export function MoveEntryChip({ entry, containerRef, onCommit, onCancel }: MoveE
   const bodyRef = useRef<HTMLDivElement>(null);
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const switchRef = useRef<HTMLButtonElement>(null);
+  const copyRef = useRef<HTMLInputElement>(null);
   const messageId = useId();
   const [absolute, setAbsolute] = useState(false);
+  const [copy, setCopy] = useState(entry.copyPreset);
   const [edited, setEdited] = useState<[boolean, boolean]>([false, false]);
   const [typed, setTyped] = useState<[string, string]>(["", ""]);
   const [invalid, setInvalid] = useState<number | null>(null);
@@ -99,7 +104,7 @@ export function MoveEntryChip({ entry, containerRef, onCommit, onCancel }: MoveE
   const returnFocusToCanvas = () => containerRef.current?.focus();
 
   const submit = () => {
-    const outcome = onCommit(textOf(0), textOf(1), absolute);
+    const outcome = onCommit(textOf(0), textOf(1), absolute, copy);
     if (outcome.startsWith("invalid:")) {
       const field = Number(outcome.split(":")[1]);
       setInvalid(field);
@@ -110,18 +115,18 @@ export function MoveEntryChip({ entry, containerRef, onCommit, onCancel }: MoveE
     returnFocusToCanvas();
   };
 
-  /** Tab order X, Y, the mode switch and back to X (Shift+Tab reverses): the
-   * chip is a closed loop, so Tab never leaves it and cancels it by a blur
-   * (`edit-interaction-polish` criterion 18). The two ends are handled here;
-   * the steps in between are the browser's own. */
+  /** Tab order X, Y, the mode switch, the Copy check and back to X
+   * (Shift+Tab reverses): the chip is a closed loop, so Tab never leaves it
+   * and cancels it by a blur (`edit-interaction-polish` criteria 18, 23). The
+   * two ends are handled here; the steps in between are the browser's own. */
   const loopFocus = (event: React.KeyboardEvent<HTMLElement>, first: boolean) => {
     if (event.key !== "Tab" || event.shiftKey !== first) {
       return false;
     }
     event.preventDefault();
-    const target = first ? switchRef.current : inputRefs.current[0];
+    const target = first ? copyRef.current : inputRefs.current[0];
     target?.focus();
-    if (target instanceof HTMLInputElement) {
+    if (target instanceof HTMLInputElement && target.type === "text") {
       target.select();
     }
     return true;
@@ -145,9 +150,6 @@ export function MoveEntryChip({ entry, containerRef, onCommit, onCancel }: MoveE
   };
 
   const onSwitchKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (loopFocus(event, false)) {
-      return;
-    }
     if (event.key === " " || event.key === "ArrowLeft" || event.key === "ArrowRight") {
       event.preventDefault();
       setAbsolute((previous) => !previous);
@@ -284,6 +286,23 @@ export function MoveEntryChip({ entry, containerRef, onCommit, onCancel }: MoveE
             Absolute
           </span>
         </button>
+        <label className="mt-1.5 flex h-6 cursor-pointer items-center gap-1.5 px-1 text-xs">
+          <input
+            ref={copyRef}
+            type="checkbox"
+            checked={copy}
+            aria-label="Copy"
+            onChange={(event) => setCopy(event.target.checked)}
+            onKeyDown={(event) => {
+              if (!loopFocus(event, false)) {
+                onKeyDown(event);
+              }
+            }}
+            onBlur={onBlur}
+            className="size-3.5 cursor-pointer accent-[var(--editor-accent)]"
+          />
+          <span aria-hidden>Copy</span>
+        </label>
       </div>
       {/* Always mounted so the polite live region announces a change; empty it
           has no height. The message sits outside the body (the chip is placed

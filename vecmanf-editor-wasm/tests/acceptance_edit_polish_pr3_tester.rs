@@ -24,7 +24,7 @@ use vecmanf_document_core::{
     PointCount, RectBounds, Shape, StarFrame, Vec2, pack, unpack,
 };
 use vecmanf_editor_wasm::{EscapeStep, KeyHint, KeyInput, KeyOutcome, Session, Tool};
-use vecmanf_ui_core::{EntryOutcome, InvalidReason};
+use vecmanf_ui_core::{EntryOutcome, InvalidReason, MoveEntryMode};
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -1404,7 +1404,14 @@ fn c17_small_objects_and_hidden_centre_handles_open_no_chip_by_double_click_but_
             v.center
         );
         assert_eq!(
-            s.commit_move_entry("2", "1", false),
+            s.commit_move_entry(
+                "2",
+                "1",
+                MoveEntryMode {
+                    absolute: false,
+                    copy: false
+                }
+            ),
             EntryOutcome::Committed,
             "{name}"
         );
@@ -1489,7 +1496,14 @@ fn c20_relative_move_equals_a_drag_of_the_same_offset_and_is_one_commit() {
             dbl(&mut a, ctr, ctr, false, false);
             assert!(a.move_entry().is_some(), "{name}");
             let n = change_count(&a);
-            let out = a.commit_move_entry("25.5", "-13.25", false);
+            let out = a.commit_move_entry(
+                "25.5",
+                "-13.25",
+                MoveEntryMode {
+                    absolute: false,
+                    copy: false,
+                },
+            );
             assert_eq!(out, EntryOutcome::Committed, "{name}");
             assert_eq!(change_count(&a), n + 1, "{name}: one commit");
             assert!(a.move_entry().is_none(), "{name}: chip closes");
@@ -1516,7 +1530,14 @@ fn c20_spec_example_relative_5_and_minus_3_moves_top_left_10_20_to_15_17() {
     let mut s = select_at(&rect_doc(10.0, 20.0, 30.0, 40.0), pt(25.0, 20.0));
     assert_eq!(press(&mut s, "m"), KeyOutcome::EntryOpened);
     assert_eq!(
-        s.commit_move_entry("5", "-3", false),
+        s.commit_move_entry(
+            "5",
+            "-3",
+            MoveEntryMode {
+                absolute: false,
+                copy: false
+            }
+        ),
         EntryOutcome::Committed
     );
     let (x0, y0, x1, y1) = tight_of(&obj_of(&s, 0));
@@ -1529,7 +1550,14 @@ fn c21_spec_example_absolute_100_50_puts_the_rect_origin_at_100_50() {
     let mut s = select_at(&rect_doc(10.0, 20.0, 30.0, 40.0), pt(25.0, 20.0));
     assert_eq!(press(&mut s, "m"), KeyOutcome::EntryOpened);
     assert_eq!(
-        s.commit_move_entry("100", "50", true),
+        s.commit_move_entry(
+            "100",
+            "50",
+            MoveEntryMode {
+                absolute: true,
+                copy: false
+            }
+        ),
         EntryOutcome::Committed
     );
     let ObjectSnapshot::Primitive(p) = obj_of(&s, 0) else {
@@ -1587,7 +1615,14 @@ fn c21_absolute_puts_the_top_left_of_the_tight_drawn_outline_at_x_y_for_every_ki
             let before = tight_of(&obj_of(&s, 0));
             let n = change_count(&s);
             assert_eq!(press(&mut s, "m"), KeyOutcome::EntryOpened, "{name}");
-            let out = s.commit_move_entry(&format!("{tx}"), &format!("{ty}"), true);
+            let out = s.commit_move_entry(
+                &format!("{tx}"),
+                &format!("{ty}"),
+                MoveEntryMode {
+                    absolute: true,
+                    copy: false,
+                },
+            );
             if before.0 == tx && before.1 == ty {
                 continue;
             }
@@ -1621,10 +1656,24 @@ fn c21_absolute_does_not_include_the_stroke_width_and_equals_the_relative_offset
         let mut a = select_at(&c.doc, c.on);
         let (x0, y0, _, _) = tight_of(&obj_of(&a, 0));
         press(&mut a, "m");
-        a.commit_move_entry("40.25", "-7.5", true);
+        a.commit_move_entry(
+            "40.25",
+            "-7.5",
+            MoveEntryMode {
+                absolute: true,
+                copy: false,
+            },
+        );
         let mut b = select_at(&c.doc, c.on);
         press(&mut b, "m");
-        b.commit_move_entry(&format!("{}", 40.25 - x0), &format!("{}", -7.5 - y0), false);
+        b.commit_move_entry(
+            &format!("{}", 40.25 - x0),
+            &format!("{}", -7.5 - y0),
+            MoveEntryMode {
+                absolute: false,
+                copy: false,
+            },
+        );
         same_object(&obj_of(&a, 0), &obj_of(&b, 0), 1e-6, c.name);
     }
 }
@@ -1638,7 +1687,14 @@ fn c19_an_untouched_field_means_no_change_on_that_axis() {
     let before = snapshot_bytes(&s);
     let n = change_count(&s);
     assert_eq!(
-        s.commit_move_entry(&v.relative_prefill[0], &v.relative_prefill[1], false),
+        s.commit_move_entry(
+            &v.relative_prefill[0],
+            &v.relative_prefill[1],
+            MoveEntryMode {
+                absolute: false,
+                copy: false
+            }
+        ),
         EntryOutcome::Unchanged
     );
     assert_eq!(snapshot_bytes(&s), before);
@@ -1649,7 +1705,14 @@ fn c19_an_untouched_field_means_no_change_on_that_axis() {
     let mut s = select_at(&bulgy_doc(), pt(10.04, 0.0));
     press(&mut s, "m");
     let v = s.move_entry().unwrap();
-    let out = s.commit_move_entry(&v.absolute_prefill[0], &v.absolute_prefill[1], true);
+    let out = s.commit_move_entry(
+        &v.absolute_prefill[0],
+        &v.absolute_prefill[1],
+        MoveEntryMode {
+            absolute: true,
+            copy: false,
+        },
+    );
     assert_eq!(
         out,
         EntryOutcome::Unchanged,
@@ -1665,7 +1728,14 @@ fn c19_an_untouched_field_means_no_change_on_that_axis() {
     let v = s.move_entry().unwrap();
     let (x0, _y0, _, _) = tight_of(&obj_of(&s, 0));
     assert_eq!(
-        s.commit_move_entry(&v.absolute_prefill[0], "5", true),
+        s.commit_move_entry(
+            &v.absolute_prefill[0],
+            "5",
+            MoveEntryMode {
+                absolute: true,
+                copy: false
+            }
+        ),
         EntryOutcome::Committed
     );
     let after = tight_of(&obj_of(&s, 0));
@@ -1683,7 +1753,14 @@ fn c19_an_untouched_field_means_no_change_on_that_axis() {
     let v = s.move_entry().unwrap();
     let (_x0, y0, _, _) = tight_of(&obj_of(&s, 0));
     assert_eq!(
-        s.commit_move_entry("77", &v.absolute_prefill[1], true),
+        s.commit_move_entry(
+            "77",
+            &v.absolute_prefill[1],
+            MoveEntryMode {
+                absolute: true,
+                copy: false
+            }
+        ),
         EntryOutcome::Committed
     );
     let after = tight_of(&obj_of(&s, 0));
@@ -1699,7 +1776,14 @@ fn c19_an_untouched_field_means_no_change_on_that_axis() {
     let mut s = select_at(&rect_doc(10.0, 20.0, 30.0, 40.0), pt(25.0, 20.0));
     press(&mut s, "m");
     assert_eq!(
-        s.commit_move_entry("5", "0", false),
+        s.commit_move_entry(
+            "5",
+            "0",
+            MoveEntryMode {
+                absolute: false,
+                copy: false
+            }
+        ),
         EntryOutcome::Committed
     );
     let (x0, y0, _, _) = tight_of(&obj_of(&s, 0));
@@ -1709,7 +1793,14 @@ fn c19_an_untouched_field_means_no_change_on_that_axis() {
     let mut s = select_at(&rect_doc(10.0, 20.0, 30.0, 40.0), pt(25.0, 20.0));
     press(&mut s, "m");
     assert_eq!(
-        s.commit_move_entry("5", "-3", true),
+        s.commit_move_entry(
+            "5",
+            "-3",
+            MoveEntryMode {
+                absolute: true,
+                copy: false
+            }
+        ),
         EntryOutcome::Committed
     );
     let (x0, y0, _, _) = tight_of(&obj_of(&s, 0));
@@ -1746,7 +1837,14 @@ fn c22_invalid_text_or_out_of_range_keeps_the_chip_open_and_writes_nothing() {
             ("1-", "1", 0),
             ("1 2", "1", 0),
         ] {
-            let out = s.commit_move_entry(a, b, absolute);
+            let out = s.commit_move_entry(
+                a,
+                b,
+                MoveEntryMode {
+                    absolute,
+                    copy: false,
+                },
+            );
             assert!(
                 matches!(out, EntryOutcome::Invalid { field: f, reason: InvalidReason::NotANumber } if f == field),
                 "abs {absolute} ({a:?}, {b:?}) gave {out:?}, wanted field {field}"
@@ -1760,14 +1858,28 @@ fn c22_invalid_text_or_out_of_range_keeps_the_chip_open_and_writes_nothing() {
             assert_eq!(change_count(&s), n);
         }
         // both fields wrong: the first is flagged
-        let out = s.commit_move_entry("x", "y", absolute);
+        let out = s.commit_move_entry(
+            "x",
+            "y",
+            MoveEntryMode {
+                absolute,
+                copy: false,
+            },
+        );
         assert!(
             matches!(out, EntryOutcome::Invalid { field: 0, .. }),
             "{out:?}"
         );
         // the chip still works
         assert_ne!(
-            s.commit_move_entry("3", "4", absolute),
+            s.commit_move_entry(
+                "3",
+                "4",
+                MoveEntryMode {
+                    absolute,
+                    copy: false
+                }
+            ),
             EntryOutcome::Invalid {
                 field: 0,
                 reason: InvalidReason::NotANumber
@@ -1783,7 +1895,14 @@ fn c22_a_result_beyond_the_coordinate_limit_is_refused_in_both_modes() {
     press(&mut s, "m");
     let before = snapshot_bytes(&s);
     for (a, b) in [("10000000", "0"), ("0", "-10000100"), ("1e7", "1")] {
-        let out = s.commit_move_entry(a, b, false);
+        let out = s.commit_move_entry(
+            a,
+            b,
+            MoveEntryMode {
+                absolute: false,
+                copy: false,
+            },
+        );
         assert!(
             matches!(out, EntryOutcome::Invalid { .. }),
             "({a},{b}) {out:?}"
@@ -1791,7 +1910,14 @@ fn c22_a_result_beyond_the_coordinate_limit_is_refused_in_both_modes() {
         assert_eq!(snapshot_bytes(&s), before);
     }
     for (a, b) in [("10000001", "0"), ("0", "-10000001"), ("1e8", "1")] {
-        let out = s.commit_move_entry(a, b, true);
+        let out = s.commit_move_entry(
+            a,
+            b,
+            MoveEntryMode {
+                absolute: true,
+                copy: false,
+            },
+        );
         assert!(
             matches!(out, EntryOutcome::Invalid { .. }),
             "abs ({a},{b}) {out:?}"
@@ -1799,7 +1925,14 @@ fn c22_a_result_beyond_the_coordinate_limit_is_refused_in_both_modes() {
         assert_eq!(snapshot_bytes(&s), before);
     }
     assert_eq!(
-        s.commit_move_entry("9000000", "-9000000", false),
+        s.commit_move_entry(
+            "9000000",
+            "-9000000",
+            MoveEntryMode {
+                absolute: false,
+                copy: false
+            }
+        ),
         EntryOutcome::Committed
     );
     let (x0, y0, _, _) = tight_of(&obj_of(&s, 0));
@@ -1824,7 +1957,14 @@ fn c22_number_formats_comma_point_sign_and_odd_spellings() {
     ] {
         let mut s = select_at(&rect_doc(10.0, 20.0, 30.0, 40.0), pt(25.0, 20.0));
         press(&mut s, "m");
-        let out = s.commit_move_entry(text, "0", false);
+        let out = s.commit_move_entry(
+            text,
+            "0",
+            MoveEntryMode {
+                absolute: false,
+                copy: false,
+            },
+        );
         assert_eq!(out, EntryOutcome::Committed, "{text:?}");
         let (x0, _, _, _) = tight_of(&obj_of(&s, 0));
         assert!(near(x0, 10.0 + want, 1e-9), "{text:?}: {x0}");
@@ -1843,7 +1983,14 @@ fn c22_number_formats_comma_point_sign_and_odd_spellings() {
     ] {
         let mut s = select_at(&rect_doc(10.0, 20.0, 30.0, 40.0), pt(25.0, 20.0));
         press(&mut s, "m");
-        let out = s.commit_move_entry(text, "0", false);
+        let out = s.commit_move_entry(
+            text,
+            "0",
+            MoveEntryMode {
+                absolute: false,
+                copy: false,
+            },
+        );
         let (x0, _, _, _) = tight_of(&obj_of(&s, 0));
         eprintln!("MOVE-FORMAT {text:?} -> {out:?}, x0 = {x0}");
     }
@@ -1905,18 +2052,39 @@ fn c25_closing_without_writing_escape_blur_tool_switch_selection_change_press_el
     // a no-op result (0, 0 typed explicitly counts as untouched) writes nothing
     let mut s = open(&d);
     assert_eq!(
-        s.commit_move_entry("0", "0", false),
+        s.commit_move_entry(
+            "0",
+            "0",
+            MoveEntryMode {
+                absolute: false,
+                copy: false
+            }
+        ),
         EntryOutcome::Unchanged
     );
     assert_eq!(
-        s.commit_move_entry("0", "0", false),
+        s.commit_move_entry(
+            "0",
+            "0",
+            MoveEntryMode {
+                absolute: false,
+                copy: false
+            }
+        ),
         EntryOutcome::Unchanged
     );
     assert_eq!(change_count(&s), n);
     // and a typed zero in a tool-changed state
     let mut s = open(&d);
     assert_eq!(
-        s.commit_move_entry("0.0", "-0", false),
+        s.commit_move_entry(
+            "0.0",
+            "-0",
+            MoveEntryMode {
+                absolute: false,
+                copy: false
+            }
+        ),
         EntryOutcome::Unchanged
     );
     assert_eq!(snapshot_bytes(&s), before);
@@ -1927,7 +2095,14 @@ fn c25_a_committed_move_keeps_selection_and_tool_and_survives_save_and_reopen() 
     let mut s = select_at(&triangle_doc_sized(120.0, 80.0), pt(60.0, 0.0));
     press(&mut s, "m");
     assert_eq!(
-        s.commit_move_entry("10", "20", false),
+        s.commit_move_entry(
+            "10",
+            "20",
+            MoveEntryMode {
+                absolute: false,
+                copy: false
+            }
+        ),
         EntryOutcome::Committed
     );
     assert_eq!(s.tool(), Tool::Select);
@@ -2738,7 +2913,14 @@ fn x01_the_typed_move_opens_again_after_a_commit_an_escape_and_a_cancel() {
         assert!(s.move_entry().is_some(), "round {round}");
         match round {
             0 => assert_eq!(
-                s.commit_move_entry("12", "7", false),
+                s.commit_move_entry(
+                    "12",
+                    "7",
+                    MoveEntryMode {
+                        absolute: false,
+                        copy: false
+                    }
+                ),
                 EntryOutcome::Committed
             ),
             1 => assert_eq!(

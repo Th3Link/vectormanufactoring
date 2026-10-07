@@ -16,9 +16,9 @@ use vecmanf_document_core::{
     Point, PointCount, RectBounds, StarFrame, Tolerance, Vec2,
 };
 use vecmanf_ui_core::{
-    EditHandle, EntryKind, EntryOutcome, InvalidReason, ObjectSelection, ResizeDirection,
-    SelectDoubleClickOutcome, SelectPointerDownOutcome, SelectTool, Side, StrokeScaling,
-    TransformHandleTolerances, oriented_bounds,
+    AnchorIdMinter, EditHandle, EntryKind, EntryOutcome, InvalidReason, Modifiers, ObjectSelection,
+    ResizeDirection, SelectDoubleClickOutcome, SelectPointerDownOutcome, SelectTool, Side,
+    StrokeScaling, TransformHandleTolerances, oriented_bounds,
 };
 
 const EPS: f64 = 1e-9;
@@ -167,15 +167,16 @@ impl Rig {
             &objects,
             &mut self.selection,
             at,
-            shift,
-            ctrl,
+            Modifiers::new(shift, ctrl),
+            &mut AnchorIdMinter::new(99),
         );
     }
 
     /// A press at `from`, a move to `to`, a release at `to`.
     fn drag(&mut self, from: Point, to: Point, shift: bool, ctrl: bool) {
         self.press(from, shift);
-        self.tool.pointer_moved(to);
+        self.tool
+            .pointer_moved(to, Modifiers::NONE, &mut self.selection);
         self.release(to, shift, ctrl);
     }
 
@@ -510,20 +511,25 @@ fn past_the_dead_zone_the_object_follows_the_pointer_one_to_one_from_the_press()
     let centre = pt(60.0, 50.0);
     rig.press(centre, false);
     assert_eq!(
-        rig.tool.live_offset(centre.translated(Vec2::new(1.0, 0.0))),
+        rig.tool
+            .live_move(centre.translated(Vec2::new(1.0, 0.0)), false, false),
         None
     );
     let live = rig
         .tool
-        .live_offset(centre.translated(Vec2::new(10.0, 4.0)))
-        .unwrap();
+        .live_move(centre.translated(Vec2::new(10.0, 4.0)), false, false)
+        .unwrap()
+        .offset;
     assert_eq!(
         (live.x, live.y),
         (10.0, 4.0),
         "nothing jumps: delta is from the press point"
     );
-    rig.tool
-        .pointer_moved(centre.translated(Vec2::new(10.0, 4.0)));
+    rig.tool.pointer_moved(
+        centre.translated(Vec2::new(10.0, 4.0)),
+        Modifiers::NONE,
+        &mut rig.selection,
+    );
     rig.release(centre.translated(Vec2::new(10.0, 4.0)), false, false);
     let after = rect_origin(&rig);
     assert!(close(after.x - before.x, 10.0) && close(after.y - before.y, 4.0));
@@ -545,7 +551,8 @@ fn a_centre_handle_press_moves_exactly_like_a_body_drag() {
     assert_eq!(hovered.map(|(_, _, h)| h), Some(EditHandle::Move));
     rig.press(centre, false);
     assert_eq!(rig.tool.dragging_handle(), Some(EditHandle::Move));
-    rig.tool.pointer_moved(pt(80.0, 40.0));
+    rig.tool
+        .pointer_moved(pt(80.0, 40.0), Modifiers::NONE, &mut rig.selection);
     rig.release(pt(80.0, 40.0), false, false);
     let after = rig.object();
     assert_ne!(after, before);
@@ -770,7 +777,8 @@ fn switching_shift_mid_drag_always_computes_from_the_drag_start() {
         let ne = rig.handle(EditHandle::Rotate(ResizeDirection::Ne), false);
         rig.press(ne, false);
         let current = ne.translated(Vec2::new(-30.0, 25.0));
-        rig.tool.pointer_moved(current);
+        rig.tool
+            .pointer_moved(current, Modifiers::NONE, &mut rig.selection);
         let with = rig.tool.live_transform(current, true, false).unwrap();
         let without = rig.tool.live_transform(current, false, false).unwrap();
         let with_again = rig.tool.live_transform(current, true, false).unwrap();
@@ -779,7 +787,8 @@ fn switching_shift_mid_drag_always_computes_from_the_drag_start() {
         rig.tool.escape();
         // A fresh drag with Shift from the start gives the same snapshot.
         rig.press(ne, true);
-        rig.tool.pointer_moved(current);
+        rig.tool
+            .pointer_moved(current, Modifiers::NONE, &mut rig.selection);
         assert_eq!(rig.tool.live_transform(current, true, false).unwrap(), with);
         rig.tool.escape();
     }
@@ -793,7 +802,8 @@ fn ctrl_snaps_a_rotate_about_whichever_pivot_applies() {
         rig.press(ne, shift);
         let pivot = rig.tool.live_pivot(shift).unwrap();
         let current = turned(pivot, ne, 19.0_f64.to_radians());
-        rig.tool.pointer_moved(current);
+        rig.tool
+            .pointer_moved(current, Modifiers::NONE, &mut rig.selection);
         rig.release(current, shift, true);
         let degrees = rig.object().rotation().as_radians().to_degrees();
         assert!((degrees - 22.5).abs() < 1e-6, "shift {shift}: {degrees}");
@@ -913,7 +923,9 @@ fn the_entry_pivot_is_fixed_when_it_opens_and_matches_a_drag_with_the_same_pivot
                 "{kind:?} {shift}"
             );
             let to = turned(pivot, ne, 40.0_f64.to_radians());
-            dragged.tool.pointer_moved(to);
+            dragged
+                .tool
+                .pointer_moved(to, Modifiers::NONE, &mut dragged.selection);
             dragged.release(to, shift, false);
             assert_snapshots_close(
                 &typed.object(),
@@ -1156,7 +1168,9 @@ fn a_typed_size_and_a_dragged_size_leave_the_same_snapshot() {
                     let outward = turned(pt(0.0, 0.0), pt(14.0, 9.0), turn);
                     let to = at.translated(Vec2::new(outward.x, outward.y));
                     dragged.press(at, false);
-                    dragged.tool.pointer_moved(to);
+                    dragged
+                        .tool
+                        .pointer_moved(to, Modifiers::NONE, &mut dragged.selection);
                     let result = dragged.tool.live_transform(to, shift, ctrl).unwrap();
                     dragged.release(to, shift, ctrl);
                     let committed = dragged.object();
@@ -1286,7 +1300,8 @@ fn skew_leaves_the_fixed_edge_alone_and_shift_fixes_the_centre_line() {
     let bottom = rig.handle(EditHandle::Skew(Side::Bottom), false);
     rig.press(bottom, false);
     let to = bottom.translated(Vec2::new(-9.0, 0.0));
-    rig.tool.pointer_moved(to);
+    rig.tool
+        .pointer_moved(to, Modifiers::NONE, &mut rig.selection);
     let plain = rig.tool.live_transform(to, false, false).unwrap();
     let centred = rig.tool.live_transform(to, true, false).unwrap();
     rig.tool.escape();
@@ -1317,7 +1332,8 @@ fn the_skew_angle_is_the_arctangent_and_stays_inside_ninety_degrees() {
     let right = rig.handle(EditHandle::Skew(Side::Right), false);
     rig.press(right, false);
     let to = right.translated(Vec2::new(0.0, 20.0));
-    rig.tool.pointer_moved(to);
+    rig.tool
+        .pointer_moved(to, Modifiers::NONE, &mut rig.selection);
     let angle = rig
         .tool
         .live_skew_angle(to, false, false)
@@ -1328,7 +1344,8 @@ fn the_skew_angle_is_the_arctangent_and_stays_inside_ninety_degrees() {
         "y skew from the right"
     );
     let far = right.translated(Vec2::new(0.0, 1e8));
-    rig.tool.pointer_moved(far);
+    rig.tool
+        .pointer_moved(far, Modifiers::NONE, &mut rig.selection);
     let angle = rig
         .tool
         .live_skew_angle(far, false, false)
@@ -1361,7 +1378,8 @@ fn skew_preview_equals_the_committed_result_and_escape_writes_nothing() {
     let top = rig.handle(EditHandle::Skew(Side::Top), false);
     rig.press(top, false);
     let to = top.translated(Vec2::new(15.0, 0.0));
-    rig.tool.pointer_moved(to);
+    rig.tool
+        .pointer_moved(to, Modifiers::NONE, &mut rig.selection);
     let preview = rig.tool.live_transform(to, false, false).unwrap();
     rig.tool.escape();
     assert_eq!(rig.object(), before, "Escape: nothing written");
@@ -1380,7 +1398,11 @@ fn a_drag_that_returns_to_its_start_writes_nothing() {
     let before = rig.object();
     let top = rig.handle(EditHandle::Skew(Side::Top), false);
     rig.press(top, false);
-    rig.tool.pointer_moved(top.translated(Vec2::new(20.0, 0.0)));
+    rig.tool.pointer_moved(
+        top.translated(Vec2::new(20.0, 0.0)),
+        Modifiers::NONE,
+        &mut rig.selection,
+    );
     rig.release(top, false, false);
     assert_eq!(rig.object(), before);
 }

@@ -9,6 +9,7 @@ use vecmanf_document_core::{Document, ObjectSnapshot, Point, Tolerance};
 
 use super::{SelectDoubleClickOutcome, SelectDrag, SelectTool, sole_selected};
 use crate::ResizeDirection;
+use crate::anchor_id_minter::AnchorIdMinter;
 use crate::hit_test_object::hit_test_object;
 use crate::move_entry::MoveEntry;
 use crate::object_selection::ObjectSelection;
@@ -32,6 +33,17 @@ pub(super) enum OpenEntry {
     Skew(SkewEntry),
     /// A typed move (relative or absolute).
     Move(MoveEntry),
+}
+
+/// How the move chip reads its two fields at Enter: its mode switch and its
+/// Copy check, both held by the DOM and passed with the commit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MoveEntryMode {
+    /// Absolute position of the top-left of the drawn bounds, not a relative
+    /// offset.
+    pub absolute: bool,
+    /// Copy the object instead of moving it.
+    pub copy: bool,
 }
 
 /// The typed entry a key opens (`specs/edit-interaction-polish/` criteria
@@ -166,21 +178,28 @@ impl SelectTool {
         outcome
     }
 
-    /// Enter in the move chip (criteria 20, 21, 22, 25): `texts` are the X and
-    /// Y texts, `absolute` the chip's mode. A committed or unchanged entry
-    /// closes; an invalid one stays open.
+    /// Enter in the move chip (criteria 20, 21, 22, 23, 25): `texts` are the X
+    /// and Y texts, `absolute` the chip's mode and `copy` the state of its Copy
+    /// check. A committed or unchanged entry closes; an invalid one stays
+    /// open. After a typed copy the selection is the copy (criterion 35,
+    /// default of flag 5).
     pub fn commit_move_entry(
         &mut self,
         document: &Document,
+        selection: &mut ObjectSelection,
+        minter: &mut AnchorIdMinter,
         texts: [&str; 2],
-        absolute: bool,
+        mode: MoveEntryMode,
     ) -> EntryOutcome {
         let Some(OpenEntry::Move(entry)) = self.entry.as_ref() else {
             return EntryOutcome::Unchanged;
         };
-        let outcome = entry.commit(document, texts, absolute);
+        let (outcome, copies) = entry.commit(document, texts, mode.absolute, mode.copy, minter);
         if !matches!(outcome, EntryOutcome::Invalid { .. }) {
             self.entry = None;
+        }
+        if let Some(copies) = copies {
+            selection.set(&copies);
         }
         outcome
     }
@@ -285,7 +304,9 @@ impl SelectTool {
                 EditHandle::Skew(side) => {
                     SkewEntry::for_handle(object, &box_, side, shift).map(OpenEntry::Skew)
                 }
-                EditHandle::Move => Some(OpenEntry::Move(MoveEntry::new(object, &box_))),
+                EditHandle::Move => Some(OpenEntry::Move(
+                    MoveEntry::new(object, &box_).with_copy_preset(ctrl),
+                )),
             };
             return match entry {
                 Some(entry) => {

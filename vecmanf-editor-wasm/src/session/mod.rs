@@ -23,6 +23,7 @@
 mod draw;
 mod keys;
 mod move_entry;
+mod move_indicators;
 mod navigation;
 mod node;
 mod open_error;
@@ -42,6 +43,7 @@ use vecmanf_ui_core::{
 };
 
 pub use keys::{EscapeStep, KeyHint, KeyInput, KeyOutcome};
+pub use move_indicators::MoveIndicators;
 
 #[cfg(target_arch = "wasm32")]
 pub use open_error::map_open_error;
@@ -401,7 +403,7 @@ impl Session {
         self.select_ctrl_held = constrain;
         match self.tool {
             Tool::Select => {
-                self.select_hover(point);
+                self.select_hover(point, Modifiers::new(shift, constrain));
             }
             Tool::Node => {
                 let paths = self.paths();

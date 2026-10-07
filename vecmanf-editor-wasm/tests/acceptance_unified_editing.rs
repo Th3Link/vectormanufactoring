@@ -2101,7 +2101,12 @@ fn run_drag(sc: &mut Scene, h: H, to_offset_px: (f64, f64), shift: bool, ctrl: b
     let during_doc = doc_of(&sc.s).export_loro_snapshot().unwrap();
     sc.s.pointer_up(to, shift, ctrl);
     let after_doc = doc_of(&sc.s).export_loro_snapshot().unwrap();
-    let new_samples = samples_of(&sc.s, 0);
+    // `edit-interaction-polish` criterion 33: a move released with Ctrl down
+    // is a copy. The original stays, and the blue outline is the copy, which
+    // sits directly above it.
+    let is_copy = ctrl && matches!(h, H::Move | H::Centre);
+    let made_a_copy = is_copy && doc_of(&sc.s).object_ids().len() > 1;
+    let new_samples = samples_of(&sc.s, usize::from(made_a_copy));
     // A drag past the opposite side clamps to a zero size (slice 5, criterion
     // 13): nothing visible to compare there.
     let (mut w0, mut w1, mut h0, mut h1) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
