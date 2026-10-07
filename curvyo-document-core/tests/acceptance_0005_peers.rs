@@ -64,7 +64,7 @@ fn a_peer_resize_and_a_peer_rotate_about_the_centre_both_survive_the_merge() {
                 width: Length::from_mm(25.0),
                 height: Length::from_mm(9.0),
             },
-            Length::from_mm(0.0),
+            curvyo_document_core::CornerRadii::uniform(Length::from_mm(0.0)),
             Some(Length::from_mm(2.0)),
         )
         .unwrap();

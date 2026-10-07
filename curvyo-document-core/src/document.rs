@@ -50,7 +50,20 @@ use crate::units::{DocumentSize, Length};
 /// by construction: absent `rotation` reads as `0`
 /// (`path_codec::read_rotation`), so every version-4 object opens with
 /// zero rotation, unchanged.
-pub const CURRENT_FORMAT_VERSION: u32 = 5;
+///
+/// Bumped to 6 in `rectangle-corner-radii` (`specs/rectangle-corner-radii/
+/// adrs.md`, decisions 2 and 3): a rectangle stores four corner radius
+/// registers (`corner_radius_tl`, `_tr`, `_br`, `_bl`) and the single
+/// `corner_radius` key is no longer written. A version-5 reader would refuse
+/// every rectangle this build writes as `OpenError::Damaged` (no
+/// `corner_radius`), the wrong message; with differing radii it must not open
+/// the file at all. The bump makes it say "saved by a newer version", for
+/// every file this build saves. Migration from version 5 is empty: each corner
+/// reads its own key, else the legacy `corner_radius`, else the file is
+/// damaged, and an old file is not rewritten on open. The number is
+/// provisional by the rule above: whichever PR merges takes `main`'s current
+/// number plus one.
+pub const CURRENT_FORMAT_VERSION: u32 = 6;
 
 const ROOT_MAP: &str = "root";
 const KEY_FORMAT_VERSION: &str = "format_version";
@@ -272,7 +285,7 @@ enum ObjectJson {
     Rect {
         id: crate::path_model::NodeId,
         bounds: crate::primitive_model::RectBounds,
-        corner_radius: Length,
+        corner_radii: crate::corner_radii::CornerRadii,
         stroke_width: Length,
         stroke: crate::path_model::Color,
         fill: Option<crate::path_model::Color>,
@@ -329,11 +342,11 @@ impl From<crate::primitive_model::ObjectSnapshot> for ObjectJson {
                 match primitive.shape {
                     Shape::Rect {
                         bounds,
-                        corner_radius,
+                        corner_radii,
                     } => Self::Rect {
                         id,
                         bounds,
-                        corner_radius,
+                        corner_radii,
                         stroke_width,
                         stroke,
                         fill,

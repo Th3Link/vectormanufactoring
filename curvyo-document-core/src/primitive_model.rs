@@ -11,6 +11,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::corner_radii::CornerRadii;
 use crate::path_model::{Color, NodeId, PathSnapshot};
 use crate::units::{Angle, Length, Point, Tolerance, Vec2};
 
@@ -214,10 +215,10 @@ pub enum Shape {
     Rect {
         /// The rectangle's bounding box.
         bounds: RectBounds,
-        /// Stored as entered, clamped only where it is evaluated
-        /// (`adrs.md`'s "the corner radius is stored raw" decision) —
-        /// see [`crate::primitive_outline::effective_corner_radius`].
-        corner_radius: Length,
+        /// The four corner radii, stored as entered and clamped only where
+        /// they are evaluated (`adrs.md`'s "the corner radius is stored raw"
+        /// decision) — see [`crate::effective_corner_radii`].
+        corner_radii: CornerRadii,
     },
     /// Acceptance criteria 7-9. A circle is an `Ellipse` with
     /// `rx == ry`, not a kind of its own.
@@ -404,13 +405,13 @@ pub fn translate_shape(shape: Shape, offset: Vec2) -> Shape {
     match shape {
         Shape::Rect {
             bounds,
-            corner_radius,
+            corner_radii,
         } => Shape::Rect {
             bounds: RectBounds {
                 origin: bounds.origin.translated(offset),
                 ..bounds
             },
-            corner_radius,
+            corner_radii,
         },
         Shape::Ellipse { frame } => Shape::Ellipse {
             frame: EllipseFrame {
@@ -535,7 +536,7 @@ mod tests {
                     width: Length::from_mm(w),
                     height: Length::from_mm(h),
                 },
-                corner_radius: Length::from_mm(0.0),
+                corner_radii: CornerRadii::uniform(Length::from_mm(0.0)),
             },
             stroke_width: Length::from_mm(0.25),
             stroke: Color::BLACK,
@@ -552,7 +553,7 @@ mod tests {
                 width: Length::from_mm(10.0),
                 height: Length::from_mm(20.0),
             },
-            corner_radius: Length::from_mm(0.0),
+            corner_radii: CornerRadii::uniform(Length::from_mm(0.0)),
         };
         assert_eq!(shape_center(&shape), Point::new(5.0, 10.0));
     }
@@ -728,7 +729,7 @@ mod tests {
                     width: Length::from_mm(10.0),
                     height: Length::from_mm(5.0),
                 },
-                corner_radius: Length::from_mm(0.0),
+                corner_radii: CornerRadii::uniform(Length::from_mm(0.0)),
             },
             stroke_width: Length::from_mm(0.25),
             stroke: Color::BLACK,
@@ -784,7 +785,7 @@ mod tests {
                 width: Length::from_mm(10.0),
                 height: Length::from_mm(5.0),
             },
-            corner_radius: Length::from_mm(2.0),
+            corner_radii: CornerRadii::uniform(Length::from_mm(2.0)),
         };
         let snapshot = PrimitiveSnapshot {
             id: NodeId::from_parts(1, 1),
@@ -800,14 +801,14 @@ mod tests {
         };
         let Shape::Rect {
             bounds,
-            corner_radius,
+            corner_radii,
         } = moved.shape
         else {
             panic!("expected a rect");
         };
         assert_eq!(bounds.origin, Point::new(3.0, 4.0));
         assert!((bounds.width.as_mm() - 10.0).abs() < f64::EPSILON);
-        assert!((corner_radius.as_mm() - 2.0).abs() < f64::EPSILON);
+        assert!((corner_radii.tl.as_mm() - 2.0).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -846,7 +847,7 @@ mod tests {
                 width: Length::from_mm(10.0),
                 height: Length::from_mm(5.0),
             },
-            corner_radius: Length::from_mm(0.0),
+            corner_radii: CornerRadii::uniform(Length::from_mm(0.0)),
         };
         let (min, max) = shape_frame_bounds(&shape);
         assert_eq!(min, Point::new(1.0, 2.0));

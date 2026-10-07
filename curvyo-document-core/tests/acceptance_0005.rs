@@ -131,7 +131,7 @@ fn ac24_a_resized_rect_and_path_persist_exactly() {
                 width: Length::from_mm(15.0),
                 height: Length::from_mm(12.5),
             },
-            Length::from_mm(3.0),
+            curvyo_document_core::CornerRadii::uniform(Length::from_mm(3.0)),
             Some(Length::from_mm(0.375)),
         )
         .expect("resize");

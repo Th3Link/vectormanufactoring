@@ -97,15 +97,16 @@ fn craft(document: &Document, mutate: impl Fn(&loro::LoroMap)) -> Vec<u8> {
 // ---------------------------------------------------------------------
 
 #[test]
-fn format_version_is_bumped_past_main_to_5() {
-    // main's CURRENT_FORMAT_VERSION is 4 (path-merge-split-and-node-types).
-    assert_eq!(CURRENT_FORMAT_VERSION, 5);
+fn the_manifest_declares_the_current_format_version() {
+    // `object-transform` took 5 (main was at 4); a later bump
+    // (`rectangle-corner-radii`: 6) moves `CURRENT_FORMAT_VERSION` on, so this
+    // pins only that the manifest says the current number.
     let document = Document::new(1);
     let _ = rect(&document);
     let bytes = pack(&document, "0.1.0").unwrap();
     let manifest: serde_json::Value =
         serde_json::from_slice(&zip_entry(&bytes, "manifest.json")).unwrap();
-    assert_eq!(manifest["format_version"], 5);
+    assert_eq!(manifest["format_version"], CURRENT_FORMAT_VERSION);
 }
 
 #[test]

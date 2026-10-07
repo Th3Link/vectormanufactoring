@@ -173,11 +173,11 @@ fn assert_is_moved_copy(orig: &ObjectSnapshot, copy: &ObjectSnapshot, off: Vec2)
                 (
                     Shape::Rect {
                         bounds: ba,
-                        corner_radius: ra,
+                        corner_radii: ra,
                     },
                     Shape::Rect {
                         bounds: bb,
-                        corner_radius: rb,
+                        corner_radii: rb,
                     },
                 ) => {
                     assert!(pclose(

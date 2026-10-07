@@ -8,6 +8,8 @@
 
 use loro::TreeParentId;
 
+use crate::corner_radii::CornerRadii;
+use crate::corner_radii_codec::write_corner_radii_if_changed;
 use crate::document::{Document, OBJECTS_TREE};
 use crate::path_codec::node_exists;
 use crate::path_model::{NewAnchor, NodeId};
@@ -41,7 +43,7 @@ pub enum ShapeEditError {
 }
 
 impl Document {
-    /// Creates a new rectangle primitive with zero corner radius
+    /// Creates a new rectangle primitive with four zero corner radii
     /// (acceptance criterion 1), becoming the selected object is the
     /// caller's job (ADR 0009 §2: selection is ephemeral `curvyo-ui-
     /// core` state).
@@ -58,7 +60,7 @@ impl Document {
         #[allow(clippy::unwrap_used)]
         let meta = tree.get_meta(tree_id_of(id)).unwrap();
         shape_codec::write_rect_bounds(&meta, bounds);
-        shape_codec::write_corner_radius(&meta, Length::from_mm(0.0));
+        write_corner_radii_if_changed(&meta, CornerRadii::uniform(Length::from_mm(0.0)));
         self.commit_with_label("create_rect");
         id
     }
@@ -442,7 +444,7 @@ mod tests {
             snapshot.shape,
             Shape::Rect {
                 bounds,
-                corner_radius: Length::from_mm(0.0)
+                corner_radii: CornerRadii::uniform(Length::from_mm(0.0))
             }
         );
         assert_eq!(snapshot.stroke, crate::path_model::Color::BLACK);
@@ -472,13 +474,13 @@ mod tests {
         let snapshot = document.primitive(id).expect("exists");
         let Shape::Rect {
             bounds,
-            corner_radius,
+            corner_radii,
         } = snapshot.shape
         else {
             panic!("expected a rect");
         };
         assert_eq!(bounds, rect_bounds(5.0, 5.0, 20.0, 20.0));
-        assert!((corner_radius.as_mm() - 3.0).abs() < f64::EPSILON);
+        assert!((corner_radii.tl.as_mm() - 3.0).abs() < f64::EPSILON);
     }
 
     /// Acceptance criteria 8, 9: `resize_rect` writes bounds, corner
@@ -492,7 +494,7 @@ mod tests {
             .resize_rect(
                 id,
                 rect_bounds(0.0, 0.0, 20.0, 20.0),
-                Length::from_mm(2.0),
+                CornerRadii::uniform(Length::from_mm(2.0)),
                 Some(Length::from_mm(0.5)),
             )
             .expect("resize");
@@ -501,13 +503,13 @@ mod tests {
         let snapshot = document.primitive(id).expect("exists");
         let Shape::Rect {
             bounds,
-            corner_radius,
+            corner_radii,
         } = snapshot.shape
         else {
             panic!("expected rect");
         };
         assert!((bounds.width.as_mm() - 20.0).abs() < 1e-9);
-        assert!((corner_radius.as_mm() - 2.0).abs() < 1e-9);
+        assert!((corner_radii.tl.as_mm() - 2.0).abs() < 1e-9);
         assert!((snapshot.stroke_width.as_mm() - 0.5).abs() < 1e-9);
     }
 
@@ -606,7 +608,7 @@ mod tests {
         a.resize_rect(
             id,
             rect_bounds(0.0, 0.0, 30.0, 10.0),
-            Length::from_mm(0.0),
+            CornerRadii::uniform(Length::from_mm(0.0)),
             None,
         )
         .expect("A resizes, switch off");
@@ -634,7 +636,7 @@ mod tests {
         a.resize_rect(
             id,
             rect_bounds(0.0, 0.0, 30.0, 10.0),
-            Length::from_mm(0.0),
+            CornerRadii::uniform(Length::from_mm(0.0)),
             Some(Length::from_mm(crate::path_codec::DEFAULT_STROKE_WIDTH_MM)),
         )
         .expect("A resizes");
@@ -645,10 +647,10 @@ mod tests {
         for peer in [&a, &b] {
             let p = peer.primitive(id).expect("exists");
             assert!((p.stroke_width.as_mm() - 2.0).abs() < 1e-12);
-            let Shape::Rect { corner_radius, .. } = p.shape else {
+            let Shape::Rect { corner_radii, .. } = p.shape else {
                 panic!("rect");
             };
-            assert!((corner_radius.as_mm() - 3.0).abs() < 1e-12);
+            assert!((corner_radii.tl.as_mm() - 3.0).abs() < 1e-12);
         }
     }
 
@@ -661,7 +663,7 @@ mod tests {
             .resize_rect(
                 id,
                 rect_bounds(0.0, 0.0, 20.0, 20.0),
-                Length::from_mm(0.0),
+                CornerRadii::uniform(Length::from_mm(0.0)),
                 Some(Length::from_mm(0.5)),
             )
             .expect("resize");
@@ -679,7 +681,7 @@ mod tests {
         let result = document.resize_rect(
             id,
             rect_bounds(0.0, 0.0, 1.0, 1.0),
-            Length::from_mm(0.0),
+            CornerRadii::uniform(Length::from_mm(0.0)),
             Some(Length::from_mm(0.25)),
         );
         assert_eq!(result, Err(ShapeEditError::WrongShape));
@@ -867,10 +869,10 @@ mod tests {
             "5-object batch must add exactly 1 change, not 5"
         );
         for id in ids {
-            let Shape::Rect { corner_radius, .. } = document.primitive(id).unwrap().shape else {
+            let Shape::Rect { corner_radii, .. } = document.primitive(id).unwrap().shape else {
                 panic!("expected rect");
             };
-            assert!((corner_radius.as_mm() - 2.0).abs() < 1e-9);
+            assert!((corner_radii.tl.as_mm() - 2.0).abs() < 1e-9);
         }
     }
 

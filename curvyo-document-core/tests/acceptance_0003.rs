@@ -37,12 +37,12 @@ fn ac1_rect_bounds_from_any_two_opposite_corners_normalizes_and_is_zero_radius()
     match primitive.shape {
         Shape::Rect {
             bounds,
-            corner_radius,
+            corner_radii,
         } => {
             assert_eq!(bounds.origin, pt(10.0, 10.0));
             assert!((bounds.width.as_mm() - 20.0).abs() < 1e-9);
             assert!((bounds.height.as_mm() - 30.0).abs() < 1e-9);
-            assert!((corner_radius.as_mm() - 0.0).abs() < 1e-9);
+            assert!((corner_radii.tl.as_mm() - 0.0).abs() < 1e-9);
         }
         _ => panic!("expected a rect"),
     }
@@ -66,16 +66,19 @@ fn ac3_resizing_a_rect_keeps_corner_radius_untouched() {
     document
         .set_rect_bounds(id, RectBounds::from_corners(pt(0.0, 0.0), pt(100.0, 100.0)))
         .unwrap();
-    let Shape::Rect { corner_radius, .. } = document.primitive(id).unwrap().shape else {
+    let Shape::Rect { corner_radii, .. } = document.primitive(id).unwrap().shape else {
         panic!("expected rect");
     };
-    assert!((corner_radius.as_mm() - 5.0).abs() < 1e-9);
+    assert!((corner_radii.tl.as_mm() - 5.0).abs() < 1e-9);
 }
 
 #[test]
 fn ac4_and_ac18_rounding_produces_8_corner_tangent_points() {
     let bounds = RectBounds::from_corners(pt(0.0, 0.0), pt(40.0, 20.0));
-    let outline = curvyo_document_core::rect_outline(bounds, Length::from_mm(4.0));
+    let outline = curvyo_document_core::rect_outline(
+        bounds,
+        curvyo_document_core::CornerRadii::uniform(Length::from_mm(4.0)),
+    );
     assert_eq!(outline.len(), 8);
     assert!(
         outline.iter().all(|a| a.kind == AnchorKind::Corner),
@@ -88,15 +91,27 @@ fn ac5_radius_is_clamped_to_half_the_shorter_side() {
     // Shorter side is height = 20mm, so half is 10mm; asking for 999mm
     // must clamp to exactly 10mm, not overlap/self-intersect.
     let bounds = RectBounds::from_corners(pt(0.0, 0.0), pt(100.0, 20.0));
-    let effective = curvyo_document_core::effective_corner_radius(bounds, Length::from_mm(999.0));
+    let effective = curvyo_document_core::effective_corner_radii(
+        bounds,
+        curvyo_document_core::CornerRadii::uniform(Length::from_mm(999.0)),
+    )
+    .tl;
     assert!((effective.as_mm() - 10.0).abs() < 1e-9);
 }
 
 #[test]
 fn ac5_clamp_is_exact_at_the_boundary_not_past_it() {
     let bounds = RectBounds::from_corners(pt(0.0, 0.0), pt(10.0, 10.0)); // square, half-side = 5
-    let exact = curvyo_document_core::effective_corner_radius(bounds, Length::from_mm(5.0));
-    let over = curvyo_document_core::effective_corner_radius(bounds, Length::from_mm(5.0001));
+    let exact = curvyo_document_core::effective_corner_radii(
+        bounds,
+        curvyo_document_core::CornerRadii::uniform(Length::from_mm(5.0)),
+    )
+    .tl;
+    let over = curvyo_document_core::effective_corner_radii(
+        bounds,
+        curvyo_document_core::CornerRadii::uniform(Length::from_mm(5.0001)),
+    )
+    .tl;
     assert!((exact.as_mm() - 5.0).abs() < 1e-9);
     assert!((over.as_mm() - 5.0).abs() < 1e-9);
 }
@@ -111,10 +126,10 @@ fn ac6_removing_rounding_returns_to_exactly_zero() {
     document
         .set_corner_radius(&[id], Length::from_mm(0.0))
         .unwrap();
-    let Shape::Rect { corner_radius, .. } = document.primitive(id).unwrap().shape else {
+    let Shape::Rect { corner_radii, .. } = document.primitive(id).unwrap().shape else {
         panic!("expected rect");
     };
-    assert!(corner_radius.as_mm().abs() < 1e-9);
+    assert!(corner_radii.tl.as_mm().abs() < 1e-9);
     let outline = outline_of(&document.primitive(id).unwrap().shape);
     assert_eq!(outline.len(), 4);
     assert!(outline.iter().all(|a| a.kind == AnchorKind::Corner));
@@ -139,17 +154,17 @@ fn radius_is_stored_raw_shrink_then_regrow_restores_original_radius() {
     let shrunk = document.primitive(id).unwrap();
     let Shape::Rect {
         bounds: shrunk_bounds,
-        corner_radius: raw_radius,
+        corner_radii: raw_radii,
     } = shrunk.shape
     else {
         panic!("expected rect");
     };
     assert!(
-        (raw_radius.as_mm() - 40.0).abs() < 1e-9,
+        (raw_radii.tl.as_mm() - 40.0).abs() < 1e-9,
         "raw value must not be clamped on write"
     );
     let effective_while_shrunk =
-        curvyo_document_core::effective_corner_radius(shrunk_bounds, raw_radius);
+        curvyo_document_core::effective_corner_radii(shrunk_bounds, raw_radii).tl;
     assert!((effective_while_shrunk.as_mm() - 10.0).abs() < 1e-9);
 
     // Grow back to the original size: the original 40mm radius must
@@ -160,14 +175,14 @@ fn radius_is_stored_raw_shrink_then_regrow_restores_original_radius() {
     let regrown = document.primitive(id).unwrap();
     let Shape::Rect {
         bounds: regrown_bounds,
-        corner_radius: regrown_radius,
+        corner_radii: regrown_radii,
     } = regrown.shape
     else {
         panic!("expected rect");
     };
     let effective_after_regrow =
-        curvyo_document_core::effective_corner_radius(regrown_bounds, regrown_radius);
-    assert!((regrown_radius.as_mm() - 40.0).abs() < 1e-9);
+        curvyo_document_core::effective_corner_radii(regrown_bounds, regrown_radii).tl;
+    assert!((regrown_radii.tl.as_mm() - 40.0).abs() < 1e-9);
     assert!((effective_after_regrow.as_mm() - 40.0).abs() < 1e-9);
 }
 

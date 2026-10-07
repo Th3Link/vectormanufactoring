@@ -67,7 +67,7 @@ fn every_kind(document: &Document) -> Vec<NodeId> {
                 width: Length::from_mm(30.0),
                 height: Length::from_mm(12.0),
             },
-            Length::from_mm(2.5),
+            curvyo_document_core::CornerRadii::uniform(Length::from_mm(2.5)),
             Some(Length::from_mm(0.75)),
         )
         .unwrap();

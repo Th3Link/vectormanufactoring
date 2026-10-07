@@ -12,11 +12,12 @@
 //! Y-down document space — clockwise on screen, matching Inkscape's own
 //! rect/ellipse/polygon → path conversion (`adrs.md`).
 
+use crate::corner_radii::{Corner, CornerRadii, SHARP_CORNER_EPSILON_MM, effective_corner_radii};
 use crate::path_model::AnchorKind;
 use crate::primitive_model::{
     EllipseFrame, PointCount, RectBounds, Shape, StarFrame, shape_center,
 };
-use crate::units::{Angle, Length, Point, Vec2};
+use crate::units::{Angle, Point, Vec2};
 
 /// The standard cubic-Bézier approximation of a quarter circle:
 /// `4 * (√2 - 1) / 3`. Used for ellipse quadrants (acceptance criterion
@@ -43,6 +44,16 @@ pub struct OutlineAnchor {
 }
 
 impl OutlineAnchor {
+    /// A corner node with live handles, the tangent point of an arc.
+    const fn tangent(point: Point, handle_in: Vec2, handle_out: Vec2) -> Self {
+        Self {
+            point,
+            handle_in,
+            handle_out,
+            kind: AnchorKind::Corner,
+        }
+    }
+
     const fn corner(point: Point) -> Self {
         Self {
             point,
@@ -53,99 +64,89 @@ impl OutlineAnchor {
     }
 }
 
-/// A rectangle's effective corner radius: stored raw, clamped only here
-/// (`adrs.md`'s "the corner radius is stored raw and clamped where it is
-/// evaluated" decision) — acceptance criterion 5. Every consumer
-/// (outline, rendering, hit-testing, handle placement, conversion) calls
-/// this rather than reading `corner_radius` directly.
+/// A rectangle's outline (`specs/0003-primitive-shapes/` criteria 1-6, 18;
+/// `specs/rectangle-corner-radii/` criteria 11, 16): clockwise on screen from
+/// the end of the top-left corner's arc (or the top-left corner point if it is
+/// sharp). Each corner with a positive effective radius contributes two
+/// tangent nodes joined by one cubic arc, each sharp corner one node, so the
+/// list holds 4 to 8 nodes, all [`AnchorKind::Corner`] (a line-to-arc join
+/// cannot be [`AnchorKind::Symmetric`], see `adrs.md`). The radii are
+/// evaluated by [`effective_corner_radii`] first.
 #[must_use]
-pub fn effective_corner_radius(bounds: RectBounds, corner_radius: Length) -> Length {
-    let half_shorter_side = bounds.width.as_mm().min(bounds.height.as_mm()) / 2.0;
-    Length::from_mm(corner_radius.as_mm().clamp(0.0, half_shorter_side.max(0.0)))
-}
-
-/// A rectangle's outline (acceptance criteria 1-6, 18): 4 sharp corners
-/// at effective radius 0, or 8 tangent points (all [`AnchorKind::Corner`]
-/// — a line-to-arc join cannot be [`AnchorKind::Symmetric`], see `adrs.md`)
-/// once rounded.
-#[must_use]
-pub fn rect_outline(bounds: RectBounds, corner_radius: Length) -> Vec<OutlineAnchor> {
-    let radius = effective_corner_radius(bounds, corner_radius).as_mm();
+pub fn rect_outline(bounds: RectBounds, radii: CornerRadii) -> Vec<OutlineAnchor> {
+    let effective = effective_corner_radii(bounds, radii);
+    let [tl, tr, br, bl] = Corner::ALL.map(|corner| effective.get(corner).as_mm());
     let left = bounds.origin.x;
     let top = bounds.origin.y;
-    let width = bounds.width.as_mm();
-    let height = bounds.height.as_mm();
+    let right = left + bounds.width.as_mm();
+    let bottom = top + bounds.height.as_mm();
+    let sharp = |radius: f64| radius <= SHARP_CORNER_EPSILON_MM;
+    let at = OutlineAnchor::tangent;
 
-    if radius <= 0.0 {
-        return vec![
-            OutlineAnchor::corner(Point::new(left, top)),
-            OutlineAnchor::corner(Point::new(left + width, top)),
-            OutlineAnchor::corner(Point::new(left + width, top + height)),
-            OutlineAnchor::corner(Point::new(left, top + height)),
-        ];
+    let mut anchors = Vec::with_capacity(8);
+    // Top edge, left end: the end of the top-left arc (its start closes the loop).
+    anchors.push(if sharp(tl) {
+        OutlineAnchor::corner(Point::new(left, top))
+    } else {
+        at(
+            Point::new(left + tl, top),
+            Vec2::new(-KAPPA * tl, 0.0),
+            Vec2::ZERO,
+        )
+    });
+    if sharp(tr) {
+        anchors.push(OutlineAnchor::corner(Point::new(right, top)));
+    } else {
+        let handle = KAPPA * tr;
+        anchors.push(at(
+            Point::new(right - tr, top),
+            Vec2::ZERO,
+            Vec2::new(handle, 0.0),
+        ));
+        anchors.push(at(
+            Point::new(right, top + tr),
+            Vec2::new(0.0, -handle),
+            Vec2::ZERO,
+        ));
     }
-
-    let handle = KAPPA * radius;
-    let corner = AnchorKind::Corner;
-    vec![
-        // Top edge, left tangent point — end of the top-left arc.
-        OutlineAnchor {
-            point: Point::new(left + radius, top),
-            handle_in: Vec2::new(-handle, 0.0),
-            handle_out: Vec2::ZERO,
-            kind: corner,
-        },
-        // Top edge, right tangent point — start of the top-right arc.
-        OutlineAnchor {
-            point: Point::new(left + width - radius, top),
-            handle_in: Vec2::ZERO,
-            handle_out: Vec2::new(handle, 0.0),
-            kind: corner,
-        },
-        // Right edge, top tangent point — end of the top-right arc.
-        OutlineAnchor {
-            point: Point::new(left + width, top + radius),
-            handle_in: Vec2::new(0.0, -handle),
-            handle_out: Vec2::ZERO,
-            kind: corner,
-        },
-        // Right edge, bottom tangent point — start of the bottom-right arc.
-        OutlineAnchor {
-            point: Point::new(left + width, top + height - radius),
-            handle_in: Vec2::ZERO,
-            handle_out: Vec2::new(0.0, handle),
-            kind: corner,
-        },
-        // Bottom edge, right tangent point — end of the bottom-right arc.
-        OutlineAnchor {
-            point: Point::new(left + width - radius, top + height),
-            handle_in: Vec2::new(handle, 0.0),
-            handle_out: Vec2::ZERO,
-            kind: corner,
-        },
-        // Bottom edge, left tangent point — start of the bottom-left arc.
-        OutlineAnchor {
-            point: Point::new(left + radius, top + height),
-            handle_in: Vec2::ZERO,
-            handle_out: Vec2::new(-handle, 0.0),
-            kind: corner,
-        },
-        // Left edge, bottom tangent point — end of the bottom-left arc.
-        OutlineAnchor {
-            point: Point::new(left, top + height - radius),
-            handle_in: Vec2::new(0.0, handle),
-            handle_out: Vec2::ZERO,
-            kind: corner,
-        },
-        // Left edge, top tangent point — start of the top-left arc
-        // (closing the loop back to the first anchor).
-        OutlineAnchor {
-            point: Point::new(left, top + radius),
-            handle_in: Vec2::ZERO,
-            handle_out: Vec2::new(0.0, -handle),
-            kind: corner,
-        },
-    ]
+    if sharp(br) {
+        anchors.push(OutlineAnchor::corner(Point::new(right, bottom)));
+    } else {
+        let handle = KAPPA * br;
+        anchors.push(at(
+            Point::new(right, bottom - br),
+            Vec2::ZERO,
+            Vec2::new(0.0, handle),
+        ));
+        anchors.push(at(
+            Point::new(right - br, bottom),
+            Vec2::new(handle, 0.0),
+            Vec2::ZERO,
+        ));
+    }
+    if sharp(bl) {
+        anchors.push(OutlineAnchor::corner(Point::new(left, bottom)));
+    } else {
+        let handle = KAPPA * bl;
+        anchors.push(at(
+            Point::new(left + bl, bottom),
+            Vec2::ZERO,
+            Vec2::new(-handle, 0.0),
+        ));
+        anchors.push(at(
+            Point::new(left, bottom - bl),
+            Vec2::new(0.0, handle),
+            Vec2::ZERO,
+        ));
+    }
+    if !sharp(tl) {
+        anchors.push(at(
+            Point::new(left, top + tl),
+            Vec2::ZERO,
+            Vec2::new(0.0, -KAPPA * tl),
+        ));
+    }
+    anchors
 }
 
 /// An ellipse's outline (acceptance criteria 7-9, 19): 4 smooth nodes,
@@ -256,8 +257,8 @@ pub fn outline_of(shape: &Shape) -> Vec<OutlineAnchor> {
     match *shape {
         Shape::Rect {
             bounds,
-            corner_radius,
-        } => rect_outline(bounds, corner_radius),
+            corner_radii,
+        } => rect_outline(bounds, corner_radii),
         Shape::Ellipse { frame } => ellipse_outline(frame),
         Shape::Polygon { frame, point_count } => polygon_outline(frame, point_count),
         Shape::Star {
@@ -296,13 +297,14 @@ pub fn outline_of_rotated(shape: &Shape, rotation: Angle) -> Vec<OutlineAnchor> 
 mod tests {
     use super::*;
     use crate::primitive_model::InnerRatio;
+    use crate::units::Length;
 
     /// Zero rotation returns exactly the plain outline.
     #[test]
     fn outline_of_rotated_at_zero_angle_matches_outline_of() {
         let shape = Shape::Rect {
             bounds: bounds(0.0, 0.0, 10.0, 10.0),
-            corner_radius: Length::from_mm(0.0),
+            corner_radii: CornerRadii::uniform(Length::from_mm(0.0)),
         };
         assert_eq!(
             outline_of_rotated(&shape, Angle::from_radians(0.0)),
@@ -317,7 +319,7 @@ mod tests {
     fn outline_of_rotated_rotates_every_anchor_about_the_frame_center() {
         let shape = Shape::Rect {
             bounds: bounds(0.0, 0.0, 10.0, 10.0),
-            corner_radius: Length::from_mm(0.0),
+            corner_radii: CornerRadii::uniform(Length::from_mm(0.0)),
         };
         let rotation = Angle::from_radians(std::f64::consts::FRAC_PI_2);
         let rotated = outline_of_rotated(&shape, rotation);
@@ -338,36 +340,13 @@ mod tests {
         }
     }
 
-    /// AC5: the effective radius never exceeds half the shorter side,
-    /// even when the stored value is far larger.
-    #[test]
-    fn effective_corner_radius_clamps_to_half_the_shorter_side() {
-        let b = bounds(0.0, 0.0, 10.0, 20.0);
-        let effective = effective_corner_radius(b, Length::from_mm(100.0));
-        assert!((effective.as_mm() - 5.0).abs() < 1e-9);
-    }
-
-    /// `adrs.md`'s "clamped on read, not on write" round-trip: shrinking
-    /// a rectangle and growing it back restores the original radius,
-    /// because the stored value was never rewritten.
-    #[test]
-    fn shrink_then_regrow_restores_the_original_radius() {
-        let original_bounds = bounds(0.0, 0.0, 20.0, 20.0);
-        let stored_radius = Length::from_mm(8.0);
-        // Shrink: the effective radius clamps down...
-        let shrunk = bounds(0.0, 0.0, 10.0, 10.0);
-        let effective_when_shrunk = effective_corner_radius(shrunk, stored_radius);
-        assert!((effective_when_shrunk.as_mm() - 5.0).abs() < 1e-9);
-        // ...but the stored value itself is untouched, so growing back
-        // gives the original radius again.
-        let effective_when_regrown = effective_corner_radius(original_bounds, stored_radius);
-        assert!((effective_when_regrown.as_mm() - 8.0).abs() < 1e-9);
-    }
-
     /// AC18: zero radius is exactly 4 corner nodes, straight segments.
     #[test]
     fn rect_outline_at_zero_radius_has_four_corner_nodes() {
-        let outline = rect_outline(bounds(0.0, 0.0, 10.0, 10.0), Length::from_mm(0.0));
+        let outline = rect_outline(
+            bounds(0.0, 0.0, 10.0, 10.0),
+            CornerRadii::uniform(Length::from_mm(0.0)),
+        );
         assert_eq!(outline.len(), 4);
         assert!(outline.iter().all(|a| a.kind == AnchorKind::Corner));
         assert!(
@@ -381,7 +360,10 @@ mod tests {
     /// smooth), 4 pairs joined by a curve, the rest by straight lines.
     #[test]
     fn rect_outline_at_nonzero_radius_has_eight_corner_nodes() {
-        let outline = rect_outline(bounds(0.0, 0.0, 20.0, 10.0), Length::from_mm(2.0));
+        let outline = rect_outline(
+            bounds(0.0, 0.0, 20.0, 10.0),
+            CornerRadii::uniform(Length::from_mm(2.0)),
+        );
         assert_eq!(outline.len(), 8);
         assert!(outline.iter().all(|a| a.kind == AnchorKind::Corner));
         let curved = outline
@@ -478,5 +460,282 @@ mod tests {
                 distance(anchor.point)
             );
         }
+    }
+
+    /// The slice-3 single-radius outline, kept verbatim (its own clamp
+    /// included) as the reference the per-corner function must reproduce for
+    /// four equal radii.
+    fn legacy_rect_outline(bounds: RectBounds, corner_radius: f64) -> Vec<OutlineAnchor> {
+        let half_shorter_side = bounds.width.as_mm().min(bounds.height.as_mm()) / 2.0;
+        let radius = corner_radius.clamp(0.0, half_shorter_side.max(0.0));
+        let left = bounds.origin.x;
+        let top = bounds.origin.y;
+        let width = bounds.width.as_mm();
+        let height = bounds.height.as_mm();
+        if radius <= 0.0 {
+            return vec![
+                OutlineAnchor::corner(Point::new(left, top)),
+                OutlineAnchor::corner(Point::new(left + width, top)),
+                OutlineAnchor::corner(Point::new(left + width, top + height)),
+                OutlineAnchor::corner(Point::new(left, top + height)),
+            ];
+        }
+        let handle = KAPPA * radius;
+        let anchor = |point, handle_in, handle_out| OutlineAnchor {
+            point,
+            handle_in,
+            handle_out,
+            kind: AnchorKind::Corner,
+        };
+        vec![
+            anchor(
+                Point::new(left + radius, top),
+                Vec2::new(-handle, 0.0),
+                Vec2::ZERO,
+            ),
+            anchor(
+                Point::new(left + width - radius, top),
+                Vec2::ZERO,
+                Vec2::new(handle, 0.0),
+            ),
+            anchor(
+                Point::new(left + width, top + radius),
+                Vec2::new(0.0, -handle),
+                Vec2::ZERO,
+            ),
+            anchor(
+                Point::new(left + width, top + height - radius),
+                Vec2::ZERO,
+                Vec2::new(0.0, handle),
+            ),
+            anchor(
+                Point::new(left + width - radius, top + height),
+                Vec2::new(handle, 0.0),
+                Vec2::ZERO,
+            ),
+            anchor(
+                Point::new(left + radius, top + height),
+                Vec2::ZERO,
+                Vec2::new(-handle, 0.0),
+            ),
+            anchor(
+                Point::new(left, top + height - radius),
+                Vec2::new(0.0, handle),
+                Vec2::ZERO,
+            ),
+            anchor(
+                Point::new(left, top + radius),
+                Vec2::ZERO,
+                Vec2::new(0.0, -handle),
+            ),
+        ]
+    }
+
+    fn radii(tl: f64, tr: f64, br: f64, bl: f64) -> CornerRadii {
+        CornerRadii {
+            tl: Length::from_mm(tl),
+            tr: Length::from_mm(tr),
+            br: Length::from_mm(br),
+            bl: Length::from_mm(bl),
+        }
+    }
+
+    fn assert_anchor_close(actual: &OutlineAnchor, expected: &OutlineAnchor) {
+        let close = |a: f64, b: f64| (a - b).abs() < 1e-9;
+        assert!(
+            close(actual.point.x, expected.point.x)
+                && close(actual.point.y, expected.point.y)
+                && close(actual.handle_in.x, expected.handle_in.x)
+                && close(actual.handle_in.y, expected.handle_in.y)
+                && close(actual.handle_out.x, expected.handle_out.x)
+                && close(actual.handle_out.y, expected.handle_out.y)
+                && actual.kind == expected.kind,
+            "{actual:?} vs {expected:?}"
+        );
+    }
+
+    /// AC 16: with one radius for all corners the result is today's, anchor
+    /// for anchor and exactly (not within a tolerance), 4 nodes sharp and 8
+    /// rounded.
+    #[test]
+    fn four_equal_radii_within_the_limit_give_exactly_the_slice_3_outline() {
+        for (x, y, w, h, r) in [
+            (0.0, 0.0, 10.0, 10.0, 0.0),
+            (0.0, 0.0, 20.0, 10.0, 2.0),
+            (3.5, -4.25, 100.0, 40.0, 5.0),
+            (-7.0, 1.0, 33.3, 77.7, 16.0),
+            (0.0, 0.0, 10.0, 10.0, 5.0),
+        ] {
+            let b = bounds(x, y, w, h);
+            let new = rect_outline(b, CornerRadii::uniform(Length::from_mm(r)));
+            assert_eq!(new, legacy_rect_outline(b, r), "{w} x {h}, r {r}");
+        }
+    }
+
+    /// A uniform radius above the limit is the old clamp, within the
+    /// tolerance of the shared-factor rule.
+    #[test]
+    fn four_equal_radii_above_the_limit_match_the_slice_3_clamp() {
+        for (w, h, r) in [
+            (10.0, 20.0, 100.0),
+            (100.0, 40.0, 25.0),
+            (40.0, 100.0, 21.0),
+        ] {
+            let b = bounds(1.0, 2.0, w, h);
+            let new = rect_outline(b, CornerRadii::uniform(Length::from_mm(r)));
+            let old = legacy_rect_outline(b, r);
+            assert_eq!(new.len(), old.len());
+            for (n, o) in new.iter().zip(&old) {
+                assert_anchor_close(n, o);
+            }
+        }
+    }
+
+    /// AC 16: 4 to 8 nodes, one per sharp corner and two per rounded one.
+    #[test]
+    fn each_rounded_corner_adds_one_node() {
+        for mask in 0..16_u32 {
+            let radius = |bit: u32| if mask & (1 << bit) == 0 { 0.0 } else { 6.0 };
+            let outline = rect_outline(
+                bounds(0.0, 0.0, 100.0, 60.0),
+                radii(radius(0), radius(1), radius(2), radius(3)),
+            );
+            assert_eq!(outline.len(), 4 + mask.count_ones() as usize, "{mask:04b}");
+            assert!(outline.iter().all(|a| a.kind == AnchorKind::Corner));
+        }
+    }
+
+    /// AC 16: the path starts at the end of the top-left arc, or at the
+    /// top-left corner point when it is sharp.
+    #[test]
+    fn the_outline_starts_at_the_top_left_corner() {
+        let b = bounds(10.0, 20.0, 100.0, 60.0);
+        let sharp = rect_outline(b, radii(0.0, 8.0, 8.0, 8.0));
+        assert_eq!(sharp[0].point, Point::new(10.0, 20.0));
+        assert_eq!(sharp.len(), 7);
+        let rounded = rect_outline(b, radii(8.0, 0.0, 0.0, 0.0));
+        assert_eq!(rounded[0].point, Point::new(18.0, 20.0));
+        assert_eq!(rounded[rounded.len() - 1].point, Point::new(10.0, 28.0));
+    }
+
+    /// AC 16: clockwise on screen (Y down), so the shoelace sum is positive.
+    #[test]
+    fn the_outline_runs_clockwise_on_screen() {
+        for r in [
+            radii(0.0, 0.0, 0.0, 0.0),
+            radii(5.0, 0.0, 0.0, 0.0),
+            radii(5.0, 9.0, 0.0, 12.0),
+            radii(5.0, 9.0, 3.0, 12.0),
+        ] {
+            let outline = rect_outline(bounds(0.0, 0.0, 100.0, 60.0), r);
+            let twice_area: f64 = outline
+                .iter()
+                .zip(outline.iter().cycle().skip(1))
+                .map(|(a, b)| a.point.x * b.point.y - b.point.x * a.point.y)
+                .sum();
+            assert!(twice_area > 0.0, "{r:?}");
+        }
+    }
+
+    /// AC 16: each arc deviates from the true quarter circle by at most
+    /// 0.1 % of that corner's own radius.
+    #[test]
+    fn every_arc_is_within_a_tenth_of_a_percent_of_its_circle() {
+        let (width, height) = (100.0, 60.0);
+        let outline = rect_outline(
+            bounds(0.0, 0.0, width, height),
+            radii(4.0, 11.0, 23.0, 30.0),
+        );
+        assert_eq!(outline.len(), 8);
+        // Arc k joins the pair (node 2k+1, node 2k+2) for TR, BR, BL, and the
+        // last node to the first for TL; centres are the inward corner offsets.
+        let arcs = [
+            (1, 2, Point::new(width - 11.0, 11.0), 11.0),
+            (3, 4, Point::new(width - 23.0, height - 23.0), 23.0),
+            (5, 6, Point::new(30.0, height - 30.0), 30.0),
+            (7, 0, Point::new(4.0, 4.0), 4.0),
+        ];
+        for (from, to, centre, radius) in arcs {
+            let (first, last) = (outline[from], outline[to]);
+            let c1 = first.point.translated(first.handle_out);
+            let c2 = last.point.translated(last.handle_in);
+            // The cubic's value at t = 1/2.
+            let at_half = |start: f64, control1: f64, control2: f64, end: f64| {
+                0.125 * start + 0.375 * control1 + 0.375 * control2 + 0.125 * end
+            };
+            let mid = Point::new(
+                at_half(first.point.x, c1.x, c2.x, last.point.x),
+                at_half(first.point.y, c1.y, c2.y, last.point.y),
+            );
+            let distance = centre.vector_to(mid).length();
+            assert!(
+                (distance - radius).abs() / radius < 0.001,
+                "arc {from}->{to}: {distance} vs {radius}"
+            );
+        }
+    }
+
+    /// AC 9, 16: the two worked examples of the specification on 100 x 40.
+    #[test]
+    fn the_specification_examples_on_a_100_by_40_rectangle() {
+        let b = bounds(0.0, 0.0, 100.0, 40.0);
+        // TL 30, TR 30, BR 0, BL 0: f = 1, six nodes.
+        let outline = rect_outline(b, radii(30.0, 30.0, 0.0, 0.0));
+        let points: Vec<(f64, f64)> = outline.iter().map(|a| (a.point.x, a.point.y)).collect();
+        assert_eq!(
+            points,
+            [
+                (30.0, 0.0),
+                (70.0, 0.0),
+                (100.0, 30.0),
+                (100.0, 40.0),
+                (0.0, 40.0),
+                (0.0, 30.0)
+            ]
+        );
+        // TL 30, TR 30, BL 30, BR 0: f = 40/60, effective 20, 20, 0, 20.
+        let outline = rect_outline(b, radii(30.0, 30.0, 0.0, 30.0));
+        let points: Vec<(f64, f64)> = outline.iter().map(|a| (a.point.x, a.point.y)).collect();
+        let expected = [
+            (20.0, 0.0),
+            (80.0, 0.0),
+            (100.0, 20.0),
+            (100.0, 40.0),
+            (20.0, 40.0),
+            (0.0, 20.0),
+            (0.0, 20.0 + 0.0),
+        ];
+        // Seven nodes: TL end, TR start, TR end, BR corner, BL start, BL end, TL start.
+        assert_eq!(points.len(), 7);
+        for (actual, expected) in points.iter().zip(&expected[..5]) {
+            assert!((actual.0 - expected.0).abs() < 1e-9 && (actual.1 - expected.1).abs() < 1e-9);
+        }
+        assert!((points[5].0).abs() < 1e-9 && (points[5].1 - 20.0).abs() < 1e-9);
+        assert!((points[6].0).abs() < 1e-9 && (points[6].1 - 20.0).abs() < 1e-9);
+    }
+
+    /// AC 11: an effective radius within the sharp tolerance is a sharp
+    /// corner (one node).
+    #[test]
+    fn a_radius_within_the_sharp_tolerance_is_a_sharp_corner() {
+        let outline = rect_outline(
+            bounds(0.0, 0.0, 10.0, 10.0),
+            radii(SHARP_CORNER_EPSILON_MM / 2.0, 0.0, 0.0, 0.0),
+        );
+        assert_eq!(outline.len(), 4);
+        let outline = rect_outline(
+            bounds(0.0, 0.0, 10.0, 10.0),
+            radii(SHARP_CORNER_EPSILON_MM * 10.0, 0.0, 0.0, 0.0),
+        );
+        assert_eq!(outline.len(), 5);
+    }
+
+    /// AC 16: two arcs meeting leave a straight segment of length 0 and two
+    /// coincident nodes, as before; they are not merged.
+    #[test]
+    fn arcs_that_meet_keep_their_zero_length_segment() {
+        let outline = rect_outline(bounds(0.0, 0.0, 100.0, 100.0), radii(50.0, 50.0, 0.0, 0.0));
+        assert_eq!(outline.len(), 6);
+        assert_eq!(outline[0].point, outline[1].point);
     }
 }
