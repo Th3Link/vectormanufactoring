@@ -436,6 +436,21 @@ fn a_new_rectangle_stores_four_radius_keys_and_never_the_legacy_one() {
     assert!(meta.get("corner_radius").is_none());
 }
 
+/// The non-authoritative `document.json` view lists the four radii in
+/// millimetres, in outline order.
+#[test]
+fn document_json_lists_the_four_radii() {
+    let document = unpack(2, &fixture(V6_FIXTURE)).unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&document.export_json().unwrap()).unwrap();
+    assert_eq!(json["format_version"], CURRENT_FORMAT_VERSION);
+    let first = &json["objects"][0];
+    assert_eq!(first["shape"], "rect");
+    assert!(first.get("corner_radius").is_none());
+    for (key, expected) in [("tl", 12.0), ("tr", 0.0), ("br", 8.0), ("bl", 3.5)] {
+        assert_eq!(first["corner_radii"][key], expected, "{key}");
+    }
+}
+
 #[test]
 fn the_future_fixture_is_newer_than_the_current_version() {
     let bytes = fixture("future_format_version.curvyo");
