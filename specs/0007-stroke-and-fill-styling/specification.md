@@ -1,6 +1,6 @@
 # Stroke and fill styling: width/dash/join/cap/color, solid and gradient fill
 
-Status: Ready
+Status: In progress
 Priority: Must
 Origin: Customer
 
