@@ -898,6 +898,9 @@ skew guide (criterion 68).
   polygon by the smallest angle that puts an edge on an axis; UX optional).
   Decided out of scope, 2026-10-06: typing the angle and the Ctrl stops of
   criterion 7 cover it.
+- A Ctrl link or aspect-lock switch for the S key's chip (Ctrl+S is gated); a
+  typed size that uses the opposite corner from the keyboard (the double-click
+  route does it).
 - Storing a skew, or any skew of primitives (`object-transform-refinements`
   decision P1 stands).
 - Any other angle behaviour of polygon and star creation (the press-centre,
@@ -970,6 +973,10 @@ one German message. Resolved questions stay for the record.
    (criterion 54), and the plus and lock badges and the origin axes of criteria
    27 and 33. The fallback (tool letters unchanged, the four entries on
    Shift+M, R, S, K) is no longer needed.
+   *Amended 2026-10-07 after testing PR 1:* the customer: "wenn man einfach S
+   drückt soll es zentrisch skalieren". The typed size of the key S scales about
+   the box centre; the double-click on a resize handle keeps the drag's fixed
+   point (criteria 57, 57a). A criterion 57 amendment, no new scope.
 
 10. **Architect flags, resolved 2026-10-06 on the architect's defaults**
    (`adrs.md`, "Flagged to the PO"; no customer answer needed):
