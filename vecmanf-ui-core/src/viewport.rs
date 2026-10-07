@@ -193,6 +193,13 @@ impl Viewport {
         self.drag_pan = None;
     }
 
+    /// The canvas's size in CSS pixels, `(0.0, 0.0)` before the host's first
+    /// size report.
+    #[must_use]
+    pub const fn canvas_size(&self) -> (f64, f64) {
+        self.canvas_size
+    }
+
     /// Whether a drag-pan gesture is currently in flight — the host uses
     /// this for the grab/grabbing cursor convention
     /// (`docs/design-system.md`'s "Pan cursor").

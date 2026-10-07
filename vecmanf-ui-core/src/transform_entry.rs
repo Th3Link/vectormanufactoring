@@ -165,7 +165,8 @@ pub(crate) fn format_mm(value: f64) -> String {
 }
 
 /// Parses the text of an entry field (criteria 19, 21, 30): trimmed, an
-/// optional sign, digits with at most one separator ("." or ","), and on
+/// optional sign ("+", "-" or the real minus U+2212 the move readout shows, so
+/// a value copied from it parses), digits with at most one separator ("." or ","), and on
 /// the angle field one optional trailing "°". Anything else (empty,
 /// letters, "1,2,3", exponents, unit suffixes) is `None`, as is a value
 /// that is not finite.
@@ -175,8 +176,10 @@ pub fn parse_entry_number(text: &str, allow_degree: bool) -> Option<f64> {
     if allow_degree {
         rest = rest.strip_suffix('°').unwrap_or(rest).trim_end();
     }
-    let unsigned = rest.strip_prefix(['+', '-']).map_or(rest, str::trim_start);
-    let negative = rest.starts_with('-');
+    let unsigned = rest
+        .strip_prefix(['+', '-', '\u{2212}'])
+        .map_or(rest, str::trim_start);
+    let negative = rest.starts_with(['-', '\u{2212}']);
     let separators = unsigned.chars().filter(|c| matches!(c, '.' | ',')).count();
     let digits = unsigned.chars().filter(char::is_ascii_digit).count();
     if separators > 1

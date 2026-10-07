@@ -15,10 +15,12 @@
 
 use vecmanf_document_core::{Document, ObjectSnapshot, Point, Tolerance};
 
+use crate::anchor_id_minter::AnchorIdMinter;
+use crate::modifiers::Modifiers;
 use crate::object_selection::ObjectSelection;
 use crate::param_handles::{ParamHandle, radius_gain};
 use crate::select_bar::BarPreview;
-use crate::transform_commit::{commit_move, same_within_tolerance};
+use crate::transform_commit::same_within_tolerance;
 use crate::transform_drag::{
     CornerRadiusScaling, DragOrigin, ScaleModes, StrokeScaling, TransformDrag,
 };
@@ -28,14 +30,17 @@ pub use crate::transform_handle_layout::TransformHandleTolerances;
 mod bar;
 mod entry;
 mod handles;
+mod move_drag;
 mod press;
 mod preview;
 
 use entry::OpenEntry;
 use handles::sole_selected;
 
-pub use entry::{EntryKey, KeyEntryRefusal, double_click};
+pub use entry::{EntryKey, KeyEntryRefusal, MoveEntryMode, double_click};
 pub use handles::entry_anchor;
+use move_drag::MoveDrag;
+pub use move_drag::{Axis, MoveResolution};
 pub use press::{PressTarget, classify_press};
 pub use preview::LiveEdit;
 
@@ -47,12 +52,7 @@ enum SelectDrag {
     #[default]
     None,
     /// A move in progress (body or centre handle).
-    Moving {
-        origin: DragOrigin,
-        /// Whether the press was on the centre handle (it then shows its
-        /// dragging look).
-        from_center: bool,
-    },
+    Moving(MoveDrag),
     /// A resize, rotate or skew drag in progress.
     Transforming(TransformDrag),
 }
@@ -164,7 +164,7 @@ impl SelectTool {
     #[must_use]
     pub fn side_rotate_revealed(&self, live_shift: bool) -> bool {
         match &self.drag {
-            SelectDrag::Moving { origin, .. } => origin.shift_at_press,
+            SelectDrag::Moving(drag) => drag.origin.shift_at_press,
             SelectDrag::Transforming(drag) => drag.origin.shift_at_press,
             SelectDrag::None => match &self.entry {
                 Some(OpenEntry::Transform(entry)) => entry.side_rotate_revealed(),
@@ -227,18 +227,12 @@ impl SelectTool {
             // its first press must be recognised as a press on it
             // (criterion 15).
             PressTarget::CentreHandle => {
-                self.drag = SelectDrag::Moving {
-                    origin,
-                    from_center: true,
-                };
+                self.drag = SelectDrag::Moving(MoveDrag::new(origin, true));
                 self.last_press_handle = Some(EditHandle::Move);
                 SelectPointerDownOutcome::Selected
             }
             PressTarget::InsideSelectedBox => {
-                self.drag = SelectDrag::Moving {
-                    origin,
-                    from_center: false,
-                };
+                self.drag = SelectDrag::Moving(MoveDrag::new(origin, false));
                 SelectPointerDownOutcome::Selected
             }
             PressTarget::Empty => {
@@ -249,8 +243,16 @@ impl SelectTool {
                 SelectPointerDownOutcome::Cleared
             }
             PressTarget::Object(hit) => {
+                let mut drag = MoveDrag::new(origin, false);
                 if shift {
-                    selection.toggle(hit);
+                    // Shift does not change the selection at the press
+                    // (criterion 29): a release inside the dead zone toggles
+                    // the object, a drag that leaves it moves the selection
+                    // along one axis and an unselected object joins it then.
+                    drag.pending_toggle = Some(hit);
+                    if !selection.contains(hit) {
+                        drag.joins = Some(hit);
+                    }
                 } else if !selection.contains(hit) {
                     // A plain click on a *different* object is single-select,
                     // not additive (acceptance criterion 16). A plain click on
@@ -261,10 +263,7 @@ impl SelectTool {
                     // objects to drag them all" convention.
                     selection.select_single(hit);
                 }
-                self.drag = SelectDrag::Moving {
-                    origin,
-                    from_center: false,
-                };
+                self.drag = SelectDrag::Moving(drag);
                 SelectPointerDownOutcome::Selected
             }
         }
@@ -297,56 +296,35 @@ impl SelectTool {
         }
     }
 
-    /// Records the pointer's position for the drag in flight, so the 3 px
-    /// dead zone, once left, stays left (criterion 41's "a drag"). A no-op
-    /// when idle.
-    pub fn pointer_moved(&mut self, point: Point) {
-        match &mut self.drag {
-            SelectDrag::Moving { origin, .. } => origin.note(point),
-            SelectDrag::Transforming(drag) => drag.origin.note(point),
-            SelectDrag::None => {}
-        }
-    }
-
     /// Commits whatever drag is in flight — a move (as one
     /// [`vecmanf_document_core::Document::translate_objects`] call for
-    /// the whole selection), a resize, a rotate or a skew (one commit
-    /// each) — a no-op (writes nothing) if no drag was in flight, or the
-    /// pointer never left the dead zone, or the result equals the start.
-    /// `shift`/`ctrl` are the modifiers' state at release.
+    /// the whole selection, or, with Ctrl, one
+    /// [`vecmanf_document_core::Document::duplicate_objects`] call), a resize,
+    /// a rotate or a skew (one commit each) — a no-op (writes nothing) if no
+    /// drag was in flight, or the pointer never left the dead zone, or the
+    /// result equals the start. `shift`/`ctrl` are the modifiers' state at
+    /// release.
     pub fn pointer_up(
         &mut self,
         document: &Document,
         objects: &[ObjectSnapshot],
         selection: &mut ObjectSelection,
         point: Point,
-        shift: bool,
-        ctrl: bool,
+        modifiers: Modifiers,
+        minter: &mut AnchorIdMinter,
     ) {
         match std::mem::take(&mut self.drag) {
             SelectDrag::None => {}
-            SelectDrag::Moving { origin, .. } => {
-                if !origin.is_active_at(point) {
-                    return;
-                }
-                let offset = origin.down_at.vector_to(point);
-                // A move dragged back to its start writes nothing: a
-                // zero-offset commit would rewrite every frame or anchor
-                // register with its own value (criterion 12).
-                if offset.length() <= MOVE_EQUAL_EPSILON_MM {
-                    return;
-                }
-                selection.retain_existing(objects);
-                if selection.is_empty() {
-                    return;
-                }
-                commit_move(document, selection.ids(), offset);
+            SelectDrag::Moving(drag) => {
+                Self::finish_move(
+                    &drag, document, objects, selection, point, modifiers, minter,
+                );
             }
             SelectDrag::Transforming(drag) => {
                 if !drag.origin.is_active_at(point) {
                     return;
                 }
-                let result = drag.resolve(point, shift, ctrl);
+                let result = drag.resolve(point, modifiers.shift, modifiers.ctrl);
                 if !same_within_tolerance(&result, &drag.start) {
                     drag.commit(document, &result);
                 }
@@ -544,6 +522,17 @@ mod tests {
             HANDLE_TOLERANCES,
             true,
         );
+        // `edit-interaction-polish` criterion 29: the toggle happens at the
+        // release, and only if the pointer never left the dead zone.
+        assert_eq!(selection.ids(), &[a], "a Shift press changes nothing yet");
+        tool.pointer_up(
+            &document,
+            &objects,
+            &mut selection,
+            Point::new(55.0, 0.0),
+            Modifiers::new(true, false),
+            &mut AnchorIdMinter::new(99),
+        );
         assert_eq!(selection.ids(), &[a, b]);
     }
 
@@ -582,8 +571,8 @@ mod tests {
             &objects,
             &mut selection,
             Point::new(8.0, 3.0),
-            false,
-            false,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
         );
 
         let shape_a = document.primitive(a).expect("exists").shape;
@@ -638,8 +627,9 @@ mod tests {
         );
 
         let offset = tool
-            .live_offset(Point::new(5.0, 9.0))
-            .expect("a drag in flight");
+            .live_move(Point::new(5.0, 9.0), false, false)
+            .expect("a drag in flight")
+            .offset;
         assert_eq!(offset, Vec2::new(5.0, 4.0));
         // Not committed yet.
         let Shape::Rect { bounds, .. } = document.primitive(id).expect("exists").shape else {
@@ -652,8 +642,8 @@ mod tests {
             &objects,
             &mut selection,
             Point::new(5.0, 9.0),
-            false,
-            false,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
         );
         let Shape::Rect { bounds, .. } = document.primitive(id).expect("exists").shape else {
             panic!("expected rect");
@@ -686,8 +676,8 @@ mod tests {
             &objects,
             &mut selection,
             Point::new(0.0, 5.0),
-            false,
-            false,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
         );
         let Shape::Rect { bounds, .. } = document.primitive(id).expect("exists").shape else {
             panic!("expected rect");
@@ -738,8 +728,8 @@ mod tests {
             &objects_at_release,
             &mut selection,
             Point::new(5.0, 9.0),
-            false,
-            false,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
         );
 
         assert_eq!(
@@ -894,8 +884,8 @@ mod tests {
             &objects,
             &mut selection,
             Point::new(15.0, 13.0),
-            false,
-            false,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
         );
         let Shape::Rect { bounds, .. } = document.primitive(id).expect("exists").shape else {
             panic!("expected rect");
@@ -928,8 +918,8 @@ mod tests {
             &objects,
             &mut selection,
             Point::new(20.0, 11.0),
-            false,
-            true,
+            Modifiers::new(false, true),
+            &mut AnchorIdMinter::new(99),
         );
         let Shape::Rect { bounds, .. } = document.primitive(id).expect("exists").shape else {
             panic!("expected rect");
@@ -964,8 +954,8 @@ mod tests {
             &objects,
             &mut selection,
             Point::new(14.0, 5.0),
-            true,
-            false,
+            Modifiers::new(true, false),
+            &mut AnchorIdMinter::new(99),
         );
         let Shape::Rect { bounds, .. } = document.primitive(id).expect("exists").shape else {
             panic!("expected rect");
@@ -998,8 +988,8 @@ mod tests {
             &objects,
             &mut selection,
             Point::new(15.0, 15.0),
-            false,
-            true,
+            Modifiers::new(false, true),
+            &mut AnchorIdMinter::new(99),
         );
         let snapshot = document.primitive(id).expect("exists");
         // 1.5x proportional resize -> stroke width also 1.5x (0.25 -> 0.375).
@@ -1031,7 +1021,14 @@ mod tests {
             HANDLE_TOLERANCES,
             false,
         );
-        tool.pointer_up(document, &objects, &mut selection, to, false, false);
+        tool.pointer_up(
+            document,
+            &objects,
+            &mut selection,
+            to,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
+        );
     }
 
     /// AC 8 + 27: a new tool keeps the stroke width, for every resize
@@ -1165,7 +1162,14 @@ mod tests {
             (preview.stroke_width.as_mm() - 0.25).abs() < 1e-12,
             "preview unchanged"
         );
-        tool.pointer_up(&document, &objects, &mut selection, to, false, false);
+        tool.pointer_up(
+            &document,
+            &objects,
+            &mut selection,
+            to,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
+        );
         assert!((document.primitive(id).unwrap().stroke_width.as_mm() - 0.25).abs() < 1e-12);
 
         // The next drag picks up the new mode: 2x -> stroke 0.5.
@@ -1188,8 +1192,8 @@ mod tests {
             &objects,
             &mut selection,
             Point::new(40.0, 40.0),
-            false,
-            true,
+            Modifiers::new(false, true),
+            &mut AnchorIdMinter::new(99),
         );
         assert!((document.primitive(id).unwrap().stroke_width.as_mm() - 0.5).abs() < 1e-9);
     }
@@ -1298,8 +1302,8 @@ mod tests {
             &objects,
             &mut selection,
             Point::new(20.0, 20.0),
-            false,
-            true,
+            Modifiers::new(false, true),
+            &mut AnchorIdMinter::new(99),
         );
         let Shape::Rect { corner_radius, .. } = document.primitive(id).unwrap().shape else {
             panic!("rect");
@@ -1337,8 +1341,8 @@ mod tests {
             &objects,
             &mut selection,
             Point::new(20.0, 20.0),
-            false,
-            true,
+            Modifiers::new(false, true),
+            &mut AnchorIdMinter::new(99),
         );
         let Shape::Rect { corner_radius, .. } = document.primitive(id).expect("exists").shape
         else {
@@ -1383,7 +1387,14 @@ mod tests {
             false,
         );
         let drag_to = ne_position.translated(Vec2::new(1.0, -1.0));
-        tool.pointer_up(&document, &objects, &mut selection, drag_to, false, false);
+        tool.pointer_up(
+            &document,
+            &objects,
+            &mut selection,
+            drag_to,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
+        );
         let Shape::Star {
             frame: new_frame,
             point_count,
@@ -1429,8 +1440,8 @@ mod tests {
             &objects,
             &mut selection,
             Point::new(20.0, 10.0),
-            false,
-            false,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
         );
         let snapshot = document.path(id).expect("exists");
         // Anchored at (0,0); X doubled, Y unchanged.
@@ -1465,8 +1476,8 @@ mod tests {
             &objects,
             &mut selection,
             Point::new(-100.0, 5.0),
-            false,
-            false,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
         );
         let Shape::Rect { bounds, .. } = document.primitive(id).expect("exists").shape else {
             panic!("expected rect");
@@ -1501,7 +1512,14 @@ mod tests {
         // Swing the rotate handle a quarter turn around the center (5,5).
         let center = Point::new(5.0, 5.0);
         let current = center.translated(Vec2::new(-5.0, 0.0));
-        tool.pointer_up(&document, &objects, &mut selection, current, false, false);
+        tool.pointer_up(
+            &document,
+            &objects,
+            &mut selection,
+            current,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
+        );
         let snapshot = document.primitive(id).expect("exists");
         assert!(
             snapshot.rotation.as_radians().abs() > 0.1,
@@ -1554,8 +1572,8 @@ mod tests {
             &objects,
             &mut selection,
             ten_degrees_from_start,
-            false,
-            true,
+            Modifiers::new(false, true),
+            &mut AnchorIdMinter::new(99),
         );
         let snapshot = document.primitive(id).expect("exists");
         let degrees = snapshot.rotation.as_radians().to_degrees();
@@ -1607,7 +1625,14 @@ mod tests {
         );
         // Drag 5 mm along the object's own local X axis.
         let drag_to = se.translated(Vec2::new(5.0, 0.0).rotated(angle));
-        tool.pointer_up(&document, &objects, &mut selection, drag_to, false, false);
+        tool.pointer_up(
+            &document,
+            &objects,
+            &mut selection,
+            drag_to,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
+        );
         let p = document.primitive(id).expect("exists");
         let Shape::Rect { bounds, .. } = p.shape else {
             panic!("expected rect");
@@ -1664,7 +1689,14 @@ mod tests {
                 false,
             );
             assert_eq!(outcome, SelectPointerDownOutcome::Handle);
-            tool.pointer_up(&document, &objects, &mut selection, at, true, true);
+            tool.pointer_up(
+                &document,
+                &objects,
+                &mut selection,
+                at,
+                Modifiers::new(true, true),
+                &mut AnchorIdMinter::new(99),
+            );
             assert_eq!(document.object(id), before, "{wanted:?}");
         }
     }
@@ -1693,8 +1725,8 @@ mod tests {
             &objects,
             &mut selection,
             Point::new(50.0, -6.0),
-            false,
-            true,
+            Modifiers::new(false, true),
+            &mut AnchorIdMinter::new(99),
         );
         let Shape::Rect { bounds, .. } = document.primitive(id).expect("exists").shape else {
             panic!("expected rect");
@@ -1735,8 +1767,8 @@ mod tests {
             &objects,
             &mut selection,
             Point::new(40.0, 5.0),
-            false,
-            false,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
         );
         let snapshot = document.primitive(id).expect("exists");
         assert!(
@@ -1770,8 +1802,8 @@ mod tests {
             &objects,
             &mut selection,
             Point::new(-80.0, 5.0),
-            false,
-            false,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
         );
         let snapshot = document.primitive(id).expect("exists");
         assert!(
@@ -1813,8 +1845,8 @@ mod tests {
             &objects,
             &mut selection,
             se.translated(Vec2::new(4.0, 2.0)),
-            false,
-            false,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
         );
         let Shape::Ellipse { frame } = document.primitive(id).expect("exists").shape else {
             panic!("still an ellipse");
@@ -1857,7 +1889,14 @@ mod tests {
         // (+90 degrees in Y-down) gives (13.54, 13.54).
         let offset = 5.0 / std::f64::consts::SQRT_2;
         let current = Point::new(10.0 + offset, 10.0 + 10.0 + offset);
-        tool.pointer_up(&document, &objects, &mut selection, current, true, false);
+        tool.pointer_up(
+            &document,
+            &objects,
+            &mut selection,
+            current,
+            Modifiers::new(true, false),
+            &mut AnchorIdMinter::new(99),
+        );
         let snapshot = document.primitive(id).expect("exists");
         assert!((snapshot.rotation.as_radians() - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
         let Shape::Rect { bounds, .. } = snapshot.shape else {
@@ -1913,7 +1952,14 @@ mod tests {
                     .vector_to(r)
                     .rotated(vecmanf_document_core::Angle::from_radians(0.6)),
             );
-            tool.pointer_up(&document, &objects, &mut selection, to, false, false);
+            tool.pointer_up(
+                &document,
+                &objects,
+                &mut selection,
+                to,
+                Modifiers::new(false, false),
+                &mut AnchorIdMinter::new(99),
+            );
         }
         let path = document.path(path_id).expect("still a path");
         assert!((path.rotation.as_radians() - 0.6).abs() < 1e-9);
@@ -2035,8 +2081,8 @@ mod tests {
                     &objects,
                     &mut selection,
                     centre.translated(Vec2::new(7.0, 3.0)),
-                    false,
-                    false,
+                    Modifiers::new(false, false),
+                    &mut AnchorIdMinter::new(99),
                 );
                 let moved = document.primitive(id).expect("exists");
                 assert!((moved.rotation.as_radians() - turn).abs() < 1e-9);
@@ -2169,8 +2215,8 @@ mod tests {
             &objects,
             &mut selection,
             Point::new(15.0, -15.0),
-            false,
-            false,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
         );
         let Shape::Polygon { frame, .. } = document.primitive(id).expect("exists").shape else {
             panic!("polygon");
@@ -2219,7 +2265,14 @@ mod tests {
                     HANDLE_TOLERANCES,
                     false,
                 );
-                tool.pointer_up(&document, &objects, &mut selection, bad, true, true);
+                tool.pointer_up(
+                    &document,
+                    &objects,
+                    &mut selection,
+                    bad,
+                    Modifiers::new(true, true),
+                    &mut AnchorIdMinter::new(99),
+                );
                 assert_eq!(document.object(id), before, "{wanted:?} to {bad:?}");
             }
         }
@@ -2250,7 +2303,14 @@ mod tests {
         );
         let to = Point::new(-3.0, 4.0);
         let preview = tool.live_transform(to, true, false).expect("rotating");
-        tool.pointer_up(&document, &objects, &mut selection, to, true, false);
+        tool.pointer_up(
+            &document,
+            &objects,
+            &mut selection,
+            to,
+            Modifiers::new(true, false),
+            &mut AnchorIdMinter::new(99),
+        );
         assert_eq!(document.object(id), Some(preview));
     }
 
@@ -2293,8 +2353,8 @@ mod tests {
             &objects,
             &mut selection,
             body_point.translated(Vec2::new(2.0, 3.0)),
-            false,
-            false,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
         );
         let snapshot = document.primitive(id).expect("exists");
         assert!(

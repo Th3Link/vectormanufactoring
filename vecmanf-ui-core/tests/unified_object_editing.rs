@@ -15,8 +15,8 @@ use vecmanf_document_core::{
     Point, PointCount, PrimitiveSnapshot, RectBounds, Shape, StarFrame, Tolerance, Vec2,
 };
 use vecmanf_ui_core::{
-    Corner, EditHandle, ObjectSelection, ParamHandle, ResizeDirection, SelectPointerDownOutcome,
-    SelectTool, TransformHandleTolerances, radius_gain, radius_travel,
+    AnchorIdMinter, Corner, EditHandle, Modifiers, ObjectSelection, ParamHandle, ResizeDirection,
+    SelectPointerDownOutcome, SelectTool, TransformHandleTolerances, radius_gain, radius_travel,
 };
 
 const SEGMENT_TOLERANCE: Tolerance = Tolerance::from_mm(1.0);
@@ -120,8 +120,8 @@ impl Rig {
             &objects,
             &mut self.selection,
             at,
-            false,
-            false,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
         );
     }
 
@@ -450,7 +450,11 @@ fn ac9_a_dead_zone_press_and_an_escaped_drag_write_nothing() {
     assert_eq!(rig.radius(), 0.0);
 
     rig.press(at);
-    rig.tool.pointer_moved(at.translated(diagonal.scaled(10.0)));
+    rig.tool.pointer_moved(
+        at.translated(diagonal.scaled(10.0)),
+        Modifiers::NONE,
+        &mut rig.selection,
+    );
     rig.tool.escape();
     rig.release(at.translated(diagonal.scaled(10.0)));
     assert_eq!(rig.radius(), 0.0);
@@ -591,11 +595,11 @@ proptest! {
         let before = rig.object();
         prop_assert_eq!(rig.press(at), SelectPointerDownOutcome::Handle, "{:?}", handle);
         let to = at.translated(Vec2::new(dx, dy));
-        rig.tool.pointer_moved(to);
+        rig.tool.pointer_moved(to, Modifiers::NONE, &mut rig.selection);
         let objects = rig.objects();
         let live = rig.tool.live_edit(&objects, &rig.selection, to, shift, ctrl);
         let objects = rig.objects();
-        rig.tool.pointer_up(&rig.document, &objects, &mut rig.selection, to, shift, ctrl);
+        rig.tool.pointer_up(&rig.document, &objects, &mut rig.selection, to, Modifiers::new(shift, ctrl), &mut AnchorIdMinter::new(99));
         let after = rig.object();
         match live {
             Some(live) => {
@@ -660,7 +664,8 @@ fn ac12_a_move_dragged_back_to_its_start_writes_nothing() {
         };
         rig.press(body);
         let away = body.translated(Vec2::new(30.0, 12.0));
-        rig.tool.pointer_moved(away);
+        rig.tool
+            .pointer_moved(away, Modifiers::NONE, &mut rig.selection);
         let objects = rig.objects();
         assert!(
             rig.tool
@@ -668,7 +673,8 @@ fn ac12_a_move_dragged_back_to_its_start_writes_nothing() {
                 .is_some(),
             "kind {kind}: out of the dead zone there is a preview"
         );
-        rig.tool.pointer_moved(body);
+        rig.tool
+            .pointer_moved(body, Modifiers::NONE, &mut rig.selection);
         let objects = rig.objects();
         assert!(
             rig.tool
@@ -716,7 +722,7 @@ fn ac11_a_multi_object_move_previews_every_selected_object() {
         false,
     );
     let to = pt(10.0, 9.0);
-    tool.pointer_moved(to);
+    tool.pointer_moved(to, Modifiers::NONE, &mut selection);
     let live = tool
         .live_edit(&objects, &selection, to, false, false)
         .unwrap();
@@ -733,7 +739,8 @@ fn ac14_a_modifier_change_with_no_pointer_movement_changes_the_live_edit() {
     let se = rig.handle(EditHandle::Resize(ResizeDirection::Se));
     rig.press(se);
     let to = se.translated(Vec2::new(10.0, 10.0));
-    rig.tool.pointer_moved(to);
+    rig.tool
+        .pointer_moved(to, Modifiers::NONE, &mut rig.selection);
     let objects = rig.objects();
     let plain = rig
         .tool
@@ -753,7 +760,8 @@ fn ac12_inside_the_dead_zone_there_is_no_live_edit() {
     let tr = rig.handle(EditHandle::Param(ParamHandle::CornerRadius(Corner::Tr)));
     rig.press(tr);
     let near = tr.translated(Vec2::new(-0.5, 0.5));
-    rig.tool.pointer_moved(near);
+    rig.tool
+        .pointer_moved(near, Modifiers::NONE, &mut rig.selection);
     let objects = rig.objects();
     assert!(
         rig.tool
@@ -819,8 +827,8 @@ impl Zoomed {
             &objects,
             &mut self.selection,
             from.translated(delta),
-            false,
-            false,
+            Modifiers::new(false, false),
+            &mut AnchorIdMinter::new(99),
         );
         outcome
     }

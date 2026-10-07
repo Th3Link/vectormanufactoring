@@ -50,13 +50,15 @@ impl Session {
     /// geometry enters, and only for the decorations (the boxes, handles,
     /// pivot marker and readout follow the new geometry). The objects
     /// themselves are always drawn as committed, so the old geometry stays on
-    /// screen under the blue outline. Takes the committed objects by value:
+    /// screen under the blue outline; a copy substitutes nothing. Takes the committed objects by value:
     /// the caller has read them for this one use.
     pub(super) fn live_objects_in(
         mut objects: Vec<ObjectSnapshot>,
         live: Option<&LiveEdit>,
     ) -> Vec<ObjectSnapshot> {
-        if let Some(live) = live {
+        // In a copy the blue outline travels alone: the boxes, handles and the
+        // pivot stay on the originals (`edit-interaction-polish` criterion 33).
+        if let Some(live) = live.filter(|live| !live.copy) {
             for new in &live.objects {
                 if let Some(slot) = objects.iter_mut().find(|o| o.id() == new.id()) {
                     *slot = new.clone();
@@ -371,6 +373,9 @@ impl Session {
         if self.tool != Tool::Select {
             return None;
         }
+        if self.select.move_in_flight() {
+            return self.move_readout();
+        }
         let anchor = self.pointer_position?;
         let handle = self.select.dragging_handle()?;
         let text = match handle {
@@ -478,6 +483,32 @@ mod tests {
         session.pointer_down(Point::new(0.0, 5.0), false);
         session.pointer_up(Point::new(0.0, 5.0), false, false);
         (session, id)
+    }
+
+    /// `edit-interaction-polish` criterion 33: while a copy is dragged the
+    /// selection box stays on the original and only the blue outline travels;
+    /// in a move the box follows the blue outline, in the frame the key
+    /// changes, with the pointer at rest.
+    #[test]
+    fn the_selection_box_stays_on_the_original_in_a_copy() {
+        let (mut session, _) = session_with_selected_rect();
+        let original = session.select_decoration_input().selected[0].1;
+        let start = Point::new(0.0, 5.0);
+        let to = Point::new(30.0, 12.0);
+        session.pointer_down(start, false);
+        session.pointer_hover(to, false, false);
+        let moved = session.select_decoration_input().selected[0].1;
+        assert_ne!(moved, original, "a move: the box follows");
+        // Ctrl pressed with the pointer at rest: the box jumps back.
+        session.modifiers_changed(false, true);
+        session.pointer_hover(to, false, true);
+        assert_eq!(session.select_decoration_input().selected[0].1, original);
+        let live = session.select_live_edit_in(&session.objects()).unwrap();
+        assert!(live.copy && live.objects.len() == 1, "the copy still shows");
+        // Released again: the box follows again.
+        session.modifiers_changed(false, false);
+        session.pointer_hover(to, false, false);
+        assert_eq!(session.select_decoration_input().selected[0].1, moved);
     }
 
     /// `edit-interaction-polish` criterion 65: the device pixel ratio the host

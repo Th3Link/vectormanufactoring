@@ -6,7 +6,7 @@
 //! and the focus, and passes the mode with the commit.
 
 use vecmanf_document_core::Point;
-use vecmanf_ui_core::{EntryOutcome, MoveEntry};
+use vecmanf_ui_core::{EntryOutcome, MoveEntry, MoveEntryMode};
 
 use super::{Session, Tool};
 
@@ -21,6 +21,9 @@ pub struct MoveEntryView {
     /// What an untouched X and Y field show in Absolute mode: the current
     /// top-left of the object's drawn bounds.
     pub absolute_prefill: [String; 2],
+    /// Whether the Copy check opens on: Ctrl was held at the second press of
+    /// the double-click (criterion 23).
+    pub copy_preset: bool,
 }
 
 impl Session {
@@ -44,18 +47,30 @@ impl Session {
             center: box_.to_document(box_.local_center()),
             relative_prefill: [relative(0), relative(1)],
             absolute_prefill: entry.absolute_prefill().clone(),
+            copy_preset: entry.copy_preset(),
         })
     }
 
-    /// Enter in the move chip: `first` and `second` are the X and Y texts and
-    /// `absolute` the chip's mode. A committed or unchanged entry closes; an
-    /// invalid one stays open.
-    pub fn commit_move_entry(&mut self, first: &str, second: &str, absolute: bool) -> EntryOutcome {
+    /// Enter in the move chip: `first` and `second` are the X and Y texts,
+    /// `absolute` the chip's mode and `copy` its Copy check. A committed or
+    /// unchanged entry closes; an invalid one stays open. After a typed copy
+    /// the selection is the copy.
+    pub fn commit_move_entry(
+        &mut self,
+        first: &str,
+        second: &str,
+        mode: MoveEntryMode,
+    ) -> EntryOutcome {
         if self.open_move_entry().is_none() {
             self.select.cancel_entry();
             return EntryOutcome::Unchanged;
         }
-        self.select
-            .commit_move_entry(&self.document, [first, second], absolute)
+        self.select.commit_move_entry(
+            &self.document,
+            &mut self.selection,
+            &mut self.minter,
+            [first, second],
+            mode,
+        )
     }
 }

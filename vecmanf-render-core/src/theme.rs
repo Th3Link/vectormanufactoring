@@ -18,6 +18,14 @@ pub const ACCENT: RgbaColor = RgbaColor::opaque(0x2F, 0x6F, 0xEE);
 /// `--accent-hover`: `--accent` at 20% opacity.
 pub const ACCENT_HOVER: RgbaColor = ACCENT.with_alpha(51); // 20% of 255, rounded
 
+/// `--axis-guide`: `--accent` at 50%, the origin axis line an axis-locked move
+/// runs along (`edit-interaction-polish` criterion 27). Faint on purpose.
+pub const AXIS_GUIDE: RgbaColor = ACCENT.with_alpha(128);
+
+/// `--axis-guide-idle`: `--accent-hover`, the origin axis line the locked move
+/// is not along.
+pub const AXIS_GUIDE_IDLE: RgbaColor = ACCENT_HOVER;
+
 /// `--node-stroke`: a corner/smooth node glyph's outline, both states.
 pub const NODE_STROKE: RgbaColor = RgbaColor::opaque(0x3A, 0x3A, 0x3F);
 

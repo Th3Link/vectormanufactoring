@@ -24,8 +24,14 @@ use crate::transform_handle_layout::EditHandle;
 /// disagree.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LiveEdit {
-    /// The resolved objects, uncommitted.
+    /// The resolved objects, uncommitted. In a copy these are the copies,
+    /// which carry the ids of their originals: the originals stay where they
+    /// are.
     pub objects: Vec<ObjectSnapshot>,
+    /// Whether the edit is a copy (a move released with Ctrl down): the
+    /// selection boxes and handles stay on the originals while the blue
+    /// outline travels alone (criterion 33).
+    pub copy: bool,
 }
 
 impl SelectTool {
@@ -44,11 +50,14 @@ impl SelectTool {
         shift: bool,
         ctrl: bool,
     ) -> Option<LiveEdit> {
-        let resolved: Vec<ObjectSnapshot> = if let Some(offset) = self.live_offset(pointer) {
+        let mut copy = false;
+        let resolved: Vec<ObjectSnapshot> = if let Some(live) = self.live_move(pointer, shift, ctrl)
+        {
+            copy = live.copy;
             objects
                 .iter()
                 .filter(|object| selection.contains(object.id()))
-                .map(|object| object.translated(offset))
+                .map(|object| object.translated(live.offset))
                 .collect()
         } else if let Some(live) = self.live_transform(pointer, shift, ctrl) {
             vec![live]
@@ -69,7 +78,10 @@ impl SelectTool {
                 .find(|old| old.id() == new.id())
                 .is_none_or(|old| !same_within_tolerance(old, new))
         });
-        changed.then_some(LiveEdit { objects: resolved })
+        changed.then_some(LiveEdit {
+            objects: resolved,
+            copy,
+        })
     }
 
     /// Whether a move, resize, rotate, skew or parameter drag is in flight. A
@@ -89,7 +101,7 @@ impl SelectTool {
         match &self.drag {
             SelectDrag::None => true,
             SelectDrag::Transforming(drag) => matches!(drag.handle, EditHandle::Param(_)),
-            SelectDrag::Moving { .. } => false,
+            SelectDrag::Moving(_) => false,
         }
     }
 
@@ -100,10 +112,8 @@ impl SelectTool {
     pub fn dragging_handle(&self) -> Option<EditHandle> {
         match &self.drag {
             SelectDrag::Transforming(drag) => Some(drag.handle),
-            SelectDrag::Moving {
-                from_center: true, ..
-            } => Some(EditHandle::Move),
-            SelectDrag::Moving { .. } | SelectDrag::None => None,
+            SelectDrag::Moving(drag) if drag.from_center => Some(EditHandle::Move),
+            SelectDrag::Moving(_) | SelectDrag::None => None,
         }
     }
 
@@ -119,7 +129,7 @@ impl SelectTool {
             SelectDrag::Transforming(drag) => {
                 pivot_for(drag.handle, &drag.start, &drag.start_box, shift)
             }
-            SelectDrag::Moving { .. } => None,
+            SelectDrag::Moving(_) => None,
             SelectDrag::None => match &self.entry {
                 Some(OpenEntry::Transform(entry)) => Some(entry.pivot()),
                 Some(OpenEntry::Skew(entry)) => Some(entry.pivot()),
@@ -140,21 +150,6 @@ impl SelectTool {
     ) -> Option<Point> {
         pivot_for(handle, object, box_, shift)
     }
-    /// The live, uncommitted move offset while a drag is in flight — the
-    /// Select tool's own counterpart to the shape tools' `live_shape`
-    /// (acceptance criterion 20's "live"). `None` when idle, or while the
-    /// pointer is still inside the dead zone — a press-and-release there
-    /// must write nothing (`specs/0002-path-node-editing/adrs.md`'s rule).
-    #[must_use]
-    pub fn live_offset(&self, current_point: Point) -> Option<Vec2> {
-        match &self.drag {
-            SelectDrag::Moving { origin, .. } if origin.is_active_at(current_point) => {
-                Some(origin.down_at.vector_to(current_point))
-            }
-            SelectDrag::Moving { .. } | SelectDrag::Transforming(_) | SelectDrag::None => None,
-        }
-    }
-
     /// The live, uncommitted resize, rotate or skew preview (acceptance
     /// criteria 14, 22 of slice 5; 40 here): the object as it would commit
     /// right now, re-evaluated from the drag-start snapshot every call so
@@ -171,7 +166,7 @@ impl SelectTool {
             SelectDrag::Transforming(drag) if drag.origin.is_active_at(current) => {
                 Some(drag.resolve(current, shift, ctrl))
             }
-            SelectDrag::Transforming(_) | SelectDrag::Moving { .. } | SelectDrag::None => None,
+            SelectDrag::Transforming(_) | SelectDrag::Moving(_) | SelectDrag::None => None,
         }
     }
 
@@ -183,7 +178,7 @@ impl SelectTool {
             SelectDrag::Transforming(drag) if drag.origin.is_active_at(current) => {
                 drag.skew_angle_at(current, shift, ctrl)
             }
-            SelectDrag::Transforming(_) | SelectDrag::Moving { .. } | SelectDrag::None => None,
+            SelectDrag::Transforming(_) | SelectDrag::Moving(_) | SelectDrag::None => None,
         }
     }
 

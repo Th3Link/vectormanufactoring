@@ -5,9 +5,10 @@
 //! [`crate::transform_drag`], which resolves the gestures.
 
 use vecmanf_document_core::{
-    AnchorId, Document, Length, NodeId, ObjectSnapshot, Point, Shape, Vec2,
+    AnchorId, CopySource, Document, Length, NodeId, ObjectSnapshot, Point, Shape, Vec2,
 };
 
+use crate::anchor_id_minter::AnchorIdMinter;
 use crate::param_edit::commit_param;
 use crate::transform_drag::{ScaleModes, StrokeScaling};
 use crate::transform_handle_layout::EditHandle;
@@ -40,12 +41,37 @@ pub(crate) fn commit_gesture(
     }
 }
 
-/// Writes a move of `ids` by `offset` as one commit (shared by a drag's
-/// release and the typed move's Enter, so a typed offset and a dragged one
-/// leave the same registers). A stale id refuses the whole call, which writes
-/// nothing.
-pub(crate) fn commit_move(document: &Document, ids: &[NodeId], offset: Vec2) {
-    let _ = document.translate_objects(ids, offset);
+/// Writes a move of `ids` by `offset` as one commit, or, with `copy`, one copy
+/// of each of them displaced by `offset` and the originals untouched (shared
+/// by a drag's release, a Ctrl release and the typed move's Enter, so every
+/// route leaves the same registers). A stale id refuses the whole call, which
+/// writes nothing. Returns the copies' ids in `ids` order after a copy, `None`
+/// after a move or a refusal: the caller selects them.
+pub(crate) fn commit_move(
+    document: &Document,
+    ids: &[NodeId],
+    offset: Vec2,
+    copy: bool,
+    minter: &mut AnchorIdMinter,
+) -> Option<Vec<NodeId>> {
+    if !copy {
+        let _ = document.translate_objects(ids, offset);
+        return None;
+    }
+    let sources: Option<Vec<CopySource>> = ids
+        .iter()
+        .map(|&id| {
+            let anchor_count = match document.object(id)? {
+                ObjectSnapshot::Path(path) => path.anchors.len(),
+                ObjectSnapshot::Primitive(_) => 0,
+            };
+            Some(CopySource {
+                id,
+                anchor_ids: (0..anchor_count).map(|_| minter.mint()).collect(),
+            })
+        })
+        .collect();
+    document.duplicate_objects(&sources?, offset).ok()
 }
 
 /// Writes a resize's resulting geometry, dispatching on the object's own

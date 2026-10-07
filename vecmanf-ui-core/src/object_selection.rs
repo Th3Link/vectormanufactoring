@@ -62,6 +62,21 @@ impl ObjectSelection {
         self.ids.push(id);
     }
 
+    /// Adds `id` to the selection, keeping every other id: a no-op when it is
+    /// already selected.
+    pub fn add(&mut self, id: NodeId) {
+        if !self.ids.contains(&id) {
+            self.ids.push(id);
+        }
+    }
+
+    /// Selects exactly `ids`, in the order given, replacing whatever was
+    /// selected before (the copies a copy commit just made).
+    pub fn set(&mut self, ids: &[NodeId]) {
+        self.ids.clear();
+        self.ids.extend_from_slice(ids);
+    }
+
     /// Shift-click: toggles `id`'s membership in the selection, keeping
     /// every other currently-selected id untouched — including ones from
     /// a different shape kind (acceptance criterion 22).

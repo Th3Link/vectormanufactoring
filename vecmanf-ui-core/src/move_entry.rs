@@ -6,7 +6,9 @@
 //! exists once, here. The DOM chip only holds the text, the caret and the
 //! focus (`adrs.md`, decision 3).
 
-use vecmanf_document_core::{Document, ObjectSnapshot, Point, Vec2};
+use vecmanf_document_core::{Document, NodeId, ObjectSnapshot, Point, Vec2};
+
+use crate::anchor_id_minter::AnchorIdMinter;
 
 use crate::object_bounds::object_outline_bounds;
 use crate::oriented_box::OrientedBox;
@@ -28,6 +30,9 @@ pub struct MoveEntry {
     fields: [EntryField; 2],
     /// What an untouched field shows in Absolute mode: the current top-left.
     absolute_prefill: [String; 2],
+    /// Whether the chip opens with its Copy check on: Ctrl was held at the
+    /// second press of the double-click (criterion 23).
+    copy_preset: bool,
 }
 
 impl MoveEntry {
@@ -46,7 +51,23 @@ impl MoveEntry {
                 field("Y", "Vertical offset"),
             ],
             absolute_prefill: [format_mm(bounds.0.x), format_mm(bounds.0.y)],
+            copy_preset: false,
         }
+    }
+
+    /// The same entry opening with its Copy check on or off: on when Ctrl was
+    /// held at the second press of the double-click (criterion 23); the key M
+    /// cannot carry a Ctrl and opens it off.
+    #[must_use]
+    pub const fn with_copy_preset(mut self, copy: bool) -> Self {
+        self.copy_preset = copy;
+        self
+    }
+
+    /// Whether the Copy check opens on.
+    #[must_use]
+    pub const fn copy_preset(&self) -> bool {
+        self.copy_preset
     }
 
     /// The object being moved.
@@ -122,19 +143,28 @@ impl MoveEntry {
 
     /// Validates the typed values and, if valid and not a no-op, moves the
     /// object by them as one commit, the one a drag of the same offset
-    /// writes. An entry whose object changed or vanished since it opened
-    /// writes nothing.
+    /// writes; with `copy`, makes one copy displaced as typed and leaves the
+    /// object untouched. An entry whose object changed or vanished since it
+    /// opened writes nothing. The ids of the copy come back with a committed
+    /// copy: the caller selects them (criterion 35).
     #[must_use]
-    pub fn commit(&self, document: &Document, texts: [&str; 2], absolute: bool) -> EntryOutcome {
+    pub fn commit(
+        &self,
+        document: &Document,
+        texts: [&str; 2],
+        absolute: bool,
+        copy: bool,
+        minter: &mut AnchorIdMinter,
+    ) -> (EntryOutcome, Option<Vec<NodeId>>) {
         if document.object(self.start.id()).as_ref() != Some(&self.start) {
-            return EntryOutcome::Unchanged;
+            return (EntryOutcome::Unchanged, None);
         }
         match self.resolve(texts, absolute) {
-            Err((field, reason)) => EntryOutcome::Invalid { field, reason },
-            Ok(None) => EntryOutcome::Unchanged,
+            Err((field, reason)) => (EntryOutcome::Invalid { field, reason }, None),
+            Ok(None) => (EntryOutcome::Unchanged, None),
             Ok(Some(offset)) => {
-                commit_move(document, &[self.start.id()], offset);
-                EntryOutcome::Committed
+                let copies = commit_move(document, &[self.start.id()], offset, copy, minter);
+                (EntryOutcome::Committed, copies)
             }
         }
     }
@@ -196,7 +226,15 @@ mod tests {
         let id = rect(&document, 10.0, 20.0, 30.0, 40.0);
         let entry = entry_of(&document, id);
         assert_eq!(
-            entry.commit(&document, ["5", "-3"], false),
+            entry
+                .commit(
+                    &document,
+                    ["5", "-3"],
+                    false,
+                    false,
+                    &mut AnchorIdMinter::new(99)
+                )
+                .0,
             EntryOutcome::Committed
         );
         assert!(near(top_left(&document, id), 15.0, 17.0));
@@ -210,7 +248,15 @@ mod tests {
         let id = rect(&document, 10.0, 20.0, 30.0, 40.0);
         let entry = entry_of(&document, id);
         assert_eq!(
-            entry.commit(&document, ["100", "50"], true),
+            entry
+                .commit(
+                    &document,
+                    ["100", "50"],
+                    true,
+                    false,
+                    &mut AnchorIdMinter::new(99)
+                )
+                .0,
             EntryOutcome::Committed
         );
         assert!(near(top_left(&document, id), 100.0, 50.0));
@@ -243,7 +289,15 @@ mod tests {
         for id in [id, star] {
             let entry = entry_of(&document, id);
             assert_eq!(
-                entry.commit(&document, ["-12.5", "300.25"], true),
+                entry
+                    .commit(
+                        &document,
+                        ["-12.5", "300.25"],
+                        true,
+                        false,
+                        &mut AnchorIdMinter::new(99)
+                    )
+                    .0,
                 EntryOutcome::Committed
             );
             assert!(near(top_left(&document, id), -12.5, 300.25), "{id:?}");
@@ -293,7 +347,15 @@ mod tests {
             (["10", "20"], true),
         ] {
             assert_eq!(
-                entry.commit(&document, texts, absolute),
+                entry
+                    .commit(
+                        &document,
+                        texts,
+                        absolute,
+                        false,
+                        &mut AnchorIdMinter::new(99)
+                    )
+                    .0,
                 EntryOutcome::Unchanged,
                 "{texts:?} {absolute}"
             );
@@ -321,7 +383,15 @@ mod tests {
         ] {
             for absolute in [false, true] {
                 assert_eq!(
-                    entry.commit(&document, texts, absolute),
+                    entry
+                        .commit(
+                            &document,
+                            texts,
+                            absolute,
+                            false,
+                            &mut AnchorIdMinter::new(99)
+                        )
+                        .0,
                     EntryOutcome::Invalid {
                         field,
                         reason: InvalidReason::NotANumber
@@ -371,7 +441,15 @@ mod tests {
             let id2 = [a2, b2][pick];
             let entry = entry_of(&typed_doc, id);
             assert_eq!(
-                entry.commit(&typed_doc, ["12.5", "-4.25"], false),
+                entry
+                    .commit(
+                        &typed_doc,
+                        ["12.5", "-4.25"],
+                        false,
+                        false,
+                        &mut AnchorIdMinter::new(99)
+                    )
+                    .0,
                 EntryOutcome::Committed
             );
             drag_doc
@@ -393,13 +471,29 @@ mod tests {
             .expect("moves");
         let before = document.object(id);
         assert_eq!(
-            entry.commit(&document, ["5", "5"], false),
+            entry
+                .commit(
+                    &document,
+                    ["5", "5"],
+                    false,
+                    false,
+                    &mut AnchorIdMinter::new(99)
+                )
+                .0,
             EntryOutcome::Unchanged
         );
         assert_eq!(document.object(id), before);
         document.delete_objects(&[id]).expect("deletes");
         assert_eq!(
-            entry.commit(&document, ["5", "5"], false),
+            entry
+                .commit(
+                    &document,
+                    ["5", "5"],
+                    false,
+                    false,
+                    &mut AnchorIdMinter::new(99)
+                )
+                .0,
             EntryOutcome::Unchanged
         );
     }

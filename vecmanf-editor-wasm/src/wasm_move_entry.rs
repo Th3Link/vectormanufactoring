@@ -4,7 +4,7 @@
 //! scalars only (ADR 0001 §5); every method passes straight through to
 //! `Session`, which holds the orchestration, over `vecmanf-ui-core`'s rules.
 
-use vecmanf_ui_core::{EntryOutcome, InvalidReason};
+use vecmanf_ui_core::{EntryOutcome, InvalidReason, MoveEntryMode};
 use wasm_bindgen::prelude::*;
 
 use crate::session::MoveEntryView;
@@ -41,6 +41,7 @@ pub struct MoveEntryChip {
     pub center_y: f64,
     relative: [String; 2],
     absolute: [String; 2],
+    copy_preset: bool,
 }
 
 #[wasm_bindgen]
@@ -52,6 +53,13 @@ impl MoveEntryChip {
             .get(axis as usize)
             .cloned()
             .unwrap_or_default()
+    }
+
+    /// Whether the Copy check opens on: Ctrl was held at the second press of
+    /// the double-click (criterion 23).
+    #[must_use]
+    pub fn copy_preset(&self) -> bool {
+        self.copy_preset
     }
 
     /// The text X (`0`) or Y (`1`) shows in Absolute mode while untouched: the
@@ -76,6 +84,7 @@ impl WasmSession {
             center,
             relative_prefill,
             absolute_prefill,
+            copy_preset,
         } = self.session.move_entry()?;
         let (center_x, center_y) = self.session.view().document_to_screen(center);
         Some(MoveEntryChip {
@@ -83,14 +92,25 @@ impl WasmSession {
             center_y,
             relative: relative_prefill,
             absolute: absolute_prefill,
+            copy_preset,
         })
     }
 
-    /// Enter in the move chip: `first` and `second` are the X and Y texts and
-    /// `absolute` the chip's mode (criteria 19 to 22, 25). Returns
-    /// `"committed"`, `"unchanged"` (both close the chip) or
+    /// Enter in the move chip: `first` and `second` are the X and Y texts,
+    /// `absolute` the chip's mode and `copy` its Copy check (criteria 19 to 23,
+    /// 25). Returns `"committed"`, `"unchanged"` (both close the chip) or
     /// `"invalid:<field>:number"` (the chip stays open).
-    pub fn commit_move_entry(&mut self, first: &str, second: &str, absolute: bool) -> String {
-        outcome_code(self.session.commit_move_entry(first, second, absolute))
+    pub fn commit_move_entry(
+        &mut self,
+        first: &str,
+        second: &str,
+        absolute: bool,
+        copy: bool,
+    ) -> String {
+        outcome_code(self.session.commit_move_entry(
+            first,
+            second,
+            MoveEntryMode { absolute, copy },
+        ))
     }
 }

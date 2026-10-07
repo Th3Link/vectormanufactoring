@@ -243,6 +243,7 @@ mod select_tool_state {
     use vecmanf_document_core::{
         AnchorId, Document, Length, NewAnchor, ObjectSnapshot, Point, RectBounds, Tolerance,
     };
+    use vecmanf_ui_core::{AnchorIdMinter, Modifiers};
     use vecmanf_ui_core::{
         EditHandle, ObjectSelection, ResizeDirection, SelectTool, Side, TransformHandleTolerances,
         oriented_bounds,
@@ -316,8 +317,8 @@ mod select_tool_state {
             &objects,
             &mut sel,
             pt(ne.x + 20.0, ne.y + 20.0),
-            true,
-            false,
+            Modifiers::new(true, false),
+            &mut AnchorIdMinter::new(99),
         );
         assert!(
             tool.side_rotate_revealed(true),
