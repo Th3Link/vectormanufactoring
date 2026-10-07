@@ -22,6 +22,7 @@
 
 #[cfg(test)]
 mod box_refit_tests;
+mod corner_readout;
 mod draw;
 mod keys;
 mod move_entry;
@@ -179,6 +180,11 @@ pub struct Session {
     /// (`specs/edit-interaction-polish/` criterion 49); the key gate reads
     /// each tool's own drag state instead.
     button_down: bool,
+    /// The "r 12.0 mm max" notice shown for 1.5 s at a knob after a typed
+    /// radius was limited (`specs/rectangle-corner-radii/` criterion 6): a
+    /// limit is never silent. The host clears it after the delay
+    /// ([`Session::clear_limit_notice`]); a press clears it too.
+    limit_notice: Option<shapes::LiveReadout>,
 }
 
 impl Session {
@@ -212,6 +218,7 @@ impl Session {
             drag_objects: std::cell::RefCell::new(None),
             device_pixel_ratio: 1.0,
             button_down: false,
+            limit_notice: None,
         }
     }
 
@@ -242,6 +249,7 @@ impl Session {
             drag_objects: std::cell::RefCell::new(None),
             device_pixel_ratio: 1.0,
             button_down: false,
+            limit_notice: None,
         })
     }
 

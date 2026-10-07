@@ -8,14 +8,13 @@
 //! it owns `SelectTool`'s pending-edit field.
 
 use curvyo_document_core::{
-    Document, Length, NodeId, ObjectSnapshot, PrimitiveSnapshot, Shape, ShapeEditError,
+    Corner, CornerRadii, Document, Length, NodeId, ObjectSnapshot, PrimitiveSnapshot,
+    SHARP_CORNER_EPSILON_MM, Shape, ShapeEditError,
 };
 
 use super::SelectTool;
 use crate::object_selection::ObjectSelection;
-use crate::param_edit::{
-    PARAM_EQUAL_EPSILON, ParamValue, apply_param, commit_param_batch, max_corner_radius,
-};
+use crate::param_edit::{ParamValue, apply_param, commit_param_batch};
 use crate::select_bar::{BarPreview, ObjectKind, ids_of_kind};
 use crate::transform_commit::MAX_COORDINATE_MM;
 use crate::transform_entry::{EntryOutcome, InvalidReason, parse_entry_number};
@@ -23,7 +22,7 @@ use crate::transform_entry::{EntryOutcome, InvalidReason, parse_entry_number};
 /// The kind of object a bar `value` acts on.
 const fn kind_of(value: ParamValue) -> ObjectKind {
     match value {
-        ParamValue::Radius(_) => ObjectKind::Rectangle,
+        ParamValue::Radius(_) | ParamValue::CornerRadius(..) => ObjectKind::Rectangle,
         ParamValue::Ratio(_) => ObjectKind::Star,
         ParamValue::PointCount(_) => ObjectKind::PolygonOrStar,
     }
@@ -117,9 +116,11 @@ impl SelectTool {
                         && matches!(
                             object,
                             ObjectSnapshot::Primitive(PrimitiveSnapshot {
-                                shape: Shape::Rect { corner_radius, .. },
+                                shape: Shape::Rect { corner_radii, .. },
                                 ..
-                            }) if corner_radius.as_mm() > PARAM_EQUAL_EPSILON
+                            }) if Corner::ALL.iter().any(|&corner| {
+                                corner_radii.get(corner).as_mm() > SHARP_CORNER_EPSILON_MM
+                            })
                         )
                 })
             })
@@ -148,22 +149,23 @@ impl SelectTool {
             return invalid(InvalidReason::Negative);
         }
         let value = value.min(MAX_COORDINATE_MM);
-        let radii: Vec<(NodeId, Length)> = ids_of_kind(objects, selection, ObjectKind::Rectangle)
-            .into_iter()
-            .filter_map(|id| {
-                let object = objects.iter().find(|object| object.id() == id)?;
-                let ObjectSnapshot::Primitive(PrimitiveSnapshot {
-                    shape: Shape::Rect { bounds, .. },
-                    ..
-                }) = object
-                else {
-                    return None;
-                };
-                let limited = Length::from_mm(value.min(max_corner_radius(*bounds)));
-                (apply_param(object, ParamValue::Radius(limited)) != *object)
-                    .then_some((id, limited))
-            })
-            .collect();
+        let radii: Vec<(NodeId, CornerRadii)> =
+            ids_of_kind(objects, selection, ObjectKind::Rectangle)
+                .into_iter()
+                .filter_map(|id| {
+                    let object = objects.iter().find(|object| object.id() == id)?;
+                    // The one limit rule is `apply_param`'s: write what it resolves.
+                    let resolved = apply_param(object, ParamValue::Radius(Length::from_mm(value)));
+                    let ObjectSnapshot::Primitive(PrimitiveSnapshot {
+                        shape: Shape::Rect { corner_radii, .. },
+                        ..
+                    }) = resolved
+                    else {
+                        return None;
+                    };
+                    (resolved != *object).then_some((id, corner_radii))
+                })
+                .collect();
         if radii.is_empty() {
             return EntryOutcome::Unchanged;
         }
@@ -231,13 +233,18 @@ mod tests {
 
         fn radius(&self, id: NodeId) -> f64 {
             let Some(ObjectSnapshot::Primitive(PrimitiveSnapshot {
-                shape: Shape::Rect { corner_radius, .. },
+                shape: Shape::Rect { corner_radii, .. },
                 ..
             })) = self.document.object(id)
             else {
                 panic!("a rectangle");
             };
-            corner_radius.as_mm()
+            assert_eq!(
+                corner_radii,
+                CornerRadii::uniform(corner_radii.tl),
+                "four equal radii"
+            );
+            corner_radii.tl.as_mm()
         }
 
         fn ratio(&self, id: NodeId) -> f64 {

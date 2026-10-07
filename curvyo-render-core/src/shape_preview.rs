@@ -148,7 +148,7 @@ mod tests {
                 width: Length::from_mm(10.0),
                 height: Length::from_mm(10.0),
             },
-            corner_radius: Length::from_mm(0.0),
+            corner_radii: curvyo_document_core::CornerRadii::uniform(Length::from_mm(0.0)),
         };
         let list =
             build_shape_live_preview(&shape, Angle::from_radians(0.0), ViewTransform::identity());

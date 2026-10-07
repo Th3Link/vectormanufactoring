@@ -1097,7 +1097,7 @@ fn the_stroke_switch_is_read_when_the_entry_opens() {
                 width: Length::from_mm(100.0),
                 height: Length::from_mm(60.0),
             },
-            Length::from_mm(0.0),
+            curvyo_document_core::CornerRadii::uniform(Length::from_mm(0.0)),
             Some(Length::from_mm(2.0)),
         )
         .unwrap();

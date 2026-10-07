@@ -337,12 +337,12 @@ fn ac25_creation_drags_follow_the_constraint_and_create_exactly_as_0003() {
     match prim(&s, 0).shape {
         Shape::Rect {
             bounds: r,
-            corner_radius,
+            corner_radii,
         } => {
             assert!(near(r.origin.x, a.x, 1e-9) && near(r.origin.y, a.y, 1e-9));
             assert!(near(r.width.as_mm(), 90.0 / k, 1e-9));
             assert!(near(r.height.as_mm(), 40.0 / k, 1e-9));
-            assert!(corner_radius.as_mm().abs() < 1e-12);
+            assert!(uniform_mm(corner_radii).abs() < 1e-12);
         }
         other => panic!("rect expected {other:?}"),
     }
@@ -1255,7 +1255,7 @@ fn sweep_rectangle_radius_handle_and_pen_then_node_flows_still_work() {
     let to = pt(h.x + 30.0 / k, h.y + 30.0 / k);
     drag(&mut s, h, to, false, false);
     match prim(&s, 0).shape {
-        Shape::Rect { corner_radius, .. } => assert!(corner_radius.as_mm() > 0.0),
+        Shape::Rect { corner_radii, .. } => assert!(uniform_mm(corner_radii) > 0.0),
         other => panic!("{other:?}"),
     }
     // Pen: three clicks and a finish, no tool-switch side effects.
@@ -1283,4 +1283,14 @@ fn sweep_rectangle_radius_handle_and_pen_then_node_flows_still_work() {
         Shape::Rect { bounds: r, .. } => assert!(near(r.origin.x, 20.0, 1e-9)),
         other => panic!("{other:?}"),
     }
+}
+
+/// The one radius of a rectangle whose four corner radii are equal (asserted).
+fn uniform_mm(radii: curvyo_document_core::CornerRadii) -> f64 {
+    assert_eq!(
+        radii,
+        curvyo_document_core::CornerRadii::uniform(radii.tl),
+        "four equal radii"
+    );
+    radii.tl.as_mm()
 }

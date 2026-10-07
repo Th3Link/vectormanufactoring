@@ -234,10 +234,11 @@ Reference state: `main` at `e285c2d` (Curvyo rename), `CURRENT_FORMAT_VERSION`
     click on the switch closes an open entry without writing, as the other two
     switches do (one rule for every bar switch; the entry's own link state was
     fixed when it opened, so this only keeps the rule uniform).
-  - **The drag is unlinked** when `corner_linking == Unlinked` **or**
-    `shift_at_press` (criterion 3's wording and the UX hint "Shift: this corner
-    only" read as OR; the parenthetical "Shift inverts the switch" in the same
-    criterion says XOR; flag 3). `begin_handle_drag` computes
+  - **The drag is unlinked** when the switch and Shift differ: `(corner_linking
+    == Unlinked) != shift_at_press`, an exclusive or (criterion 3: Shift inverts
+    the switch for that one drag; the first draft of this decision said OR and
+    the `ux-engineer` overruled it on 2026-10-07, flag 3). `begin_handle_drag`
+    computes
     `unlinked: bool` once from the two and stores it in `TransformDrag` next to
     `param_gain`, so preview and release share it and a mid-drag switch click
     changes nothing.
@@ -306,15 +307,23 @@ Reference state: `main` at `e285c2d` (Curvyo rename), `CURRENT_FORMAT_VERSION`
     centre ties. The statement in the unified spec and design system that an
     unlinked corner "cannot break" the clearance is true for adjacent corners
     only. **Default taken (layout only, no restriction on the shapes a maker
-    can build):** the knob is drawn at `ρ'_i = min(ρ_i, max(1, 2 - ρ_j))`
-    with `j` the diagonal partner. This gives `ρ'_i + ρ'_j ≤ 2` for every pair, so
-    the same inequality as above yields at least 14 px per axis between
-    diagonal knobs; a corner alone can still reach `ρ' = 2`; where both partners
-    exceed 1 both knobs rest at the `ρ = 1` position. The drag arithmetic is
+    can build):** the knob is drawn at `ρ'_i = min(ρ_i, max(1, Σ − ρ_j))` with `j`
+    the diagonal partner and `Σ = 2 + √2·(S − s)/L(s)` (`s` and `S` the shorter
+    and longer side on screen, `L` the travel). **Derivation:** the offset of a
+    knob from its corner along each axis is `o_i = (15 + ρ'_i·L)/√2`, so two
+    diagonal knobs are `S − (o_1 + o_2)` apart along the longer side; 14 px
+    centre to centre is the 10 px glyph plus the 4 px gap, so
+    `ρ'_1 + ρ'_2 ≤ (√2·(S − 14) − 30)/L = 2 + √2·(S − s)/L = Σ`, using
+    `√2·(s − 14) = 2L + 30`. On a square `Σ = 2`, the flat rule this decision
+    first stated (`max(1, 2 − ρ_j)`); on a wide box the longer side buys room, so
+    a flat 2 would pull knobs back that are 80 px apart. The cap gives
+    `ρ'_i + ρ'_j ≤ Σ` for every pair, so at least 14 px between diagonal knobs;
+    a corner alone can still reach `ρ' = 2`; where both partners exceed 1 on a
+    square both knobs rest at the `ρ = 1` position. The drag arithmetic is
     unchanged (delta from the effective radius with the frozen gain); in that
     capped state the knob lags the pointer, which is the same visible rule as a
     handle that has reached a limit. One pure function
-    `knob_rho(effective_radii, shorter_side, corner) -> f64` next to
+    `knob_rho(effective_radii, shorter_side, longer_side, corner, tolerances) -> f64` next to
     `radius_travel`; `param_handles` and the drag's guide line both call it.
   - **Test.** The clearance property of the unified ADR is re-run over this
     domain: `s ≥ 72`, aspect 1 to 8, four independent effective radii obeying
@@ -322,9 +331,18 @@ Reference state: `main` at `e285c2d` (Curvyo rename), `CURRENT_FORMAT_VERSION`
     `effective_corner_radii`, with the cases TL = BR large and one corner at the
     shorter side included), rotation, zoom: every pair of drawn glyphs (all
     transform handles and four knobs, centre glyph excluded) is at least 4 px
-    apart (circumscribed radii as there), and the body-reachability check (a
-    point halfway between the centre and each edge midpoint is a move) is run on
-    the same sample. A fixed case at TL = BR = 0.6 s, TR = BL = 0 on a square at
+    apart (circumscribed radii as there). **What is true about reaching the
+    body (2026-10-07, correcting the claim "a point halfway between the centre
+    and each edge midpoint is a move", which is false: on a wide box a knob can
+    sit 7.7 px from such a point, also with one uniform radius):** a press is a
+    handle if a drawn handle's centre is within its radius (parameter handles 12
+    px with no inner band; resize handles only inside a 6 px band); the nearest
+    centre wins and ties go to the parameter handle, then TL, TR, BR, BL; every
+    other point inside the box is a move. The dead zones are the four 12 px discs
+    and the 6 px bands. Over the scanned configurations at least 35 to 41 % of the
+    interior stays a move; the centre of a near-square at `ρ` about 1 is a knob
+    press in about 9 % of random states, an accepted consequence of
+    `unified-object-editing`. A fixed case at TL = BR = 0.6 s, TR = BL = 0 on a square at
     `s` 72 pins the diagonal rule.
 
 - **10. 2026-10-07: validation on open.** In `validate_rect`: each of the four keys,
@@ -357,7 +375,7 @@ Reference state: `main` at `e285c2d` (Curvyo rename), `CURRENT_FORMAT_VERSION`
   5. Validation: negative, NaN and mistyped per-corner keys, a mistyped legacy
      key used as fallback, a missing corner with no legacy key: each `Damaged`.
   6. ui-core: unlinked drag leaves the other three effective radii unchanged at
-     every step, also from an `f < 1` start; Shift OR switch; the limit
+     every step, also from an `f < 1` start; Shift XOR switch; the limit
      `min(W - r_h, H - r_v)`; linked drag overwrites; drag, entry and bar agree
      per value; typed entry captures link state at open; the clearance property
      above; `Remove rounding` per register.
@@ -428,11 +446,12 @@ Reference state: `main` at `e285c2d` (Curvyo rename), `CURRENT_FORMAT_VERSION`
    otherwise. After such an edit, enlarging the rectangle no longer brings the
    neighbours' old stored radii back. Only an `f < 1` start does this.
 3. **PO: criterion 3 contradicts itself.** "Shift inverts the switch" (XOR) against
-   "the switch is off, or Shift is held" and "Shift: this corner only" (OR). Default
-   taken: OR, because the UX hint, the question 1 wording "Shift to invert it for
-   one drag", and the case "switch off plus Shift" have no useful second meaning
-   (making it link all four would need a second hint). PO to reword the
-   parenthetical and Question 1 (a).
+   "the switch is off, or Shift is held" and "Shift: this corner only" (OR). First
+   default: OR. **Resolved 2026-10-07: XOR** (the `ux-engineer`'s judgement,
+   adopted in criterion 3): Shift inverts the switch for one drag, the one rule
+   the maker can state; with OR Shift would be a dead key in the unlinked state.
+   The hint then names what Shift does now ("Shift: all four corners" when the
+   switch is off).
 4. **UX: states the spec does not draw.** (a) The bar's Radius field shows Mixed for
    one rectangle with unequal corners; typing sets all four. (b) When the
    "Link corners" toggle is visible: default, with the Radius field when the

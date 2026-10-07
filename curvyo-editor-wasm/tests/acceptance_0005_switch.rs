@@ -133,8 +133,13 @@ fn build(kind: Kind, stroke: Option<f64>) -> (Document, NodeId) {
         Kind::Rect | Kind::RotatedRect => {
             let id = d.create_rect(rb(0.0, 0.0, 40.0, 20.0));
             if w.is_some() {
-                d.resize_rect(id, rb(0.0, 0.0, 40.0, 20.0), Length::from_mm(0.0), w)
-                    .unwrap();
+                d.resize_rect(
+                    id,
+                    rb(0.0, 0.0, 40.0, 20.0),
+                    curvyo_document_core::CornerRadii::uniform(Length::from_mm(0.0)),
+                    w,
+                )
+                .unwrap();
             }
             id
         }
@@ -727,7 +732,7 @@ fn rect_with_radius(radius: f64, stroke_mm: f64) -> Session {
     d.resize_rect(
         id,
         rb(0.0, 0.0, 40.0, 20.0),
-        Length::from_mm(radius),
+        curvyo_document_core::CornerRadii::uniform(Length::from_mm(radius)),
         Some(Length::from_mm(stroke_mm)),
     )
     .unwrap();
@@ -740,10 +745,10 @@ fn radius_and_stroke(s: &Session) -> (f64, f64) {
     let ObjectSnapshot::Primitive(p) = snapshot(s) else {
         panic!()
     };
-    let Shape::Rect { corner_radius, .. } = p.shape else {
+    let Shape::Rect { corner_radii, .. } = p.shape else {
         panic!()
     };
-    (corner_radius.as_mm(), p.stroke_width.as_mm())
+    (uniform_mm(corner_radii), p.stroke_width.as_mm())
 }
 
 #[test]
@@ -846,7 +851,7 @@ fn a_peers_stroke_edit_survives_a_resize_with_the_switch_off_in_both_merge_order
                     .resize_rect(
                         id,
                         rb(0.0, 0.0, 40.0, 20.0),
-                        Length::from_mm(0.0),
+                        curvyo_document_core::CornerRadii::uniform(Length::from_mm(0.0)),
                         Some(Length::from_mm(2.0)),
                     )
                     .unwrap(),
@@ -913,13 +918,17 @@ fn an_equal_value_corner_radius_is_not_rewritten_so_a_peers_radius_survives() {
             panic!()
         };
         let Shape::Rect {
-            corner_radius,
+            corner_radii,
             bounds,
         } = p.shape
         else {
             panic!()
         };
-        assert_eq!(corner_radius.as_mm(), 3.0, "flip {flip}: peer radius lost");
+        assert_eq!(
+            uniform_mm(corner_radii),
+            3.0,
+            "flip {flip}: peer radius lost"
+        );
         assert!(close(bounds.width.as_mm(), 60.0), "resize survived");
     }
 }
@@ -937,4 +946,14 @@ fn a_resize_of_a_zero_radius_rect_writes_no_corner_radius_key() {
         let ops = ops_since(&s, &from);
         assert!(!ops.contains("corner_radius"), "on {on}: {ops}");
     }
+}
+
+/// The one radius of a rectangle whose four corner radii are equal (asserted).
+fn uniform_mm(radii: curvyo_document_core::CornerRadii) -> f64 {
+    assert_eq!(
+        radii,
+        curvyo_document_core::CornerRadii::uniform(radii.tl),
+        "four equal radii"
+    );
+    radii.tl.as_mm()
 }

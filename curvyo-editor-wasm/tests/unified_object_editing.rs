@@ -63,10 +63,29 @@ fn radius_of(session: &Session) -> f64 {
     let ObjectSnapshot::Primitive(p) = first_object(session) else {
         panic!("a primitive");
     };
-    let Shape::Rect { corner_radius, .. } = p.shape else {
+    let Shape::Rect { corner_radii, .. } = p.shape else {
         panic!("a rectangle");
     };
-    corner_radius.as_mm()
+    uniform_mm(corner_radii)
+}
+
+/// The largest of a rectangle's four corner radii.
+fn largest_radius_mm(session: &Session) -> f64 {
+    let ObjectSnapshot::Primitive(p) = first_object(session) else {
+        panic!("a primitive");
+    };
+    let Shape::Rect { corner_radii, .. } = p.shape else {
+        panic!("a rectangle");
+    };
+    [
+        corner_radii.tl,
+        corner_radii.tr,
+        corner_radii.br,
+        corner_radii.bl,
+    ]
+    .into_iter()
+    .map(curvyo_document_core::Length::as_mm)
+    .fold(0.0, f64::max)
 }
 
 fn ratio_of(session: &Session, index: usize) -> f64 {
@@ -183,7 +202,6 @@ fn a_radius_set_with_the_select_tool_survives_save_and_reopen_with_the_same_form
     let manifest: serde_json::Value =
         serde_json::from_reader(archive.by_name("manifest.json").unwrap()).unwrap();
     assert_eq!(manifest["format_version"], CURRENT_FORMAT_VERSION);
-    assert_eq!(CURRENT_FORMAT_VERSION, 5, "no format change in this story");
 }
 
 /// Criterion 20: "r 3.5 mm" live at the pointer; the knob shows the built-in
@@ -368,7 +386,10 @@ fn a_double_click_on_a_radius_handle_opens_the_corner_radius_field() {
     assert_eq!(entry.kind, "corner-radius");
     assert_eq!(entry.fields.len(), 1);
     assert_eq!(entry.fields[0].label, "r");
-    assert_eq!(entry.fields[0].accessible_name, "Corner radius");
+    assert_eq!(
+        entry.fields[0].accessible_name,
+        "Corner radius, all corners"
+    );
     assert_eq!(entry.fields[0].prefill, "3.5");
     assert_eq!(
         session.tool(),
@@ -574,14 +595,14 @@ fn a_resize_with_the_switch_off_does_not_rewrite_the_radius_so_a_peers_radius_su
             panic!("a primitive");
         };
         let Shape::Rect {
-            corner_radius,
+            corner_radii,
             bounds,
         } = p.shape
         else {
             panic!("a rectangle");
         };
         assert_eq!(
-            corner_radius.as_mm(),
+            uniform_mm(corner_radii),
             9.0,
             "flip {flip}: the peer's radius survives"
         );
@@ -857,7 +878,9 @@ fn a_press_on_a_radius_handle_starts_that_drag_with_or_without_shift() {
         let to = pt(knob.x - 4.0, knob.y + 4.0);
         session.pointer_hover(to, shift, false);
         session.pointer_up(to, shift, false);
-        assert!(radius_of(&session) > 0.0, "shift {shift}");
+        // With Shift the drag changes its own corner only (the switch is on):
+        // the dragged corner grew either way.
+        assert!(largest_radius_mm(&session) > 0.0, "shift {shift}");
     }
 }
 
@@ -1039,4 +1062,14 @@ fn a_project_with_primitives_opens_in_the_same_state_and_a_click_writes_nothing(
     session.pointer_hover(pt(5.0, 5.0), false, false);
     assert_eq!(change_count(&session), changes, "selecting writes nothing");
     assert_eq!(objects_of(&state_of(&session)), before);
+}
+
+/// The one radius of a rectangle whose four corner radii are equal (asserted).
+fn uniform_mm(radii: curvyo_document_core::CornerRadii) -> f64 {
+    assert_eq!(
+        radii,
+        curvyo_document_core::CornerRadii::uniform(radii.tl),
+        "four equal radii"
+    );
+    radii.tl.as_mm()
 }

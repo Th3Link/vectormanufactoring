@@ -147,6 +147,7 @@ pub struct TransformEntryView {
     kind: String,
     fields: Vec<crate::session::EntryFieldView>,
     pub linked: bool,
+    scope: String,
     pub handle_x: f64,
     pub handle_y: f64,
     pub center_x: f64,
@@ -164,6 +165,14 @@ impl TransformEntryView {
     #[must_use]
     pub fn kind(&self) -> String {
         self.kind.clone()
+    }
+
+    /// The muted second row of a corner radius entry ("All four corners" or
+    /// "This corner only"); empty for every other entry.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn scope(&self) -> String {
+        self.scope.clone()
     }
 
     /// How many fields the chip has (one or two).
@@ -219,6 +228,7 @@ impl TransformEntryView {
             kind: entry.kind.to_string(),
             fields: entry.fields,
             linked: entry.linked,
+            scope: entry.scope.unwrap_or_default().to_string(),
             handle_x,
             handle_y,
             center_x,
@@ -411,6 +421,14 @@ impl WasmSession {
     #[must_use]
     pub fn handle_hint(&self) -> String {
         self.session.handle_hint()
+    }
+
+    /// The lines of the hint chip of a corner radius knob under the pointer
+    /// (state-dependent, see [`Session::corner_hint_lines`]); empty on any
+    /// other handle.
+    #[must_use]
+    pub fn corner_hint_lines(&self) -> Vec<String> {
+        self.session.corner_hint_lines()
     }
 
     /// The typed numeric entry to show, or `undefined` (criteria 18, 25, 26

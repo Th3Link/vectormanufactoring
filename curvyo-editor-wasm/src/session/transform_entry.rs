@@ -10,10 +10,11 @@
 
 use curvyo_document_core::Point;
 use curvyo_ui_core::{
-    EditHandle, EntryField, EntryKind, EntryOutcome, ParamEntry, SelectTool, SkewEntry,
-    TransformEntry, entry_anchor,
+    EditHandle, EntryField, EntryKind, EntryOutcome, ParamDragInfo, ParamEntry, SelectTool,
+    SkewEntry, TransformEntry, entry_anchor,
 };
 
+use super::corner_readout::param_readout;
 use super::{Session, Tool};
 
 /// One field of the entry chip, as the host renders it.
@@ -40,6 +41,10 @@ pub struct EntryView {
     pub fields: Vec<EntryFieldView>,
     /// Whether the two fields are linked (a chain glyph between them).
     pub linked: bool,
+    /// The muted second row of a corner radius entry, "All four corners" or
+    /// "This corner only" (`specs/rectangle-corner-radii/` criterion 6); `None`
+    /// for every other entry.
+    pub scope: Option<&'static str>,
     /// The grabbed handle, in document space.
     pub handle: Point,
     /// The box center, in document space: the chip goes outward from it,
@@ -99,6 +104,7 @@ impl Session {
             kind: "skew",
             fields: entry.fields().iter().map(EntryFieldView::of).collect(),
             linked: false,
+            scope: None,
             handle,
             center: box_.to_document(box_.local_center()),
             glyph_reach_px: 6.0,
@@ -136,6 +142,7 @@ impl Session {
             },
             fields: entry.fields().iter().map(EntryFieldView::of).collect(),
             linked: false,
+            scope: entry.scope(),
             handle,
             center: box_.to_document(box_.local_center()),
             glyph_reach_px: 6.0,
@@ -195,6 +202,7 @@ impl Session {
             },
             fields: entry.fields().iter().map(EntryFieldView::of).collect(),
             linked: entry.linked(),
+            scope: None,
             handle,
             center: box_.to_document(box_.local_center()),
             glyph_reach_px: if skew_beyond { 22.0 } else { 6.0 },
@@ -228,8 +236,33 @@ impl Session {
             self.select.cancel_entry();
             return EntryOutcome::Unchanged;
         }
-        self.select
-            .commit_entry(&self.document, [first, second], last_edited)
+        // A typed corner radius past its limit is committed limited, and says
+        // so at the knob for a moment (criterion 6): the notice is built from
+        // the entry as it was before it closes.
+        let notice = self.open_param_entry().and_then(|entry| {
+            let limited = entry.is_limited(first);
+            let knob = self.param_entry_view(entry)?.handle;
+            limited.then(|| (entry.clone(), knob))
+        });
+        let outcome = self
+            .select
+            .commit_entry(&self.document, [first, second], last_edited);
+        if outcome == EntryOutcome::Committed
+            && let Some((entry, anchor)) = notice
+            && let Some(object) = self.document.object(entry.object().id())
+            && let EditHandle::Param(param) = entry.handle()
+            && let Some(text) = param_readout(
+                &object,
+                param,
+                Some(ParamDragInfo {
+                    limited: true,
+                    overwrites_unequal: false,
+                }),
+            )
+        {
+            self.limit_notice = Some(super::shapes::LiveReadout { text, anchor });
+        }
+        outcome
     }
 
     /// Closes the entry without writing (criterion 20): Escape in the chip,

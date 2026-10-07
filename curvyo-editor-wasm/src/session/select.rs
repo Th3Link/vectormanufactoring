@@ -11,7 +11,7 @@
 
 use curvyo_document_core::Point;
 use curvyo_ui_core::{
-    CornerRadiusScaling, Modifiers, SelectDoubleClickOutcome, StrokeScaling,
+    CornerLinking, CornerRadiusScaling, Modifiers, SelectDoubleClickOutcome, StrokeScaling,
     TransformHandleTolerances,
 };
 
@@ -61,6 +61,33 @@ impl Session {
         });
     }
 
+    /// The "Link corners" switch (`specs/rectangle-corner-radii/` criterion 2):
+    /// whether a corner radius handle sets all four radii (the default) or
+    /// only its own corner. On in every new session (`Session::new`/`open`
+    /// build a fresh `SelectTool`, so New and Open reset it); never written
+    /// to the document.
+    #[must_use]
+    pub fn link_corners(&self) -> bool {
+        self.select.corner_linking() == CornerLinking::Linked
+    }
+
+    /// Sets the switch for the *next* corner radius drag or entry. Changes no
+    /// radius and writes nothing; an open numeric entry closes without writing
+    /// (criterion 8).
+    pub fn set_link_corners(&mut self, on: bool) {
+        self.select.set_corner_linking(if on {
+            CornerLinking::Linked
+        } else {
+            CornerLinking::Unlinked
+        });
+    }
+
+    /// Removes the "max" notice of a limited typed radius (the host calls this
+    /// 1.5 s after it appeared).
+    pub fn clear_limit_notice(&mut self) {
+        self.limit_notice = None;
+    }
+
     /// The Shift and Ctrl modifiers changed with no pointer movement
     /// (`adrs.md`, "Shift state"): the host calls this from window-level key
     /// events, and with `(false, false)` when the window or canvas loses
@@ -86,6 +113,7 @@ impl Session {
     /// An open numeric entry closes first; this press is processed as usual
     /// (criterion 20).
     pub(super) fn select_pointer_down(&mut self, point: Point, shift: bool) {
+        self.limit_notice = None;
         let objects = self.objects();
         let tolerance = self.segment_tolerance();
         let handle_tolerances = self.transform_handle_tolerances();

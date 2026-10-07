@@ -10,8 +10,7 @@
 #![allow(clippy::too_many_lines)]
 
 use curvyo_document_core::{
-    AnchorId, CURRENT_FORMAT_VERSION, Document, Length, NewAnchor, ObjectSnapshot, Point,
-    RectBounds, Vec2, pack, unpack,
+    AnchorId, Document, Length, NewAnchor, ObjectSnapshot, Point, RectBounds, Vec2, pack, unpack,
 };
 use curvyo_editor_wasm::{Session, Tool};
 
@@ -389,7 +388,6 @@ fn the_angle_entry_commits_one_change_and_survives_save_and_reopen() {
         panic!("still a primitive")
     };
     assert!(matches!(p.shape, curvyo_document_core::Shape::Rect { .. }));
-    assert_eq!(CURRENT_FORMAT_VERSION, 5, "no format change");
 }
 
 #[test]

@@ -130,7 +130,9 @@ under "Flagged to the lead".
     (criterion 7's 64 px cannot hold, flag 1). A property test over size,
     aspect, radius and rotation asserts the 4 px clearance and that the body
     stays reachable (a press at the box centre and at a point a quarter of the
-    shorter side in from each corner is a move).
+    shorter side in from each corner is a move). **Corrected 2026-10-07
+    (`rectangle-corner-radii` review): this reachability claim is false as
+    stated; see the dated note at the end of this file.**
   - A star's inner-radius handle is laid out where `handle_layout` puts it
     today (the first inner vertex), in the shape's local frame. Its only
     possible collision is the centre glyph (rule 1). **Wrong, corrected in the
@@ -211,7 +213,8 @@ under "Flagged to the lead".
      near 1 the box centre (about 10 px from each knob) is a radius-handle press;
      the body stays reachable halfway between the centre and each edge midpoint
      (nearest knob 12.7 px away at `s` 72, minimum `s/(4√2)`, so larger above;
-     the square box is the worst case for any aspect). This replaces my earlier
+     the square box is the worst case for any aspect; **wrong for a wide box,
+     see the dated note at the end of this file**). This replaces my earlier
      "a press at the box centre is a move" assertion.
   4. **Parameter handles not drawn during other drags: CONFIRMED.** It is a
      decoration rule: the drawn set (`Session`/`select_view`) skips the
@@ -713,3 +716,19 @@ under "Flagged to the lead".
     covers only half the product"). Everything testable is in `ui-core` and
     `Session`; the bar, switch and chip are covered by the `ux-engineer` review
     and the demo, not by an automated test.
+
+- **2026-10-07 (architect, `rectangle-corner-radii` review): the body-reachability
+  claim of the second-pass note and the "quarter of the shorter side" sentence
+  of the layout decision are false as stated.** A point halfway between the
+  centre and an edge midpoint can be within the 12 px hit radius of a knob,
+  and the square is not the worst case: on a box of aspect 1.8 with one uniform
+  radius at `ρ` = 1 a knob sits 7.7 px from the halfway point of the long edge.
+  What holds: a press is a handle if a drawn handle's centre is within its
+  radius (parameter handles 12 px, no inner band; resize handles only inside a 6
+  px band); the nearest centre wins, ties go to the parameter handle, then TL,
+  TR, BR, BL; every other point inside the box is a move. The dead zones are the
+  four 12 px discs and the 6 px bands; over the scanned configurations at least
+  35 to 41 % of the interior stays a move, and the centre of a near-square at
+  `ρ` about 1 is a knob press in about 9 % of random states. This is accepted
+  (the centre handle and the Move cursor remain the move routes). The
+  glyph-clearance property (4 px) is unaffected.

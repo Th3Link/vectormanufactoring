@@ -6,15 +6,14 @@
 //! the pointer, and the live numeric readout of a drag. Split out of
 //! `session/select.rs`, which dispatches the events.
 
-use curvyo_document_core::{
-    Angle, ObjectSnapshot, PrimitiveSnapshot, Shape, Vec2, effective_corner_radius,
-};
+use curvyo_document_core::{Angle, ObjectSnapshot, Shape, Vec2};
 use curvyo_render_core::{
     SelectDecorationInput, TransformDecorationInput, TransformGlyphKind, TransformHandleGlyph,
 };
 use curvyo_ui_core::{
-    EditHandle, LiveEdit, ParamHandle, SelectTool, Side, format_degrees, is_corner,
-    is_drawn_handle, oriented_bounds, resize_cursor_angle_degrees, skew_cursor_angle_degrees,
+    EditHandle, LiveEdit, ParamHandle, SelectTool, Side, corner_local_position, format_degrees,
+    is_corner, is_drawn_handle, oriented_bounds, resize_cursor_angle_degrees,
+    skew_cursor_angle_degrees,
 };
 
 use super::Session;
@@ -140,7 +139,7 @@ impl Session {
     /// one hit rule a press would use, plus the centre handle for hover
     /// (`SelectTool::hover_handle_at`). Only while no drag runs and no
     /// entry is open.
-    fn select_hovered_handle(
+    pub(super) fn select_hovered_handle(
         &self,
         objects: &[ObjectSnapshot],
     ) -> Option<(ObjectSnapshot, curvyo_ui_core::OrientedBox, EditHandle)> {
@@ -205,10 +204,12 @@ impl Session {
         let hide_center =
             centre_chip || highlighted.is_some_and(|handle| handle != EditHandle::Move);
         let params_visible = self.select.param_handles_visible();
+        // The other three radius knobs follow only while the drag changes all
+        // four corners (decided at the press, criterion 23).
         let radius_in_use = matches!(
             highlighted,
             Some(EditHandle::Param(ParamHandle::CornerRadius(_)))
-        );
+        ) && self.select.corner_drag_changes_all() == Some(true);
         let drawn: Vec<(EditHandle, curvyo_document_core::Point)> =
             SelectTool::transform_handles(objects, &self.selection, tolerances, side_rotate)
                 .into_iter()
@@ -226,7 +227,10 @@ impl Session {
                 if let (EditHandle::Param(ParamHandle::CornerRadius(corner)), true) =
                     (handle, active)
                 {
-                    param_guides.push((box_.to_document(corner.local_position(&box_)), position));
+                    param_guides.push((
+                        box_.to_document(corner_local_position(corner, &box_)),
+                        position,
+                    ));
                 }
                 TransformHandleGlyph {
                     position,
@@ -382,8 +386,11 @@ impl Session {
         if self.select.move_in_flight() {
             return self.move_readout();
         }
+        let Some(handle) = self.select.dragging_handle() else {
+            // No drag: the "max" notice of a limited typed radius, if any.
+            return self.limit_notice.clone();
+        };
         let anchor = self.pointer_position?;
-        let handle = self.select.dragging_handle()?;
         let text = match handle {
             EditHandle::Skew(side) => {
                 let angle = self.select.live_skew_angle(
@@ -411,7 +418,11 @@ impl Session {
                     format!("{:.1} × {:.1} mm", b.width(), b.height())
                 }
             },
-            EditHandle::Param(_) => param_readout(&self.select_live_transform()?)?,
+            EditHandle::Param(param) => super::corner_readout::param_readout(
+                &self.select_live_transform()?,
+                param,
+                self.select.live_param_drag(anchor),
+            )?,
             EditHandle::Move => return None,
         };
         Some(super::shapes::LiveReadout { text, anchor })
@@ -434,25 +445,6 @@ fn glyph_kind(handle: EditHandle, box_: &curvyo_ui_core::OrientedBox) -> Transfo
         },
         EditHandle::Move => TransformGlyphKind::Move,
         EditHandle::Param(_) => TransformGlyphKind::Parameter,
-    }
-}
-
-/// `r 3.5 mm` for a rectangle's effective corner radius, `ratio 0.45` for a
-/// star's inner ratio.
-fn param_readout(object: &ObjectSnapshot) -> Option<String> {
-    let ObjectSnapshot::Primitive(PrimitiveSnapshot { shape, .. }) = object else {
-        return None;
-    };
-    match *shape {
-        Shape::Rect {
-            bounds,
-            corner_radius,
-        } => Some(format!(
-            "r {:.1} mm",
-            effective_corner_radius(bounds, corner_radius).as_mm()
-        )),
-        Shape::Star { inner_ratio, .. } => Some(format!("ratio {:.2}", inner_ratio.get())),
-        Shape::Ellipse { .. } | Shape::Polygon { .. } => None,
     }
 }
 

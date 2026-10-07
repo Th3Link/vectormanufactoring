@@ -21,7 +21,7 @@ use std::f64::consts::{FRAC_PI_2, PI, SQRT_2};
 
 use curvyo_document_core::{
     AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, ObjectSnapshot, Point,
-    PointCount, RectBounds, Shape, StarFrame, effective_corner_radius, outline_of_rotated, pack,
+    PointCount, RectBounds, Shape, StarFrame, effective_corner_radii, outline_of_rotated, pack,
     unpack,
 };
 use curvyo_editor_wasm::{Session, Tool};
@@ -129,8 +129,8 @@ fn rect_of(s: &Session, index: usize) -> (RectBounds, Length) {
     match prim_of(s, index).shape {
         Shape::Rect {
             bounds,
-            corner_radius,
-        } => (bounds, corner_radius),
+            corner_radii,
+        } => (bounds, Length::from_mm(uniform_mm(corner_radii))),
         other => panic!("rect expected, got {other:?}"),
     }
 }
@@ -874,12 +874,14 @@ fn ac02_shift_on_a_parameter_handle_still_drags_the_handle_and_cursor_stays_poin
         sc.s.pointer_hover(q, shift, ctrl);
         assert_eq!(sc.s.cursor_hint(), "pointer", "drag {shift} {ctrl}");
         sc.s.pointer_up(q, shift, ctrl);
-        let got = rect_of(&sc.s, 0).1.as_mm() * sc.k;
+        // With Shift the drag changes its own corner only: the dragged corner
+        // (top-left) gets the same value either way.
+        let got = largest_radius_mm(&sc.s, 0) * sc.k;
         assert!(
             near(got, radius_from_q(120.0, 45.0), 0.02),
             "{shift} {ctrl}: {got}"
         );
-        assert_eq!(rect_of(&sc.s, 0).0.origin, {
+        assert_eq!(bounds_of(&sc.s, 0).origin, {
             let k = sc.k;
             pt(60.0 - 60.0 / k, 45.0 - 60.0 / k)
         });
@@ -1116,7 +1118,7 @@ fn ac18_double_click_on_a_radius_handle_opens_the_corner_radius_field() {
     assert_eq!(e.kind, "corner-radius");
     assert_eq!(e.fields.len(), 1);
     assert_eq!(e.fields[0].label, "r");
-    assert_eq!(e.fields[0].accessible_name, "Corner radius");
+    assert_eq!(e.fields[0].accessible_name, "Corner radius, all corners");
     let shown = num(&e.fields[0].prefill);
     assert!(
         near(shown, 20.0 / sc.k, 0.06),
@@ -1430,7 +1432,10 @@ fn ac19_three_accessible_names_never_collide_on_one_selected_kind() {
         let h = sc.fr.corner(1.0, -1.0);
         names.push(open_entry(&mut sc.s, h, false, false).unwrap().fields[0].accessible_name);
     }
-    assert_eq!(names, ["Corner radius", "Inner ratio", "Outer radius"]);
+    assert_eq!(
+        names,
+        ["Corner radius, all corners", "Inner ratio", "Outer radius"]
+    );
 }
 
 // =====================================================================
@@ -2846,11 +2851,11 @@ fn ac35_a_handle_wins_over_the_inside_move_with_or_without_shift() {
             false,
         );
         assert!(
-            rect_of(&sc.s, 0).1.as_mm() > 0.0,
+            largest_radius_mm(&sc.s, 0) > 0.0,
             "shift={shift}: radius changed"
         );
         assert_eq!(
-            rect_of(&sc.s, 0).0.origin,
+            bounds_of(&sc.s, 0).origin,
             pt(60.0 - 80.0 / sc.k, 45.0 - 80.0 / sc.k),
             "not moved"
         );
@@ -2858,7 +2863,7 @@ fn ac35_a_handle_wins_over_the_inside_move_with_or_without_shift() {
         let c = handle_point(&sc, H::ResizeCorner(0));
         drag_mod(&mut sc.s, c, pt(c.x - 30.0 / sc.k, c.y), shift, false);
         assert!(
-            rect_of(&sc.s, 0).0.width.as_mm() * sc.k > 160.0 + 20.0,
+            bounds_of(&sc.s, 0).width.as_mm() * sc.k > 160.0 + 20.0,
             "shift={shift}: resized"
         );
     }
@@ -3381,7 +3386,14 @@ fn manifest_of(bytes: &[u8]) -> String {
 #[test]
 fn ac24_the_stored_fields_are_the_ones_the_shape_tools_wrote() {
     // Radius drag, entry, bar field, ratio drag, entry, slider, points: only
-    // corner_radius / inner_ratio / point_count are written.
+    // the four corner radius registers (all four, equal) / inner_ratio /
+    // point_count are written.
+    const CORNER_RADIUS_KEYS: [&str; 4] = [
+        "corner_radius_bl",
+        "corner_radius_br",
+        "corner_radius_tl",
+        "corner_radius_tr",
+    ];
     let keys_of = |s: &Session, v0: &loro::VersionVector| -> Vec<String> {
         let json = ops_since_json(s, v0);
         let mut keys: Vec<String> = json
@@ -3402,13 +3414,13 @@ fn ac24_the_stored_fields_are_the_ones_the_shape_tools_wrote() {
         from,
         pt(from.x + 20.0 / sc.k, from.y + 20.0 / sc.k),
     );
-    assert_eq!(keys_of(&sc.s, &v0), ["corner_radius"]);
+    assert_eq!(keys_of(&sc.s, &v0), CORNER_RADIUS_KEYS);
     let v1 = vv_of(&sc.s);
     assert_eq!(sc.s.set_selected_radius_text("3"), EntryOutcome::Committed);
-    assert_eq!(keys_of(&sc.s, &v1), ["corner_radius"]);
+    assert_eq!(keys_of(&sc.s, &v1), CORNER_RADIUS_KEYS);
     let v2 = vv_of(&sc.s);
     sc.s.remove_corner_rounding();
-    assert_eq!(keys_of(&sc.s, &v2), ["corner_radius"]);
+    assert_eq!(keys_of(&sc.s, &v2), CORNER_RADIUS_KEYS);
     // star
     let mut sc = star_scene(100, 60.0, 8, Some(0.5), 0.0);
     let v0 = vv_of(&sc.s);
@@ -3461,14 +3473,15 @@ fn ac24_ac38_format_version_and_field_names_match_the_shape_tool_route() {
         serde_json::from_str(&manifest_of(&sc.s.pack("0.1.0").unwrap())).unwrap();
     assert_eq!(va["format_version"], vc["format_version"]);
     assert_eq!(
-        vc["format_version"], 5,
-        "the project format version is the one of main (document-core is untouched)"
+        vc["format_version"],
+        curvyo_document_core::CURRENT_FORMAT_VERSION,
+        "the project format version is the current one"
     );
     // and the saved project reopens with the radius set
     let reopened = unpack(7, &sc.s.pack("0.1.0").unwrap()).unwrap();
     let id = reopened.object_ids()[0];
     match reopened.primitive(id).unwrap().shape {
-        Shape::Rect { corner_radius, .. } => assert!(corner_radius.as_mm() > 0.0),
+        Shape::Rect { corner_radii, .. } => assert!(uniform_mm(corner_radii) > 0.0),
         _ => panic!(),
     }
 }
@@ -3805,4 +3818,44 @@ fn ac16_live_readouts_during_primitive_drags() {
         let text = sc.s.live_readout().expect("rotate readout").text;
         assert!(text.contains('°'), "kind {build}: {text}");
     }
+}
+
+/// The one radius of a rectangle whose four corner radii are equal (asserted).
+fn uniform_mm(radii: curvyo_document_core::CornerRadii) -> f64 {
+    assert_eq!(
+        radii,
+        curvyo_document_core::CornerRadii::uniform(radii.tl),
+        "four equal radii"
+    );
+    radii.tl.as_mm()
+}
+
+/// The effective radius of a rectangle with one radius at all four corners.
+fn effective_corner_radius(bounds: RectBounds, radius: Length) -> Length {
+    effective_corner_radii(bounds, curvyo_document_core::CornerRadii::uniform(radius)).tl
+}
+
+/// The largest of a rectangle's four corner radii (Shift on a radius handle
+/// changes one corner only).
+fn largest_radius_mm(s: &Session, index: usize) -> f64 {
+    let Shape::Rect { corner_radii, .. } = prim_of(s, index).shape else {
+        panic!("a rectangle");
+    };
+    [
+        corner_radii.tl,
+        corner_radii.tr,
+        corner_radii.br,
+        corner_radii.bl,
+    ]
+    .into_iter()
+    .map(Length::as_mm)
+    .fold(0.0, f64::max)
+}
+
+/// A rectangle's bounds, whatever its corner radii are.
+fn bounds_of(s: &Session, index: usize) -> RectBounds {
+    let Shape::Rect { bounds, .. } = prim_of(s, index).shape else {
+        panic!("a rectangle");
+    };
+    bounds
 }

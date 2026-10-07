@@ -99,8 +99,13 @@ fn wrap(d: f64) -> f64 {
 }
 
 #[test]
-fn the_format_version_is_unchanged() {
-    assert_eq!(CURRENT_FORMAT_VERSION, 5);
+fn a_saved_file_declares_the_current_format_version() {
+    // This story added no key; whatever the number is, a saved file says it.
+    let bytes = curvyo_document_core::pack(&Document::new(1), "0.1.0").unwrap();
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+    let manifest: serde_json::Value =
+        serde_json::from_reader(archive.by_name("manifest.json").unwrap()).unwrap();
+    assert_eq!(manifest["format_version"], CURRENT_FORMAT_VERSION);
 }
 
 /// Criterion 13: old outlines, shown angles 78.7 and 40, boxes in those

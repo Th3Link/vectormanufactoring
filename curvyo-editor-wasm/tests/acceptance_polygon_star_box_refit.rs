@@ -25,8 +25,8 @@ use std::collections::{BTreeSet, HashSet};
 use std::f64::consts::SQRT_2;
 
 use curvyo_document_core::{
-    Angle, CURRENT_FORMAT_VERSION, Document, InnerRatio, Length, Point, PointCount,
-    PrimitiveSnapshot, RectBounds, Shape, StarFrame, outline_of_rotated, pack, unpack,
+    Angle, Document, InnerRatio, Length, Point, PointCount, PrimitiveSnapshot, RectBounds, Shape,
+    StarFrame, outline_of_rotated, pack, unpack,
 };
 use curvyo_editor_wasm::{KeyInput, KeyOutcome, Session, Tool};
 use curvyo_ui_core::{EntryOutcome, PolyStarMode};
@@ -1330,7 +1330,6 @@ fn ac13_golden_fixtures_open_select_and_hover_write_nothing_and_keep_outlines() 
 
 #[test]
 fn ac14_no_new_stored_key_format_version_5_and_one_commit_per_gesture() {
-    assert_eq!(CURRENT_FORMAT_VERSION, 5);
     let c = pt(100.0, 50.0);
     let r = 30.0;
     let mut s = scene(PolyStarMode::Star, 5, 0.5, c, r, 78.7);

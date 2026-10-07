@@ -27,6 +27,17 @@ pub struct SelectBarView {
     pub radius_limited: bool,
     /// The stored radius, millimetres, for the tooltip of "limited".
     pub radius_stored: f64,
+    /// One rectangle with unequal corners is selected: `radius_tl` to
+    /// `radius_bl` are its effective radii for the "Mixed" tooltip.
+    pub radius_corners_shown: bool,
+    /// Top-left effective radius, millimetres.
+    pub radius_tl: f64,
+    /// Top-right effective radius, millimetres.
+    pub radius_tr: f64,
+    /// Bottom-right effective radius, millimetres.
+    pub radius_br: f64,
+    /// Bottom-left effective radius, millimetres.
+    pub radius_bl: f64,
     /// "Remove rounding" is shown.
     pub remove_rounding_shown: bool,
     /// "Remove rounding" would change something.
@@ -72,6 +83,11 @@ impl From<SelectBarState> for SelectBarView {
             radius_stored: state
                 .radius_limited
                 .map_or(0.0, curvyo_document_core::Length::as_mm),
+            radius_corners_shown: state.radius_corners.is_some(),
+            radius_tl: state.radius_corners.map_or(0.0, |c| c.tl.as_mm()),
+            radius_tr: state.radius_corners.map_or(0.0, |c| c.tr.as_mm()),
+            radius_br: state.radius_corners.map_or(0.0, |c| c.br.as_mm()),
+            radius_bl: state.radius_corners.map_or(0.0, |c| c.bl.as_mm()),
             remove_rounding_shown: state.remove_rounding_shown,
             remove_rounding_enabled: state.remove_rounding_enabled,
             points_shown,
@@ -105,6 +121,25 @@ impl WasmSession {
     /// closes an open numeric entry without writing.
     pub fn set_scale_corner_radius(&mut self, on: bool) {
         self.session.set_scale_corner_radius(on);
+    }
+
+    /// The Select tool's "Link corners" switch (`specs/rectangle-corner-radii/`
+    /// criterion 2). On in every new session; not persisted.
+    #[must_use]
+    pub fn link_corners(&self) -> bool {
+        self.session.link_corners()
+    }
+
+    /// Sets the "Link corners" switch for the next corner radius drag or
+    /// entry. Writes nothing; an open numeric entry closes without writing.
+    pub fn set_link_corners(&mut self, on: bool) {
+        self.session.set_link_corners(on);
+    }
+
+    /// Removes the "max" notice of a limited typed radius, 1.5 s after it
+    /// appeared.
+    pub fn clear_limit_notice(&mut self) {
+        self.session.clear_limit_notice();
     }
 
     /// Enter in the bar's "Radius" field (criterion 21a): `"committed"`,

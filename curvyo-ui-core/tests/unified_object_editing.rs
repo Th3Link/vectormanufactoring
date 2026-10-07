@@ -127,13 +127,13 @@ impl Rig {
 
     fn radius(&self) -> f64 {
         let ObjectSnapshot::Primitive(PrimitiveSnapshot {
-            shape: Shape::Rect { corner_radius, .. },
+            shape: Shape::Rect { corner_radii, .. },
             ..
         }) = self.object()
         else {
             panic!("a rectangle");
         };
-        corner_radius.as_mm()
+        uniform_mm(corner_radii)
     }
 
     fn ratio(&self) -> f64 {
@@ -426,14 +426,14 @@ fn ac6_an_undrawn_parameter_handle_has_no_hit_area() {
     let ObjectSnapshot::Primitive(PrimitiveSnapshot {
         shape: Shape::Rect {
             bounds,
-            corner_radius,
+            corner_radii,
         },
         ..
     }) = rig.object()
     else {
         panic!("a rectangle");
     };
-    assert_eq!(corner_radius.as_mm(), 0.0, "no radius written");
+    assert_eq!(uniform_mm(corner_radii), 0.0, "no radius written");
     assert!((bounds.origin.x - 15.0).abs() < 1e-9, "the object moved");
 }
 
@@ -859,13 +859,13 @@ fn ported_ac3_a_resize_handle_changes_the_bounds_and_keeps_the_radius() {
     );
     let Shape::Rect {
         bounds,
-        corner_radius,
+        corner_radii,
     } = rig.shape()
     else {
         panic!("still a rectangle");
     };
     assert!((bounds.width.as_mm() - 60.0).abs() < 1e-6);
-    assert!((corner_radius.as_mm() - 5.0).abs() < 1e-9);
+    assert!((uniform_mm(corner_radii) - 5.0).abs() < 1e-9);
 }
 
 /// Was `EllipseTool` AC9: the E handle moves only the east edge, so a resize
@@ -996,12 +996,22 @@ fn ported_all_four_radius_handles_of_a_rounded_rectangle_are_draggable() {
             SelectPointerDownOutcome::Handle,
             "{corner:?}"
         );
-        let Shape::Rect { corner_radius, .. } = rig.shape() else {
+        let Shape::Rect { corner_radii, .. } = rig.shape() else {
             panic!("a rectangle");
         };
         assert!(
-            corner_radius.as_mm() > 8.0,
+            uniform_mm(corner_radii) > 8.0,
             "{corner:?}: dragging inward grows it"
         );
     }
+}
+
+/// The one radius of a rectangle whose four corner radii are equal (asserted).
+fn uniform_mm(radii: curvyo_document_core::CornerRadii) -> f64 {
+    assert_eq!(
+        radii,
+        curvyo_document_core::CornerRadii::uniform(radii.tl),
+        "four equal radii"
+    );
+    radii.tl.as_mm()
 }

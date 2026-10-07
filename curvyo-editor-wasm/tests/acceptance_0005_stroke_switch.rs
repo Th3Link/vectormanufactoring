@@ -183,11 +183,21 @@ fn ac31_the_corner_radius_scales_identically_with_the_switch_either_way() {
         let ObjectSnapshot::Primitive(p) = only_object(&s) else {
             panic!("primitive");
         };
-        let Shape::Rect { corner_radius, .. } = p.shape else {
+        let Shape::Rect { corner_radii, .. } = p.shape else {
             panic!("rect");
         };
-        corner_radius.as_mm()
+        uniform_mm(corner_radii)
     };
     assert!((radius(false) - 4.0).abs() < 1e-9);
     assert!((radius(true) - 4.0).abs() < 1e-9);
+}
+
+/// The one radius of a rectangle whose four corner radii are equal (asserted).
+fn uniform_mm(radii: curvyo_document_core::CornerRadii) -> f64 {
+    assert_eq!(
+        radii,
+        curvyo_document_core::CornerRadii::uniform(radii.tl),
+        "four equal radii"
+    );
+    radii.tl.as_mm()
 }

@@ -126,9 +126,9 @@ fn primitives_v3_project_round_trips_every_shape_kind() {
                 assert_eq!(path.anchors.len(), 2);
             }
             ObjectSnapshot::Primitive(primitive) => match primitive.shape {
-                Shape::Rect { corner_radius, .. } => {
+                Shape::Rect { corner_radii, .. } => {
                     saw_rect = true;
-                    assert!((corner_radius.as_mm() - 2.0).abs() < f64::EPSILON);
+                    assert!((corner_radii.tl.as_mm() - 2.0).abs() < f64::EPSILON);
                 }
                 Shape::Ellipse { frame } => {
                     saw_ellipse = true;

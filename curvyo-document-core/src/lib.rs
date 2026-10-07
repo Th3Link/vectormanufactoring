@@ -19,6 +19,8 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 mod container;
+mod corner_radii;
+mod corner_radii_codec;
 mod document;
 mod error;
 mod objects;
@@ -29,10 +31,12 @@ mod paths;
 mod primitive_model;
 mod primitive_outline;
 mod shape_codec;
+mod shape_radii;
 mod shapes;
 mod units;
 
 pub use container::{CURRENT_LORO_SNAPSHOT_VERSION, pack, unpack};
+pub use corner_radii::{Corner, CornerRadii, SHARP_CORNER_EPSILON_MM, effective_corner_radii};
 pub use document::{CURRENT_FORMAT_VERSION, Document};
 pub use error::{OpenError, SaveError};
 pub use objects::{CopySource, ObjectEditError};
@@ -46,8 +50,8 @@ pub use primitive_model::{
     ShapeParamError, StarFrame, shape_center, shape_frame_bounds, translate_shape,
 };
 pub use primitive_outline::{
-    KAPPA, OutlineAnchor, effective_corner_radius, ellipse_outline, outline_of, outline_of_rotated,
-    polygon_outline, rect_outline, star_outline,
+    KAPPA, OutlineAnchor, ellipse_outline, outline_of, outline_of_rotated, polygon_outline,
+    rect_outline, star_outline,
 };
 pub use shapes::ShapeEditError;
 pub use units::{Angle, DocumentSize, Length, Point, Tolerance, Vec2, ViewTransform};

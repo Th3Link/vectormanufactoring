@@ -273,6 +273,13 @@ export function TransformEntryChip({
           );
         })}
       </div>
+      {entry.scope !== "" && (
+        // The scope of a corner radius value, fixed when the field opened; the
+        // field's accessible name carries it too, so this row is not read twice.
+        <div aria-hidden className="mt-1.5 px-1 text-xs opacity-70">
+          {entry.scope}
+        </div>
+      )}
       {/* Always mounted so the polite live region announces a change; empty
           it has no height. The message sits outside the field row (the chip
           is anchored by the row, so it never jumps), on the side away from

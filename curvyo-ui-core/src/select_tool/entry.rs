@@ -298,9 +298,13 @@ impl SelectTool {
                 EditHandle::Resize(direction) => Some(OpenEntry::Transform(
                     TransformEntry::for_resize(object, &box_, direction, (shift, ctrl), self.modes),
                 )),
-                EditHandle::Param(param) => {
-                    ParamEntry::for_handle(object, &box_, param).map(OpenEntry::Param)
-                }
+                EditHandle::Param(param) => ParamEntry::for_handle(
+                    object,
+                    &box_,
+                    param,
+                    self.corner_linking.is_unlinked_with(shift),
+                )
+                .map(OpenEntry::Param),
                 EditHandle::Skew(side) => {
                     SkewEntry::for_handle(object, &box_, side, shift).map(OpenEntry::Skew)
                 }

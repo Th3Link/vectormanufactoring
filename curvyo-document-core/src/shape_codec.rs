@@ -14,7 +14,10 @@
 //!                   once at creation, deleted by "object to path"
 //!   stroke_width, stroke   same keys/defaults as a path's (path_codec)
 //!   rect:     rect_bounds   [x, y, w, h] mm        ONE LWW register
-//!             corner_radius  mm, stored raw         LWW register
+//!             corner_radius_tl/_tr/_br/_bl  mm, stored raw, one LWW
+//!                           register per corner (`crate::corner_radii_codec`;
+//!                           the legacy `corner_radius` of format_version <= 5
+//!                           is read as a fallback, never written)
 //!   ellipse:  ellipse_frame  [cx, cy, rx, ry]       ONE LWW register
 //!   polygon:  star_frame     [cx, cy, r, theta]     ONE LWW register
 //!             point_count    integer >= 3           LWW register
@@ -33,6 +36,10 @@
 
 use loro::{LoroMap, LoroValue};
 
+use crate::corner_radii_codec::{
+    KEY_CORNER_RADIUS_BL, KEY_CORNER_RADIUS_BR, KEY_CORNER_RADIUS_TL, KEY_CORNER_RADIUS_TR,
+    KEY_LEGACY_CORNER_RADIUS, corner_radii_are_valid, read_corner_radii,
+};
 use crate::path_codec::{self, KEY_STROKE, KEY_STROKE_WIDTH};
 use crate::path_model::NewAnchor;
 use crate::primitive_model::{
@@ -42,7 +49,6 @@ use crate::units::{Angle, Length, Point};
 
 pub(crate) const KEY_SHAPE: &str = "shape";
 pub(crate) const KEY_RECT_BOUNDS: &str = "rect_bounds";
-pub(crate) const KEY_CORNER_RADIUS: &str = "corner_radius";
 pub(crate) const KEY_ELLIPSE_FRAME: &str = "ellipse_frame";
 pub(crate) const KEY_STAR_FRAME: &str = "star_frame";
 pub(crate) const KEY_POINT_COUNT: &str = "point_count";
@@ -53,13 +59,18 @@ pub(crate) const SHAPE_ELLIPSE: &str = "ellipse";
 pub(crate) const SHAPE_POLYGON: &str = "polygon";
 pub(crate) const SHAPE_STAR: &str = "star";
 
-/// Every key this module ever writes on a primitive node — used by
-/// "object to path" to strip them all before the node becomes a path
-/// (`adrs.md`: "deletes `shape` and every primitive parameter key").
+/// Every key a primitive node can carry (the legacy `corner_radius` included,
+/// which is read but no longer written) — used by "object to path" to strip
+/// them all before the node becomes a path (`adrs.md`: "deletes `shape` and
+/// every primitive parameter key").
 pub(crate) const ALL_PRIMITIVE_KEYS: &[&str] = &[
     KEY_SHAPE,
     KEY_RECT_BOUNDS,
-    KEY_CORNER_RADIUS,
+    KEY_LEGACY_CORNER_RADIUS,
+    KEY_CORNER_RADIUS_TL,
+    KEY_CORNER_RADIUS_TR,
+    KEY_CORNER_RADIUS_BR,
+    KEY_CORNER_RADIUS_BL,
     KEY_ELLIPSE_FRAME,
     KEY_STAR_FRAME,
     KEY_POINT_COUNT,
@@ -155,16 +166,6 @@ pub(crate) fn read_rect_bounds(meta: &LoroMap) -> Option<RectBounds> {
         width: Length::from_mm(values[2]),
         height: Length::from_mm(values[3]),
     })
-}
-
-pub(crate) fn write_corner_radius(meta: &LoroMap, radius: Length) {
-    // invariant: see `write_shape_tag`.
-    #[allow(clippy::unwrap_used)]
-    meta.insert(KEY_CORNER_RADIUS, radius.as_mm()).unwrap();
-}
-
-pub(crate) fn read_corner_radius(meta: &LoroMap) -> Option<Length> {
-    read_f64(meta, KEY_CORNER_RADIUS).map(Length::from_mm)
 }
 
 pub(crate) fn write_ellipse_frame(meta: &LoroMap, frame: EllipseFrame) {
@@ -305,7 +306,7 @@ pub(crate) fn read_shape(meta: &LoroMap, shape_tag: &str) -> Option<Shape> {
     match shape_tag {
         SHAPE_RECT => Some(Shape::Rect {
             bounds: read_rect_bounds(meta)?,
-            corner_radius: read_corner_radius(meta)?,
+            corner_radii: read_corner_radii(meta)?,
         }),
         SHAPE_ELLIPSE => Some(Shape::Ellipse {
             frame: read_ellipse_frame(meta)?,
@@ -350,14 +351,11 @@ fn validate_rect(meta: &LoroMap) -> bool {
     let Some(bounds) = read_rect_bounds(meta) else {
         return false;
     };
-    let Some(radius) = read_corner_radius(meta) else {
-        return false;
-    };
     bounds.origin.x.is_finite()
         && bounds.origin.y.is_finite()
         && finite_non_negative(bounds.width.as_mm())
         && finite_non_negative(bounds.height.as_mm())
-        && finite_non_negative(radius.as_mm())
+        && corner_radii_are_valid(meta)
 }
 
 fn validate_ellipse(meta: &LoroMap) -> bool {

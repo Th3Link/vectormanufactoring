@@ -36,7 +36,7 @@ fn ac1_drag_creates_a_rect_sized_from_a_to_b_zero_radius() {
 
     let Shape::Rect {
         bounds,
-        corner_radius,
+        corner_radii,
     } = document.primitive(id).unwrap().shape
     else {
         panic!("expected rect");
@@ -44,7 +44,7 @@ fn ac1_drag_creates_a_rect_sized_from_a_to_b_zero_radius() {
     assert_eq!(bounds.origin, pt(10.0, 10.0));
     assert!((bounds.width.as_mm() - 20.0).abs() < 1e-9);
     assert!((bounds.height.as_mm() - 15.0).abs() < 1e-9);
-    assert!(corner_radius.as_mm().abs() < 1e-9);
+    assert!(uniform_mm(corner_radii).abs() < 1e-9);
 }
 
 #[test]
@@ -360,4 +360,14 @@ fn escape_during_a_create_drag_writes_nothing() {
     let up = tool.pointer_up(&document, pt(50.0, 50.0), Modifiers::NONE);
     assert_eq!(up, CreateOutcome::NoOp);
     assert_eq!(document.object_ids().len(), 0);
+}
+
+/// The one radius of a rectangle whose four corner radii are equal (asserted).
+fn uniform_mm(radii: curvyo_document_core::CornerRadii) -> f64 {
+    assert_eq!(
+        radii,
+        curvyo_document_core::CornerRadii::uniform(radii.tl),
+        "four equal radii"
+    );
+    radii.tl.as_mm()
 }

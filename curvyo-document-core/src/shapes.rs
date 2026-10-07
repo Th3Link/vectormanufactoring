@@ -8,6 +8,8 @@
 
 use loro::TreeParentId;
 
+use crate::corner_radii::CornerRadii;
+use crate::corner_radii_codec::write_corner_radii_if_changed;
 use crate::document::{Document, OBJECTS_TREE};
 use crate::path_codec::node_exists;
 use crate::path_model::{NewAnchor, NodeId};
@@ -38,10 +40,14 @@ pub enum ShapeEditError {
     /// inner ratio to set).
     #[error("this operation does not apply to this primitive's shape")]
     WrongShape,
+    /// A corner radius is not a finite number (NaN or infinite). Nothing is
+    /// written. A negative radius is not an error: it is floored to 0.
+    #[error("a corner radius must be a finite number")]
+    InvalidRadius,
 }
 
 impl Document {
-    /// Creates a new rectangle primitive with zero corner radius
+    /// Creates a new rectangle primitive with four zero corner radii
     /// (acceptance criterion 1), becoming the selected object is the
     /// caller's job (ADR 0009 §2: selection is ephemeral `curvyo-ui-
     /// core` state).
@@ -58,7 +64,7 @@ impl Document {
         #[allow(clippy::unwrap_used)]
         let meta = tree.get_meta(tree_id_of(id)).unwrap();
         shape_codec::write_rect_bounds(&meta, bounds);
-        shape_codec::write_corner_radius(&meta, Length::from_mm(0.0));
+        write_corner_radii_if_changed(&meta, CornerRadii::uniform(Length::from_mm(0.0)));
         self.commit_with_label("create_rect");
         id
     }
@@ -194,72 +200,6 @@ impl Document {
         Ok(())
     }
 
-    /// Sets a corner radius as entered — clamped only where it is later
-    /// evaluated, never here (acceptance criteria 4, 5, 6) — on every
-    /// named rectangle, as **one commit for the whole batch** (architect
-    /// review: a resize-handle drag always names exactly one id, but
-    /// "remove rounding" can name an entire multi-rectangle selection,
-    /// and that must not cost one commit per object). Every id is
-    /// resolved and confirmed to be a rectangle before any of them is
-    /// written, so one unknown or non-rectangle id anywhere in `ids`
-    /// refuses the whole call — the same contract
-    /// [`Document::convert_to_paths`] already uses. A negative value is
-    /// floored to zero defensively; nothing in this slice's UI can
-    /// produce one.
-    ///
-    /// # Errors
-    /// [`ShapeEditError::NoSuchObject`] if any named id no longer
-    /// exists; [`ShapeEditError::NotAPrimitive`] /
-    /// [`ShapeEditError::WrongShape`] if any named id is not a
-    /// rectangle.
-    pub fn set_corner_radius(&self, ids: &[NodeId], radius: Length) -> Result<(), ShapeEditError> {
-        let radius = Length::from_mm(radius.as_mm().max(0.0));
-        let metas: Vec<_> = ids
-            .iter()
-            .map(|&id| self.require_shape(id, SHAPE_RECT))
-            .collect::<Result<_, _>>()?;
-        for meta in metas {
-            shape_codec::write_corner_radius(&meta, radius);
-        }
-        self.commit_with_label("set_corner_radius");
-        Ok(())
-    }
-
-    /// Sets each named rectangle's corner radius to its own value as **one
-    /// commit for the whole batch**: the Select bar's "Radius" field over
-    /// rectangles of different sizes (`specs/unified-object-editing/`
-    /// criterion 21a), where each value is limited to half of that
-    /// rectangle's own shorter side. A rectangle whose stored radius already
-    /// equals its value is not rewritten (an LWW rewrite of an unchanged value
-    /// could beat a concurrent radius edit), and nothing is committed when no
-    /// rectangle changes. Every id is resolved and confirmed to be a rectangle
-    /// before any is written. A negative value is floored to zero.
-    ///
-    /// # Errors
-    /// [`ShapeEditError::NoSuchObject`] if any named id no longer exists;
-    /// [`ShapeEditError::NotAPrimitive`] / [`ShapeEditError::WrongShape`] if
-    /// any named id is not a rectangle.
-    pub fn set_corner_radii(&self, radii: &[(NodeId, Length)]) -> Result<(), ShapeEditError> {
-        let metas: Vec<_> = radii
-            .iter()
-            .map(|&(id, radius)| {
-                self.require_shape(id, SHAPE_RECT)
-                    .map(|meta| (meta, Length::from_mm(radius.as_mm().max(0.0))))
-            })
-            .collect::<Result<_, _>>()?;
-        let mut changed = false;
-        for (meta, radius) in metas {
-            if shape_codec::read_corner_radius(&meta) != Some(radius) {
-                shape_codec::write_corner_radius(&meta, radius);
-                changed = true;
-            }
-        }
-        if changed {
-            self.commit_with_label("set_corner_radii");
-        }
-        Ok(())
-    }
-
     /// Sets an ellipse/circle's frame as one commit (acceptance
     /// criterion 9).
     ///
@@ -284,40 +224,6 @@ impl Document {
         let meta = self.require_polygon_or_star(id)?;
         shape_codec::write_star_frame(&meta, frame);
         self.commit_with_label("set_star_frame");
-        Ok(())
-    }
-
-    /// Resizes a rectangle's bounding box, corner radius and (optionally)
-    /// stroke width together as **one commit** (`specs/0005-object-transform/
-    /// adrs.md`'s resize-writes table: "frame, `corner_radius` (rect),
-    /// `stroke_width`" — a Select-tool resize-handle drag, acceptance
-    /// criteria 8, 9). `curvyo-ui-core` computes all three values
-    /// (including the local-frame mapping for a rotated object and the
-    /// √(sx·sy) stroke/radius factor) before calling this — this method
-    /// `stroke_width: None` leaves the stored stroke width untouched.
-    /// This method is purely "write what was computed", the same split
-    /// [`Document::set_rect_bounds`] already follows for a plain resize.
-    ///
-    /// # Errors
-    /// [`ShapeEditError::NoSuchObject`] / [`ShapeEditError::NotAPrimitive`]
-    /// / [`ShapeEditError::WrongShape`] if `id` is not a rectangle.
-    pub fn resize_rect(
-        &self,
-        id: NodeId,
-        bounds: RectBounds,
-        corner_radius: Length,
-        stroke_width: Option<Length>,
-    ) -> Result<(), ShapeEditError> {
-        let meta = self.require_shape(id, SHAPE_RECT)?;
-        shape_codec::write_rect_bounds(&meta, bounds);
-        // An unchanged radius is not rewritten (a radius of 0 scales to
-        // 0): an LWW rewrite of an unchanged value would be a new
-        // operation that could beat a concurrent radius edit.
-        if shape_codec::read_corner_radius(&meta) != Some(corner_radius) {
-            shape_codec::write_corner_radius(&meta, corner_radius);
-        }
-        write_stroke_width_if_changed(&meta, stroke_width);
-        self.commit_with_label("resize_rect");
         Ok(())
     }
 
@@ -463,7 +369,11 @@ impl Document {
 
     /// Looks up a primitive's meta map, refusing unless it both exists
     /// and currently has `shape == expected`.
-    fn require_shape(&self, id: NodeId, expected: &str) -> Result<loro::LoroMap, ShapeEditError> {
+    pub(crate) fn require_shape(
+        &self,
+        id: NodeId,
+        expected: &str,
+    ) -> Result<loro::LoroMap, ShapeEditError> {
         let meta = self.require_primitive(id)?;
         match shape_codec::read_shape_tag(&meta) {
             Some(shape) if shape == expected => Ok(meta),
@@ -538,7 +448,7 @@ mod tests {
             snapshot.shape,
             Shape::Rect {
                 bounds,
-                corner_radius: Length::from_mm(0.0)
+                corner_radii: CornerRadii::uniform(Length::from_mm(0.0))
             }
         );
         assert_eq!(snapshot.stroke, crate::path_model::Color::BLACK);
@@ -568,13 +478,13 @@ mod tests {
         let snapshot = document.primitive(id).expect("exists");
         let Shape::Rect {
             bounds,
-            corner_radius,
+            corner_radii,
         } = snapshot.shape
         else {
             panic!("expected a rect");
         };
         assert_eq!(bounds, rect_bounds(5.0, 5.0, 20.0, 20.0));
-        assert!((corner_radius.as_mm() - 3.0).abs() < f64::EPSILON);
+        assert!((corner_radii.tl.as_mm() - 3.0).abs() < f64::EPSILON);
     }
 
     /// Acceptance criteria 8, 9: `resize_rect` writes bounds, corner
@@ -588,7 +498,7 @@ mod tests {
             .resize_rect(
                 id,
                 rect_bounds(0.0, 0.0, 20.0, 20.0),
-                Length::from_mm(2.0),
+                CornerRadii::uniform(Length::from_mm(2.0)),
                 Some(Length::from_mm(0.5)),
             )
             .expect("resize");
@@ -597,13 +507,13 @@ mod tests {
         let snapshot = document.primitive(id).expect("exists");
         let Shape::Rect {
             bounds,
-            corner_radius,
+            corner_radii,
         } = snapshot.shape
         else {
             panic!("expected rect");
         };
         assert!((bounds.width.as_mm() - 20.0).abs() < 1e-9);
-        assert!((corner_radius.as_mm() - 2.0).abs() < 1e-9);
+        assert!((corner_radii.tl.as_mm() - 2.0).abs() < 1e-9);
         assert!((snapshot.stroke_width.as_mm() - 0.5).abs() < 1e-9);
     }
 
@@ -702,7 +612,7 @@ mod tests {
         a.resize_rect(
             id,
             rect_bounds(0.0, 0.0, 30.0, 10.0),
-            Length::from_mm(0.0),
+            CornerRadii::uniform(Length::from_mm(0.0)),
             None,
         )
         .expect("A resizes, switch off");
@@ -730,7 +640,7 @@ mod tests {
         a.resize_rect(
             id,
             rect_bounds(0.0, 0.0, 30.0, 10.0),
-            Length::from_mm(0.0),
+            CornerRadii::uniform(Length::from_mm(0.0)),
             Some(Length::from_mm(crate::path_codec::DEFAULT_STROKE_WIDTH_MM)),
         )
         .expect("A resizes");
@@ -741,10 +651,10 @@ mod tests {
         for peer in [&a, &b] {
             let p = peer.primitive(id).expect("exists");
             assert!((p.stroke_width.as_mm() - 2.0).abs() < 1e-12);
-            let Shape::Rect { corner_radius, .. } = p.shape else {
+            let Shape::Rect { corner_radii, .. } = p.shape else {
                 panic!("rect");
             };
-            assert!((corner_radius.as_mm() - 3.0).abs() < 1e-12);
+            assert!((corner_radii.tl.as_mm() - 3.0).abs() < 1e-12);
         }
     }
 
@@ -757,7 +667,7 @@ mod tests {
             .resize_rect(
                 id,
                 rect_bounds(0.0, 0.0, 20.0, 20.0),
-                Length::from_mm(0.0),
+                CornerRadii::uniform(Length::from_mm(0.0)),
                 Some(Length::from_mm(0.5)),
             )
             .expect("resize");
@@ -775,7 +685,7 @@ mod tests {
         let result = document.resize_rect(
             id,
             rect_bounds(0.0, 0.0, 1.0, 1.0),
-            Length::from_mm(0.0),
+            CornerRadii::uniform(Length::from_mm(0.0)),
             Some(Length::from_mm(0.25)),
         );
         assert_eq!(result, Err(ShapeEditError::WrongShape));
@@ -963,10 +873,10 @@ mod tests {
             "5-object batch must add exactly 1 change, not 5"
         );
         for id in ids {
-            let Shape::Rect { corner_radius, .. } = document.primitive(id).unwrap().shape else {
+            let Shape::Rect { corner_radii, .. } = document.primitive(id).unwrap().shape else {
                 panic!("expected rect");
             };
-            assert!((corner_radius.as_mm() - 2.0).abs() < 1e-9);
+            assert!((corner_radii.tl.as_mm() - 2.0).abs() < 1e-9);
         }
     }
 

@@ -75,7 +75,7 @@ fn rect_of(d: &Document, o: CreateOutcome) -> (f64, f64, f64, f64, f64, f64) {
     let p = d.primitive(id).unwrap();
     let Shape::Rect {
         bounds,
-        corner_radius,
+        corner_radii,
     } = p.shape
     else {
         panic!("rect expected")
@@ -85,7 +85,7 @@ fn rect_of(d: &Document, o: CreateOutcome) -> (f64, f64, f64, f64, f64, f64) {
         bounds.origin.y,
         bounds.width.as_mm(),
         bounds.height.as_mm(),
-        corner_radius.as_mm(),
+        uniform_mm(corner_radii),
         p.rotation.as_radians(),
     )
 }
@@ -734,4 +734,14 @@ fn whitebox_shift_mirror_overflow_does_not_store_infinity_for_finite_pointers() 
             "overflow stored: {bounds:?}"
         );
     }
+}
+
+/// The one radius of a rectangle whose four corner radii are equal (asserted).
+fn uniform_mm(radii: curvyo_document_core::CornerRadii) -> f64 {
+    assert_eq!(
+        radii,
+        curvyo_document_core::CornerRadii::uniform(radii.tl),
+        "four equal radii"
+    );
+    radii.tl.as_mm()
 }

@@ -10,8 +10,8 @@
 #![allow(clippy::too_many_lines)]
 
 use curvyo_document_core::{
-    Angle, CURRENT_FORMAT_VERSION, Document, InnerRatio, Length, ObjectSnapshot, Point, PointCount,
-    PrimitiveSnapshot, Shape, StarFrame, outline_of_rotated, pack, unpack,
+    Angle, Document, InnerRatio, Length, ObjectSnapshot, Point, PointCount, PrimitiveSnapshot,
+    Shape, StarFrame, outline_of_rotated, pack, unpack,
 };
 use curvyo_editor_wasm::{Session, Tool};
 use curvyo_ui_core::EntryOutcome;
@@ -343,7 +343,6 @@ fn rotating_changes_the_shown_angle_by_the_delta() {
 /// format version did not move; opening and saving rewrites no register.
 #[test]
 fn an_old_project_opens_unchanged_and_shows_the_orientation() {
-    assert_eq!(CURRENT_FORMAT_VERSION, 5);
     let document = Document::new(1);
     let frame = |angle: f64, x: f64| StarFrame {
         center: pt(x, 50.0),

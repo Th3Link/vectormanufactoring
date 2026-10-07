@@ -391,6 +391,7 @@ fn translate_primitive_meta(meta: &loro::LoroMap, shape_tag: &str, offset: Vec2)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::corner_radii::CornerRadii;
     use crate::path_model::{AnchorId, NewAnchor};
     use crate::primitive_model::Shape;
     use crate::units::{Angle, Length, Point};
@@ -711,7 +712,7 @@ mod tests {
                 width: Length::from_mm(25.0),
                 height: Length::from_mm(10.0),
             },
-            Length::from_mm(0.0),
+            CornerRadii::uniform(Length::from_mm(0.0)),
             Some(Length::from_mm(0.25)),
         )
         .expect("A resizes");
