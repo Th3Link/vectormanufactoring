@@ -2694,3 +2694,276 @@ fn oracle_sanity_the_drawn_ellipse_outline_is_within_a_few_hundredths_of_the_exa
     assert!(near(x0, 70.0 - hx, 0.03) && near(x1, 70.0 + hx, 0.03));
     assert!(near(y0, 60.0 - hy, 0.03) && near(y1, 60.0 + hy, 0.03));
 }
+
+// ---------------------------------------------------------------------
+// Second pass: routing and sequencing probes
+// ---------------------------------------------------------------------
+
+#[test]
+fn x01_the_typed_move_opens_again_after_a_commit_an_escape_and_a_cancel() {
+    let mut s = select_at(&triangle_doc_sized(120.0, 80.0), pt(30.0, 20.0));
+    for round in 0..3 {
+        let ctr = ctr_of(&obj_of(&s, 0));
+        dbl(&mut s, ctr, ctr, false, false);
+        assert!(s.move_entry().is_some(), "round {round}");
+        match round {
+            0 => assert_eq!(
+                s.commit_move_entry("12", "7", false),
+                EntryOutcome::Committed
+            ),
+            1 => assert_eq!(
+                s.key_down(key("Escape")),
+                KeyOutcome::Escape(EscapeStep::ClosedEntry)
+            ),
+            _ => s.cancel_transform_entry(),
+        }
+        assert!(s.move_entry().is_none(), "round {round}: closed");
+        assert_eq!(s.selected_object_count(), 1);
+        assert_eq!(s.tool(), Tool::Select);
+    }
+}
+
+#[test]
+fn x02_both_presses_must_be_on_the_centre_handle() {
+    let (mut s, b) = select_path(&triangle_doc_sized(120.0, 80.0));
+    let kk = k(&s);
+    let ctr = b.c;
+    let away = pt(ctr.x + 30.0 / kk, ctr.y);
+    let before = snapshot_bytes(&s);
+    // first press elsewhere inside the box, second on the centre handle
+    dbl(&mut s, away, ctr, false, false);
+    assert!(
+        s.move_entry().is_none(),
+        "first press was not on the centre handle"
+    );
+    assert_eq!(snapshot_bytes(&s), before);
+    // first press on the centre, second elsewhere
+    let (mut s, b) = select_path(&triangle_doc_sized(120.0, 80.0));
+    let away = pt(b.c.x + 30.0 / kk, b.c.y);
+    dbl(&mut s, b.c, away, false, false);
+    assert!(
+        s.move_entry().is_none(),
+        "second press was not on the centre handle"
+    );
+    assert_eq!(snapshot_bytes(&s), before);
+}
+
+#[test]
+fn x03_a_press_that_starts_a_move_closes_an_open_chip_and_is_not_swallowed() {
+    for chip in ["move", "skew", "size", "angle"] {
+        let (mut s, b) = select_path(&triangle_doc_sized(120.0, 80.0));
+        let kk = k(&s);
+        let key_for = match chip {
+            "move" => "m",
+            "skew" => "k",
+            "size" => "s",
+            _ => "r",
+        };
+        assert_eq!(press(&mut s, key_for), KeyOutcome::EntryOpened, "{chip}");
+        let before = path_of(&s);
+        let from = pt(b.c.x + 25.0 / kk, b.c.y);
+        s.pointer_hover(from, false, false);
+        s.pointer_down(from, false);
+        s.pointer_hover(pt(from.x + 20.0, from.y + 10.0), false, false);
+        s.pointer_up(pt(from.x + 20.0, from.y + 10.0), false, false);
+        assert!(
+            s.move_entry().is_none() && s.transform_entry().is_none(),
+            "{chip}: closed"
+        );
+        let after = path_of(&s);
+        assert!(
+            pnear(
+                after.anchors[0].point,
+                pt(
+                    before.anchors[0].point.x + 20.0,
+                    before.anchors[0].point.y + 10.0
+                ),
+                1e-9
+            ),
+            "{chip}: the press that closed the chip started a move: {:?}",
+            after.anchors[0].point
+        );
+    }
+}
+
+#[test]
+fn x04_skew_tiny_angles_are_no_change_or_exact_and_never_a_false_too_large() {
+    for text in [
+        "0.0000000000001",
+        "0.000000000001",
+        "-0.000000000001",
+        "0.00000000001",
+        "0.000000001",
+        "0.000001",
+    ] {
+        let (mut s, _b) = open_skew(&rect_path_doc(), (0.0, -1.0));
+        let before = snapshot_bytes(&s);
+        let n = change_count(&s);
+        let out = s.commit_transform_entry(text, "", 0);
+        eprintln!(
+            "SKEW-TINY {text:?} -> {out:?}, commits {}",
+            change_count(&s) - n
+        );
+        assert_ne!(
+            out,
+            EntryOutcome::Invalid {
+                field: 0,
+                reason: InvalidReason::TooLarge
+            },
+            "{text}"
+        );
+        assert_ne!(
+            out,
+            EntryOutcome::Invalid {
+                field: 0,
+                reason: InvalidReason::SkewRange
+            },
+            "{text}"
+        );
+        if out == EntryOutcome::Unchanged {
+            assert_eq!(snapshot_bytes(&s), before);
+        }
+    }
+}
+
+#[test]
+#[ignore = "FAIL (tester finding): a vanishing skew far from the origin is refused as 'Too large' (SkewEntry::resolve treats result == start as the sanity-limit refusal)"]
+fn x04b_a_tiny_angle_far_from_the_origin_is_not_reported_as_too_large() {
+    // far from the origin, where a tiny skew vanishes in the floating-point
+    // resolution of the coordinates: must not be reported as "Too large"
+    let d = Document::new(1);
+    let _ = d.create_path(
+        &[
+            anchor(1, 5_000_000.0, 5_000_000.0),
+            anchor(2, 5_000_020.0, 5_000_000.0),
+            anchor(3, 5_000_020.0, 5_000_010.0),
+        ],
+        true,
+    );
+    let (mut s, b) = select_path(&d);
+    let h = skew_handle_pos(&s, &b, (0.0, -1.0));
+    dbl(&mut s, h, h, false, false);
+    for text in ["0.000000001", "0.00000001", "0.0000001", "0.001"] {
+        let out = s.commit_transform_entry(text, "", 0);
+        eprintln!("SKEW-FAR {text:?} -> {out:?}");
+        assert_ne!(
+            out,
+            EntryOutcome::Invalid {
+                field: 0,
+                reason: InvalidReason::TooLarge
+            },
+            "{text}: a tiny angle is not 'Too large'"
+        );
+        if !matches!(out, EntryOutcome::Invalid { .. }) {
+            break;
+        }
+    }
+}
+
+#[test]
+fn x05_skew_on_a_straight_line_path_has_no_lever() {
+    // zero height: top and bottom skew handles do not exist, K still must not
+    // panic or write; Shift+K (left/right) works because the width is non-zero
+    let d = Document::new(1);
+    let _ = d.create_path(&[anchor(1, 0.0, 0.0), anchor(2, 40.0, 0.0)], false);
+    let mut s = select_at(&d, pt(20.0, 0.0));
+    let before = snapshot_bytes(&s);
+    let out = press(&mut s, "k");
+    eprintln!("K on a horizontal line: {out:?}");
+    if out == KeyOutcome::EntryOpened {
+        let r = s.commit_transform_entry("30", "", 0);
+        eprintln!("commit on a zero-lever skew: {r:?}");
+        assert_eq!(
+            snapshot_bytes(&s),
+            before,
+            "a skew without a lever writes nothing"
+        );
+        s.cancel_transform_entry();
+    }
+    let out = press_shift(&mut s, "K");
+    assert!(matches!(
+        out,
+        KeyOutcome::EntryOpened | KeyOutcome::Ignored | KeyOutcome::Hint(_)
+    ));
+    s.cancel_transform_entry();
+}
+
+#[test]
+fn x06_key_outcome_codes_for_the_new_hints() {
+    assert_eq!(
+        KeyOutcome::Hint(KeyHint::SelectFirst).code(),
+        "hint-select-first"
+    );
+    assert_eq!(KeyOutcome::Hint(KeyHint::PathOnly).code(), "hint-path-only");
+    assert_eq!(
+        KeyOutcome::Hint(KeyHint::SelectOne).code(),
+        "hint-select-one"
+    );
+    assert_eq!(KeyOutcome::EntryOpened.code(), "entry");
+}
+
+#[test]
+fn x07_handle_hints_name_skew_x_and_y_apart() {
+    let (mut s, b) = select_path(&triangle_doc_sized(120.0, 80.0));
+    for side in SIDES {
+        s.pointer_hover(skew_handle_pos(&s, &b, side), false, false);
+        let want = if side.1 != 0.0 { "skew" } else { "skew-y" };
+        assert_eq!(s.handle_hint(), want, "{side:?}");
+    }
+    s.pointer_hover(b.c, false, false);
+    assert_eq!(s.handle_hint(), "move");
+}
+
+#[test]
+fn x08_s_r_m_k_open_for_a_rotated_selection_at_the_rotated_anchors() {
+    let d = curvy_doc();
+    rotate_doc_object(&d, 0.7);
+    let (mut s, b) = select_path(&d);
+    assert_eq!(press(&mut s, "s"), KeyOutcome::EntryOpened);
+    let e = s.transform_entry().unwrap();
+    assert!(
+        pnear(e.handle, b.corner(1.0, 1.0), 1e-6),
+        "{:?} vs {:?}",
+        e.handle,
+        b.corner(1.0, 1.0)
+    );
+    s.cancel_transform_entry();
+    assert_eq!(press(&mut s, "k"), KeyOutcome::EntryOpened);
+    let e = s.transform_entry().unwrap();
+    assert!(pnear(e.handle, skew_handle_pos(&s, &b, (0.0, -1.0)), 1e-6));
+    s.cancel_transform_entry();
+    assert_eq!(press_shift(&mut s, "K"), KeyOutcome::EntryOpened);
+    let e = s.transform_entry().unwrap();
+    assert!(pnear(e.handle, skew_handle_pos(&s, &b, (1.0, 0.0)), 1e-6));
+    s.cancel_transform_entry();
+    assert_eq!(press(&mut s, "m"), KeyOutcome::EntryOpened);
+    assert!(pnear(s.move_entry().unwrap().center, b.c, 1e-6));
+}
+
+#[test]
+fn x09_the_s_pivot_marker_draw_list_differs_from_the_chip_closed_state() {
+    // The marker is not exposed except through the draw list: with the S chip
+    // open the list must differ from the same scene with the chip closed, and
+    // the double-click chip on the same handle must differ from the S chip
+    // (the marker sits elsewhere).
+    let make = || select_at(&rect_doc(10.0, 10.0, 40.0, 20.0), pt(30.0, 10.0));
+    let closed = make().draw_list().triangles.len();
+    let mut a = make();
+    press(&mut a, "s");
+    let with_s = a.draw_list();
+    let mut b = make();
+    dbl(&mut b, pt(50.0, 30.0), pt(50.0, 30.0), false, false);
+    let with_dbl = b.draw_list();
+    assert_ne!(with_s.triangles.len(), closed, "S chip adds the marker");
+    let pos = |d: &vecmanf_render_core::DrawList| -> Vec<(i64, i64)> {
+        d.triangles
+            .iter()
+            .map(|v| ((v.position.x * 100.0) as i64, (v.position.y * 100.0) as i64))
+            .collect()
+    };
+    assert_ne!(
+        pos(&with_s),
+        pos(&with_dbl),
+        "different fixed points, different marker"
+    );
+}
