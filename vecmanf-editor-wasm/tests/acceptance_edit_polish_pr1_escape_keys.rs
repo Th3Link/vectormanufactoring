@@ -1009,7 +1009,12 @@ fn ac57_r_and_s_open_exactly_the_double_click_entries_for_every_kind() {
                 d
             },
             pt(30.0 + 20.0 * 0.3_f64.cos(), 30.0 + 20.0 * 0.3_f64.sin()),
-            pt(50.0, 50.0),
+            // The box turns with the shape (`polygon-star-box-refit`): its
+            // bottom-right corner is (R, R) turned by the frame angle.
+            pt(
+                30.0 + 20.0 * (0.3_f64.cos() - 0.3_f64.sin()),
+                30.0 + 20.0 * (0.3_f64.sin() + 0.3_f64.cos()),
+            ),
         ),
     ];
     for (name, doc, grab, south_east) in kinds {

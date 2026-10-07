@@ -99,7 +99,7 @@ pub(crate) fn resize_primitive(
         }
     };
     let anchor_local = resize_anchor_local_position(start_box.min, start_box.max, direction, shift);
-    let pinned = pin_resize_anchor(shape, start_box.pivot, primitive.rotation, anchor_local);
+    let pinned = pin_resize_anchor(shape, start_box.pivot, start_box.angle, anchor_local);
     (
         PrimitiveSnapshot {
             shape: pinned,

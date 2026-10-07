@@ -8,11 +8,13 @@
 //! specification.md`, which still shows every object's plain,
 //! non-oriented box regardless of its own rotation).
 //!
-//! A primitive's local frame coincides with its stored
-//! `RectBounds`/`EllipseFrame`/`StarFrame` (already unrotated by
-//! construction, `adrs.md`'s "the frame registers... are the shape in
-//! its LOCAL frame"), so its own frame center is both the local and the
-//! document-space pivot the rotation turns about. A path has no local
+//! A rectangle's or ellipse's local frame coincides with its stored
+//! `RectBounds`/`EllipseFrame` (already unrotated by construction,
+//! `adrs.md`'s "the frame registers... are the shape in its LOCAL frame"),
+//! and a polygon's or star's is its `StarFrame` turned by the frame's own
+//! angle (its +x axis points at the first outer vertex), so in every case
+//! the frame center is both the local and the document-space pivot the
+//! angle turns about. A path has no local
 //! frame stored at all — its anchors are baked, absolute document-space
 //! points — so this module derives one by rotating every anchor by
 //! `-rotation` about a fixed reference point (document origin) and
@@ -112,8 +114,12 @@ impl OrientedBox {
 }
 
 /// `object`'s own [`OrientedBox`] — a primitive's local frame
-/// ([`shape_frame_bounds`]) with its own rotation, or a path's
-/// derotated-anchor bounds (`specs/0005-object-transform/adrs.md`).
+/// ([`shape_frame_bounds`]) turned by its shown angle
+/// ([`ObjectSnapshot::orientation`]), or a path's derotated-anchor bounds
+/// (`specs/0005-object-transform/adrs.md`). For a polygon or star the shown
+/// angle is `StarFrame.angle + rotation`, so the box direction is the number in
+/// the readout and the first outer vertex sits on the middle of the box's
+/// right-hand side (`specs/polygon-star-box-refit/`).
 #[must_use]
 pub fn oriented_bounds(object: &ObjectSnapshot) -> OrientedBox {
     match object {
@@ -122,7 +128,7 @@ pub fn oriented_bounds(object: &ObjectSnapshot) -> OrientedBox {
             OrientedBox {
                 min,
                 max,
-                angle: primitive.rotation,
+                angle: object.orientation(),
                 pivot: shape_center(&primitive.shape),
             }
         }

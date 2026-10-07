@@ -75,12 +75,13 @@ fn polygon_session(count: u32) -> Session {
     session
 }
 
-/// The NE rotate handle of a freshly created shape of radius `r` at `c`.
-fn ne_rotate(c: Point, r: f64) -> Point {
-    pt(
-        c.x + r + CORNER_OFFSET_PX / SCALE,
-        c.y - r - CORNER_OFFSET_PX / SCALE,
-    )
+/// The NE rotate handle of a shape of radius `r` at `c` whose shown angle is
+/// `shown_degrees`: its box is turned by that angle
+/// (`specs/polygon-star-box-refit/`).
+fn ne_rotate(c: Point, r: f64, shown_degrees: f64) -> Point {
+    let out = r + CORNER_OFFSET_PX / SCALE;
+    let (sin, cos) = shown_degrees.to_radians().sin_cos();
+    pt(c.x + out * cos + out * sin, c.y + out * sin - out * cos)
 }
 
 fn double_click(session: &mut Session, at: Point) {
@@ -91,7 +92,8 @@ fn double_click(session: &mut Session, at: Point) {
 }
 
 fn type_angle(session: &mut Session, c: Point, r: f64, text: &str) -> EntryOutcome {
-    double_click(session, ne_rotate(c, r));
+    let shown = orientation_deg(session);
+    double_click(session, ne_rotate(c, r, shown));
     session.commit_transform_entry(text, "", 0)
 }
 
@@ -125,7 +127,7 @@ fn a_created_shape_shows_the_direction_it_was_dragged() {
             orientation_deg(&session)
         );
         // The angle entry opens on it.
-        double_click(&mut session, ne_rotate(pt(100.0, 50.0), 10.0));
+        double_click(&mut session, ne_rotate(pt(100.0, 50.0), 10.0, degrees));
         let entry = session.transform_entry().expect("an angle entry");
         assert_eq!(entry.kind, "angle");
         let shown: f64 = entry.fields[0].prefill.parse().unwrap();
@@ -230,7 +232,7 @@ fn ctrl_rotate_snaps_the_shown_angle() {
         let center = pt(100.0, 50.0);
         let mut session = polygon_session(5);
         create_drag(&mut session, center, polar(center, 10.0, created), false);
-        let handle = ne_rotate(center, 10.0);
+        let handle = ne_rotate(center, 10.0, created);
         let from = center.vector_to(handle);
         let start = from.y.atan2(from.x).to_degrees();
         let radius = from.length();
@@ -319,7 +321,7 @@ fn rotating_changes_the_shown_angle_by_the_delta() {
     let center = pt(100.0, 50.0);
     let mut session = polygon_session(5);
     create_drag(&mut session, center, polar(center, 10.0, 170.0), false);
-    let handle = ne_rotate(center, 10.0);
+    let handle = ne_rotate(center, 10.0, 170.0);
     let from = center.vector_to(handle);
     let radius = from.length();
     let start = from.y.atan2(from.x).to_degrees();
@@ -388,7 +390,7 @@ fn an_old_project_opens_unchanged_and_shows_the_orientation() {
         session.pointer_hover(on_outline, false, false);
         session.pointer_down(on_outline, false);
         session.pointer_up(on_outline, false, false);
-        double_click(&mut session, ne_rotate(pt(250.0, 50.0), 10.0));
+        double_click(&mut session, ne_rotate(pt(250.0, 50.0), 10.0, angle));
         let entry = session.transform_entry().expect("an angle entry");
         assert_eq!(entry.fields[0].prefill, text);
     }

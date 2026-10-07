@@ -1219,7 +1219,12 @@ fn sweep_draw_each_shape_then_move_resize_and_rotate_it_through_the_select_tool(
         let hw = (nb.2 - nb.0) / 2.0 * k;
         let hh = (nb.3 - nb.1) / 2.0 * k;
         let d = 32.0 / SQRT_2;
-        let handle = pt(c.x + (hw + d) / k, c.y + (hh + d) / k);
+        // The box of a polygon or star is turned by its shown angle
+        // (`polygon-star-box-refit`); for the other kinds that angle is 0 here.
+        let shown = vecmanf_document_core::ObjectSnapshot::Primitive(prim(&s, 0))
+            .orientation()
+            .as_radians();
+        let handle = rot(pt(c.x + (hw + d) / k, c.y + (hh + d) / k), c, shown);
         let target = rot(handle, c, std::f64::consts::FRAC_PI_2);
         let rot_before = prim(&s, 0).rotation.as_radians();
         drag(&mut s, handle, target, false, false);

@@ -291,11 +291,14 @@ impl Session {
             return "default".to_string();
         }
         let objects = self.objects();
+        // The cursor arrows follow the box the maker sees: its direction is the
+        // shown angle (`orientation()`), which is the `rotation` register for
+        // every kind but polygon and star.
         let rotation = match self.selection.ids() {
             [only] => objects
                 .iter()
                 .find(|o| o.id() == *only)
-                .map_or(Angle::from_radians(0.0), ObjectSnapshot::rotation),
+                .map_or(Angle::from_radians(0.0), |o| oriented_bounds(o).angle),
             _ => Angle::from_radians(0.0),
         };
         match self.select_cursor_handle(&objects) {
