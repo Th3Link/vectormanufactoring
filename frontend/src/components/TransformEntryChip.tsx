@@ -18,6 +18,8 @@ const MESSAGES = {
   positive: "Must be above 0",
   negative: "Must be 0 or more",
   "ratio-range": "Must be 0.01 to 0.99",
+  "skew-range": "Must be between -90 and 90",
+  "too-large": "Too large",
 } as const;
 
 type Reason = keyof typeof MESSAGES;
@@ -180,13 +182,15 @@ export function TransformEntryChip({
     onCancel();
   };
 
-  const isAngle = entry.kind === "angle";
+  const isAngle = entry.kind === "angle" || entry.kind === "skew";
   const isRatio = entry.kind === "inner-ratio";
   const fieldWidth = isAngle ? 80 : isRatio ? 96 : 100;
   const groupName =
     entry.kind === "angle"
       ? "Rotation"
-      : entry.kind === "corner-radius"
+      : entry.kind === "skew"
+        ? "Skew"
+        : entry.kind === "corner-radius"
         ? "Corner radius"
         : isRatio
           ? "Inner ratio"

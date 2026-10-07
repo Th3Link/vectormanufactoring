@@ -174,11 +174,113 @@ and read where the select decoration input is built, `session/select_view.rs`).
 Unit tests in `vecmanf-render-core` (pure functions and draw lists), one session
 test in `vecmanf-editor-wasm`, the pixel readback in the browser pane, and the
 whole CI gate (`.github/workflows/ci.yml`) on the PR head.
-||||||| 450f5f3
 
 ## PR 3: `story/edit-polish-typed-skew-move`
 
-Part B and the keys M and K of Part F. Tasks are added when PR 3 starts.
+Part B (typed skew and typed move) and the keys M, K and Shift+K of Part F.
+Criteria 9 to 25 except the Copy check of 23 (PR 4), and 54 (M, K), 56, 58, 59.
+Plus, as the first commit, the customer change request on PR 1 (2026-10-07):
+the key S scales the typed size about the box centre (criteria 57, 57a).
+Worktree `/home/marc/workbench/vecmanf-claude/edit-polish-3`, from
+`origin/main` at `6d2eaed`. No new crate, no new dependency, no document
+change, no `format_version` change.
+
+### Affected crates and modules
+
+- `vecmanf-ui-core`: new `skew_entry.rs`, `move_entry.rs`; `object_bounds.rs`
+  (`object_outline_bounds`), `select_tool/handles.rs` (`entry_anchor`),
+  `select_tool/entry.rs` (`OpenEntry::{Skew, Move}`, the centre-handle and
+  skew double-click, `open_entry_for_key` for M, K, Shift+K),
+  `select_tool.rs` (the centre press is recorded, `Ignored` deleted),
+  `transform_commit.rs` (`commit_move`), `transform_entry.rs` (two
+  `InvalidReason`s, `EntryKind::Skew`).
+- `vecmanf-editor-wasm`: `session/keys.rs` (M, K, Shift+K, two `KeyHint`s),
+  `session/transform_entry.rs` (skew view, anchor from the box),
+  new `session/move_entry.rs`, new `wasm_move_entry.rs` (the outcome codes
+  moved there so `wasm_api.rs` shrinks), `session/select_view.rs` (`skew-y`
+  hint).
+- `frontend/`: new `MoveEntryChip.tsx`, `TransformEntryChip.tsx` (skew kind and
+  two messages), `HandleHintChip.tsx` (hint lines), `useEditorSession.ts`,
+  `Canvas.tsx`, `readoutPlacement.ts` (`placeMoveChip`).
+- Docs: `docs/design-system.md` rows (S about the centre, M, K, hint lines).
+
+### Tasks
+
+- [x] 0. Change request: the key S scales about the box centre (the typed
+  size is the one a Shift drag of the bottom-right handle resolves, the pivot
+  marker shows at the centre, the fields stay independent); the double-click on
+  a resize handle keeps the dragged handle's fixed point. Tests: unit test of
+  the rectangle example of criterion 57 (40 x 20 at (10, 10) typed 60 x 30
+  ends at (0, 5)), the pivot of both routes, a session test for the marker;
+  no earlier test pinned the old S fixed point. Design-system rows. (57, 57a,
+  59)
+- [x] 1. `object_outline_bounds`: the tight bounds of the drawn outline (path:
+  curve extrema; primitive: its rotated outline). (21)
+- [x] 2. `entry_anchor(box, handle, tolerances)`: the chip anchor from the box,
+  not from the drawn handle set; the three existing transform entries read it
+  in `Session::transform_entry`, so R, S and K open on a box too small to draw
+  the handle. (17, 56, 58, 59)
+- [x] 3. `SkewEntry`: one field "Skew angle x" or "y", prefill "0", calls the
+  drag's `skew_by_angle`; `SkewRange` and `TooLarge`; a flat path's field is
+  read-only; the pivot marker. Tests: the worked example of 10, entry equals a
+  drag for every side at rotation 0 and 30 with and without Shift, skew then
+  negated skew restores the path (13), refusals (11), no-ops (12). (9 to 14)
+- [x] 4. `MoveEntry` and `commit_move`: relative offset, absolute against the
+  tight top-left, untouched field means no change on that axis, the mode and
+  the (later) Copy check arrive with the commit. The drag's release uses the
+  same `commit_move`. (18 to 22, 25)
+- [x] 5. Double-click routing: the drawn centre handle opens the typed move
+  (the press on it is recorded; where it is not drawn the old rule holds), a
+  skew handle opens the skew entry, `SelectDoubleClickOutcome::Ignored` is
+  deleted. (9, 15, 16, 17)
+- [x] 6. `open_entry_for_key` for M, K and Shift+K; `Session::key_down` binds
+  them; `Hint(SelectFirst)` (nothing selected, or M and K outside the Select
+  tool) and `Hint(PathOnly)` (K on a non-path) join `Hint(SelectOne)`. The
+  Shift-revealed side rotate handles stay hidden while a skew, move or
+  parameter chip is open. (54, 56, 58, 59)
+- [x] 7. Session and wasm surface: the skew chip reuses the transform entry view
+  with kind "skew"; `move_entry()` and `commit_move_entry()` in a second
+  `impl WasmSession` block; the outcome codes gain `skew-range` and
+  `too-large`. `handle_hint()` reports `skew-y` for the left and right skew
+  handles. (9, 11, 18, 24)
+- [x] 8. Frontend: `MoveEntryChip` (X, Tab, Y, Tab, the Relative | Absolute
+  switch with `role="switch"`, Space and arrows flip it, Enter applies,
+  Escape cancels, untouched fields follow the mode), the skew chip, the hint
+  lines "Double-click or M / K / Shift+K", the key hint texts. No Copy check is
+  drawn (PR 4). (18, 24, 59)
+- [x] 9. Tests that pinned superseded behaviour are rewritten with an equal or
+  stronger assertion: skew-handle double-click (was ignored, now the skew
+  entry), centre-handle double-click (was handoff or hint, now the typed
+  move), the `skew` hint (now `skew` for top and bottom, `skew-y` for left
+  and right; negative assertions use `starts_with("skew")` so they do not get
+  weaker), the "M and K are unbound" assertions.
+- [ ] 10. Gate: fmt, clippy (host, wasm32 per core crate and editor-wasm),
+  nextest, rustdoc, deny, banned-dependency check, `npm run build`, `tsc -b
+  --noEmit`, `npm run lint`, license check, `npm audit`; the CI result of the
+  head commit; the Browser-pane check.
+
+### Decisions taken here (inside the ADR)
+
+- The chip anchor is computed by `entry_anchor` when the view is built from the
+  entry's start box, not stored in the entry: the box is fixed for the entry's
+  life, so the two are the same, and no field is added to four types.
+- `commit_move` has no `copy` parameter in this PR: the Copy check and
+  `duplicate_objects` are PR 4's, and a parameter that is always `false` would
+  be dead code. PR 4 adds it.
+- The hint code of a left or right skew handle is `skew-y` (top and bottom keep
+  `skew`), so the hint chip can say "Shift+K" for those two.
+- The move chip's hint names only "Double-click or M: type an offset" until PR 4
+  adds "Shift: keep one axis" and "Ctrl: copy", which do not exist yet.
+- `parse_entry_number` is not extended to U+2212 here: nothing in this PR
+  produces a value with that sign (the move readout is PR 4).
+
+### Validation
+
+Every rule is in Rust and tested there: `SkewEntry` against a drag, `MoveEntry`
+in both modes, the key table, the double-click routing at small and large box
+sizes, the session round trip. The frontend has no test runner
+(`docs/technical-debt.md`); the chips are checked in the Browser pane against a
+worktree build.
 
 ## PR 4: `story/edit-polish-move-copy-lock`
 

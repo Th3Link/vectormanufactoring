@@ -4,6 +4,7 @@ import { EditHintChip } from "@/components/EditHintChip";
 import { HandleHintChip } from "@/components/HandleHintChip";
 import { KeyHintChip } from "@/components/KeyHintChip";
 import { NodeContextMenu } from "@/components/NodeToolbar";
+import { MoveEntryChip } from "@/components/MoveEntryChip";
 import { TransformEntryChip } from "@/components/TransformEntryChip";
 import type { EditorSession } from "@/hooks/useEditorSession";
 import { cursorForHint } from "@/lib/cursors";
@@ -121,6 +122,14 @@ export function Canvas({ editor }: CanvasProps) {
           onCommit={editor.commitTransformEntry}
           onCancel={editor.cancelTransformEntry}
           onLinked={editor.transformEntryLinked}
+        />
+      )}
+      {editor.moveEntry && (
+        <MoveEntryChip
+          entry={editor.moveEntry}
+          containerRef={editor.containerRef}
+          onCommit={editor.commitMoveEntry}
+          onCancel={editor.cancelTransformEntry}
         />
       )}
       <HandleHintChip hint={editor.handleHint} containerRef={editor.containerRef} />

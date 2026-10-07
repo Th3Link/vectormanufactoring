@@ -102,3 +102,30 @@ export function placeEntryChip(
   const outward = at(1);
   return coversPoint(outward, chip, handle) ? at(-1) : outward;
 }
+
+/** Distance of the typed-move chip's near corner from the centre glyph, in
+ * CSS pixels, on both axes (`docs/design-system.md`, "Move entry chip"). */
+const MOVE_CHIP_OFFSET_PX = 16;
+
+/**
+ * Where to put the typed-move chip (`edit-interaction-polish` criterion 18):
+ * its top left 16px right of and 16px below the centre glyph, so it never
+ * covers the glyph, flipped to the left of the glyph when it would cross the
+ * right edge and above it when it would cross the bottom edge (the readout's
+ * rule, mirrored), then clamped inside the canvas.
+ */
+export function placeMoveChip(
+  center: { x: number; y: number },
+  chip: Size,
+  canvas: Size,
+): Placement {
+  let left = center.x + MOVE_CHIP_OFFSET_PX;
+  let top = center.y + MOVE_CHIP_OFFSET_PX;
+  if (left + chip.width > canvas.width) {
+    left = center.x - MOVE_CHIP_OFFSET_PX - chip.width;
+  }
+  if (top + chip.height > canvas.height) {
+    top = center.y - MOVE_CHIP_OFFSET_PX - chip.height;
+  }
+  return clampInside(left, top, chip, canvas);
+}
