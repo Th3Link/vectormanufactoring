@@ -20,27 +20,27 @@ direction is `ObjectSnapshot::orientation()`, derived in `oriented_bounds`.
 
 ## Tasks
 
-- [ ] 1. Golden numbers from `main` for the old inner-vertex positions and the
+- [x] 1. Golden numbers from `main` for the old inner-vertex positions and the
   rectangle, ellipse and path boxes, pinned in tests before the change
   (fulfils AC 8, 15).
-- [ ] 2. Failing ui-core tests: box table over (frame angle, rotation),
+- [x] 2. Failing ui-core tests: box table over (frame angle, rotation),
   worked corners, invariant proptest (all outline vertices inside the box,
   first outer vertex at local angle 0, star handle on the real inner vertex,
   rotate by delta turns the box by delta) (fulfils AC 1, 2, 4, 8, 13).
-- [ ] 3. `oriented_bounds` sets `angle: object.orientation()`; fix
+- [x] 3. `oriented_bounds` sets `angle: object.orientation()`; fix
   `star_inner_vertex`, `value_from_pointer`, `resize_primitive` pin argument
   (fulfils AC 1, 7, 8, 9).
-- [ ] 4. Failing session tests, then `cursor_hint` uses the box angle:
+- [x] 4. Failing session tests, then `cursor_hint` uses the box angle:
   create-drag box direction, typed rotation table, drag rotate with and
   without Shift and Ctrl (preview equals commit), resize example, typed
   radius, cursor strings, hit rule, no skew handle, no stored-field write,
   old fixtures (fulfils AC 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15).
-- [ ] 5. Update the existing tests whose expectation moved with the box
+- [x] 5. Update the existing tests whose expectation moved with the box
   direction; list each in the PR (fulfils AC 1, 2).
-- [ ] 6. Docs: `docs/technical-debt.md` and `specs/edit-interaction-polish`
-  notes are in PR #48; after it merges nothing else changes here. Module doc of
+- [x] 6. Docs: `docs/technical-debt.md` and `specs/edit-interaction-polish`
+  notes are in PR #48; nothing else changes here. Module doc of
   `oriented_box.rs` updated.
-- [ ] 7. Full gate (CLAUDE.md §7 plus everything `.github/workflows/ci.yml`
+- [x] 7. Full gate (CLAUDE.md §7 plus everything `.github/workflows/ci.yml`
   runs), check the UI in the Browser pane, draft PR, CI green on the head sha.
 
 ## Validation
