@@ -814,18 +814,17 @@ system are in "UX notes round 2", section 1.
     - **Pivot marker:** while the S chip is open the marker shows at the box
       centre (the fixed point). The double-click route keeps its marker where
       its fixed point is.
-    - **Placement of the chip:** unchanged by default, at the bottom-right
-      corner resize handle's position (criterion 59). The `ux-engineer`
-      judges whether the S chip should rather open at the centre handle's
-      position, where the fixed point now is; if so it moves there and
-      criterion 59's "where that handle is or would be" names the centre for
-      S. Constraint if it moves: it must not cover the pivot marker (the move
-      chip opens 16 px right of and below the centre glyph for the same
-      reason, criterion 18).
-    - **Hint chip:** the resize hint line reads "Double-click or S: type a
-      size" (criterion 24). It names no fixed point, so no wording changes. If
-      the `ux-engineer` wants the difference visible, a second line "S: from
-      the centre" is allowed; the default adds none.
+    - **Placement of the chip (decided 2026-10-07, UX review):** the S chip is
+      placed as the move chip is, its top left 16 px right of and below the box
+      centre (flipped and clamped as the move chip is), not at the hidden
+      bottom-right handle. No handle takes its dragging look, the centre
+      handle's glyph makes way for the pivot marker, and the marker at the
+      centre is drawn at full `--accent` while the chip is open. The double-click
+      route on a resize handle keeps its handle in the dragging look, its chip
+      at the handle and its marker at the opposite point.
+    - **Hint chip:** the resize hint lines read "Double-click or S: type a
+      size" and a second line "S: from the center; double-click: opposite
+      corner" (criterion 24), on the two corner resize hints.
 58. Given the Select tool with one path selected, when the maker presses K, then
     the skew entry of criterion 9 for the top handle opens, accessible name "Skew
     angle x"; with Shift+K the one for the right handle, "Skew angle y". Both
@@ -834,9 +833,10 @@ system are in "UX notes round 2", section 1.
 59. Given a chip opened by an entry key, then it behaves in every respect as the
     chip of the double-click route (fields, prefill, validation, Enter writes one
     commit, Escape, a click elsewhere or a tool switch write nothing), except the
-    fixed point of S and the missing Ctrl link (criterion 57a), it opens
-    where that handle is or would be, the handle if drawn shows its dragging
-    look, focus returns to the canvas when it closes, and while a chip is open
+    fixed point of S, the missing Ctrl link and the placement of the S chip
+    (criterion 57a), it opens where that handle is or would be, the handle if
+    drawn shows its dragging look (the S chip: by the box centre, no handle
+    highlighted), focus returns to the canvas when it closes, and while a chip is open
     the Shift-revealed side rotate handles other than the open chip's own are
     hidden (so no key-opened chip sits on one; the side rotate handle that a
     double-click chip belongs to stays drawn in its dragging look until the chip
@@ -1089,10 +1089,9 @@ at all, apart from Shift+K meaning skew y); the double-click route keeps it.
 skalieren"):* S is the one entry whose fixed point is not that of its handle. No
 handle was chosen, so the typed size scales about the box centre, as a drag
 with Shift held would; the double-click on a resize handle keeps the drag's
-fixed point (criterion 57a). Open for the `ux-engineer`: whether the S chip
-should open at the centre handle's position instead of the hidden bottom-right
-handle's (default: unchanged); the pivot marker shows at the centre while it is
-open.
+fixed point (criterion 57a). Decided 2026-10-07 (UX review): the S chip opens
+by the centre, placed as the move chip is, with no handle in its dragging look
+and the pivot marker at the centre in full `--accent`.
 While a chip is open the Shift-revealed side rotate handles other than the open
 chip's own are hidden, so the Shift+K chip never sits on one. With several objects selected, or K on a
 non-path, the key shows a one-line hint-chip message for 2 s and writes

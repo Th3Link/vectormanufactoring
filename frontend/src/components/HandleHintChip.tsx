@@ -18,11 +18,13 @@ const HINT_LINES: Record<string, string[]> = {
     "Shift: from center",
     "Ctrl: keep proportions",
     "Double-click or S: type a size",
+    "S: from the center; double-click: opposite corner",
   ],
   "resize-corner-uniform": [
     "Resize",
     "Shift: from center",
     "Double-click or S: type a size",
+    "S: from the center; double-click: opposite corner",
   ],
   "rotate-corner": [
     "Rotate",

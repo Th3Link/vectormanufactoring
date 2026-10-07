@@ -152,6 +152,8 @@ pub struct TransformEntryView {
     pub center_x: f64,
     pub center_y: f64,
     pub glyph_reach: f64,
+    /// The chip goes by the box centre instead of outward from the handle.
+    pub at_centre: bool,
 }
 
 #[wasm_bindgen]
@@ -222,6 +224,7 @@ impl TransformEntryView {
             center_x,
             center_y,
             glyph_reach: entry.glyph_reach_px,
+            at_centre: entry.at_centre,
         }
     }
 }

@@ -255,7 +255,7 @@ change, no `format_version` change.
   and right; negative assertions use `starts_with("skew")` so they do not get
   weaker), the "M and K are unbound" assertions.
 - [x] 10. Gate: fmt, clippy (host, wasm32 per core crate and editor-wasm),
-  nextest (1601 tests), rustdoc, deny, banned-dependency check, `npm run build`,
+  nextest, rustdoc, deny, banned-dependency check, `npm run build`,
   `tsc -b --noEmit`, `npm run lint` (5 warnings, the same as `main`), license
   check, `npm audit`; the Browser-pane check (M relative and absolute, K, the
   double-click on the centre and skew handles, S about the centre, the hint
@@ -285,6 +285,14 @@ change, no `format_version` change.
   height opens a chip whose field is read-only and never writes; a dedicated
   "cannot skew" hint would need a text and a criterion 59 line that the spec
   does not have, so it is left for the customer's review of the demo.
+
+- Review round 2 (UX): the S key's chip is placed by the box centre
+  (`TransformEntry::centre_chip`, `EntryView::at_centre`), no handle is
+  highlighted and the centre glyph yields to the pivot marker, drawn at full
+  `--accent` (`pivot_marker_full`). The corner resize hints gain a second line;
+  the skew chip shows "Skew x" / "Skew y" inside a 120 px field; the Absolute
+  switch has a title and a description; the pill ring is a 1.5 px shadow
+  because a 1.5 px border computes to 1 px at DPR 1.
 
 ### Validation
 

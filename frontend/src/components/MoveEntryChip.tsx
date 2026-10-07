@@ -11,6 +11,9 @@ const TOOL_RAIL_CLEAR_PX = 72;
 /** Height of the message card plus its gap, in px. */
 const MESSAGE_CARD_PX = 28;
 
+/** What "Absolute" measures from (criterion 21). */
+const ABSOLUTE_HINT = "Top-left corner of the object's bounds, measured from the page's top-left corner";
+
 /** The labels and the accessible names of the two fields, per mode
  * (`edit-interaction-polish` criterion 18). */
 const FIELDS = [
@@ -239,11 +242,18 @@ export function MoveEntryChip({ entry, containerRef, onCommit, onCancel }: MoveE
           role="switch"
           aria-checked={absolute}
           aria-label="Absolute position"
+          aria-description={ABSOLUTE_HINT}
+          title={ABSOLUTE_HINT}
           onClick={() => setAbsolute((previous) => !previous)}
           onKeyDown={onSwitchKeyDown}
           onBlur={onBlur}
-          className="mt-1.5 flex h-7 w-full cursor-pointer rounded-[7px] border-[1.5px] p-[1px] outline-none focus-visible:ring-2 focus-visible:ring-[var(--editor-accent)]"
-          style={{ borderColor: "var(--toolbar-icon)", color: "var(--toolbar-icon)" }}
+          className="mt-1.5 flex h-7 w-full cursor-pointer rounded-[7px] p-[1.5px] outline-none focus-visible:ring-2 focus-visible:ring-[var(--editor-accent)]"
+          // A 1.5 px ring as a shadow: a CSS border of 1.5 px computes to 1 px
+          // at a device pixel ratio of 1, a shadow spread does not snap.
+          style={{
+            boxShadow: "inset 0 0 0 1.5px var(--toolbar-icon)",
+            color: "var(--toolbar-icon)",
+          }}
         >
           <span
             aria-hidden

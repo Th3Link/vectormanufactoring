@@ -294,6 +294,10 @@ export interface TransformEntryState {
    * CSS pixels: 6 normally, 22 for an edge resize handle with a skew arrow
    * on the same side (the chip must clear the arrow). */
   glyphReach: number;
+  /** The chip goes 16 px right of and below the box centre, as the move chip
+   * does, instead of outward from the handle: the key S, whose fixed point is
+   * the centre (`edit-interaction-polish` criterion 59). */
+  atCentre: boolean;
 }
 
 /** Reads the wasm-bindgen `TransformEntryView` once, immediately, so it can
@@ -313,6 +317,7 @@ function readTransformEntry(
         center_x: number;
         center_y: number;
         glyph_reach: number;
+        at_centre: boolean;
         free(): void;
       }
     | undefined,
@@ -336,6 +341,7 @@ function readTransformEntry(
     handle: { x: raw.handle_x, y: raw.handle_y },
     center: { x: raw.center_x, y: raw.center_y },
     glyphReach: raw.glyph_reach,
+    atCentre: raw.at_centre,
   };
   raw.free();
   return entry;

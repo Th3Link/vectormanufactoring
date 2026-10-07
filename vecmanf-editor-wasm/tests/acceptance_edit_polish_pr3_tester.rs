@@ -2636,11 +2636,14 @@ fn c57_s_and_r_chips_open_at_the_bottom_right_resize_and_top_right_rotate_corner
         let bx = Bx { c, hw, hh, th: 0.0 };
         size_entry_open(&mut s);
         let e = s.transform_entry().unwrap();
+        // Amended 2026-10-07 (UX review, criterion 59): the S chip is placed by
+        // the box centre, the fixed point of the key's typed size.
+        assert!(e.at_centre, "{name}");
         assert!(
-            pnear(e.handle, bx.corner(1.0, 1.0), 1e-6),
-            "{name}: S chip at {:?}, bottom-right corner {:?}",
+            pnear(e.handle, bx.c, 1e-6),
+            "{name}: S chip at {:?}, centre {:?}",
             e.handle,
-            bx.corner(1.0, 1.0)
+            bx.c
         );
         s.cancel_transform_entry();
         assert_eq!(press(&mut s, "r"), KeyOutcome::EntryOpened, "{name}");
@@ -2947,12 +2950,10 @@ fn x08_s_r_m_k_open_for_a_rotated_selection_at_the_rotated_anchors() {
     let (mut s, b) = select_path(&d);
     assert_eq!(press(&mut s, "s"), KeyOutcome::EntryOpened);
     let e = s.transform_entry().unwrap();
-    assert!(
-        pnear(e.handle, b.corner(1.0, 1.0), 1e-6),
-        "{:?} vs {:?}",
-        e.handle,
-        b.corner(1.0, 1.0)
-    );
+    // Amended 2026-10-07 (UX review, criterion 59): the S chip is placed by
+    // the box centre, not at the bottom-right corner.
+    assert!(e.at_centre);
+    assert!(pnear(e.handle, b.c, 1e-6), "{:?} vs {:?}", e.handle, b.c);
     s.cancel_transform_entry();
     assert_eq!(press(&mut s, "k"), KeyOutcome::EntryOpened);
     let e = s.transform_entry().unwrap();

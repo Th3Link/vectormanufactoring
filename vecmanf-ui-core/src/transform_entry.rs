@@ -139,6 +139,10 @@ pub struct TransformEntry {
     linked: bool,
     modes: ScaleModes,
     side_rotate_revealed: bool,
+    /// Opened by the key S (`edit-interaction-polish` criterion 59): no handle
+    /// was chosen, so the chip sits by the box centre, where the fixed point
+    /// is, and no handle takes its dragging look.
+    centre_chip: bool,
     pivot: Point,
     fields: Vec<EntryField>,
 }
@@ -216,6 +220,7 @@ impl TransformEntry {
             linked: false,
             modes: ScaleModes::default(),
             side_rotate_revealed: !is_corner(direction),
+            centre_chip: false,
             pivot: pivot_for(handle, object, box_, shift)
                 .unwrap_or_else(|| box_.to_document(box_.local_center())),
             fields: vec![EntryField {
@@ -292,6 +297,7 @@ impl TransformEntry {
             linked,
             modes,
             side_rotate_revealed: false,
+            centre_chip: false,
             pivot: pivot_for(handle, object, box_, shift)
                 .unwrap_or_else(|| box_.to_document(box_.local_center())),
             fields,
@@ -302,6 +308,21 @@ impl TransformEntry {
     #[must_use]
     pub const fn kind(&self) -> EntryKind {
         self.kind
+    }
+
+    /// Marks the entry as opened by the key S: its chip goes by the box
+    /// centre and no handle is highlighted.
+    #[must_use]
+    pub(crate) const fn with_centre_chip(mut self) -> Self {
+        self.centre_chip = true;
+        self
+    }
+
+    /// Whether the chip sits by the box centre instead of at the handle
+    /// (the key S).
+    #[must_use]
+    pub const fn centre_chip(&self) -> bool {
+        self.centre_chip
     }
 
     /// The handle the entry belongs to (it keeps its dragging look while
