@@ -13,6 +13,10 @@ use crate::angle_snap::snap_angle;
 use crate::oriented_box::OrientedBox;
 use crate::transform_handle_layout::{is_corner, resize_handle_local_position};
 
+/// A typed angle within this (radians) of the current one is "equal": nothing
+/// is written (`transform_entry`, `skew_entry`).
+pub(crate) const ANGLE_EQUAL_EPSILON_RAD: f64 = 1e-12;
+
 /// Whether `object` is a polygon or a star — the one kind whose transform
 /// handles are corner-only and always-uniform (slice 5, criterion 11).
 pub(crate) fn is_polygon_or_star(object: &ObjectSnapshot) -> bool {

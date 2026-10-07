@@ -19,7 +19,7 @@ use crate::hit_test_object::hit_test_object;
 use crate::object_selection::ObjectSelection;
 use crate::param_handles::{ParamHandle, radius_gain};
 use crate::select_bar::BarPreview;
-use crate::transform_commit::{commit_move, same_within_tolerance};
+use crate::transform_commit::{MOVE_EQUAL_EPSILON_MM, commit_move, same_within_tolerance};
 use crate::transform_drag::{
     CornerRadiusScaling, DragOrigin, ScaleModes, StrokeScaling, TransformDrag,
 };
@@ -37,9 +37,6 @@ use handles::sole_selected;
 pub use entry::{EntryKey, KeyEntryRefusal, double_click};
 pub use handles::entry_anchor;
 pub use preview::LiveEdit;
-
-/// A move offset within this (millimetres) of zero is no move.
-pub(crate) const MOVE_EQUAL_EPSILON_MM: f64 = 1e-9;
 
 #[derive(Debug, Clone, Default)]
 enum SelectDrag {

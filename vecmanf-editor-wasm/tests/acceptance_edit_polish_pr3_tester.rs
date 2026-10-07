@@ -2854,7 +2854,6 @@ fn x04_skew_tiny_angles_are_no_change_or_exact_and_never_a_false_too_large() {
 }
 
 #[test]
-#[ignore = "FAIL (tester finding): a vanishing skew far from the origin is refused as 'Too large' (SkewEntry::resolve treats result == start as the sanity-limit refusal)"]
 fn x04b_a_tiny_angle_far_from_the_origin_is_not_reported_as_too_large() {
     // far from the origin, where a tiny skew vanishes in the floating-point
     // resolution of the coordinates: must not be reported as "Too large"

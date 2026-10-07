@@ -427,7 +427,8 @@ export interface EditorSession {
   cursorHint: string;
   /** Which hint the handle under the pointer earns (`""`, `"resize-edge"`,
    * `"resize-corner"`, `"resize-corner-uniform"`, `"rotate-corner"`,
-   * `"rotate-side"`, `"skew"`, `"move"`): the hover chip's content
+   * `"rotate-side"`, `"skew"` (top and bottom handle), `"skew-y"` (left and
+   * right), `"move"`, `"param-radius"`, `"param-inner"`): the hover chip's content
    * (`object-transform-refinements` criterion 54). */
   handleHint: string;
   /** The typed numeric entry to show, or `null`. */
@@ -438,7 +439,8 @@ export interface EditorSession {
    * `"invalid:<field>:number"` (the chip stays open). */
   commitMoveEntry: (first: string, second: string, absolute: boolean) => string;
   /** Enter in the entry chip: `"committed"`, `"unchanged"` (both close it)
-   * or `"invalid:<field>:number|positive|negative|ratio-range"` (it stays
+   * or `"invalid:<field>:number|positive|negative|ratio-range|skew-range|too-large"`
+   * (it stays
    * open). */
   commitTransformEntry: (first: string, second: string, lastEdited: number) => string;
   /** Closes the entry without writing (Escape, blur). Idempotent. */

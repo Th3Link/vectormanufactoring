@@ -15,16 +15,15 @@ use crate::transform_drag::{
     ResizeOptions, ScaleModes, pivot_for, resize_by_local_delta, rotate_by,
 };
 use crate::transform_handle_layout::{EditHandle, is_corner};
-use crate::transform_math::{is_polygon_or_star, local_delta_for_radius, local_delta_for_size};
+use crate::transform_math::{
+    ANGLE_EQUAL_EPSILON_RAD, is_polygon_or_star, local_delta_for_radius, local_delta_for_size,
+};
 use vecmanf_document_core::PrimitiveSnapshot;
 
 /// A typed size within this (millimetres) of the current one is "equal":
 /// nothing is written (criteria 19, 31). The prefill is the readout's
 /// rounded value, so this and the untouched-text rule are both needed.
 const SIZE_EQUAL_EPSILON_MM: f64 = 1e-9;
-
-/// A typed angle within this (radians) of the current rotation is equal.
-const ANGLE_EQUAL_EPSILON_RAD: f64 = 1e-12;
 
 impl EntryField {
     /// The single field of a parameter or skew entry.
@@ -165,13 +164,16 @@ pub(crate) fn format_mm(value: f64) -> String {
 }
 
 /// Parses the text of an entry field (criteria 19, 21, 30): trimmed, an
-/// optional sign, digits with at most one separator ("." or ","), and on
+/// optional sign ("+", "-" or the real minus U+2212), digits with at most one separator ("." or ","), and on
 /// the angle field one optional trailing "°". Anything else (empty,
 /// letters, "1,2,3", exponents, unit suffixes) is `None`, as is a value
 /// that is not finite.
 #[must_use]
 pub fn parse_entry_number(text: &str, allow_degree: bool) -> Option<f64> {
-    let mut rest = text.trim();
+    // The move readout prints a real minus sign (U+2212): a value copied from
+    // it parses (`edit-interaction-polish`, flag 6).
+    let normalized = text.replace('\u{2212}', "-");
+    let mut rest = normalized.trim();
     if allow_degree {
         rest = rest.strip_suffix('°').unwrap_or(rest).trim_end();
     }
@@ -523,6 +525,27 @@ fn outer_radius(object: &ObjectSnapshot) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
+    /// A value copied from the move readout (real minus U+2212) parses like
+    /// the ASCII sign; exponent notation and a minus inside the number stay
+    /// rejected.
+    #[test]
+    fn the_real_minus_sign_parses_and_exponents_do_not() {
+        assert_eq!(parse_entry_number("\u{2212}3.5", false), Some(-3.5));
+        assert_eq!(parse_entry_number(" \u{2212} 3,5 ", false), Some(-3.5));
+        assert_eq!(parse_entry_number("\u{2212}12\u{b0}", true), Some(-12.0));
+        assert_eq!(parse_entry_number("-3.5", false), Some(-3.5));
+        for bad in [
+            "1e3",
+            "1E-3",
+            "3\u{2212}5",
+            "\u{2212}\u{2212}3",
+            "\u{2212}",
+            "3-",
+        ] {
+            assert_eq!(parse_entry_number(bad, false), None, "{bad:?}");
+        }
+    }
+
     use vecmanf_document_core::{InnerRatio, Length, PointCount, StarFrame};
 
     use super::*;

@@ -87,6 +87,8 @@ impl Session {
     /// drawn (`edit-interaction-polish` criteria 9, 58, 59).
     fn skew_entry_view(&self, entry: &SkewEntry) -> EntryView {
         let box_ = entry.start_box();
+        // invariant: `entry_anchor` is `Some` for every handle but a parameter
+        // handle, and a skew entry's handle is a skew handle.
         let handle = entry_anchor(box_, entry.handle(), &self.transform_handle_tolerances())
             .unwrap_or_else(|| box_.to_document(box_.local_center()));
         EntryView {
