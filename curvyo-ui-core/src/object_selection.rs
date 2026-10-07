@@ -11,7 +11,7 @@
 //! One type rather than one per tool/mode, so selecting a rectangle then
 //! shift-selecting a path (or an ellipse) stays selected together
 //! (acceptance criteria 17, 22) — the same reasoning
-//! `vecmanf_document_core::AnchorIdMinter` is shared across
+//! `curvyo_document_core::AnchorIdMinter` is shared across
 //! `PenTool`/`NodeTool` rather than duplicated.
 //!
 //! Ephemeral, per ADR 0009 §2 — never written to the document, never
@@ -21,7 +21,7 @@
 //! (path or which primitive) comes from `Document::object(id)` at the
 //! point of use — no stored kind here.
 
-use vecmanf_document_core::{NodeId, ObjectSnapshot};
+use curvyo_document_core::{NodeId, ObjectSnapshot};
 
 /// The current set of selected objects, any kind (acceptance criteria 17,
 /// 22: two or more, possibly of different kinds, can be selected
@@ -111,19 +111,19 @@ impl ObjectSelection {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vecmanf_document_core::Document;
+    use curvyo_document_core::Document;
 
     fn two_ids() -> (NodeId, NodeId) {
         let document = Document::new(1);
-        let a = document.create_rect(vecmanf_document_core::RectBounds {
-            origin: vecmanf_document_core::Point::new(0.0, 0.0),
-            width: vecmanf_document_core::Length::from_mm(1.0),
-            height: vecmanf_document_core::Length::from_mm(1.0),
+        let a = document.create_rect(curvyo_document_core::RectBounds {
+            origin: curvyo_document_core::Point::new(0.0, 0.0),
+            width: curvyo_document_core::Length::from_mm(1.0),
+            height: curvyo_document_core::Length::from_mm(1.0),
         });
-        let b = document.create_rect(vecmanf_document_core::RectBounds {
-            origin: vecmanf_document_core::Point::new(5.0, 5.0),
-            width: vecmanf_document_core::Length::from_mm(1.0),
-            height: vecmanf_document_core::Length::from_mm(1.0),
+        let b = document.create_rect(curvyo_document_core::RectBounds {
+            origin: curvyo_document_core::Point::new(5.0, 5.0),
+            width: curvyo_document_core::Length::from_mm(1.0),
+            height: curvyo_document_core::Length::from_mm(1.0),
         });
         (a, b)
     }
@@ -151,15 +151,15 @@ mod tests {
     #[test]
     fn retain_existing_drops_only_ids_no_longer_in_the_object_list() {
         let document = Document::new(1);
-        let a = document.create_rect(vecmanf_document_core::RectBounds {
-            origin: vecmanf_document_core::Point::new(0.0, 0.0),
-            width: vecmanf_document_core::Length::from_mm(1.0),
-            height: vecmanf_document_core::Length::from_mm(1.0),
+        let a = document.create_rect(curvyo_document_core::RectBounds {
+            origin: curvyo_document_core::Point::new(0.0, 0.0),
+            width: curvyo_document_core::Length::from_mm(1.0),
+            height: curvyo_document_core::Length::from_mm(1.0),
         });
-        let b = document.create_rect(vecmanf_document_core::RectBounds {
-            origin: vecmanf_document_core::Point::new(5.0, 5.0),
-            width: vecmanf_document_core::Length::from_mm(1.0),
-            height: vecmanf_document_core::Length::from_mm(1.0),
+        let b = document.create_rect(curvyo_document_core::RectBounds {
+            origin: curvyo_document_core::Point::new(5.0, 5.0),
+            width: curvyo_document_core::Length::from_mm(1.0),
+            height: curvyo_document_core::Length::from_mm(1.0),
         });
         let mut selection = ObjectSelection::new();
         selection.toggle(a);

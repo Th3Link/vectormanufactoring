@@ -2,17 +2,17 @@
 //! (`specs/0004-canvas-navigation-and-selection/adrs.md`, feature-local
 //! decision "one bounds rule, used by both drawing and the tools"): a
 //! primitive's own frame box
-//! ([`vecmanf_document_core::shape_frame_bounds`]) or, for a path, the
-//! union of [`vecmanf_geometry_core::segment_bounds`] over every segment —
+//! ([`curvyo_document_core::shape_frame_bounds`]) or, for a path, the
+//! union of [`curvyo_geometry_core::segment_bounds`] over every segment —
 //! tight to the curve's own extrema, not its (looser) control-point hull
-//! (acceptance criterion 14). Reaches `vecmanf-render-core` as plain
+//! (acceptance criterion 14). Reaches `curvyo-render-core` as plain
 //! rectangles in the decoration input, the same way `primitive-shapes`
 //! passes handle positions.
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     ObjectSnapshot, PathSnapshot, Point, Vec2, outline_of_rotated, shape_frame_bounds,
 };
-use vecmanf_geometry_core::segment_bounds;
+use curvyo_geometry_core::segment_bounds;
 
 use crate::hit_test::segment_pairs;
 
@@ -83,7 +83,7 @@ pub fn object_outline_bounds(object: &ObjectSnapshot) -> (Point, Point) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vecmanf_document_core::{AnchorId, Document, Length, NewAnchor, RectBounds};
+    use curvyo_document_core::{AnchorId, Document, Length, NewAnchor, RectBounds};
 
     #[test]
     fn a_straight_path_bounds_to_its_own_extent() {
@@ -106,7 +106,7 @@ mod tests {
     /// curve's real extent.
     #[test]
     fn a_curved_path_bounds_tightly_to_its_curve_not_its_control_hull() {
-        use vecmanf_document_core::{AnchorKind, Vec2};
+        use curvyo_document_core::{AnchorKind, Vec2};
 
         let document = Document::new(1);
         let id = document.create_path(
@@ -158,7 +158,7 @@ mod tests {
     /// and 20 high; the frame box would still say 20 x 10.
     #[test]
     fn a_rotated_rectangle_bounds_to_its_drawn_outline() {
-        use vecmanf_document_core::Angle;
+        use curvyo_document_core::Angle;
         let document = Document::new(1);
         let id = document.create_rect(RectBounds {
             origin: Point::new(10.0, 20.0),
@@ -188,7 +188,7 @@ mod tests {
     /// points at the two bottom tips, below the centre by R cos 36 degrees.
     #[test]
     fn a_star_bounds_to_its_vertices_not_its_circumscribed_square() {
-        use vecmanf_document_core::{Angle, InnerRatio, PointCount, StarFrame};
+        use curvyo_document_core::{Angle, InnerRatio, PointCount, StarFrame};
         let document = Document::new(1);
         let id = document.create_star(
             StarFrame {
@@ -214,7 +214,7 @@ mod tests {
     /// they equal its box to tolerance.
     #[test]
     fn an_ellipse_bounds_to_its_curve() {
-        use vecmanf_document_core::EllipseFrame;
+        use curvyo_document_core::EllipseFrame;
         let document = Document::new(1);
         let id = document.create_ellipse(EllipseFrame {
             center: Point::new(30.0, 40.0),

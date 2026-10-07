@@ -2,9 +2,9 @@
 //! (`specs/edit-interaction-polish/`, criteria 15 to 25): a second
 //! `impl WasmSession` block, so `wasm_api.rs` does not grow. Strings and
 //! scalars only (ADR 0001 §5); every method passes straight through to
-//! `Session`, which holds the orchestration, over `vecmanf-ui-core`'s rules.
+//! `Session`, which holds the orchestration, over `curvyo-ui-core`'s rules.
 
-use vecmanf_ui_core::{EntryOutcome, InvalidReason, MoveEntryMode};
+use curvyo_ui_core::{EntryOutcome, InvalidReason, MoveEntryMode};
 use wasm_bindgen::prelude::*;
 
 use crate::session::MoveEntryView;

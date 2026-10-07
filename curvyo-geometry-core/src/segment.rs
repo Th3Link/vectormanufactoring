@@ -15,12 +15,12 @@
 //! Every function here takes a segment as its two endpoint anchors' own
 //! data — `start`/`end` points plus the two *relative* handles that face
 //! this segment (`specs/0002-path-node-editing/adrs.md` decision 2) — never a
-//! pre-built absolute curve, so a caller in `vecmanf-ui-core` can pass a
-//! [`vecmanf_document_core::AnchorSnapshot`] pair's fields straight
+//! pre-built absolute curve, so a caller in `curvyo-ui-core` can pass a
+//! [`curvyo_document_core::AnchorSnapshot`] pair's fields straight
 //! through without converting anything itself.
 
+use curvyo_document_core::{Length, Point, Tolerance, Vec2};
 use kurbo::{CubicBez, ParamCurve, ParamCurveExtrema, ParamCurveNearest, Point as KurboPoint};
-use vecmanf_document_core::{Length, Point, Tolerance, Vec2};
 
 /// Search accuracy handed to `kurbo`'s nearest-point query, in millimetres:
 /// far below any hit radius or machine tolerance, so the reported distance
@@ -79,7 +79,7 @@ pub fn nearest_point_on_segment(
 /// curve extrema, not its (looser) control-point hull
 /// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "a path's box must
 /// be tight... and tight means curve extrema"). Returns `(min, max)`
-/// corners. `vecmanf-ui-core::object_bounds` unions this over every segment
+/// corners. `curvyo-ui-core::object_bounds` unions this over every segment
 /// of a path to get the whole path's selection-box bounds (acceptance
 /// criterion 14).
 #[must_use]
@@ -97,7 +97,7 @@ pub fn segment_bounds(
 /// The caller-resolved geometry of splitting one segment at a parameter —
 /// acceptance criterion 12; every field is already relative to its own
 /// anchor, ready to pass straight into
-/// [`vecmanf_document_core::Document::insert_anchor`]
+/// [`curvyo_document_core::Document::insert_anchor`]
 /// (`specs/0002-path-node-editing/adrs.md`, "commands carry resolved geometry,
 /// never geometric intent").
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -2,9 +2,9 @@
 //! readout and the DOM badges (`specs/edit-interaction-polish/adrs.md`,
 //! decision 5; criteria 26, 27, 33, 37).
 
-use vecmanf_document_core::{ObjectSnapshot, Point, Vec2};
-use vecmanf_render_core::{LockedAxis, MoveAxes};
-use vecmanf_ui_core::{Axis, classify_press, oriented_bounds};
+use curvyo_document_core::{ObjectSnapshot, Point, Vec2};
+use curvyo_render_core::{LockedAxis, MoveAxes};
+use curvyo_ui_core::{Axis, classify_press, oriented_bounds};
 
 use super::shapes::LiveReadout;
 use super::{Session, Tool};

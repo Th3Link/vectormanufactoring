@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "vecmanf",
+  "productName": "Curvyo",
   "version": "0.1.0",
-  "identifier": "dev.vecmanf.app",
+  "identifier": "org.curvyo.desktop",
   "build": {
     "frontendDist": "../frontend/dist",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "vecmanf",
+        "title": "Curvyo",
         "width": 1280,
         "height": 800,
         "resizable": true
@@ -36,9 +36,9 @@
     ],
     "fileAssociations": [
       {
-        "ext": ["vmf"],
-        "name": "vecmanf project",
-        "description": "vecmanf project (*.vmf)",
+        "ext": ["curvyo"],
+        "name": "Curvyo project",
+        "description": "Curvyo project (*.curvyo)",
         "role": "Editor"
       }
     ]

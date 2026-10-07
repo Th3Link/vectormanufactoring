@@ -278,7 +278,7 @@ register, stored raw, clamped on evaluation) has to carry four radii. Questions:
    (criterion 20); the rule that a rectangle with all four radii equal is
    stored the same way as any other (no special "uniform" encoding).
 6. Corner order TL, TR, BR, BL in the local frame, matching the outline's
-   direction; golden fixtures: an outline with mixed radii, a `.vmf` before and
+   direction; golden fixtures: an outline with mixed radii, a `.curvyo` before and
    one after the bump (`CLAUDE.md` §5).
 7. Whether the field addition needs a full ADR or a feature-local note;
    `CLAUDE.md` §3 puts document-model ADRs to the customer.

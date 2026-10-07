@@ -9,7 +9,7 @@
 //! mapped to document space through its [`OrientedBox`], like every other
 //! handle; `specs/ellipse-arcs-and-shaping/` adds its own variants here.
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     InnerRatio, ObjectSnapshot, Point, PointCount, Shape, StarFrame, Vec2, effective_corner_radius,
 };
 
@@ -241,10 +241,10 @@ pub fn centre_drawn(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use proptest::prelude::*;
-    use vecmanf_document_core::{
+    use curvyo_document_core::{
         Angle, Document, EllipseFrame, Length, NodeId, PrimitiveSnapshot, RectBounds,
     };
+    use proptest::prelude::*;
 
     use crate::oriented_box::oriented_bounds;
     use crate::transform_handle_layout::{
@@ -252,7 +252,7 @@ mod tests {
     };
 
     /// The 8 px resize squircle, the 12 px rotate glyph and the 16 px centre
-    /// glyph (`docs/design-system.md`). `vecmanf-render-core` asserts in its own
+    /// glyph (`docs/design-system.md`). `curvyo-render-core` asserts in its own
     /// test that its drawn glyphs never exceed these numbers: the two crates
     /// share no code, so the duplicated number is guarded on both sides.
     const RESIZE_GLYPH_PX: f64 = 8.0;
@@ -291,7 +291,7 @@ mod tests {
                 corner_radius: Length::from_mm(radius),
             },
             stroke_width: Length::from_mm(0.25),
-            stroke: vecmanf_document_core::Color::BLACK,
+            stroke: curvyo_document_core::Color::BLACK,
             fill: None,
             rotation: Angle::from_radians(rotation),
         })
@@ -316,7 +316,7 @@ mod tests {
                 inner_ratio: InnerRatio::new(ratio).unwrap(),
             },
             stroke_width: Length::from_mm(0.25),
-            stroke: vecmanf_document_core::Color::BLACK,
+            stroke: curvyo_document_core::Color::BLACK,
             fill: None,
             rotation: Angle::from_radians(rotation),
         })
@@ -450,7 +450,7 @@ mod tests {
                 },
             },
             stroke_width: Length::from_mm(0.25),
-            stroke: vecmanf_document_core::Color::BLACK,
+            stroke: curvyo_document_core::Color::BLACK,
             fill: None,
             rotation: Angle::from_radians(0.0),
         });

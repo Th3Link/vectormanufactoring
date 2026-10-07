@@ -3,7 +3,7 @@
 This slice extends slice 4's Select tool. It adds no stored field and no
 document write: a marquee, a lasso and an Alt-click cycle only change the
 ephemeral `ObjectSelection`. **No new crate, no new external dependency, no
-new `vecmanf-geometry-core` function, no `format_version` bump, no ADR
+new `curvyo-geometry-core` function, no `format_version` bump, no ADR
 amendment.**
 
 All 20 acceptance criteria can be built against the ADRs as they read today.
@@ -16,15 +16,15 @@ are under "Flagged to the lead", each with a default.
 - [ADR 0009 §2](../../docs/adr/0009-concurrent-editing-semantics.md): the
   marquee rectangle, the lasso polyline and the Alt-click cycle are
   **ephemeral tool state**, the same category as `PenTool`'s in-progress
-  path. None is an operation, none is written to `.vmf`, none is undoable.
+  path. None is an operation, none is written to `.curvyo`, none is undoable.
 - [ADR 0002 §2, §9](../../docs/adr/0002-document-model-units-and-svg-round-trip.md):
   every proximity and box test takes an explicit `Tolerance` derived from
   screen pixels at the current zoom.
 - [ADR 0001 §3, §4](../../docs/adr/0001-ui-framework-and-canvas-rendering.md):
-  gesture logic lives in `vecmanf-ui-core`; the facade forwards scalar input;
+  gesture logic lives in `curvyo-ui-core`; the facade forwards scalar input;
   the marquee box and lasso line are drawn in the WebGL draw list.
 - [ADR 0003 §1](../../docs/adr/0003-geometry-kernel-booleans-offsetting-vcarving.md):
-  anything that evaluates a curve stays in `vecmanf-geometry-core`. This
+  anything that evaluates a curve stays in `curvyo-geometry-core`. This
   slice evaluates curves only through the existing `nearest_point_on_segment`
   and `segment_bounds`.
 - [`specs/0004-canvas-navigation-and-selection/adrs.md`](../0004-canvas-navigation-and-selection/adrs.md):
@@ -35,7 +35,7 @@ are under "Flagged to the lead", each with a default.
 ## Feature-local decisions
 
 - **2026-10-05: the Select tool gets its own 8 px tolerance (AC 1, 2).**
-  `SEGMENT_TOLERANCE_PX` in `vecmanf-editor-wasm/src/session/mod.rs` cannot
+  `SEGMENT_TOLERANCE_PX` in `curvyo-editor-wasm/src/session/mod.rs` cannot
   simply change to 8: `Session::segment_tolerance()` is shared by the Node
   tool (through `hit_tolerances()`), the shape tools (`session/shapes.rs`:
   primitive outline hover/pick and `hit_test_primitive`) and the Select tool
@@ -100,7 +100,7 @@ are under "Flagged to the lead", each with a default.
   (AC 11, 14). `Lasso` ignores Alt after press (spec: no defined effect).
   Shift and Ctrl are read at release for both gestures (AC 12, 13, 19).
   The 3 px threshold is `PEN_DRAG_THRESHOLD_PX` renamed to a shared
-  `DRAG_THRESHOLD_PX` in `vecmanf-editor-wasm`, converted to a document
+  `DRAG_THRESHOLD_PX` in `curvyo-editor-wasm`, converted to a document
   `Length` at the current zoom as the Pen tool already does. The enum is no
   longer `Copy` because `Lasso` holds a `Vec<Point>`. The frontend picks the
   cursor from the live gesture (`PendingEmpty`/`Marquee`: crosshair;
@@ -110,7 +110,7 @@ are under "Flagged to the lead", each with a default.
   splits the marquee and cycle state into their own modules to stay under
   the §5 limit.
 
-- **2026-10-05: the marquee is box arithmetic in `vecmanf-ui-core`
+- **2026-10-05: the marquee is box arithmetic in `curvyo-ui-core`
   (`marquee.rs`).** The module holds `MarqueeMode { Touch, Contain }`, the
   mode rule `MarqueeMode::for_drag(start, current, alt)` (rightward, i.e.
   `current.x > start.x`, is Contain, otherwise Touch; `alt` inverts the
@@ -181,7 +181,7 @@ are under "Flagged to the lead", each with a default.
 - **2026-10-05: the modifier legend reuses the live-readout channel.** The
   label ("Touch · Remove", "Touch (line) · Add") is built from the live
   `MarqueeMode` (or "line" for a lasso) and `SelectionCombine`, exposed by
-  `SelectTool` as plain state. `vecmanf-editor-wasm` formats the English
+  `SelectTool` as plain state. `curvyo-editor-wasm` formats the English
   string and returns it through the existing `live_readout()` /
   `LiveReadout` path the shape tools' numeric readout already uses; the
   frontend renders it unchanged. No new facade method, no text in the WebGL
@@ -199,7 +199,7 @@ are under "Flagged to the lead", each with a default.
   Windows focus the menu bar on a lone Alt release). That is input
   translation, not logic.
   *2026-10-06 (architect):* `specs/shape-creation-from-center/adrs.md`
-  introduces `vecmanf-ui-core::Modifiers { shift, ctrl }` first, for the
+  introduces `curvyo-ui-core::Modifiers { shift, ctrl }` first, for the
   rectangle and ellipse tools. This feature adds the `alt` field to that
   struct instead of creating it; the shape tools ignore `alt`.
 
@@ -235,16 +235,16 @@ are under "Flagged to the lead", each with a default.
     as the one that brings `select_tool.rs` under 500.
 
 - **2026-10-05: the crate boundary.**
-  - `vecmanf-geometry-core`: no change.
-  - `vecmanf-document-core`: no change.
-  - `vecmanf-ui-core`: `hit_test_objects`, `hit_test_objects_along`,
+  - `curvyo-geometry-core`: no change.
+  - `curvyo-document-core`: no change.
+  - `curvyo-ui-core`: `hit_test_objects`, `hit_test_objects_along`,
     `marquee` (mode rule with Alt inversion, box tests), `Modifiers`, the
     `ClickCycle` and new `SelectDrag` variants in `select_tool`,
     `SelectionCombine` and `ObjectSelection::apply`.
-  - `vecmanf-render-core`: `SelectDecorationInput` gains an optional marquee
+  - `curvyo-render-core`: `SelectDecorationInput` gains an optional marquee
     rectangle with its mode and an optional lasso polyline; styling per the
     UX notes. Draw list still depends on the view's scale only.
-  - `vecmanf-editor-wasm`: `OBJECT_TOLERANCE_PX`, `object_tolerance()`,
+  - `curvyo-editor-wasm`: `OBJECT_TOLERANCE_PX`, `object_tolerance()`,
     `DRAG_THRESHOLD_PX` (renamed), the modifier parameters, the legend text
     through `live_readout()`, the live gesture kind for the cursor, glue in
     `session/select.rs` (not `session/mod.rs`, which is already over 1,200
@@ -253,7 +253,7 @@ are under "Flagged to the lead", each with a default.
     Alt default suppression, cursor per gesture.
 
 - **2026-10-06 (architect, from the `unified-object-editing` review): task 1 of
-  this feature is a pure-move split of `vecmanf-editor-wasm/src/wasm_api.rs` by
+  this feature is a pure-move split of `curvyo-editor-wasm/src/wasm_api.rs` by
   tool (about 760 non-test lines, over the ~500 limit), one `#[wasm_bindgen]
   impl` per tool as `wasm_select_bar.rs` already does, no behaviour change.
   It owns the `docs/technical-debt.md` entry on `wasm_api.rs`.**

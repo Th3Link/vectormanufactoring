@@ -1,15 +1,15 @@
 //! Owns the `wgpu` device/surface and GPU submission (ADR 0001 §3, §4):
 //! the one piece of this crate that is not plain, host-independent Rust,
 //! and therefore the one piece `cargo test` cannot exercise. Takes
-//! [`vecmanf_render_core::DrawList`] in, submits triangles out — no
+//! [`curvyo_render_core::DrawList`] in, submits triangles out — no
 //! editing logic lives here, matching this crate's one job.
 //!
 //! `wgpu` is a `wasm32`-only dependency (`Cargo.toml`): this whole module
 //! only compiles for that target, so `cargo test`/`cargo clippy` on the
 //! host never needs a GPU driver.
 
-use vecmanf_document_core::{Point, ViewTransform};
-use vecmanf_render_core::DrawList;
+use curvyo_document_core::{Point, ViewTransform};
+use curvyo_render_core::DrawList;
 use wasm_bindgen::JsValue;
 use web_sys::HtmlCanvasElement;
 
@@ -144,7 +144,7 @@ struct GpuVertex {
 /// screen, in pixels — regardless of where the document origin is.
 /// [`ScreenTransform`]'s own offset no longer needs `origin` at all,
 /// since every vertex arrives already shifted.
-fn to_gpu_vertex(vertex: vecmanf_render_core::Vertex, origin: Point) -> GpuVertex {
+fn to_gpu_vertex(vertex: curvyo_render_core::Vertex, origin: Point) -> GpuVertex {
     let relative_x = vertex.position.x - origin.x;
     let relative_y = vertex.position.y - origin.y;
     #[allow(clippy::cast_possible_truncation)]
@@ -251,14 +251,14 @@ struct TransformResources {
 
 fn create_transform_resources(device: &wgpu::Device) -> TransformResources {
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("vecmanf screen transform"),
+        label: Some("curvyo screen transform"),
         size: std::mem::size_of::<ScreenTransform>() as u64,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
 
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("vecmanf transform layout"),
+        label: Some("curvyo transform layout"),
         entries: &[wgpu::BindGroupLayoutEntry {
             binding: 0,
             visibility: wgpu::ShaderStages::VERTEX,
@@ -271,7 +271,7 @@ fn create_transform_resources(device: &wgpu::Device) -> TransformResources {
         }],
     });
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("vecmanf transform bind group"),
+        label: Some("curvyo transform bind group"),
         layout: &bind_group_layout,
         entries: &[wgpu::BindGroupEntry {
             binding: 0,
@@ -297,12 +297,12 @@ fn create_pipeline(
     sample_count: u32,
 ) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("vecmanf draw-list shader"),
+        label: Some("curvyo draw-list shader"),
         source: wgpu::ShaderSource::Wgsl(SHADER_SOURCE.into()),
     });
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("vecmanf pipeline layout"),
+        label: Some("curvyo pipeline layout"),
         bind_group_layouts: &[Some(transform_bind_group_layout)],
         immediate_size: 0,
     });
@@ -325,7 +325,7 @@ fn create_pipeline(
     };
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("vecmanf draw-list pipeline"),
+        label: Some("curvyo draw-list pipeline"),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module: &shader,
@@ -372,7 +372,7 @@ fn create_msaa_view(
         return None;
     }
     let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("vecmanf msaa color target"),
+        label: Some("curvyo msaa color target"),
         size: wgpu::Extent3d {
             width: config.width.max(1),
             height: config.height.max(1),
@@ -623,7 +623,7 @@ impl Gpu {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("vecmanf frame encoder"),
+                label: Some("curvyo frame encoder"),
             });
 
         // An empty document still needs its one clear pass below, or the
@@ -635,7 +635,7 @@ impl Gpu {
             wgpu::util::DeviceExt::create_buffer_init(
                 &self.device,
                 &wgpu::util::BufferInitDescriptor {
-                    label: Some("vecmanf vertex buffer"),
+                    label: Some("curvyo vertex buffer"),
                     contents: bytemuck::cast_slice(&vertices),
                     usage: wgpu::BufferUsages::VERTEX,
                 },
@@ -672,7 +672,7 @@ impl Gpu {
 
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("vecmanf draw-list pass"),
+                label: Some("curvyo draw-list pass"),
                 color_attachments: &[Some(color_attachment)],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,

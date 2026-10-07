@@ -6,7 +6,7 @@
 //! dragged one cannot disagree (`adrs.md`, decision 3). The DOM chip only
 //! holds the text, the caret and the focus.
 
-use vecmanf_document_core::{Angle, Document, ObjectSnapshot, Point};
+use curvyo_document_core::{Angle, Document, ObjectSnapshot, Point};
 
 use crate::oriented_box::OrientedBox;
 use crate::skew_math::{MIN_SKEW_LEVER_MM, skew_frame};
@@ -160,7 +160,7 @@ impl SkewEntry {
 
 #[cfg(test)]
 mod tests {
-    use vecmanf_document_core::{AnchorId, AnchorKind, NewAnchor, NodeId, Vec2};
+    use curvyo_document_core::{AnchorId, AnchorKind, NewAnchor, NodeId, Vec2};
 
     use super::*;
     use crate::oriented_box::oriented_bounds;
@@ -217,7 +217,7 @@ mod tests {
             assert_eq!(entry.kind(), EntryKind::Skew);
             assert_eq!(entry.handle(), EditHandle::Skew(side));
         }
-        let rect = document.create_rect(vecmanf_document_core::RectBounds::from_corners(
+        let rect = document.create_rect(curvyo_document_core::RectBounds::from_corners(
             Point::new(0.0, 0.0),
             Point::new(5.0, 5.0),
         ));

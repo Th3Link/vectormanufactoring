@@ -2,14 +2,14 @@
 //! criteria 21 to 23): a second `impl WasmSession` block, so `wasm_api.rs`
 //! does not grow. Strings and scalars only (ADR 0001 §5); every method is a
 //! direct pass-through to `Session`, which holds the orchestration, over
-//! `vecmanf-ui-core`'s rules.
+//! `curvyo-ui-core`'s rules.
 
-use vecmanf_ui_core::{BarValue, EntryOutcome, InvalidReason, SelectBarState, clamped_ratio};
+use curvyo_ui_core::{BarValue, EntryOutcome, InvalidReason, SelectBarState, clamped_ratio};
 use wasm_bindgen::prelude::*;
 
 use crate::wasm_api::WasmSession;
 
-/// `wasm-bindgen`'s JS-facing mirror of [`vecmanf_ui_core::SelectBarState`]:
+/// `wasm-bindgen`'s JS-facing mirror of [`curvyo_ui_core::SelectBarState`]:
 /// which kind controls the Select bar shows and their values. A `*_mixed`
 /// flag means the selected objects differ (the field is empty with the
 /// placeholder "Mixed"); the value beside it is then meaningless.
@@ -71,7 +71,7 @@ impl From<SelectBarState> for SelectBarView {
             radius_limited: state.radius_limited.is_some(),
             radius_stored: state
                 .radius_limited
-                .map_or(0.0, vecmanf_document_core::Length::as_mm),
+                .map_or(0.0, curvyo_document_core::Length::as_mm),
             remove_rounding_shown: state.remove_rounding_shown,
             remove_rounding_enabled: state.remove_rounding_enabled,
             points_shown,
@@ -130,7 +130,7 @@ impl WasmSession {
     /// # Errors
     /// A `JsValue` if `count` is outside `3..=1024`.
     pub fn set_selected_point_count(&mut self, count: u32) -> Result<(), JsValue> {
-        let count = vecmanf_document_core::PointCount::new(count)
+        let count = curvyo_document_core::PointCount::new(count)
             .map_err(|err| JsValue::from_str(&format!("{err}")))?;
         self.session.set_selected_point_count(count);
         Ok(())

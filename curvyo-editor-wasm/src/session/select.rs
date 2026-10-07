@@ -1,7 +1,7 @@
 //! `Session`'s Select-tool glue (`specs/0004-canvas-navigation-and-
 //! selection/specification.md`, acceptance criteria 14-23; `specs/0005-
 //! object-transform`; `specs/object-transform-refinements`): dispatching
-//! pointer, modifier and double-click events to [`vecmanf_ui_core::
+//! pointer, modifier and double-click events to [`curvyo_ui_core::
 //! SelectTool`], its live move/transform preview, the stroke switch and the
 //! double-click handoff. What the Select tool *shows* (decoration input,
 //! cursor, hint, readout) is in `session/select_view.rs`, the typed entry
@@ -9,8 +9,8 @@
 //! shares `Session`'s privacy boundary and its methods join the same type's
 //! `impl Session`.
 
-use vecmanf_document_core::Point;
-use vecmanf_ui_core::{
+use curvyo_document_core::Point;
+use curvyo_ui_core::{
     CornerRadiusScaling, Modifiers, SelectDoubleClickOutcome, StrokeScaling,
     TransformHandleTolerances,
 };
@@ -127,7 +127,7 @@ impl Session {
         self.hovered_object = if self.select.drag_in_flight() {
             None
         } else {
-            vecmanf_ui_core::hit_test_object(&objects, point, tolerance)
+            curvyo_ui_core::hit_test_object(&objects, point, tolerance)
         };
     }
 

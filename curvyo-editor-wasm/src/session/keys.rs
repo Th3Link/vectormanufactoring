@@ -2,7 +2,7 @@
 //! Delete (`specs/edit-interaction-polish/`, Parts D and F; `adrs.md`
 //! decisions 4 and 6).
 
-use vecmanf_ui_core::{EntryKey, KeyEntryRefusal};
+use curvyo_ui_core::{EntryKey, KeyEntryRefusal};
 
 use super::{Session, Tool};
 

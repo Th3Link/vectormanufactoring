@@ -8,7 +8,7 @@
 //! [`skew_by_angle`]), so each rule exists once. The primitive-specific
 //! resize arithmetic is in [`crate::transform_primitive`].
 
-use vecmanf_document_core::{Angle, Document, Length, ObjectSnapshot, Point, Vec2};
+use curvyo_document_core::{Angle, Document, Length, ObjectSnapshot, Point, Vec2};
 
 use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;

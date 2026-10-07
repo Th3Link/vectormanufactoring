@@ -1,21 +1,21 @@
-//! Tests of `vecmanf-ui-core`'s share of
+//! Tests of `curvyo-ui-core`'s share of
 //! `specs/object-transform-refinements/specification.md`: the handle set and
 //! its one hit rule, the pivot rule, the 3 px dead zone, the centre handle,
 //! the double-click dispatch, the typed numeric entry (including "a typed
 //! value and a dragged value never disagree"), and path skew. Session-level
 //! behaviour (commit counts, cursors, readouts, save and reopen) is in
-//! `vecmanf-editor-wasm/tests/acceptance_object_transform_refinements.rs`.
+//! `curvyo-editor-wasm/tests/acceptance_object_transform_refinements.rs`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::too_many_lines)]
 
 use std::f64::consts::FRAC_PI_2;
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, NodeId, ObjectSnapshot,
     Point, PointCount, RectBounds, StarFrame, Tolerance, Vec2,
 };
-use vecmanf_ui_core::{
+use curvyo_ui_core::{
     AnchorIdMinter, EditHandle, EntryKind, EntryOutcome, InvalidReason, Modifiers, ObjectSelection,
     ResizeDirection, SelectDoubleClickOutcome, SelectPointerDownOutcome, SelectTool, Side,
     StrokeScaling, TransformHandleTolerances, oriented_bounds,
@@ -66,7 +66,7 @@ fn curve_anchors() -> Vec<NewAnchor> {
         NewAnchor {
             handle_in: Vec2::new(-15.0, -5.0),
             handle_out: Vec2::new(15.0, 5.0),
-            kind: vecmanf_document_core::AnchorKind::Symmetric,
+            kind: curvyo_document_core::AnchorKind::Symmetric,
             ..NewAnchor::corner(AnchorId::new(1, 2), pt(70.0, 60.0))
         },
         NewAnchor {
@@ -470,7 +470,7 @@ fn rect_origin(rig: &Rig) -> Point {
     let ObjectSnapshot::Primitive(p) = rig.object() else {
         panic!("primitive");
     };
-    let vecmanf_document_core::Shape::Rect { bounds, .. } = p.shape else {
+    let curvyo_document_core::Shape::Rect { bounds, .. } = p.shape else {
         panic!("rect");
     };
     bounds.origin
@@ -1227,8 +1227,8 @@ fn radius_of(object: &ObjectSnapshot) -> f64 {
         panic!()
     };
     match p.shape {
-        vecmanf_document_core::Shape::Polygon { frame, .. }
-        | vecmanf_document_core::Shape::Star { frame, .. } => frame.radius.as_mm(),
+        curvyo_document_core::Shape::Polygon { frame, .. }
+        | curvyo_document_core::Shape::Star { frame, .. } => frame.radius.as_mm(),
         _ => panic!("not a polygon or star"),
     }
 }

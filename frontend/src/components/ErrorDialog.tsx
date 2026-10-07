@@ -17,7 +17,7 @@ interface ErrorDialogProps {
 
 /**
  * The blocking failure dialog this slice uses for both open errors
- * (acceptance criterion 7: a `.vmf` that isn't a zip, is damaged, or is
+ * (acceptance criterion 7: a `.curvyo` that isn't a zip, is damaged, or is
  * from a newer version of the app) and save errors (a write that failed
  * must never look like it succeeded) — the same dialog "machinery", a
  * different title/message per caller.

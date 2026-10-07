@@ -1,13 +1,13 @@
-//! The vecmanf desktop host: a Tauri 2 binary owning the native menu,
-//! native file dialogs, the `.vmf` file association and all filesystem
+//! The Curvyo desktop host: a Tauri 2 binary owning the native menu,
+//! native file dialogs, the `.curvyo` file association and all filesystem
 //! access, behind the narrow command/event interface this module defines
 //! (ADR 0001 §6).
 //!
 //! `path-node-editing`'s own PR review narrowed this crate's job further:
 //! the host does byte I/O only. The actual document lives in the
-//! `WasmSession` the frontend owns (`vecmanf-editor-wasm`, hosted in the
+//! `WasmSession` the frontend owns (`curvyo-editor-wasm`, hosted in the
 //! webview); this crate never builds or reads a
-//! `vecmanf_document_core::Document` itself any more. Save hands this
+//! `curvyo_document_core::Document` itself any more. Save hands this
 //! host already-packed bytes (via [`save_project_bytes`]) and it writes
 //! them; Open reads bytes from disk and hands them to the frontend (the
 //! "open-bytes" event) for `WasmSession::open` to parse.
@@ -29,11 +29,11 @@ use state::{AppState, PendingOpen, ProjectState};
 /// The main window's label, matching `tauri.conf.json`.
 const MAIN_WINDOW: &str = "main";
 
-/// The native file filter/extension for a vecmanf project, used by both
+/// The native file filter/extension for a Curvyo project, used by both
 /// dialogs and the file association in `tauri.conf.json`.
-const VMF_EXTENSION: &str = "vmf";
-const VMF_FILTER_NAME: &str = "vecmanf project";
-const DEFAULT_FILE_NAME: &str = "Untitled.vmf";
+const PROJECT_EXTENSION: &str = "curvyo";
+const PROJECT_FILTER_NAME: &str = "Curvyo project";
+const DEFAULT_FILE_NAME: &str = "Untitled.curvyo";
 
 /// The project state pushed to the frontend after New, Open, Save or Save
 /// As succeeds — just enough for the status bar (ADR 0002 §2's mm size).
@@ -41,7 +41,7 @@ const DEFAULT_FILE_NAME: &str = "Untitled.vmf";
 /// (native window title, ADR 0001 §1).
 ///
 /// `size_mm` is always the default A4-portrait page: no slice has yet
-/// given a document any other size (`vecmanf_document_core::Document`
+/// given a document any other size (`curvyo_document_core::Document`
 /// has no resize command), so this host does not need to ask the
 /// frontend's `WasmSession` for it. Whichever slice adds page-size
 /// editing will need to move this to a real query against the live
@@ -57,8 +57,8 @@ struct SizeMmPayload {
     height: f64,
 }
 
-impl From<vecmanf_document_core::DocumentSize> for SizeMmPayload {
-    fn from(size: vecmanf_document_core::DocumentSize) -> Self {
+impl From<curvyo_document_core::DocumentSize> for SizeMmPayload {
+    fn from(size: curvyo_document_core::DocumentSize) -> Self {
         Self {
             width: size.width.as_mm(),
             height: size.height.as_mm(),
@@ -68,12 +68,12 @@ impl From<vecmanf_document_core::DocumentSize> for SizeMmPayload {
 
 fn default_project_state_payload() -> ProjectStatePayload {
     ProjectStatePayload {
-        size_mm: vecmanf_document_core::DocumentSize::default().into(),
+        size_mm: curvyo_document_core::DocumentSize::default().into(),
     }
 }
 
 /// A host-level failure to even read a path's bytes (missing file,
-/// permissions, not a file) — distinct from a `.vmf` whose *content* is
+/// permissions, not a file) — distinct from a `.curvyo` whose *content* is
 /// invalid, which is the frontend's own refusal once it tries
 /// `WasmSession::open` on bytes this host did successfully read.
 #[derive(Clone, serde::Serialize)]
@@ -186,7 +186,7 @@ fn save_project_bytes(app: AppHandle, state: State<AppState>, bytes: Vec<u8>, sa
         return; // no known path, and the user cancelled the dialog.
     };
 
-    if vecmanf_storage_io::write_atomic(&path, &bytes).is_err() {
+    if curvyo_storage_io::write_atomic(&path, &bytes).is_err() {
         // A failed save that looks successful is the worst failure mode
         // this product can have — report it, don't just return.
         emit_save_error(
@@ -284,20 +284,20 @@ fn main() {
                 menu::dispatch(&menu_handle, event.id().as_ref());
             });
 
-            // A `.vmf` opened via the OS file association on Linux/Windows
+            // A `.curvyo` opened via the OS file association on Linux/Windows
             // arrives as argv[1] (specs/0001-project-file-foundation, AC5).
             if let Some(path) = std::env::args().nth(1) {
                 let path = PathBuf::from(path);
-                if path.extension().and_then(|ext| ext.to_str()) == Some(VMF_EXTENSION) {
+                if path.extension().and_then(|ext| ext.to_str()) == Some(PROJECT_EXTENSION) {
                     open_path(&handle, &path);
                 }
             }
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error while building the vecmanf application");
+        .expect("error while building the Curvyo application");
 
-    // macOS (and iOS) deliver a double-clicked `.vmf` as an Apple Event,
+    // macOS (and iOS) deliver a double-clicked `.curvyo` as an Apple Event,
     // surfaced here rather than as argv[1] — the file-association half of
     // acceptance criterion 5 that the Linux/Windows argv path above does
     // not cover. Not build-verified on real macOS hardware in this
@@ -307,7 +307,7 @@ fn main() {
         if let tauri::RunEvent::Opened { urls } = event {
             for url in urls {
                 if let Ok(path) = url.to_file_path()
-                    && path.extension().and_then(|ext| ext.to_str()) == Some(VMF_EXTENSION)
+                    && path.extension().and_then(|ext| ext.to_str()) == Some(PROJECT_EXTENSION)
                 {
                     open_path(app_handle, &path);
                 }
@@ -322,8 +322,8 @@ fn main() {
 
 fn window_title(file_name: Option<&str>) -> String {
     match file_name {
-        Some(name) => format!("{name} — vecmanf"),
-        None => "vecmanf".to_string(),
+        Some(name) => format!("{name} — Curvyo"),
+        None => "Curvyo".to_string(),
     }
 }
 
@@ -376,7 +376,7 @@ pub(crate) fn handle_open(app: &AppHandle) {
     let picked = app
         .dialog()
         .file()
-        .add_filter(VMF_FILTER_NAME, &[VMF_EXTENSION])
+        .add_filter(PROJECT_FILTER_NAME, &[PROJECT_EXTENSION])
         .blocking_pick_file();
 
     let Some(file_path) = picked else {
@@ -393,8 +393,8 @@ pub(crate) fn handle_open(app: &AppHandle) {
 /// project — this host does not update [`AppState`]'s path at all here;
 /// [`confirm_project_opened`] does, once the frontend reports success).
 fn open_path(app: &AppHandle, path: &Path) {
-    let Ok(bytes) = vecmanf_storage_io::read_to_vec(path) else {
-        // Not one of vecmanf_document_core::OpenError's three cases (that
+    let Ok(bytes) = curvyo_storage_io::read_to_vec(path) else {
+        // Not one of curvyo_document_core::OpenError's three cases (that
         // taxonomy is about file *content*, and only the frontend's
         // `WasmSession::open` ever sees it now), but the UI has one
         // failure dialog, so an unreadable path is reported the same way
@@ -424,19 +424,19 @@ pub(crate) fn handle_save(app: &AppHandle) {
     request_pack(app, false);
 }
 
-/// Handles File → Save As…: always prompts, defaulting to `Untitled.vmf`
+/// Handles File → Save As…: always prompts, defaulting to `Untitled.curvyo`
 /// (acceptance criterion 3).
 pub(crate) fn handle_save_as(app: &AppHandle) {
     request_pack(app, true);
 }
 
-/// The native Save As… dialog, defaulting to `Untitled.vmf` (acceptance
+/// The native Save As… dialog, defaulting to `Untitled.curvyo` (acceptance
 /// criterion 3). Shared by [`save_project_bytes`]'s "no known path yet"
 /// and "Save As was explicitly requested" cases.
 fn pick_save_path(app: &AppHandle) -> Option<PathBuf> {
     app.dialog()
         .file()
-        .add_filter(VMF_FILTER_NAME, &[VMF_EXTENSION])
+        .add_filter(PROJECT_FILTER_NAME, &[PROJECT_EXTENSION])
         .set_file_name(DEFAULT_FILE_NAME)
         .blocking_save_file()
         .and_then(|file_path| file_path.into_path().ok())

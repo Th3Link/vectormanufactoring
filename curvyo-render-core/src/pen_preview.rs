@@ -6,12 +6,12 @@
 //! rubber-band line to the live cursor.
 //!
 //! A separate entry point from [`crate::build_draw_list`] rather than a
-//! synthetic [`vecmanf_document_core::PathSnapshot`]: an in-progress pen
-//! path has no [`vecmanf_document_core::NodeId`] yet (ADR 0009 §2 — it is
-//! ephemeral `vecmanf-ui-core::PenTool` state, not a document node), and
-//! `NodeId` has no public constructor outside `vecmanf-document-core`.
+//! synthetic [`curvyo_document_core::PathSnapshot`]: an in-progress pen
+//! path has no [`curvyo_document_core::NodeId`] yet (ADR 0009 §2 — it is
+//! ephemeral `curvyo-ui-core::PenTool` state, not a document node), and
+//! `NodeId` has no public constructor outside `curvyo-document-core`.
 
-use vecmanf_document_core::{AnchorKind, AnchorSnapshot, Point, Vec2, ViewTransform};
+use curvyo_document_core::{AnchorKind, AnchorSnapshot, Point, Vec2, ViewTransform};
 
 use crate::glyphs::{self, DrawList};
 use crate::stroke;
@@ -27,17 +27,17 @@ fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
 }
 
 /// Builds the pen tool's in-progress preview. `nodes` is whatever
-/// `vecmanf_ui_core::PenTool::in_progress_nodes` currently holds (empty
+/// `curvyo_ui_core::PenTool::in_progress_nodes` currently holds (empty
 /// or absent, with no pending anchor either: nothing to preview, returns
 /// an empty list); `cursor` is the live pointer position in document
 /// space for the rubber-band line (acceptance criterion 1: "showing
 /// where a plain click would land") — `None` suppresses it (e.g. the
 /// pointer has left the canvas).
 ///
-/// `pending` is `vecmanf_ui_core::PenTool::pending_anchor`'s result —
+/// `pending` is `curvyo_ui_core::PenTool::pending_anchor`'s result —
 /// `Some` while the maker is holding the mouse button down, already
 /// resolved (by that same method, the one place this rule is decided)
-/// into exactly the anchor `vecmanf_ui_core::PenTool::pointer_up` would
+/// into exactly the anchor `curvyo_ui_core::PenTool::pointer_up` would
 /// commit if released right now: a corner node with no handles for a
 /// press that hasn't moved past the drag threshold yet, a smooth node
 /// with symmetric handles once it has. This function draws `pending`
@@ -129,7 +129,7 @@ pub fn build_pen_preview(
     // own first node also gets the hover ring while the cursor is over
     // it and closing is one click away. `is_hovering_close_target` only
     // ever comes in `true` once at least two nodes are placed — the
-    // same precondition `vecmanf_ui_core::PenTool`'s own close decision
+    // same precondition `curvyo_ui_core::PenTool`'s own close decision
     // uses — but `nodes.len() > 1` is checked here too rather than
     // trusting the caller, so a single placed node (first and last are
     // the same node, already ringed above) can never be drawn twice.
@@ -175,7 +175,7 @@ pub fn build_pen_preview(
         // threshold (`pending.handle_in`/`handle_out` are both
         // `Vec2::ZERO` below it, matching the corner node that would
         // actually commit; a zero handle has no line/endpoint to show,
-        // same rule `vecmanf-ui-core::hit_test` already uses for a
+        // same rule `curvyo-ui-core::hit_test` already uses for a
         // committed corner node's handles). Filled accent endpoints,
         // matching `docs/design-system.md`'s "being dragged: filled
         // accent" handle convention — this drag is live, the same visual
@@ -230,7 +230,7 @@ pub fn build_pen_preview(
 
 #[cfg(test)]
 mod tests {
-    use vecmanf_document_core::{AnchorId, NewAnchor};
+    use curvyo_document_core::{AnchorId, NewAnchor};
 
     use super::*;
 
@@ -320,7 +320,7 @@ mod tests {
 
     /// Acceptance criterion 2's live drag-to-curve preview, the bug this
     /// slice fixes: a held press resolved to a smooth node with handles
-    /// (what `vecmanf_ui_core::PenTool::pending_anchor` hands this
+    /// (what `curvyo_ui_core::PenTool::pending_anchor` hands this
     /// function — constructed here directly, the same shape that method
     /// would resolve to, since this crate's own job is just drawing it)
     /// must draw strictly more geometry than the same moment with no
@@ -383,7 +383,7 @@ mod tests {
 
     /// A zero-length drag (the cursor hasn't moved off the press point
     /// yet) resolves to a corner node with no handles
-    /// (`vecmanf_ui_core::PenTool::resolve_anchor`'s own rule) — this
+    /// (`curvyo_ui_core::PenTool::resolve_anchor`'s own rule) — this
     /// must not draw degenerate zero-length handle lines, and must draw
     /// the square corner glyph, not the diamond smooth one.
     #[test]

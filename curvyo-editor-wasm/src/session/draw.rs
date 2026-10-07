@@ -3,12 +3,12 @@
 //! `session/mod.rs` (`docs/technical-debt.md`, "`Session` is one module
 //! past the size limit").
 
-use vecmanf_render_core::{
+use curvyo_render_core::{
     DrawList, TransformDecorationInput, build_draw_list, build_pen_preview, build_select_draw_list,
     build_transform_draw_list,
 };
 
-use vecmanf_document_core::{ObjectSnapshot, PrimitiveSnapshot};
+use curvyo_document_core::{ObjectSnapshot, PrimitiveSnapshot};
 
 use super::{Session, Tool};
 
@@ -27,7 +27,7 @@ impl Session {
     /// `live_node_drag_paths_in` (private: this module's own internal step,
     /// not part of its public surface) substitutes that drag's live,
     /// not-yet-committed position/handle values into the snapshot before
-    /// anything downstream ever sees it — `vecmanf-render-core` needs no
+    /// anything downstream ever sees it — `curvyo-render-core` needs no
     /// drag-specific code of its own for this: it already draws whatever
     /// `PathSnapshot` it is handed, so a locally live-overridden one
     /// reshapes the stroke and every decoration exactly as if it had
@@ -43,20 +43,20 @@ impl Session {
         let paths = self.live_node_drag_paths_in(&objects);
         let mut list = build_draw_list(&paths, view, &self.decoration_input());
         let primitives = Self::primitives_in(&objects);
-        list.extend(vecmanf_render_core::build_primitive_strokes(
+        list.extend(curvyo_render_core::build_primitive_strokes(
             &primitives,
             view,
         ));
         // The origin axes of an axis-locked move: above the artwork, below the
         // blue outline, the boxes and the handles (criterion 27).
         if let Some(axes) = self.move_axes_in(&objects) {
-            list.extend(vecmanf_render_core::build_move_axes(view, &axes));
+            list.extend(curvyo_render_core::build_move_axes(view, &axes));
         }
         // The blue half of blue-new, black-old: the geometry a release would
         // commit, over the committed objects drawn above and under the boxes
         // and handles below (`specs/unified-object-editing` criterion 10).
         if let Some(live) = &live {
-            list.extend(vecmanf_render_core::build_live_edit_preview(
+            list.extend(curvyo_render_core::build_live_edit_preview(
                 &live.objects,
                 view,
             ));
@@ -71,9 +71,9 @@ impl Session {
             &self.select_transform_decoration_input_in(&live_objects),
         ));
         if let Some(preview) = self.live_preview() {
-            list.extend(vecmanf_render_core::build_shape_live_preview(
+            list.extend(curvyo_render_core::build_shape_live_preview(
                 &preview.shape,
-                vecmanf_document_core::Angle::from_radians(0.0),
+                curvyo_document_core::Angle::from_radians(0.0),
                 view,
             ));
             // Shift makes the press point the centre: the pivot marker says so

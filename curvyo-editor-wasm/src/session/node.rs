@@ -6,9 +6,9 @@
 //! are (`docs/technical-debt.md`, "`Session` is one module past the size
 //! limit").
 
-use vecmanf_document_core::{AnchorKind, ObjectSnapshot, Point};
-use vecmanf_render_core::{DecorationInput, Hovered as RenderHovered};
-use vecmanf_ui_core::{Hit, NodeToolbarState};
+use curvyo_document_core::{AnchorKind, ObjectSnapshot, Point};
+use curvyo_render_core::{DecorationInput, Hovered as RenderHovered};
+use curvyo_ui_core::{Hit, NodeToolbarState};
 
 use super::{Session, Tool};
 
@@ -26,8 +26,8 @@ impl Session {
     pub(super) fn live_node_drag_paths_in(
         &self,
         objects: &[ObjectSnapshot],
-    ) -> Vec<vecmanf_document_core::PathSnapshot> {
-        let mut paths: Vec<vecmanf_document_core::PathSnapshot> = objects
+    ) -> Vec<curvyo_document_core::PathSnapshot> {
+        let mut paths: Vec<curvyo_document_core::PathSnapshot> = objects
             .iter()
             .filter_map(|object| match object {
                 ObjectSnapshot::Path(path) => Some(path.clone()),
@@ -40,7 +40,7 @@ impl Session {
         paths
     }
 
-    pub(super) fn apply_live_node_drag(&self, paths: &mut [vecmanf_document_core::PathSnapshot]) {
+    pub(super) fn apply_live_node_drag(&self, paths: &mut [curvyo_document_core::PathSnapshot]) {
         let Some(cursor) = self.pointer_position else {
             return;
         };
@@ -48,7 +48,7 @@ impl Session {
             return;
         };
         match live {
-            vecmanf_ui_core::LiveNodeDrag::Nodes { positions } => {
+            curvyo_ui_core::LiveNodeDrag::Nodes { positions } => {
                 for (path, id, point) in positions {
                     if let Some(snapshot) = paths.iter_mut().find(|p| p.id == path)
                         && let Some(anchor) = snapshot.anchors.iter_mut().find(|a| a.id == id)
@@ -57,7 +57,7 @@ impl Session {
                     }
                 }
             }
-            vecmanf_ui_core::LiveNodeDrag::Handle {
+            curvyo_ui_core::LiveNodeDrag::Handle {
                 path,
                 anchor,
                 handle_in,
@@ -65,7 +65,7 @@ impl Session {
             } => {
                 // `handle_in`/`handle_out` already fully resolved by
                 // `NodeTool::live_drag` (which calls the exact same
-                // `vecmanf_document_core::resolve_handle_pair` function
+                // `curvyo_document_core::resolve_handle_pair` function
                 // `Document::set_handle` itself commits with) — a plain
                 // assignment, no slot/mirror logic of its own to
                 // independently drift from the commit.

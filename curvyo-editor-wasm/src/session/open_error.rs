@@ -1,12 +1,12 @@
-//! The one-sentence user-facing message for each way opening a `.vmf` can
+//! The one-sentence user-facing message for each way opening a `.curvyo` can
 //! fail. Split out of `session/mod.rs` (`docs/technical-debt.md`,
 //! "`Session` is one module past the size limit").
 
 #[cfg(any(test, target_arch = "wasm32"))]
-use vecmanf_document_core::OpenError;
+use curvyo_document_core::OpenError;
 
 /// Returns the one-sentence message the frontend's `ErrorDialog` shows
-/// for `error` — moved here from `vecmanf-app`'s native `open_error.rs`
+/// for `error` — moved here from `curvyo-app`'s native `open_error.rs`
 /// (`specs/0001-project-file-foundation/specification.md`, "Error handling —
 /// invalid/corrupt file") now that [`Session::open`] (and the
 /// `Document::open` it wraps) only ever runs inside this wasm session,
@@ -21,10 +21,10 @@ use vecmanf_document_core::OpenError;
 #[must_use]
 pub const fn map_open_error(error: &OpenError) -> &'static str {
     match error {
-        OpenError::NotAVmf => "This file isn't a vecmanf project (.vmf) file.",
+        OpenError::NotAProject => "This file isn't a Curvyo project (.curvyo) file.",
         OpenError::Damaged => "This file is damaged and can't be read.",
         OpenError::FormatTooNew { .. } => {
-            "This file was saved by a newer version of vecmanf. Update the app to open it."
+            "This file was saved by a newer version of Curvyo. Update the app to open it."
         }
     }
 }
@@ -32,13 +32,13 @@ pub const fn map_open_error(error: &OpenError) -> &'static str {
 #[cfg(test)]
 mod map_open_error_tests {
     use super::map_open_error;
-    use vecmanf_document_core::OpenError;
+    use curvyo_document_core::OpenError;
 
     #[test]
-    fn not_a_vmf_names_the_specific_cause() {
+    fn not_a_project_names_the_specific_cause() {
         assert_eq!(
-            map_open_error(&OpenError::NotAVmf),
-            "This file isn't a vecmanf project (.vmf) file."
+            map_open_error(&OpenError::NotAProject),
+            "This file isn't a Curvyo project (.curvyo) file."
         );
     }
 
@@ -58,7 +58,7 @@ mod map_open_error_tests {
         };
         assert_eq!(
             map_open_error(&error),
-            "This file was saved by a newer version of vecmanf. Update the app to open it."
+            "This file was saved by a newer version of Curvyo. Update the app to open it."
         );
     }
 }

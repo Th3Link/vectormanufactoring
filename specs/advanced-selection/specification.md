@@ -44,7 +44,7 @@ segment test) and what happens when more than one object lies within it.
    **8 screen pixels** of any object's outline (a path's anchor-run
    segments, or a primitive's outline), then that object is hit, exactly as
    if the click had landed on the outline itself — double today's shipped
-   4px tolerance (`vecmanf-editor-wasm`'s `SEGMENT_TOLERANCE_PX`, which the
+   4px tolerance (`curvyo-editor-wasm`'s `SEGMENT_TOLERANCE_PX`, which the
    Select tool currently reuses from the Node tool's segment test). This is
    the same Fitts's-law-margin doubling `canvas-navigation-and-selection`
    already applied to the node (8px→16px) and handle (8px→16px) hit-test
@@ -251,7 +251,7 @@ behavior for drags that were already Alt-held at press).
    canvas (no object within criterion 1's tolerance) and the pointer then
    moves more than **3 screen pixels** from the press point before release
    — the same click-vs-drag threshold this product already uses elsewhere
-   (`PEN_DRAG_THRESHOLD_PX`, `vecmanf-editor-wasm`) — then a marquee drag
+   (`PEN_DRAG_THRESHOLD_PX`, `curvyo-editor-wasm`) — then a marquee drag
    begins instead of clearing the selection outright. A press-and-release
    within that 3px threshold is a plain click: criterion 15 of
    `canvas-navigation-and-selection` ("clicking empty canvas clears the

@@ -2,11 +2,11 @@
 //! (`specs/edit-interaction-polish/specification.md`, criteria 15 to 25, 56):
 //! the move chip's view for the DOM and its commit. All rules (parsing,
 //! relative and absolute reading, the tight bounds, the coordinate limit) live
-//! in `vecmanf_ui_core::MoveEntry`; the DOM holds the text, the mode switch
+//! in `curvyo_ui_core::MoveEntry`; the DOM holds the text, the mode switch
 //! and the focus, and passes the mode with the commit.
 
-use vecmanf_document_core::Point;
-use vecmanf_ui_core::{EntryOutcome, MoveEntry, MoveEntryMode};
+use curvyo_document_core::Point;
+use curvyo_ui_core::{EntryOutcome, MoveEntry, MoveEntryMode};
 
 use super::{Session, Tool};
 

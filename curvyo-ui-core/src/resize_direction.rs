@@ -1,7 +1,7 @@
 //! The eight directions of a resize handle on an oriented box: a corner or an
 //! edge midpoint (`specs/0005-object-transform/specification.md`).
 
-use vecmanf_document_core::Vec2;
+use curvyo_document_core::Vec2;
 
 /// One of a box's eight resize directions: a corner or an edge midpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

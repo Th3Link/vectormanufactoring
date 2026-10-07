@@ -4,7 +4,7 @@
 //!
 //! Ephemeral, per ADR 0009 §2 — never written to the document, never
 //! saved. Holds `(NodeId, AnchorId)` pairs and resolves them lazily
-//! against whatever [`vecmanf_document_core::PathSnapshot`]s the caller
+//! against whatever [`curvyo_document_core::PathSnapshot`]s the caller
 //! hands in, so a selected anchor a collaborator (or this same session)
 //! has since deleted simply stops resolving rather than dangling
 //! (`specs/0002-path-node-editing/adrs.md`).
@@ -42,7 +42,7 @@
 //! one action that already works across paths by construction, via
 //! [`NodeSelection::join_pairs`]).
 
-use vecmanf_document_core::{AnchorId, NodeId};
+use curvyo_document_core::{AnchorId, NodeId};
 
 /// The node tool's current selection: nothing, one or more nodes
 /// (possibly across several path objects, acceptance criteria 6, 7), or
@@ -225,7 +225,7 @@ impl NodeSelection {
 
 #[cfg(test)]
 mod tests {
-    use vecmanf_document_core::{Document, NewAnchor, Point};
+    use curvyo_document_core::{Document, NewAnchor, Point};
 
     use super::*;
 

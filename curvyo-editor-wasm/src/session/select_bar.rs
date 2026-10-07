@@ -1,11 +1,11 @@
 //! `Session`'s glue for the Select bar (`specs/unified-object-editing`,
 //! criteria 21, 21a, 22, 23): the bar's state for the current selection and the
-//! commands its controls issue. All rules live in `vecmanf_ui_core`
+//! commands its controls issue. All rules live in `curvyo_ui_core`
 //! (`select_bar_state`, `SelectTool`'s bar edits); the DOM holds only the
 //! open text, the invalid state and "Escape restores".
 
-use vecmanf_document_core::{InnerRatio, PointCount};
-use vecmanf_ui_core::{
+use curvyo_document_core::{InnerRatio, PointCount};
+use curvyo_ui_core::{
     EntryOutcome, ParamValue, SelectBarState, build_primitive_conversions, select_bar_state,
 };
 
@@ -84,8 +84,8 @@ impl Session {
 
     /// "Object to path" (acceptance criteria 17, 21, 22): converts every
     /// currently selected primitive to a path, in one
-    /// [`vecmanf_document_core::Document::convert_to_paths`] call
-    /// (the anchor geometry itself is built by `vecmanf-ui-core`'s own
+    /// [`curvyo_document_core::Document::convert_to_paths`] call
+    /// (the anchor geometry itself is built by `curvyo-ui-core`'s own
     /// `build_primitive_conversions` — architect review: this facade
     /// must hold no editing logic of its own, ADR 0001 §1), then
     /// switches to the node tool. The shape handles/tool-options bar
@@ -106,7 +106,7 @@ impl Session {
     /// object conversion therefore stays selected together at object
     /// level"). A multi-object conversion (acceptance criterion 22)
     /// additionally selects the first converted path's anchors the same
-    /// way — `vecmanf-ui-core`'s [`vecmanf_ui_core::NodeSelection`] has no
+    /// way — `curvyo-ui-core`'s [`curvyo_ui_core::NodeSelection`] has no
     /// representation for "these anchors across several different paths
     /// are selected together", so that part remains an approximation of
     /// AC22's "remain selected together" wording, not a literal one — a
@@ -143,7 +143,7 @@ impl Session {
 
 #[cfg(test)]
 mod tests {
-    use vecmanf_document_core::Point;
+    use curvyo_document_core::Point;
 
     use super::super::{Session, Tool};
 

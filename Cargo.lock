@@ -5002,7 +5002,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 
 [[package]]
-name = "vecmanf-app"
+name = "curvyo-app"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -5010,12 +5010,12 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
- "vecmanf-document-core",
- "vecmanf-storage-io",
+ "curvyo-document-core",
+ "curvyo-storage-io",
 ]
 
 [[package]]
-name = "vecmanf-document-core"
+name = "curvyo-document-core"
 version = "0.1.0"
 dependencies = [
  "loro",
@@ -5026,16 +5026,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "vecmanf-editor-wasm"
+name = "curvyo-editor-wasm"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
  "console_error_panic_hook",
  "loro",
  "serde_json",
- "vecmanf-document-core",
- "vecmanf-render-core",
- "vecmanf-ui-core",
+ "curvyo-document-core",
+ "curvyo-render-core",
+ "curvyo-ui-core",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -5044,24 +5044,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "vecmanf-geometry-core"
+name = "curvyo-geometry-core"
 version = "0.1.0"
 dependencies = [
  "kurbo",
  "proptest",
- "vecmanf-document-core",
+ "curvyo-document-core",
 ]
 
 [[package]]
-name = "vecmanf-render-core"
+name = "curvyo-render-core"
 version = "0.1.0"
 dependencies = [
  "lyon",
- "vecmanf-document-core",
+ "curvyo-document-core",
 ]
 
 [[package]]
-name = "vecmanf-storage-io"
+name = "curvyo-storage-io"
 version = "0.1.0"
 dependencies = [
  "tempfile",
@@ -5069,12 +5069,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "vecmanf-ui-core"
+name = "curvyo-ui-core"
 version = "0.1.0"
 dependencies = [
  "proptest",
- "vecmanf-document-core",
- "vecmanf-geometry-core",
+ "curvyo-document-core",
+ "curvyo-geometry-core",
 ]
 
 [[package]]

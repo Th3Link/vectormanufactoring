@@ -2,14 +2,14 @@
 //! (`specs/object-transform-refinements/specification.md`, acceptance
 //! criteria 18-32): the entry's view for the DOM chip, the linked-field
 //! text, commit and cancel. All rules (parser, validation, linking,
-//! resolution) live in `vecmanf_ui_core::transform_entry`; the DOM holds only
+//! resolution) live in `curvyo_ui_core::transform_entry`; the DOM holds only
 //! text, caret and focus. Closing without writing on a tool switch, a
 //! selection change, Delete, "Object to path", Escape and a press elsewhere
 //! happens at those call sites through [`Session::cancel_transform_entry`]
 //! and `SelectTool::pointer_down`.
 
-use vecmanf_document_core::Point;
-use vecmanf_ui_core::{
+use curvyo_document_core::Point;
+use curvyo_ui_core::{
     EditHandle, EntryField, EntryKind, EntryOutcome, ParamEntry, SelectTool, SkewEntry,
     TransformEntry, entry_anchor,
 };

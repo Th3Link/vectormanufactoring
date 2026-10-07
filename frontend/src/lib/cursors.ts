@@ -1,7 +1,7 @@
 /**
  * Canvas cursors for the Select tool's transform handles
  * (`specs/0005-object-transform/specification.md`, UX notes, "Cursor
- * feedback"). `vecmanf-editor-wasm`'s `cursor_hint()` returns a plain
+ * feedback"). `curvyo-editor-wasm`'s `cursor_hint()` returns a plain
  * string; this turns it into a CSS `cursor` value — all the geometry
  * (which handle, which angle) is decided in Rust, nothing here.
  *

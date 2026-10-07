@@ -10,7 +10,7 @@ parts 1 to 3).
 `specification.md` and `adrs.md` were written before two features landed. What
 exists now, checked in the code:
 
-- `vecmanf-ui-core/src/modifiers.rs` already has `Modifiers { shift, ctrl }`
+- `curvyo-ui-core/src/modifiers.rs` already has `Modifiers { shift, ctrl }`
   (`NONE`, `new`). Not created again.
 - `Session::pointer_hover` / `pointer_up` already build `Modifiers` and call
   `shape_pointer_move(point, Modifiers)` / `shape_pointer_up(point,
@@ -63,15 +63,15 @@ exists now, checked in the code:
    (the press point under Shift for rectangle and ellipse, `None` for
    polygon/star); `Session::draw_list` draws the existing pivot marker there.
    The Rectangle and Ellipse rail tooltips get a second line. A small public
-   field addition in `vecmanf-ui-core`, requested by the UX review.
+   field addition in `curvyo-ui-core`, requested by the UX review.
 
 ## Affected crates/modules
 
-- `vecmanf-ui-core`: `shape_tool_common.rs` (`CreateDragBox`,
+- `curvyo-ui-core`: `shape_tool_common.rs` (`CreateDragBox`,
   `create_drag_box`), `rectangle_tool.rs`, `ellipse_tool.rs`, tests in
   `tests/acceptance_0003.rs` (signature migration) and a new
   `tests/shape_creation_from_center.rs`.
-- `vecmanf-editor-wasm`: `session/shapes.rs` (pass `Modifiers`), new
+- `curvyo-editor-wasm`: `session/shapes.rs` (pass `Modifiers`), new
   `tests/shape_creation_from_center.rs` through `Session`.
 - No new crate, dependency, `format_version`, `wasm_api.rs` or frontend
   change. Docs: `specs/shape-creation-from-center/` (status, plan);

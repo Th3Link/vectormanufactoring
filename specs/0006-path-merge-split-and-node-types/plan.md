@@ -21,26 +21,26 @@ One side effect worth recording: Split's own result (acceptance
 criterion 13) can legitimately produce two coincident nodes on two
 *different* path objects, and criterion 15 asks for both to end up
 selected, immediately re-Joinable. That one case *is* reachable end to
-end without `ObjectSelection` — it is exercised by `vecmanf-ui-core`'s
-and `vecmanf-editor-wasm`'s own tests (`split_then_rejoin_restores_one_object`,
+end without `ObjectSelection` — it is exercised by `curvyo-ui-core`'s
+and `curvyo-editor-wasm`'s own tests (`split_then_rejoin_restores_one_object`,
 `split_selected_on_an_interior_node_through_the_session`).
 
 ## Affected crates/modules
 
-- `vecmanf-document-core`: `path_model.rs` (`AnchorKind::Asymmetric`,
+- `curvyo-document-core`: `path_model.rs` (`AnchorKind::Asymmetric`,
   two new `PathEditError` variants), `path_codec.rs` (kind tag
   rename/alias, `write_closed`, `write_path_style`), `paths.rs`
   (`resolve_handle_pair`'s Asymmetric rule, `convert_anchor_kind`'s full
   table + no-op rule, `join_endpoints`, `split_at_anchor`,
   `create_path_uncommitted`), `document.rs` (`CURRENT_FORMAT_VERSION`
   4 — see note below).
-- `vecmanf-ui-core`: `selection.rs` (`NodeSelection`'s new `SplitPair`
+- `curvyo-ui-core`: `selection.rs` (`NodeSelection`'s new `SplitPair`
   state, `join_pairs()`), `node_tool.rs` (`can_join`/`can_split`,
   `join_selected`/`split_selected`, `NodeToolbarState`'s new/renamed
   fields).
-- `vecmanf-render-core`: `glyphs.rs` (`triangle`), `decorations.rs` /
+- `curvyo-render-core`: `glyphs.rs` (`triangle`), `decorations.rs` /
   `pen_preview.rs` (third glyph arm).
-- `vecmanf-editor-wasm`: `session/mod.rs` / `wasm_api.rs`
+- `curvyo-editor-wasm`: `session/mod.rs` / `wasm_api.rs`
   (`join_selected`/`split_selected` passthrough, `kind_from_str`,
   `NodeToolbarState` mirror).
 - `frontend/`: `useEditorSession.ts`, `NodeToolbar.tsx` (3-segment
@@ -80,17 +80,17 @@ defect in either slice.
       (AC 13, via a new `create_path_uncommitted` shared with
       `create_path` so Split stays one commit) and closed-path split
       via movable-list `mov` rotation (AC 14). (AC 12, 13, 14)
-- [x] 6. `vecmanf-ui-core`: `NodeSelection::SplitPair` + `join_pairs()`
+- [x] 6. `curvyo-ui-core`: `NodeSelection::SplitPair` + `join_pairs()`
       (narrowly scoped — see `selection.rs`'s own doc comment for why
       this is not a general cross-path selection mechanism);
       `NodeTool::can_join`/`join_selected`/`can_split`/`split_selected`.
       (AC 8, 11, 12, 15)
-- [x] 7. `vecmanf-render-core`: triangle glyph, third `match` arm in
+- [x] 7. `curvyo-render-core`: triangle glyph, third `match` arm in
       decorations/pen-preview.
-- [x] 8. `vecmanf-editor-wasm` + `frontend/`: wasm passthroughs, binding
+- [x] 8. `curvyo-editor-wasm` + `frontend/`: wasm passthroughs, binding
       strings, 3-segment `ToggleGroup` + Join/Split buttons (toolbar and
       context menu), disable-don't-hide throughout.
-- [x] 9. Golden-file migration test: reused `paths_v2.vmf` (already
+- [x] 9. Golden-file migration test: reused `paths_v2.curvyo` (already
       stores the legacy `"smooth"` tag) rather than adding a new
       fixture, per `adrs.md`'s own note that this is the intended test.
 - [x] 10. AC 6, AC 7, and AC 9's "two different pre-existing open path
@@ -109,20 +109,20 @@ defect in either slice.
       AnchorId, Point)` triples across paths and commits once;
       `Drag::Nodes`/`LiveNodeDrag::Nodes` carry those cross-path triples
       instead of one path plus `(AnchorId, Point)` pairs. New tests:
-      `vecmanf-document-core::paths` (two cross-path move tests, one
-      asserting `len_changes() == 1`), `vecmanf-ui-core::node_tool`
+      `curvyo-document-core::paths` (two cross-path move tests, one
+      asserting `len_changes() == 1`), `curvyo-ui-core::node_tool`
       (plain click keeps a cross-path selection and drags both paths),
-      `vecmanf-editor-wasm/tests/acceptance_0006.rs` (same, through
+      `curvyo-editor-wasm/tests/acceptance_0006.rs` (same, through
       `Session`'s public API).
 
 ## Validation
 
-- Unit tests throughout `vecmanf-document-core` (new `join_endpoints`/
+- Unit tests throughout `curvyo-document-core` (new `join_endpoints`/
   `split_at_anchor`/conversion-table/`resolve_handle_pair` tests),
-  `vecmanf-ui-core` (`NodeTool`/`NodeSelection`), `vecmanf-editor-wasm`
+  `curvyo-ui-core` (`NodeTool`/`NodeSelection`), `curvyo-editor-wasm`
   (`Session`-level end-to-end Join/Split).
-- Golden-file: `paths_v2.vmf` (existing fixture) now doubles as the
+- Golden-file: `paths_v2.curvyo` (existing fixture) now doubles as the
   `format_version` migration test.
-- Full gate (`CLAUDE.md` §7): green except `vecmanf-app`'s pre-existing
+- Full gate (`CLAUDE.md` §7): green except `curvyo-app`'s pre-existing
   `tauri-macros` proc-macro panic, confirmed to reproduce identically
   on an unmodified `main` checkout (unrelated to this story).

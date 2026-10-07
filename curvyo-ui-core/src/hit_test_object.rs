@@ -7,8 +7,8 @@
 //! through its own anchors, a primitive through its outline). It is the one
 //! definition of "near an outline"; the shape tools no longer hit-test at all.
 
-use vecmanf_document_core::{NodeId, ObjectSnapshot, Point, Tolerance, Vec2, outline_of_rotated};
-use vecmanf_geometry_core::nearest_point_on_segment;
+use curvyo_document_core::{NodeId, ObjectSnapshot, Point, Tolerance, Vec2, outline_of_rotated};
+use curvyo_geometry_core::nearest_point_on_segment;
 
 use crate::hit_test::segment_pairs;
 
@@ -69,11 +69,11 @@ fn distance_to_object(object: &ObjectSnapshot, point: Point, tolerance: Toleranc
 
 /// Hit-tests `point` against every object in `objects` — a path through
 /// its own anchors, a primitive through its own (rotation-aware)
-/// outline ([`vecmanf_document_core::outline_of_rotated`]) — returning
+/// outline ([`curvyo_document_core::outline_of_rotated`]) — returning
 /// the nearest one
 /// within `tolerance`. A tie goes to the topmost object in z-order:
 /// `objects` is expected in z-order (as
-/// [`vecmanf_document_core::Document::object_ids`] already returns it),
+/// [`curvyo_document_core::Document::object_ids`] already returns it),
 /// and the last-indexed (topmost) candidate wins an exact distance tie.
 #[must_use]
 pub fn hit_test_object(
@@ -102,7 +102,7 @@ pub fn hit_test_object(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vecmanf_document_core::{AnchorId, Document, EllipseFrame, Length, NewAnchor, RectBounds};
+    use curvyo_document_core::{AnchorId, Document, EllipseFrame, Length, NewAnchor, RectBounds};
 
     fn open_path(document: &Document, a: Point, b: Point) -> NodeId {
         document.create_path(
@@ -232,7 +232,7 @@ mod tests {
         document
             .rotate_object(&document.object(rect).expect("object exists").rotated(
                 Point::new(0.0, 0.0),
-                vecmanf_document_core::Angle::from_radians(std::f64::consts::FRAC_PI_4),
+                curvyo_document_core::Angle::from_radians(std::f64::consts::FRAC_PI_4),
             ))
             .expect("rotate");
         let objects = vec![document.object(rect).expect("exists")];

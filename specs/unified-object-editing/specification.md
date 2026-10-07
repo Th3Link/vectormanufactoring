@@ -48,9 +48,9 @@ transform-refinements/`).
 Reference state: `main` after PR #29 (`specs/0005-object-transform/`), with
 PR #35 (`specs/object-transform-refinements/`) assumed merged; items that
 arrive only with #35 are marked (#35). The code facts are from
-`vecmanf-ui-core/src/{select_tool,rectangle_tool,ellipse_tool,poly_star_tool,
+`curvyo-ui-core/src/{select_tool,rectangle_tool,ellipse_tool,poly_star_tool,
 shape_tool_common,shape_hit_test,handle_layout}.rs` and the `Session` in
-`vecmanf-editor-wasm/src/session/`.
+`curvyo-editor-wasm/src/session/`.
 
 | | Select tool | Rectangle tool | Ellipse tool | Polygon/Star tool |
 |---|---|---|---|---|
@@ -902,8 +902,8 @@ shippable but inconsistent (the shape tools still select and edit while the
 Select tool also edits them), so PR 2 must merge in the same window as PR 1,
 before any release. Tester note: assert that a move dragged back to its start
 writes nothing (criterion 12). Tests that drive a primitive through
-its own tool (`vecmanf-ui-core` shape-tool unit tests,
-`vecmanf-editor-wasm/tests/acceptance_0003*.rs`, `acceptance_0004.rs`) are
+its own tool (`curvyo-ui-core` shape-tool unit tests,
+`curvyo-editor-wasm/tests/acceptance_0003*.rs`, `acceptance_0004.rs`) are
 rewritten against the Select tool, not deleted.
 
 ## Links

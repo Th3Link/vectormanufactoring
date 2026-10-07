@@ -1,22 +1,22 @@
-//! `vecmanf-ui-core`'s share of `specs/polygon-star-box-refit/`: the oriented
+//! `curvyo-ui-core`'s share of `specs/polygon-star-box-refit/`: the oriented
 //! box of a polygon or star has the direction `orientation()` (criteria 1, 2,
 //! 4, 8, 13, 15), checked as a table, as an invariant over random shapes and
 //! against golden numbers computed independently of the box code. The
-//! session-level gestures are in `vecmanf-editor-wasm/tests/`.
+//! session-level gestures are in `curvyo-editor-wasm/tests/`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::too_many_lines, clippy::similar_names)]
 
-use proptest::prelude::*;
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Angle, Color, Document, EllipseFrame, InnerRatio, Length, NewAnchor, NodeId,
     ObjectSnapshot, Point, PointCount, PrimitiveSnapshot, RectBounds, Shape, StarFrame, Vec2,
     outline_of_rotated,
 };
-use vecmanf_ui_core::{
+use curvyo_ui_core::{
     ParamHandle, ParamValue, TransformHandleTolerances, oriented_bounds, param_handles,
     value_from_pointer,
 };
+use proptest::prelude::*;
 
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)

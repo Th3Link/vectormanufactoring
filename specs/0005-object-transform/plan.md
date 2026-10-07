@@ -5,7 +5,7 @@ Branch: `story/object-transform`, worktree
 `origin/main` at `a7e82f5` (`path-merge-split-and-node-types`, #26).
 
 `main`'s `CURRENT_FORMAT_VERSION` is **4** at branch time, confirmed by
-reading `vecmanf-document-core/src/document.rs` on `origin/main` before
+reading `curvyo-document-core/src/document.rs` on `origin/main` before
 branching. This slice therefore takes **5**, matching the architect's own
 2026-10-05 resolution note in `adrs.md` (not the plain "4" the dated
 decision above it says) — no discrepancy to report.
@@ -19,7 +19,7 @@ UX notes, not follow-ups).
 
 ## Affected crates/modules
 
-- `vecmanf-document-core`: `units.rs` (Angle::normalized, Point/Vec2
+- `curvyo-document-core`: `units.rs` (Angle::normalized, Point/Vec2
   rotation arithmetic), `path_model.rs` (`PathSnapshot::rotation`, Join/
   Split-safe), `primitive_model.rs` (`PrimitiveSnapshot::rotation`,
   `ObjectSnapshot::rotated`, `shape_center`, `rotate_shape`),
@@ -29,20 +29,20 @@ UX notes, not follow-ups).
   (`Document::rotate_object`), `shapes.rs` (`resize_rect`/`resize_ellipse`/
   `resize_star_frame`), `paths.rs` (`resize_path`), `path_topology.rs`
   (Split copies rotation to the new object).
-- `vecmanf-ui-core`: new `oriented_box.rs` (OrientedBox type + local/
+- `curvyo-ui-core`: new `oriented_box.rs` (OrientedBox type + local/
   document mapping), new `transform_handle_layout.rs` (8 resize + 1 rotate
   handle layout, hit test, stroke/radius factor arithmetic, Ctrl/Shift
   rules), `select_tool.rs` (resize/rotate drag states alongside the
   existing move drag), `hit_test_object.rs`/`conversion.rs`/
   `object_bounds.rs` updated for rotation-aware outlines.
-- `vecmanf-render-core`: `select_decoration.rs` extended with transform
+- `curvyo-render-core`: `select_decoration.rs` extended with transform
   handle quads (thin — reuses existing decoration conventions).
 
 ## Tasks (acceptance criteria in parens)
 
 - [x] 1. `Angle::normalized`, `Point::rotated_around`, `Vec2::rotated` (infrastructure)
 - [x] 2. `rotation` on snapshots, codec, `Damaged` on non-finite/mistyped (19, 24)
-- [x] 3. `CURRENT_FORMAT_VERSION = 5`, `document.json` carries `rotation`; golden fixture `rotation_v5.vmf`, `future_format_version.vmf` regenerated (19, 24)
+- [x] 3. `CURRENT_FORMAT_VERSION = 5`, `document.json` carries `rotation`; golden fixture `rotation_v5.curvyo`, `future_format_version.curvyo` regenerated (19, 24)
 - [x] 4. `shape_center`, `rotate_shape`, `ObjectSnapshot::rotated` (15-18, 20, 21)
 - [x] 5. `PathSnapshot::rotated`/`scaled` (12, 20)
 - [x] 6. `outline_of_rotated`; **used by render-core's primitive stroke and live preview too** (an earlier pass of this slice forgot render-core) (17, 21, 25)
@@ -58,7 +58,7 @@ UX notes, not follow-ups).
 - [x] 16. Cursors: `Session::cursor_hint`, `wasm_api::cursor_hint`, `frontend/src/lib/cursors.ts` (rotated resize cursor with built-in fallback; static rotate cursor) (UX notes)
 - [x] 17. Shift/Ctrl threaded through `pointer_hover`/`pointer_up`, re-run on modifier key press/release (5, 7, 16, 17)
 - [x] 18. Shape tools' own handles follow rotation: `handles_for` rotated, drag deltas mapped into local axes, live preview rotated (25)
-- [x] 19. Frontend builds (`npm install`, `npm run build`: `tsc -b` + `vite build`), `vecmanf-app` builds and is in the gate
+- [x] 19. Frontend builds (`npm install`, `npm run build`: `tsc -b` + `vite build`), `curvyo-app` builds and is in the gate
 
 ## Review round (2026-10-06)
 
@@ -82,6 +82,6 @@ Remaining, by design: the glyph and cursor art is a first version for the ux-eng
 
 ## Validation
 
-- `cargo test -p vecmanf-document-core -p vecmanf-ui-core` for every task
+- `cargo test -p curvyo-document-core -p curvyo-ui-core` for every task
   above, test-first.
 - Full gate (`CLAUDE.md` §7) before reporting done.

@@ -10,7 +10,7 @@
 //! `viewport` field and its methods join the same type's `impl Session`
 //! `session/mod.rs` itself defines.
 
-use vecmanf_document_core::{Point, ViewTransform};
+use curvyo_document_core::{Point, ViewTransform};
 
 use super::Session;
 
@@ -24,7 +24,7 @@ const ZOOM_WHEEL_SENSITIVITY_PX: f64 = 400.0;
 
 /// Converts a wheel event's vertical delta (screen pixels, already
 /// normalized by the host from whichever `deltaMode` the browser used)
-/// into a multiplicative zoom factor for [`vecmanf_ui_core::Viewport::
+/// into a multiplicative zoom factor for [`curvyo_ui_core::Viewport::
 /// zoom_about`]: scrolling up (negative `delta_y`) zooms in (`factor >
 /// 1`), scrolling down zooms out (`factor < 1`), continuously rather than
 /// in fixed steps.

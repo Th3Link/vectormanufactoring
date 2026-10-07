@@ -2,16 +2,16 @@
 //! specification.md` and the keys M, K and Shift+K of Part F, for PR 3: the
 //! typed skew and the typed move, by double-click and by key. Driven through
 //! `Session`'s public API only; the rules themselves are tested in
-//! `vecmanf-ui-core`.
+//! `curvyo-ui-core`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::too_many_lines)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Document, Length, NewAnchor, ObjectSnapshot, Point, RectBounds, pack, unpack,
 };
-use vecmanf_editor_wasm::{EscapeStep, KeyHint, KeyInput, KeyOutcome, Session, Tool};
-use vecmanf_ui_core::{EntryOutcome, MoveEntryMode, object_outline_bounds};
+use curvyo_editor_wasm::{EscapeStep, KeyHint, KeyInput, KeyOutcome, Session, Tool};
+use curvyo_ui_core::{EntryOutcome, MoveEntryMode, object_outline_bounds};
 
 /// Screen pixels per millimetre of a fresh session (96 dpi at 100 %).
 const SCALE: f64 = 96.0 / 25.4;

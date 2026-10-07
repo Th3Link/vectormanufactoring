@@ -464,7 +464,7 @@ pub(crate) fn read_path_snapshot(id: NodeId, meta: &LoroMap) -> PathSnapshot {
 /// this module's own writers always produce, *without* relying on any of
 /// the `// invariant:` comments above that a trusted document gets to
 /// lean on (architect review, `specs/0002-path-node-editing/adrs.md`'s PR
-/// review: "Opening a `.vmf` validates the path tree before it returns a
+/// review: "Opening a `.curvyo` validates the path tree before it returns a
 /// `Document`"). Called once, right after import, before a freshly opened
 /// `Document` is ever handed to a caller — every read helper in this
 /// module can then keep trusting its own invariant for the rest of that

@@ -6,13 +6,13 @@
 //! the pointer, and the live numeric readout of a drag. Split out of
 //! `session/select.rs`, which dispatches the events.
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Angle, ObjectSnapshot, PrimitiveSnapshot, Shape, Vec2, effective_corner_radius,
 };
-use vecmanf_render_core::{
+use curvyo_render_core::{
     SelectDecorationInput, TransformDecorationInput, TransformGlyphKind, TransformHandleGlyph,
 };
-use vecmanf_ui_core::{
+use curvyo_ui_core::{
     EditHandle, LiveEdit, ParamHandle, SelectTool, Side, format_degrees, is_corner,
     is_drawn_handle, oriented_bounds, resize_cursor_angle_degrees, skew_cursor_angle_degrees,
 };
@@ -71,7 +71,7 @@ impl Session {
     /// Builds the Select tool's decoration input for this frame: every
     /// selected object's own box, plus a hovered-but-unselected one — each
     /// box computed from the *live* geometry, via
-    /// [`vecmanf_ui_core::oriented_bounds`] — so a rotated object's outline
+    /// [`curvyo_ui_core::oriented_bounds`] — so a rotated object's outline
     /// turns with it instead of re-squaring to the screen axes
     /// (`object-transform` acceptance criterion 18; the hover outline uses
     /// the same rule), and a skewed path's box is the tight oriented
@@ -129,9 +129,7 @@ impl Session {
     /// The skew fixed-line guide of the drag in flight, if it is a skew drag:
     /// drawn by the transform overlay, and the box leaves its own dashes off
     /// the edge it covers.
-    fn skew_guide_now(
-        &self,
-    ) -> Option<(vecmanf_document_core::Point, vecmanf_document_core::Point)> {
+    fn skew_guide_now(&self) -> Option<(curvyo_document_core::Point, curvyo_document_core::Point)> {
         self.select.skew_guide(
             self.select_shift_held,
             SKEW_GUIDE_EXTEND_PX / self.view().scale(),
@@ -145,7 +143,7 @@ impl Session {
     fn select_hovered_handle(
         &self,
         objects: &[ObjectSnapshot],
-    ) -> Option<(ObjectSnapshot, vecmanf_ui_core::OrientedBox, EditHandle)> {
+    ) -> Option<(ObjectSnapshot, curvyo_ui_core::OrientedBox, EditHandle)> {
         if self.select.drag_in_flight() || self.select.has_entry() {
             return None;
         }
@@ -211,7 +209,7 @@ impl Session {
             highlighted,
             Some(EditHandle::Param(ParamHandle::CornerRadius(_)))
         );
-        let drawn: Vec<(EditHandle, vecmanf_document_core::Point)> =
+        let drawn: Vec<(EditHandle, curvyo_document_core::Point)> =
             SelectTool::transform_handles(objects, &self.selection, tolerances, side_rotate)
                 .into_iter()
                 .filter(|(handle, _)| {
@@ -422,7 +420,7 @@ impl Session {
 
 /// The glyph a handle draws; a skew glyph's arrows run along its side's axis
 /// in the box's own rotated frame.
-fn glyph_kind(handle: EditHandle, box_: &vecmanf_ui_core::OrientedBox) -> TransformGlyphKind {
+fn glyph_kind(handle: EditHandle, box_: &curvyo_ui_core::OrientedBox) -> TransformGlyphKind {
     let (sin, cos) = box_.angle.as_radians().sin_cos();
     match handle {
         EditHandle::Resize(_) => TransformGlyphKind::Resize,
@@ -476,11 +474,11 @@ fn skew_readout(side: Side, degrees: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vecmanf_document_core::{Angle, Length, Point, RectBounds};
+    use curvyo_document_core::{Angle, Length, Point, RectBounds};
 
     /// A 10 × 10 mm rectangle at the origin, selected under the Select
     /// tool (a click on its left edge).
-    fn session_with_selected_rect() -> (Session, vecmanf_document_core::NodeId) {
+    fn session_with_selected_rect() -> (Session, curvyo_document_core::NodeId) {
         let mut session = Session::new(1);
         let id = session.document.create_rect(RectBounds {
             origin: Point::new(0.0, 0.0),
@@ -541,7 +539,7 @@ mod tests {
     #[test]
     fn a_selected_object_draws_a_dashed_box() {
         let (session, _) = session_with_selected_rect();
-        let solid = vecmanf_render_core::build_select_draw_list(
+        let solid = curvyo_render_core::build_select_draw_list(
             session.view(),
             &SelectDecorationInput {
                 hovered: session.select_decoration_input().selected.first().copied(),
@@ -553,7 +551,7 @@ mod tests {
             8,
             "the hover box is four solid quads"
         );
-        let dashed = vecmanf_render_core::build_select_draw_list(
+        let dashed = curvyo_render_core::build_select_draw_list(
             session.view(),
             &session.select_decoration_input(),
         );
@@ -669,7 +667,7 @@ mod tests {
         // Deselect, then hover the rotated outline's turned top-left edge.
         session.pointer_down(Point::new(500.0, 500.0), false);
         let on_outline = Point::new(5.0, 5.0).translated(
-            vecmanf_document_core::Vec2::new(-5.0, 0.0).rotated(Angle::from_radians(0.5)),
+            curvyo_document_core::Vec2::new(-5.0, 0.0).rotated(Angle::from_radians(0.5)),
         );
         session.pointer_hover(on_outline, false, false);
         let input = session.select_decoration_input();
@@ -712,7 +710,7 @@ mod tests {
         let to_handle = center.vector_to(handle);
         let swing = |deg: f64| {
             let a = to_handle.y.atan2(to_handle.x) + deg.to_radians();
-            center.translated(vecmanf_document_core::Vec2::new(
+            center.translated(curvyo_document_core::Vec2::new(
                 to_handle.length() * a.cos(),
                 to_handle.length() * a.sin(),
             ))
@@ -752,7 +750,7 @@ mod tests {
             false,
         )
         .into_iter()
-        .find(|(h, _)| matches!(h, EditHandle::Resize(vecmanf_ui_core::ResizeDirection::N)))
+        .find(|(h, _)| matches!(h, EditHandle::Resize(curvyo_ui_core::ResizeDirection::N)))
         .expect("N handle")
         .1;
         session.pointer_hover(n_handle, false, false);
@@ -996,7 +994,7 @@ mod tests {
     /// 16 px past each end of the box; it is gone after Escape.
     #[test]
     fn a_skew_drag_draws_the_fixed_line_guide() {
-        use vecmanf_document_core::{AnchorId, NewAnchor};
+        use curvyo_document_core::{AnchorId, NewAnchor};
         let mut session = Session::new(1);
         let _ = session.document.create_path(
             &[
@@ -1031,7 +1029,7 @@ mod tests {
         // leaves its own dashes off that edge (fewer triangles); the centre
         // line under Shift covers none of its edges.
         let box_triangles = |session: &Session| {
-            vecmanf_render_core::build_select_draw_list(
+            curvyo_render_core::build_select_draw_list(
                 session.view(),
                 &session.select_decoration_input(),
             )

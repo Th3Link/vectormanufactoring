@@ -60,7 +60,7 @@ fn tree_id_of(id: NodeId) -> TreeID {
 /// Deduplicates `ids`, keeping each one's first occurrence's position.
 /// Both [`Document::translate_objects`] and [`Document::delete_objects`]
 /// are public APIs on this crate's own `Document` — not reachable with a
-/// duplicate id via the shipped UI today (`vecmanf-ui-core`'s own
+/// duplicate id via the shipped UI today (`curvyo-ui-core`'s own
 /// `ObjectSelection::select_single`/`toggle` can't produce one), but
 /// nothing in either function's own signature forbids a caller from
 /// passing one, and without this a duplicate would double-apply an
@@ -196,7 +196,7 @@ impl Document {
     /// (`specs/0005-object-transform/specification.md` acceptance
     /// criteria 15-18, 20): a primitive's frame (only if the rotation
     /// moved it, i.e. a pivot off its center) and `rotation`; a path's
-    /// anchor points and handles and `rotation`. `vecmanf-ui-core`
+    /// anchor points and handles and `rotation`. `curvyo-ui-core`
     /// resolves the geometry with the same [`ObjectSnapshot::rotated`]
     /// its live preview renders, so preview and commit share one rule
     /// and this method holds no rotation arithmetic of its own.

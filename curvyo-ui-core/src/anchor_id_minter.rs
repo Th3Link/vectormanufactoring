@@ -2,17 +2,17 @@
 //!
 //! `specs/0002-path-node-editing/adrs.md`: "`AnchorId` is minted by the
 //! creating peer and is globally unique... passed into
-//! `vecmanf-document-core`, never minted there." Both tools in this crate
+//! `curvyo-document-core`, never minted there." Both tools in this crate
 //! create anchors — [`crate::PenTool`] placing nodes, [`crate::NodeTool`]
 //! inserting one on a double-clicked segment — so they share one minter
 //! per session rather than each keeping an independent counter, which
 //! would risk two tools minting the same `(peer, counter)` pair.
 
-use vecmanf_document_core::AnchorId;
+use curvyo_document_core::AnchorId;
 
 /// Mints [`AnchorId`]s for one open session on one peer.
 ///
-/// The caller (`vecmanf-editor-wasm`) owns exactly one of these per open
+/// The caller (`curvyo-editor-wasm`) owns exactly one of these per open
 /// document and hands a `&mut` reference into whichever tool is currently
 /// handling input.
 #[derive(Debug)]
@@ -23,7 +23,7 @@ pub struct AnchorIdMinter {
 
 impl AnchorIdMinter {
     /// Starts minting for `peer` — the same Loro peer id the session's
-    /// [`vecmanf_document_core::Document`] was opened with
+    /// [`curvyo_document_core::Document`] was opened with
     /// (`specs/0001-project-file-foundation/adrs.md`, amended 2026-10-03: a
     /// fresh peer id per open session).
     #[must_use]

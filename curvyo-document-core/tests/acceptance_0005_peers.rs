@@ -6,10 +6,10 @@
 
 use std::io::{Cursor, Write};
 
-use loro::LoroDoc;
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Angle, CURRENT_FORMAT_VERSION, Document, Length, Point, RectBounds, Shape, pack, unpack,
 };
+use loro::LoroDoc;
 
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)
@@ -41,7 +41,7 @@ fn merged(a: &Document, b: &Document) -> Document {
     unpack(9, &bytes).expect("merged document opens")
 }
 
-fn base() -> (Vec<u8>, vecmanf_document_core::NodeId) {
+fn base() -> (Vec<u8>, curvyo_document_core::NodeId) {
     let document = Document::new(1);
     let id = document.create_rect(RectBounds {
         origin: pt(0.0, 0.0),

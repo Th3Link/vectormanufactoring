@@ -4,16 +4,16 @@
 //! movement, the double-click dispatch and the typed entry's lifecycle,
 //! cursors, hints and readouts, save and reopen of a typed rotation, and
 //! that a skew writes no `rotation`. The arithmetic itself is tested in
-//! `vecmanf-ui-core/tests/acceptance_object_transform_refinements.rs`.
+//! `curvyo-ui-core/tests/acceptance_object_transform_refinements.rs`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::too_many_lines)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, CURRENT_FORMAT_VERSION, Document, Length, NewAnchor, ObjectSnapshot, Point,
     RectBounds, Vec2, pack, unpack,
 };
-use vecmanf_editor_wasm::{Session, Tool};
+use curvyo_editor_wasm::{Session, Tool};
 
 /// Screen pixels per millimetre of a fresh session (96 dpi at 100 %).
 const SCALE: f64 = 96.0 / 25.4;
@@ -256,12 +256,12 @@ fn cursors_and_hints_follow_the_handle_under_the_pointer() {
 fn a_polygons_resize_hint_has_no_proportional_line() {
     let document = Document::new(1);
     let _ = document.create_polygon(
-        vecmanf_document_core::StarFrame {
+        curvyo_document_core::StarFrame {
             center: pt(60.0, 50.0),
             radius: Length::from_mm(40.0),
-            angle: vecmanf_document_core::Angle::from_radians(0.0),
+            angle: curvyo_document_core::Angle::from_radians(0.0),
         },
-        vecmanf_document_core::PointCount::new(6).unwrap(),
+        curvyo_document_core::PointCount::new(6).unwrap(),
     );
     let bytes = pack(&document, "0.1.0").unwrap();
     let mut session = Session::open(2, &bytes).unwrap();
@@ -375,7 +375,7 @@ fn the_angle_entry_commits_one_change_and_survives_save_and_reopen() {
 
     assert_eq!(
         session.commit_transform_entry("45", "", 0),
-        vecmanf_ui_core::EntryOutcome::Committed
+        curvyo_ui_core::EntryOutcome::Committed
     );
     assert_eq!(changes(&session), before + 1, "one commit");
     assert!(session.transform_entry().is_none(), "the entry closes");
@@ -388,7 +388,7 @@ fn the_angle_entry_commits_one_change_and_survives_save_and_reopen() {
     let ObjectSnapshot::Primitive(p) = object(&reopened) else {
         panic!("still a primitive")
     };
-    assert!(matches!(p.shape, vecmanf_document_core::Shape::Rect { .. }));
+    assert!(matches!(p.shape, curvyo_document_core::Shape::Rect { .. }));
     assert_eq!(CURRENT_FORMAT_VERSION, 5, "no format change");
 }
 
@@ -399,13 +399,13 @@ fn an_untouched_equal_or_invalid_entry_writes_nothing() {
     dbl(&mut session, ne_rotate(), false, false);
     assert_eq!(
         session.commit_transform_entry("0", "", 0),
-        vecmanf_ui_core::EntryOutcome::Unchanged
+        curvyo_ui_core::EntryOutcome::Unchanged
     );
     assert!(session.transform_entry().is_none());
     dbl(&mut session, ne_rotate(), false, false);
     assert!(matches!(
         session.commit_transform_entry("abc", "", 0),
-        vecmanf_ui_core::EntryOutcome::Invalid { field: 0, .. }
+        curvyo_ui_core::EntryOutcome::Invalid { field: 0, .. }
     ));
     assert!(
         session.transform_entry().is_some(),
@@ -436,7 +436,7 @@ fn the_size_entry_commits_one_change_with_the_hand_drags_fixed_point() {
     let ObjectSnapshot::Primitive(p) = object(&session) else {
         panic!()
     };
-    let vecmanf_document_core::Shape::Rect { bounds, .. } = p.shape else {
+    let curvyo_document_core::Shape::Rect { bounds, .. } = p.shape else {
         panic!()
     };
     assert!((bounds.origin.x - 10.0).abs() < 1e-9 && (bounds.origin.y - 20.0).abs() < 1e-9);

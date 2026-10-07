@@ -5,12 +5,12 @@ variant and its existing second variant is renamed. That is the document
 model and a file format we write, so the wire tags and the reading rule are
 written out below. Join and Split are anchor-list surgery on the existing
 schema: no new register, no curve evaluation.
-**No new crate, no new external dependency, no new `vecmanf-geometry-core`
+**No new crate, no new external dependency, no new `curvyo-geometry-core`
 function, no ADR amendment. `format_version` goes to 4** (was 5; see the
 architect's 2026-10-05 resolution below).
 
-**Build order:** this slice touches `vecmanf-document-core`,
-`vecmanf-ui-core`, `vecmanf-render-core` and `vecmanf-editor-wasm`, the same
+**Build order:** this slice touches `curvyo-document-core`,
+`curvyo-ui-core`, `curvyo-render-core` and `curvyo-editor-wasm`, the same
 crates as `object-transform`. It was planned to start after that branch
 merged; it was built first instead, so `object-transform` now starts after
 this branch merges and threads its `rotation` register through Split
@@ -83,7 +83,7 @@ this branch merges and threads its `rotation` register through Split
     meaning; that is invisible to every reader that goes through `read_kind`,
     and `document.json` is regenerated from the snapshot on every save, so it
     only ever shows `"symmetric"`. The existing golden fixture
-    `paths_v2.vmf` stores `"smooth"` and already asserts the kind; it
+    `paths_v2.curvyo` stores `"smooth"` and already asserts the kind; it
     becomes this migration's test with the variant renamed.
   - **(C) Rewrite every `"smooth"` to `"symmetric"` on open.** Rejected.
     Opening a file would write operations: a dirty document nobody edited,
@@ -297,20 +297,20 @@ this branch merges and threads its `rotation` register through Split
   here.
 
 - **2026-10-05: the crate boundary.**
-  - `vecmanf-document-core`: the three-variant `AnchorKind`, the codec tags
+  - `curvyo-document-core`: the three-variant `AnchorKind`, the codec tags
     and read alias, the per-kind handle rule, the conversion table,
     `join_endpoints`, `split_at_anchor`, multi-path `move_anchors` and
     `convert_anchor_kind`, `CURRENT_FORMAT_VERSION = 4`.
-  - `vecmanf-ui-core`: the multi-path `NodeSelection` and editing set,
+  - `curvyo-ui-core`: the multi-path `NodeSelection` and editing set,
     toolbar state (`can_convert_to_symmetric`, `can_convert_to_asymmetric`,
     `can_join`, `can_split`, computed from the selection with the same
     conditions the commands refuse on), minting the Split copy's id,
     selection after Join and Split.
-  - `vecmanf-render-core`: node decorations for several paths, and an
+  - `curvyo-render-core`: node decorations for several paths, and an
     Asymmetric glyph (the `ux-engineer` chooses it).
-  - `vecmanf-editor-wasm` / `frontend/`: binding strings, the new actions,
+  - `curvyo-editor-wasm` / `frontend/`: binding strings, the new actions,
     the labels.
-  - `vecmanf-geometry-core`: no change.
+  - `curvyo-geometry-core`: no change.
 
 ## Flagged to the lead
 
@@ -336,7 +336,7 @@ this branch merges and threads its `rotation` register through Split
    node (today it resets the handles), which slice 2's AC 11 never specified.
 6. **For the tester:** all four endpoint combinations of AC 9; an Asymmetric
    drag to the node itself and with a zero-length opposite handle; reopen a
-   `paths_v2.vmf` with `"smooth"` and check it reads as Symmetric; a
+   `paths_v2.curvyo` with `"smooth"` and check it reads as Symmetric; a
    multi-path node drag is one commit.
 7. **No new crate, no new dependency, no ADR amendment.**
 8. **AC 15 vs `path-node-editing` AC 10 — resolved.** The PO reworded AC 15

@@ -16,12 +16,12 @@
 use std::f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2};
 use std::io::{Cursor, Write};
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Angle, CURRENT_FORMAT_VERSION, CURRENT_LORO_SNAPSHOT_VERSION, Document, EllipseFrame,
     InnerRatio, Length, NewAnchor, NodeId, ObjectSnapshot, Point, PointCount, RectBounds, Shape,
     StarFrame, Vec2, outline_of_rotated, pack, unpack,
 };
-use vecmanf_editor_wasm::{Session, Tool};
+use curvyo_editor_wasm::{Session, Tool};
 
 const EPS: f64 = 1e-9;
 

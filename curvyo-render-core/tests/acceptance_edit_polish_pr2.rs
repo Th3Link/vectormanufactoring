@@ -14,8 +14,8 @@
 #![allow(missing_docs, clippy::doc_markdown, clippy::type_complexity)]
 #![allow(clippy::too_many_arguments, clippy::needless_range_loop)]
 
-use vecmanf_document_core::{Document, Length, NodeId, Point, RectBounds, ViewTransform};
-use vecmanf_render_core::{DrawList, RgbaColor, SelectDecorationInput, build_select_draw_list};
+use curvyo_document_core::{Document, Length, NodeId, Point, RectBounds, ViewTransform};
+use curvyo_render_core::{DrawList, RgbaColor, SelectDecorationInput, build_select_draw_list};
 
 // ---------------------------------------------------------------------
 // Helpers

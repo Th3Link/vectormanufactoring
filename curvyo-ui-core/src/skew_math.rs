@@ -4,7 +4,7 @@
 //! the shear factor. Split out of [`crate::transform_math`], which keeps the
 //! resize and rotate arithmetic.
 
-use vecmanf_document_core::{Angle, Point};
+use curvyo_document_core::{Angle, Point};
 
 use crate::angle_snap::snap_skew_angle;
 use crate::oriented_box::OrientedBox;

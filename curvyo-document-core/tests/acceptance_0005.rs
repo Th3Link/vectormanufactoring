@@ -5,7 +5,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, ObjectSnapshot, Point,
     PointCount, RectBounds, Shape, StarFrame, Vec2, pack, unpack,
 };

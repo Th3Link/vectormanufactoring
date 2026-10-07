@@ -3,8 +3,8 @@
 This feature changes how the rectangle and ellipse tools turn a press point
 and a pointer position into a box. It writes the same fields through the
 same `Document::create_rect` / `create_ellipse` commands as today.
-**No new crate, no new external dependency, no new `vecmanf-geometry-core`
-or `vecmanf-document-core` function, no ADR amendment, no `format_version`
+**No new crate, no new external dependency, no new `curvyo-geometry-core`
+or `curvyo-document-core` function, no ADR amendment, no `format_version`
 change, no `wasm_api.rs` change and no frontend change.**
 
 Nothing in the specification is unbuildable. Two criteria need a small
@@ -14,7 +14,7 @@ reading, under "Flagged to the lead".
 
 - [ADR 0001 §1, §4](../../docs/adr/0001-ui-framework-and-canvas-rendering.md):
   the Shift/Ctrl-to-box rule is interaction logic and lives in
-  `vecmanf-ui-core`; `editor-wasm` and the frontend only forward key state as
+  `curvyo-ui-core`; `editor-wasm` and the frontend only forward key state as
   scalars.
 - [ADR 0002 §3](../../docs/adr/0002-document-model-units-and-svg-round-trip.md):
   the box is in document millimetres; tests compare with an explicit
@@ -39,7 +39,7 @@ reading, under "Flagged to the lead".
   itself, so a `Session`-level test of criterion 8 calls `pointer_hover`
   with the new modifiers.
 - [`specs/advanced-selection/adrs.md`](../advanced-selection/adrs.md):
-  its planned `Modifiers { shift, ctrl, alt }` in `vecmanf-ui-core`, which
+  its planned `Modifiers { shift, ctrl, alt }` in `curvyo-ui-core`, which
   this feature introduces first (below).
 
 ## Feature-local decisions
@@ -67,7 +67,7 @@ reading, under "Flagged to the lead".
     create-drag already takes `Modifiers` (see the 2026-10-07 note).
 
 - **2026-10-06: Shift reaches the tools as `Modifiers`, not a third
-  parameter.** New `vecmanf-ui-core/src/modifiers.rs`: `pub struct Modifiers
+  parameter.** New `curvyo-ui-core/src/modifiers.rs`: `pub struct Modifiers
   { pub shift: bool, pub ctrl: bool }` (`Copy`, `Default`). The rectangle
   and ellipse `pointer_move(point, modifiers)` and `pointer_up(document,
   point, modifiers)` take it in place of `constrain: bool`, and
@@ -114,7 +114,7 @@ reading, under "Flagged to the lead".
 - **2026-10-06: "new shape is not selected" is a separate `fix/`.**
   `primitive-shapes` AC 1, 7 and 11/12 say the created shape becomes the
   selected object. `Session::shape_pointer_up`
-  (`vecmanf-editor-wasm/src/session/shapes.rs`) discards each tool's
+  (`curvyo-editor-wasm/src/session/shapes.rs`) discards each tool's
   `Created(id)` outcome, so nothing selects it, for all three tools. Fix: on
   `Created(id)`, `self.selection.select_single(id)`, plus one
   `editor-wasm` test per tool. Branch `fix/select-created-shape`, standing
@@ -153,11 +153,11 @@ reading, under "Flagged to the lead".
 - **2026-10-06: `format_version` unchanged, no new dependency.** The
   committed rectangle and ellipse are built by the same commands from the
   same field types; a reader of `main`'s version reads them exactly.
-  `proptest` is already a dev-dependency of `vecmanf-ui-core`.
+  `proptest` is already a dev-dependency of `curvyo-ui-core`.
 
 - **2026-10-06: sequencing.** After `object-transform-refinements` merges,
   as the spec says. Every candidate next feature (`0007`,
-  `advanced-selection`) touches `vecmanf-ui-core` and `vecmanf-editor-wasm`,
+  `advanced-selection`) touches `curvyo-ui-core` and `curvyo-editor-wasm`,
   so none runs in parallel with this one (`CLAUDE.md` §4). Recommended
   slot: directly after `object-transform-refinements`, before `0007`: it is
   one small PR, the customer asked for it, and it shares no function with
@@ -168,7 +168,7 @@ reading, under "Flagged to the lead".
 
 - **2026-10-07 (architect, after `unified-object-editing` and
   `edit-interaction-polish`):** `Modifiers { shift, ctrl }` already exists on
-  main (`vecmanf-ui-core/src/modifiers.rs`), so no new `modifiers.rs`;
+  main (`curvyo-ui-core/src/modifiers.rs`), so no new `modifiers.rs`;
   `Session` already builds `Modifiers` and passes it to
   `shape_pointer_move` / `shape_pointer_up`, and the polygon/star tool already
   takes it. This feature only changes the rectangle and ellipse tools to take

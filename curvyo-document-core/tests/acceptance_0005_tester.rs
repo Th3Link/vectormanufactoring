@@ -13,11 +13,11 @@
 use std::f64::consts::PI;
 use std::io::{Cursor, Read, Write};
 
-use loro::LoroDoc;
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Angle, CURRENT_FORMAT_VERSION, Document, Length, NewAnchor, NodeId, ObjectSnapshot,
     OpenError, Point, RectBounds, Shape, Vec2, pack, unpack,
 };
+use loro::LoroDoc;
 
 fn fixture(name: &str) -> Vec<u8> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -110,7 +110,7 @@ fn format_version_is_bumped_past_main_to_5() {
 
 #[test]
 fn golden_rotation_v5_fixture_declares_version_5_and_opens_with_both_rotations() {
-    let bytes = fixture("rotation_v5.vmf");
+    let bytes = fixture("rotation_v5.curvyo");
     let manifest: serde_json::Value =
         serde_json::from_slice(&zip_entry(&bytes, "manifest.json")).unwrap();
     assert_eq!(manifest["format_version"], 5, "fixture is a version-5 file");
@@ -140,7 +140,7 @@ fn golden_rotation_v5_fixture_declares_version_5_and_opens_with_both_rotations()
 fn golden_fixture_document_json_lists_rotation_only_where_non_zero() {
     // adrs.md: `document.json` adds `rotation` (radians) to each entry in
     // `objects`, omitted when 0.
-    let bytes = fixture("rotation_v5.vmf");
+    let bytes = fixture("rotation_v5.curvyo");
     let json: serde_json::Value =
         serde_json::from_slice(&zip_entry(&bytes, "document.json")).unwrap();
     let objects = json["objects"].as_array().expect("objects array");
@@ -167,7 +167,7 @@ fn golden_fixture_document_json_lists_rotation_only_where_non_zero() {
 
 #[test]
 fn golden_fixture_round_trips_exactly_through_save_and_open() {
-    let document = unpack(3, &fixture("rotation_v5.vmf")).unwrap();
+    let document = unpack(3, &fixture("rotation_v5.curvyo")).unwrap();
     let again = unpack(4, &pack(&document, "0.1.0").unwrap()).unwrap();
     for id in document.object_ids() {
         assert_eq!(again.object(id), document.object(id));
@@ -177,10 +177,10 @@ fn golden_fixture_round_trips_exactly_through_save_and_open() {
 #[test]
 fn every_older_fixture_still_opens_and_reads_rotation_as_zero() {
     for name in [
-        "format_version_1.vmf",
-        "paths_v2.vmf",
-        "primitives_v3.vmf",
-        "valid.vmf",
+        "format_version_1.curvyo",
+        "paths_v2.curvyo",
+        "primitives_v3.curvyo",
+        "valid.curvyo",
     ] {
         let document =
             unpack(2, &fixture(name)).unwrap_or_else(|e| panic!("{name} must still open: {e:?}"));
@@ -196,7 +196,7 @@ fn every_older_fixture_still_opens_and_reads_rotation_as_zero() {
 
 #[test]
 fn a_file_one_version_newer_than_current_is_refused_as_too_new() {
-    let result = unpack(2, &fixture("future_format_version.vmf"));
+    let result = unpack(2, &fixture("future_format_version.curvyo"));
     assert!(matches!(result, Err(OpenError::FormatTooNew { .. })));
 }
 

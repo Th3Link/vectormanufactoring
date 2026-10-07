@@ -22,13 +22,13 @@
 
 use std::collections::HashSet;
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, AnchorKind, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, NodeId,
     ObjectSnapshot, Point, PointCount, RectBounds, Shape, StarFrame, Vec2, pack, unpack,
 };
-use vecmanf_editor_wasm::{EscapeStep, KeyInput, KeyOutcome, Session, Tool};
-use vecmanf_render_core::{DrawList, RgbaColor, Vertex, build_live_edit_preview};
-use vecmanf_ui_core::{Axis, EntryOutcome, InvalidReason, MoveEntryMode};
+use curvyo_editor_wasm::{EscapeStep, KeyInput, KeyOutcome, Session, Tool};
+use curvyo_render_core::{DrawList, RgbaColor, Vertex, build_live_edit_preview};
+use curvyo_ui_core::{Axis, EntryOutcome, InvalidReason, MoveEntryMode};
 
 // ---------------------------------------------------------------------
 // Helpers

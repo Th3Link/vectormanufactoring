@@ -16,12 +16,12 @@
 
 use std::f64::consts::PI;
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Angle, Document, InnerRatio, Length, ObjectSnapshot, Point, PointCount, PrimitiveSnapshot,
     RectBounds, Shape, StarFrame, outline_of_rotated, pack, unpack,
 };
-use vecmanf_editor_wasm::{KeyInput, KeyOutcome, Session, Tool};
-use vecmanf_ui_core::{EntryOutcome, PolyStarMode};
+use curvyo_editor_wasm::{KeyInput, KeyOutcome, Session, Tool};
+use curvyo_ui_core::{EntryOutcome, PolyStarMode};
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -796,7 +796,7 @@ fn ac07_edge_on_axis_rule_for_every_n() {
         let pts = outline_of_rotated(&p.shape, p.rotation);
         let r = frame_of(&p).radius.as_mm();
         let tol = 1e-6 * r;
-        let edge_on_axis = |pts: &[vecmanf_document_core::OutlineAnchor]| {
+        let edge_on_axis = |pts: &[curvyo_document_core::OutlineAnchor]| {
             (0..pts.len()).any(|i| {
                 let (a, b) = (pts[i].point, pts[(i + 1) % pts.len()].point);
                 (a.x - b.x).abs() < tol || (a.y - b.y).abs() < tol
@@ -947,7 +947,7 @@ fn ac08_rectangle_ctrl_rotate_keeps_the_relative_rule() {
 
 fn fixture(name: &str) -> Vec<u8> {
     let p = format!(
-        "{}/../vecmanf-document-core/tests/fixtures/{name}",
+        "{}/../curvyo-document-core/tests/fixtures/{name}",
         env!("CARGO_MANIFEST_DIR")
     );
     std::fs::read(&p).unwrap_or_else(|e| panic!("{p}: {e}"))
@@ -1012,11 +1012,11 @@ fn ac02_old_files_keep_their_look_and_show_frame_angle_plus_rotation() {
     let mut docs: Vec<(String, Vec<u8>)> =
         vec![("generated".into(), pack(&old_style_doc(), "0.1.0").unwrap())];
     for name in [
-        "primitives_v3.vmf",
-        "rotation_v5.vmf",
-        "valid.vmf",
-        "paths_v2.vmf",
-        "format_version_1.vmf",
+        "primitives_v3.curvyo",
+        "rotation_v5.curvyo",
+        "valid.curvyo",
+        "paths_v2.curvyo",
+        "format_version_1.curvyo",
     ] {
         docs.push((name.into(), fixture(name)));
     }

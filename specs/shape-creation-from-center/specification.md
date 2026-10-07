@@ -134,7 +134,7 @@ reports them (Ctrl is Cmd on macOS, as everywhere else in the product).
     written to the document in one commit. The stored fields are the existing
     ones (rectangle origin, width, height, corner radius 0; ellipse center,
     rx, ry) and rotation 0; nothing records which modifiers were used, and
-    the saved `.vmf` file has the same `format_version` as before.
+    the saved `.curvyo` file has the same `format_version` as before.
 14. Given a create-drag in progress with Shift, Ctrl or both held, when the
     maker presses Escape, then the drag is cancelled, no object is written,
     no preview remains, and pressing or releasing modifiers afterwards does
@@ -230,9 +230,9 @@ is final.
 
 ## Sequencing
 
-Touches the shape tools in `vecmanf-ui-core` (`rectangle_tool.rs`,
+Touches the shape tools in `curvyo-ui-core` (`rectangle_tool.rs`,
 `ellipse_tool.rs`, `shape_tool_common.rs`) and `Session`'s pointer paths in
-`vecmanf-editor-wasm` (`session/mod.rs`, `session/shapes.rs`) plus the
+`curvyo-editor-wasm` (`session/mod.rs`, `session/shapes.rs`) plus the
 `wasm_api` and host key handling. `specs/object-transform-refinements/` edits
 the same pointer paths, so this is built after it.
 

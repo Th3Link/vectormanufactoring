@@ -5,7 +5,7 @@
 //! and ratio persist across shapes and never change a selected shape; that is
 //! the Select bar's job.
 
-use vecmanf_document_core::{Document, InnerRatio, Point, PointCount, Shape, StarFrame};
+use curvyo_document_core::{Document, InnerRatio, Point, PointCount, Shape, StarFrame};
 
 use crate::angle_snap::snap_angle;
 use crate::modifiers::Modifiers;

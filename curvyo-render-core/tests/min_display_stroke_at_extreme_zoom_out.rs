@@ -15,8 +15,8 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use vecmanf_document_core::{Document, Length, Point, RectBounds, ViewTransform};
-use vecmanf_render_core::build_primitive_strokes;
+use curvyo_document_core::{Document, Length, Point, RectBounds, ViewTransform};
+use curvyo_render_core::build_primitive_strokes;
 
 /// 2% zoom, in the same CSS-reference-pixel terms acceptance criterion 7
 /// defines (`96.0 / 25.4` px/mm at 100%).

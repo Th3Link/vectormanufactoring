@@ -261,7 +261,7 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
 - Stroke/fill behavior under SVG export/import — `svg-import-export`
   (slice 11) is where this slice's properties first need to round-trip
   through actual SVG markup; this slice's persistence criterion (25) is
-  about the project's own `.vmf` file only.
+  about the project's own `.curvyo` file only.
 
 ## UX notes
 

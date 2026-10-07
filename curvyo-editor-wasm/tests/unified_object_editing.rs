@@ -3,21 +3,21 @@
 //! radius handle's position rule `p = 15 + ρ·L(s)`, the stored fields, the
 //! blue-new/black-old frames) and driven through `Session`'s public API
 //! only. The pure parts (tiers, clearance, hit order, `apply_param`) are
-//! tested in `vecmanf-ui-core`.
+//! tested in `curvyo-ui-core`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::too_many_lines, clippy::many_single_char_names)]
 
 use std::io::{Cursor, Write};
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, CURRENT_FORMAT_VERSION, CURRENT_LORO_SNAPSHOT_VERSION, Document, InnerRatio, Length,
     NewAnchor, NodeId, ObjectSnapshot, Point, PointCount, RectBounds, Shape, StarFrame, pack,
     unpack,
 };
-use vecmanf_editor_wasm::{Session, Tool};
-use vecmanf_render_core::{RgbaColor, build_live_edit_preview};
-use vecmanf_ui_core::{BarValue, EntryOutcome, InvalidReason};
+use curvyo_editor_wasm::{Session, Tool};
+use curvyo_render_core::{RgbaColor, build_live_edit_preview};
+use curvyo_ui_core::{BarValue, EntryOutcome, InvalidReason};
 
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)
@@ -35,7 +35,7 @@ fn star_frame(cx: f64, cy: f64, r: f64) -> StarFrame {
     StarFrame {
         center: pt(cx, cy),
         radius: Length::from_mm(r),
-        angle: vecmanf_document_core::Angle::from_radians(0.0),
+        angle: curvyo_document_core::Angle::from_radians(0.0),
     }
 }
 
@@ -252,7 +252,7 @@ fn a_drag_draws_the_old_object_in_black_and_the_new_geometry_in_blue() {
     session.pointer_up(to, false, false);
     let committed = first_object(&session);
     let expected_blue = build_live_edit_preview(std::slice::from_ref(&committed), session.view());
-    let has = |frame: &vecmanf_render_core::DrawList, v: &vecmanf_render_core::Vertex| {
+    let has = |frame: &curvyo_render_core::DrawList, v: &curvyo_render_core::Vertex| {
         frame.triangles.iter().any(|w| {
             w.color == v.color
                 && (w.position.x - v.position.x).abs() < 1e-6
@@ -869,7 +869,7 @@ fn a_press_on_a_radius_handle_starts_that_drag_with_or_without_shift() {
 /// rectangles, all selected, dragged. The budget is 8 ms of CPU time for
 /// `Session::draw_list()` per frame (half of a 16.7 ms frame); the gate is
 /// 50 fps, 20 ms. Run in release by the tester:
-/// `cargo test --release -p vecmanf-editor-wasm --test unified_object_editing -- --ignored --nocapture`.
+/// `cargo test --release -p curvyo-editor-wasm --test unified_object_editing -- --ignored --nocapture`.
 #[test]
 #[ignore = "benchmark: run in release with --ignored --nocapture"]
 fn a_200_object_move_draws_within_the_frame_budget() {
@@ -1019,7 +1019,7 @@ fn a_project_with_primitives_opens_in_the_same_state_and_a_click_writes_nothing(
     document
         .set_corner_radius(&[rect], Length::from_mm(7.0))
         .unwrap();
-    let _ = document.create_ellipse(vecmanf_document_core::EllipseFrame {
+    let _ = document.create_ellipse(curvyo_document_core::EllipseFrame {
         center: pt(300.0, 50.0),
         rx: Length::from_mm(40.0),
         ry: Length::from_mm(25.0),

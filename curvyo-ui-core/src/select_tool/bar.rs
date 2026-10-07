@@ -7,7 +7,7 @@
 //! objects that match, in one commit. A child module of `select_tool.rs`, so
 //! it owns `SelectTool`'s pending-edit field.
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Document, Length, NodeId, ObjectSnapshot, PrimitiveSnapshot, Shape, ShapeEditError,
 };
 
@@ -177,7 +177,7 @@ impl SelectTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vecmanf_document_core::{Angle, InnerRatio, Point, PointCount, RectBounds, StarFrame};
+    use curvyo_document_core::{Angle, InnerRatio, Point, PointCount, RectBounds, StarFrame};
 
     struct Rig {
         document: Document,

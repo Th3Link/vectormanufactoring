@@ -20,12 +20,12 @@
 
 use std::f64::consts::{FRAC_PI_2, PI, SQRT_2};
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, ObjectSnapshot, Point,
     PointCount, RectBounds, Shape, StarFrame, Vec2, pack, unpack,
 };
-use vecmanf_editor_wasm::{Session, Tool};
-use vecmanf_ui_core::{EntryOutcome, InvalidReason};
+use curvyo_editor_wasm::{Session, Tool};
+use curvyo_ui_core::{EntryOutcome, InvalidReason};
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -217,16 +217,16 @@ fn vv_of(s: &Session) -> loro::VersionVector {
     l.oplog_vv()
 }
 
-fn prim_of(s: &Session, index: usize) -> vecmanf_document_core::PrimitiveSnapshot {
+fn prim_of(s: &Session, index: usize) -> curvyo_document_core::PrimitiveSnapshot {
     let d = doc_of(s);
     d.primitive(d.object_ids()[index]).unwrap()
 }
 
-fn prim(s: &Session) -> vecmanf_document_core::PrimitiveSnapshot {
+fn prim(s: &Session) -> curvyo_document_core::PrimitiveSnapshot {
     prim_of(s, 0)
 }
 
-fn path_of(s: &Session) -> vecmanf_document_core::PathSnapshot {
+fn path_of(s: &Session) -> curvyo_document_core::PathSnapshot {
     let d = doc_of(s);
     d.path(d.object_ids()[0]).unwrap()
 }
@@ -456,7 +456,7 @@ fn ac02_centre_drag_is_a_pure_translation_one_commit() {
     }
 }
 
-fn rect_bounds_of(p: &vecmanf_document_core::PrimitiveSnapshot) -> RectBounds {
+fn rect_bounds_of(p: &curvyo_document_core::PrimitiveSnapshot) -> RectBounds {
     let Shape::Rect { bounds, .. } = p.shape else {
         panic!("rect")
     };
@@ -2582,7 +2582,7 @@ fn ac25_ellipse_entry_agrees_with_what_the_resize_readout_shows() {
 /// Sampled cubic Bezier extents of a path in the `th` frame:
 /// (u_min, u_max, v_min, v_max) with u along (cos th, sin th), v along
 /// (-sin th, cos th).
-fn tight_box(p: &vecmanf_document_core::PathSnapshot, th: f64) -> (f64, f64, f64, f64) {
+fn tight_box(p: &curvyo_document_core::PathSnapshot, th: f64) -> (f64, f64, f64, f64) {
     let (sn, cs) = th.sin_cos();
     let uv = |q: Point| (q.x * cs + q.y * sn, -q.x * sn + q.y * cs);
     let mut ext = (
@@ -2624,7 +2624,7 @@ fn tight_box(p: &vecmanf_document_core::PathSnapshot, th: f64) -> (f64, f64, f64
 }
 
 /// The box (centre, hw, hh) of a path in its own rotation frame.
-fn path_bx(p: &vecmanf_document_core::PathSnapshot) -> Bx {
+fn path_bx(p: &curvyo_document_core::PathSnapshot) -> Bx {
     let th = p.rotation.as_radians();
     let (u0, u1, v0, v1) = tight_box(p, th);
     let (sn, cs) = th.sin_cos();
@@ -2640,7 +2640,7 @@ fn path_bx(p: &vecmanf_document_core::PathSnapshot) -> Bx {
 /// Reference skew of a path snapshot: grabbed side `(nx, ny)` of the box,
 /// pointer displacement (du, dv) in the local frame.
 fn skew_ref(
-    p: &vecmanf_document_core::PathSnapshot,
+    p: &curvyo_document_core::PathSnapshot,
     side: (f64, f64),
     shift: bool,
     disp_local: (f64, f64),
@@ -2721,7 +2721,7 @@ fn skew_drag(
 }
 
 fn assert_path_matches(
-    p: &vecmanf_document_core::PathSnapshot,
+    p: &curvyo_document_core::PathSnapshot,
     want: &[(Point, Vec2, Vec2)],
     eps: f64,
     ctx: &str,
@@ -2964,7 +2964,7 @@ fn ac38_curves_stay_beziers_and_keep_their_shape_under_the_affine_map() {
     let before = path_of(&s);
     skew_drag(&mut s, &b, (0.0, -1.0), 9.0, 0.0, false, false);
     let after = path_of(&s);
-    let eval = |p: &vecmanf_document_core::PathSnapshot, t: f64| {
+    let eval = |p: &curvyo_document_core::PathSnapshot, t: f64| {
         let (a, c) = (&p.anchors[0], &p.anchors[1]);
         let (p0, p3) = (a.point, c.point);
         let p1 = pt(a.point.x + a.handle_out.x, a.point.y + a.handle_out.y);
@@ -3252,10 +3252,10 @@ fn ac40_preview_and_commit_are_the_same_function() {
     s.pointer_hover(to, false, false);
     let preview = s.draw_list();
     s.pointer_up(to, false, false);
-    let committed = vecmanf_document_core::ObjectSnapshot::Path(path_of(&s));
-    let expected_blue = vecmanf_render_core::build_live_edit_preview(&[committed], s.view());
+    let committed = curvyo_document_core::ObjectSnapshot::Path(path_of(&s));
+    let expected_blue = curvyo_render_core::build_live_edit_preview(&[committed], s.view());
     assert_ne!(expected_blue.triangle_count(), 0);
-    let in_frame = |frame: &vecmanf_render_core::DrawList, v: &vecmanf_render_core::Vertex| {
+    let in_frame = |frame: &curvyo_render_core::DrawList, v: &curvyo_render_core::Vertex| {
         frame
             .triangles
             .iter()
@@ -3270,7 +3270,7 @@ fn ac40_preview_and_commit_are_the_same_function() {
         missing_blue, 0,
         "the blue outline during the drag is the committed geometry"
     );
-    let black = vecmanf_render_core::RgbaColor::BLACK;
+    let black = curvyo_render_core::RgbaColor::BLACK;
     let old_stroke_gone = before_drag
         .triangles
         .iter()

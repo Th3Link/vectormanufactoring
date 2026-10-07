@@ -15,8 +15,8 @@
 //! neither a node nor a handle hit, and the nearest segment candidate
 //! within its own tolerance wins, same as before.
 
-use vecmanf_document_core::{AnchorId, HandleSlot, NodeId, PathSnapshot, Point, Tolerance, Vec2};
-use vecmanf_geometry_core::nearest_point_on_segment;
+use curvyo_document_core::{AnchorId, HandleSlot, NodeId, PathSnapshot, Point, Tolerance, Vec2};
+use curvyo_geometry_core::nearest_point_on_segment;
 
 use crate::NodeSelection;
 
@@ -78,7 +78,7 @@ pub fn hit_test(
     let handle = hit_test_handle(paths, selection, point, handle_tolerance);
     let node = hit_test_node(paths, selection, point, node_tolerance);
     // The nearer of the two wins; a handle wins an exact tie (its own
-    // glyph draws on top of the node's, `vecmanf-render-core::
+    // glyph draws on top of the node's, `curvyo-render-core::
     // decorations`, so winning the tie is what the maker actually sees
     // under the cursor).
     let point_hit = match (handle, node) {
@@ -230,7 +230,7 @@ fn hit_test_segment(paths: &[PathSnapshot], point: Point, tolerance: Tolerance) 
 
 #[cfg(test)]
 mod tests {
-    use vecmanf_document_core::{AnchorId, AnchorKind, Document, NewAnchor};
+    use curvyo_document_core::{AnchorId, AnchorKind, Document, NewAnchor};
 
     use super::*;
 

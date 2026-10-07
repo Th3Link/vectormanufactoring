@@ -208,7 +208,7 @@ and CI structure. Adaptations for this project:
   (device and OS integration), plus two accepted exceptions named by their
   owning ADRs: `-wasm` for a browser-facing facade over several core crates
   (ADR 0001), `-server` for a standalone server binary (ADR 0004). A plugin
-  SDK crate (e.g. `vecmanf-plugin`, ADR 0005) takes no suffix. There is no
+  SDK crate (e.g. `curvyo-plugin`, ADR 0005) takes no suffix. There is no
   `-hardware` suffix and no embedded toolchain. Full layout in
   [ADR 0011](docs/adr/0011-workspace-and-crate-layout.md).
 - CI runs the app crates on an OS matrix (ubuntu, windows, macos) and adds

@@ -1,17 +1,17 @@
-//! `vecmanf-ui-core`'s share of Part B of
+//! `curvyo-ui-core`'s share of Part B of
 //! `specs/edit-interaction-polish/specification.md`, PR 3: the double-click
 //! on the centre handle and on a skew handle, the keys M, K and Shift+K, and
 //! the entries they open. Session-level behaviour (commit counts, hints,
-//! save and reopen) is in `vecmanf-editor-wasm/tests/edit_polish_typed_skew_move.rs`.
+//! save and reopen) is in `curvyo-editor-wasm/tests/edit_polish_typed_skew_move.rs`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::too_many_lines)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, NodeId, ObjectSnapshot,
     Point, PointCount, RectBounds, StarFrame, Tolerance, Vec2,
 };
-use vecmanf_ui_core::{
+use curvyo_ui_core::{
     AnchorIdMinter, EditHandle, EntryKey, EntryKind, EntryOutcome, InvalidReason, KeyEntryRefusal,
     Modifiers, MoveEntryMode, ObjectSelection, SelectDoubleClickOutcome, SelectTool, Side,
     TransformHandleTolerances, object_outline_bounds, oriented_bounds,

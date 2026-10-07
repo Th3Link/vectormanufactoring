@@ -81,10 +81,10 @@ unawareness. Reversing either needs a new ADR, not an edit:
   the build; the root `Cargo.toml` and the crate directories it describes are
   the first commit of product work, not part of the ADR. Three crate slots are
   deliberately left empty there (a machine/toolpath core crate and a device
-  `-io` crate, awaiting the first machine-family ADR; `vecmanf-model-core`;
+  `-io` crate, awaiting the first machine-family ADR; `curvyo-model-core`;
   a plugin-host core crate), each with its trigger named in 0011 §8.
   One crate name the index's earlier list had missed is in it:
-  `vecmanf-vectorize-core`, named by ADR 0003 §6.
+  `curvyo-vectorize-core`, named by ADR 0003 §6.
 - ~~`CLAUDE.md` §8's crate-suffix list needs a lead amendment~~ — done: §8 now
   names `-wasm` (0001 §3), `-server` (0004 §5) and the suffix-less plugin SDK
   (0005 §1) alongside `-core`/`-app`/`-io`, pointing at ADR 0011.
@@ -134,7 +134,7 @@ unawareness. Reversing either needs a new ADR, not an edit:
   three merge rules are where a bug re-admits a removed participant. They are
   pure functions over an entry set, so the review and exhaustive small-case
   tests are the mitigation, and they share the security-review slot with
-  `vecmanf-crypto-core`.
+  `curvyo-crypto-core`.
 - **Push flow details for the git-forge sink.** The target is settled (ADR 0007
   §14, git wire protocol). Two sub-questions remain with working defaults:
   commit-and-push versus a real pull-request flow (default: commit and push, a

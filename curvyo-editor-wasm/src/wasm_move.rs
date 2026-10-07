@@ -3,7 +3,7 @@
 //! `impl WasmSession` block, so `wasm_api.rs` does not grow. Scalars and
 //! strings only (ADR 0001 §5).
 
-use vecmanf_ui_core::Axis;
+use curvyo_ui_core::Axis;
 use wasm_bindgen::prelude::*;
 
 use crate::wasm_api::WasmSession;

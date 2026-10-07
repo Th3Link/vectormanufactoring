@@ -2,14 +2,14 @@
 //!
 //! Selection ([`NodeSelection`]) persists across calls; a drag's
 //! in-flight geometry is ephemeral (ADR 0009 §2) and collapses into one
-//! [`vecmanf_document_core::Document::move_anchors`] or
+//! [`curvyo_document_core::Document::move_anchors`] or
 //! `set_handle` commit on release.
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorKind, Document, HandleSlot, NodeId, PathSnapshot, Point, Tolerance, Vec2,
     resolve_handle_pair,
 };
-use vecmanf_geometry_core::{nearest_point_on_segment, subdivide_at_parameter};
+use curvyo_geometry_core::{nearest_point_on_segment, subdivide_at_parameter};
 
 use crate::hit_test::{Hit, hit_test};
 use crate::{AnchorIdMinter, NodeSelection};
@@ -104,7 +104,7 @@ enum Drag {
     /// node keeps the selection, whether it spans one path or several").
     Nodes {
         down_at: Point,
-        starts: Vec<(NodeId, vecmanf_document_core::AnchorId, Point)>,
+        starts: Vec<(NodeId, curvyo_document_core::AnchorId, Point)>,
     },
     /// Dragging one handle (acceptance criterion 9). `down_at` and
     /// `start_value` (the dragged slot's own value at press time) are
@@ -117,13 +117,13 @@ enum Drag {
     /// handles cannot change while one continuous drag gesture holds it,
     /// so caching them here is exact, not stale) so
     /// [`NodeTool::live_drag`] can call
-    /// [`vecmanf_document_core::resolve_handle_pair`] — the exact
-    /// function [`vecmanf_document_core::Document::set_handle`] itself
+    /// [`curvyo_document_core::resolve_handle_pair`] — the exact
+    /// function [`curvyo_document_core::Document::set_handle`] itself
     /// calls to commit — rather than recomputing the mirror rule
     /// independently.
     Handle {
         path: NodeId,
-        anchor: vecmanf_document_core::AnchorId,
+        anchor: curvyo_document_core::AnchorId,
         slot: HandleSlot,
         down_at: Point,
         start_value: Vec2,
@@ -137,9 +137,9 @@ enum Drag {
 /// the two shapes [`NodeTool::pointer_up`] can commit (acceptance
 /// criteria 8, 9, 10), built by the exact same resolution helpers
 /// (`NodeTool::resolve_node_positions`/`resolve_handle_value`, and —
-/// for a handle drag — `vecmanf_document_core::resolve_handle_pair`
+/// for a handle drag — `curvyo_document_core::resolve_handle_pair`
 /// itself) so a live preview and the eventual commit can never disagree
-/// — the same discipline `vecmanf_ui_core::PenTool::pending_anchor` uses
+/// — the same discipline `curvyo_ui_core::PenTool::pending_anchor` uses
 /// for the pen tool's own live preview.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LiveNodeDrag {
@@ -152,11 +152,11 @@ pub enum LiveNodeDrag {
     /// correct, with no separate value to resolve.
     Nodes {
         /// Each selected node's path, id and live position.
-        positions: Vec<(NodeId, vecmanf_document_core::AnchorId, Point)>,
+        positions: Vec<(NodeId, curvyo_document_core::AnchorId, Point)>,
     },
     /// One anchor's live (not yet committed) `(handle_in, handle_out)`
     /// pair — acceptance criterion 9. Already fully resolved by
-    /// [`vecmanf_document_core::resolve_handle_pair`] (mirrored for a
+    /// [`curvyo_document_core::resolve_handle_pair`] (mirrored for a
     /// `Smooth` anchor, the other side passed through unchanged for a
     /// `Corner` one): the caller assigns both fields directly, with no
     /// slot/mirror logic of its own to get wrong.
@@ -164,7 +164,7 @@ pub enum LiveNodeDrag {
         /// The handle's path.
         path: NodeId,
         /// The handle's own anchor.
-        anchor: vecmanf_document_core::AnchorId,
+        anchor: curvyo_document_core::AnchorId,
         /// The anchor's live `handle_in`.
         handle_in: Vec2,
         /// The anchor's live `handle_out`.
@@ -344,7 +344,7 @@ impl NodeTool {
         &mut self,
         paths: &[PathSnapshot],
         path: NodeId,
-        anchor: vecmanf_document_core::AnchorId,
+        anchor: curvyo_document_core::AnchorId,
         slot: HandleSlot,
         down_at: Point,
     ) {
@@ -379,9 +379,9 @@ impl NodeTool {
     /// independently drift apart.
     fn resolve_node_positions(
         down_at: Point,
-        starts: &[(NodeId, vecmanf_document_core::AnchorId, Point)],
+        starts: &[(NodeId, curvyo_document_core::AnchorId, Point)],
         release: Point,
-    ) -> Vec<(NodeId, vecmanf_document_core::AnchorId, Point)> {
+    ) -> Vec<(NodeId, curvyo_document_core::AnchorId, Point)> {
         let delta = down_at.vector_to(release);
         starts
             .iter()
@@ -535,8 +535,8 @@ impl NodeTool {
         &self,
     ) -> Option<(
         NodeId,
-        vecmanf_document_core::AnchorId,
-        vecmanf_document_core::AnchorId,
+        curvyo_document_core::AnchorId,
+        curvyo_document_core::AnchorId,
     )> {
         let path = self.selection.path()?;
         let (start, end) = self.selection.segment()?;
@@ -545,7 +545,7 @@ impl NodeTool {
 
     /// Which contextual-toolbar actions apply right now, computed from
     /// this tool's current selection against `document`'s live state —
-    /// the facade (`vecmanf-editor-wasm`'s `Session`) just calls this
+    /// the facade (`curvyo-editor-wasm`'s `Session`) just calls this
     /// rather than re-deriving the same booleans itself.
     #[must_use]
     pub fn toolbar_state(&self, document: &Document) -> NodeToolbarState {
@@ -697,7 +697,7 @@ impl NodeTool {
             end_anchor.point,
             t,
         );
-        let new_anchor = vecmanf_document_core::NewAnchor {
+        let new_anchor = curvyo_document_core::NewAnchor {
             id: minter.mint(),
             point: subdivision.new_point,
             handle_in: subdivision.new_handle_in,
@@ -750,7 +750,7 @@ impl NodeTool {
             end_anchor.point,
             0.5,
         );
-        let new_anchor = vecmanf_document_core::NewAnchor {
+        let new_anchor = curvyo_document_core::NewAnchor {
             id: minter.mint(),
             point: subdivision.new_point,
             handle_in: subdivision.new_handle_in,
@@ -776,7 +776,7 @@ impl NodeTool {
 
 #[cfg(test)]
 mod tests {
-    use vecmanf_document_core::{AnchorId, NewAnchor, Vec2};
+    use curvyo_document_core::{AnchorId, NewAnchor, Vec2};
 
     use super::*;
 
@@ -1610,7 +1610,7 @@ mod tests {
         (document, path, tool)
     }
 
-    fn all_paths(document: &Document) -> Vec<vecmanf_document_core::PathSnapshot> {
+    fn all_paths(document: &Document) -> Vec<curvyo_document_core::PathSnapshot> {
         document
             .object_ids()
             .into_iter()

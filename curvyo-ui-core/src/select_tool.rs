@@ -10,10 +10,10 @@
 //! side), skew (paths) and the centre move handle, plus the typed numeric
 //! entry [`crate::transform_entry`]. Follows [`crate::RectangleTool`]'s
 //! established pattern — ephemeral in-progress drag state (ADR 0009 §2), one
-//! [`vecmanf_document_core::Document`] commit on release, a press-and-
+//! [`curvyo_document_core::Document`] commit on release, a press-and-
 //! release inside the 3 px dead zone writes nothing.
 
-use vecmanf_document_core::{Document, ObjectSnapshot, Point, Tolerance};
+use curvyo_document_core::{Document, ObjectSnapshot, Point, Tolerance};
 
 use crate::anchor_id_minter::AnchorIdMinter;
 use crate::modifiers::Modifiers;
@@ -266,9 +266,9 @@ impl SelectTool {
     }
 
     /// Commits whatever drag is in flight — a move (as one
-    /// [`vecmanf_document_core::Document::translate_objects`] call for
+    /// [`curvyo_document_core::Document::translate_objects`] call for
     /// the whole selection, or, with Ctrl, one
-    /// [`vecmanf_document_core::Document::duplicate_objects`] call), a resize,
+    /// [`curvyo_document_core::Document::duplicate_objects`] call), a resize,
     /// a rotate or a skew (one commit each) — a no-op (writes nothing) if no
     /// drag was in flight, or the pointer never left the dead zone, or the
     /// result equals the start. `shift`/`ctrl` are the modifiers' state at
@@ -342,9 +342,9 @@ mod tests {
     use super::*;
     use crate::ResizeDirection;
     use crate::oriented_box::oriented_bounds;
-    use vecmanf_document_core::Shape;
-    use vecmanf_document_core::Vec2;
-    use vecmanf_document_core::{
+    use curvyo_document_core::Shape;
+    use curvyo_document_core::Vec2;
+    use curvyo_document_core::{
         AnchorId, EllipseFrame, Length, NewAnchor, NodeId, RectBounds, StarFrame,
     };
 
@@ -1004,7 +1004,7 @@ mod tests {
     /// handle, on a rectangle, an ellipse, a star and a path (anchors).
     #[test]
     fn ac8_ac27_default_keeps_the_stroke_width_for_every_handle_and_kind() {
-        use vecmanf_document_core::{InnerRatio, PointCount};
+        use curvyo_document_core::{InnerRatio, PointCount};
         assert_eq!(SelectTool::new().stroke_scaling(), StrokeScaling::Keep);
         for direction in ResizeDirection::ALL_EIGHT {
             let document = Document::new(1);
@@ -1051,7 +1051,7 @@ mod tests {
             StarFrame {
                 center: Point::new(0.0, 0.0),
                 radius: Length::from_mm(10.0),
-                angle: vecmanf_document_core::Angle::from_radians(0.0),
+                angle: curvyo_document_core::Angle::from_radians(0.0),
             },
             PointCount::new(5).unwrap(),
             InnerRatio::new(0.5).unwrap(),
@@ -1210,7 +1210,7 @@ mod tests {
     }
 
     /// Criterion 23 of `unified-object-editing`: the default is off, a resize
-    /// keeps the radius's absolute size (the register-level check is in `vecmanf-editor-wasm`).
+    /// keeps the radius's absolute size (the register-level check is in `curvyo-editor-wasm`).
     #[test]
     fn a_resize_keeps_the_corner_radius_by_default() {
         assert_eq!(
@@ -1324,12 +1324,12 @@ mod tests {
     /// uniform scale, point count and ratio untouched.
     #[test]
     fn ac11_star_corner_handle_is_uniform_scale() {
-        use vecmanf_document_core::{InnerRatio, PointCount};
+        use curvyo_document_core::{InnerRatio, PointCount};
         let document = Document::new(1);
         let frame = StarFrame {
             center: Point::new(0.0, 0.0),
             radius: Length::from_mm(10.0),
-            angle: vecmanf_document_core::Angle::from_radians(0.0),
+            angle: curvyo_document_core::Angle::from_radians(0.0),
         };
         let id = document.create_star(
             frame,
@@ -1558,7 +1558,7 @@ mod tests {
     /// about that center, so without pinning the anchor it would swing.
     #[test]
     fn ac4_ac18_resizing_a_rotated_rect_keeps_the_opposite_corner_fixed_in_document_space() {
-        use vecmanf_document_core::{Angle, outline_of_rotated};
+        use curvyo_document_core::{Angle, outline_of_rotated};
         let document = Document::new(1);
         let id = rect(&document, 0.0);
         let angle = Angle::from_radians(30.0_f64.to_radians());
@@ -1919,7 +1919,7 @@ mod tests {
             let to = pivot.translated(
                 pivot
                     .vector_to(r)
-                    .rotated(vecmanf_document_core::Angle::from_radians(0.6)),
+                    .rotated(curvyo_document_core::Angle::from_radians(0.6)),
             );
             tool.pointer_up(
                 &document,
@@ -2002,7 +2002,7 @@ mod tests {
     /// still deselects.
     #[test]
     fn a_selected_small_square_moves_from_inside_its_box_rotated_or_not() {
-        use vecmanf_document_core::Angle;
+        use curvyo_document_core::Angle;
         let wide = TransformHandleTolerances {
             resize: Tolerance::from_mm(16.0),
             rotate: Tolerance::from_mm(16.0),
@@ -2151,13 +2151,13 @@ mod tests {
     /// 7.07 of raw diagonal displacement.
     #[test]
     fn a_polygon_corner_handle_ends_up_under_the_pointer() {
-        use vecmanf_document_core::PointCount;
+        use curvyo_document_core::PointCount;
         let document = Document::new(1);
         let id = document.create_polygon(
             StarFrame {
                 center: Point::new(0.0, 0.0),
                 radius: Length::from_mm(10.0),
-                angle: vecmanf_document_core::Angle::from_radians(0.0),
+                angle: curvyo_document_core::Angle::from_radians(0.0),
             },
             PointCount::new(6).unwrap(),
         );
@@ -2288,7 +2288,7 @@ mod tests {
     /// rotated object.
     #[test]
     fn ac23_move_never_changes_rotation_or_size() {
-        use vecmanf_document_core::Angle;
+        use curvyo_document_core::Angle;
         let document = Document::new(1);
         let id = rect(&document, 0.0);
         document

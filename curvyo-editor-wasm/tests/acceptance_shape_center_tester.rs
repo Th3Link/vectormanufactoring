@@ -11,9 +11,9 @@
 #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 #![allow(clippy::needless_pass_by_value, clippy::cast_lossless)]
 
-use vecmanf_document_core::{Document, Point, PrimitiveSnapshot, Shape, pack, unpack};
-use vecmanf_editor_wasm::{EscapeStep, Session, Tool};
-use vecmanf_ui_core::PolyStarMode;
+use curvyo_document_core::{Document, Point, PrimitiveSnapshot, Shape, pack, unpack};
+use curvyo_editor_wasm::{EscapeStep, Session, Tool};
+use curvyo_ui_core::PolyStarMode;
 
 const EPS: f64 = 1e-9;
 const ALL: [(bool, bool); 4] = [(false, false), (false, true), (true, false), (true, true)];

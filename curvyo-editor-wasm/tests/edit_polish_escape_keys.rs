@@ -7,11 +7,11 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::too_many_lines)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Document, Length, NewAnchor, ObjectSnapshot, Point, PointCount, RectBounds, pack,
     unpack,
 };
-use vecmanf_editor_wasm::{EscapeStep, KeyHint, KeyInput, KeyOutcome, Session, Tool};
+use curvyo_editor_wasm::{EscapeStep, KeyHint, KeyInput, KeyOutcome, Session, Tool};
 
 /// Screen pixels per millimetre of a fresh session (96 dpi at 100 %).
 const SCALE: f64 = 96.0 / 25.4;
@@ -498,7 +498,7 @@ fn r_after_drawing_a_rectangle_opens_the_angle_entry_and_escape_then_r_draws() {
 fn r_zero_enter_stands_a_star_back_to_zero() {
     let mut session = Session::new(1);
     session.set_tool(Tool::PolygonStar);
-    session.set_poly_star_mode(vecmanf_ui_core::PolyStarMode::Star);
+    session.set_poly_star_mode(curvyo_ui_core::PolyStarMode::Star);
     session.set_poly_star_point_count(PointCount::new(5).unwrap());
     session.pointer_hover(pt(100.0, 50.0), false, false);
     session.pointer_down(pt(100.0, 50.0), false);
@@ -510,7 +510,7 @@ fn r_zero_enter_stands_a_star_back_to_zero() {
     assert_eq!(entry.fields[0].prefill, "-15");
     assert_eq!(
         session.commit_transform_entry("0", "", 0),
-        vecmanf_ui_core::EntryOutcome::Committed
+        curvyo_ui_core::EntryOutcome::Committed
     );
     let ObjectSnapshot::Primitive(star) = objects(&session).remove(0) else {
         panic!("a star");

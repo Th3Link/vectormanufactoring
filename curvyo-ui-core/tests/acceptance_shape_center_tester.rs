@@ -9,11 +9,11 @@
 #![allow(clippy::many_single_char_names, clippy::similar_names)]
 #![allow(clippy::too_many_lines, missing_docs, clippy::doc_markdown)]
 
-use proptest::prelude::*;
-use vecmanf_document_core::{Document, Point, Shape};
-use vecmanf_ui_core::{
+use curvyo_document_core::{Document, Point, Shape};
+use curvyo_ui_core::{
     CreateOutcome, EllipseTool, Modifiers, PolyStarMode, PolygonStarTool, RectangleTool,
 };
+use proptest::prelude::*;
 
 const EPS: f64 = 1e-9;
 

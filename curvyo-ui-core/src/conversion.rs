@@ -1,19 +1,19 @@
 //! "Object to path" (acceptance criteria 17, 21, 22): building the
 //! resolved anchor geometry a
-//! [`vecmanf_document_core::Document::convert_to_paths`] call needs,
+//! [`curvyo_document_core::Document::convert_to_paths`] call needs,
 //! for a whole primitive selection at once. Lives in this crate, not
-//! `vecmanf-editor-wasm`'s facade (architect review: ADR 0001 §1's
+//! `curvyo-editor-wasm`'s facade (architect review: ADR 0001 §1's
 //! "the facade has no editing logic of its own" rule) — `Session` just
 //! calls [`build_primitive_conversions`] and passes the result straight
 //! to `Document::convert_to_paths`.
 
-use vecmanf_document_core::{Document, NewAnchor, NodeId, outline_of_rotated};
+use curvyo_document_core::{Document, NewAnchor, NodeId, outline_of_rotated};
 
 use crate::AnchorIdMinter;
 
 /// For every id in `ids` that still names a live primitive, mints fresh
-/// [`vecmanf_document_core::AnchorId`]s for its own, rotation-aware
-/// outline ([`vecmanf_document_core::outline_of_rotated`]) and pairs
+/// [`curvyo_document_core::AnchorId`]s for its own, rotation-aware
+/// outline ([`curvyo_document_core::outline_of_rotated`]) and pairs
 /// them with that id — exactly the shape `Document::convert_to_paths`
 /// takes. A rotated primitive's anchors come out already baked into
 /// document space (`specs/0005-object-transform/adrs.md`: "a path bakes
@@ -25,7 +25,7 @@ use crate::AnchorIdMinter;
 /// specification.md`) without this function doing anything extra. An id
 /// that no longer resolves to a primitive (already deleted, or already
 /// converted) is silently skipped, the same lazy-resolution stance
-/// `vecmanf-ui-core`'s other multi-id operations take (ADR 0009 §2);
+/// `curvyo-ui-core`'s other multi-id operations take (ADR 0009 §2);
 /// `convert_to_paths` itself still refuses the whole call on any id it
 /// cannot resolve, so a genuinely stale id surviving to that point is
 /// reported there, not swallowed twice.
@@ -57,7 +57,7 @@ pub fn build_primitive_conversions(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vecmanf_document_core::{AnchorKind, EllipseFrame, Length, Point, RectBounds};
+    use curvyo_document_core::{AnchorKind, EllipseFrame, Length, Point, RectBounds};
 
     /// AC17: one primitive's conversion carries its outline's exact
     /// anchor count/kind, with freshly minted, distinct ids.
@@ -119,7 +119,7 @@ mod tests {
         document
             .rotate_object(&document.object(id).expect("object exists").rotated(
                 Point::new(0.0, 0.0),
-                vecmanf_document_core::Angle::from_radians(std::f64::consts::FRAC_PI_2),
+                curvyo_document_core::Angle::from_radians(std::f64::consts::FRAC_PI_2),
             ))
             .expect("rotate");
         let mut minter = AnchorIdMinter::new(1);

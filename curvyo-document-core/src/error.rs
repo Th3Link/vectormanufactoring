@@ -1,9 +1,9 @@
-//! The typed refusal reasons for opening a `.vmf` project
+//! The typed refusal reasons for opening a `.curvyo` project
 //! (`specs/0001-project-file-foundation/adrs.md`, "open-refusal reasons are a
-//! typed error in `vecmanf-document-core`") and the (currently narrow)
+//! typed error in `curvyo-document-core`") and the (currently narrow)
 //! failure modes for building one.
 
-/// Why a byte buffer could not be opened as a `.vmf` project.
+/// Why a byte buffer could not be opened as a `.curvyo` project.
 ///
 /// This is a pure function of the bytes: given the same input it always
 /// returns the same variant, so it is testable with fixture files and no
@@ -18,7 +18,7 @@ pub enum OpenError {
     /// checking for a zip local-file-header or end-of-central-directory
     /// signature.
     #[error("not a zip archive")]
-    NotAVmf,
+    NotAProject,
     /// The bytes look like a zip archive but are truncated or corrupt, or
     /// a required container member (`manifest.json`, `document.loro`) is
     /// missing or unparsable.
@@ -41,7 +41,7 @@ pub enum OpenError {
     },
 }
 
-/// Why building a `.vmf` container from an in-memory [`crate::Document`]
+/// Why building a `.curvyo` container from an in-memory [`crate::Document`]
 /// failed.
 ///
 /// Every variant here indicates a defect in this crate or its dependencies

@@ -9,7 +9,7 @@ already write, through `Document` commands that already exist
 `resize_ellipse`, `resize_star_frame`, `rotate_object`, `translate_objects`,
 `convert_to_paths`). **No document-model change, no `format_version` change
 (it stays at `main`'s 5), no new crate, no new external dependency, no new
-`vecmanf-document-core` or `vecmanf-geometry-core` function, no ADR
+`curvyo-document-core` or `curvyo-geometry-core` function, no ADR
 amendment.** Criteria 24 and 38 are confirmed buildable on that basis.
 
 Reference state: `main` after PR #35. Everything below was checked against the
@@ -21,8 +21,8 @@ under "Flagged to the lead".
 
 - [ADR 0001 §1, §4](../../docs/adr/0001-ui-framework-and-canvas-rendering.md):
   handle layout, the one hit rule, the drag and entry arithmetic, the bar's
-  state and the live-edit resolution live in `vecmanf-ui-core`; the draw list
-  in `vecmanf-render-core`; `Session` and the frontend forward events and
+  state and the live-edit resolution live in `curvyo-ui-core`; the draw list
+  in `curvyo-render-core`; `Session` and the frontend forward events and
   render.
 - [ADR 0001 §5](../../docs/adr/0001-ui-framework-and-canvas-rendering.md):
   new wasm calls carry scalars and strings only.
@@ -483,7 +483,7 @@ under "Flagged to the lead".
     rounding, selection click); `ellipse_tool.rs` and `poly_star_tool.rs` unit
     tests (resize, inner radius, point count live, ratio preview and flush);
     `handle_layout.rs` and `shape_hit_test.rs` tests;
-    `vecmanf-ui-core/tests/acceptance_0003.rs` AC3, AC9, AC13, AC14 (both),
+    `curvyo-ui-core/tests/acceptance_0003.rs` AC3, AC9, AC13, AC14 (both),
     AC15, `hit_test_handle_ignores_non_draggable_echo_handles` (replaced by
     "all four radius handles are draggable"); `session/shapes.rs` tests
     `corner_radius_drag_renders_a_live_preview_through_the_session`,
@@ -496,7 +496,7 @@ under "Flagged to the lead".
     to the committed result); `session/shapes.rs`
     `live_readout_only_applies_to_a_create_drag` (create-drag or Select edit);
     `ac17_ac21_*` and `ac22_*` conversion tests (driven from the Select bar's
-    path); `vecmanf-editor-wasm/tests/fix_select_created_shape.rs` (the tool is
+    path); `curvyo-editor-wasm/tests/fix_select_created_shape.rs` (the tool is
     now Select after a create-drag; the draw-list assertion stays).
   - Double-click handoff for a primitive, to a negative of equal strength (tool
     stays Select, nothing written, selection unchanged), the path handoff
@@ -582,8 +582,8 @@ under "Flagged to the lead".
   comment without "and". `advanced-selection` still has to take its own
   pressure off `select_tool.rs`; this feature leaves it more room, not less.
 
-- **2026-10-06: purity and wasm32.** All new code is in `vecmanf-ui-core` and
-  `vecmanf-render-core`: no filesystem, network, clock, thread or UI; both
+- **2026-10-06: purity and wasm32.** All new code is in `curvyo-ui-core` and
+  `curvyo-render-core`: no filesystem, network, clock, thread or UI; both
   crates keep `#![forbid(unsafe_code)]` and build for `wasm32-unknown-unknown`
   in the gate. The benchmark reads the clock only inside an `#[ignore]` test.
   Dependency direction is unchanged: `render-core` takes `ObjectSnapshot`
@@ -602,7 +602,7 @@ under "Flagged to the lead".
     `value_from_pointer` arms use the absolute pointer in the shape's local
     frame (decision on param drags above). The shared Curve evaluation (ring of
     vertices, side arc, `k_min`, side middle, cubic control points) belongs in
-    `vecmanf-document-core` next to `primitive_outline.rs` (a new sibling
+    `curvyo-document-core` next to `primitive_outline.rs` (a new sibling
     module): outline, hit test, render, "Object to path" and the handle
     position all already reach geometry through `outline_of`, and `ui-core`
     positions the handle from the same function, so criterion 51 of that spec

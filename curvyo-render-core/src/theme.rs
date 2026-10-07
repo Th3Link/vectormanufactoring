@@ -35,7 +35,7 @@ pub const NODE_STROKE: RgbaColor = RgbaColor::opaque(0x3A, 0x3A, 0x3F);
 /// the same complaint and the same fix already applied to
 /// [`HANDLE_DIAMETER_PX`] one round earlier, now extended to nodes. The
 /// node hit-test radius doubles alongside this in
-/// `vecmanf-editor-wasm::session::POINT_TOLERANCE_PX`, same reasoning as
+/// `curvyo-editor-wasm::session::POINT_TOLERANCE_PX`, same reasoning as
 /// the handle doc comment above: a visual-only change would look right
 /// but still feel exactly as hard to hit.
 pub const NODE_SIZE_PX: f64 = 14.0;
@@ -53,7 +53,7 @@ pub const NODE_OUTLINE_PX: f64 = 1.0;
 /// 2026-10-05 follow-up request did the same for nodes too, so that
 /// distinction no longer holds; see `NODE_SIZE_PX`'s own doc comment. The
 /// hit-test radius around a handle doubles alongside this in
-/// `vecmanf-ui-core::hit_test` — a visual-only change here would look
+/// `curvyo-ui-core::hit_test` — a visual-only change here would look
 /// right but still feel exactly as hard to hit.
 pub const HANDLE_DIAMETER_PX: f64 = 12.0;
 
@@ -87,7 +87,7 @@ pub const HOVER_RING_DIAMETER_PX: f64 = NODE_SIZE_PX + 4.0;
 /// hover feedback. A dedicated token rather than deriving this one from
 /// `HANDLE_DIAMETER_PX` the same way `HOVER_RING_DIAMETER_PX` now derives
 /// from `NODE_SIZE_PX` (both followed the same "+4px margin" reasoning
-/// when sized, just not the same mechanism) — `vecmanf-render-core`'s
+/// when sized, just not the same mechanism) — `curvyo-render-core`'s
 /// `decorations::build` draws every handle hover ring after the handle's
 /// own glyph, with this diameter, so it reads as a ring around it either
 /// way; keeping both independently correct (size *and* draw order) is
@@ -98,7 +98,7 @@ pub const HANDLE_HOVER_RING_DIAMETER_PX: f64 = HANDLE_DIAMETER_PX + 4.0;
 
 /// How many straight segments approximate one handle/hover circle.
 /// Coarse on purpose: these are small, flat-colored UI glyphs, not
-/// document geometry, so no [`vecmanf_document_core::Tolerance`] applies.
+/// document geometry, so no [`curvyo_document_core::Tolerance`] applies.
 pub const CIRCLE_SEGMENTS: usize = 16;
 
 /// `--shape-handle-fill`/`--shape-handle-stroke` idle state
@@ -149,8 +149,8 @@ pub const TRANSFORM_ROTATE_HANDLE_STROKE_PX: f64 = 2.0;
 /// The resize/rotate handles' own hit-test radii and the rotate
 /// handle's 20px screen offset (`docs/design-system.md`'s own rows) are
 /// not constants in this crate: this crate never hit-tests or lays out
-/// handles (ADR 0011 §3) — `vecmanf-ui-core::transform_handle_layout`
-/// and `vecmanf-editor-wasm`'s own wiring own those values; this crate
+/// handles (ADR 0011 §3) — `curvyo-ui-core::transform_handle_layout`
+/// and `curvyo-editor-wasm`'s own wiring own those values; this crate
 /// only draws a glyph at whatever position it is handed.
 pub const TRANSFORM_ROTATE_HANDLE_SIZE_PX: f64 = 12.0;
 
@@ -287,7 +287,7 @@ pub const LIVE_PREVIEW_STROKE_PX: f64 = 1.5;
 pub const PREVIEW_NEW: RgbaColor = ACCENT;
 
 /// A parameter handle's knob, screen-space pixels: a 10 px circle
-/// (`docs/design-system.md`, "Parameter handle"). `vecmanf-ui-core`'s own
+/// (`docs/design-system.md`, "Parameter handle"). `curvyo-ui-core`'s own
 /// `KNOB_DIAMETER_PX` is the same number, which its 4 px clearance property
 /// is derived from; a test here guards that no glyph grows past it.
 pub const PARAM_KNOB_DIAMETER_PX: f64 = 10.0;

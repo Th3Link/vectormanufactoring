@@ -6,7 +6,7 @@ import type { EditHint } from "@/components/EditHintChip";
 
 /** The canvas's backing-buffer (physical pixel) size for a given CSS
  * (layout) size, plus the `devicePixelRatio` that relates the two —
- * `vecmanf-editor-wasm`'s `Gpu` needs both: the buffer itself sized to
+ * `curvyo-editor-wasm`'s `Gpu` needs both: the buffer itself sized to
  * the display's actual resolution (correctness fix: a HiDPI display
  * previously got a buffer sized 1:1 to CSS pixels, then upscaled and
  * softened by the browser compositor — the same class of bug as this
@@ -269,7 +269,7 @@ export interface LiveReadout {
 }
 
 /** One field of the typed numeric entry chip (`object-transform-
- * refinements` criteria 18-32), as `vecmanf-editor-wasm` describes it. */
+ * refinements` criteria 18-32), as `curvyo-editor-wasm` describes it. */
 export interface TransformEntryField {
   /** Visible label ("W", "H", "r"; empty for the angle). */
   label: string;
@@ -447,7 +447,7 @@ export interface EditorSession {
   editHint: EditHint | null;
   /** Closes the edit hint (3 s, a press, a key, the pointer leaving). */
   dismissEditHint: () => void;
-  /** `vecmanf-editor-wasm`'s `cursor_hint()` — `"default"`, `"rotate"`
+  /** `curvyo-editor-wasm`'s `cursor_hint()` — `"default"`, `"rotate"`
    * or `"resize:<degrees>"` (`object-transform`'s transform-handle
    * cursors); `Canvas` turns it into a CSS cursor via `lib/cursors`. */
   cursorHint: string;
@@ -560,16 +560,16 @@ export interface EditorSession {
   onKeyUp: (event: React.KeyboardEvent<HTMLDivElement>) => void;
   /** File → New: swaps in a brand-new, empty session. */
   newProject: () => void;
-  /** File → Open / the OS file association: parses `bytes` as a `.vmf`
+  /** File → Open / the OS file association: parses `bytes` as a `.curvyo`
    * and swaps it in as the live session.
    * @throws the exact user-facing sentence naming why `bytes` could not
    * be opened (see `@/lib/editorSession`'s `openSession`) — the caller
    * shows it, this hook does not. */
   openProject: (bytes: Uint8Array) => Promise<void>;
   /** File → Save / Save As: packs the live session's document into
-   * `.vmf` container bytes for the host to write.
+   * `.curvyo` container bytes for the host to write.
    * @throws a plain `Error` if there is no live session yet, or the
-   * `JsValue` `vecmanf-editor-wasm`'s `pack` throws if the document could
+   * `JsValue` `curvyo-editor-wasm`'s `pack` throws if the document could
    * not be serialized — the caller shows it, this hook does not. */
   packProject: (appVersion: string) => Uint8Array;
 }

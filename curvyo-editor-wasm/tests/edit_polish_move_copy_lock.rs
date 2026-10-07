@@ -1,17 +1,17 @@
 //! `Session`-level tests of Part C of `specs/edit-interaction-polish/
 //! specification.md` (PR 4): the axis lock, the copy, their readout, axes and
 //! badges, and the Copy check of the typed move. Driven through `Session`'s
-//! public API; the rules themselves are tested in `vecmanf-ui-core`.
+//! public API; the rules themselves are tested in `curvyo-ui-core`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::too_many_lines)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Document, Length, NewAnchor, NodeId, ObjectSnapshot, Point, RectBounds, Shape, pack,
     unpack,
 };
-use vecmanf_editor_wasm::{EscapeStep, MoveIndicators, Session, Tool};
-use vecmanf_ui_core::{Axis, EntryOutcome, MoveEntryMode};
+use curvyo_editor_wasm::{EscapeStep, MoveIndicators, Session, Tool};
+use curvyo_ui_core::{Axis, EntryOutcome, MoveEntryMode};
 
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)
@@ -189,7 +189,7 @@ fn the_box_stays_on_the_original_in_a_copy_and_travels_in_a_move() {
     let mut session = session();
     let start = press_on_edge(&mut session, false, false);
     let target = pt(start.x + 70.0, start.y + 10.0);
-    let near = |list: &vecmanf_render_core::DrawList, at: Point| {
+    let near = |list: &curvyo_render_core::DrawList, at: Point| {
         list.triangles
             .iter()
             .any(|v| (v.position.x - at.x).abs() < 9.0 && (v.position.y - at.y).abs() < 9.0)
@@ -450,9 +450,9 @@ fn the_typed_move_copies_with_the_copy_check() {
     hold(&mut session, edge, false, false);
     session.pointer_down(edge, false);
     session.pointer_up(edge, false, false);
-    session.key_down(vecmanf_editor_wasm::KeyInput {
+    session.key_down(curvyo_editor_wasm::KeyInput {
         key: "m",
-        ..vecmanf_editor_wasm::KeyInput::default()
+        ..curvyo_editor_wasm::KeyInput::default()
     });
     assert!(!session.move_entry().expect("the chip").copy_preset);
 }
@@ -475,7 +475,7 @@ fn a_plain_drag_is_still_one_move_commit() {
 /// Criterion 41: a copy of 200 selected objects (100 paths with 50 nodes
 /// each, 100 rectangles): the live preview stays within the 8 ms budget per
 /// `draw_list()`, and the commit is measured, not budgeted. Run in release:
-/// `cargo test --release -p vecmanf-editor-wasm --test edit_polish_move_copy_lock -- --ignored --nocapture`.
+/// `cargo test --release -p curvyo-editor-wasm --test edit_polish_move_copy_lock -- --ignored --nocapture`.
 #[test]
 #[ignore = "benchmark: run in release with --ignored --nocapture"]
 fn a_200_object_copy_previews_within_the_frame_budget_and_the_commit_is_measured() {

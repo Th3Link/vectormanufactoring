@@ -1,11 +1,11 @@
-//! White-box edge-case tests for the `.vmf` container (`src/container.rs`),
+//! White-box edge-case tests for the `.curvyo` container (`src/container.rs`),
 //! written after reading the implementation diff. These target the
 //! degenerate inputs the golden fixtures and inline unit tests do not
 //! cover: a genuinely empty file versus a structurally-valid-but-empty
 //! zip, a container missing only the non-manifest required member, the
 //! exact version boundary (current vs. current+1), the snapshot-version
 //! field refusing independently of the container-version field, a
-//! differently-shaped-but-valid zip (not a vecmanf container at all), and
+//! differently-shaped-but-valid zip (not a Curvyo container at all), and
 //! a corrupt `document.loro` hiding behind an otherwise valid manifest.
 //!
 //! Scope note: this file only constructs container bytes and calls the
@@ -15,10 +15,10 @@
 
 use std::io::{Cursor, Write};
 
-use serde::Serialize;
-use vecmanf_document_core::{
+use curvyo_document_core::{
     CURRENT_FORMAT_VERSION, CURRENT_LORO_SNAPSHOT_VERSION, Document, OpenError, pack, unpack,
 };
+use serde::Serialize;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
@@ -58,19 +58,19 @@ fn manifest_bytes(format_version: u32, loro_snapshot_version: u32) -> Vec<u8> {
 }
 
 /// A genuinely empty file (0 bytes) is not zip-shaped at all and must be
-/// refused as `NotAVmf`, the same bucket as a renamed text file.
+/// refused as `NotAProject`, the same bucket as a renamed text file.
 #[test]
-fn truly_empty_file_is_not_a_vmf() {
-    assert!(matches!(unpack(2, &[]), Err(OpenError::NotAVmf)));
+fn truly_empty_file_is_not_a_project() {
+    assert!(matches!(unpack(2, &[]), Err(OpenError::NotAProject)));
 }
 
 /// A *structurally valid* empty zip archive (just an end-of-central-
 /// directory record, no entries at all) is zip-shaped and must therefore
 /// fall into the `Damaged` bucket (missing required members), not
-/// `NotAVmf` — these two cases must not be conflated by the zip-sniff
+/// `NotAProject` — these two cases must not be conflated by the zip-sniff
 /// check.
 #[test]
-fn structurally_valid_but_empty_zip_is_damaged_not_not_a_vmf() {
+fn structurally_valid_but_empty_zip_is_damaged_not_not_a_project() {
     let empty_zip = ZipWriter::new(Cursor::new(Vec::new()))
         .finish()
         .expect("finish")
@@ -160,16 +160,16 @@ fn loro_snapshot_version_above_current_is_refused_even_when_format_version_is_cu
     }
 }
 
-/// A `.vmf` that is actually a different, perfectly valid zip-based
+/// A `.curvyo` that is actually a different, perfectly valid zip-based
 /// document format (simulated here as a minimal "docx-shaped" archive:
-/// `[Content_Types].xml` and `word/document.xml`, no vecmanf members at
+/// `[Content_Types].xml` and `word/document.xml`, no Curvyo members at
 /// all) must be refused as `Damaged` ("missing a required member"), not
-/// `NotAVmf` — per the spec's own grouping, "missing required members" is
-/// explicitly part of the *damaged* sentence, not the *not-a-.vmf-at-all*
+/// `NotAProject` — per the spec's own grouping, "missing required members" is
+/// explicitly part of the *damaged* sentence, not the *not-a-.curvyo-at-all*
 /// one, even though intuitively one might call a foreign-but-valid zip
-/// "not a vecmanf project".
+/// "not a Curvyo project".
 #[test]
-fn a_different_but_valid_zip_format_is_damaged_not_not_a_vmf() {
+fn a_different_but_valid_zip_format_is_damaged_not_not_a_project() {
     let bytes = zip_with_members(&[
         (
             "[Content_Types].xml",
@@ -231,7 +231,7 @@ fn unparsable_manifest_json_is_damaged() {
 
 /// A `document.loro` snapshot that is itself a perfectly valid Loro
 /// document, behind a perfectly valid manifest, but whose `paths` tree
-/// has a node not shaped like `vecmanf_document_core::paths` ever writes
+/// has a node not shaped like `curvyo_document_core::paths` ever writes
 /// one (`specs/0002-path-node-editing/adrs.md`'s architect review: "a
 /// container whose path data does not match the schema is refused with
 /// `OpenError::Damaged`"). Without that validation, this exact byte
@@ -241,7 +241,7 @@ fn unparsable_manifest_json_is_damaged() {
 /// acceptance criterion 7: "not a crash").
 ///
 /// Built with `loro` directly rather than through
-/// `vecmanf_document_core::Document`: the public API has no way to
+/// `curvyo_document_core::Document`: the public API has no way to
 /// produce a malformed path node, by design.
 #[test]
 fn a_path_node_missing_its_anchors_list_is_damaged_not_a_panic() {
@@ -474,9 +474,9 @@ fn a_stored_rotation_is_read_as_a_number_and_normalized() {
     );
 }
 
-/// Builds a one-node `.vmf` container whose single `paths`-tree node is
+/// Builds a one-node `.curvyo` container whose single `paths`-tree node is
 /// shaped by `build_meta` directly through `loro`, bypassing
-/// `vecmanf_document_core::Document`'s public API entirely (which has no
+/// `curvyo_document_core::Document`'s public API entirely (which has no
 /// way to produce a malformed primitive, by design) — the same approach
 /// `a_path_node_missing_its_anchors_list_is_damaged_not_a_panic` above
 /// uses for a malformed path.

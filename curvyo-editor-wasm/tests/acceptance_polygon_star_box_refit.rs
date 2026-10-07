@@ -24,12 +24,12 @@
 use std::collections::{BTreeSet, HashSet};
 use std::f64::consts::SQRT_2;
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Angle, CURRENT_FORMAT_VERSION, Document, InnerRatio, Length, Point, PointCount,
     PrimitiveSnapshot, RectBounds, Shape, StarFrame, outline_of_rotated, pack, unpack,
 };
-use vecmanf_editor_wasm::{KeyInput, KeyOutcome, Session, Tool};
-use vecmanf_ui_core::{EntryOutcome, PolyStarMode};
+use curvyo_editor_wasm::{KeyInput, KeyOutcome, Session, Tool};
+use curvyo_ui_core::{EntryOutcome, PolyStarMode};
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -243,7 +243,7 @@ fn rotate_drag_from(
 
 type Deco = HashSet<String>;
 
-fn vkey(v: &vecmanf_render_core::Vertex) -> String {
+fn vkey(v: &curvyo_render_core::Vertex) -> String {
     format!("{:.4},{:.4}|{:?}", v.position.x, v.position.y, v.color)
 }
 
@@ -1284,14 +1284,14 @@ fn ac13_rotate_writes_rotation_only_and_resize_writes_the_radius_only_on_old_fil
 #[test]
 fn ac13_golden_fixtures_open_select_and_hover_write_nothing_and_keep_outlines() {
     for name in [
-        "primitives_v3.vmf",
-        "rotation_v5.vmf",
-        "valid.vmf",
-        "paths_v2.vmf",
-        "format_version_1.vmf",
+        "primitives_v3.curvyo",
+        "rotation_v5.curvyo",
+        "valid.curvyo",
+        "paths_v2.curvyo",
+        "format_version_1.curvyo",
     ] {
         let p = format!(
-            "{}/../vecmanf-document-core/tests/fixtures/{name}",
+            "{}/../curvyo-document-core/tests/fixtures/{name}",
             env!("CARGO_MANIFEST_DIR")
         );
         let bytes = std::fs::read(&p).unwrap();
@@ -1461,7 +1461,7 @@ fn ac15_rectangle_and_ellipse_boxes_still_turn_by_rotation_alone() {
     }
     // ellipse: circle stays a circle; frame-box rotation
     let d = Document::new(1);
-    let id = d.create_ellipse(vecmanf_document_core::EllipseFrame {
+    let id = d.create_ellipse(curvyo_document_core::EllipseFrame {
         center: c,
         rx: Length::from_mm(20.0),
         ry: Length::from_mm(12.0),

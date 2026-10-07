@@ -4,7 +4,7 @@
 //! ("wherever a press with Ctrl would start a move"), so the badge cannot
 //! disagree with the press.
 
-use vecmanf_document_core::{NodeId, ObjectSnapshot, Point, Tolerance};
+use curvyo_document_core::{NodeId, ObjectSnapshot, Point, Tolerance};
 
 use super::handles::sole_selected;
 use super::move_drag::MoveDrag;

@@ -2,7 +2,7 @@
 //! (`specs/edit-interaction-polish/specification.md`, criterion 27; the
 //! "Move axis guide" row of `docs/design-system.md`).
 
-use vecmanf_document_core::{Point, ViewTransform};
+use curvyo_document_core::{Point, ViewTransform};
 
 use crate::glyphs::{DrawList, thick_line};
 use crate::select_box::snap_guide_line;
@@ -10,7 +10,7 @@ use crate::theme;
 
 /// The axis a move is locked to: the offset runs along it and is zero on the
 /// other. Mirrors the Select tool's own axis, so this crate depends on no
-/// `vecmanf-ui-core` type (ADR 0011 §3).
+/// `curvyo-ui-core` type (ADR 0011 §3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LockedAxis {
     /// The horizontal axis: the horizontal line is the active one.

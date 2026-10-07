@@ -2,11 +2,11 @@
 //! 14; `docs/design-system.md`'s node/handle visual convention).
 //!
 //! Built from a [`DecorationInput`] of [`AnchorId`]s and flags —
-//! `vecmanf-editor-wasm` builds that input from `vecmanf-ui-core`'s
-//! selection, since this crate cannot read `vecmanf-ui-core` directly
+//! `curvyo-editor-wasm` builds that input from `curvyo-ui-core`'s
+//! selection, since this crate cannot read `curvyo-ui-core` directly
 //! (`specs/0002-path-node-editing/adrs.md`, "the path/node crate boundary").
 
-use vecmanf_document_core::{AnchorKind, HandleSlot, NodeId, PathSnapshot, Vec2, ViewTransform};
+use curvyo_document_core::{AnchorKind, HandleSlot, NodeId, PathSnapshot, Vec2, ViewTransform};
 
 use crate::color::RgbaColor;
 use crate::glyphs::{self, DrawList};
@@ -19,13 +19,13 @@ use crate::theme;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Hovered {
     /// A node is hovered.
-    Node(NodeId, vecmanf_document_core::AnchorId),
+    Node(NodeId, curvyo_document_core::AnchorId),
     /// One of a node's handles is hovered.
-    Handle(NodeId, vecmanf_document_core::AnchorId, HandleSlot),
+    Handle(NodeId, curvyo_document_core::AnchorId, HandleSlot),
 }
 
-/// What to decorate, built from `vecmanf-ui-core`'s selection by whoever
-/// owns both it and this crate (`vecmanf-editor-wasm`).
+/// What to decorate, built from `curvyo-ui-core`'s selection by whoever
+/// owns both it and this crate (`curvyo-editor-wasm`).
 #[derive(Debug, Clone, Default)]
 pub struct DecorationInput {
     /// Whether to draw path nodes (and the handles of selected ones) at
@@ -34,20 +34,20 @@ pub struct DecorationInput {
     pub show_nodes: bool,
     /// Nodes shown as selected, each tagged with its own path (acceptance
     /// criteria 7, 10).
-    pub selected_nodes: Vec<(NodeId, vecmanf_document_core::AnchorId)>,
+    pub selected_nodes: Vec<(NodeId, curvyo_document_core::AnchorId)>,
     /// The one segment shown as selected, if any (acceptance criterion
     /// 14).
     pub selected_segment: Option<(
         NodeId,
-        vecmanf_document_core::AnchorId,
-        vecmanf_document_core::AnchorId,
+        curvyo_document_core::AnchorId,
+        curvyo_document_core::AnchorId,
     )>,
     /// What is currently under the pointer, if anything.
     pub hovered: Option<Hovered>,
 }
 
 impl DecorationInput {
-    fn is_node_selected(&self, path: NodeId, anchor: vecmanf_document_core::AnchorId) -> bool {
+    fn is_node_selected(&self, path: NodeId, anchor: curvyo_document_core::AnchorId) -> bool {
         self.selected_nodes
             .iter()
             .any(|&(p, a)| p == path && a == anchor)
@@ -118,7 +118,7 @@ fn push_node(
     sizes: &Sizes,
     input: &DecorationInput,
     path: NodeId,
-    anchor: &vecmanf_document_core::AnchorSnapshot,
+    anchor: &curvyo_document_core::AnchorSnapshot,
     selected: bool,
 ) {
     if selected {
@@ -204,8 +204,8 @@ fn selected_segment_overlay(
     view: ViewTransform,
     selected_segment: Option<(
         NodeId,
-        vecmanf_document_core::AnchorId,
-        vecmanf_document_core::AnchorId,
+        curvyo_document_core::AnchorId,
+        curvyo_document_core::AnchorId,
     )>,
 ) -> Option<DrawList> {
     let (path, start, end) = selected_segment?;
@@ -229,7 +229,7 @@ fn selected_segment_overlay(
 
 #[cfg(test)]
 mod tests {
-    use vecmanf_document_core::{AnchorId, Document, NewAnchor, Point};
+    use curvyo_document_core::{AnchorId, Document, NewAnchor, Point};
 
     use super::*;
 

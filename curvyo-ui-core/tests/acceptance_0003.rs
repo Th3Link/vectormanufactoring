@@ -1,15 +1,15 @@
 //! Black-box acceptance tests for `specs/0003-primitive-shapes/
 //! specification.md`'s 22 acceptance criteria, written against
-//! `vecmanf-ui-core`'s public API (`RectangleTool`, `EllipseTool`,
-//! `PolygonStarTool`, `ObjectSelection`, `NodeTool`) and `vecmanf-document-core`'s own public
+//! `curvyo-ui-core`'s public API (`RectangleTool`, `EllipseTool`,
+//! `PolygonStarTool`, `ObjectSelection`, `NodeTool`) and `curvyo-document-core`'s own public
 //! `Document`, before reading the implementation diff. Complements
-//! `vecmanf-document-core/tests/acceptance_0003.rs`, which covers the
+//! `curvyo-document-core/tests/acceptance_0003.rs`, which covers the
 //! parts of these criteria that don't need a pointer-drag state machine.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use vecmanf_document_core::{Document, InnerRatio, NodeId, PathSnapshot, Point, PointCount, Shape};
-use vecmanf_ui_core::{
+use curvyo_document_core::{Document, InnerRatio, NodeId, PathSnapshot, Point, PointCount, Shape};
+use curvyo_ui_core::{
     CreateOutcome, EllipseTool, Modifiers, NodeTool, ObjectSelection, PolyStarMode,
     PolygonStarTool, RectangleTool,
 };
@@ -233,7 +233,7 @@ fn ac12_zero_movement_star_drag_creates_nothing() {
 #[test]
 fn ac21_selecting_and_deselecting_a_primitive_never_converts_it() {
     let document = Document::new(1);
-    let id = document.create_rect(vecmanf_document_core::RectBounds::from_corners(
+    let id = document.create_rect(curvyo_document_core::RectBounds::from_corners(
         pt(0.0, 0.0),
         pt(10.0, 10.0),
     ));
@@ -254,7 +254,7 @@ fn ac21_selecting_and_deselecting_a_primitive_never_converts_it() {
 /// AC22's exact wording: "two or more primitives selected together...
 /// each selected primitive is converted independently per criteria
 /// 17-20, and the resulting path objects remain selected together
-/// afterward." This replicates exactly what `vecmanf-editor-wasm`'s
+/// afterward." This replicates exactly what `curvyo-editor-wasm`'s
 /// `Session::convert_selected_to_paths` does with this crate's public
 /// API (mint anchors via `outline_of`, call `Document::convert_to_paths`
 /// once for the whole selection, then hand each converted path to
@@ -262,7 +262,7 @@ fn ac21_selecting_and_deselecting_a_primitive_never_converts_it() {
 /// actually holds afterward.
 ///
 /// It does not: [`NodeSelection`]/[`NodeTool`] carries a single
-/// `path: Option<NodeId>` (see `vecmanf-ui-core/src/selection.rs`), so a
+/// `path: Option<NodeId>` (see `curvyo-ui-core/src/selection.rs`), so a
 /// second `select_all_anchors` call for the second converted path wipes
 /// out the first path's selection entirely. After a 2-object conversion,
 /// at most one of the two resulting paths has anything selected — not
@@ -271,11 +271,11 @@ fn ac21_selecting_and_deselecting_a_primitive_never_converts_it() {
 #[test]
 fn ac22_multi_object_conversion_cannot_keep_both_paths_selected_together() {
     let document = Document::new(1);
-    let rect_id = document.create_rect(vecmanf_document_core::RectBounds::from_corners(
+    let rect_id = document.create_rect(curvyo_document_core::RectBounds::from_corners(
         pt(0.0, 0.0),
         pt(20.0, 10.0),
     ));
-    let ellipse_id = document.create_ellipse(vecmanf_document_core::EllipseFrame::from_corners(
+    let ellipse_id = document.create_ellipse(curvyo_document_core::EllipseFrame::from_corners(
         pt(0.0, 0.0),
         pt(10.0, 10.0),
     ));
@@ -290,13 +290,13 @@ fn ac22_multi_object_conversion_cannot_keep_both_paths_selected_together() {
     );
 
     let mut next_anchor_counter: u64 = 0;
-    let mut mint = |id: NodeId| -> Vec<vecmanf_document_core::NewAnchor> {
-        vecmanf_document_core::outline_of(&document.primitive(id).unwrap().shape)
+    let mut mint = |id: NodeId| -> Vec<curvyo_document_core::NewAnchor> {
+        curvyo_document_core::outline_of(&document.primitive(id).unwrap().shape)
             .into_iter()
             .map(|a| {
                 next_anchor_counter += 1;
-                vecmanf_document_core::NewAnchor {
-                    id: vecmanf_document_core::AnchorId::new(1, next_anchor_counter),
+                curvyo_document_core::NewAnchor {
+                    id: curvyo_document_core::AnchorId::new(1, next_anchor_counter),
                     point: a.point,
                     handle_in: a.handle_in,
                     handle_out: a.handle_out,
@@ -340,8 +340,8 @@ fn ac22_multi_object_conversion_cannot_keep_both_paths_selected_together() {
 
 fn as_path(document: &Document, id: NodeId) -> PathSnapshot {
     match document.object(id).expect("object exists") {
-        vecmanf_document_core::ObjectSnapshot::Path(path) => path,
-        vecmanf_document_core::ObjectSnapshot::Primitive(_) => {
+        curvyo_document_core::ObjectSnapshot::Path(path) => path,
+        curvyo_document_core::ObjectSnapshot::Primitive(_) => {
             panic!("expected {id:?} to have converted to a path")
         }
     }

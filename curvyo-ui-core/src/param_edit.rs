@@ -7,7 +7,7 @@
 //! [`commit_param_batch`], over the `Document` commands the shape tools
 //! already used.
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Document, InnerRatio, Length, NodeId, ObjectSnapshot, PointCount, PrimitiveSnapshot,
     RectBounds, Shape, ShapeEditError, Vec2, effective_corner_radius,
 };
@@ -249,7 +249,7 @@ pub fn commit_param_batch(
 mod tests {
     use super::*;
     use crate::param_handles::Corner;
-    use vecmanf_document_core::{Angle, Point, RectBounds, StarFrame};
+    use curvyo_document_core::{Angle, Point, RectBounds, StarFrame};
 
     fn rect(document: &Document, width: f64, height: f64, radius: f64) -> ObjectSnapshot {
         let id = document.create_rect(RectBounds {

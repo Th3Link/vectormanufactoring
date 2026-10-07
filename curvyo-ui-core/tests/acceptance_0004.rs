@@ -1,6 +1,6 @@
 //! Additional black-box / white-box tests for `specs/0004-canvas-
 //! navigation-and-selection/specification.md`, independent of the
-//! implementer's own `vecmanf-ui-core` unit tests (`viewport.rs`,
+//! implementer's own `curvyo-ui-core` unit tests (`viewport.rs`,
 //! `select_tool.rs`, `hit_test_object.rs`, `object_bounds.rs` each carry
 //! their own `#[cfg(test)]` modules already) — these use different
 //! numbers, directions and object shapes, written against the crate's
@@ -8,11 +8,11 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, AnchorKind, Document, EllipseFrame, Length, NewAnchor, Point, RectBounds, Tolerance,
     Vec2,
 };
-use vecmanf_ui_core::{Viewport, hit_test_object, object_bounds};
+use curvyo_ui_core::{Viewport, hit_test_object, object_bounds};
 
 // ---------------------------------------------------------------------
 // AC 6/8: zoom-toward-cursor stays fixed through the clamp, re-verified

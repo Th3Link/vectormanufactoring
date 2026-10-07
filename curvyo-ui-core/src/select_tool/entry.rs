@@ -5,7 +5,7 @@
 //! out of `select_tool.rs`; a child module, so it shares `SelectTool`'s
 //! private state.
 
-use vecmanf_document_core::{Document, ObjectSnapshot, Point, Tolerance};
+use curvyo_document_core::{Document, ObjectSnapshot, Point, Tolerance};
 
 use super::{SelectDoubleClickOutcome, SelectDrag, SelectTool, sole_selected};
 use crate::ResizeDirection;
@@ -354,7 +354,7 @@ fn hit_outcome(object: &ObjectSnapshot) -> SelectDoubleClickOutcome {
 
 #[cfg(test)]
 mod tests {
-    use vecmanf_document_core::{
+    use curvyo_document_core::{
         AnchorId, Angle, Document, InnerRatio, Length, NewAnchor, PointCount, RectBounds, Shape,
         StarFrame,
     };
@@ -363,7 +363,7 @@ mod tests {
     use crate::transform_drag::ScaleModes;
     use crate::transform_entry::EntryKind;
 
-    fn rect_at(document: &Document, x: f64, size: f64) -> vecmanf_document_core::NodeId {
+    fn rect_at(document: &Document, x: f64, size: f64) -> curvyo_document_core::NodeId {
         document.create_rect(RectBounds {
             origin: Point::new(x, 0.0),
             width: Length::from_mm(size),
@@ -373,7 +373,7 @@ mod tests {
 
     fn open(
         document: &Document,
-        ids: &[vecmanf_document_core::NodeId],
+        ids: &[curvyo_document_core::NodeId],
         key: EntryKey,
     ) -> (SelectTool, Result<(), KeyEntryRefusal>) {
         let objects: Vec<ObjectSnapshot> = document
@@ -461,7 +461,7 @@ mod tests {
         }
     }
 
-    fn rect_of(document: &Document, id: vecmanf_document_core::NodeId) -> (Point, Point) {
+    fn rect_of(document: &Document, id: curvyo_document_core::NodeId) -> (Point, Point) {
         let ObjectSnapshot::Primitive(primitive) = document.object(id).expect("exists") else {
             panic!("a primitive");
         };

@@ -1,13 +1,13 @@
-//! The vecmanf draw-list builder (ADR 0001 §4, ADR 0011 §1): document
+//! The Curvyo draw-list builder (ADR 0001 §4, ADR 0011 §1): document
 //! snapshot + view transform + decoration input → flat draw list,
 //! tessellated with `lyon` (`specs/0002-path-node-editing/adrs.md`).
 //!
 //! Pure and wasm-compatible (`CLAUDE.md` §6): no filesystem, network,
-//! clock, threads, UI or GPU access — `vecmanf-editor-wasm` owns the
+//! clock, threads, UI or GPU access — `curvyo-editor-wasm` owns the
 //! `wgpu` device/surface and uploads this crate's output as a vertex
-//! buffer, applying the same [`vecmanf_document_core::ViewTransform`]
-//! uniformly to every vertex. Depends on `vecmanf-document-core` only
-//! (ADR 0011 §3): it cannot read `vecmanf-ui-core`'s selection directly,
+//! buffer, applying the same [`curvyo_document_core::ViewTransform`]
+//! uniformly to every vertex. Depends on `curvyo-document-core` only
+//! (ADR 0011 §3): it cannot read `curvyo-ui-core`'s selection directly,
 //! which is why [`DecorationInput`] exists.
 
 #![forbid(unsafe_code)]
@@ -35,7 +35,7 @@ pub use select_box::{SelectDecorationInput, SelectionBox};
 pub use select_decoration::{TransformDecorationInput, TransformGlyphKind, TransformHandleGlyph};
 pub use shape_preview::{build_primitive_strokes, build_shape_live_preview};
 
-use vecmanf_document_core::{PathSnapshot, ViewTransform};
+use curvyo_document_core::{PathSnapshot, ViewTransform};
 
 fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
     px / view.scale()
@@ -90,7 +90,7 @@ pub fn build_transform_draw_list(
 
 #[cfg(test)]
 mod tests {
-    use vecmanf_document_core::{AnchorId, Document, NewAnchor, Point};
+    use curvyo_document_core::{AnchorId, Document, NewAnchor, Point};
 
     use super::*;
 

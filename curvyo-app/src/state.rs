@@ -4,7 +4,7 @@
 //! multi-window support is in scope here). No document lives here any
 //! more (`specs/0002-path-node-editing/adrs.md`'s PR review: "the host does
 //! byte I/O only") — the real document is the `WasmSession` the frontend
-//! owns; this crate reads and writes `.vmf` bytes on its behalf and
+//! owns; this crate reads and writes `.curvyo` bytes on its behalf and
 //! otherwise never looks inside them. Also buffers at most one pending
 //! open payload for the frontend to pick up once it has mounted (see
 //! `take_pending_open`).
@@ -60,7 +60,7 @@ pub enum PendingOpen {
         bytes: Vec<u8>,
     },
     /// The path could not even be read (missing, permissions, not a
-    /// file) — a host-level I/O failure, distinct from a `.vmf` whose
+    /// file) — a host-level I/O failure, distinct from a `.curvyo` whose
     /// *content* is invalid (that refusal is the frontend's own, once it
     /// tries `WasmSession::open` on the bytes above).
     IoError(String),
@@ -71,7 +71,7 @@ pub enum PendingOpen {
 /// at most one pending open payload.
 ///
 /// The pending buffer exists for one reason: when the app is launched by
-/// double-clicking a `.vmf` (the OS file-association path), the open
+/// double-clicking a `.curvyo` (the OS file-association path), the open
 /// attempt runs synchronously in Tauri's `.setup()`, before the
 /// frontend's event listeners have attached. A `project-state` update
 /// surviving that race has a fallback (`get_project_state`, polled once on

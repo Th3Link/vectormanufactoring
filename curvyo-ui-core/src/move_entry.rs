@@ -6,7 +6,7 @@
 //! exists once, here. The DOM chip only holds the text, the caret and the
 //! focus (`adrs.md`, decision 3).
 
-use vecmanf_document_core::{Document, NodeId, ObjectSnapshot, Point, Vec2};
+use curvyo_document_core::{Document, NodeId, ObjectSnapshot, Point, Vec2};
 
 use crate::anchor_id_minter::AnchorIdMinter;
 
@@ -171,7 +171,7 @@ impl MoveEntry {
 
 #[cfg(test)]
 mod tests {
-    use vecmanf_document_core::{
+    use curvyo_document_core::{
         AnchorId, Angle, InnerRatio, Length, NewAnchor, NodeId, PointCount, RectBounds, StarFrame,
     };
 

@@ -2,12 +2,12 @@
 
 ## Affected crates/modules
 
-- `vecmanf-document-core`: `primitive_model.rs` (`ObjectSnapshot::translated`,
+- `curvyo-document-core`: `primitive_model.rs` (`ObjectSnapshot::translated`,
   `translate_shape` helper), `primitive_outline.rs` (`shape_frame_bounds`,
   moved from `render-core`), new `objects.rs` (`Document::translate_objects`,
   `Document::delete_objects`, `ObjectEditError`).
-- `vecmanf-geometry-core`: `segment.rs` gains `segment_bounds`.
-- `vecmanf-ui-core`: new `viewport.rs` (`Zoom`, `Viewport`, pan gesture,
+- `curvyo-geometry-core`: `segment.rs` gains `segment_bounds`.
+- `curvyo-ui-core`: new `viewport.rs` (`Zoom`, `Viewport`, pan gesture,
   zoom-about-a-point, resize), new `select_tool.rs` (`SelectTool`,
   double-click outcome), new `hit_test_object.rs` (`hit_test_object` + shared
   anchor-run helper), new `object_bounds.rs` (`object_bounds`),
@@ -15,13 +15,13 @@
   (`ObjectSelection`), `shape_hit_test.rs`'s `hit_test_primitive` now
   delegates to `hit_test_object`, every shape-tool file's `PrimitiveSelection`
   references renamed.
-- `vecmanf-render-core`: `theme.rs` (screen-space display tolerance tokens,
+- `curvyo-render-core`: `theme.rs` (screen-space display tolerance tokens,
   min stroke width), `stroke.rs`/`pen_preview.rs`/`shape_preview.rs`
   (view-dependent display tolerance + 1px-minimum display stroke width),
   `decorations.rs` gains the Select-tool bounding-box decoration input and
   geometry, `shape_preview.rs`'s private `bounding_box` replaced by the
-  moved `vecmanf_document_core::shape_frame_bounds`.
-- `vecmanf-editor-wasm`: `session/mod.rs` (`Tool::Select`, `Viewport` field
+  moved `curvyo_document_core::shape_frame_bounds`.
+- `curvyo-editor-wasm`: `session/mod.rs` (`Tool::Select`, `Viewport` field
   replacing the bare `ViewTransform`, `screen_to_document`, wheel/pan/resize
   plumbing, `double_click`), new `session/select.rs` (Select-tool glue,
   `tool_for`/`tool_for_shape`), `session/shapes.rs` (`shape_matches_active_tool`
@@ -36,51 +36,51 @@
 
 ## Tasks
 
-- [x] 1. `vecmanf-geometry-core::segment_bounds` — exact cubic-segment bounds
+- [x] 1. `curvyo-geometry-core::segment_bounds` — exact cubic-segment bounds
       via `kurbo`'s `ParamCurveExtrema`. Test-first. (fulfils AC 14)
-- [x] 2. `vecmanf-document-core`: `shape_frame_bounds(&Shape)`, moved from
+- [x] 2. `curvyo-document-core`: `shape_frame_bounds(&Shape)`, moved from
       `render-core`'s private `bounding_box`; `translate_shape(Shape, Vec2)`;
       `ObjectSnapshot::translated(Vec2)`. Test-first. (fulfils AC 14, 18, 20)
-- [x] 3. `vecmanf-document-core::objects`: `Document::translate_objects` and
+- [x] 3. `curvyo-document-core::objects`: `Document::translate_objects` and
       `Document::delete_objects`, one commit each, resolve-before-write,
       reusing `translate_shape` for primitives. Test-first — including the
       one-commit-per-batch check the existing shape methods already pin.
       (fulfils AC 18, 19, 20, 21)
-- [x] 4. `vecmanf-ui-core::viewport`: `Zoom` (clamped `0.02..=80.0`),
+- [x] 4. `curvyo-ui-core::viewport`: `Zoom` (clamped `0.02..=80.0`),
       `PX_PER_MM_AT_100`, `Viewport` (pan by screen delta, zoom-about-a-point,
       drag-pan gesture, resize-keeps-center). Test-first, including the
       clamp-boundary cursor-fixed-point test called out explicitly by
       `adrs.md`. (fulfils AC 1-11)
-- [x] 5. `vecmanf-ui-core`: rename `PrimitiveSelection` → `ObjectSelection`
+- [x] 5. `curvyo-ui-core`: rename `PrimitiveSelection` → `ObjectSelection`
       (file + all call sites across `rectangle_tool.rs`, `ellipse_tool.rs`,
       `poly_star_tool.rs`, `shape_tool_common.rs`, tests). (fulfils AC 16, 17)
-- [x] 6. `vecmanf-ui-core::hit_test_object` — shared anchor-run distance
+- [x] 6. `curvyo-ui-core::hit_test_object` — shared anchor-run distance
       helper + public `hit_test_object(&[ObjectSnapshot], Point, Tolerance)`;
       `shape_hit_test::hit_test_primitive` delegates to it. Test-first,
       including the z-order tie-break. (fulfils AC 14)
-- [x] 7. `vecmanf-ui-core::object_bounds` — primitive via
+- [x] 7. `curvyo-ui-core::object_bounds` — primitive via
       `shape_frame_bounds`, path via the union of `segment_bounds` over every
       segment. Test-first. (fulfils AC 14)
-- [x] 8. `vecmanf-ui-core::select_tool` — `SelectTool` (click/shift-toggle via
+- [x] 8. `curvyo-ui-core::select_tool` — `SelectTool` (click/shift-toggle via
       `hit_test_object`, single-object drag-to-move tracked as a screen-space
       offset, Delete), plus a free `double_click` outcome function. Test-first.
       (fulfils AC 14, 15, 16, 17, 18, 19, 20, 21, 22, 23)
-- [x] 9. `vecmanf-render-core`: screen-space `DISPLAY_TOLERANCE_MM` (`0.25px /
+- [x] 9. `curvyo-render-core`: screen-space `DISPLAY_TOLERANCE_MM` (`0.25px /
       scale`) threaded through `stroke::path_stroke`/`segment_stroke` call
       sites; 1px-minimum on-screen stroke width for committed strokes (flag 2,
       default (a)); new `SelectionBoxInput`/decoration geometry for the
       Select tool's plain bounding box (selected/hovered, per object, no
       handles). Test-first. (fulfils AC 7, 14, 17 UX notes)
-- [x] 10. `vecmanf-editor-wasm::gpu`: subtract the view origin in `f64` before
+- [x] 10. `curvyo-editor-wasm::gpu`: subtract the view origin in `f64` before
       the `f32` vertex cast; `ScreenTransform`'s offset no longer re-subtracts
       origin. (fulfils AC 7's high-zoom-far-from-origin precision note)
-- [x] 11. `vecmanf-editor-wasm::session`: `Tool::Select` (new launch default
+- [x] 11. `curvyo-editor-wasm::session`: `Tool::Select` (new launch default
       for `new`/`open`), `Viewport` field, `screen_to_document`, `wheel`,
       `begin_pan`/`pan_to`/`end_pan`, `resize_viewport`, `zoom_percent`,
       `double_click` dispatch via `session/select.rs`'s `tool_for`. Resize
       keeps center. Test-first for every dispatch branch. (fulfils AC 1-13,
       22, 23, 24)
-- [x] 12. `vecmanf-editor-wasm::wasm_api`: screen-pixel `pointer_down`/
+- [x] 12. `curvyo-editor-wasm::wasm_api`: screen-pixel `pointer_down`/
       `pointer_hover`/`pointer_up`, `wheel`, `begin_pan`/`pan_to`/`end_pan`,
       `double_click`, `zoom_percent`; `resize` also updates the viewport's
       canvas size; `set_view` removed; `"select"` added to `tool_from_str`/

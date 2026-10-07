@@ -3,10 +3,10 @@
 //! editing/`, criteria 25 and 26): a press anywhere starts a new rectangle,
 //! even on an existing outline, and never selects, moves or handle-drags
 //! anything. Ephemeral drag state (ADR 0009 §2), one
-//! [`vecmanf_document_core::Document`] commit on release, a zero-movement
+//! [`curvyo_document_core::Document`] commit on release, a zero-movement
 //! press writes nothing and leaves the selection alone.
 
-use vecmanf_document_core::{Document, Length, Point, RectBounds, Shape};
+use curvyo_document_core::{Document, Length, Point, RectBounds, Shape};
 
 use crate::modifiers::Modifiers;
 use crate::shape_tool_common::{CreateDragBox, CreateOutcome, CreatePreview, create_drag_box};

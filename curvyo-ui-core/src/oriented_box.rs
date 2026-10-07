@@ -1,6 +1,6 @@
 //! The oriented selection box of a single selected object
 //! (`specs/0005-object-transform/adrs.md`, "the oriented box lives in
-//! `vecmanf-ui-core`"): a rectangle in the object's own local, unrotated
+//! `curvyo-ui-core`"): a rectangle in the object's own local, unrotated
 //! frame plus the angle that maps that frame into document space —
 //! [`crate::object_bounds::object_bounds`]'s own axis-aligned two-point
 //! box is this type's angle-0 case, kept separately for multi-selection
@@ -18,14 +18,14 @@
 //! frame stored at all — its anchors are baked, absolute document-space
 //! points — so this module derives one by rotating every anchor by
 //! `-rotation` about a fixed reference point (document origin) and
-//! taking [`vecmanf_geometry_core::segment_bounds`]'s tight union in
+//! taking [`curvyo_geometry_core::segment_bounds`]'s tight union in
 //! that frame, exactly mirroring [`crate::object_bounds::object_bounds`]'s
 //! own curve-tight (not control-hull) rule.
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Angle, ObjectSnapshot, PathSnapshot, Point, shape_center, shape_frame_bounds,
 };
-use vecmanf_geometry_core::segment_bounds;
+use curvyo_geometry_core::segment_bounds;
 
 use crate::hit_test::segment_pairs;
 
@@ -141,8 +141,8 @@ fn path_oriented_bounds(path: &PathSnapshot) -> OrientedBox {
     let into_local = Angle::from_radians(-path.rotation.as_radians());
     let derotated: Vec<(
         Point,
-        vecmanf_document_core::Vec2,
-        vecmanf_document_core::Vec2,
+        curvyo_document_core::Vec2,
+        curvyo_document_core::Vec2,
     )> = path
         .anchors
         .iter()
@@ -184,7 +184,7 @@ fn path_oriented_bounds(path: &PathSnapshot) -> OrientedBox {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vecmanf_document_core::{Document, Length, RectBounds};
+    use curvyo_document_core::{Document, Length, RectBounds};
 
     #[test]
     fn oriented_bounds_of_an_unrotated_rect_matches_its_frame() {
@@ -312,7 +312,7 @@ mod tests {
     /// rotated) frame, and reports the path's `rotation` register.
     #[test]
     fn oriented_bounds_of_a_rotated_path() {
-        use vecmanf_document_core::{AnchorId, NewAnchor};
+        use curvyo_document_core::{AnchorId, NewAnchor};
 
         let document = Document::new(1);
         let id = document.create_path(

@@ -1,9 +1,9 @@
-//! Black-box + property tests for `vecmanf-geometry-core`'s slice of
+//! Black-box + property tests for `curvyo-geometry-core`'s slice of
 //! `specs/0002-path-node-editing/specification.md` (acceptance criteria 12, 14,
 //! and the segment hit-testing that backs AC7/AC10 selection), written
 //! against this crate's public API only (`nearest_point_on_segment`,
-//! `subdivide_at_parameter`), independent of `vecmanf-ui-core`'s and
-//! `vecmanf-document-core`'s own inline unit tests of the same functions.
+//! `subdivide_at_parameter`), independent of `curvyo-ui-core`'s and
+//! `curvyo-document-core`'s own inline unit tests of the same functions.
 //!
 //! Also exercises known closed-form Bézier values (the de Casteljau
 //! subdivision identity, and a pure quadratic-shaped cubic's exact
@@ -19,9 +19,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use curvyo_document_core::{Length, Point, Tolerance, Vec2};
+use curvyo_geometry_core::{nearest_point_on_segment, subdivide_at_parameter};
 use proptest::prelude::*;
-use vecmanf_document_core::{Length, Point, Tolerance, Vec2};
-use vecmanf_geometry_core::{nearest_point_on_segment, subdivide_at_parameter};
 
 const TOLERANCE: Tolerance = Tolerance::from_mm(0.01);
 

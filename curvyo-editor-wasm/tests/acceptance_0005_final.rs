@@ -6,11 +6,11 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::many_single_char_names, clippy::similar_names)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Angle, Document, EllipseFrame, Length, NodeId, ObjectSnapshot, Point, PointCount, RectBounds,
     Shape, StarFrame, pack, unpack,
 };
-use vecmanf_editor_wasm::{Session, Tool};
+use curvyo_editor_wasm::{Session, Tool};
 
 const SCALE: f64 = 96.0 / 25.4;
 
@@ -121,7 +121,7 @@ fn one(kind: Kind, size_px: f64, a: f64) -> (Session, Point, f64) {
                 angle: Angle::from_radians(0.0),
             },
             PointCount::new(5).unwrap(),
-            vecmanf_document_core::InnerRatio::new(0.5).unwrap(),
+            curvyo_document_core::InnerRatio::new(0.5).unwrap(),
         ),
     };
     if a != 0.0 {

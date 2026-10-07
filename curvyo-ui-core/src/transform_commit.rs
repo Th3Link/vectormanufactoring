@@ -4,7 +4,7 @@
 //! confirmed entry, dispatched on the gesture's handle. Split out of
 //! [`crate::transform_drag`], which resolves the gestures.
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, CopySource, Document, Length, NodeId, ObjectSnapshot, Point, Shape, Vec2,
 };
 

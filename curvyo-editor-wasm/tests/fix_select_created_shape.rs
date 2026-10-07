@@ -4,14 +4,14 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use vecmanf_document_core::{Document, Point};
-use vecmanf_editor_wasm::{Session, Tool};
+use curvyo_document_core::{Document, Point};
+use curvyo_editor_wasm::{Session, Tool};
 
 const SHAPE_TOOLS: [Tool; 3] = [Tool::Rectangle, Tool::Ellipse, Tool::PolygonStar];
 
 fn document_of(session: &Session) -> Document {
     let bytes = session.pack("0.1.0").expect("pack");
-    vecmanf_document_core::unpack(99, &bytes).expect("unpack")
+    curvyo_document_core::unpack(99, &bytes).expect("unpack")
 }
 
 /// The same document and tool, but with nothing selected.

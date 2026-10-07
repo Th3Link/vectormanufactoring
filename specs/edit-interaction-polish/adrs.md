@@ -1,7 +1,7 @@
 # ADRs for "Edit interaction polish: star and polygon angle, typed skew and move, copy and one-axis move, Escape, Split selection, keyboard shortcuts"
 
 This feature adds **one `Document` operation** (`duplicate_objects`, Part C)
-and nothing else to `vecmanf-document-core`'s public surface except one
+and nothing else to `curvyo-document-core`'s public surface except one
 read-only method (`ObjectSnapshot::orientation`, Part A). Every value it
 writes goes to a register that already exists, with its existing meaning.
 **No stored field, no new key, no `format_version` change (it stays at
@@ -81,7 +81,7 @@ to the PO" (criteria 21, 41, 59, 64 and four smaller ones).
   definition, today, in every existing file. What is wrong today is that four
   readers of the angle read `rotation` alone.
   - New read-only `ObjectSnapshot::orientation() -> Angle` in
-    `vecmanf-document-core` next to `rotation()`: a polygon or star returns
+    `curvyo-document-core` next to `rotation()`: a polygon or star returns
     `(frame.angle + rotation).normalized()`, every other kind returns
     `rotation`. It sits in document-core because "the angle of the first
     vertex in document space" is the model's own meaning of two registers, the
@@ -164,7 +164,7 @@ to the PO" (criteria 21, 41, 59, 64 and four smaller ones).
 
 ### 2. Duplicating objects: `Document::duplicate_objects` (Part C, criteria 34, 35, 36)
 
-- **2026-10-06: one operation, one commit, in `vecmanf-document-core/src/
+- **2026-10-06: one operation, one commit, in `curvyo-document-core/src/
   objects.rs`.**
 
   ```rust
@@ -344,7 +344,7 @@ to the PO" (criteria 21, 41, 59, 64 and four smaller ones).
     `cancel_transform_entry` are unchanged; the outcome strings gain
     `invalid-skew-range` and `invalid-too-large`.
   - The move chip has its own view and calls, in a new
-    `vecmanf-editor-wasm/src/wasm_move_entry.rs` (a second `#[wasm_bindgen]
+    `curvyo-editor-wasm/src/wasm_move_entry.rs` (a second `#[wasm_bindgen]
     impl WasmSession` block, the pattern of `wasm_select_bar.rs`): `move_entry()
     -> Option<MoveEntryView>` (handle position, centre, the two prefill sets,
     `copy_preset`), `commit_move_entry(x, y, absolute, copy) -> String`.
@@ -386,7 +386,7 @@ to the PO" (criteria 21, 41, 59, 64 and four smaller ones).
   triggers stays in `ui-core` (decision 3). Placing it in `ui-core` was
   rejected: `Tool` lives in `editor-wasm`, and moving it for one `match` is
   churn.
-- **Module and shape.** `vecmanf-editor-wasm/src/session/keys.rs` (new, with
+- **Module and shape.** `curvyo-editor-wasm/src/session/keys.rs` (new, with
   `escape` and `delete_selected` moved into it so `session/mod.rs`, at 506
   non-test lines, shrinks):
 
@@ -653,7 +653,7 @@ to the PO" (criteria 21, 41, 59, 64 and four smaller ones).
     the node-type buttons act on one node. Re-Join of a just-split pair is
     Undo's job (criterion 52).
 - **Tests that are rewritten, not deleted, with an equal or stronger assertion:**
-  `vecmanf-ui-core/src/node_tool.rs`: `split_selected_on_an_interior_node_selects_both_new_objects_nodes`
+  `curvyo-ui-core/src/node_tool.rs`: `split_selected_on_an_interior_node_selects_both_new_objects_nodes`
   and `split_selected_on_a_closed_path_node_opens_it_selecting_both_ends` become
   "selects exactly the second node, the first is not selected, a press at the
   shared point hits the selected one, a drag moves one end only";
@@ -662,8 +662,8 @@ to the PO" (criteria 21, 41, 59, 64 and four smaller ones).
   `escape_mid_drag_cancels_it` and `escape_clears_a_present_selection_and_is_a_no_op_otherwise`
   become the two-step Node behaviour (the drag is cancelled and the selection
   is kept, then the selection clears, then nothing is left to clear).
-  `vecmanf-editor-wasm/src/session/mod.rs`: `split_selected_on_an_interior_node_through_the_session`.
-  `vecmanf-editor-wasm/tests/acceptance_0006*.rs`: the criterion-15 assertions.
+  `curvyo-editor-wasm/src/session/mod.rs`: `split_selected_on_an_interior_node_through_the_session`.
+  `curvyo-editor-wasm/tests/acceptance_0006*.rs`: the criterion-15 assertions.
   New: the full cascade as one test per tool (Select, Pen, Node, Rectangle,
   Ellipse, Polygon/Star), including "Escape with the button held, then Escape"
   and a held key repeat; the Select tool's Escape clears the selection and
@@ -797,7 +797,7 @@ to the PO" (criteria 21, 41, 59, 64 and four smaller ones).
   **Deletes or rewrites:** the frontend letter `switch` in `onKeyDown`;
   `NodeTool::escape`; the tests listed in decision 6; the tests that read the
   rotation of a polygon or star in the rotate readout, the angle entry or the
-  Ctrl rotate snap (`vecmanf-ui-core/tests/acceptance_object_transform_refinements.rs`
+  Ctrl rotate snap (`curvyo-ui-core/tests/acceptance_object_transform_refinements.rs`
   and `acceptance_otr_tester.rs`, the polygon/star rotate cases) are rewritten
   to `orientation()`; `0006` criterion 15's tests.
 
@@ -849,7 +849,7 @@ to the PO" (criteria 21, 41, 59, 64 and four smaller ones).
   press of the typed move; (9) benchmark, review, demo. **Deletes or
   rewrites:** `live_offset` (folded into `MoveDrag::resolve`); the Shift-press
   toggle-at-press assertions of slice 4 (`acceptance_0004.rs`,
-  `vecmanf-ui-core/tests/acceptance_0004.rs`: the toggle now happens on
+  `curvyo-ui-core/tests/acceptance_0004.rs`: the toggle now happens on
   release); `shape-creation-from-center`'s and `unified-object-editing`'s tests
   that press with Shift inside a selected box stay as they are (criterion 29
   keeps that case).
@@ -886,13 +886,13 @@ to the PO" (criteria 21, 41, 59, 64 and four smaller ones).
 
 ### 9. Crates, dependencies, purity, size limits
 
-- **No new crate, no new dependency.** `vecmanf-document-core` gains
+- **No new crate, no new dependency.** `curvyo-document-core` gains
   `duplicate_objects`, `CopySource` and `ObjectSnapshot::orientation`;
-  `vecmanf-ui-core` gains `skew_entry.rs`, `move_entry.rs`,
+  `curvyo-ui-core` gains `skew_entry.rs`, `move_entry.rs`,
   `select_tool/move_drag.rs`, `select_tool/press.rs`, one function in
   `object_bounds.rs`, `entry_anchor` in `select_tool/handles.rs`,
-  `rotate_delta_for` in `transform_math.rs`; `vecmanf-render-core` gains
-  `select_box.rs` and `MoveAxes`; `vecmanf-editor-wasm` gains `session/keys.rs`,
+  `rotate_delta_for` in `transform_math.rs`; `curvyo-render-core` gains
+  `select_box.rs` and `MoveAxes`; `curvyo-editor-wasm` gains `session/keys.rs`,
   `session/move_entry.rs`, `wasm_keys.rs`, `wasm_move_entry.rs`, `wasm_move.rs`.
   Each new module's doc comment is one sentence without "and" (`CLAUDE.md` §5).
   No new trait; the one new enum-with-two-more-variants is `OpenEntry`, an

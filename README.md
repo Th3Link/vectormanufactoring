@@ -1,4 +1,4 @@
-# vecmanf
+# Curvyo
 
 A desktop-first application for makers who draw, prepare and produce vector
 work on laser cutters, cutting plotters, embroidery machines and CNC mills —

@@ -1,13 +1,13 @@
-//! The vecmanf interaction layer (ADR 0001 §1, §2): pen- and node-tool
+//! The Curvyo interaction layer (ADR 0001 §1, §2): pen- and node-tool
 //! state machines, hit-testing, selection and command dispatch, as plain
 //! state and pure functions (`specs/0002-path-node-editing/adrs.md`).
 //!
 //! Pure and wasm-compatible (`CLAUDE.md` §6): no filesystem, network,
 //! clock, threads or UI. The frontend renders this crate's state and
 //! forwards input events into it; it holds no editing logic of its own.
-//! Depends on `vecmanf-document-core` (the commands these tools dispatch)
-//! and `vecmanf-geometry-core` (hit-testing a curved segment, subdividing
-//! one for an insert) — never on `vecmanf-render-core` or the wasm
+//! Depends on `curvyo-document-core` (the commands these tools dispatch)
+//! and `curvyo-geometry-core` (hit-testing a curved segment, subdividing
+//! one for an insert) — never on `curvyo-render-core` or the wasm
 //! facade (ADR 0011 §3).
 
 #![forbid(unsafe_code)]

@@ -1,6 +1,6 @@
 //! Reproduction for a live-browser observation while verifying PR #20's
 //! bug 4 ("pen tool drag-to-curve preview"): driving the compiled wasm
-//! module in a real Chrome tab against `vecmanf-ui-core`'s own
+//! module in a real Chrome tab against `curvyo-ui-core`'s own
 //! `PenTool`/`build_pen_preview` wiring showed a plain straight line from
 //! the last placed node all the way to the live cursor while a
 //! click-and-hold drag was in flight — never the curved B→C segment with
@@ -12,7 +12,7 @@
 //! kind it is about to commit as"`).
 //!
 //! This test drives the exact same sequence through `Session` (the same
-//! public surface `vecmanf_editor_wasm::wasm_api::WasmSession` is a thin
+//! public surface `curvyo_editor_wasm::wasm_api::WasmSession` is a thin
 //! shell over, and the same type the implementer's own
 //! `draw_list_shows_the_live_curve_preview_during_a_pen_drag` test in
 //! `session/mod.rs` exercises) to check, independent of any browser or
@@ -23,8 +23,8 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use vecmanf_document_core::Point;
-use vecmanf_editor_wasm::{Session, Tool};
+use curvyo_document_core::Point;
+use curvyo_editor_wasm::{Session, Tool};
 
 /// Same shape as the implementer's own
 /// `draw_list_shows_the_live_curve_preview_during_a_pen_drag` (B at the
@@ -89,7 +89,7 @@ fn pen_drag_preview_draws_curve_geometry_not_just_a_longer_straight_line() {
     );
 }
 
-/// Direct comparison against `vecmanf_render_core::build_pen_preview`
+/// Direct comparison against `curvyo_render_core::build_pen_preview`
 /// called explicitly two ways from the exact same inputs
 /// `Session::draw_list` itself would use at this moment: once with
 /// `pending: None` (criterion 1's plain rubber band to the cursor) and
@@ -105,14 +105,14 @@ fn pen_drag_preview_draws_curve_geometry_not_just_a_longer_straight_line() {
 /// way around.
 #[test]
 fn pen_drag_preview_matches_the_pending_anchor_some_branch_not_the_none_branch() {
-    use vecmanf_render_core::build_pen_preview;
-    use vecmanf_ui_core::{AnchorIdMinter, PenTool};
+    use curvyo_render_core::build_pen_preview;
+    use curvyo_ui_core::{AnchorIdMinter, PenTool};
 
-    let document = vecmanf_document_core::Document::new(1);
+    let document = curvyo_document_core::Document::new(1);
     let mut minter = AnchorIdMinter::new(1);
     let mut pen = PenTool::new();
-    let close_tolerance = vecmanf_document_core::Length::from_mm(2.0);
-    let drag_threshold = vecmanf_document_core::Length::from_mm(1.0);
+    let close_tolerance = curvyo_document_core::Length::from_mm(2.0);
+    let drag_threshold = curvyo_document_core::Length::from_mm(1.0);
 
     pen.pointer_down(Point::new(0.0, 0.0), close_tolerance);
     pen.pointer_up(&mut minter, &document, Point::new(0.0, 0.0), drag_threshold);

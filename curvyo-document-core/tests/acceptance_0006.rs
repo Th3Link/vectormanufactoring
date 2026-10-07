@@ -1,5 +1,5 @@
 //! Black-box acceptance tests for `specs/0006-path-merge-split-and-node-
-//! types/specification.md`, written against `vecmanf-document-core`'s
+//! types/specification.md`, written against `curvyo-document-core`'s
 //! public API only (`Document`, `AnchorKind`, `HandleSlot`, `Vec2`, ...),
 //! before reading the implementation diff.
 //!
@@ -15,7 +15,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, AnchorKind, Document, HandleSlot, NewAnchor, PathEditError, Point, Vec2,
 };
 

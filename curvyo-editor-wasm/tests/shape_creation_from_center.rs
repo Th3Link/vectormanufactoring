@@ -7,9 +7,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 
-use vecmanf_document_core::{CURRENT_FORMAT_VERSION, Point, Shape, unpack};
-use vecmanf_editor_wasm::{EscapeStep, Session, Tool};
-use vecmanf_ui_core::PolyStarMode;
+use curvyo_document_core::{CURRENT_FORMAT_VERSION, Point, Shape, unpack};
+use curvyo_editor_wasm::{EscapeStep, Session, Tool};
+use curvyo_ui_core::PolyStarMode;
 
 const TOL: f64 = 1e-9;
 

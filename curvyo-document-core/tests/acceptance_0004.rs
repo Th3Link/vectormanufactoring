@@ -1,17 +1,15 @@
 //! Black-box / white-box edge cases for `Document::translate_objects` and
 //! `Document::delete_objects` (`specs/0004-canvas-navigation-and-
 //! selection/specification.md`, acceptance criteria 18-21), independent
-//! of `vecmanf-document-core::objects`'s own `#[cfg(test)]` module —
+//! of `curvyo-document-core::objects`'s own `#[cfg(test)]` module —
 //! duplicate ids in one batch, an empty batch, and a delete-then-
 //! translate-the-same-id sequence.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use vecmanf_document_core::{
-    AnchorId, Document, Length, NewAnchor, Point, RectBounds, Shape, Vec2,
-};
+use curvyo_document_core::{AnchorId, Document, Length, NewAnchor, Point, RectBounds, Shape, Vec2};
 
-fn rect(document: &Document, x: f64) -> vecmanf_document_core::NodeId {
+fn rect(document: &Document, x: f64) -> curvyo_document_core::NodeId {
     document.create_rect(RectBounds {
         origin: Point::new(x, 0.0),
         width: Length::from_mm(10.0),
@@ -19,7 +17,7 @@ fn rect(document: &Document, x: f64) -> vecmanf_document_core::NodeId {
     })
 }
 
-fn rect_origin(document: &Document, id: vecmanf_document_core::NodeId) -> Point {
+fn rect_origin(document: &Document, id: curvyo_document_core::NodeId) -> Point {
     let Shape::Rect { bounds, .. } = document.primitive(id).expect("exists").shape else {
         panic!("expected rect");
     };

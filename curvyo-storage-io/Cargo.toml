@@ -1,5 +1,5 @@
 [package]
-name = "vecmanf-storage-io"
+name = "curvyo-storage-io"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true

@@ -43,7 +43,7 @@ pub enum ShapeEditError {
 impl Document {
     /// Creates a new rectangle primitive with zero corner radius
     /// (acceptance criterion 1), becoming the selected object is the
-    /// caller's job (ADR 0009 §2: selection is ephemeral `vecmanf-ui-
+    /// caller's job (ADR 0009 §2: selection is ephemeral `curvyo-ui-
     /// core` state).
     ///
     /// # Panics
@@ -291,7 +291,7 @@ impl Document {
     /// stroke width together as **one commit** (`specs/0005-object-transform/
     /// adrs.md`'s resize-writes table: "frame, `corner_radius` (rect),
     /// `stroke_width`" — a Select-tool resize-handle drag, acceptance
-    /// criteria 8, 9). `vecmanf-ui-core` computes all three values
+    /// criteria 8, 9). `curvyo-ui-core` computes all three values
     /// (including the local-frame mapping for a rotated object and the
     /// √(sx·sy) stroke/radius factor) before calling this — this method
     /// `stroke_width: None` leaves the stored stroke width untouched.
@@ -423,7 +423,7 @@ impl Document {
     /// Every id is resolved — and confirmed to currently name a
     /// primitive — before any of them is written, so one unknown or
     /// already-a-path id anywhere in `conversions` refuses the whole
-    /// call rather than converting a prefix of it. `vecmanf-ui-core` is
+    /// call rather than converting a prefix of it. `curvyo-ui-core` is
     /// expected to have already filtered a mixed selection down to its
     /// primitives before calling this (`adrs.md`).
     ///

@@ -2,13 +2,13 @@
 //! convert JS-friendly values to and from [`crate::session::Session`]
 //! calls, plus [`crate::gpu::Gpu`] ownership and per-frame submission.
 //! No editing logic lives here — every method is a direct pass-through
-//! to `Session`, `vecmanf-ui-core` or `vecmanf-render-core`.
+//! to `Session`, `curvyo-ui-core` or `curvyo-render-core`.
 
-use vecmanf_document_core::{AnchorKind, ViewTransform};
+use curvyo_document_core::{AnchorKind, ViewTransform};
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 
-use vecmanf_ui_core::NodeToolbarState as SessionNodeToolbarState;
+use curvyo_ui_core::NodeToolbarState as SessionNodeToolbarState;
 
 use crate::gpu::Gpu;
 use crate::session::{Session, Tool};
@@ -34,10 +34,10 @@ fn tool_from_str(name: &str) -> Result<Tool, JsValue> {
     }
 }
 
-fn poly_star_mode_from_str(name: &str) -> Result<vecmanf_ui_core::PolyStarMode, JsValue> {
+fn poly_star_mode_from_str(name: &str) -> Result<curvyo_ui_core::PolyStarMode, JsValue> {
     match name {
-        "polygon" => Ok(vecmanf_ui_core::PolyStarMode::Polygon),
-        "star" => Ok(vecmanf_ui_core::PolyStarMode::Star),
+        "polygon" => Ok(curvyo_ui_core::PolyStarMode::Polygon),
+        "star" => Ok(curvyo_ui_core::PolyStarMode::Star),
         other => Err(JsValue::from_str(&format!(
             "unknown polygon/star mode: {other}"
         ))),
@@ -58,7 +58,7 @@ fn kind_from_str(name: &str) -> Result<AnchorKind, JsValue> {
     }
 }
 
-/// `wasm-bindgen`'s JS-facing mirror of [`vecmanf_ui_core::NodeToolbarState`]
+/// `wasm-bindgen`'s JS-facing mirror of [`curvyo_ui_core::NodeToolbarState`]
 /// — a plain `bool`-fields struct needs no getter methods, unlike a type
 /// `wasm-bindgen` can't expose by value. See that type's own doc comment
 /// for why independent `bool`s, not an enum.
@@ -262,15 +262,15 @@ impl WasmSession {
         }
     }
 
-    /// Reopens a previously saved `.vmf` container's bytes.
+    /// Reopens a previously saved `.curvyo` container's bytes.
     ///
     /// The host does byte I/O only (`specs/0002-path-node-editing/adrs.md`'s
     /// PR review: "Open reads bytes and calls `WasmSession::open`") — it
-    /// never sees a [`vecmanf_document_core::OpenError`] itself, so this
+    /// never sees a [`curvyo_document_core::OpenError`] itself, so this
     /// maps it to the exact user-facing sentence
     /// `specs/0001-project-file-foundation/specification.md`'s "Error
     /// handling — invalid/corrupt file" names, the same mapping
-    /// `vecmanf-app`'s own (now-removed) native `open_error.rs` used to
+    /// `curvyo-app`'s own (now-removed) native `open_error.rs` used to
     /// do for a native-side `Document`.
     ///
     /// # Errors
@@ -282,7 +282,7 @@ impl WasmSession {
         Ok(Self { session, gpu: None })
     }
 
-    /// Packs the current document into `.vmf` container bytes.
+    /// Packs the current document into `.curvyo` container bytes.
     ///
     /// # Errors
     /// A `JsValue` (a plain string) if the document could not be
@@ -562,8 +562,8 @@ impl WasmSession {
     #[must_use]
     pub fn poly_star_mode(&self) -> String {
         match self.session.poly_star_mode() {
-            vecmanf_ui_core::PolyStarMode::Polygon => "polygon".to_string(),
-            vecmanf_ui_core::PolyStarMode::Star => "star".to_string(),
+            curvyo_ui_core::PolyStarMode::Polygon => "polygon".to_string(),
+            curvyo_ui_core::PolyStarMode::Star => "star".to_string(),
         }
     }
 
@@ -603,7 +603,7 @@ impl WasmSession {
     /// # Errors
     /// A `JsValue` if `count` is outside `3..=1024`.
     pub fn set_poly_star_point_count(&mut self, count: u32) -> Result<(), JsValue> {
-        let count = vecmanf_document_core::PointCount::new(count)
+        let count = curvyo_document_core::PointCount::new(count)
             .map_err(|err| JsValue::from_str(&format!("{err}")))?;
         self.session.set_poly_star_point_count(count);
         Ok(())
@@ -622,7 +622,7 @@ impl WasmSession {
     /// # Errors
     /// A `JsValue` if `ratio` is outside the open interval `(0, 1)`.
     pub fn set_poly_star_ratio(&mut self, ratio: f64) -> Result<(), JsValue> {
-        let ratio = vecmanf_document_core::InnerRatio::new(ratio)
+        let ratio = curvyo_document_core::InnerRatio::new(ratio)
             .map_err(|err| JsValue::from_str(&format!("{err}")))?;
         self.session.set_poly_star_ratio(ratio);
         Ok(())

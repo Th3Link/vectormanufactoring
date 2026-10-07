@@ -3,18 +3,18 @@
 //! star is its real orientation (`StarFrame.angle + rotation`), the create
 //! readout shows it, Ctrl snaps it, a typed angle and a Ctrl rotate land on
 //! the shown angle, and old files open unchanged. Driven through `Session`'s
-//! public API only; the arithmetic itself is tested in `vecmanf-ui-core` and
-//! `vecmanf-document-core`.
+//! public API only; the arithmetic itself is tested in `curvyo-ui-core` and
+//! `curvyo-document-core`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::too_many_lines)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Angle, CURRENT_FORMAT_VERSION, Document, InnerRatio, Length, ObjectSnapshot, Point, PointCount,
     PrimitiveSnapshot, Shape, StarFrame, outline_of_rotated, pack, unpack,
 };
-use vecmanf_editor_wasm::{Session, Tool};
-use vecmanf_ui_core::EntryOutcome;
+use curvyo_editor_wasm::{Session, Tool};
+use curvyo_ui_core::EntryOutcome;
 
 /// Screen pixels per millimetre of a fresh session (96 dpi at 100 %).
 const SCALE: f64 = 96.0 / 25.4;
@@ -151,7 +151,7 @@ fn the_create_readout_shows_the_angle() {
     let text = create_drag(&mut free, pt(100.0, 50.0), pt(110.0, 48.0), false).unwrap();
     assert_eq!(text, "r 10.2 mm, -11.3°");
     let mut star = polygon_session(5);
-    star.set_poly_star_mode(vecmanf_ui_core::PolyStarMode::Star);
+    star.set_poly_star_mode(curvyo_ui_core::PolyStarMode::Star);
     star.set_poly_star_ratio(InnerRatio::new(0.5).unwrap());
     let text = create_drag(&mut star, pt(100.0, 50.0), pt(110.0, 48.0), true).unwrap();
     assert_eq!(text, "r 10.2 mm, ratio 0.50, -15°");

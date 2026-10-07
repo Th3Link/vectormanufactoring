@@ -3,7 +3,7 @@
 //! crate's public API only (`pack`, `unpack`, `Document`, `OpenError`,
 //! `DocumentSize`, `Length`) and before reading the implementation.
 //!
-//! This crate (`vecmanf-document-core`) is pure byte-level code with no
+//! This crate (`curvyo-document-core`) is pure byte-level code with no
 //! filesystem or UI, so it can only exercise the criteria that reduce to
 //! "given these bytes, what comes out": the container shape of AC3, the
 //! restart-survives-a-round-trip claim of AC5/AC6, and the three refusal
@@ -16,7 +16,7 @@
 
 use std::io::{Cursor, Read};
 
-use vecmanf_document_core::{Document, OpenError, pack, unpack};
+use curvyo_document_core::{Document, OpenError, pack, unpack};
 use zip::ZipArchive;
 
 /// AC2 (the part reachable without a UI): a new, never-saved document
@@ -67,11 +67,11 @@ fn ac3_pack_produces_a_valid_zip_with_the_required_members() {
     // sync with that documented, deliberate bump rather than weakening it.
     assert_eq!(
         parsed["format_version"],
-        vecmanf_document_core::CURRENT_FORMAT_VERSION
+        curvyo_document_core::CURRENT_FORMAT_VERSION
     );
 }
 
-/// AC5/AC6: a `.vmf` previously saved by this slice reopens to an
+/// AC5/AC6: a `.curvyo` previously saved by this slice reopens to an
 /// equivalent empty document — the full round trip the container exists
 /// for, exercised purely through `pack`/`unpack` (the process-restart half
 /// of AC6 is necessarily an app-level claim; this is the byte-level half
@@ -82,25 +82,25 @@ fn ac5_ac6_pack_then_unpack_round_trips_the_document_size() {
     let bytes = pack(&original, "0.1.0").expect("pack");
 
     let reopened =
-        unpack(2, &bytes).expect("a .vmf written by this build must reopen without error");
+        unpack(2, &bytes).expect("a .curvyo written by this build must reopen without error");
 
     assert_eq!(original.size(), reopened.size());
 }
 
 /// AC7, case 1: a file that is not a zip at all (e.g. a renamed empty text
-/// file) is refused as "not a vecmanf project", not silently ignored and
+/// file) is refused as "not a Curvyo project", not silently ignored and
 /// not a panic.
 #[test]
-fn ac7_a_renamed_text_file_is_refused_as_not_a_vmf() {
+fn ac7_a_renamed_text_file_is_refused_as_not_a_project() {
     let bytes = b"Hello, this is not a project file at all.".to_vec();
     let result = unpack(2, &bytes);
-    assert!(matches!(result, Err(OpenError::NotAVmf)));
+    assert!(matches!(result, Err(OpenError::NotAProject)));
 }
 
 /// AC7, case 2: a truncated zip is refused as damaged, not a panic and not
 /// a silent partial open.
 #[test]
-fn ac7_a_truncated_vmf_is_refused_as_damaged() {
+fn ac7_a_truncated_project_is_refused_as_damaged() {
     let document = Document::new(1);
     let whole = pack(&document, "0.1.0").expect("pack");
     let truncated = whole[..whole.len() / 3].to_vec();
@@ -118,12 +118,12 @@ fn ac7_a_newer_format_version_is_refused_as_too_new_not_damaged() {
     // Built from this crate's own golden fixture generator convention: we
     // cannot reach into the crate's private `Manifest` type from a
     // black-box test, so we assert on the only externally observable
-    // contract instead — a real future `.vmf` (round-tripped through a
+    // contract instead — a real future `.curvyo` (round-tripped through a
     // compatible writer) is refused with `FormatTooNew`, never `Damaged`
-    // or `NotAVmf`. The fixture used here is the implementation's own
+    // or `NotAProject`. The fixture used here is the implementation's own
     // committed golden file for this exact case.
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/future_format_version.vmf");
+        .join("tests/fixtures/future_format_version.curvyo");
     let bytes = std::fs::read(&path).expect("golden fixture must exist");
 
     let result = unpack(2, &bytes);
@@ -140,24 +140,24 @@ fn ac7_a_newer_format_version_is_refused_as_too_new_not_damaged() {
 /// if two cases were accidentally collapsed into the same message.
 #[test]
 fn ac7_the_three_refusal_cases_are_distinct_variants() {
-    let not_a_vmf = unpack(2, b"plain text").err().expect("must be an error");
+    let not_a_project = unpack(2, b"plain text").err().expect("must be an error");
     let document = Document::new(1);
     let whole = pack(&document, "0.1.0").unwrap();
     let damaged = unpack(2, &whole[..whole.len() / 3])
         .err()
         .expect("must be an error");
     let fixture_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/future_format_version.vmf");
+        .join("tests/fixtures/future_format_version.curvyo");
     let future_bytes = std::fs::read(&fixture_path).unwrap();
     let too_new = unpack(2, &future_bytes).err().expect("must be an error");
 
-    assert!(matches!(not_a_vmf, OpenError::NotAVmf));
+    assert!(matches!(not_a_project, OpenError::NotAProject));
     assert!(matches!(damaged, OpenError::Damaged));
     assert!(matches!(too_new, OpenError::FormatTooNew { .. }));
     // pairwise inequality of the discriminant, defence against a future
     // refactor that merges variants without updating the host mapping.
     assert_ne!(
-        std::mem::discriminant(&not_a_vmf),
+        std::mem::discriminant(&not_a_project),
         std::mem::discriminant(&damaged)
     );
 }

@@ -9,8 +9,8 @@
 //! `Session`'s privacy boundary and its methods join the same type's
 //! `impl Session`.
 
-use vecmanf_document_core::{InnerRatio, Point, PointCount, Shape};
-use vecmanf_ui_core::{CreateOutcome, CreatePreview, Modifiers, PolyStarMode, format_degrees};
+use curvyo_document_core::{InnerRatio, Point, PointCount, Shape};
+use curvyo_ui_core::{CreateOutcome, CreatePreview, Modifiers, PolyStarMode, format_degrees};
 
 use super::{Session, Tool};
 
@@ -170,7 +170,7 @@ impl Session {
 
 #[cfg(test)]
 mod tests {
-    use vecmanf_document_core::{Point, Shape};
+    use curvyo_document_core::{Point, Shape};
 
     use super::super::{Session, Tool};
 
@@ -310,8 +310,8 @@ mod tests {
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(10.0, 0.0), false, false);
         let before = first_shape(&session);
-        session.set_poly_star_point_count(vecmanf_document_core::PointCount::new(11).unwrap());
-        session.set_poly_star_ratio(vecmanf_document_core::InnerRatio::new(0.2).unwrap());
+        session.set_poly_star_point_count(curvyo_document_core::PointCount::new(11).unwrap());
+        session.set_poly_star_ratio(curvyo_document_core::InnerRatio::new(0.2).unwrap());
         assert_eq!(first_shape(&session), before);
         assert_eq!(session.poly_star_point_count().get(), 11);
     }

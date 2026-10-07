@@ -92,9 +92,9 @@ order in every tool.
 
 Reference state: `main` after PR #35, with PR #38
 (`specs/unified-object-editing/`) assumed merged; items that arrive only with
-#38 are marked (#38). Facts are from `vecmanf-ui-core/src/{select_tool,
+#38 are marked (#38). Facts are from `curvyo-ui-core/src/{select_tool,
 select_tool/entry,poly_star_tool,node_tool,pen_tool,transform_math,
-transform_entry,angle_snap}.rs` and `vecmanf-editor-wasm/src/session/` and
+transform_entry,angle_snap}.rs` and `curvyo-editor-wasm/src/session/` and
 `frontend/src/hooks/useEditorSession.ts`.
 
 | Item | What the code does today |
@@ -142,8 +142,8 @@ The lead mentions every customer-visible change at the demo.
    both), and its UX note "Visual feedback for Split: yes, both new nodes render
    selected" with it. Criterion 15's workaround (click empty canvas first) is
    no longer needed. The old spec is not edited; its tests for "both nodes
-   selected" are rewritten (`vecmanf-ui-core/src/node_tool.rs` tests
-   `split_selected_on_*`, `vecmanf-editor-wasm/tests/acceptance_0006*.rs`).
+   selected" are rewritten (`curvyo-ui-core/src/node_tool.rs` tests
+   `split_selected_on_*`, `curvyo-editor-wasm/tests/acceptance_0006*.rs`).
 2. **`specs/object-transform-refinements/` criterion 49 and the "typed skew
    entry" out-of-scope line are superseded** by criteria 9 to 14. Criterion 54's
    hint for a skew handle gains the line "Double-click or K: type an angle"

@@ -79,8 +79,8 @@ Decided by the `product-owner` on the architect's flags (2026-10-06). Items
 6. **Slice 5 tests that must be rewritten (not deleted).** The old rotate
    handle above the top edge no longer exists; that spot now holds the
    Shift-only top side rotate handle. Tests that press it
-   (`vecmanf-ui-core/tests/acceptance_0005.rs`,
-   `vecmanf-editor-wasm/tests/acceptance_0005*.rs`, `acceptance_0004.rs`,
+   (`curvyo-ui-core/tests/acceptance_0005.rs`,
+   `curvyo-editor-wasm/tests/acceptance_0005*.rs`, `acceptance_0004.rs`,
    `select_tool.rs` unit tests) hold Shift or use a corner rotate handle
    instead. Tests that expect a drag under 3 px to write something are
    rewritten to move at least 3 px (item 2). Tests that expect a

@@ -5,7 +5,7 @@
 //! [`apply_param`] a drag and the bar use, so the three cannot disagree, and
 //! every close path of the refinements entry writes nothing here too.
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Document, Length, ObjectSnapshot, PrimitiveSnapshot, Shape, effective_corner_radius,
 };
 
@@ -162,7 +162,7 @@ mod tests {
     use super::*;
     use crate::oriented_box::oriented_bounds;
     use crate::param_handles::Corner;
-    use vecmanf_document_core::{Angle, InnerRatio, Point, PointCount, RectBounds, StarFrame};
+    use curvyo_document_core::{Angle, InnerRatio, Point, PointCount, RectBounds, StarFrame};
 
     fn rect_entry(radius: f64) -> (Document, ParamEntry) {
         let document = Document::new(1);

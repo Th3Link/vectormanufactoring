@@ -1,4 +1,4 @@
-//! Independent tests of `vecmanf-ui-core`'s object-transform arithmetic
+//! Independent tests of `curvyo-ui-core`'s object-transform arithmetic
 //! (`specs/0005-object-transform/specification.md`, criteria 1, 4-9, 11-13,
 //! 15-18): oriented boxes, handle layout and hit-testing, resize and rotate
 //! drag arithmetic. Expected values come from the specification's own
@@ -10,25 +10,25 @@
 
 use std::f64::consts::{FRAC_PI_2, PI};
 
-use proptest::prelude::*;
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Angle, Document, EllipseFrame, Length, NewAnchor, ObjectSnapshot, Point, RectBounds,
     Vec2,
 };
-use vecmanf_ui_core::{
+use curvyo_ui_core::{
     ALL_EIGHT, CORNERS_FOUR, EditHandle, HandleSpec, ResizeDirection, TransformHandleTolerances,
     hit_transform_handle, oriented_bounds, polygon_star_resize_factor,
     resize_anchor_local_position, resize_cursor_angle_degrees, resize_local_box,
     rotate_delta_angle, rotate_pivot, scaled_and_floored, stroke_or_radius_factor,
     transform_handles,
 };
+use proptest::prelude::*;
 
 /// Handle tolerances where one screen pixel is one millimetre, with the
 /// rotate offset given and no centre handle (the slice 5 tests predate it).
 fn tolerances(rotate_offset_mm: f64, hit_mm: f64) -> TransformHandleTolerances {
     TransformHandleTolerances {
-        resize: vecmanf_document_core::Tolerance::from_mm(hit_mm),
-        rotate: vecmanf_document_core::Tolerance::from_mm(hit_mm),
+        resize: curvyo_document_core::Tolerance::from_mm(hit_mm),
+        rotate: curvyo_document_core::Tolerance::from_mm(hit_mm),
         rotate_offset_mm,
         center_min_side_mm: f64::INFINITY,
         ..TransformHandleTolerances::at_scale(1.0)
@@ -253,8 +253,8 @@ fn oriented_box_to_document_and_to_local_are_inverse() {
 // Handle layout (AC 1, 11, 18)
 // ---------------------------------------------------------------------
 
-fn box_of(x0: f64, y0: f64, x1: f64, y1: f64, angle: f64) -> vecmanf_ui_core::OrientedBox {
-    vecmanf_ui_core::OrientedBox {
+fn box_of(x0: f64, y0: f64, x1: f64, y1: f64, angle: f64) -> curvyo_ui_core::OrientedBox {
+    curvyo_ui_core::OrientedBox {
         min: pt(x0, y0),
         max: pt(x1, y1),
         angle: Angle::from_radians(angle),

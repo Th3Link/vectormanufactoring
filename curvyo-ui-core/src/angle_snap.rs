@@ -3,7 +3,7 @@
 //! criteria 33-36, 47): the stops are the union of multiples of 15° and of
 //! 22.5°, repeated through every quadrant, nearest stop wins.
 
-use vecmanf_document_core::Angle;
+use curvyo_document_core::Angle;
 
 /// The stops inside one 45° period; the whole table is these plus `45° · k`.
 /// (Multiples of 15° give 0, 15, 30, 45; multiples of 22.5° give 0, 22.5, 45.)

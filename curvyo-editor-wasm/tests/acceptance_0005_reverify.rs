@@ -8,10 +8,10 @@
 #![allow(clippy::many_single_char_names, clippy::similar_names)]
 #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Angle, Document, EllipseFrame, Length, ObjectSnapshot, Point, RectBounds, Shape, pack, unpack,
 };
-use vecmanf_editor_wasm::{Session, Tool};
+use curvyo_editor_wasm::{Session, Tool};
 
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)
@@ -69,7 +69,7 @@ fn document_of(session: &Session) -> Document {
     unpack(99, &bytes).expect("a gesture must never make a file unopenable")
 }
 
-fn prim(session: &Session) -> vecmanf_document_core::PrimitiveSnapshot {
+fn prim(session: &Session) -> curvyo_document_core::PrimitiveSnapshot {
     let doc = document_of(session);
     doc.primitive(doc.object_ids()[0]).unwrap()
 }

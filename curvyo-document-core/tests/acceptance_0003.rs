@@ -1,27 +1,27 @@
 //! Black-box acceptance tests for `specs/0003-primitive-shapes/
 //! specification.md`'s 22 acceptance criteria, written against
-//! `vecmanf-document-core`'s public API only (`Document`,
+//! `curvyo-document-core`'s public API only (`Document`,
 //! `RectBounds`/`EllipseFrame`/`StarFrame`, `PointCount`/`InnerRatio`,
 //! the `primitive_outline` functions, `pack`/`unpack`), before reading
 //! the implementation diff.
 //!
 //! This crate is pure byte-level/geometry code with no UI, so the parts
 //! of criteria 1, 2, 7, 8, 11, 12 that describe "the maker drags the
-//! mouse" are exercised at the `vecmanf-ui-core` level instead
-//! (`vecmanf-ui-core/tests/acceptance_0003.rs`); here they are tested as
+//! mouse" are exercised at the `curvyo-ui-core` level instead
+//! (`curvyo-ui-core/tests/acceptance_0003.rs`); here they are tested as
 //! "given these two points, what does the stored shape look like" plus
 //! this crate's own newtype/codec/outline guarantees.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use loro::LoroDoc;
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorKind, Document, EllipseFrame, InnerRatio, Length, ObjectSnapshot, OpenError, PointCount,
     RectBounds, Shape, ShapeEditError, ShapeParamError, StarFrame, outline_of, pack, unpack,
 };
+use loro::LoroDoc;
 
-fn pt(x: f64, y: f64) -> vecmanf_document_core::Point {
-    vecmanf_document_core::Point::new(x, y)
+fn pt(x: f64, y: f64) -> curvyo_document_core::Point {
+    curvyo_document_core::Point::new(x, y)
 }
 
 // ---------------------------------------------------------------------
@@ -52,7 +52,7 @@ fn ac1_rect_bounds_from_any_two_opposite_corners_normalizes_and_is_zero_radius()
 fn ac1_degenerate_drag_is_not_the_document_s_job_to_create_but_bounds_math_still_well_defined() {
     // AC1's "A = B creates nothing" is a tool-level (ui-core) rule; at
     // this layer we only confirm `RectBounds::is_degenerate` exists and
-    // agrees, since `vecmanf-ui-core`'s tool relies on it.
+    // agrees, since `curvyo-ui-core`'s tool relies on it.
     assert!(RectBounds::is_degenerate(pt(5.0, 5.0), pt(5.0, 5.0)));
 }
 
@@ -75,7 +75,7 @@ fn ac3_resizing_a_rect_keeps_corner_radius_untouched() {
 #[test]
 fn ac4_and_ac18_rounding_produces_8_corner_tangent_points() {
     let bounds = RectBounds::from_corners(pt(0.0, 0.0), pt(40.0, 20.0));
-    let outline = vecmanf_document_core::rect_outline(bounds, Length::from_mm(4.0));
+    let outline = curvyo_document_core::rect_outline(bounds, Length::from_mm(4.0));
     assert_eq!(outline.len(), 8);
     assert!(
         outline.iter().all(|a| a.kind == AnchorKind::Corner),
@@ -88,15 +88,15 @@ fn ac5_radius_is_clamped_to_half_the_shorter_side() {
     // Shorter side is height = 20mm, so half is 10mm; asking for 999mm
     // must clamp to exactly 10mm, not overlap/self-intersect.
     let bounds = RectBounds::from_corners(pt(0.0, 0.0), pt(100.0, 20.0));
-    let effective = vecmanf_document_core::effective_corner_radius(bounds, Length::from_mm(999.0));
+    let effective = curvyo_document_core::effective_corner_radius(bounds, Length::from_mm(999.0));
     assert!((effective.as_mm() - 10.0).abs() < 1e-9);
 }
 
 #[test]
 fn ac5_clamp_is_exact_at_the_boundary_not_past_it() {
     let bounds = RectBounds::from_corners(pt(0.0, 0.0), pt(10.0, 10.0)); // square, half-side = 5
-    let exact = vecmanf_document_core::effective_corner_radius(bounds, Length::from_mm(5.0));
-    let over = vecmanf_document_core::effective_corner_radius(bounds, Length::from_mm(5.0001));
+    let exact = curvyo_document_core::effective_corner_radius(bounds, Length::from_mm(5.0));
+    let over = curvyo_document_core::effective_corner_radius(bounds, Length::from_mm(5.0001));
     assert!((exact.as_mm() - 5.0).abs() < 1e-9);
     assert!((over.as_mm() - 5.0).abs() < 1e-9);
 }
@@ -149,7 +149,7 @@ fn radius_is_stored_raw_shrink_then_regrow_restores_original_radius() {
         "raw value must not be clamped on write"
     );
     let effective_while_shrunk =
-        vecmanf_document_core::effective_corner_radius(shrunk_bounds, raw_radius);
+        curvyo_document_core::effective_corner_radius(shrunk_bounds, raw_radius);
     assert!((effective_while_shrunk.as_mm() - 10.0).abs() < 1e-9);
 
     // Grow back to the original size: the original 40mm radius must
@@ -166,7 +166,7 @@ fn radius_is_stored_raw_shrink_then_regrow_restores_original_radius() {
         panic!("expected rect");
     };
     let effective_after_regrow =
-        vecmanf_document_core::effective_corner_radius(regrown_bounds, regrown_radius);
+        curvyo_document_core::effective_corner_radius(regrown_bounds, regrown_radius);
     assert!((regrown_radius.as_mm() - 40.0).abs() < 1e-9);
     assert!((effective_after_regrow.as_mm() - 40.0).abs() < 1e-9);
 }
@@ -223,7 +223,7 @@ fn ac19_ellipse_outline_is_4_smooth_nodes_within_0_1_percent_of_a_true_circle() 
         rx: Length::from_mm(50.0),
         ry: Length::from_mm(50.0),
     };
-    let outline = vecmanf_document_core::ellipse_outline(frame);
+    let outline = curvyo_document_core::ellipse_outline(frame);
     assert_eq!(outline.len(), 4);
     assert!(outline.iter().all(|a| a.kind == AnchorKind::Symmetric));
 
@@ -260,7 +260,7 @@ fn ac19_ellipse_outline_handles_are_mirrored_and_equal_length_smooth_handles() {
         rx: Length::from_mm(12.0),
         ry: Length::from_mm(8.0),
     };
-    for anchor in vecmanf_document_core::ellipse_outline(frame) {
+    for anchor in curvyo_document_core::ellipse_outline(frame) {
         assert_eq!(anchor.kind, AnchorKind::Symmetric);
         assert!(
             (anchor.handle_in.x + anchor.handle_out.x).abs() < 1e-9
@@ -296,11 +296,11 @@ fn ac10_point_count_accepts_only_3_to_1024_inclusive() {
     );
 }
 
-/// Builds a `.vmf`'s bytes carrying one polygon whose on-disk
+/// Builds a `.curvyo`'s bytes carrying one polygon whose on-disk
 /// `point_count` is `raw_point_count` — a value that cannot be reached
 /// through this crate's own public API (`PointCount::new` would refuse
 /// it), simulating a hand-crafted or foreign-writer damaged file.
-fn craft_vmf_with_raw_point_count(raw_point_count: i64) -> Vec<u8> {
+fn craft_project_with_raw_point_count(raw_point_count: i64) -> Vec<u8> {
     let document = Document::new(1);
     let frame = StarFrame::from_center_and_vertex(pt(50.0, 50.0), pt(60.0, 50.0));
     let id = document.create_polygon(frame, PointCount::new(6).unwrap());
@@ -325,10 +325,10 @@ fn craft_vmf_with_raw_point_count(raw_point_count: i64) -> Vec<u8> {
     // reads `document.json` to decide whether to refuse, a stale one is
     // fine here.
     let _ = id;
-    build_vmf_zip(&bad_loro_bytes)
+    build_project_zip(&bad_loro_bytes)
 }
 
-fn build_vmf_zip(loro_bytes: &[u8]) -> Vec<u8> {
+fn build_project_zip(loro_bytes: &[u8]) -> Vec<u8> {
     use std::io::{Cursor, Write};
     use zip::write::SimpleFileOptions;
     use zip::{CompressionMethod, ZipWriter};
@@ -352,8 +352,8 @@ fn build_vmf_zip(loro_bytes: &[u8]) -> Vec<u8> {
 }
 
 #[test]
-fn ac10_a_vmf_with_point_count_above_1024_is_refused_as_damaged_not_a_crash() {
-    let bytes = craft_vmf_with_raw_point_count(2000);
+fn ac10_a_project_with_point_count_above_1024_is_refused_as_damaged_not_a_crash() {
+    let bytes = craft_project_with_raw_point_count(2000);
     let result = unpack(2, &bytes);
     assert!(
         matches!(result, Err(OpenError::Damaged)),
@@ -362,25 +362,25 @@ fn ac10_a_vmf_with_point_count_above_1024_is_refused_as_damaged_not_a_crash() {
 }
 
 #[test]
-fn ac10_a_vmf_with_point_count_below_3_is_refused_as_damaged() {
-    let bytes = craft_vmf_with_raw_point_count(2);
+fn ac10_a_project_with_point_count_below_3_is_refused_as_damaged() {
+    let bytes = craft_project_with_raw_point_count(2);
     let result = unpack(2, &bytes);
     assert!(matches!(result, Err(OpenError::Damaged)));
 }
 
 #[test]
-fn ac10_a_vmf_with_a_billion_point_count_is_refused_not_an_oom_abort() {
+fn ac10_a_project_with_a_billion_point_count_is_refused_not_an_oom_abort() {
     // The crash-safety case `adrs.md`'s "Flagged to the lead" names
     // explicitly: a 10^9 point count must never reach allocation.
-    let bytes = craft_vmf_with_raw_point_count(1_000_000_000);
+    let bytes = craft_project_with_raw_point_count(1_000_000_000);
     let result = unpack(2, &bytes);
     assert!(matches!(result, Err(OpenError::Damaged)));
 }
 
 #[test]
-fn ac10_a_vmf_with_point_count_exactly_at_the_valid_boundaries_still_opens() {
-    let bytes_min = craft_vmf_with_raw_point_count(3);
-    let bytes_max = craft_vmf_with_raw_point_count(1024);
+fn ac10_a_project_with_point_count_exactly_at_the_valid_boundaries_still_opens() {
+    let bytes_min = craft_project_with_raw_point_count(3);
+    let bytes_max = craft_project_with_raw_point_count(1024);
     assert!(unpack(2, &bytes_min).is_ok());
     assert!(unpack(2, &bytes_max).is_ok());
 }
@@ -391,9 +391,9 @@ fn ac10_a_vmf_with_point_count_exactly_at_the_valid_boundaries_still_opens() {
 /// truncated to `5` or coerced in any other way. Bypasses the normal
 /// write API by overwriting the meta map's `point_count` key directly
 /// with a Loro f64 value, the same technique
-/// `craft_vmf_with_raw_point_count` uses for an out-of-range integer.
+/// `craft_project_with_raw_point_count` uses for an out-of-range integer.
 #[test]
-fn ac10_a_vmf_with_a_decimal_point_count_is_refused_as_damaged_not_truncated() {
+fn ac10_a_project_with_a_decimal_point_count_is_refused_as_damaged_not_truncated() {
     let document = Document::new(1);
     let frame = StarFrame::from_center_and_vertex(pt(50.0, 50.0), pt(60.0, 50.0));
     let _id = document.create_polygon(frame, PointCount::new(6).unwrap());
@@ -411,7 +411,7 @@ fn ac10_a_vmf_with_a_decimal_point_count_is_refused_as_damaged_not_truncated() {
     meta.insert("point_count", 5.7_f64).unwrap();
     loro.commit();
     let bad_loro_bytes = loro.export(loro::ExportMode::Snapshot).unwrap();
-    let bytes = build_vmf_zip(&bad_loro_bytes);
+    let bytes = build_project_zip(&bad_loro_bytes);
 
     let result = unpack(2, &bytes);
     assert!(
@@ -426,7 +426,7 @@ fn ac10_a_vmf_with_a_decimal_point_count_is_refused_as_damaged_not_truncated() {
 /// primitive as an ordinary path and likely panic or desync on its
 /// missing `anchors`/`closed` fields).
 #[test]
-fn ac_a_vmf_with_a_non_string_shape_tag_is_refused_as_damaged() {
+fn ac_a_project_with_a_non_string_shape_tag_is_refused_as_damaged() {
     let document = Document::new(1);
     let bounds = RectBounds::from_corners(pt(0.0, 0.0), pt(10.0, 10.0));
     let _id = document.create_rect(bounds);
@@ -443,7 +443,7 @@ fn ac_a_vmf_with_a_non_string_shape_tag_is_refused_as_damaged() {
     meta.insert("shape", 42_i64).unwrap();
     loro.commit();
     let bad_loro_bytes = loro.export(loro::ExportMode::Snapshot).unwrap();
-    let bytes = build_vmf_zip(&bad_loro_bytes);
+    let bytes = build_project_zip(&bad_loro_bytes);
 
     let result = unpack(2, &bytes);
     assert!(
@@ -601,17 +601,17 @@ fn ac15_point_count_change_keeps_size_ratio_and_orientation() {
 #[test]
 fn ac20_polygon_and_star_outlines_are_all_corner_nodes_straight_segments() {
     let frame = StarFrame::from_center_and_vertex(pt(0.0, 0.0), pt(10.0, 0.0));
-    let polygon = vecmanf_document_core::polygon_outline(frame, PointCount::new(7).unwrap());
+    let polygon = curvyo_document_core::polygon_outline(frame, PointCount::new(7).unwrap());
     assert_eq!(polygon.len(), 7);
     assert!(polygon.iter().all(|a| a.kind == AnchorKind::Corner));
     assert!(
         polygon
             .iter()
-            .all(|a| a.handle_in == vecmanf_document_core::Vec2::ZERO
-                && a.handle_out == vecmanf_document_core::Vec2::ZERO)
+            .all(|a| a.handle_in == curvyo_document_core::Vec2::ZERO
+                && a.handle_out == curvyo_document_core::Vec2::ZERO)
     );
 
-    let star = vecmanf_document_core::star_outline(
+    let star = curvyo_document_core::star_outline(
         frame,
         PointCount::new(7).unwrap(),
         InnerRatio::new(0.5).unwrap(),
@@ -633,8 +633,8 @@ fn ac17_converting_a_rect_replaces_its_parameters_with_only_path_anchors() {
     let anchors: Vec<_> = outline
         .into_iter()
         .enumerate()
-        .map(|(i, a)| vecmanf_document_core::NewAnchor {
-            id: vecmanf_document_core::AnchorId::new(999, i as u64),
+        .map(|(i, a)| curvyo_document_core::NewAnchor {
+            id: curvyo_document_core::AnchorId::new(999, i as u64),
             point: a.point,
             handle_in: a.handle_in,
             handle_out: a.handle_out,
@@ -663,7 +663,7 @@ fn ac17_convert_to_paths_refuses_an_unknown_or_already_converted_id() {
     // out of this crate's public API entirely), so a never-minted id is
     // built the same way a non-Rust reader of `document.json` would see
     // one: through `NodeId`'s own public `Deserialize`.
-    let bogus: vecmanf_document_core::NodeId =
+    let bogus: curvyo_document_core::NodeId =
         serde_json::from_str(r#"{"peer":"999999999","counter":123456}"#).unwrap();
     let result = document.convert_to_paths(&[(bogus, vec![])]);
     assert_eq!(result, Err(ShapeEditError::NoSuchObject));
@@ -685,12 +685,12 @@ fn ac22_each_selected_primitive_converts_independently_in_one_call() {
     let ellipse_id =
         document.create_ellipse(EllipseFrame::from_corners(pt(0.0, 0.0), pt(10.0, 10.0)));
 
-    let mk_anchors = |id: vecmanf_document_core::NodeId| -> Vec<vecmanf_document_core::NewAnchor> {
+    let mk_anchors = |id: curvyo_document_core::NodeId| -> Vec<curvyo_document_core::NewAnchor> {
         outline_of(&document.primitive(id).unwrap().shape)
             .into_iter()
             .enumerate()
-            .map(|(i, a)| vecmanf_document_core::NewAnchor {
-                id: vecmanf_document_core::AnchorId::new(777, i as u64),
+            .map(|(i, a)| curvyo_document_core::NewAnchor {
+                id: curvyo_document_core::AnchorId::new(777, i as u64),
                 point: a.point,
                 handle_in: a.handle_in,
                 handle_out: a.handle_out,

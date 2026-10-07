@@ -19,12 +19,12 @@
 use std::collections::HashSet;
 use std::f64::consts::SQRT_2;
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Document, EllipseFrame, Length, NewAnchor, Point, PointCount, RectBounds, Shape,
     outline_of_rotated, pack, unpack,
 };
-use vecmanf_editor_wasm::{Session, Tool};
-use vecmanf_ui_core::PolyStarMode;
+use curvyo_editor_wasm::{Session, Tool};
+use curvyo_ui_core::PolyStarMode;
 
 const CREATION: [Tool; 3] = [Tool::Rectangle, Tool::Ellipse, Tool::PolygonStar];
 
@@ -83,7 +83,7 @@ fn n_objects(s: &Session) -> usize {
     doc_of(s).object_ids().len()
 }
 
-fn prim(s: &Session, index: usize) -> vecmanf_document_core::PrimitiveSnapshot {
+fn prim(s: &Session, index: usize) -> curvyo_document_core::PrimitiveSnapshot {
     let d = doc_of(s);
     d.primitive(d.object_ids()[index]).unwrap()
 }
@@ -124,7 +124,7 @@ fn dbl(s: &mut Session, first: Point, second: Point) -> bool {
 }
 
 /// Box of a primitive in document space (axis-aligned, rotation ignored).
-fn box_of(p: &vecmanf_document_core::PrimitiveSnapshot) -> (f64, f64, f64, f64) {
+fn box_of(p: &curvyo_document_core::PrimitiveSnapshot) -> (f64, f64, f64, f64) {
     let pts = outline_of_rotated(&p.shape, p.rotation);
     let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
     for a in &pts {
@@ -234,7 +234,7 @@ fn rect_scene(w: f64, h: f64, th: f64) -> (Session, Fr) {
         let o = d.object(id).unwrap();
         d.rotate_object(&o.rotated(
             pt(60.0, 45.0),
-            vecmanf_document_core::Angle::from_radians(th),
+            curvyo_document_core::Angle::from_radians(th),
         ))
         .unwrap();
     }
@@ -545,13 +545,13 @@ fn ac27_choosing_a_creation_tool_clears_the_selection_and_draws_no_box() {
     let d = Document::new(1);
     let _ = d.create_rect(bounds(20.0, 20.0, 200.0 / k, 140.0 / k));
     let _ = d.create_star(
-        vecmanf_document_core::StarFrame {
+        curvyo_document_core::StarFrame {
             center: pt(150.0, 120.0),
             radius: Length::from_mm(90.0 / k),
-            angle: vecmanf_document_core::Angle::from_radians(-std::f64::consts::FRAC_PI_2),
+            angle: curvyo_document_core::Angle::from_radians(-std::f64::consts::FRAC_PI_2),
         },
         PointCount::new(8).unwrap(),
-        vecmanf_document_core::InnerRatio::new(0.5).unwrap(),
+        curvyo_document_core::InnerRatio::new(0.5).unwrap(),
     );
     let _ = d.create_path(
         &[
@@ -701,7 +701,7 @@ fn ac28_the_new_shape_can_be_edited_with_its_handles_straight_away() {
     s.set_tool(Tool::PolygonStar);
     s.set_poly_star_mode(PolyStarMode::Star);
     s.set_poly_star_point_count(PointCount::new(8).unwrap());
-    s.set_poly_star_ratio(vecmanf_document_core::InnerRatio::new(0.5).unwrap());
+    s.set_poly_star_ratio(curvyo_document_core::InnerRatio::new(0.5).unwrap());
     drag(
         &mut s,
         pt(100.0, 100.0),
@@ -786,7 +786,7 @@ fn ac29_next_shape_settings_persist_and_never_change_a_selected_shape() {
     s.set_tool(Tool::PolygonStar);
     s.set_poly_star_mode(PolyStarMode::Star);
     s.set_poly_star_point_count(PointCount::new(7).unwrap());
-    s.set_poly_star_ratio(vecmanf_document_core::InnerRatio::new(0.3).unwrap());
+    s.set_poly_star_ratio(curvyo_document_core::InnerRatio::new(0.3).unwrap());
     drag(
         &mut s,
         pt(80.0, 80.0),
@@ -828,7 +828,7 @@ fn ac29_next_shape_settings_persist_and_never_change_a_selected_shape() {
     let changes = change_count(&s);
     let (d0, d1) = (shape_dbg(&s, 0), shape_dbg(&s, 1));
     s.set_poly_star_point_count(PointCount::new(12).unwrap());
-    s.set_poly_star_ratio(vecmanf_document_core::InnerRatio::new(0.9).unwrap());
+    s.set_poly_star_ratio(curvyo_document_core::InnerRatio::new(0.9).unwrap());
     s.set_poly_star_mode(PolyStarMode::Polygon);
     assert_eq!(change_count(&s), changes, "no commit");
     assert_eq!((shape_dbg(&s, 0), shape_dbg(&s, 1)), (d0, d1));
@@ -917,10 +917,10 @@ fn primitive_docs(k: f64) -> Vec<(&'static str, Document, Point)> {
         rx: Length::from_mm(100.0 / k),
         ry: Length::from_mm(70.0 / k),
     });
-    let frame = vecmanf_document_core::StarFrame {
+    let frame = curvyo_document_core::StarFrame {
         center: pt(40.0 + 100.0 / k, 30.0 + 100.0 / k),
         radius: Length::from_mm(80.0 / k),
-        angle: vecmanf_document_core::Angle::from_radians(-std::f64::consts::FRAC_PI_2),
+        angle: curvyo_document_core::Angle::from_radians(-std::f64::consts::FRAC_PI_2),
     };
     let p = mk(1);
     let _ = p.create_polygon(frame, PointCount::new(8).unwrap());
@@ -928,7 +928,7 @@ fn primitive_docs(k: f64) -> Vec<(&'static str, Document, Point)> {
     let _ = st.create_star(
         frame,
         PointCount::new(8).unwrap(),
-        vecmanf_document_core::InnerRatio::new(0.5).unwrap(),
+        curvyo_document_core::InnerRatio::new(0.5).unwrap(),
     );
     // A plain outline point that is on no handle spot: a quarter along the
     // top edge of a rectangle, 45 degrees on an ellipse, the middle of the
@@ -1067,16 +1067,16 @@ fn ac33_a_double_click_on_a_handle_opens_its_entry_without_a_tool_switch() {
         assert_eq!(bytes(&s), before, "{name}: nothing written");
     }
     // Star inner-radius handle.
-    let frame = vecmanf_document_core::StarFrame {
+    let frame = curvyo_document_core::StarFrame {
         center: pt(100.0, 100.0),
         radius: Length::from_mm(100.0 / k),
-        angle: vecmanf_document_core::Angle::from_radians(-std::f64::consts::FRAC_PI_2),
+        angle: curvyo_document_core::Angle::from_radians(-std::f64::consts::FRAC_PI_2),
     };
     let d = Document::new(1);
     let _ = d.create_star(
         frame,
         PointCount::new(8).unwrap(),
-        vecmanf_document_core::InnerRatio::new(0.5).unwrap(),
+        curvyo_document_core::InnerRatio::new(0.5).unwrap(),
     );
     let mut s = open_session(&d);
     let p = outline_point(&s, 0);
@@ -1221,7 +1221,7 @@ fn sweep_draw_each_shape_then_move_resize_and_rotate_it_through_the_select_tool(
         let d = 32.0 / SQRT_2;
         // The box of a polygon or star is turned by its shown angle
         // (`polygon-star-box-refit`); for the other kinds that angle is 0 here.
-        let shown = vecmanf_document_core::ObjectSnapshot::Primitive(prim(&s, 0))
+        let shown = curvyo_document_core::ObjectSnapshot::Primitive(prim(&s, 0))
             .orientation()
             .as_radians();
         let handle = rot(pt(c.x + (hw + d) / k, c.y + (hh + d) / k), c, shown);

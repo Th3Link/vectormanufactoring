@@ -4,11 +4,11 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Document, EllipseFrame, Length, NewAnchor, ObjectSnapshot, Point, RectBounds, Shape,
     pack, unpack,
 };
-use vecmanf_editor_wasm::{Session, Tool};
+use curvyo_editor_wasm::{Session, Tool};
 
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)

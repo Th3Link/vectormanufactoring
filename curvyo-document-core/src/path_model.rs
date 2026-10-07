@@ -3,7 +3,7 @@
 //! identities, the per-anchor data a caller builds or reads, and the
 //! typed refusal reasons for an edit. No Loro type appears here — the CRDT
 //! wiring lives in [`crate::paths`] — so these types are what
-//! `vecmanf-ui-core` and `vecmanf-render-core` actually depend on.
+//! `curvyo-ui-core` and `curvyo-render-core` actually depend on.
 
 use serde::{Deserialize, Serialize};
 
@@ -71,11 +71,11 @@ impl<'de> Deserialize<'de> for NodeId {
 /// An anchor's identity within its path's movable list
 /// (`specs/0002-path-node-editing/adrs.md`: "`AnchorId` is minted by the
 /// creating peer and is globally unique... passed into
-/// `vecmanf-document-core`, never minted there").
+/// `curvyo-document-core`, never minted there").
 ///
 /// Built from a `(peer, counter)` pair the same shape as a Loro peer id
 /// plus a per-session monotonic counter — both already available to
-/// `vecmanf-ui-core` without this crate (or its caller) touching an
+/// `curvyo-ui-core` without this crate (or its caller) touching an
 /// entropy source (`CLAUDE.md` §6).
 ///
 /// `(De)Serialize` are hand-written as a lowercase, zero-padded 32-digit
@@ -231,7 +231,7 @@ impl NewAnchor {
 pub type AnchorSnapshot = NewAnchor;
 
 /// A path's full data as read from the document — the ADR 0002 §5 "derived
-/// local read model" `vecmanf-ui-core` and `vecmanf-render-core` consume
+/// local read model" `curvyo-ui-core` and `curvyo-render-core` consume
 /// instead of touching Loro themselves.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PathSnapshot {

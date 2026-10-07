@@ -1,11 +1,11 @@
 //! A primitive's closed-form outline (`specs/0003-primitive-shapes/adrs.md`,
-//! "outline construction lives in `vecmanf-document-core`"): one pure
+//! "outline construction lives in `curvyo-document-core`"): one pure
 //! function per shape, parameters in, [`OutlineAnchor`]s out, no curve
 //! ever evaluated (flattened, projected, subdivided or intersected) —
 //! only trigonometry and the fixed Bézier-circle constant `KAPPA`. Three
 //! consumers reach these functions over edges that already exist:
-//! `vecmanf-render-core` (stroking, acceptance criterion 16),
-//! `vecmanf-ui-core` (hit-testing and "object to path", acceptance
+//! `curvyo-render-core` (stroking, acceptance criterion 16),
+//! `curvyo-ui-core` (hit-testing and "object to path", acceptance
 //! criteria 17-20), and a later SVG exporter.
 //!
 //! Every outline here is closed, and direction is increasing angle in
@@ -27,7 +27,7 @@ pub const KAPPA: f64 = 0.552_284_749_830_793_4;
 /// One outline anchor, structurally identical to
 /// [`crate::path_model::NewAnchor`] minus the identity: an outline is a
 /// pure function of a shape's parameters and has no [`crate::AnchorId`]
-/// of its own until a caller (`vecmanf-ui-core`, converting one to a
+/// of its own until a caller (`curvyo-ui-core`, converting one to a
 /// real path) mints one (`adrs.md`: "a primitive's outline is closed-
 /// form... parameters → its outline anchors without ids").
 #[derive(Debug, Clone, Copy, PartialEq)]

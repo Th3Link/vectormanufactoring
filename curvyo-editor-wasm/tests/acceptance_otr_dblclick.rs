@@ -8,11 +8,11 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::too_many_lines, clippy::similar_names)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, Point, PointCount,
     RectBounds, StarFrame, pack, unpack,
 };
-use vecmanf_editor_wasm::{Session, Tool};
+use curvyo_editor_wasm::{Session, Tool};
 
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)
@@ -428,8 +428,8 @@ fn double_click_on_a_converted_polygons_segment_hands_off_without_inserting_a_no
             .iter()
             .filter_map(|id| d.object(*id))
             .map(|o| match o {
-                vecmanf_document_core::ObjectSnapshot::Path(p) => p.anchors.len(),
-                vecmanf_document_core::ObjectSnapshot::Primitive(_) => 0,
+                curvyo_document_core::ObjectSnapshot::Path(p) => p.anchors.len(),
+                curvyo_document_core::ObjectSnapshot::Primitive(_) => 0,
             })
             .sum::<usize>()
     };
@@ -437,7 +437,7 @@ fn double_click_on_a_converted_polygons_segment_hands_off_without_inserting_a_no
 
     // The midpoint of the segment between the first two anchors.
     let d = unpack(3, &after_conversion).unwrap();
-    let vecmanf_document_core::ObjectSnapshot::Path(path) = d.object(d.object_ids()[0]).unwrap()
+    let curvyo_document_core::ObjectSnapshot::Path(path) = d.object(d.object_ids()[0]).unwrap()
     else {
         panic!("converted to a path");
     };

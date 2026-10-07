@@ -6,7 +6,7 @@
 //! (`adrs.md`, "one resolving function per gesture"). The DOM chip only
 //! holds the text, the caret and the focus; every rule lives here.
 
-use vecmanf_document_core::{Angle, Document, ObjectSnapshot, Point, Shape};
+use curvyo_document_core::{Angle, Document, ObjectSnapshot, Point, Shape};
 
 use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;
@@ -18,7 +18,7 @@ use crate::transform_handle_layout::{EditHandle, is_corner};
 use crate::transform_math::{
     ANGLE_EQUAL_EPSILON_RAD, is_polygon_or_star, local_delta_for_radius, local_delta_for_size,
 };
-use vecmanf_document_core::PrimitiveSnapshot;
+use curvyo_document_core::PrimitiveSnapshot;
 
 /// A typed size within this (millimetres) of the current one is "equal":
 /// nothing is written (criteria 19, 31). The prefill is the readout's
@@ -568,7 +568,7 @@ mod tests {
         }
     }
 
-    use vecmanf_document_core::{InnerRatio, Length, PointCount, StarFrame};
+    use curvyo_document_core::{InnerRatio, Length, PointCount, StarFrame};
 
     use super::*;
     use crate::oriented_box::oriented_bounds;
@@ -606,7 +606,7 @@ mod tests {
         let ObjectSnapshot::Primitive(primitive) = object else {
             panic!("a primitive");
         };
-        vecmanf_document_core::outline_of_rotated(&primitive.shape, primitive.rotation)[0].point
+        curvyo_document_core::outline_of_rotated(&primitive.shape, primitive.rotation)[0].point
     }
 
     /// Criteria 1 and 7: the angle entry opens on the shape's real
@@ -681,7 +681,7 @@ mod tests {
     /// Rectangles, ellipses and paths still show their register.
     #[test]
     fn a_rectangle_still_shows_its_rotation_register() {
-        use vecmanf_document_core::RectBounds;
+        use curvyo_document_core::RectBounds;
         let document = Document::new(1);
         let id = document.create_rect(RectBounds::from_corners(
             Point::new(0.0, 0.0),

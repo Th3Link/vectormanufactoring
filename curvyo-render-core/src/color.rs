@@ -1,6 +1,6 @@
 //! A flat, alpha-capable color for decoration and stroke geometry.
 //!
-//! Distinct from [`vecmanf_document_core::Color`]: that type is this
+//! Distinct from [`curvyo_document_core::Color`]: that type is this
 //! slice's one placeholder *document* stroke color (acceptance criterion
 //! 6, always opaque black) — editing-UI decorations need alpha (the
 //! hover ring's "faint outer ring", `specs/0002-path-node-editing/
@@ -42,8 +42,8 @@ impl RgbaColor {
     pub const WHITE: Self = Self::opaque(255, 255, 255);
 }
 
-impl From<vecmanf_document_core::Color> for RgbaColor {
-    fn from(color: vecmanf_document_core::Color) -> Self {
+impl From<curvyo_document_core::Color> for RgbaColor {
+    fn from(color: curvyo_document_core::Color) -> Self {
         Self::opaque(color.r, color.g, color.b)
     }
 }

@@ -1,10 +1,10 @@
 //! Black-box acceptance tests for `specs/0006-path-merge-split-and-node-
 //! types/specification.md`'s acceptance criteria 6, 7, and the
 //! cross-object case of criterion 9 — the parts of the spec that
-//! `vecmanf-document-core/tests/acceptance_0006.rs` explicitly deferred
+//! `curvyo-document-core/tests/acceptance_0006.rs` explicitly deferred
 //! ("need `canvas-navigation-and-selection`'s `ObjectSelection`, which
 //! does not exist on this branch") and that landed in this later round
-//! on top of `vecmanf-editor-wasm::Session` and `vecmanf-ui-core`'s
+//! on top of `curvyo-editor-wasm::Session` and `curvyo-ui-core`'s
 //! `NodeSelection`/`NodeTool`.
 //!
 //! Written against `Session`'s public API only, before reading the
@@ -14,12 +14,12 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 
-use vecmanf_document_core::{AnchorKind, Document, Point};
-use vecmanf_editor_wasm::{Session, Tool};
+use curvyo_document_core::{AnchorKind, Document, Point};
+use curvyo_editor_wasm::{Session, Tool};
 
 fn document_of(session: &Session) -> Document {
     let bytes = session.pack("0.1.0").expect("pack");
-    vecmanf_document_core::unpack(99, &bytes).expect("unpack")
+    curvyo_document_core::unpack(99, &bytes).expect("unpack")
 }
 
 /// Draws an open path with the Pen tool through consecutive clicks.

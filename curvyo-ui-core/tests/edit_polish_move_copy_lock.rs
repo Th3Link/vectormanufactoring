@@ -1,18 +1,18 @@
-//! `vecmanf-ui-core`'s share of Part C of
+//! `curvyo-ui-core`'s share of Part C of
 //! `specs/edit-interaction-polish/specification.md`, PR 4: the axis lock, the
 //! copy by Ctrl, Shift and Ctrl at the press, and the press classification the
 //! plus badge shares with `pointer_down`. Session-level behaviour (readout,
 //! badges, axes input, commit counts) is in
-//! `vecmanf-editor-wasm/tests/edit_polish_move_copy_lock.rs`.
+//! `curvyo-editor-wasm/tests/edit_polish_move_copy_lock.rs`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::too_many_lines)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Document, Length, NewAnchor, NodeId, ObjectSnapshot, Point, RectBounds, Tolerance,
     Vec2,
 };
-use vecmanf_ui_core::{
+use curvyo_ui_core::{
     AnchorIdMinter, Axis, Modifiers, ObjectSelection, PressTarget, SelectTool,
     TransformHandleTolerances, classify_press,
 };
@@ -123,7 +123,7 @@ impl Rig {
     fn origin_of(&self, id: NodeId) -> Point {
         match self.document.object(id).unwrap() {
             ObjectSnapshot::Primitive(p) => match p.shape {
-                vecmanf_document_core::Shape::Rect { bounds, .. } => bounds.origin,
+                curvyo_document_core::Shape::Rect { bounds, .. } => bounds.origin,
                 _ => panic!("a rectangle"),
             },
             ObjectSnapshot::Path(p) => p.anchors[0].point,
@@ -554,7 +554,7 @@ fn a_press_on_empty_canvas_starts_no_move() {
 // The Copy check of the typed move (criterion 23)
 // ---------------------------------------------------------------------
 
-use vecmanf_ui_core::{
+use curvyo_ui_core::{
     EntryKey, EntryOutcome, MoveEntryMode, SelectDoubleClickOutcome, parse_entry_number,
 };
 
@@ -657,7 +657,7 @@ fn a_typed_copy_with_no_offset_or_a_bad_field_writes_nothing() {
         rig.commit_chip(["abc", "0"], false, true),
         EntryOutcome::Invalid {
             field: 0,
-            reason: vecmanf_ui_core::InvalidReason::NotANumber
+            reason: curvyo_ui_core::InvalidReason::NotANumber
         }
     );
     assert!(rig.tool.move_entry().is_some(), "stays open");

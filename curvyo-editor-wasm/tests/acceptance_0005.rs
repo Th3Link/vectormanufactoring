@@ -1,6 +1,6 @@
 //! Black-box acceptance tests for `specs/0005-object-transform/
 //! specification.md` (25 acceptance criteria), written against
-//! `vecmanf-editor-wasm::Session`'s public API before reading the
+//! `curvyo-editor-wasm::Session`'s public API before reading the
 //! implementation diff. Expected values are derived here from the spec's
 //! own arithmetic (opposite corner pinned, per-axis factors, sqrt(sx*sy)
 //! stroke/radius rule, rotation about a pivot), never read back from the
@@ -15,12 +15,12 @@
 
 use std::f64::consts::{FRAC_PI_2, PI};
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, NodeId, ObjectSnapshot,
     OpenError, Point, PointCount, RectBounds, Shape, StarFrame, Vec2, effective_corner_radius,
     outline_of_rotated, pack, shape_frame_bounds, unpack,
 };
-use vecmanf_editor_wasm::{Session, Tool};
+use curvyo_editor_wasm::{Session, Tool};
 
 const EPS: f64 = 1e-6;
 
@@ -74,12 +74,12 @@ fn only_id(session: &Session) -> NodeId {
     ids[0]
 }
 
-fn prim(session: &Session) -> vecmanf_document_core::PrimitiveSnapshot {
+fn prim(session: &Session) -> curvyo_document_core::PrimitiveSnapshot {
     let doc = document_of(session);
     doc.primitive(doc.object_ids()[0]).expect("primitive")
 }
 
-fn path_of(session: &Session) -> vecmanf_document_core::PathSnapshot {
+fn path_of(session: &Session) -> curvyo_document_core::PathSnapshot {
     let doc = document_of(session);
     doc.path(doc.object_ids()[0]).expect("path")
 }
@@ -509,7 +509,7 @@ fn ac2_multi_selection_move_and_delete_still_work() {
     s.delete_selected();
     assert_eq!(
         document_of(&s).object_ids(),
-        [] as [vecmanf_document_core::NodeId; 0]
+        [] as [curvyo_document_core::NodeId; 0]
     );
 }
 
@@ -2187,7 +2187,7 @@ fn drag_writes_nothing_until_release_and_exactly_one_change_on_release() {
 }
 
 mod bounds_of {
-    use vecmanf_document_core::Point;
+    use curvyo_document_core::Point;
 
     pub struct List(pub Vec<Point>);
 
@@ -2353,10 +2353,10 @@ fn live_rotation_preview_draws_the_rotated_shape_before_release() {
     // the rotated outline is drawn over it. Rotated 90 degrees about (50, 10)
     // the corners move from (0, 0) to (60, -40) and from (100, 20) to (40, 60).
     let list = s.draw_list();
-    let near = |v: &vecmanf_render_core::Vertex, x: f64, y: f64| {
+    let near = |v: &curvyo_render_core::Vertex, x: f64, y: f64| {
         (v.position.x - x).abs() < 1.0 && (v.position.y - y).abs() < 1.0
     };
-    let black = vecmanf_render_core::RgbaColor::BLACK;
+    let black = curvyo_render_core::RgbaColor::BLACK;
     assert!(
         list.triangles
             .iter()
@@ -2714,8 +2714,8 @@ fn damaged_rotation_in_session_open_is_refused_not_panicked() {
     // is crafted in `document-core`'s acceptance_0005_tester. Here only check
     // the error mapping exists.
     assert!(matches!(
-        Session::open(1, b"not a vmf").err(),
-        Some(OpenError::NotAVmf | OpenError::Damaged)
+        Session::open(1, b"not a project").err(),
+        Some(OpenError::NotAProject | OpenError::Damaged)
     ));
 }
 

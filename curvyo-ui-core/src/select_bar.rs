@@ -6,7 +6,7 @@
 //! The state is a pure function of the document snapshots, the selection and
 //! a pending slider edit, so the DOM holds no editing logic.
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Length, NodeId, ObjectSnapshot, PrimitiveSnapshot, Shape, effective_corner_radius,
 };
 
@@ -209,7 +209,7 @@ pub fn select_bar_state(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vecmanf_document_core::{
+    use curvyo_document_core::{
         AnchorId, Angle, Document, InnerRatio, NewAnchor, Point, PointCount, RectBounds, StarFrame,
     };
 
@@ -271,7 +271,7 @@ mod tests {
 
         fn ellipse(&self) -> NodeId {
             self.document
-                .create_ellipse(vecmanf_document_core::EllipseFrame {
+                .create_ellipse(curvyo_document_core::EllipseFrame {
                     center: Point::new(0.0, 0.0),
                     rx: Length::from_mm(4.0),
                     ry: Length::from_mm(3.0),

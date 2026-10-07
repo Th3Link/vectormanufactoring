@@ -1,10 +1,10 @@
-//! The vecmanf document model (ADR 0002): units, the document root
-//! record, and the `.vmf` project container (ADR 0004 §1).
+//! The Curvyo document model (ADR 0002): units, the document root
+//! record, and the `.curvyo` project container (ADR 0004 §1).
 //!
 //! This crate is pure and wasm-compatible (`CLAUDE.md` §6): no filesystem,
 //! network, clock, threads or UI. Everything a caller needs — bytes in,
-//! bytes out — is passed in explicitly; `vecmanf-storage-io` and
-//! `vecmanf-app` own the impure edges (reading/writing files, native
+//! bytes out — is passed in explicitly; `curvyo-storage-io` and
+//! `curvyo-app` own the impure edges (reading/writing files, native
 //! dialogs).
 //!
 //! `project-file-foundation` (slice 1) implemented the thinnest possible

@@ -4,8 +4,8 @@
 //! Deliberately free of any `wasm-bindgen`/`web-sys`/GPU type so it can
 //! be exercised by ordinary `cargo test` — "no editing logic of its own"
 //! (ADR 0001 §3) describes the `wasm-bindgen` boundary in `lib.rs`, not
-//! this module: the logic itself is `vecmanf-document-core`'s,
-//! `vecmanf-ui-core`'s and `vecmanf-render-core`'s, and this module's own
+//! this module: the logic itself is `curvyo-document-core`'s,
+//! `curvyo-ui-core`'s and `curvyo-render-core`'s, and this module's own
 //! job is exactly "which tool is active, and where do its inputs and the
 //! view transform come from" — nothing a browser is required to answer.
 //!
@@ -36,10 +36,10 @@ mod select_view;
 mod shapes;
 mod transform_entry;
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Document, Length, NodeId, ObjectSnapshot, OpenError, Point, SaveError, Tolerance,
 };
-use vecmanf_ui_core::{
+use curvyo_ui_core::{
     AnchorIdMinter, EllipseTool, Hit, HitTolerances, Modifiers, NodeTool, ObjectSelection, PenTool,
     PolygonStarTool, RectangleTool, SelectTool, Viewport, hit_test,
 };
@@ -64,9 +64,9 @@ pub use transform_entry::{EntryFieldView, EntryView};
 /// doubled from 8px — customer feedback: "you can click on the nodes
 /// too — the node squares and diamonds need to be bigger too," the same
 /// fix one round earlier applied to `HANDLE_TOLERANCE_PX` below, now
-/// extended to nodes alongside `vecmanf-render-core::theme::
+/// extended to nodes alongside `curvyo-render-core::theme::
 /// NODE_SIZE_PX`'s own doubling. Now equal to `HANDLE_TOLERANCE_PX` —
-/// that is not a problem: `vecmanf-ui-core::hit_test` picks the nearer
+/// that is not a problem: `curvyo-ui-core::hit_test` picks the nearer
 /// candidate regardless of either tolerance's value, a handle winning
 /// only an exact tie, so two equal tolerances do not change which of a
 /// coincident node and handle wins, only that both are now reachable
@@ -74,7 +74,7 @@ pub use transform_entry::{EntryFieldView, EntryView};
 const POINT_TOLERANCE_PX: f64 = 16.0;
 /// 16px handle hit-test radius (`docs/design-system.md`; 2026-10-05:
 /// doubled from the node's own then-8px alongside the handle glyph's
-/// doubled visual size, `vecmanf-render-core::theme::
+/// doubled visual size, `curvyo-render-core::theme::
 /// HANDLE_DIAMETER_PX`'s own doc comment).
 const HANDLE_TOLERANCE_PX: f64 = 16.0;
 /// 4px segment hit-test tolerance (`docs/design-system.md`).
@@ -215,13 +215,13 @@ impl Session {
         }
     }
 
-    /// Reopens a previously saved `.vmf` container's bytes (File → Open),
+    /// Reopens a previously saved `.curvyo` container's bytes (File → Open),
     /// bound to `peer`.
     ///
     /// # Errors
-    /// See [`vecmanf_document_core::unpack`].
+    /// See [`curvyo_document_core::unpack`].
     pub fn open(peer: u64, bytes: &[u8]) -> Result<Self, OpenError> {
-        let document = vecmanf_document_core::unpack(peer, bytes)?;
+        let document = curvyo_document_core::unpack(peer, bytes)?;
         Ok(Self {
             document,
             minter: AnchorIdMinter::new(peer),
@@ -245,13 +245,13 @@ impl Session {
         })
     }
 
-    /// Packs the current document into `.vmf` container bytes (File →
+    /// Packs the current document into `.curvyo` container bytes (File →
     /// Save/Save As).
     ///
     /// # Errors
-    /// See [`vecmanf_document_core::pack`].
+    /// See [`curvyo_document_core::pack`].
     pub fn pack(&self, app_version: &str) -> Result<Vec<u8>, SaveError> {
-        vecmanf_document_core::pack(&self.document, app_version)
+        curvyo_document_core::pack(&self.document, app_version)
     }
 
     /// The active tool.
@@ -311,7 +311,7 @@ impl Session {
         }
     }
 
-    fn paths(&self) -> Vec<vecmanf_document_core::PathSnapshot> {
+    fn paths(&self) -> Vec<curvyo_document_core::PathSnapshot> {
         self.document
             .object_ids()
             .into_iter()
@@ -494,8 +494,8 @@ impl Session {
 
 #[cfg(test)]
 mod tests {
-    use vecmanf_document_core::{AnchorKind, Vec2};
-    use vecmanf_ui_core::NodeToolbarState;
+    use curvyo_document_core::{AnchorKind, Vec2};
+    use curvyo_ui_core::NodeToolbarState;
 
     use super::*;
 
@@ -622,7 +622,7 @@ mod tests {
     /// held down, not yet released) must render strictly more than the
     /// plain rubber-band line a hover alone draws, through the actual
     /// `Session::draw_list` path the host calls every frame (not just
-    /// `vecmanf-render-core`'s own unit test of `build_pen_preview`
+    /// `curvyo-render-core`'s own unit test of `build_pen_preview`
     /// directly).
     #[test]
     fn draw_list_shows_the_live_curve_preview_during_a_pen_drag() {
@@ -776,7 +776,7 @@ mod tests {
         session.viewport = Viewport::new();
         session
             .viewport
-            .zoom_about(0.0, 0.0, 1.0 / vecmanf_ui_core::PX_PER_MM_AT_100);
+            .zoom_about(0.0, 0.0, 1.0 / curvyo_ui_core::PX_PER_MM_AT_100);
     }
 
     /// Tester verification (PR #20, handles-doubled fix, 2026-10-05):
@@ -825,7 +825,7 @@ mod tests {
             Some(Hit::Handle {
                 path: session.paths()[0].id,
                 anchor: b,
-                slot: vecmanf_document_core::HandleSlot::Out,
+                slot: curvyo_document_core::HandleSlot::Out,
             }),
             "13px is outside the old 8px handle radius but inside the new 16px one"
         );

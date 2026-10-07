@@ -5,8 +5,8 @@
 //! primitive without this crate ever handing back an empty
 //! [`crate::path_model::PathSnapshot`] for a node that is not a path at
 //! all. No Loro type appears here — the CRDT wiring lives in
-//! [`crate::shape_codec`] — so this is what `vecmanf-ui-core` and
-//! `vecmanf-render-core` actually depend on, the same split
+//! [`crate::shape_codec`] — so this is what `curvyo-ui-core` and
+//! `curvyo-render-core` actually depend on, the same split
 //! [`crate::path_model`] already draws for paths.
 
 use serde::{Deserialize, Serialize};
@@ -461,7 +461,7 @@ pub fn shape_center(shape: &Shape) -> Point {
 /// [`rotate_shape`] to treat it as *the* center: nanometre-scale, far
 /// below anything a pointer can express, but far above the one-ulp
 /// difference between a rectangle's derived `shape_center` and the box
-/// center `vecmanf-ui-core` computes for the same shape.
+/// center `curvyo-ui-core` computes for the same shape.
 const PIVOT_AT_CENTER_TOLERANCE: Tolerance = Tolerance::from_mm(1e-6);
 
 /// Rotates a primitive's own frame center about `pivot` by `angle`,

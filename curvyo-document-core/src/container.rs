@@ -1,7 +1,7 @@
-//! The `.vmf` project container: a zip archive holding `manifest.json`,
+//! The `.curvyo` project container: a zip archive holding `manifest.json`,
 //! `document.loro` and `document.json` (ADR 0004 §1), as pure, byte-level
 //! code — zip in/out over `&[u8]`/`Vec<u8>`, no `std::fs`
-//! (ADR 0011 §2, `vecmanf-document-core`'s responsibility).
+//! (ADR 0011 §2, `curvyo-document-core`'s responsibility).
 //!
 //! `manifest.json` is read first and alone decides whether the rest of the
 //! container is trusted (`specs/0001-project-file-foundation/adrs.md`,
@@ -30,8 +30,8 @@ const LORO_SNAPSHOT_MEMBER: &str = "document.loro";
 const DOCUMENT_JSON_MEMBER: &str = "document.json";
 
 /// Zip local-file-header and empty-archive signatures. A buffer not
-/// starting with one of these is not zip-shaped at all — the "not a .vmf
-/// (.vmf) file" case — as distinct from a zip-shaped buffer that is
+/// starting with one of these is not zip-shaped at all — the "not a .curvyo
+/// (.curvyo) file" case — as distinct from a zip-shaped buffer that is
 /// truncated or otherwise corrupt.
 const ZIP_LOCAL_FILE_HEADER: &[u8] = b"PK\x03\x04";
 const ZIP_EMPTY_ARCHIVE: &[u8] = b"PK\x05\x06";
@@ -49,7 +49,7 @@ struct Manifest {
     app_version: String,
 }
 
-/// Packs a [`Document`] into `.vmf` container bytes.
+/// Packs a [`Document`] into `.curvyo` container bytes.
 ///
 /// Writes the three required members in one pass from a single frozen
 /// read of `document` (ADR 0009 §4), so `document.loro` and
@@ -90,12 +90,12 @@ fn write_member(
     writer.write_all(bytes).map_err(|_| SaveError::Container)
 }
 
-/// Unpacks `.vmf` container bytes into a [`Document`], bound to the given
+/// Unpacks `.curvyo` container bytes into a [`Document`], bound to the given
 /// Loro peer id.
 ///
 /// `peer_id` exists for the same reason [`Document::new`]'s does: this
 /// `*-core` crate must not draw one from `getrandom` itself
-/// (`CLAUDE.md` §6). The caller (`vecmanf-app`) mints a fresh id per open
+/// (`CLAUDE.md` §6). The caller (`curvyo-app`) mints a fresh id per open
 /// session, the same way it does for a brand-new document.
 ///
 /// `manifest.json` is read and validated before `document.loro` is even
@@ -104,13 +104,13 @@ fn write_member(
 /// (`specs/0001-project-file-foundation/specification.md`, AC7).
 ///
 /// # Errors
-/// Returns [`OpenError::NotAVmf`] if `bytes` is not zip-shaped at all,
+/// Returns [`OpenError::NotAProject`] if `bytes` is not zip-shaped at all,
 /// [`OpenError::Damaged`] if it is zip-shaped but truncated, corrupt, or
 /// missing a required member, and [`OpenError::FormatTooNew`] if
 /// `manifest.json` declares a newer version than this build supports.
 pub fn unpack(peer_id: u64, bytes: &[u8]) -> Result<Document, OpenError> {
     if !looks_like_zip(bytes) {
-        return Err(OpenError::NotAVmf);
+        return Err(OpenError::NotAProject);
     }
 
     let mut archive = ZipArchive::new(Cursor::new(bytes)).map_err(|_| OpenError::Damaged)?;
@@ -184,14 +184,14 @@ mod tests {
     // `assert_eq!` on the whole `Result`.
 
     #[test]
-    fn empty_bytes_are_not_a_vmf() {
-        assert!(matches!(unpack(2, &[]), Err(OpenError::NotAVmf)));
+    fn empty_bytes_are_not_a_project() {
+        assert!(matches!(unpack(2, &[]), Err(OpenError::NotAProject)));
     }
 
     #[test]
-    fn plain_text_is_not_a_vmf() {
+    fn plain_text_is_not_a_project() {
         let bytes = b"this is just a renamed text file, not a zip".to_vec();
-        assert!(matches!(unpack(2, &bytes), Err(OpenError::NotAVmf)));
+        assert!(matches!(unpack(2, &bytes), Err(OpenError::NotAProject)));
     }
 
     #[test]
@@ -239,15 +239,15 @@ mod tests {
         ));
     }
 
-    /// One-off generator for `tests/fixtures/*.vmf`
+    /// One-off generator for `tests/fixtures/*.curvyo`
     /// (`CLAUDE.md` §5: golden-file tests for every file-format
     /// importer/exporter). Run once with
-    /// `cargo test -p vecmanf-document-core generate_golden_fixtures -- --ignored`
+    /// `cargo test -p curvyo-document-core generate_golden_fixtures -- --ignored`
     /// after changing the container format, then delete this test again —
     /// the committed fixture bytes are what `container_fixtures.rs` pins,
     /// not this generator.
     #[test]
-    #[ignore = "run deliberately to regenerate tests/fixtures/*.vmf, not on every `cargo test`"]
+    #[ignore = "run deliberately to regenerate tests/fixtures/*.curvyo, not on every `cargo test`"]
     // One linear sequence of fixture-writing steps, each with its own
     // explanatory comment; splitting it into sub-functions would just
     // move the same line count behind extra indirection for a
@@ -261,16 +261,17 @@ mod tests {
 
         let document = Document::new(1);
         let valid = pack(&document, "0.1.0").expect("pack");
-        std::fs::write(fixtures_dir.join("valid.vmf"), &valid).expect("write valid.vmf");
+        std::fs::write(fixtures_dir.join("valid.curvyo"), &valid).expect("write valid.curvyo");
 
         let truncated = &valid[..valid.len() / 2];
-        std::fs::write(fixtures_dir.join("truncated.vmf"), truncated).expect("write truncated.vmf");
+        std::fs::write(fixtures_dir.join("truncated.curvyo"), truncated)
+            .expect("write truncated.curvyo");
 
         std::fs::write(
-            fixtures_dir.join("not_a_vmf.txt"),
+            fixtures_dir.join("not_a_project.txt"),
             b"this is just a renamed text file, not a zip",
         )
-        .expect("write not_a_vmf.txt");
+        .expect("write not_a_project.txt");
 
         let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
         let options = SimpleFileOptions::default();
@@ -286,13 +287,13 @@ mod tests {
         write_member(&mut writer, DOCUMENT_JSON_MEMBER, b"{}", options).expect("json member");
         let future_version = writer.finish().expect("finish").into_inner();
         std::fs::write(
-            fixtures_dir.join("future_format_version.vmf"),
+            fixtures_dir.join("future_format_version.curvyo"),
             &future_version,
         )
-        .expect("write future_format_version.vmf");
+        .expect("write future_format_version.curvyo");
 
-        // `paths_v2.vmf` is deliberately NOT regenerated here, for the
-        // same reason as `format_version_1.vmf` below: `primitive-shapes`
+        // `paths_v2.curvyo` is deliberately NOT regenerated here, for the
+        // same reason as `format_version_1.curvyo` below: `primitive-shapes`
         // bumped `CURRENT_FORMAT_VERSION` to 3, so running this build's
         // own `Document`/`pack` would bake a `format_version: 3` manifest
         // onto it, destroying its value as proof that a *genuine*
@@ -302,7 +303,7 @@ mod tests {
         // task 19). The committed fixture is `path-node-editing`'s own,
         // untouched.
 
-        // `primitives_v3.vmf` (`specs/0003-primitive-shapes/plan.md`, task 19):
+        // `primitives_v3.curvyo` (`specs/0003-primitive-shapes/plan.md`, task 19):
         // a genuine `format_version = 3` fixture carrying one of each
         // primitive kind — a rounded rectangle, a circle (rx == ry), a
         // plain polygon and a star — plus one ordinary path, proving the
@@ -346,10 +347,10 @@ mod tests {
             false,
         );
         let primitives_v3 = pack(&with_primitives, "0.1.0").expect("pack");
-        std::fs::write(fixtures_dir.join("primitives_v3.vmf"), &primitives_v3)
-            .expect("write primitives_v3.vmf");
+        std::fs::write(fixtures_dir.join("primitives_v3.curvyo"), &primitives_v3)
+            .expect("write primitives_v3.curvyo");
 
-        // `format_version_1.vmf` is deliberately NOT regenerated here.
+        // `format_version_1.curvyo` is deliberately NOT regenerated here.
         // Synthesizing it from this build's own `Document::new` would bake
         // in a Loro snapshot whose root map already says
         // `format_version: 2` (today's `CURRENT_FORMAT_VERSION`) underneath
@@ -358,16 +359,16 @@ mod tests {
         // mislabeled version-2 one does (architect review,
         // `specs/0002-path-node-editing/adrs.md`'s PR review). The committed
         // fixture is instead `project-file-foundation`'s own
-        // `valid.vmf` (`main`, commit 968b543), copied byte-for-byte: a
+        // `valid.curvyo` (`main`, commit 968b543), copied byte-for-byte: a
         // genuine container written before this slice's path schema
         // existed at all.
 
-        // `malformed_paths.vmf` (architect review, same PR review note):
+        // `malformed_paths.curvyo` (architect review, same PR review note):
         // a perfectly valid Loro snapshot, behind a perfectly valid
         // manifest, whose `paths` tree has one node with no `anchors`
         // list at all — the shape `Document::from_loro_snapshot`'s path-
         // tree validation must catch and refuse as `OpenError::Damaged`,
-        // not something any public `vecmanf_document_core::Document`
+        // not something any public `curvyo_document_core::Document`
         // method could ever produce by itself.
         let malformed = loro::LoroDoc::new();
         malformed.set_peer_id(1).expect("set peer id");
@@ -410,7 +411,10 @@ mod tests {
         write_member(&mut malformed_writer, DOCUMENT_JSON_MEMBER, b"{}", options)
             .expect("json member");
         let malformed_bytes = malformed_writer.finish().expect("finish").into_inner();
-        std::fs::write(fixtures_dir.join("malformed_paths.vmf"), &malformed_bytes)
-            .expect("write malformed_paths.vmf");
+        std::fs::write(
+            fixtures_dir.join("malformed_paths.curvyo"),
+            &malformed_bytes,
+        )
+        .expect("write malformed_paths.curvyo");
     }
 }

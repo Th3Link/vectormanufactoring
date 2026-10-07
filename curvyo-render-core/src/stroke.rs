@@ -1,17 +1,17 @@
 //! Tessellating a path's (or one segment's) cubic Bézier geometry into a
 //! stroke, via `lyon` (ADR 0001 §4). The curve math itself is `lyon`'s
-//! job here, same as `vecmanf-geometry-core`'s hit-testing — this crate
+//! job here, same as `curvyo-geometry-core`'s hit-testing — this crate
 //! just needs a different, coarser tolerance for display
 //! (ADR 0003 §7: "a separate, coarser display tolerance in
-//! `vecmanf-render-core` must not be reused" for hit-testing).
+//! `curvyo-render-core` must not be reused" for hit-testing).
 
+use curvyo_document_core::{AnchorSnapshot, Point, Vec2};
 use lyon::math::point;
 use lyon::path::Path;
 use lyon::tessellation::{
     BuffersBuilder, StrokeOptions, StrokeTessellator, StrokeVertex, StrokeVertexConstructor,
     VertexBuffers,
 };
-use vecmanf_document_core::{AnchorSnapshot, Point, Vec2};
 
 use crate::color::RgbaColor;
 use crate::glyphs::{DrawList, Vertex};
@@ -105,8 +105,8 @@ fn stroke(path: &Path, width_mm: f64, color: RgbaColor, tolerance_mm: f64) -> Dr
 /// millimetres by the caller at its own view scale — screen-space, so
 /// curves stay visually smooth at every zoom level
 /// (`specs/0004-canvas-navigation-and-selection/adrs.md`), unrelated to,
-/// and coarser than, `vecmanf-geometry-core`'s hit-testing
-/// [`vecmanf_document_core::Tolerance`] (ADR 0003 §7).
+/// and coarser than, `curvyo-geometry-core`'s hit-testing
+/// [`curvyo_document_core::Tolerance`] (ADR 0003 §7).
 #[must_use]
 pub fn path_stroke(
     anchors: &[AnchorSnapshot],
@@ -145,7 +145,7 @@ pub fn segment_stroke(
 
 #[cfg(test)]
 mod tests {
-    use vecmanf_document_core::{AnchorId, AnchorKind, NewAnchor};
+    use curvyo_document_core::{AnchorId, AnchorKind, NewAnchor};
 
     use super::*;
 

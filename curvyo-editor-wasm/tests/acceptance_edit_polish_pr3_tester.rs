@@ -19,12 +19,12 @@
 
 use std::f64::consts::{FRAC_PI_2, PI, SQRT_2};
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, ObjectSnapshot, Point,
     PointCount, RectBounds, Shape, StarFrame, Vec2, pack, unpack,
 };
-use vecmanf_editor_wasm::{EscapeStep, KeyHint, KeyInput, KeyOutcome, Session, Tool};
-use vecmanf_ui_core::{EntryOutcome, InvalidReason, MoveEntryMode};
+use curvyo_editor_wasm::{EscapeStep, KeyHint, KeyInput, KeyOutcome, Session, Tool};
+use curvyo_ui_core::{EntryOutcome, InvalidReason, MoveEntryMode};
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -227,7 +227,7 @@ fn obj_of(s: &Session, index: usize) -> ObjectSnapshot {
     d.object(d.object_ids()[index]).unwrap()
 }
 
-fn path_of(s: &Session) -> vecmanf_document_core::PathSnapshot {
+fn path_of(s: &Session) -> curvyo_document_core::PathSnapshot {
     let d = doc_of(s);
     d.path(d.object_ids()[0]).unwrap()
 }
@@ -325,7 +325,7 @@ impl Bx {
 const SIDES: [(f64, f64); 4] = [(0.0, -1.0), (1.0, 0.0), (0.0, 1.0), (-1.0, 0.0)];
 
 /// Sampled cubic Bezier extents of a path in the `th` frame.
-fn tight_box(p: &vecmanf_document_core::PathSnapshot, th: f64) -> (f64, f64, f64, f64) {
+fn tight_box(p: &curvyo_document_core::PathSnapshot, th: f64) -> (f64, f64, f64, f64) {
     let a: Vec<(Point, Vec2, Vec2)> = p
         .anchors
         .iter()
@@ -380,7 +380,7 @@ fn tight_box_of(anchors: &[(Point, Vec2, Vec2)], closed: bool, th: f64) -> (f64,
 
 /// Tight bounds of the drawn (Bezier) outline of a primitive.
 fn tight_drawn(shape: &Shape, rotation: Angle) -> (f64, f64, f64, f64) {
-    let o = vecmanf_document_core::outline_of_rotated(shape, rotation);
+    let o = curvyo_document_core::outline_of_rotated(shape, rotation);
     let a: Vec<(Point, Vec2, Vec2)> = o
         .iter()
         .map(|x| (x.point, x.handle_in, x.handle_out))
@@ -389,7 +389,7 @@ fn tight_drawn(shape: &Shape, rotation: Angle) -> (f64, f64, f64, f64) {
     (u0, v0, u1, v1)
 }
 
-fn path_bx(p: &vecmanf_document_core::PathSnapshot) -> Bx {
+fn path_bx(p: &curvyo_document_core::PathSnapshot) -> Bx {
     let th = p.rotation.as_radians();
     let (u0, u1, v0, v1) = tight_box(p, th);
     let (sn, cs) = th.sin_cos();
@@ -405,7 +405,7 @@ fn path_bx(p: &vecmanf_document_core::PathSnapshot) -> Bx {
 /// Reference skew: grabbed side `(nx, ny)`, displacement `d` of the grabbed
 /// side along its direction (mm, in the box's frame).
 fn skew_ref(
-    p: &vecmanf_document_core::PathSnapshot,
+    p: &curvyo_document_core::PathSnapshot,
     side: (f64, f64),
     shift: bool,
     d: f64,
@@ -456,7 +456,7 @@ fn skew_ref(
 }
 
 fn assert_path_matches(
-    p: &vecmanf_document_core::PathSnapshot,
+    p: &curvyo_document_core::PathSnapshot,
     want: &[(Point, Vec2, Vec2)],
     eps: f64,
     ctx: &str,
@@ -481,8 +481,8 @@ fn assert_path_matches(
 }
 
 fn paths_equal(
-    a: &vecmanf_document_core::PathSnapshot,
-    b: &vecmanf_document_core::PathSnapshot,
+    a: &curvyo_document_core::PathSnapshot,
+    b: &curvyo_document_core::PathSnapshot,
     eps: f64,
     ctx: &str,
 ) {
@@ -1214,7 +1214,7 @@ fn ctr_of(o: &ObjectSnapshot) -> Point {
 
 /// Centre of the unrotated frame box: the centre of the oriented box of a
 /// primitive (rotation is about it).
-fn frame_centre_box(p: &vecmanf_document_core::PrimitiveSnapshot) -> (f64, f64, f64, f64) {
+fn frame_centre_box(p: &curvyo_document_core::PrimitiveSnapshot) -> (f64, f64, f64, f64) {
     match p.shape {
         Shape::Rect { bounds: b, .. } => (
             b.origin.x,
@@ -3164,7 +3164,7 @@ fn x09_the_s_pivot_marker_draw_list_differs_from_the_chip_closed_state() {
     dbl(&mut b, pt(50.0, 30.0), pt(50.0, 30.0), false, false);
     let with_dbl = b.draw_list();
     assert_ne!(with_s.triangles.len(), closed, "S chip adds the marker");
-    let pos = |d: &vecmanf_render_core::DrawList| -> Vec<(i64, i64)> {
+    let pos = |d: &curvyo_render_core::DrawList| -> Vec<(i64, i64)> {
         d.triangles
             .iter()
             .map(|v| ((v.position.x * 100.0) as i64, (v.position.y * 100.0) as i64))

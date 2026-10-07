@@ -3,7 +3,7 @@
 //! (`specs/0005-object-transform/adrs.md`: "a resize rewrites geometry").
 //! Split out of [`crate::transform_drag`], which resolves the gestures.
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Angle, EllipseFrame, Length, Point, PrimitiveSnapshot, RectBounds, Shape, StarFrame, Vec2,
     shape_center, translate_shape,
 };

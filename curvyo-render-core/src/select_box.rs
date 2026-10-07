@@ -9,11 +9,11 @@
 //! Each selected or hovered object's own bounding box reaches here as four
 //! document-space corners (oriented to the object's own rotation,
 //! `object-transform` acceptance criterion 18), computed by
-//! `vecmanf_ui_core::oriented_bounds` and passed through by
-//! `vecmanf-editor-wasm`: this crate cannot read `vecmanf-ui-core`'s
+//! `curvyo_ui_core::oriented_bounds` and passed through by
+//! `curvyo-editor-wasm`: this crate cannot read `curvyo-ui-core`'s
 //! selection or `object_bounds` directly (ADR 0011 §3).
 
-use vecmanf_document_core::{NodeId, Point, ViewTransform};
+use curvyo_document_core::{NodeId, Point, ViewTransform};
 
 use crate::color::RgbaColor;
 use crate::glyphs::{DrawList, quad_outline, thick_line};
@@ -21,7 +21,7 @@ use crate::theme;
 
 /// One object's selection box: its four corners in document space, in
 /// order around the perimeter — oriented to the object's own rotation
-/// (`vecmanf_ui_core::OrientedBox::document_corners`), which for an
+/// (`curvyo_ui_core::OrientedBox::document_corners`), which for an
 /// unrotated object is the plain axis-aligned box slice 4 shipped.
 pub type SelectionBox = [Point; 4];
 
@@ -356,11 +356,11 @@ mod tests {
         // `NodeId` has no public constructor outside `document-core`; any
         // real one round-tripped through a `Document` is fine here, since
         // these tests never read the id back, only the geometry it keys.
-        let document = vecmanf_document_core::Document::new(1);
-        document.create_rect(vecmanf_document_core::RectBounds {
+        let document = curvyo_document_core::Document::new(1);
+        document.create_rect(curvyo_document_core::RectBounds {
             origin: Point::new(0.0, 0.0),
-            width: vecmanf_document_core::Length::from_mm(1.0),
-            height: vecmanf_document_core::Length::from_mm(1.0),
+            width: curvyo_document_core::Length::from_mm(1.0),
+            height: curvyo_document_core::Length::from_mm(1.0),
         })
     }
 

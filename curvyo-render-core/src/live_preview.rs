@@ -6,7 +6,7 @@
 //! second render path, because the document's own strokes are drawn exactly
 //! as they are.
 
-use vecmanf_document_core::{ObjectSnapshot, ViewTransform};
+use curvyo_document_core::{ObjectSnapshot, ViewTransform};
 
 use crate::glyphs::DrawList;
 use crate::shape_preview::build_shape_live_preview;
@@ -42,7 +42,7 @@ pub fn build_live_edit_preview(objects: &[ObjectSnapshot], view: ViewTransform) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vecmanf_document_core::{
+    use curvyo_document_core::{
         AnchorId, Document, Length, NewAnchor, Point, RectBounds, ViewTransform,
     };
 

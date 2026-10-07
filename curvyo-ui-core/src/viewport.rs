@@ -1,19 +1,19 @@
 //! Pan and zoom view state (`specs/0004-canvas-navigation-and-selection/
 //! adrs.md`, feature-local decision "navigation state lives in a
-//! `viewport` module in `vecmanf-ui-core`"): a validated [`Zoom`] factor,
+//! `viewport` module in `curvyo-ui-core`"): a validated [`Zoom`] factor,
 //! the document point at the canvas's top-left corner, the canvas's own
 //! CSS-pixel size, and whichever drag-pan gesture (middle-mouse or
 //! Space+drag) is currently in flight.
 //!
 //! Ephemeral, per ADR 0009 §2: never written to the document, never part
-//! of the `.vmf` format, and resets to the default view on every `New`/
-//! `Open` — [`Session`](../../vecmanf_editor_wasm/session/index.html) owns
+//! of the `.curvyo` format, and resets to the default view on every `New`/
+//! `Open` — [`Session`](../../curvyo_editor_wasm/session/index.html) owns
 //! one [`Viewport`] instead of a bare
-//! [`vecmanf_document_core::ViewTransform`]. `vecmanf-render-core` still
+//! [`curvyo_document_core::ViewTransform`]. `curvyo-render-core` still
 //! only ever sees the plain `ViewTransform` ([`Viewport::view`]) — it
 //! cannot depend on this crate (ADR 0011 §3).
 
-use vecmanf_document_core::{Point, Vec2, ViewTransform};
+use curvyo_document_core::{Point, Vec2, ViewTransform};
 
 /// Screen pixels per document millimetre at 100% zoom: CSS's own "1in ==
 /// 96px" convention expressed per millimetre (`96 / 25.4`) — the
@@ -110,7 +110,7 @@ impl Viewport {
         }
     }
 
-    /// The plain [`ViewTransform`] `vecmanf-render-core` and every
+    /// The plain [`ViewTransform`] `curvyo-render-core` and every
     /// screen↔document conversion build from.
     #[must_use]
     pub fn view(&self) -> ViewTransform {

@@ -3,7 +3,7 @@
 //! editing/`, criteria 25 and 26): see [`crate::rectangle_tool`], whose
 //! pattern this follows.
 
-use vecmanf_document_core::{Document, EllipseFrame, Point, Shape};
+use curvyo_document_core::{Document, EllipseFrame, Point, Shape};
 
 use crate::modifiers::Modifiers;
 use crate::shape_tool_common::{CreateDragBox, CreateOutcome, CreatePreview, create_drag_box};

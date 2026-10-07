@@ -8,12 +8,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::too_many_lines)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Angle, CURRENT_FORMAT_VERSION, Document, InnerRatio, Length, NodeId, ObjectSnapshot, Point,
     PointCount, PrimitiveSnapshot, Shape, StarFrame, outline_of_rotated, pack, unpack,
 };
-use vecmanf_editor_wasm::{KeyInput, KeyOutcome, Session, Tool};
-use vecmanf_ui_core::oriented_bounds;
+use curvyo_editor_wasm::{KeyInput, KeyOutcome, Session, Tool};
+use curvyo_ui_core::oriented_bounds;
 
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)
@@ -28,7 +28,7 @@ fn key(session: &mut Session, k: &str) -> KeyOutcome {
 
 fn fixture(name: &str) -> Vec<u8> {
     let p = format!(
-        "{}/../vecmanf-document-core/tests/fixtures/{name}",
+        "{}/../curvyo-document-core/tests/fixtures/{name}",
         env!("CARGO_MANIFEST_DIR")
     );
     std::fs::read(&p).unwrap_or_else(|e| panic!("{p}: {e}"))
@@ -140,7 +140,7 @@ fn an_old_file_opens_with_the_same_outlines_and_the_box_of_its_shown_angle() {
 /// Criterion 13, 14: the shipped fixtures still open with every object equal.
 #[test]
 fn the_shipped_fixtures_round_trip_unchanged() {
-    for name in ["primitives_v3.vmf", "rotation_v5.vmf"] {
+    for name in ["primitives_v3.curvyo", "rotation_v5.curvyo"] {
         let bytes = fixture(name);
         let reference = unpack(7, &bytes).unwrap();
         let mut session = Session::open(3, &bytes).unwrap();

@@ -35,33 +35,33 @@ confidence-threshold = 0.9
 # dependencies, not this project's own chosen license.
 [[licenses.exceptions]]
 allow = ["AGPL-3.0-or-later"]
-name = "vecmanf-document-core"
+name = "curvyo-document-core"
 
 [[licenses.exceptions]]
 allow = ["AGPL-3.0-or-later"]
-name = "vecmanf-storage-io"
+name = "curvyo-storage-io"
 
 [[licenses.exceptions]]
 allow = ["AGPL-3.0-or-later"]
-name = "vecmanf-app"
+name = "curvyo-app"
 
 # path-node-editing's four new crates (specs/0002-path-node-editing/adrs.md:
 # "the four new crate manifests... carry AGPL-3.0-or-later").
 [[licenses.exceptions]]
 allow = ["AGPL-3.0-or-later"]
-name = "vecmanf-geometry-core"
+name = "curvyo-geometry-core"
 
 [[licenses.exceptions]]
 allow = ["AGPL-3.0-or-later"]
-name = "vecmanf-ui-core"
+name = "curvyo-ui-core"
 
 [[licenses.exceptions]]
 allow = ["AGPL-3.0-or-later"]
-name = "vecmanf-render-core"
+name = "curvyo-render-core"
 
 [[licenses.exceptions]]
 allow = ["AGPL-3.0-or-later"]
-name = "vecmanf-editor-wasm"
+name = "curvyo-editor-wasm"
 
 [advisories]
 # "Unmaintained" advisories with no safe upgrade available, from

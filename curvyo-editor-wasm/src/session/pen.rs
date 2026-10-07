@@ -3,7 +3,7 @@
 //! threshold. Split out of `session/mod.rs` (`docs/technical-debt.md`,
 //! "`Session` is one module past the size limit").
 
-use vecmanf_document_core::Length;
+use curvyo_document_core::Length;
 
 use super::{Session, Tool};
 
@@ -22,7 +22,7 @@ impl Session {
     /// rubber-band/live-curve preview — `None` when idle or the node
     /// tool is active.
     #[must_use]
-    pub fn pen_in_progress(&self) -> Option<&[vecmanf_document_core::NewAnchor]> {
+    pub fn pen_in_progress(&self) -> Option<&[curvyo_document_core::NewAnchor]> {
         if self.tool == Tool::Pen {
             self.pen.in_progress_nodes()
         } else {

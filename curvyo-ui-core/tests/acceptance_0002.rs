@@ -1,20 +1,20 @@
 //! Black-box acceptance tests for `specs/0002-path-node-editing/
 //! specification.md`'s 14 acceptance criteria, written against
-//! `vecmanf-ui-core`'s public API (`PenTool`, `NodeTool`, `NodeSelection`,
-//! `AnchorIdMinter`, `hit_test`) and `vecmanf-document-core`'s own public
+//! `curvyo-ui-core`'s public API (`PenTool`, `NodeTool`, `NodeSelection`,
+//! `AnchorIdMinter`, `hit_test`) and `curvyo-document-core`'s own public
 //! `Document`, independent of the implementer's inline `#[cfg(test)]`
 //! modules in `src/pen_tool.rs` / `src/node_tool.rs` — different scenarios
 //! and boundary values, as an integration-test-level second opinion.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, AnchorKind, Document, HandleSlot, NewAnchor, Point, Tolerance, Vec2,
 };
-use vecmanf_ui_core::{AnchorIdMinter, HitTolerances, NodeTool, PenPointerUpOutcome, PenTool};
+use curvyo_ui_core::{AnchorIdMinter, HitTolerances, NodeTool, PenPointerUpOutcome, PenTool};
 
-const CLOSE_TOLERANCE: vecmanf_document_core::Length = vecmanf_document_core::Length::from_mm(2.0);
-const DRAG_THRESHOLD: vecmanf_document_core::Length = vecmanf_document_core::Length::from_mm(1.0);
+const CLOSE_TOLERANCE: curvyo_document_core::Length = curvyo_document_core::Length::from_mm(2.0);
+const DRAG_THRESHOLD: curvyo_document_core::Length = curvyo_document_core::Length::from_mm(1.0);
 const TOLERANCES: HitTolerances = HitTolerances {
     point: Tolerance::from_mm(2.0),
     handle: Tolerance::from_mm(4.0),
@@ -225,7 +225,7 @@ fn three_node_path(
     a: AnchorId,
     b: AnchorId,
     c: AnchorId,
-) -> vecmanf_document_core::NodeId {
+) -> curvyo_document_core::NodeId {
     document.create_path(
         &[
             NewAnchor::corner(a, Point::new(0.0, 0.0)),
@@ -316,7 +316,7 @@ fn ac8_zero_delta_node_drag_is_a_no_op() {
 
     let after = document.export_loro_snapshot().expect("snapshot");
 
-    assert_eq!(outcome, vecmanf_ui_core::NodePointerUpOutcome::NoOp);
+    assert_eq!(outcome, curvyo_ui_core::NodePointerUpOutcome::NoOp);
     assert_eq!(document.path(path).unwrap().anchors[0].point, point_before);
     assert_eq!(
         before, after,
@@ -376,14 +376,14 @@ fn ac9_zero_delta_handle_drag_off_tip_is_a_no_op() {
     let down_outcome = tool.pointer_down(&paths, press_point, TOLERANCES, false);
     assert_eq!(
         down_outcome,
-        vecmanf_ui_core::NodePointerDownOutcome::Handle,
+        curvyo_ui_core::NodePointerDownOutcome::Handle,
         "the press must land on the handle, not the node or nothing"
     );
     let outcome = tool.pointer_up(&document, press_point);
 
     let after = document.export_loro_snapshot().expect("snapshot");
 
-    assert_eq!(outcome, vecmanf_ui_core::NodePointerUpOutcome::NoOp);
+    assert_eq!(outcome, curvyo_ui_core::NodePointerUpOutcome::NoOp);
     assert_eq!(
         document.path(path).unwrap().anchors[0].handle_out,
         handle_before,
@@ -623,7 +623,7 @@ fn ac14_clicking_exactly_on_a_node_selects_the_node_not_a_segment() {
     let mut tool = NodeTool::new();
     let paths = vec![document.path(path).unwrap()];
     let outcome = tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
-    assert_eq!(outcome, vecmanf_ui_core::NodePointerDownOutcome::Node);
+    assert_eq!(outcome, curvyo_ui_core::NodePointerDownOutcome::Node);
     assert_eq!(tool.selection().nodes(), &[a]);
     assert_eq!(tool.selection().segment(), None);
 }
@@ -649,7 +649,7 @@ fn ac14_make_curve_on_the_wraparound_segment_touches_the_right_handles() {
     let paths = vec![document.path(path).unwrap()];
     // Midpoint of the closing segment c -> a.
     let outcome = tool.pointer_down(&paths, Point::new(2.5, 5.0), TOLERANCES, false);
-    assert_eq!(outcome, vecmanf_ui_core::NodePointerDownOutcome::Segment);
+    assert_eq!(outcome, curvyo_ui_core::NodePointerDownOutcome::Segment);
     assert_eq!(tool.selection().segment(), Some((c, a)));
 
     tool.make_curve(&document);
@@ -675,7 +675,7 @@ fn ac14_make_curve_on_the_wraparound_segment_touches_the_right_handles() {
 /// AC6: every path, regardless of how it was drawn (straight AC1, curved
 /// AC2, or closed AC5), reads back the exact 0.25mm/black/no-fill
 /// placeholder style — checked directly against `PathSnapshot` here as a
-/// second, independent confirmation alongside `vecmanf-document-core`'s
+/// second, independent confirmation alongside `curvyo-document-core`'s
 /// own inline tests.
 #[test]
 fn ac6_every_path_shape_gets_the_identical_placeholder_style() {
@@ -711,7 +711,7 @@ fn ac6_every_path_shape_gets_the_identical_placeholder_style() {
     for id in [straight, curved, closed] {
         let snapshot = document.path(id).unwrap();
         assert!((snapshot.stroke_width.as_mm() - 0.25).abs() < 1e-9);
-        assert_eq!(snapshot.stroke, vecmanf_document_core::Color::BLACK);
+        assert_eq!(snapshot.stroke, curvyo_document_core::Color::BLACK);
         assert_eq!(snapshot.fill, None);
     }
 }

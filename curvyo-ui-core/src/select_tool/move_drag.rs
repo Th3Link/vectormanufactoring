@@ -4,7 +4,7 @@
 //! [`MoveDrag::resolve`] is the one resolving function the live preview and
 //! the release both call.
 
-use vecmanf_document_core::{Document, NodeId, ObjectSnapshot, Point, Vec2};
+use curvyo_document_core::{Document, NodeId, ObjectSnapshot, Point, Vec2};
 
 use super::{SelectDrag, SelectTool};
 use crate::anchor_id_minter::AnchorIdMinter;

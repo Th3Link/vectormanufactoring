@@ -4,9 +4,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use curvyo_document_core::{Document, Point, PointCount, Shape};
+use curvyo_ui_core::{CreateOutcome, EllipseTool, Modifiers, PolygonStarTool, RectangleTool};
 use proptest::prelude::*;
-use vecmanf_document_core::{Document, Point, PointCount, Shape};
-use vecmanf_ui_core::{CreateOutcome, EllipseTool, Modifiers, PolygonStarTool, RectangleTool};
 
 const TOL: f64 = 1e-9;
 

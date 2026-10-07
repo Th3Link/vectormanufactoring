@@ -3,7 +3,7 @@
 //! `specs/0002-path-node-editing/adrs.md`, "a pen session is one commit": from
 //! the first click to the double-click, close-path or Escape, the
 //! in-progress path lives *only* as this type's own ephemeral state
-//! (ADR 0009 §2) — [`vecmanf_document_core::Document`] gains exactly one
+//! (ADR 0009 §2) — [`curvyo_document_core::Document`] gains exactly one
 //! commit, at [`PenTool::finish`] or a closing
 //! [`PenTool::pointer_up`]; [`PenTool::escape`] drops this state and
 //! writes nothing.
@@ -14,7 +14,7 @@
 //! is a direct action the caller invokes, not something this state
 //! machine infers from two `pointer_up` calls.
 
-use vecmanf_document_core::{AnchorId, AnchorKind, Document, Length, NewAnchor, NodeId, Point};
+use curvyo_document_core::{AnchorId, AnchorKind, Document, Length, NewAnchor, NodeId, Point};
 
 use crate::AnchorIdMinter;
 
@@ -103,7 +103,7 @@ impl PenTool {
     /// eventual commit are structurally guaranteed to agree (`specs/0002-
     /// path-node-editing/adrs.md`: "commands carry resolved geometry,
     /// never geometric intent", applied here to the preview too). A
-    /// separate re-implementation of this rule in `vecmanf-render-core`
+    /// separate re-implementation of this rule in `curvyo-render-core`
     /// previously ignored `drag_threshold` entirely, so a drag just under
     /// it previewed a smooth node with handles that then committed, on
     /// release, as a corner node with none — this method is what closes
@@ -328,7 +328,7 @@ mod tests {
         assert_eq!(nodes[1].point, Point::new(10.0, 0.0));
         assert_eq!(nodes[0].kind, AnchorKind::Corner);
         assert_eq!(nodes[1].kind, AnchorKind::Corner);
-        assert_eq!(nodes[0].handle_out, vecmanf_document_core::Vec2::ZERO);
+        assert_eq!(nodes[0].handle_out, curvyo_document_core::Vec2::ZERO);
     }
 
     /// AC2: pressing down at C, dragging, then releasing adds a smooth
@@ -359,7 +359,7 @@ mod tests {
             "the node sits at C, not the release point"
         );
         assert_eq!(c.kind, AnchorKind::Symmetric);
-        assert_eq!(c.handle_out, vecmanf_document_core::Vec2::new(3.0, 4.0));
+        assert_eq!(c.handle_out, curvyo_document_core::Vec2::new(3.0, 4.0));
         assert_eq!(c.handle_in, c.handle_out.negated());
     }
 
@@ -593,8 +593,8 @@ mod tests {
             Some(NewAnchor {
                 id,
                 point: Point::new(0.0, 0.0),
-                handle_in: vecmanf_document_core::Vec2::new(-3.0, -4.0),
-                handle_out: vecmanf_document_core::Vec2::new(3.0, 4.0),
+                handle_in: curvyo_document_core::Vec2::new(-3.0, -4.0),
+                handle_out: curvyo_document_core::Vec2::new(3.0, 4.0),
                 kind: AnchorKind::Symmetric,
             })
         );
@@ -609,8 +609,8 @@ mod tests {
             Some(NewAnchor {
                 id,
                 point: Point::new(10.0, 0.0),
-                handle_in: vecmanf_document_core::Vec2::new(-3.0, -4.0),
-                handle_out: vecmanf_document_core::Vec2::new(3.0, 4.0),
+                handle_in: curvyo_document_core::Vec2::new(-3.0, -4.0),
+                handle_out: curvyo_document_core::Vec2::new(3.0, 4.0),
                 kind: AnchorKind::Symmetric,
             }),
             "held at C, the press position — not wherever the cursor ended up"
@@ -622,7 +622,7 @@ mod tests {
     /// handles) that `pointer_up` would actually commit at that cursor
     /// position — not a smooth node with handles that then disagrees with
     /// the commit on release. Before `pending_anchor` shared
-    /// `resolve_anchor` with `pointer_up`, `vecmanf-render-core`'s own
+    /// `resolve_anchor` with `pointer_up`, `curvyo-render-core`'s own
     /// re-implementation of this rule ignored `drag_threshold` entirely
     /// and always previewed a smooth node.
     #[test]
@@ -646,8 +646,8 @@ mod tests {
         pen.pointer_up(&mut minter, &document, cursor, DRAG_THRESHOLD);
         let committed = pen.in_progress_nodes().expect("still placing")[0];
         assert_eq!(committed.kind, AnchorKind::Corner);
-        assert_eq!(committed.handle_in, vecmanf_document_core::Vec2::ZERO);
-        assert_eq!(committed.handle_out, vecmanf_document_core::Vec2::ZERO);
+        assert_eq!(committed.handle_in, curvyo_document_core::Vec2::ZERO);
+        assert_eq!(committed.handle_out, curvyo_document_core::Vec2::ZERO);
     }
 
     /// A press held down over the close target (acceptance criterion 5)

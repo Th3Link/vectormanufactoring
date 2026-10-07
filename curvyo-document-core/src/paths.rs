@@ -50,7 +50,7 @@ const DEFAULT_CURVE_HANDLE_FRACTION: f64 = 1.0 / 3.0;
 /// rule (mirror for [`AnchorKind::Symmetric`], touch only the named handle
 /// for [`AnchorKind::Corner`]), as a single pure function rather than
 /// logic duplicated at each of its two callers. [`Document::set_handle`]
-/// calls this to build what it writes; `vecmanf-ui-core`'s live handle-
+/// calls this to build what it writes; `curvyo-ui-core`'s live handle-
 /// drag preview calls the exact same function to build what it
 /// *previews*, so the two can never independently drift apart (the same
 /// gap the pen-tool preview/commit split had — `specs/0002-path-node-
@@ -214,7 +214,7 @@ impl Document {
     /// handle vectors, plus the stroke width, together as **one commit**
     /// (`specs/0005-object-transform/adrs.md`'s resize-writes table:
     /// "anchors, `stroke_width`" — acceptance criteria 12, 8).
-    /// `vecmanf-ui-core` computes every value (via
+    /// `curvyo-ui-core` computes every value (via
     /// [`crate::path_model::PathSnapshot::scaled`] plus its own stroke-
     /// factor arithmetic) before calling this; this method only writes
     /// what was computed, resolving every named anchor before writing

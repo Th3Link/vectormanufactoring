@@ -1,13 +1,13 @@
 //! Regression coverage for PR #20 (`fix/canvas-interaction-bugs`, bug 1:
 //! "Node tool broken" / invisible horizontal and vertical strokes).
 //!
-//! The PR attributes this purely to missing MSAA in `vecmanf-editor-
+//! The PR attributes this purely to missing MSAA in `curvyo-editor-
 //! wasm::gpu` (anti-aliasing cannot fix geometry that was never
 //! generated in the first place). Verifying the GPU-side fix needs a
-//! real browser (`vecmanf-editor-wasm`'s `gpu`/`wasm_api` modules only
+//! real browser (`curvyo-editor-wasm`'s `gpu`/`wasm_api` modules only
 //! compile for `wasm32`, see its own `lib.rs` doc comment), but the
 //! *tessellation* that feeds the GPU — whether `lyon`, via
-//! `vecmanf-render-core`'s private `stroke` module, actually emits
+//! `curvyo-render-core`'s private `stroke` module, actually emits
 //! non-degenerate triangle geometry for an exactly horizontal or
 //! exactly vertical segment at all — is pure, host-testable geometry.
 //! This locks that in independently of any rendering/anti-aliasing
@@ -16,8 +16,8 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use vecmanf_document_core::{AnchorId, AnchorKind, Color, Document, NewAnchor, Point};
-use vecmanf_render_core::{DecorationInput, build_draw_list, build_pen_preview};
+use curvyo_document_core::{AnchorId, AnchorKind, Color, Document, NewAnchor, Point};
+use curvyo_render_core::{DecorationInput, build_draw_list, build_pen_preview};
 
 fn two_node_path(a: Point, b: Point) -> Document {
     let document = Document::new(1);
@@ -43,7 +43,7 @@ fn committed_horizontal_path_stroke_is_non_empty() {
     let snapshot = document.path(id).expect("exists");
     let list = build_draw_list(
         &[snapshot],
-        vecmanf_document_core::ViewTransform::identity(),
+        curvyo_document_core::ViewTransform::identity(),
         &DecorationInput::default(),
     );
     // Two node glyphs (outline+fill, 2 quads = 4 triangles each) account
@@ -66,7 +66,7 @@ fn committed_vertical_path_stroke_is_non_empty() {
     let snapshot = document.path(id).expect("exists");
     let list = build_draw_list(
         &[snapshot],
-        vecmanf_document_core::ViewTransform::identity(),
+        curvyo_document_core::ViewTransform::identity(),
         &DecorationInput::default(),
     );
     assert!(
@@ -92,12 +92,12 @@ fn horizontal_and_diagonal_strokes_of_equal_length_tessellate_comparably() {
     let d_id = diagonal.object_ids()[0];
     let h_list = build_draw_list(
         &[horizontal.path(h_id).unwrap()],
-        vecmanf_document_core::ViewTransform::identity(),
+        curvyo_document_core::ViewTransform::identity(),
         &DecorationInput::default(),
     );
     let d_list = build_draw_list(
         &[diagonal.path(d_id).unwrap()],
-        vecmanf_document_core::ViewTransform::identity(),
+        curvyo_document_core::ViewTransform::identity(),
         &DecorationInput::default(),
     );
 
@@ -126,24 +126,24 @@ fn horizontal_and_diagonal_strokes_of_equal_length_tessellate_comparably() {
 
 /// The in-progress pen-tool preview's own connecting stroke (a separate
 /// code path from the committed-path one above, per
-/// `vecmanf-render-core::pen_preview`'s own doc comment) must likewise
+/// `curvyo-render-core::pen_preview`'s own doc comment) must likewise
 /// not degenerate for an exactly horizontal or vertical segment between
 /// two placed, not-yet-committed nodes.
 #[test]
 fn in_progress_pen_preview_stroke_is_non_empty_for_axis_aligned_segments() {
     let horizontal_nodes = [
-        vecmanf_document_core::AnchorSnapshot {
+        curvyo_document_core::AnchorSnapshot {
             id: AnchorId::new(1, 1),
             point: Point::new(0.0, 20.0),
-            handle_in: vecmanf_document_core::Vec2::ZERO,
-            handle_out: vecmanf_document_core::Vec2::ZERO,
+            handle_in: curvyo_document_core::Vec2::ZERO,
+            handle_out: curvyo_document_core::Vec2::ZERO,
             kind: AnchorKind::Corner,
         },
-        vecmanf_document_core::AnchorSnapshot {
+        curvyo_document_core::AnchorSnapshot {
             id: AnchorId::new(1, 2),
             point: Point::new(60.0, 20.0),
-            handle_in: vecmanf_document_core::Vec2::ZERO,
-            handle_out: vecmanf_document_core::Vec2::ZERO,
+            handle_in: curvyo_document_core::Vec2::ZERO,
+            handle_out: curvyo_document_core::Vec2::ZERO,
             kind: AnchorKind::Corner,
         },
     ];
@@ -151,14 +151,14 @@ fn in_progress_pen_preview_stroke_is_non_empty_for_axis_aligned_segments() {
         &horizontal_nodes[..1],
         None,
         None,
-        vecmanf_document_core::ViewTransform::identity(),
+        curvyo_document_core::ViewTransform::identity(),
         false,
     );
     let with_segment_list = build_pen_preview(
         &horizontal_nodes,
         None,
         None,
-        vecmanf_document_core::ViewTransform::identity(),
+        curvyo_document_core::ViewTransform::identity(),
         false,
     );
     assert!(

@@ -7,7 +7,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use vecmanf_storage_io::{FsError, read_to_vec, write_atomic};
+use curvyo_storage_io::{FsError, read_to_vec, write_atomic};
 
 /// Writing to a path whose parent directory does not exist must return a
 /// clean error, not panic — `write_atomic` creates no directories itself
@@ -16,7 +16,7 @@ use vecmanf_storage_io::{FsError, read_to_vec, write_atomic};
 #[test]
 fn write_atomic_to_a_missing_parent_directory_errors_cleanly() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let path = dir.path().join("does-not-exist-yet").join("project.vmf");
+    let path = dir.path().join("does-not-exist-yet").join("project.curvyo");
 
     let result = write_atomic(&path, b"bytes");
 
@@ -39,7 +39,7 @@ fn read_to_vec_of_a_directory_errors_cleanly() {
 #[test]
 fn zero_byte_payload_round_trips() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let path = dir.path().join("empty.vmf");
+    let path = dir.path().join("empty.curvyo");
 
     write_atomic(&path, b"").expect("write empty bytes");
     let read_back = read_to_vec(&path).expect("read");
@@ -54,7 +54,7 @@ fn zero_byte_payload_round_trips() {
 #[test]
 fn write_atomic_leaves_no_temp_file_on_a_brand_new_path() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let path = dir.path().join("new-project.vmf");
+    let path = dir.path().join("new-project.curvyo");
 
     write_atomic(&path, b"first ever save").expect("write");
 

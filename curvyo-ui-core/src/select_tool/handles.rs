@@ -5,7 +5,7 @@
 //! it is drawn, the parameter handles from 72 px) and the queries over it.
 //! Split out of `select_tool.rs`; a child module of it.
 
-use vecmanf_document_core::{ObjectSnapshot, Point};
+use curvyo_document_core::{ObjectSnapshot, Point};
 
 use super::SelectTool;
 use crate::object_selection::ObjectSelection;
@@ -185,7 +185,7 @@ impl SelectTool {
 
 #[cfg(test)]
 mod tests {
-    use vecmanf_document_core::{Angle, Document, Length, RectBounds};
+    use curvyo_document_core::{Angle, Document, Length, RectBounds};
 
     use super::*;
     use crate::ResizeDirection;

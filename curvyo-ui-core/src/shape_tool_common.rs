@@ -6,14 +6,14 @@
 //! The shape tools only create; every edit of an existing shape is the
 //! Select tool's.
 
-use vecmanf_document_core::{NodeId, Point, Shape};
+use curvyo_document_core::{NodeId, Point, Shape};
 
 use crate::modifiers::Modifiers;
 
 /// A create-drag's live, uncommitted preview (`specification.md`'s "Live
 /// creation feedback": "a maker dragging out a rectangle sees a rectangle
 /// updating live, not a placeholder box that snaps to shape on release").
-/// Never touches the [`vecmanf_document_core::Document`] (ADR 0009 §2:
+/// Never touches the [`curvyo_document_core::Document`] (ADR 0009 §2:
 /// ephemeral state); read each frame by the host for the on-canvas outline
 /// and the numeric readout.
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -40,7 +40,7 @@ That trade is what makes it an escalation rather than the first choice.
 
 ## Node selection holds one path
 
-`vecmanf-ui-core`'s `NodeSelection` refers to a single path. After
+`curvyo-ui-core`'s `NodeSelection` refers to a single path. After
 "object to path" on several primitives, only the first converted path is
 selected in the node tool (`specs/0003-primitive-shapes/adrs.md`, 2026-10-04
 PR #10 review note). Node editing across several paths at once, as
@@ -198,7 +198,7 @@ and edit a document they cannot render faithfully.
 
 **Resolution:** an "embed fonts when sharing" action alongside the existing
 export option, plus a visible substituted-font marker. Both are stories; the
-write-back restriction must be enforced in `vecmanf-document-core`, not only in
+write-back restriction must be enforced in `curvyo-document-core`, not only in
 the UI, because it is a correctness rule rather than a hint.
 
 ## Record conflicts are not merged automatically
@@ -212,7 +212,7 @@ resolve.
 
 **Resolution:** detect and surface conflict copies in the UI with a
 side-by-side resolution view (a story), on top of
-`vecmanf-library-core`'s `merge()`. Extending the CRDT to records is the
+`curvyo-library-core`'s `merge()`. Extending the CRDT to records is the
 expensive alternative and is not planned.
 
 ## Loro is a young dependency in the most expensive position
@@ -268,7 +268,7 @@ Removing a collaborator rotates the document key and re-wraps it for everyone
 who remains ([ADR 0008](adr/0008-end-to-end-encryption-of-sync-and-collaboration.md)
 §8, [ADR 0010](adr/0010-document-keyring-admins-and-revocation.md) §8), so the
 removed device cannot read anything written afterwards. It can still read
-everything it already had: the plaintext `.vmf` on its own disk, its cached
+everything it already had: the plaintext `.curvyo` on its own disk, its cached
 updates, and every epoch key it legitimately held. There is no mechanism — in
 this product or in any encryption scheme — that retracts information somebody has
 already decrypted.
@@ -306,7 +306,7 @@ anything that could do so could also be done by a relay operator. If every admin
 of a document loses both keychain and recovery key, the document keeps working
 for its existing members but its membership can never change again. If every
 *member* also loses their keys, the only copy left is an ordinary plaintext
-`.vmf` on somebody's disk, recovered by copying the file by hand and forking it
+`.curvyo` on somebody's disk, recovered by copying the file by hand and forking it
 into a new document with a new genesis entry (§13).
 
 **Resolution:** not a code fix — it is the designed worst case. The mitigation is
@@ -325,7 +325,7 @@ of code whose failures tests do not stumble over by accident.
 
 **Resolution:** the rules are pure functions over an entry set with no clock and
 no I/O, so small membership graphs can be enumerated exhaustively in tests —
-that, plus the security review slot shared with `vecmanf-crypto-core` below,
+that, plus the security review slot shared with `curvyo-crypto-core` below,
 before the first collaboration story ships.
 
 ## No key recovery for encrypted cloud sync
@@ -359,7 +359,7 @@ Join time and server storage therefore depend on client behaviour.
 log-length threshold), measured against a real long-lived room. Document growth
 is the related entry below.
 
-## `vecmanf-crypto-core` is our code in the path of every byte
+## `curvyo-crypto-core` is our code in the path of every byte
 
 The AEAD envelope, the header format and the invite encoding are ours
 ([ADR 0008](adr/0008-end-to-end-encryption-of-sync-and-collaboration.md) §4),
@@ -416,7 +416,7 @@ everything except the wire itself.
 ## Document files grow with edit history
 
 A CRDT document carries operation metadata and tombstones, so a long-lived
-`.vmf` grows beyond its content and costs more memory when open
+`.curvyo` grows beyond its content and costs more memory when open
 ([ADR 0004](adr/0004-persistence-and-cross-machine-sync.md) consequences). Undo
 adds to this rather than shrinking it: an undo is a new forward commit, not a
 rewind ([ADR 0009](adr/0009-concurrent-editing-semantics.md) §1), so
@@ -449,7 +449,7 @@ Per-record files mean a large asset or font collection is thousands of small
 files, listed and searched by walking the directory
 ([ADR 0004](adr/0004-persistence-and-cross-machine-sync.md) consequences).
 
-**Resolution:** a rebuildable local index (SQLite in `vecmanf-storage-io`,
+**Resolution:** a rebuildable local index (SQLite in `curvyo-storage-io`,
 never authoritative), once a collection is big enough to measure the problem.
 
 ## Canvas performance on Linux/WebKitGTK: measured once, renderer not cached
@@ -479,7 +479,7 @@ selected):** 102 ms per frame at rest before the change, almost all of it
 reading every object out of the document, which the frame did about six times.
 `draw_list` now reads once per frame (18 ms at rest) and a Select drag keeps
 the snapshot it started with, so the 200-object move frame, blue overlay
-included, costs 8.5 ms (`vecmanf-editor-wasm/tests/unified_object_editing.rs`,
+included, costs 8.5 ms (`curvyo-editor-wasm/tests/unified_object_editing.rs`,
 the `#[ignore]` benchmark). That meets 50 fps but not the architect's 8 ms
 budget by 0.5 ms, and a frame at rest with no drag still costs 18 ms. The
 cache above needs a cheap document version, a read-only accessor on
@@ -513,7 +513,7 @@ multi-monitor mixed-DPI report comes in.
 The fix below adds a multisampled offscreen color target sized to the
 canvas's physical (DPR-scaled) backing buffer, recreated on every resize,
 at the highest sample count the adapter's own surface format reports
-supporting (`vecmanf-editor-wasm::gpu::choose_sample_count`, preferring 8x
+supporting (`curvyo-editor-wasm::gpu::choose_sample_count`, preferring 8x
 and falling back to WebGL2's guaranteed 4x floor). On a HiDPI display the
 backing buffer is already up to 4x the pixel count of the equivalent 1x
 canvas (`devicePixelRatio` 2 → 2x width × 2x height); 8x MSAA on top of
@@ -535,7 +535,7 @@ either way.
 pan/zoom interactive — the same spike shape, two more input dimensions
 (DPR, MSAA, and now whichever sample count `choose_sample_count` actually
 picks on that hardware). If it fails, the fallback lever is
-`vecmanf-editor-wasm::gpu::PREFERRED_SAMPLE_COUNTS`: drop the 8 from the
+`curvyo-editor-wasm::gpu::PREFERRED_SAMPLE_COUNTS`: drop the 8 from the
 list (falls back to the 4x floor, still anti-aliased, a fraction of the
 cost) or make the choice DPR-conditional (e.g. no MSAA once the backing
 buffer is already oversampled past some ratio) before reaching for anything
@@ -643,7 +643,7 @@ upgrade: `im` has a maintained fork (`imbl`) loro could adopt, and
 when either upstream does, or when a real vulnerability (not just
 "unmaintained") lands in one of these four.
 
-## `vecmanf-document-core` needs a JavaScript host on `wasm32`
+## `curvyo-document-core` needs a JavaScript host on `wasm32`
 
 The crate builds clean for `wasm32-unknown-unknown`, and that build does not
 mean what it looks like it means. `loro` → `loro-internal` pulls
@@ -652,7 +652,7 @@ mean what it looks like it means. `loro` → `loro-internal` pulls
 `default-features = false` does not prevent it. In the browser this is free —
 ADR 0001's target *is* a JS host. In a wasm host without JavaScript it is fatal
 at instantiation, and ADR 0005's `wasmtime` plugin guests are such a host,
-reaching this crate through `vecmanf-plugin → vecmanf-document-core`
+reaching this crate through `curvyo-plugin → curvyo-document-core`
 ([ADR 0011](adr/0011-workspace-and-crate-layout.md) consequences, "Every plugin
 guest currently carries Loro").
 
@@ -661,7 +661,7 @@ because the build succeeds: nothing fails until something tries to run the
 module outside a browser.
 
 **Resolution:** two parts, neither urgent until the plugin-host story.
-`vecmanf-model-core` ([ADR 0011](adr/0011-workspace-and-crate-layout.md) §8,
+`curvyo-model-core` ([ADR 0011](adr/0011-workspace-and-crate-layout.md) §8,
 option D) is the structural fix and now has a second, sharper trigger than
 guest binary size — a plugin guest that needs units and paths but not the CRDT
 would carry neither Loro nor a JS requirement, and the extraction is a `lib.rs`
@@ -687,7 +687,7 @@ Pinning `jobs` repo-wide slows every machine and every CI runner to work around
 one sandbox, so it is set per-machine via `CARGO_BUILD_JOBS` instead.
 
 **Resolution:** drop `RUST_MIN_STACK` at the next toolchain upgrade that no
-longer needs it — check by removing the line and building `vecmanf-app`. If a
+longer needs it — check by removing the line and building `curvyo-app`. If a
 future toolchain still needs it, it stops being a workaround and becomes a
 documented build requirement in the README.
 
@@ -724,7 +724,7 @@ no longer matches what's actually there).
 
 ## `Session` is one module past the size limit
 
-`vecmanf-editor-wasm/src/session/mod.rs` has about 730 lines of non-test
+`curvyo-editor-wasm/src/session/mod.rs` has about 730 lines of non-test
 code on `main` and about 800 after `object-transform`, against the ~500-line
 limit in `CLAUDE.md` §5. Each slice adds its tool's binding, readout and
 decoration input there. Per-tool files already exist (`session/select.rs`,
@@ -732,7 +732,7 @@ decoration input there. Per-tool files already exist (`session/select.rs`,
 the decoration-input assembly into their own submodules. Not done in a
 feature PR because it touches every tool's binding at once.
 
-The same PR splits `vecmanf-ui-core/src/transform_handle_layout.rs` (about
+The same PR splits `curvyo-ui-core/src/transform_handle_layout.rs` (about
 550 lines of non-test code after `object-transform`). It holds two
 responsibilities: transform-handle layout and hit test, and the resize/
 rotate drag arithmetic (`ResizedBox`, `resize_local_box` and its helpers,
@@ -757,7 +757,7 @@ the live select preview, `draw_list` and the open-error text moved to
 `transform_handle_layout.rs` keeps layout and hit test while the arithmetic
 is in `transform_math.rs`. Left open, after the refinements: `select_tool.rs` (about 530
 non-test lines), `transform_drag.rs` (about 505), `transform_math.rs` (about
-527) and `vecmanf-editor-wasm/src/wasm_api.rs` (about 770, 154 of them added
+527) and `curvyo-editor-wasm/src/wasm_api.rs` (about 770, 154 of them added
 here by the entry, hint and modifier surface) are over or at the ~500-line
 limit. The typed entry and double-click dispatch already moved to
 `select_tool/entry.rs` and `transform_commit.rs`; `advanced-selection`, which
@@ -779,12 +779,12 @@ grows. PR 2 removes about 80 lines from `wasm_api.rs` and most of
 story):* `select_tool.rs` is 375 non-test lines (the handle queries moved to
 `select_tool/handles.rs`), `transform_drag.rs` about 380, `transform_math.rs`
 about 435, `session/mod.rs` 510 (it gained the `drag_objects` field) and
-`vecmanf-editor-wasm/src/wasm_api.rs` 779 (the Select bar's calls are in
+`curvyo-editor-wasm/src/wasm_api.rs` 779 (the Select bar's calls are in
 `wasm_select_bar.rs`; PR 2 removes about 80 lines here).
 
 *2026-10-06 (implementer, `unified-object-editing` PR 2):* the shape tools are
 creation-only. `session/shapes.rs` is 170 non-test lines, `session/mod.rs` 499,
-`vecmanf-editor-wasm/src/wasm_api.rs` 760 (about 20 lines less than the
+`curvyo-editor-wasm/src/wasm_api.rs` 760 (about 20 lines less than the
 expected 80: the Select bar's calls were already in `wasm_select_bar.rs`, and the
 two new surfaces `double_click -> bool` and the polygon/star setters stayed),
 `select_tool.rs` 379, `transform_drag.rs` 379. Only `wasm_api.rs` is still over

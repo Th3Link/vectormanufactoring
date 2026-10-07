@@ -8,10 +8,10 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use vecmanf_document_core::{Document, Point, Shape};
-use vecmanf_editor_wasm::{Session, Tool};
+use curvyo_document_core::{Document, Point, Shape};
+use curvyo_editor_wasm::{Session, Tool};
 
-fn rect_origin(document: &Document, id: vecmanf_document_core::NodeId) -> Point {
+fn rect_origin(document: &Document, id: curvyo_document_core::NodeId) -> Point {
     let Shape::Rect { bounds, .. } = document.primitive(id).expect("exists").shape else {
         panic!("expected rect");
     };
@@ -20,7 +20,7 @@ fn rect_origin(document: &Document, id: vecmanf_document_core::NodeId) -> Point 
 
 fn document_of(session: &Session) -> Document {
     let bytes = session.pack("0.1.0").expect("pack");
-    vecmanf_document_core::unpack(99, &bytes).expect("unpack")
+    curvyo_document_core::unpack(99, &bytes).expect("unpack")
 }
 
 #[test]

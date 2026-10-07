@@ -14,12 +14,12 @@
 #![allow(missing_docs, clippy::doc_markdown, clippy::type_complexity)]
 #![allow(clippy::too_many_arguments, clippy::needless_range_loop)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Angle, Document, Length, NewAnchor, NodeId, ObjectSnapshot, Point, PrimitiveSnapshot,
     RectBounds, ViewTransform, pack,
 };
-use vecmanf_editor_wasm::{Session, Tool};
-use vecmanf_render_core::{
+use curvyo_editor_wasm::{Session, Tool};
+use curvyo_render_core::{
     DrawList, RgbaColor, SelectDecorationInput, Vertex, build_primitive_strokes,
     build_select_draw_list,
 };
@@ -78,7 +78,7 @@ fn rect_corners(x: f64, y: f64, w: f64, h: f64) -> [Point; 4] {
 
 fn prims_of(s: &Session) -> Vec<PrimitiveSnapshot> {
     let bytes = s.pack("0.1.0").unwrap();
-    let d = vecmanf_document_core::unpack(9, &bytes).unwrap();
+    let d = curvyo_document_core::unpack(9, &bytes).unwrap();
     d.object_ids()
         .into_iter()
         .filter_map(|id| match d.object(id).unwrap() {

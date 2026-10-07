@@ -92,7 +92,7 @@ AC 8 conflicts with AC 6 as written (see "Flagged to the lead", 1).
   around the content. The `ux-engineer` may choose otherwise for resize
   alone.
 - **2026-10-05: the active page lives in the editor `Session`** (a
-  `session/pages.rs` glue module in `vecmanf-editor-wasm`, the same pattern
+  `session/pages.rs` glue module in `curvyo-editor-wasm`, the same pattern
   as `session/select.rs`). It holds one `PageId`. Render and hit-test
   snapshots come from `Document::objects_on(page)`, so no other page is
   visible or selectable by construction (AC 15). A page switch clears
@@ -106,7 +106,7 @@ AC 8 conflicts with AC 6 as written (see "Flagged to the lead", 1).
 - **2026-10-05: rulers are computed in `ui-core` and drawn by the frontend.
   They are not part of `render-core`.** They have no document-model impact.
   `render-core` cannot draw text, and ruler labels are text. A `ruler`
-  module in `vecmanf-ui-core` has one job: tick positions for one viewport
+  module in `curvyo-ui-core` has one job: tick positions for one viewport
   axis. Input is the `Viewport` and the canvas length in px. Output is a
   list of (screen px, value mm, major or minor). The major step is the
   smallest value in {1, 2, 5} × 10ⁿ mm whose on-screen length is at least
@@ -126,14 +126,14 @@ AC 8 conflicts with AC 6 as written (see "Flagged to the lead", 1).
   (AC 11–12). `pen_preview.rs` fills its knockouts with `CANVAS_BG`, so they
   will show as light dots on the pasteboard. That is a `ux-engineer` check.
 - **2026-10-05: the crate boundary.**
-  - `vecmanf-document-core`: page storage, `PageId`, `pages()`,
+  - `curvyo-document-core`: page storage, `PageId`, `pages()`,
     `page_size`, `objects_on`, `add_page`, `remove_page`, `resize_page`,
     `fit_page`, object creation under a page, migration, zero-page repair,
     `document.json`, validation, `MIN_PAGE_MM`.
-  - `vecmanf-geometry-core`: no change.
-  - `vecmanf-ui-core`: `ruler`, and the content-box union over `object_bounds`.
-  - `vecmanf-render-core`: the page rectangle and the pasteboard colour.
-  - `vecmanf-editor-wasm`: `session/pages.rs`, the ruler tick export, and the
+  - `curvyo-geometry-core`: no change.
+  - `curvyo-ui-core`: `ruler`, and the content-box union over `object_bounds`.
+  - `curvyo-render-core`: the page rectangle and the pasteboard colour.
+  - `curvyo-editor-wasm`: `session/pages.rs`, the ruler tick export, and the
     clear colour in `gpu.rs`.
   - `frontend/`: the rulers, the Pages section, the page-size fields, Fit to
     content, and the status bar.

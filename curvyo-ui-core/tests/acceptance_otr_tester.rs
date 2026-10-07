@@ -1,5 +1,5 @@
 //! Independent tester acceptance tests for
-//! `specs/object-transform-refinements/specification.md`, `vecmanf-ui-core`
+//! `specs/object-transform-refinements/specification.md`, `curvyo-ui-core`
 //! share: the 22.5 degree snap stops (criteria 33-36, 47) and the entry
 //! parser (criteria 19, 21, 30). Expected values come from the specification
 //! text and from a brute-force reference written here, never from the code
@@ -8,9 +8,9 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
 
+use curvyo_document_core::Angle;
+use curvyo_ui_core::{format_degrees, parse_entry_number, snap_angle, snap_skew_angle};
 use proptest::prelude::*;
-use vecmanf_document_core::Angle;
-use vecmanf_ui_core::{format_degrees, parse_entry_number, snap_angle, snap_skew_angle};
 
 fn snap_deg(raw: f64) -> f64 {
     snap_angle(Angle::from_radians(raw.to_radians()))
@@ -240,11 +240,11 @@ fn ac30_parser_never_returns_non_finite_even_for_huge_digit_strings() {
 // ----------------------------------------------------------------------
 
 mod select_tool_state {
-    use vecmanf_document_core::{
+    use curvyo_document_core::{
         AnchorId, Document, Length, NewAnchor, ObjectSnapshot, Point, RectBounds, Tolerance,
     };
-    use vecmanf_ui_core::{AnchorIdMinter, Modifiers};
-    use vecmanf_ui_core::{
+    use curvyo_ui_core::{AnchorIdMinter, Modifiers};
+    use curvyo_ui_core::{
         EditHandle, ObjectSelection, ResizeDirection, SelectTool, Side, TransformHandleTolerances,
         oriented_bounds,
     };

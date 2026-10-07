@@ -7,12 +7,12 @@
 
 use std::io::{Cursor, Write};
 
-use loro::LoroDoc;
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, AnchorKind, Angle, CURRENT_FORMAT_VERSION, CopySource, Document, EllipseFrame,
     InnerRatio, Length, NewAnchor, NodeId, ObjectEditError, ObjectSnapshot, Point, PointCount,
     RectBounds, StarFrame, Vec2, pack, unpack,
 };
+use loro::LoroDoc;
 
 const OFFSET: Vec2 = Vec2::new(12.5, -3.25);
 
@@ -380,8 +380,8 @@ fn a_copy_and_a_concurrent_move_of_the_original_both_survive_the_merge() {
             panic!("a primitive")
         };
         let (
-            vecmanf_document_core::Shape::Rect { bounds: o, .. },
-            vecmanf_document_core::Shape::Rect { bounds: c, .. },
+            curvyo_document_core::Shape::Rect { bounds: o, .. },
+            curvyo_document_core::Shape::Rect { bounds: c, .. },
         ) = (original.shape, copied.shape)
         else {
             panic!("rectangles")

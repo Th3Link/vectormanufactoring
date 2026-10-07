@@ -15,20 +15,20 @@ selection), the keyboard gate, and the R and S entries of Part F. Criteria 1 to
 are out of scope here. Worktree
 `/home/marc/workbench/vecmanf-claude/edit-polish-1`, from `origin/main` at
 `450f5f3`. PR 2 (dashed box, Part E) runs in `edit-polish-2` and touches
-`vecmanf-render-core` selection-box code and `set_device_pixel_ratio`, which
+`curvyo-render-core` selection-box code and `set_device_pixel_ratio`, which
 PR 1 does not.
 
 ### Affected crates and modules
 
-- `vecmanf-document-core`: `primitive_model.rs` (`ObjectSnapshot::orientation`).
-- `vecmanf-ui-core`: new `modifiers.rs`; `poly_star_tool.rs`,
+- `curvyo-document-core`: `primitive_model.rs` (`ObjectSnapshot::orientation`).
+- `curvyo-ui-core`: new `modifiers.rs`; `poly_star_tool.rs`,
   `transform_math.rs` (`rotate_delta_for`), `transform_drag.rs`,
   `transform_entry.rs` (three readers), `node_tool.rs` (`cancel_drag`,
   `clear_selection`, Split selects one node, hit-test tie),
   `hit_test.rs` (tie goes to a selected node), `select_tool/entry.rs`
   (`open_entry_for_key`), the three shape tools (`drag_in_flight`).
-- `vecmanf-render-core`: `decorations.rs` (selected node glyphs drawn last).
-- `vecmanf-editor-wasm`: new `session/keys.rs` (`escape`, `delete_selected`,
+- `curvyo-render-core`: `decorations.rs` (selected node glyphs drawn last).
+- `curvyo-editor-wasm`: new `session/keys.rs` (`escape`, `delete_selected`,
   `decide`, `key_down`), new `wasm_keys.rs`; `session/mod.rs` (`button_down`,
   `pointer_cancelled`, `escape() -> EscapeStep`), `session/shapes.rs`,
   `session/select_view.rs`, `session/transform_entry.rs`, `lib.rs`.
@@ -108,10 +108,10 @@ and read where the select decoration input is built, `session/select_view.rs`).
 
 ### Affected crates/modules
 
-- `vecmanf-render-core`: new `select_box.rs` (moved box code, `fit_dashes`,
+- `curvyo-render-core`: new `select_box.rs` (moved box code, `fit_dashes`,
   the pixel snap, the dashed box); `select_decoration.rs` loses the box code;
   `theme.rs` (dash and skew guide constants); `lib.rs`.
-- `vecmanf-editor-wasm`: `session/mod.rs` (one field and `set_device_pixel_ratio`),
+- `curvyo-editor-wasm`: `session/mod.rs` (one field and `set_device_pixel_ratio`),
   `session/select_view.rs` (passes the ratio), `wasm_api.rs` (the ratio is set
   from the two calls that already receive it; the file does not grow).
 - `docs/design-system.md`: the skew guide row, the box rows.
@@ -171,8 +171,8 @@ and read where the select decoration input is built, `session/select_view.rs`).
 
 ### Validation
 
-Unit tests in `vecmanf-render-core` (pure functions and draw lists), one session
-test in `vecmanf-editor-wasm`, the pixel readback in the browser pane, and the
+Unit tests in `curvyo-render-core` (pure functions and draw lists), one session
+test in `curvyo-editor-wasm`, the pixel readback in the browser pane, and the
 whole CI gate (`.github/workflows/ci.yml`) on the PR head.
 
 ## PR 3: `story/edit-polish-typed-skew-move`
@@ -187,14 +187,14 @@ change, no `format_version` change.
 
 ### Affected crates and modules
 
-- `vecmanf-ui-core`: new `skew_entry.rs`, `move_entry.rs`; `object_bounds.rs`
+- `curvyo-ui-core`: new `skew_entry.rs`, `move_entry.rs`; `object_bounds.rs`
   (`object_outline_bounds`), `select_tool/handles.rs` (`entry_anchor`),
   `select_tool/entry.rs` (`OpenEntry::{Skew, Move}`, the centre-handle and
   skew double-click, `open_entry_for_key` for M, K, Shift+K),
   `select_tool.rs` (the centre press is recorded, `Ignored` deleted),
   `transform_commit.rs` (`commit_move`), `transform_entry.rs` (two
   `InvalidReason`s, `EntryKind::Skew`).
-- `vecmanf-editor-wasm`: `session/keys.rs` (M, K, Shift+K, two `KeyHint`s),
+- `curvyo-editor-wasm`: `session/keys.rs` (M, K, Shift+K, two `KeyHint`s),
   `session/transform_entry.rs` (skew view, anchor from the box),
   new `session/move_entry.rs`, new `wasm_move_entry.rs` (the outcome codes
   moved there so `wasm_api.rs` shrinks), `session/select_view.rs` (`skew-y`
@@ -315,17 +315,17 @@ on `main`, `origin/main` is merged too. No new crate, no new dependency, no
 
 ### Affected crates and modules
 
-- `vecmanf-document-core`: `objects.rs` (`duplicate_objects`, `CopySource`,
+- `curvyo-document-core`: `objects.rs` (`duplicate_objects`, `CopySource`,
   `ObjectEditError::AnchorIds`).
-- `vecmanf-ui-core`: new `select_tool/press.rs` (`classify_press`), new
+- `curvyo-ui-core`: new `select_tool/press.rs` (`classify_press`), new
   `select_tool/move_drag.rs` (`MoveDrag::resolve`); `select_tool.rs` (the move
   arms and the press classification leave it), `select_tool/preview.rs`
   (`LiveEdit.copy`, `live_offset` folded into `resolve`), `select_tool/entry.rs`
   (Ctrl at the second press), `transform_commit.rs` (`commit_move(copy,
   minter)`), `move_entry.rs` (Copy), `transform_entry.rs` (U+2212).
-- `vecmanf-render-core`: new `move_axes.rs` (`MoveAxes`, drawn before the blue
+- `curvyo-render-core`: new `move_axes.rs` (`MoveAxes`, drawn before the blue
   outline), `theme.rs` (two tokens).
-- `vecmanf-editor-wasm`: `session/select.rs` (modifiers into the drag,
+- `curvyo-editor-wasm`: `session/select.rs` (modifiers into the drag,
   minter), `session/select_view.rs` (move readout, `live_objects_in` copy
   rule, handle hint), `session/draw.rs` (axes), new `session/move_indicators.rs`,
   new `wasm_move.rs` (`move_indicators`), `session/move_entry.rs` and

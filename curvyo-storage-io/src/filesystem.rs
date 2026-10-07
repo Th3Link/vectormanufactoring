@@ -1,9 +1,9 @@
 //! Atomic file writes and plain reads — the one module this slice needs
-//! from `vecmanf-storage-io` (ADR 0011 §2; ADR 0004 §7: "atomic
+//! from `curvyo-storage-io` (ADR 0011 §2; ADR 0004 §7: "atomic
 //! write-temp-then-rename ... and no lock files").
 //!
 //! This module is impure by design (`-io`, not `-core`): it is the thing
-//! `vecmanf-document-core` is deliberately not allowed to be.
+//! `curvyo-document-core` is deliberately not allowed to be.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -81,7 +81,7 @@ fn temporary_sibling_path(dir: &Path, final_path: &Path) -> PathBuf {
     let file_name = final_path
         .file_name()
         .and_then(|name| name.to_str())
-        .unwrap_or("vecmanf-project");
+        .unwrap_or("curvyo-project");
     dir.join(format!("{file_name}.{}.tmp", unique_suffix()))
 }
 
@@ -102,7 +102,7 @@ mod tests {
     #[test]
     fn write_then_read_round_trips() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let path = dir.path().join("project.vmf");
+        let path = dir.path().join("project.curvyo");
 
         write_atomic(&path, b"hello").expect("write");
         let read_back = read_to_vec(&path).expect("read");
@@ -113,7 +113,7 @@ mod tests {
     #[test]
     fn write_atomic_replaces_existing_file_fully() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let path = dir.path().join("project.vmf");
+        let path = dir.path().join("project.curvyo");
 
         write_atomic(&path, b"first version, longer").expect("first write");
         write_atomic(&path, b"second").expect("second write");
@@ -125,7 +125,7 @@ mod tests {
     #[test]
     fn write_atomic_leaves_no_temp_file_behind() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let path = dir.path().join("project.vmf");
+        let path = dir.path().join("project.curvyo");
 
         write_atomic(&path, b"hello").expect("write");
 
@@ -141,7 +141,7 @@ mod tests {
     #[test]
     fn read_missing_file_is_an_error() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let path = dir.path().join("does-not-exist.vmf");
+        let path = dir.path().join("does-not-exist.curvyo");
 
         assert!(read_to_vec(&path).is_err());
     }

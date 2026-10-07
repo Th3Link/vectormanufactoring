@@ -95,7 +95,7 @@ per criterion below and in "Out of scope", not silently dropped.
     not a style choice — an unbounded N risks the same kind of
     resource-exhaustion crash `project-file-foundation` AC 7 already rules
     out for a damaged file) and every subsequently created polygon/star has N
-    points; the control is not reset between shapes. Given a `.vmf` file
+    points; the control is not reset between shapes. Given a `.curvyo` file
     whose stored `point_count` for a polygon/star is outside 3–1024, when the
     maker opens it, then the file is refused the same way a damaged file is
     (a named error, not a crash or a silently clamped value) — see
@@ -218,7 +218,7 @@ per criterion below and in "Out of scope", not silently dropped.
 - Multi-path node selection — selecting and editing nodes across more than
   one path object at once, needed to make a multi-object "object to path"
   (criterion 22) leave every result selected together. `NodeSelection`
-  (`vecmanf-ui-core`) holds one path at a time; this is deferred to the
+  (`curvyo-ui-core`) holds one path at a time; this is deferred to the
   future general selection-tool story slices 2 and 3 already point at.
 
 ## UX notes

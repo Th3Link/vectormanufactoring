@@ -2,13 +2,13 @@
 //! (`specs/0003-primitive-shapes/specification.md`, acceptance criterion 16)
 //! and the shape tools' create-drag preview: its placeholder stroke (reusing
 //! [`crate::stroke::path_stroke`] on
-//! [`vecmanf_document_core::outline_of`]'s output, so AC16's identical stroke
+//! [`curvyo_document_core::outline_of`]'s output, so AC16's identical stroke
 //! holds by construction and AC17's "visually identical" conversion holds
 //! exactly, not just within a tolerance, `adrs.md`) and the live outline of a
 //! shape being created. Selection boxes and handles are the Select tool's
 //! (`crate::select_decoration`); the shape tools only create.
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Angle, Point, PrimitiveSnapshot, Shape, ViewTransform, outline_of_rotated,
 };
 
@@ -23,17 +23,16 @@ fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
 
 /// A dummy identity used only to satisfy
 /// [`crate::stroke::path_stroke`]'s `AnchorSnapshot` parameter type — an
-/// outline anchor has no real id (`vecmanf_document_core::OutlineAnchor`
+/// outline anchor has no real id (`curvyo_document_core::OutlineAnchor`
 /// is deliberately id-less), and nothing here ever reads it back.
-const UNUSED_ANCHOR_ID: vecmanf_document_core::AnchorId =
-    vecmanf_document_core::AnchorId::new(0, 0);
+const UNUSED_ANCHOR_ID: curvyo_document_core::AnchorId = curvyo_document_core::AnchorId::new(0, 0);
 
 pub(crate) fn outline_to_anchors(
-    outline: &[vecmanf_document_core::OutlineAnchor],
-) -> Vec<vecmanf_document_core::AnchorSnapshot> {
+    outline: &[curvyo_document_core::OutlineAnchor],
+) -> Vec<curvyo_document_core::AnchorSnapshot> {
     outline
         .iter()
-        .map(|a| vecmanf_document_core::NewAnchor {
+        .map(|a| curvyo_document_core::NewAnchor {
             id: UNUSED_ANCHOR_ID,
             point: a.point,
             handle_in: a.handle_in,
@@ -70,9 +69,9 @@ fn primitive_stroke(snapshot: &PrimitiveSnapshot, view: ViewTransform) -> DrawLi
 /// release"). Hollow, `--accent` outline, screen-space-constant
 /// stroke weight — distinct from this module's own placeholder stroke
 /// (acceptance criterion 16's black, document-mm-weighted one), since
-/// nothing has committed yet. `vecmanf-ui-core`'s own shape tools
+/// nothing has committed yet. `curvyo-ui-core`'s own shape tools
 /// decide *whether* there is a live shape to preview right now
-/// (`vecmanf_ui_core::CreatePreview`); this function only draws the
+/// (`curvyo_ui_core::CreatePreview`); this function only draws the
 /// [`Shape`] it is given.
 #[must_use]
 pub fn build_shape_live_preview(shape: &Shape, rotation: Angle, view: ViewTransform) -> DrawList {
@@ -128,7 +127,7 @@ pub fn build_primitive_strokes(primitives: &[PrimitiveSnapshot], view: ViewTrans
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vecmanf_document_core::{Document, Length, NodeId, Point, RectBounds};
+    use curvyo_document_core::{Document, Length, NodeId, Point, RectBounds};
 
     fn rect_snapshot(document: &Document) -> (NodeId, PrimitiveSnapshot) {
         let id = document.create_rect(RectBounds {

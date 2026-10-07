@@ -9,7 +9,7 @@
 //! (knob) handles are laid out in [`crate::param_handles`]. The resize and
 //! rotate arithmetic lives next door in [`crate::transform_math`].
 
-use vecmanf_document_core::{Angle, Point, Tolerance};
+use curvyo_document_core::{Angle, Point, Tolerance};
 
 use crate::ResizeDirection;
 use crate::oriented_box::OrientedBox;

@@ -14,11 +14,11 @@
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 #![allow(clippy::needless_range_loop, clippy::manual_let_else)]
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Angle, Document, InnerRatio, Length, NewAnchor, ObjectSnapshot, Point, PointCount,
     RectBounds, StarFrame, pack, unpack,
 };
-use vecmanf_editor_wasm::{EscapeStep, KeyHint, KeyInput, KeyOutcome, Session, Tool};
+use curvyo_editor_wasm::{EscapeStep, KeyHint, KeyInput, KeyOutcome, Session, Tool};
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -597,7 +597,7 @@ fn ac42_skew_and_parameter_handle_drags_are_cancelled_too() {
             let o = &objects_of(&s)[0];
             match o {
                 ObjectSnapshot::Primitive(p) => {
-                    vecmanf_document_core::outline_of_rotated(&p.shape, p.rotation)[0].point
+                    curvyo_document_core::outline_of_rotated(&p.shape, p.rotation)[0].point
                 }
                 ObjectSnapshot::Path(_) => unreachable!(),
             }
@@ -812,11 +812,11 @@ fn tri_colour_at(s: &Session, doc_pt: Point) -> Option<[u8; 4]> {
     found
 }
 
-fn colour_of(v: &vecmanf_render_core::Vertex) -> [u8; 4] {
+fn colour_of(v: &curvyo_render_core::Vertex) -> [u8; 4] {
     colour_array(v.color)
 }
 
-fn colour_array(c: vecmanf_render_core::RgbaColor) -> [u8; 4] {
+fn colour_array(c: curvyo_render_core::RgbaColor) -> [u8; 4] {
     [c.r, c.g, c.b, c.a]
 }
 
@@ -1076,7 +1076,7 @@ fn ac57_r_and_s_chips_apply_one_commit_and_work_at_any_object_size() {
         assert_eq!(press(&mut s, "r"), KeyOutcome::EntryOpened, "size {size}");
         let before = change_count(&s);
         let out = s.commit_transform_entry("30", "", 0);
-        assert_eq!(out, vecmanf_ui_core::EntryOutcome::Committed, "size {size}");
+        assert_eq!(out, curvyo_ui_core::EntryOutcome::Committed, "size {size}");
         assert_eq!(change_count(&s), before + 1);
         assert_eq!(press(&mut s, "s"), KeyOutcome::EntryOpened, "size {size}");
         assert_eq!(s.transform_entry().unwrap().kind, "size");
@@ -1851,7 +1851,7 @@ fn ac50_the_selected_node_after_a_split_is_the_one_with_the_original_outgoing_ha
     for closed in [false, true] {
         let d = Document::new(1);
         let mut middle = anchor(2, 10.0, 0.0);
-        middle.handle_out = vecmanf_document_core::Vec2::new(3.0, 2.0);
+        middle.handle_out = curvyo_document_core::Vec2::new(3.0, 2.0);
         let _ = d.create_path(&[anchor(1, 0.0, 0.0), middle, anchor(3, 20.0, 5.0)], closed);
         let mut s = node_session(&d, pt(0.0, 0.0));
         click(&mut s, pt(10.0, 0.0));
@@ -1872,12 +1872,12 @@ fn ac50_the_selected_node_after_a_split_is_the_one_with_the_original_outgoing_ha
         assert_eq!(moved.len(), 1, "closed {closed}: exactly one node moved");
         assert_eq!(
             moved[0].0,
-            vecmanf_document_core::Vec2::new(3.0, 2.0),
+            curvyo_document_core::Vec2::new(3.0, 2.0),
             "closed {closed}: the dragged (selected) node keeps the original outgoing handle"
         );
         assert_eq!(
             moved[0].1,
-            vecmanf_document_core::Vec2::ZERO,
+            curvyo_document_core::Vec2::ZERO,
             "closed {closed}"
         );
     }

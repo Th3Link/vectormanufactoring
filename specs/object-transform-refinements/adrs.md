@@ -5,7 +5,7 @@ already writes (`rotation`, the primitive frame, `corner_radius`,
 `stroke_width`, path anchors and handle vectors), through the commands
 slice 5 already has. Handles, Shift reveal, the entry chip and its state are
 ephemeral UI state. **No new crate, no new external dependency, no new
-`vecmanf-geometry-core` function, no ADR amendment, no `format_version`
+`curvyo-geometry-core` function, no ADR amendment, no `format_version`
 change** (it stays at `main`'s 5). Skew (Part B) is baked into path anchors
 the way rotation is, so ADR 0002 §5's per-node affine is still not needed.
 
@@ -19,7 +19,7 @@ repeated here.
 
 - [ADR 0001 §1, §4](../../docs/adr/0001-ui-framework-and-canvas-rendering.md):
   handle layout, hit test, snapping, the entry's parsing, validation, field
-  linking and resolution live in `vecmanf-ui-core`; the entry chip is a DOM
+  linking and resolution live in `curvyo-ui-core`; the entry chip is a DOM
   text overlay (allowed for text input); the frontend renders and forwards.
 - [ADR 0001 §5](../../docs/adr/0001-ui-framework-and-canvas-rendering.md):
   the entry crosses the wasm boundary as small declared messages (strings and
@@ -112,10 +112,10 @@ repeated here.
   only `Session` builds; closing on selection change or tool switch is
   `Session`'s knowledge; and the criteria's tests (21, 27, 30) would not
   reach a TypeScript-only rule.
-  - **Module:** `vecmanf-ui-core/src/transform_entry.rs` (the entry type,
+  - **Module:** `curvyo-ui-core/src/transform_entry.rs` (the entry type,
     the parser, linking, target-to-delta). `select_tool` only opens, closes
     and forwards. `Session` glue goes in a new
-    `vecmanf-editor-wasm/src/session/transform_entry.rs`, not in
+    `curvyo-editor-wasm/src/session/transform_entry.rs`, not in
     `session/select.rs`.
   - **Parser (criteria 19, 21, 30):** `parse_entry_number(text, allow_degree)
     -> Option<f64>`. Trim; optional leading sign; digits with at most one
@@ -224,7 +224,7 @@ repeated here.
   the frame or anchors).
 
 - **2026-10-06: the snap stops (criteria 33-36, 47).** New module
-  `vecmanf-ui-core/src/angle_snap.rs`, one pure function `snap_angle(raw:
+  `curvyo-ui-core/src/angle_snap.rs`, one pure function `snap_angle(raw:
   Angle) -> Angle`. The stops are `{k·15°} ∪ {k·22.5°}`; within each 45°
   period they are 0, 15, 22.5, 30 (+ 45k). Computed on `|raw|` with the
   sign restored, so negative angles mirror positive ones. The nearest stop
@@ -387,8 +387,8 @@ repeated here.
 5. **Criterion 25's "document's display unit"** does not exist yet.
    Default: mm, as the readout; not a conflict.
 6. **For the tester.** Slice 5 tests that press the rotate handle above the
-   top edge (`vecmanf-ui-core/tests/acceptance_0005.rs`,
-   `vecmanf-editor-wasm/tests/acceptance_0005*.rs`, `acceptance_0004.rs`,
+   top edge (`curvyo-ui-core/tests/acceptance_0005.rs`,
+   `curvyo-editor-wasm/tests/acceptance_0005*.rs`, `acceptance_0004.rs`,
    `select_tool.rs` unit tests) change with open question 2's default: that
    position now holds the Shift-only side handle, so they either hold Shift
    or use a corner handle. Rewrite them as part of this feature; do not

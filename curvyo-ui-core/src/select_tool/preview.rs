@@ -4,7 +4,7 @@
 //! (`docs/technical-debt.md`); a child module, so it reads `SelectTool`'s
 //! private drag state.
 
-use vecmanf_document_core::{Angle, ObjectSnapshot, Point, Vec2};
+use curvyo_document_core::{Angle, ObjectSnapshot, Point, Vec2};
 
 use super::entry::OpenEntry;
 use super::{SelectDrag, SelectTool};

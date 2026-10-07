@@ -39,7 +39,7 @@ interface MoveEntryChipProps {
  * double-click on the centre handle or by the key M. It holds only the text,
  * the mode, which fields the maker has edited and the focus: parsing, the
  * two readings, the tight bounds and the limits are Rust's
- * (`vecmanf-ui-core::move_entry`). It opens in Relative every time, with the
+ * (`curvyo-ui-core::move_entry`). It opens in Relative every time, with the
  * Copy check off unless Ctrl was held at the second press of the double-click
  * (criterion 23; the key M cannot carry a Ctrl). A field
  * the maker has not edited shows the prefill of the current mode and means

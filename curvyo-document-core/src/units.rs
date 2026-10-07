@@ -7,7 +7,7 @@
 //! offset, respectively (ADR 0002 §3) — with the elementary arithmetic
 //! `specs/0002-path-node-editing/adrs.md`'s crate-boundary decision assigns to
 //! this crate: add, subtract, scale, negate, normalize, length. None of it
-//! evaluates a curve; that is `vecmanf-geometry-core`'s job.
+//! evaluates a curve; that is `curvyo-geometry-core`'s job.
 
 use std::ops::{Add, Sub};
 
@@ -40,10 +40,10 @@ impl Length {
 /// millimetres (ADR 0002 §3: "every geometric comparison takes an
 /// explicit `Tolerance`. There is no global epsilon").
 ///
-/// `vecmanf-geometry-core`'s flatten/nearest-point/subdivide and
-/// `vecmanf-ui-core`'s hit-testing each take one of these explicitly
+/// `curvyo-geometry-core`'s flatten/nearest-point/subdivide and
+/// `curvyo-ui-core`'s hit-testing each take one of these explicitly
 /// rather than assuming a shared constant —
-/// `vecmanf-render-core`'s own, coarser display tolerance (ADR 0003 §7)
+/// `curvyo-render-core`'s own, coarser display tolerance (ADR 0003 §7)
 /// is a different value entirely and must never be reused for either.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Tolerance(Length);
@@ -262,7 +262,7 @@ impl Default for DocumentSize {
 /// transform type from `document-core`, passed to both" — `render-core`
 /// for screen-space-constant decoration sizing, and, via the host that
 /// owns pointer input, for turning a raw pointer event into the document
-/// point `vecmanf-ui-core`'s tools take).
+/// point `curvyo-ui-core`'s tools take).
 ///
 /// Carries no rotation or skew: nothing in `path-node-editing` needs a
 /// canvas that rotates, and a per-node affine transform (ADR 0002 §5) is
@@ -312,7 +312,7 @@ impl ViewTransform {
 
     /// Converts screen pixel coordinates to a document-space point —
     /// what the host uses to turn a pointer event into the point
-    /// `vecmanf-ui-core`'s tools take.
+    /// `curvyo-ui-core`'s tools take.
     #[must_use]
     pub fn screen_to_document(self, screen_x: f64, screen_y: f64) -> Point {
         self.origin

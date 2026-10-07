@@ -6,7 +6,7 @@
 //! layout and hit-testing; [`crate::transform_drag`] is this module's
 //! caller.
 
-use vecmanf_document_core::{Angle, Length, ObjectSnapshot, Point, PrimitiveSnapshot, Shape, Vec2};
+use curvyo_document_core::{Angle, Length, ObjectSnapshot, Point, PrimitiveSnapshot, Shape, Vec2};
 
 use crate::ResizeDirection;
 use crate::angle_snap::snap_angle;
@@ -142,7 +142,7 @@ pub fn resize_local_box(
 /// the opposite corner/edge-midpoint otherwise — the same anchor
 /// [`resize_local_box`] itself resizes around, exposed separately for a
 /// caller that also needs it as a document-space pivot (a path's own
-/// [`vecmanf_document_core::PathSnapshot::scaled`] resize-anchor pivot,
+/// [`curvyo_document_core::PathSnapshot::scaled`] resize-anchor pivot,
 /// via [`OrientedBox::to_document`]). On the axis `direction` does not touch
 /// at all, any point works equally well (that axis's own factor is
 /// always `1.0`), so the box's own center is used there too, for a
@@ -778,7 +778,7 @@ mod tests {
     }
 
     fn polygon_at(frame_angle_deg: f64, rotation_deg: f64) -> ObjectSnapshot {
-        use vecmanf_document_core::{Document, PointCount, StarFrame};
+        use curvyo_document_core::{Document, PointCount, StarFrame};
         let document = Document::new(1);
         let id = document.create_polygon(
             StarFrame {
@@ -841,7 +841,7 @@ mod tests {
     /// swept angle as before (`object-transform-refinements` criterion 33).
     #[test]
     fn rotate_delta_for_keeps_the_relative_rule_without_ctrl_and_for_other_kinds() {
-        use vecmanf_document_core::{AnchorId, AnchorKind, Document, NewAnchor};
+        use curvyo_document_core::{AnchorId, AnchorKind, Document, NewAnchor};
         let pivot = Point::new(0.0, 0.0);
         let polygon = polygon_at(78.7, 0.0);
         let free = rotate_delta_for(&polygon, pivot, at_degrees(0.0), at_degrees(37.0), false);

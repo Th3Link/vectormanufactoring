@@ -1,5 +1,5 @@
-//! The vecmanf wasm editor facade (ADR 0001 §3): binds
-//! `vecmanf-document-core`, `vecmanf-ui-core` and `vecmanf-render-core`
+//! The Curvyo wasm editor facade (ADR 0001 §3): binds
+//! `curvyo-document-core`, `curvyo-ui-core` and `curvyo-render-core`
 //! and owns the `wgpu` device/surface and GPU submission. No editing
 //! logic of its own — the private `session` module (its public surface
 //! is [`Session`] and [`Tool`]) is a thin orchestration layer over the

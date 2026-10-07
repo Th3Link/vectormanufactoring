@@ -8,11 +8,11 @@
 
 use std::io::{Cursor, Write};
 
-use loro::LoroDoc;
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, AnchorKind, Angle, CURRENT_FORMAT_VERSION, Document, NewAnchor, ObjectSnapshot,
     PathSnapshot, Point, Vec2, pack, unpack,
 };
+use loro::LoroDoc;
 
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)

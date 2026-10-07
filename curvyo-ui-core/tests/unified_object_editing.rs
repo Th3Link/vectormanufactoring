@@ -1,23 +1,23 @@
-//! Tests of `vecmanf-ui-core`'s share of PR 1 of
+//! Tests of `curvyo-ui-core`'s share of PR 1 of
 //! `specs/unified-object-editing/specification.md`: the parameter handles
 //! next to the transform handles (criteria 1 to 9), the press order (35),
 //! the stored fields (24). Session-level behaviour (commit counts, cursors,
-//! readouts, the bar) is in `vecmanf-editor-wasm/tests/unified_object_editing.rs`.
+//! readouts, the bar) is in `curvyo-editor-wasm/tests/unified_object_editing.rs`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::too_many_lines)]
 
 use std::fmt::Write;
 
-use proptest::prelude::*;
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, NodeId, ObjectSnapshot,
     Point, PointCount, PrimitiveSnapshot, RectBounds, Shape, StarFrame, Tolerance, Vec2,
 };
-use vecmanf_ui_core::{
+use curvyo_ui_core::{
     AnchorIdMinter, Corner, EditHandle, Modifiers, ObjectSelection, ParamHandle, ResizeDirection,
     SelectPointerDownOutcome, SelectTool, TransformHandleTolerances, radius_gain, radius_travel,
 };
+use proptest::prelude::*;
 
 const SEGMENT_TOLERANCE: Tolerance = Tolerance::from_mm(1.0);
 
@@ -215,13 +215,13 @@ fn ac1_a_star_shows_one_inner_radius_handle_and_a_polygon_none() {
 fn ac7_the_tiers_follow_the_shorter_side_in_screen_pixels() {
     let handle_counts = |side_mm: f64| {
         let rig = Rig::rect(side_mm * 3.0, side_mm, 0.0);
-        let box_ = vecmanf_ui_core::oriented_bounds(&rig.object());
+        let box_ = curvyo_ui_core::oriented_bounds(&rig.object());
         let handles = rig.handles();
         let resize_edges = handles
             .iter()
             .filter(|(h, _)| {
-                matches!(h, EditHandle::Resize(d) if !vecmanf_ui_core::is_corner(*d))
-                    && vecmanf_ui_core::is_drawn_handle(*h, &box_, &tolerances())
+                matches!(h, EditHandle::Resize(d) if !curvyo_ui_core::is_corner(*d))
+                    && curvyo_ui_core::is_drawn_handle(*h, &box_, &tolerances())
             })
             .count();
         let centre = handles.iter().any(|(h, _)| *h == EditHandle::Move);
@@ -377,7 +377,7 @@ fn ac5_a_parameter_handle_hits_within_twelve_pixels() {
 /// equidistant, the parameter handle wins.
 #[test]
 fn ac5_a_parameter_handle_wins_an_exact_tie() {
-    use vecmanf_ui_core::{OrientedBox, hit_transform_handle};
+    use curvyo_ui_core::{OrientedBox, hit_transform_handle};
     let box_ = OrientedBox {
         min: pt(0.0, 0.0),
         max: pt(100.0, 100.0),
@@ -656,7 +656,7 @@ fn ac12_a_move_dragged_back_to_its_start_writes_nothing() {
         let before = rig.document.export_loro_snapshot().unwrap();
         // A press on the object's body: the centre of its box.
         let body = {
-            let b = vecmanf_ui_core::oriented_bounds(&rig.object());
+            let b = curvyo_ui_core::oriented_bounds(&rig.object());
             b.to_document(Point::new(
                 b.min.x + b.width() * 0.5 + 3.0,
                 b.min.y + b.height() * 0.5 + 3.0,
@@ -962,7 +962,7 @@ fn ported_ac15_a_point_count_change_keeps_size_and_ratio() {
             &rig.document,
             &objects,
             &rig.selection,
-            vecmanf_ui_core::ParamValue::PointCount(PointCount::new(12).unwrap()),
+            curvyo_ui_core::ParamValue::PointCount(PointCount::new(12).unwrap()),
         )
         .unwrap();
     let Shape::Star {

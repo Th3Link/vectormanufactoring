@@ -66,12 +66,12 @@ const KEY_HEIGHT_MM: &str = "size_height_mm";
 /// but the on-disk/in-CRDT container key stays the literal `"paths"` it
 /// has always been: renaming the stored key would be a container
 /// migration for no benefit, since it is an opaque name in a format this
-/// crate already writes (`adrs.md`). `vecmanf-document-core` is the only
+/// crate already writes (`adrs.md`). `curvyo-document-core` is the only
 /// module that names this key; everything else goes through
 /// [`Document`]'s methods — see [`crate::paths`] and [`crate::shapes`].
 pub(crate) const OBJECTS_TREE: &str = "paths";
 
-/// An open vecmanf document.
+/// An open Curvyo document.
 ///
 /// Its Loro CRDT backing is an implementation detail and never appears in
 /// this type's public API (ADR 0004 §3): callers only ever see
@@ -89,8 +89,8 @@ impl Document {
     /// and a `*-core` crate reaching an entropy source is exactly what
     /// `CLAUDE.md` §6 forbids ("no filesystem, network, clock, threads or
     /// UI. Callers pass everything in.") — the same reason
-    /// `vecmanf-library-core` takes a record's UUID as a parameter instead
-    /// of generating it (ADR 0011 §6). `vecmanf-app` mints a fresh id per
+    /// `curvyo-library-core` takes a record's UUID as a parameter instead
+    /// of generating it (ADR 0011 §6). `curvyo-app` mints a fresh id per
     /// open session and passes it in here
     /// (`specs/0001-project-file-foundation/adrs.md`, amended 2026-10-03).
     ///
@@ -159,7 +159,7 @@ impl Document {
     ///
     /// Falls back to the A4 default if the root map is missing a field
     /// this crate always writes itself. This is a defensive read, not a
-    /// panic path: a `.vmf` written by a future, compatible version of
+    /// panic path: a `.curvyo` written by a future, compatible version of
     /// this crate could add fields this build does not know about without
     /// that file being "damaged".
     #[must_use]

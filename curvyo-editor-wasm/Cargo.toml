@@ -1,10 +1,10 @@
 [package]
-name = "vecmanf-editor-wasm"
+name = "curvyo-editor-wasm"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Thin wasm-bindgen facade binding vecmanf-document-core, vecmanf-ui-core and vecmanf-render-core, owning the wgpu device/surface and GPU submission (ADR 0001 §3)."
+description = "Thin wasm-bindgen facade binding curvyo-document-core, curvyo-ui-core and curvyo-render-core, owning the wgpu device/surface and GPU submission (ADR 0001 §3)."
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -13,9 +13,9 @@ crate-type = ["cdylib", "rlib"]
 workspace = true
 
 [dependencies]
-vecmanf-document-core = { path = "../vecmanf-document-core", version = "0.1.0" }
-vecmanf-ui-core = { path = "../vecmanf-ui-core", version = "0.1.0" }
-vecmanf-render-core = { path = "../vecmanf-render-core", version = "0.1.0" }
+curvyo-document-core = { path = "../curvyo-document-core", version = "0.1.0" }
+curvyo-ui-core = { path = "../curvyo-ui-core", version = "0.1.0" }
+curvyo-render-core = { path = "../curvyo-render-core", version = "0.1.0" }
 
 [dev-dependencies]
 # `tests/acceptance_0005.rs` counts Loro changes / reads op keys to verify

@@ -26,10 +26,10 @@ interface CanvasProps {
 }
 
 /**
- * Hosts the `vecmanf-editor-wasm` module's `<canvas>` (ADR 0001 §3):
+ * Hosts the `curvyo-editor-wasm` module's `<canvas>` (ADR 0001 §3):
  * forwards pointer/keyboard input into the attached `WasmSession` and
  * lets it render every frame — no editing logic lives here, matching
- * `vecmanf-ui-core`'s own "the frontend... holds no editing logic of its
+ * `curvyo-ui-core`'s own "the frontend... holds no editing logic of its
  * own" (ADR 0001 §1/§2).
  *
  * Fills the window body edge-to-edge, no margin/border/frame — the tool

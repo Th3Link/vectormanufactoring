@@ -19,14 +19,14 @@
 
 use std::f64::consts::{FRAC_PI_2, PI, SQRT_2};
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     AnchorId, Angle, Document, EllipseFrame, InnerRatio, Length, NewAnchor, ObjectSnapshot, Point,
     PointCount, RectBounds, Shape, StarFrame, effective_corner_radius, outline_of_rotated, pack,
     unpack,
 };
-use vecmanf_editor_wasm::{Session, Tool};
-use vecmanf_render_core::DrawList;
-use vecmanf_ui_core::{BarValue, EntryOutcome, InvalidReason};
+use curvyo_editor_wasm::{Session, Tool};
+use curvyo_render_core::DrawList;
+use curvyo_ui_core::{BarValue, EntryOutcome, InvalidReason};
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -120,7 +120,7 @@ fn ops_since_json(s: &Session, from: &loro::VersionVector) -> String {
     format!("{:?}", l.export_json_updates(from, &l.oplog_vv()))
 }
 
-fn prim_of(s: &Session, index: usize) -> vecmanf_document_core::PrimitiveSnapshot {
+fn prim_of(s: &Session, index: usize) -> curvyo_document_core::PrimitiveSnapshot {
     let d = doc_of(s);
     d.primitive(d.object_ids()[index]).unwrap()
 }
@@ -383,7 +383,7 @@ fn ellipse_scene(pct: i64, w_px: f64, h_px: f64, th: f64) -> Scene {
 /// 64) changes its triangle count with the box's size on screen, which would
 /// mask the tiers; the box and the arrows are never white.
 fn tri_count(s: &Session) -> usize {
-    let white = vecmanf_render_core::RgbaColor::WHITE;
+    let white = curvyo_render_core::RgbaColor::WHITE;
     s.draw_list()
         .triangles
         .iter()
@@ -1537,7 +1537,7 @@ fn select_set(s: &mut Session, indices: &[usize]) {
     }
 }
 
-fn bar_for(indices: &[usize]) -> vecmanf_ui_core::SelectBarState {
+fn bar_for(indices: &[usize]) -> curvyo_ui_core::SelectBarState {
     let mut s = open_in_session(&bar_doc());
     select_set(&mut s, indices);
     s.select_bar_state()
@@ -1946,7 +1946,7 @@ fn ac23_the_two_switches_default_to_scale_stroke_on_scale_radius_off_and_are_ses
 // Criteria 10-14: blue new, black old
 // =====================================================================
 
-use vecmanf_render_core::Vertex;
+use curvyo_render_core::Vertex;
 
 fn is_blue(v: &Vertex) -> bool {
     v.color.r == 47 && v.color.g == 111 && v.color.b == 238 && v.color.a == 255
@@ -3058,7 +3058,7 @@ fn ac16_primitives_get_centre_move_rotate_and_typed_entries() {
         let deg = shown.as_radians().to_degrees();
         // The shown angle is a fixed point of the real snap table (every stop
         // of the 15 and 22.5 degree sets through all four quadrants).
-        let snapped = vecmanf_ui_core::snap_angle(shown).as_radians().to_degrees();
+        let snapped = curvyo_ui_core::snap_angle(shown).as_radians().to_degrees();
         assert!(
             (snapped - deg).abs() < 1e-6,
             "kind {build}: shown {deg} is not a snap stop (nearest {snapped})"

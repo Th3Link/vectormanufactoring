@@ -1,6 +1,6 @@
 //! Black-box acceptance tests for `specs/0004-canvas-navigation-and-
 //! selection/specification.md`'s 24 acceptance criteria, written against
-//! `vecmanf-editor-wasm::Session`'s public API (the plain-Rust
+//! `curvyo-editor-wasm::Session`'s public API (the plain-Rust
 //! orchestration layer `wasm_api`/`gpu` are a thin wasm32-only shell
 //! around) before reading the implementation diff in depth.
 //!
@@ -14,12 +14,12 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use vecmanf_document_core::{Document, Point, Shape};
-use vecmanf_editor_wasm::{Session, Tool};
+use curvyo_document_core::{Document, Point, Shape};
+use curvyo_editor_wasm::{Session, Tool};
 
 fn document_of(session: &Session) -> Document {
     let bytes = session.pack("0.1.0").expect("pack");
-    vecmanf_document_core::unpack(99, &bytes).expect("unpack")
+    curvyo_document_core::unpack(99, &bytes).expect("unpack")
 }
 
 /// Draws a rectangle with the Rectangle tool from `(x, y)` to
@@ -49,7 +49,7 @@ fn draw_ellipse(session: &mut Session, x: f64, y: f64, w: f64, h: f64) {
     session.pointer_up(Point::new(x + w, y + h), false, false);
 }
 
-fn rect_origin(document: &Document, id: vecmanf_document_core::NodeId) -> Point {
+fn rect_origin(document: &Document, id: curvyo_document_core::NodeId) -> Point {
     let Shape::Rect { bounds, .. } = document.primitive(id).expect("exists").shape else {
         panic!("expected rect");
     };

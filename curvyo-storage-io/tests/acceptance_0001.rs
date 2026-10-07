@@ -7,19 +7,22 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use vecmanf_storage_io::{read_to_vec, write_atomic};
+use curvyo_storage_io::{read_to_vec, write_atomic};
 
 /// AC3: "Save As" writes a file at exactly the chosen path, readable back
 /// byte-for-byte.
 #[test]
 fn save_as_writes_the_file_at_the_exact_chosen_path() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let path = dir.path().join("My Project.vmf");
+    let path = dir.path().join("My Project.curvyo");
 
-    write_atomic(&path, b"vmf container bytes").expect("write");
+    write_atomic(&path, b"project container bytes").expect("write");
 
     assert!(path.exists());
-    assert_eq!(read_to_vec(&path).expect("read"), b"vmf container bytes");
+    assert_eq!(
+        read_to_vec(&path).expect("read"),
+        b"project container bytes"
+    );
 }
 
 /// AC4: "Save" again (no further changes) completes without error and
@@ -28,7 +31,7 @@ fn save_as_writes_the_file_at_the_exact_chosen_path() {
 #[test]
 fn saving_again_with_unchanged_bytes_completes_without_error() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let path = dir.path().join("project.vmf");
+    let path = dir.path().join("project.curvyo");
 
     write_atomic(&path, b"same bytes").expect("first save");
     write_atomic(&path, b"same bytes").expect("second save (no changes) must not error");
@@ -43,7 +46,7 @@ fn saving_again_with_unchanged_bytes_completes_without_error() {
 #[test]
 fn a_saved_file_round_trips_exactly() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let path = dir.path().join("roundtrip.vmf");
+    let path = dir.path().join("roundtrip.curvyo");
     let payload: Vec<u8> = (0..10_000u32).flat_map(u32::to_le_bytes).collect();
 
     write_atomic(&path, &payload).expect("write");

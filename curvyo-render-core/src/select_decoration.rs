@@ -2,9 +2,9 @@
 //!
 //! The selection and hover boxes live in [`crate::select_box`]. The handles
 //! reach here as this crate's own minimal [`TransformHandleGlyph`] values,
-//! because it cannot read `vecmanf-ui-core`'s `EditHandle` (ADR 0011 §3).
+//! because it cannot read `curvyo-ui-core`'s `EditHandle` (ADR 0011 §3).
 
-use vecmanf_document_core::{Angle, Point, Vec2, ViewTransform};
+use curvyo_document_core::{Angle, Point, Vec2, ViewTransform};
 
 use crate::color::RgbaColor;
 use crate::glyphs::{self, DrawList};
@@ -34,7 +34,7 @@ pub enum TransformGlyphKind {
 }
 
 /// One of the Select tool's transform handles — this crate's own minimal
-/// shape (ADR 0011 §3: it cannot read `vecmanf-ui-core`'s
+/// shape (ADR 0011 §3: it cannot read `curvyo-ui-core`'s
 /// `EditHandle` directly), carrying only what drawing needs: where
 /// it is, which glyph vocabulary it uses, and whether it is the one
 /// currently being dragged (solid `--accent` fill instead of the idle
@@ -664,7 +664,7 @@ mod tests {
             .fold(0.0, f64::max)
     }
 
-    /// `vecmanf-ui-core`'s 4 px clearance property is derived from these
+    /// `curvyo-ui-core`'s 4 px clearance property is derived from these
     /// numbers (`param_handles.rs`: 8 px resize squircle, 12 px rotate glyph,
     /// 16 px centre glyph, 10 px knob). The two crates share no code, so the
     /// duplicated numbers are guarded here too: no glyph is drawn larger than

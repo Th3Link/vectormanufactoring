@@ -6,16 +6,16 @@ direction is `ObjectSnapshot::orientation()`, derived in `oriented_bounds`.
 
 ## Affected crates/modules
 
-- `vecmanf-ui-core`: `oriented_box.rs` (the one expression),
+- `curvyo-ui-core`: `oriented_box.rs` (the one expression),
   `param_handles.rs::star_inner_vertex` and `param_edit.rs::value_from_pointer`
   (drop `frame.angle`, in box-local coordinates the first outer vertex is at 0),
   `transform_primitive.rs::resize_primitive` (pin helper gets `start_box.angle`),
   new `tests/polygon_star_box_refit.rs`.
-- `vecmanf-editor-wasm`: `session/select_view.rs::cursor_hint` (box angle, not
+- `curvyo-editor-wasm`: `session/select_view.rs::cursor_hint` (box angle, not
   the `rotation` register), new `tests/polygon_star_box_refit.rs`.
 - Existing tests whose expectation names a box direction or handle of a polygon
   or star with a non-zero `StarFrame.angle` (list in the PR).
-- Not touched: `vecmanf-document-core`, `vecmanf-render-core`, `vecmanf-app`,
+- Not touched: `curvyo-document-core`, `curvyo-render-core`, `curvyo-app`,
   `frontend/`, any `Cargo.toml`. No stored field, `format_version` stays 5.
 
 ## Tasks

@@ -69,7 +69,7 @@ impl Document {
     /// the first-or-last anchor of an *open* path, they are not the same
     /// anchor, and — for two ends of the same path — that path has more
     /// than two anchors (joining a 2-anchor open path would produce a
-    /// 1-anchor closed path `vecmanf-render-core::stroke` cannot draw).
+    /// 1-anchor closed path `curvyo-render-core::stroke` cannot draw).
     ///
     /// # Errors
     /// [`PathEditError::NoSuchPath`] / [`PathEditError::NoSuchAnchor`] if
@@ -98,7 +98,7 @@ impl Document {
 
     /// Whether [`Document::join_endpoints`] would succeed for this
     /// selection right now — read-only, no commit. The one place
-    /// `vecmanf-ui-core`'s toolbar-enablement state (`NodeTool::
+    /// `curvyo-ui-core`'s toolbar-enablement state (`NodeTool::
     /// can_join`) checks this, rather than independently re-deriving the
     /// refusal rule itself (acceptance criterion 8) — the same "one
     /// rule, one place" principle `resolve_handle_pair` already follows
@@ -286,7 +286,7 @@ impl Document {
     /// split_at_anchor`, Join's inverse"; acceptance criteria 12-15).
     ///
     /// `new_id` is a fresh [`AnchorId`] the caller mints
-    /// (`vecmanf-ui-core`'s `AnchorIdMinter`) for the second of the two
+    /// (`curvyo-ui-core`'s `AnchorIdMinter`) for the second of the two
     /// resulting coincident copies — this crate never mints ids itself
     /// (`CLAUDE.md` §6).
     ///
@@ -316,7 +316,7 @@ impl Document {
 
     /// Whether [`Document::split_at_anchor`] would succeed for this
     /// selection right now — read-only, no commit, `new_id` not even
-    /// needed since no id is minted here. The one place `vecmanf-ui-
+    /// needed since no id is minted here. The one place `curvyo-ui-
     /// core`'s toolbar-enablement state (`NodeTool::can_split`) checks
     /// this, rather than independently re-deriving the refusal rule
     /// (acceptance criterion 12) — see [`Document::check_join`]'s own

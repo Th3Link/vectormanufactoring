@@ -5,11 +5,11 @@
 //! come from the worked examples of the specification and from the outline's
 //! own geometry, never from `oriented_bounds`.
 
-use vecmanf_document_core::{
+use curvyo_document_core::{
     Angle, InnerRatio, Length, NodeId, Point, PointCount, Shape, StarFrame, outline_of_rotated,
 };
-use vecmanf_render_core::TransformGlyphKind;
-use vecmanf_ui_core::{EditHandle, EntryOutcome, ParamHandle, ResizeDirection, SelectTool};
+use curvyo_render_core::TransformGlyphKind;
+use curvyo_ui_core::{EditHandle, EntryOutcome, ParamHandle, ResizeDirection, SelectTool};
 
 use super::{Session, Tool};
 use crate::KeyInput;
@@ -122,7 +122,7 @@ fn handle_position(session: &Session, wanted: EditHandle, side_rotate: bool) -> 
     .1
 }
 
-fn primitive_of(session: &Session, id: NodeId) -> vecmanf_document_core::PrimitiveSnapshot {
+fn primitive_of(session: &Session, id: NodeId) -> curvyo_document_core::PrimitiveSnapshot {
     session.document.primitive(id).unwrap()
 }
 
@@ -240,7 +240,7 @@ fn a_rotated_rectangles_cursor_is_unchanged() {
     let mut session = Session::new(1);
     let id = session
         .document
-        .create_rect(vecmanf_document_core::RectBounds {
+        .create_rect(curvyo_document_core::RectBounds {
             origin: pt(0.0, 0.0),
             width: Length::from_mm(20.0),
             height: Length::from_mm(20.0),
