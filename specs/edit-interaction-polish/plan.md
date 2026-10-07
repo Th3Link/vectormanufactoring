@@ -255,7 +255,7 @@ change, no `format_version` change.
   and right; negative assertions use `starts_with("skew")` so they do not get
   weaker), the "M and K are unbound" assertions.
 - [x] 10. Gate: fmt, clippy (host, wasm32 per core crate and editor-wasm),
-  nextest (1601 tests), rustdoc, deny, banned-dependency check, `npm run build`,
+  nextest, rustdoc, deny, banned-dependency check, `npm run build`,
   `tsc -b --noEmit`, `npm run lint` (5 warnings, the same as `main`), license
   check, `npm audit`; the Browser-pane check (M relative and absolute, K, the
   double-click on the centre and skew handles, S about the centre, the hint
@@ -274,8 +274,25 @@ change, no `format_version` change.
   `skew`), so the hint chip can say "Shift+K" for those two.
 - The move chip's hint names only "Double-click or M: type an offset" until PR 4
   adds "Shift: keep one axis" and "Ctrl: copy", which do not exist yet.
-- `parse_entry_number` is not extended to U+2212 here: nothing in this PR
-  produces a value with that sign (the move readout is PR 4).
+- `parse_entry_number` accepts U+2212 (the real minus) from review on: one
+  function for the angle, size, skew and move chips, so a value copied from the
+  PR 4 move readout parses. Exponent notation ("1e3") stays rejected.
+- Review decisions (tester notes): in Absolute mode, text typed to exactly the
+  one-decimal prefill counts as untouched (no change on that axis); accepted,
+  because the prefill is what the field shows. A tiny skew that changes nothing
+  by 1e-9 mm is "no change" (no commit, no message), "Too large" only past the
+  1e7 mm limit (`skewed_unchecked` tells the two apart). K on a path with no
+  height opens a chip whose field is read-only and never writes; a dedicated
+  "cannot skew" hint would need a text and a criterion 59 line that the spec
+  does not have, so it is left for the customer's review of the demo.
+
+- Review round 2 (UX): the S key's chip is placed by the box centre
+  (`TransformEntry::centre_chip`, `EntryView::at_centre`), no handle is
+  highlighted and the centre glyph yields to the pivot marker, drawn at full
+  `--accent` (`pivot_marker_full`). The corner resize hints gain a second line;
+  the skew chip shows "Skew x" / "Skew y" inside a 120 px field; the Absolute
+  switch has a title and a description; the pill ring is a 1.5 px shadow
+  because a 1.5 px border computes to 1 px at DPR 1.
 
 ### Validation
 

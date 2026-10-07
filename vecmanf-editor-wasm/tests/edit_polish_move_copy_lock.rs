@@ -355,7 +355,7 @@ fn the_lock_badge_shows_only_during_a_locked_move() {
     hold(&mut session, at, true, false);
     assert_eq!(session.move_indicators().lock, None, "not before the press");
     session.pointer_down(at, true);
-    hold(&mut session, pt(41.0, 20.2), true, false);
+    hold(&mut session, pt(40.3, 20.1), true, false);
     assert_eq!(session.move_indicators().lock, None, "inside the dead zone");
     hold(&mut session, pt(70.0, 24.0), true, false);
     assert_eq!(session.move_indicators().lock, Some(Axis::X));

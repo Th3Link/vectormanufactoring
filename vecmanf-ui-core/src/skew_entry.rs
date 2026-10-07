@@ -1,7 +1,8 @@
 //! The typed skew entry of a path
 //! (`specs/edit-interaction-polish/specification.md`, criteria 9 to 14, 58):
 //! its state, validation and commit. The typed angle goes through
-//! [`skew_by_angle`], the function a skew drag calls, so a typed value and a
+//! the skew drag's own arithmetic (`skew_by_angle`, through its unchecked
+//! half), so a typed value and a
 //! dragged one cannot disagree (`adrs.md`, decision 3). The DOM chip only
 //! holds the text, the caret and the focus.
 
@@ -9,16 +10,13 @@ use vecmanf_document_core::{Angle, Document, ObjectSnapshot, Point};
 
 use crate::oriented_box::OrientedBox;
 use crate::skew_math::{MIN_SKEW_LEVER_MM, skew_frame};
-use crate::transform_commit::commit_gesture;
-use crate::transform_drag::{ScaleModes, skew_by_angle};
+use crate::transform_commit::{commit_gesture, is_sane, same_within_tolerance};
+use crate::transform_drag::{ScaleModes, skewed_unchecked};
 use crate::transform_entry::{
     EntryField, EntryKind, EntryOutcome, InvalidReason, format_degrees, parse_entry_number,
 };
 use crate::transform_handle_layout::{EditHandle, Side};
-
-/// A typed angle within this (radians) of zero is "no change": nothing is
-/// written.
-const ANGLE_EQUAL_EPSILON_RAD: f64 = 1e-12;
+use crate::transform_math::ANGLE_EQUAL_EPSILON_RAD;
 
 /// An open skew entry: the path and box as they were when it opened and the
 /// fixed line fixed then (the opposite side's, or the box's centre line when
@@ -115,8 +113,9 @@ impl SkewEntry {
     /// # Errors
     /// [`InvalidReason::NotANumber`] for text that is not a number,
     /// [`InvalidReason::SkewRange`] for 90° or more in size, and
-    /// [`InvalidReason::TooLarge`] when the result would put a coordinate
-    /// beyond the document's limit.
+    /// [`InvalidReason::TooLarge`] only when the result would put a coordinate
+    /// beyond the document's limit; a skew too small to change anything is
+    /// no change.
     pub fn resolve(&self, text: &str) -> Result<Option<ObjectSnapshot>, InvalidReason> {
         let field = &self.fields[0];
         if !field.editable || text == field.prefill {
@@ -130,13 +129,14 @@ impl SkewEntry {
         if angle.as_radians().abs() <= ANGLE_EQUAL_EPSILON_RAD {
             return Ok(None);
         }
-        let result = skew_by_angle(&self.start, &self.start_box, self.side, self.shift, angle);
-        if result == self.start {
-            // A non-zero angle on a path with a lever resolves to the start
-            // only when the sanity limit refused the result.
+        let result = skewed_unchecked(&self.start, &self.start_box, self.side, self.shift, angle);
+        if !is_sane(&result) {
             return Err(InvalidReason::TooLarge);
         }
-        Ok(Some(result))
+        // A skew too small to move any number by 1e-9 mm (also: far from the
+        // origin, where it vanishes in the coordinates' resolution) is no
+        // change, as for a drag: no commit and no message.
+        Ok((!same_within_tolerance(&result, &self.start)).then_some(result))
     }
 
     /// Validates the typed text and, if valid and changed, writes the skew as
@@ -445,5 +445,68 @@ mod tests {
         assert!((top.pivot().y - 10.0).abs() < 1e-9, "the bottom edge");
         let shifted = entry_of(&document, id, Side::Top, true);
         assert!((shifted.pivot().y - 5.0).abs() < 1e-9, "the centre line");
+    }
+
+    /// A tiny angle on a path far from the origin vanishes in the
+    /// coordinates' resolution: it is no change, never "Too large"; on a
+    /// normal path a skew that moves nothing by 1e-9 mm is no change too, and
+    /// writes no commit.
+    #[test]
+    fn a_vanishing_skew_is_no_change_not_too_large() {
+        let document = Document::new(1);
+        let far = document.create_path(
+            &[
+                NewAnchor::corner(AnchorId::new(1, 1), Point::new(5_000_000.0, 5_000_000.0)),
+                NewAnchor::corner(AnchorId::new(1, 2), Point::new(5_000_020.0, 5_000_000.0)),
+                NewAnchor::corner(AnchorId::new(1, 3), Point::new(5_000_020.0, 5_000_010.0)),
+            ],
+            true,
+        );
+        let near = path(&document, 0.0);
+        for id in [far, near] {
+            let before = document.object(id).expect("exists");
+            let entry = entry_of(&document, id, Side::Top, false);
+            for text in ["0.000000001", "0.0000000001", "1e-9"] {
+                let outcome = entry.commit(&document, text);
+                if text == "1e-9" {
+                    assert_eq!(
+                        outcome,
+                        EntryOutcome::Invalid {
+                            field: 0,
+                            reason: InvalidReason::NotANumber
+                        }
+                    );
+                } else {
+                    assert_eq!(outcome, EntryOutcome::Unchanged, "{text}");
+                }
+            }
+            assert_eq!(document.object(id), Some(before));
+        }
+        // Past the limit stays "Too large".
+        let big = document.create_path(
+            &[
+                NewAnchor::corner(AnchorId::new(2, 1), Point::new(0.0, 0.0)),
+                NewAnchor::corner(AnchorId::new(2, 2), Point::new(20.0, 5000.0)),
+            ],
+            false,
+        );
+        assert_eq!(
+            entry_of(&document, big, Side::Top, false).resolve("89.9999"),
+            Err(InvalidReason::TooLarge)
+        );
+    }
+
+    /// The real minus sign of the move readout is accepted.
+    #[test]
+    fn the_real_minus_sign_is_accepted() {
+        let document = Document::new(1);
+        let id = path(&document, 0.0);
+        let entry = entry_of(&document, id, Side::Top, false);
+        let typed = entry
+            .resolve("\u{2212}20")
+            .expect("valid")
+            .expect("changes");
+        let ascii = entry.resolve("-20").expect("valid").expect("changes");
+        assert_eq!(typed, ascii);
     }
 }

@@ -44,9 +44,6 @@ pub use move_drag::{Axis, MoveResolution};
 pub use press::{PressTarget, classify_press};
 pub use preview::LiveEdit;
 
-/// A move offset within this (millimetres) of zero is no move.
-pub(crate) const MOVE_EQUAL_EPSILON_MM: f64 = 1e-9;
-
 #[derive(Debug, Clone, Default)]
 enum SelectDrag {
     #[default]

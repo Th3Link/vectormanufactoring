@@ -20,6 +20,9 @@ use crate::transform_handle_layout::EditHandle;
 /// become unopenable from a drag").
 pub(crate) const MAX_COORDINATE_MM: f64 = 1e7;
 
+/// A move offset within this (millimetres) of zero is no move.
+pub(crate) const MOVE_EQUAL_EPSILON_MM: f64 = 1e-9;
+
 /// Writes a gesture's resulting snapshot (shared by a drag's release and a
 /// typed entry's Enter).
 pub(crate) fn commit_gesture(
@@ -122,7 +125,7 @@ pub(crate) fn sane_or(start: &ObjectSnapshot, resolved: ObjectSnapshot) -> Objec
     }
 }
 
-fn is_sane(object: &ObjectSnapshot) -> bool {
+pub(crate) fn is_sane(object: &ObjectSnapshot) -> bool {
     let ok = |v: f64| v.is_finite() && v.abs() <= MAX_COORDINATE_MM;
     let (numbers, rotation) = numbers_of(object);
     ok(rotation) && numbers.into_iter().all(ok)

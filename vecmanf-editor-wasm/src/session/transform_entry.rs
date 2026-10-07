@@ -49,6 +49,10 @@ pub struct EntryView {
     /// screen pixels: 6 normally, 22 for an edge resize handle with a skew
     /// arrow on the same side, which the chip must clear.
     pub glyph_reach_px: f64,
+    /// The chip goes by the box centre (16 px right of and below it, as the
+    /// move chip does) instead of outward from the handle: the key S, whose
+    /// fixed point is the centre (`edit-interaction-polish` criterion 59).
+    pub at_centre: bool,
 }
 
 impl EntryFieldView {
@@ -87,6 +91,8 @@ impl Session {
     /// drawn (`edit-interaction-polish` criteria 9, 58, 59).
     fn skew_entry_view(&self, entry: &SkewEntry) -> EntryView {
         let box_ = entry.start_box();
+        // invariant: `entry_anchor` is `Some` for every handle but a parameter
+        // handle, and a skew entry's handle is a skew handle.
         let handle = entry_anchor(box_, entry.handle(), &self.transform_handle_tolerances())
             .unwrap_or_else(|| box_.to_document(box_.local_center()));
         EntryView {
@@ -96,6 +102,7 @@ impl Session {
             handle,
             center: box_.to_document(box_.local_center()),
             glyph_reach_px: 6.0,
+            at_centre: false,
         }
     }
 
@@ -132,6 +139,7 @@ impl Session {
             handle,
             center: box_.to_document(box_.local_center()),
             glyph_reach_px: 6.0,
+            at_centre: false,
         })
     }
 
@@ -155,11 +163,17 @@ impl Session {
         );
         // The anchor comes from the box, not from the drawn set, so the chip
         // of a key opens at a handle that is hidden too.
-        let handle = entry_anchor(
-            entry.start_box(),
-            entry.handle(),
-            &self.transform_handle_tolerances(),
-        )?;
+        let handle = if entry.centre_chip() {
+            entry
+                .start_box()
+                .to_document(entry.start_box().local_center())
+        } else {
+            entry_anchor(
+                entry.start_box(),
+                entry.handle(),
+                &self.transform_handle_tolerances(),
+            )?
+        };
         // An edge resize handle with a skew arrow on its side: the arrow
         // sits 16 px out and is 12 px deep, so the glyphs reach 22 px.
         let skew_beyond = matches!(
@@ -184,6 +198,7 @@ impl Session {
             handle,
             center: box_.to_document(box_.local_center()),
             glyph_reach_px: if skew_beyond { 22.0 } else { 6.0 },
+            at_centre: entry.centre_chip(),
         })
     }
 

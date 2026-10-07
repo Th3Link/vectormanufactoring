@@ -12,8 +12,7 @@ use crate::anchor_id_minter::AnchorIdMinter;
 
 use crate::object_bounds::object_outline_bounds;
 use crate::oriented_box::OrientedBox;
-use crate::select_tool::MOVE_EQUAL_EPSILON_MM;
-use crate::transform_commit::{MAX_COORDINATE_MM, commit_move};
+use crate::transform_commit::{MAX_COORDINATE_MM, MOVE_EQUAL_EPSILON_MM, commit_move};
 use crate::transform_entry::{
     EntryField, EntryOutcome, InvalidReason, format_mm, parse_entry_number,
 };
@@ -495,6 +494,27 @@ mod tests {
                 )
                 .0,
             EntryOutcome::Unchanged
+        );
+    }
+
+    /// A value copied from the move readout ("\u{2212}3.0") is accepted in both
+    /// modes, as is the ASCII sign.
+    #[test]
+    fn the_real_minus_sign_is_accepted() {
+        let document = Document::new(1);
+        let id = rect(&document, 10.0, 20.0, 30.0, 40.0);
+        let entry = entry_of(&document, id);
+        assert_eq!(
+            entry.resolve(["\u{2212}3.0", "\u{2212}1"], false),
+            entry.resolve(["-3.0", "-1"], false)
+        );
+        assert_eq!(
+            entry.resolve(["\u{2212}3.0", "\u{2212}1"], false),
+            Ok(Some(Vec2::new(-3.0, -1.0)))
+        );
+        assert_eq!(
+            entry.resolve(["\u{2212}5", "20.0"], true),
+            Ok(Some(Vec2::new(-15.0, 0.0)))
         );
     }
 }

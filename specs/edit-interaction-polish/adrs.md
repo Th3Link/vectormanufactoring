@@ -841,6 +841,7 @@ to the PO" (criteria 21, 41, 59, 64 and four smaller ones).
   release); `shape-creation-from-center`'s and `unified-object-editing`'s tests
   that press with Shift inside a selected box stay as they are (criterion 29
   keeps that case).
+- **2026-10-07 (architect, PR 3):** +7 lines in transform_entry.rs accepted (3 enum variants plus docs, no logic); PR 4 adds 0.
 - **Order against the other Ready specs.** This feature goes **before
   `advanced-selection`**, directly after `unified-object-editing`. The
   recommended order is: `unified-object-editing` (#38), then this feature (PR 1, PR 2 in parallel or

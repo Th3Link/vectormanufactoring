@@ -6,11 +6,11 @@
 
 use vecmanf_document_core::{Document, NodeId, ObjectSnapshot, Point, Vec2};
 
-use super::{MOVE_EQUAL_EPSILON_MM, SelectDrag, SelectTool};
+use super::{SelectDrag, SelectTool};
 use crate::anchor_id_minter::AnchorIdMinter;
 use crate::modifiers::Modifiers;
 use crate::object_selection::ObjectSelection;
-use crate::transform_commit::commit_move;
+use crate::transform_commit::{MOVE_EQUAL_EPSILON_MM, commit_move};
 use crate::transform_drag::DragOrigin;
 
 /// Two absolute displacements closer than this (millimetres) are equal: an

@@ -203,7 +203,9 @@ impl Session {
         // The centre handle hides while a resize, rotate, skew or parameter
         // drag runs or an entry is open: the pivot marker may live there, and
         // a parameter drag has it yield (criterion 8).
-        let hide_center = highlighted.is_some_and(|handle| handle != EditHandle::Move);
+        let centre_chip = self.select.centre_chip_open();
+        let hide_center =
+            centre_chip || highlighted.is_some_and(|handle| handle != EditHandle::Move);
         let params_visible = self.select.param_handles_visible();
         let radius_in_use = matches!(
             highlighted,
@@ -254,6 +256,9 @@ impl Session {
         TransformDecorationInput {
             handles,
             pivot_marker: live_pivot.or(preview),
+            // The S chip highlights no handle: its marker at the centre is
+            // the one sign of the fixed point, so it is drawn solid.
+            pivot_marker_full: centre_chip,
             skew_guide: self.skew_guide_now(),
             param_guides,
             device_pixel_ratio: self.device_pixel_ratio,
@@ -941,12 +946,23 @@ mod tests {
             .pivot_marker
             .expect("a marker while the chip is open");
         assert!((marker.x - 60.0).abs() < 1e-9 && (marker.y - 50.0).abs() < 1e-9);
+        // The S chip: the marker is solid, no handle is in its dragging look,
+        // the centre glyph makes way for the marker, and the chip is placed
+        // by the centre (criterion 59).
+        let input = session.select_transform_decoration_input();
+        assert!(input.pivot_marker_full);
+        assert!(input.handles.iter().all(|glyph| !glyph.dragging));
+        let handles_with_chip = input.handles.len();
+        let view = session.transform_entry().expect("the chip");
+        assert!(view.at_centre);
+        assert!((view.handle.x - 60.0).abs() < 1e-9 && (view.handle.y - 50.0).abs() < 1e-9);
         session.cancel_transform_entry();
-        assert!(
-            session
-                .select_transform_decoration_input()
-                .pivot_marker
-                .is_none()
+        let input = session.select_transform_decoration_input();
+        assert!(input.pivot_marker.is_none());
+        assert_eq!(
+            input.handles.len(),
+            handles_with_chip + 1,
+            "the centre handle is drawn again"
         );
         let corner = Point::new(110.0, 80.0);
         session.pointer_hover(corner, false, false);
@@ -958,6 +974,17 @@ mod tests {
             .pivot_marker
             .expect("a marker while the chip is open");
         assert!((marker.x - 10.0).abs() < 1e-9 && (marker.y - 20.0).abs() < 1e-9);
+        // The double-click route keeps the handle's dragging look, the chip at
+        // the handle and the dimmer marker.
+        let input = session.select_transform_decoration_input();
+        assert!(!input.pivot_marker_full);
+        assert_eq!(
+            input.handles.iter().filter(|glyph| glyph.dragging).count(),
+            1
+        );
+        let view = session.transform_entry().expect("the chip");
+        assert!(!view.at_centre);
+        assert!((view.handle.x - 110.0).abs() < 1e-9 && (view.handle.y - 80.0).abs() < 1e-9);
     }
 
     /// Criterion 56: a skew drag draws a dashed guide along the fixed line

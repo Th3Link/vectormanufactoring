@@ -132,7 +132,18 @@ impl SelectTool {
     /// the chip is open.
     #[must_use]
     pub fn entry_handle(&self) -> Option<EditHandle> {
+        if self.centre_chip_open() {
+            return None;
+        }
         self.entry.as_ref().map(OpenEntry::handle)
+    }
+
+    /// Whether the open entry is the size chip of the key S: it sits by the
+    /// box centre, the centre handle makes way for the pivot marker, and no
+    /// handle is highlighted (`edit-interaction-polish` criterion 59).
+    #[must_use]
+    pub fn centre_chip_open(&self) -> bool {
+        matches!(&self.entry, Some(OpenEntry::Transform(entry)) if entry.centre_chip())
     }
 
     /// Closes the numeric entry without writing (criterion 20): idempotent.
@@ -235,13 +246,16 @@ impl SelectTool {
             // No handle was chosen: the typed size scales about the box centre,
             // as a drag with Shift held would (criterion 57a), and reads no
             // modifier (Ctrl+S is gated, so no Ctrl link either).
-            EntryKey::Size => OpenEntry::Transform(TransformEntry::for_resize(
-                object,
-                &box_,
-                ResizeDirection::Se,
-                (true, false),
-                self.modes,
-            )),
+            EntryKey::Size => OpenEntry::Transform(
+                TransformEntry::for_resize(
+                    object,
+                    &box_,
+                    ResizeDirection::Se,
+                    (true, false),
+                    self.modes,
+                )
+                .with_centre_chip(),
+            ),
             EntryKey::Move => OpenEntry::Move(MoveEntry::new(object, &box_)),
             EntryKey::SkewX => skew(Side::Top)?,
             EntryKey::SkewY => skew(Side::Right)?,
@@ -398,6 +412,9 @@ mod tests {
             let entry = tool.entry().expect("an entry");
             assert_eq!(entry.kind(), EntryKind::Size);
             assert_eq!(entry.handle(), EditHandle::Resize(ResizeDirection::Se));
+            // The key opens its chip by the centre and highlights no handle.
+            assert!(entry.centre_chip() && tool.centre_chip_open());
+            assert_eq!(tool.entry_handle(), None);
             assert_eq!(entry.fields().len(), 2, "width and height");
             assert!(tool.has_entry());
         }
@@ -506,6 +523,10 @@ mod tests {
             ScaleModes::default(),
         );
         assert_eq!(plain.pivot(), Point::new(10.0, 10.0), "opposite corner");
+        assert!(
+            !plain.centre_chip(),
+            "the double-click chip sits at the handle"
+        );
         let by_key = {
             let (tool, _) = open(&document, &[id], EntryKey::Size);
             tool.entry().expect("an entry").clone()
