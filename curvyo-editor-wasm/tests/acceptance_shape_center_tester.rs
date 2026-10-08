@@ -85,7 +85,7 @@ fn drag(s: &mut Session, a: Point, b: Point, shift: bool, ctrl: bool) {
 /// The host's reaction to a key press/release: modifiers_changed, then the
 /// last hover re-sent at the unchanged pointer position.
 fn press(s: &mut Session, at: Point, shift: bool, ctrl: bool) {
-    s.modifiers_changed(shift, ctrl);
+    s.modifiers_changed(shift, ctrl, false);
     s.pointer_hover(at, shift, ctrl);
 }
 
@@ -639,7 +639,7 @@ fn hostile_pointer_values_through_session_never_panic_and_keep_the_file_openable
                     s.pointer_hover(pt(x, y), sh, ct);
                     let _ = s.live_readout();
                     let _ = s.draw_list();
-                    s.modifiers_changed(!sh, !ct);
+                    s.modifiers_changed(!sh, !ct, false);
                     s.pointer_hover(pt(x, y), !sh, !ct);
                     let _ = s.live_readout();
                     s.pointer_up(pt(x, y), sh, ct);
@@ -683,7 +683,7 @@ fn probe_modifiers_changed_alone_does_not_move_the_preview() {
     s.pointer_down(A, false);
     s.pointer_hover(b, false, false);
     let before = readout(&s).unwrap().0;
-    s.modifiers_changed(true, false);
+    s.modifiers_changed(true, false, false);
     let after = readout(&s).unwrap().0;
     eprintln!("modifiers_changed alone: readout {before:?} -> {after:?}");
     // the next hover (frontend re-sends it) picks the state up

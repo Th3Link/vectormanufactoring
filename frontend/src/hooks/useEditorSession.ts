@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { ModifierTracker } from "@/lib/keyModifiers";
 import { createSession, openSession } from "@/lib/editorSession";
 import type { WasmSession } from "@/lib/editorSession";
 import type { EditHint } from "@/components/EditHintChip";
@@ -425,6 +426,9 @@ function readMoveEntry(
 export interface MoveBadgeState {
   /** The plus badge: a copy drag runs, or a press with Ctrl would start a move. */
   copy: boolean;
+  /** The minus badge: a Ctrl marquee or lasso runs, or a press with Ctrl would
+   * arm one (`specs/advanced-selection/`): it removes from the selection. */
+  remove: boolean;
   /** The lock badge's axis: `""` (none), `"x"` or `"y"`. */
   lock: "" | "x" | "y";
   /** The pointer hotspot. */
@@ -432,7 +436,7 @@ export interface MoveBadgeState {
   y: number;
 }
 
-const NO_BADGES: MoveBadgeState = { copy: false, lock: "", x: 0, y: 0 };
+const NO_BADGES: MoveBadgeState = { copy: false, remove: false, lock: "", x: 0, y: 0 };
 
 /** A key that could not act, shown for 2 s next to the pointer
  * (`specs/edit-interaction-polish/` criterion 59). */
@@ -688,6 +692,20 @@ export function useEditorSession(
    * pivot marker and live preview react the instant Shift/Ctrl change,
    * with no pointer motion needed. */
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  /** The Shift, Ctrl and Alt keys that are down (`lib/keyModifiers.ts`). */
+  const modifierTrackerRef = useRef(new ModifierTracker());
+  /** A pointer event's flags are right: they correct the tracked keys, so a
+   * key-up that never arrived is forgotten. */
+  const syncTrackedModifiers = useCallback(
+    (event: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean }) => {
+      modifierTrackerRef.current.pointerFlags({
+        shift: event.shiftKey,
+        ctrl: event.ctrlKey || event.metaKey,
+        alt: event.altKey,
+      });
+    },
+    [],
+  );
   const [zoomPercent, setZoomPercent] = useState(100);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceHeld, setIsSpaceHeld] = useState(false);
@@ -713,6 +731,7 @@ export function useEditorSession(
     const raw = session.move_indicators();
     const next: MoveBadgeState = {
       copy: last !== null && raw.copy_badge,
+      remove: last !== null && raw.remove_badge,
       lock: last !== null && (raw.lock === "x" || raw.lock === "y") ? raw.lock : "",
       x: last?.x ?? 0,
       y: last?.y ?? 0,
@@ -720,8 +739,11 @@ export function useEditorSession(
     raw.free();
     setMoveBadges((previous) =>
       previous.copy === next.copy &&
+      previous.remove === next.remove &&
       previous.lock === next.lock &&
-      (!next.copy && next.lock === "" ? true : previous.x === next.x && previous.y === next.y)
+      (!next.copy && !next.remove && next.lock === ""
+        ? true
+        : previous.x === next.x && previous.y === next.y)
         ? previous
         : next,
     );
@@ -1084,6 +1106,7 @@ export function useEditorSession(
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
+      syncTrackedModifiers(event);
       const session = sessionRef.current;
       if (!session) {
         return;
@@ -1106,7 +1129,10 @@ export function useEditorSession(
 
       const now = performance.now();
       const last = lastPressRef.current;
+      // Alt-clicks step through overlapping objects (`specs/advanced-selection/`
+      // criterion 5), quickly and at one point: never a double-click.
       const isDoubleClick =
+        !event.altKey &&
         last !== null &&
         now - last.time < DOUBLE_CLICK_MS &&
         Math.hypot(x - last.x, y - last.y) < DOUBLE_CLICK_PX;
@@ -1134,15 +1160,22 @@ export function useEditorSession(
           // works while the pointer stays over the canvas.
         }
       }
-      session.pointer_down(x, y, event.shiftKey);
+      session.pointer_down(
+        x,
+        y,
+        event.shiftKey,
+        event.ctrlKey || event.metaKey,
+        event.altKey,
+      );
       setCursorHint(session.cursor_hint());
       syncFromSession();
     },
-    [canvasPoint, isSpaceHeld, syncFromSession],
+    [canvasPoint, isSpaceHeld, syncFromSession, syncTrackedModifiers],
   );
 
   const onPointerMove = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
+      syncTrackedModifiers(event);
       const session = sessionRef.current;
       const { x, y } = canvasPoint(event);
       lastPointerRef.current = { x, y };
@@ -1161,6 +1194,7 @@ export function useEditorSession(
         y,
         event.shiftKey,
         event.ctrlKey || event.metaKey,
+        event.altKey,
       );
       setIsHoveringPenCloseTarget(
         session?.is_hovering_pen_close_target() ?? false,
@@ -1173,11 +1207,12 @@ export function useEditorSession(
         syncBadges(session);
       }
     },
-    [canvasPoint, onCursorMove, syncEntry, syncBadges],
+    [canvasPoint, onCursorMove, syncEntry, syncBadges, syncTrackedModifiers],
   );
 
   const onPointerUp = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
+      syncTrackedModifiers(event);
       const session = sessionRef.current;
       if (!session) {
         return;
@@ -1224,15 +1259,27 @@ export function useEditorSession(
         }
         // Re-run the hover so the cursor describes the handle under the
         // pointer right away (a skew double-click changes nothing else).
-        session.pointer_hover(x, y, event.shiftKey, event.ctrlKey || event.metaKey);
+        session.pointer_hover(
+          x,
+          y,
+          event.shiftKey,
+          event.ctrlKey || event.metaKey,
+          event.altKey,
+        );
       } else {
-        session.pointer_up(x, y, event.shiftKey, event.ctrlKey || event.metaKey);
+        session.pointer_up(
+          x,
+          y,
+          event.shiftKey,
+          event.ctrlKey || event.metaKey,
+          event.altKey,
+        );
       }
       setLiveReadout(null);
       setCursorHint(session.cursor_hint());
       syncFromSession();
     },
-    [canvasPoint, syncFromSession],
+    [canvasPoint, syncFromSession, syncTrackedModifiers],
   );
 
   const onPointerCancel = useCallback(() => {
@@ -1260,15 +1307,15 @@ export function useEditorSession(
    * at the last pointer position, so the pivot marker, live preview, cursor
    * and hint follow the key in the same frame
    * (`object-transform-refinements` criteria 6, 14). */
-  const applyModifiers = useCallback((shift: boolean, ctrl: boolean) => {
+  const applyModifiers = useCallback((shift: boolean, ctrl: boolean, alt: boolean) => {
     const session = sessionRef.current;
     if (!session) {
       return;
     }
-    session.modifiers_changed(shift, ctrl);
+    session.modifiers_changed(shift, ctrl, alt);
     const last = lastPointerRef.current;
     if (last) {
-      session.pointer_hover(last.x, last.y, shift, ctrl);
+      session.pointer_hover(last.x, last.y, shift, ctrl, alt);
       setLiveReadout(readLiveReadout(session.live_readout()));
       setHandleHint("");
     }
@@ -1278,21 +1325,44 @@ export function useEditorSession(
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      applyModifiers(event.shiftKey, event.ctrlKey || event.metaKey);
+      // A lone Alt press or release would focus the menu bar in some browsers
+      // and on Windows; with the pointer on the canvas and the Select tool
+      // active Alt belongs to the lasso and the Alt-click cycle
+      // (`specs/advanced-selection/`).
+      if (
+        event.key === "Alt" &&
+        lastPointerRef.current !== null &&
+        sessionRef.current?.tool() === "select"
+      ) {
+        event.preventDefault();
+      }
+      // Tracked by key, not read from the event's flags (`lib/keyModifiers.ts`).
+      const held = modifierTrackerRef.current.keyEvent(event);
+      applyModifiers(held.shift, held.ctrl, held.alt);
     };
     // A key released outside the window must not leave Shift stuck: the
     // side rotate handles and the pivot follow `modifiers_changed`.
     const onWindowBlur = () => {
       sessionRef.current?.pointer_cancelled();
-      applyModifiers(false, false);
+      modifierTrackerRef.current.reset();
+      applyModifiers(false, false, false);
+    };
+    // A hidden page gets no key-up either.
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        modifierTrackerRef.current.reset();
+        applyModifiers(false, false, false);
+      }
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKey);
     window.addEventListener("blur", onWindowBlur);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKey);
       window.removeEventListener("blur", onWindowBlur);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [applyModifiers]);
 
@@ -1303,7 +1373,8 @@ export function useEditorSession(
       if (next instanceof Node && event.currentTarget.contains(next)) {
         return;
       }
-      applyModifiers(false, false);
+      modifierTrackerRef.current.reset();
+      applyModifiers(false, false, false);
     },
     [applyModifiers],
   );

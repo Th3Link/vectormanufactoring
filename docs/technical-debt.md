@@ -829,6 +829,34 @@ and `gpu_paint.rs` after a pure-move first task, and its panel state into a new
 `useStylePanel.ts`. `session/mod.rs` is at 499, so `0007` PR 3 starts with a
 pure move of the tolerance helpers to `session/tolerances.rs`.
 
+**Done (2026-10-08, `advanced-selection` task 1, a pure-move commit):**
+`curvyo-editor-wasm/src/wasm_api.rs` is 290 lines. The calls moved into one
+`impl WasmSession` block per tool or concern: `wasm_navigation.rs`,
+`wasm_node_tool.rs`, `wasm_select_tool.rs` (with `TransformEntryView`),
+`wasm_shape_tools.rs` and `wasm_render.rs`, next to the existing
+`wasm_select_bar.rs`, `wasm_keys.rs`, `wasm_move.rs`, `wasm_move_entry.rs` and
+`wasm_properties_panel.rs`. `select_tool.rs` is 412 non-test lines
+(the marquee, lasso and cycle are in `select_tool/gesture.rs` and
+`select_tool/cycle.rs`). Left open: the test module of `select_tool.rs` is
+about 2,000 lines; the ADR suggested moving it to `tests/`.
+`curvyo-editor-wasm/src/session/select_view.rs` is at 497 non-test lines: the
+next addition there needs a split first (decorations, cursor and hint, readout).
+
+## Two `hostile_*` tests take minutes in a debug build
+
+*2026-10-08 (`advanced-selection` review).* `acceptance_unified_editing::
+hostile_degenerate_and_extreme_geometry_draws_and_hit_tests_without_panicking`
+and `acceptance_shape_center_tester::hostile_pointer_values_through_session_never_panic_and_keep_the_file_openable`
+are slow on `main` too (measured on a clean checkout of `744dfad`, 4 test
+threads: 191 s for the pair, the first about 190 s and the second about 100 s).
+On the `advanced-selection` branch the pair takes 275 s: the degenerate-geometry
+test presses at random points, moves past the dead zone and releases at the
+press point, which is now a zero-area touch marquee that selects the huge
+rectangles under that point, so later draws include their boxes and handles. No
+production path got slower. Neither test was changed. Proposal for a `chore/`
+PR: cut the value grids to a representative subset, or move the full sweep to a
+release-mode job.
+
 ## Notes for the next parts of `stroke-and-fill-styling` (from the PR 1 review, 2026-10-08)
 
 - **Stroke width has no upper bound** (only "finite and above zero" is checked,

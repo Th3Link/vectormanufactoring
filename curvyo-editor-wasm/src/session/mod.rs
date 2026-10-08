@@ -33,6 +33,7 @@ mod open_error;
 mod pen;
 mod select;
 mod select_bar;
+mod select_gesture;
 mod select_view;
 mod shapes;
 mod stops;
@@ -145,16 +146,14 @@ pub struct Session {
     /// `None` before the first move, or once [`Session::pointer_leave`]
     /// says the pointer is off the canvas.
     pointer_position: Option<Point>,
-    /// The Shift modifier's live state, as of the most recent
-    /// [`Session::pointer_hover`] call — the Select tool's own resize/
-    /// rotate live preview needs this at *render* time
-    /// (`specs/0005-object-transform/specification.md`'s pivot-swap
-    /// modifier), when `draw_list` has no event of its own to read it
-    /// from.
-    select_shift_held: bool,
-    /// The Ctrl modifier's live state, same reasoning as
-    /// `select_shift_held` (acceptance criteria 5, 17).
-    select_ctrl_held: bool,
+    /// The Shift, Ctrl and Alt modifiers' live state, as of the most recent
+    /// [`Session::pointer_hover`] or [`Session::modifiers_changed`] call —
+    /// the Select tool's resize/rotate live preview needs them at *render*
+    /// time (`specs/0005-object-transform/specification.md`'s pivot-swap
+    /// modifier; acceptance criteria 5, 17), when `draw_list` has no event
+    /// of its own to read them from, and the lasso, the marquee's mode
+    /// inversion and the cursor read Alt the same way (`advanced-selection`).
+    held: Modifiers,
     /// The objects as the document held them when a Select-tool drag began,
     /// kept for the drag's life: a drag writes nothing until its release, so
     /// the document cannot change under it, and reading every object out of
@@ -207,8 +206,7 @@ impl Session {
             hovered: None,
             hovered_object: None,
             pointer_position: None,
-            select_shift_held: false,
-            select_ctrl_held: false,
+            held: Modifiers::NONE,
             drag_objects: std::cell::RefCell::new(None),
             device_pixel_ratio: 1.0,
             button_down: false,
@@ -240,8 +238,7 @@ impl Session {
             hovered: None,
             hovered_object: None,
             pointer_position: None,
-            select_shift_held: false,
-            select_ctrl_held: false,
+            held: Modifiers::NONE,
             drag_objects: std::cell::RefCell::new(None),
             device_pixel_ratio: 1.0,
             button_down: false,
@@ -286,6 +283,7 @@ impl Session {
         self.flush_style_preview();
         self.select.cancel_entry();
         self.select.forget_press();
+        self.select.cancel_gesture();
         // A creation tool starts from an empty selection: no selection box
         // stays behind from the Select tool. Creating a shape then selects
         // the new one (`shape_pointer_up`).
@@ -375,7 +373,7 @@ impl Session {
     /// `shape-creation-from-center`) and — since `object-transform` — by the Select
     /// tool's own live resize/rotate preview, alongside `shift`
     /// (acceptance criteria 5, 7, 16, 17); both are cached
-    /// (`select_shift_held`/`select_ctrl_held`) so [`Session::draw_list`]
+    /// (`held`) so [`Session::draw_list`]
     /// can read their current state with no event of its own.
     pub fn pointer_hover(&mut self, point: Point, shift: bool, constrain: bool) {
         let Some(point) = sanitized_point(point) else {
@@ -384,11 +382,11 @@ impl Session {
         self.pointer_position = Some(point);
         self.hovered = None;
         self.hovered_object = None;
-        self.select_shift_held = shift;
-        self.select_ctrl_held = constrain;
+        self.held.shift = shift;
+        self.held.ctrl = constrain;
         match self.tool {
             Tool::Select => {
-                self.select_hover(point, Modifiers::new(shift, constrain));
+                self.select_hover(point, self.held);
             }
             Tool::Node => {
                 let paths = self.paths();

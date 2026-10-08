@@ -25,8 +25,15 @@ const POINT_TOLERANCE_PX: f64 = 16.0;
 /// doubled visual size, `curvyo-render-core::theme::
 /// HANDLE_DIAMETER_PX`'s own doc comment).
 const HANDLE_TOLERANCE_PX: f64 = 16.0;
-/// 4px segment hit-test tolerance (`docs/design-system.md`).
+/// 4px segment hit-test tolerance (`docs/design-system.md`): the Node tool's
+/// segment pick and the shape tools' outline test.
 const SEGMENT_TOLERANCE_PX: f64 = 4.0;
+/// 8px object hit-test tolerance of the Select tool (`advanced-selection`
+/// criterion 1; `docs/design-system.md`): twice the segment tolerance, the
+/// same margin the node and handle radii got. Separate from the segment
+/// tolerance, which stays 4px where several segments of one path run close
+/// together (criterion 2).
+const OBJECT_TOLERANCE_PX: f64 = 8.0;
 
 impl Session {
     pub(super) fn point_tolerance(&self) -> Tolerance {
@@ -39,6 +46,12 @@ impl Session {
 
     pub(super) fn segment_tolerance(&self) -> Tolerance {
         Tolerance::from_mm(SEGMENT_TOLERANCE_PX / self.view().scale())
+    }
+
+    /// The Select tool's outline tolerance: a press, hover, cursor, badge or
+    /// double-click within it of an object's outline hits the object.
+    pub(super) fn object_tolerance(&self) -> Tolerance {
+        Tolerance::from_mm(OBJECT_TOLERANCE_PX / self.view().scale())
     }
 
     pub(super) fn hit_tolerances(&self) -> HitTolerances {

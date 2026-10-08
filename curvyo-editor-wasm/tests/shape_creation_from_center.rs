@@ -20,7 +20,7 @@ fn pt(x: f64, y: f64) -> Point {
 /// What the frontend does on a key event: cache the state, then re-send the
 /// hover at the last pointer position.
 fn key_change(session: &mut Session, at: Point, shift: bool, ctrl: bool) {
-    session.modifiers_changed(shift, ctrl);
+    session.modifiers_changed(shift, ctrl, false);
     session.pointer_hover(at, shift, ctrl);
 }
 

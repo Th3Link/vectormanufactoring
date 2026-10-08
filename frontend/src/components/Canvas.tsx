@@ -9,7 +9,7 @@ import { MoveEntryChip } from "@/components/MoveEntryChip";
 import { TransformEntryChip } from "@/components/TransformEntryChip";
 import type { EditorSession } from "@/hooks/useEditorSession";
 import { cursorForHint } from "@/lib/cursors";
-import { placeReadout } from "@/lib/readoutPlacement";
+import { type Rect, placeReadout } from "@/lib/readoutPlacement";
 
 /** The readout's constant screen-space offset from its anchor, up and to
  * the right (`specs/0005-object-transform/specification.md`'s UX notes:
@@ -20,6 +20,10 @@ const READOUT_OFFSET_PX = 12;
 /** The tool rail's clearance from the canvas's left edge, px: the readout is
  * never drawn under it. */
 const TOOL_RAIL_CLEAR_PX = 64;
+/** The properties panel's collapse tab sits on the canvas's right edge: a chip
+ * never reaches into the last 14 px, so it cannot cover the tab when the
+ * pointer leaves the canvas over the panel. */
+const PANEL_TAB_CLEAR_PX = 14;
 
 interface CanvasProps {
   editor: EditorSession;
@@ -162,6 +166,30 @@ export function Canvas({ editor }: CanvasProps) {
   );
 }
 
+/** The floating Select bar's rectangle in the canvas's own coordinates, or
+ * `null` when no bar is shown. */
+function measureBar(container: HTMLElement): Rect | null {
+  const bar = container.parentElement?.querySelector("[data-context-bar]");
+  if (!bar) {
+    return null;
+  }
+  const outer = container.getBoundingClientRect();
+  const box = bar.getBoundingClientRect();
+  return {
+    left: box.left - outer.left,
+    top: box.top - outer.top,
+    right: box.right - outer.left,
+    bottom: box.bottom - outer.top,
+  };
+}
+
+function sameRect(a: Rect | null, b: Rect | null): boolean {
+  if (a === null || b === null) {
+    return a === b;
+  }
+  return a.left === b.left && a.top === b.top && a.right === b.right && a.bottom === b.bottom;
+}
+
 interface ReadoutChipProps {
   text: string;
   /** Canvas-relative CSS pixels, already converted by Rust
@@ -188,6 +216,7 @@ function ReadoutChip({ text, x, y, containerRef }: ReadoutChipProps) {
       width: Number.POSITIVE_INFINITY,
       height: Number.POSITIVE_INFINITY,
     },
+    bar: null as Rect | null,
   });
 
   // Both sizes are measured in a layout effect (never read from a ref
@@ -202,18 +231,26 @@ function ReadoutChip({ text, x, y, containerRef }: ReadoutChipProps) {
     const next = {
       chip: { width: chip.offsetWidth, height: chip.offsetHeight },
       canvas: { width: container.clientWidth, height: container.clientHeight },
+      bar: measureBar(container),
     };
     setSizes((previous) =>
       previous.chip.width === next.chip.width &&
       previous.chip.height === next.chip.height &&
       previous.canvas.width === next.canvas.width &&
-      previous.canvas.height === next.canvas.height
+      previous.canvas.height === next.canvas.height &&
+      sameRect(previous.bar, next.bar)
         ? previous
         : next,
     );
   }, [text, x, y, containerRef]);
 
-  const placement = placeReadout({ x, y }, sizes.chip, sizes.canvas, READOUT_OFFSET_PX);
+  const placement = placeReadout(
+    { x, y },
+    sizes.chip,
+    { width: sizes.canvas.width - PANEL_TAB_CLEAR_PX, height: sizes.canvas.height },
+    READOUT_OFFSET_PX,
+    sizes.bar ?? undefined,
+  );
 
   return (
     <div
@@ -224,6 +261,9 @@ function ReadoutChip({ text, x, y, containerRef }: ReadoutChipProps) {
         top: placement.top,
         background: "var(--toolbar-bg)",
         color: "var(--toolbar-icon)",
+        // A hairline so the chip reads as its own surface wherever it lands,
+        // also over the Select bar, which shares its ground.
+        border: "1px solid color-mix(in srgb, var(--toolbar-icon) 25%, transparent)",
       }}
     >
       {text}

@@ -128,7 +128,7 @@ from the MVP list. All Done and merged:
 
 Not part of the MVP sequence above; each waits for the customer to schedule it.
 
-- `advanced-selection` (Ready)
+- `advanced-selection` (In progress)
 - `style-panel-rework` (Ready: spec, `adrs.md` and UX notes complete, 2026-10-08):
   customer decisions after trying slice 7. Empty panel when nothing is selected,
   controls hidden when stroke or fill is None, 8-digit RGBA hex, inline colour

@@ -325,7 +325,7 @@ fn shift_pressed_or_released_mid_drag_changes_nothing() {
     // Linked, press without Shift, Shift down for the rest of the drag.
     let mut f = fx([5.0, 0.0, 12.0, 3.0]);
     let from = f.press(0, false);
-    f.s.modifiers_changed(true, false);
+    f.s.modifiers_changed(true, false, false);
     let to = along(from, 0, 6.0);
     f.s.pointer_hover(to, true, false);
     f.s.pointer_up(to, true, false);
@@ -334,7 +334,7 @@ fn shift_pressed_or_released_mid_drag_changes_nothing() {
     // Linked, press with Shift (one corner), Shift released mid-drag.
     let mut f = fx([5.0, 0.0, 12.0, 3.0]);
     let from = f.press(0, true);
-    f.s.modifiers_changed(false, false);
+    f.s.modifiers_changed(false, false, false);
     let to = along(from, 0, 6.0);
     f.s.pointer_hover(to, false, false);
     f.s.pointer_up(to, false, false);
@@ -598,9 +598,9 @@ fn hint_lines_follow_the_switch_never_shift_and_name_no_corner() {
     );
     // Shift held while hovering: unchanged (no live tracking).
     f.s.pointer_hover(at, true, false);
-    f.s.modifiers_changed(true, false);
+    f.s.modifiers_changed(true, false, false);
     assert_eq!(f.s.corner_hint_lines(), on);
-    f.s.modifiers_changed(false, false);
+    f.s.modifiers_changed(false, false, false);
     f.s.set_link_corners(false);
     assert_eq!(
         f.s.corner_hint_lines(),

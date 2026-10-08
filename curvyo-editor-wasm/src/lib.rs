@@ -34,9 +34,19 @@ mod wasm_move;
 #[cfg(target_arch = "wasm32")]
 mod wasm_move_entry;
 #[cfg(target_arch = "wasm32")]
+mod wasm_navigation;
+#[cfg(target_arch = "wasm32")]
+mod wasm_node_tool;
+#[cfg(target_arch = "wasm32")]
 mod wasm_properties_panel;
 #[cfg(target_arch = "wasm32")]
+mod wasm_render;
+#[cfg(target_arch = "wasm32")]
 mod wasm_select_bar;
+#[cfg(target_arch = "wasm32")]
+mod wasm_select_tool;
+#[cfg(target_arch = "wasm32")]
+mod wasm_shape_tools;
 
 pub use session::{EscapeStep, KeyHint, KeyInput, KeyOutcome, MoveIndicators, Session, Tool};
 

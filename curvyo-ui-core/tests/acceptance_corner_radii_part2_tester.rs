@@ -225,7 +225,7 @@ impl Rig {
             at,
             SEGMENT_TOLERANCE,
             tol,
-            shift,
+            Modifiers::new(shift, false),
         )
     }
 

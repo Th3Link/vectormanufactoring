@@ -1,4 +1,4 @@
-import { MoveHorizontal, MoveVertical, Plus } from "lucide-react";
+import { Minus, MoveHorizontal, MoveVertical, Plus } from "lucide-react";
 import { useLayoutEffect, useState } from "react";
 
 import type { MoveBadgeState } from "@/hooks/useEditorSession";
@@ -27,7 +27,9 @@ interface MoveBadgesProps {
 /**
  * The modifier badges of a move (`specs/edit-interaction-polish/` criteria
  * 26, 27, 33; `docs/design-system.md`, "Modifier badge"): the plus badge for
- * a copy and the lock badge for the axis lock, by the pointer. They are pure
+ * a copy, the minus badge for a Ctrl marquee or lasso that removes from the
+ * selection (`specs/advanced-selection/`) and the lock badge for the axis
+ * lock, by the pointer. They are pure
  * display: Rust decides whether each shows and which axis the lock is
  * (`Session::move_indicators`), and the hook re-reads it from window-level
  * key events and every pointer event, so a badge appears and vanishes in the
@@ -47,6 +49,7 @@ export function MoveBadges({ badges, containerRef }: MoveBadgesProps) {
   }, [badges, containerRef]);
   const shown = [
     badges.copy ? ("copy" as const) : null,
+    badges.remove ? ("remove" as const) : null,
     badges.lock ? (`lock-${badges.lock}` as const) : null,
   ].filter((badge) => badge !== null);
   if (shown.length === 0) {
@@ -64,7 +67,9 @@ export function MoveBadges({ badges, containerRef }: MoveBadgesProps) {
           (mirrored ? MIRRORED_OFFSET_PX : BADGE_OFFSET_PX) + index * SECOND_BADGE_SHIFT_PX;
         const centreX = badges.x + (mirrored ? reach : -reach);
         const centreY = badges.y + BADGE_OFFSET_PX + drop;
-        const isCopy = kind === "copy";
+        // Plus and minus share one look: the solid accent ground, a white
+        // sign. Rust never shows both for the same press.
+        const isCopy = kind === "copy" || kind === "remove";
         return (
           <div
             key={kind}
@@ -83,8 +88,10 @@ export function MoveBadges({ badges, containerRef }: MoveBadgesProps) {
               color: isCopy ? "#FFFFFF" : "var(--editor-accent)",
             }}
           >
-            {isCopy ? (
+            {kind === "copy" ? (
               <Plus size={8} strokeWidth={1.5} absoluteStrokeWidth />
+            ) : kind === "remove" ? (
+              <Minus size={8} strokeWidth={1.5} absoluteStrokeWidth />
             ) : kind === "lock-x" ? (
               <MoveHorizontal size={12} strokeWidth={1.5} absoluteStrokeWidth />
             ) : (

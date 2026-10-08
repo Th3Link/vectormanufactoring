@@ -11,7 +11,8 @@
     "prebuild": "npm run build:wasm",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.1",

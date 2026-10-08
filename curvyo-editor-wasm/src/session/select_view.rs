@@ -30,7 +30,7 @@ impl Session {
     /// `None` outside the Select tool, with nothing in flight, inside the
     /// dead zone, before the pointer has ever moved over the canvas, and
     /// where the result equals the committed objects. The cached
-    /// `select_shift_held`/`select_ctrl_held` let this be read at render time.
+    /// The cached `held` modifiers let this be read at render time.
     pub(super) fn select_live_edit_in(&self, objects: &[ObjectSnapshot]) -> Option<LiveEdit> {
         if self.tool != Tool::Select {
             return None;
@@ -40,8 +40,8 @@ impl Session {
             objects,
             &self.selection,
             cursor,
-            self.select_shift_held,
-            self.select_ctrl_held,
+            self.held.shift,
+            self.held.ctrl,
         )
     }
 
@@ -129,10 +129,8 @@ impl Session {
     /// drawn by the transform overlay, and the box leaves its own dashes off
     /// the edge it covers.
     fn skew_guide_now(&self) -> Option<(curvyo_document_core::Point, curvyo_document_core::Point)> {
-        self.select.skew_guide(
-            self.select_shift_held,
-            SKEW_GUIDE_EXTEND_PX / self.view().scale(),
-        )
+        self.select
+            .skew_guide(self.held.shift, SKEW_GUIDE_EXTEND_PX / self.view().scale())
     }
 
     /// The handle under the pointer, if any, with its object and box — the
@@ -152,7 +150,7 @@ impl Session {
             &self.selection,
             point,
             self.transform_handle_tolerances(),
-            self.select_shift_held,
+            self.held.shift,
         )
         .map(|(object, box_, handle)| (object.clone(), box_, handle))
     }
@@ -189,7 +187,7 @@ impl Session {
         let highlighted = dragging.or(entry_handle);
         let hover = self.select_hovered_handle(objects);
         let hovered = hover.as_ref().map(|(_, _, handle)| *handle);
-        let side_rotate = self.select.side_rotate_revealed(self.select_shift_held);
+        let side_rotate = self.select.side_rotate_revealed(self.held.shift);
         let [only] = self.selection.ids() else {
             return TransformDecorationInput::default();
         };
@@ -245,10 +243,10 @@ impl Session {
                 }
             })
             .collect();
-        let live_pivot = self.select.live_pivot(self.select_shift_held);
+        let live_pivot = self.select.live_pivot(self.held.shift);
         // Criterion 55: Shift held, nothing running, the pointer on a handle:
         // the marker previews the point that handle would use.
-        let preview = if self.select_shift_held && highlighted.is_none() {
+        let preview = if self.held.shift && highlighted.is_none() {
             hover.as_ref().and_then(|(object, box_, handle)| {
                 SelectTool::hover_pivot(object, box_, *handle, true)
             })
@@ -286,13 +284,18 @@ impl Session {
     /// paired arrow rotated to that on-screen angle, clockwise from
     /// horizontal: the handle's own base angle plus the object's rotation),
     /// `"move"` (the centre handle, and anywhere a press would move the selected
-    /// object) or `"pointer"` (a parameter handle, hover and drag, whatever the
-    /// modifiers). A handle cursor never changes with Shift or Ctrl; the move
-    /// cursor follows the press, which Shift changes.
+    /// object), `"pointer"` (a parameter handle, hover and drag, whatever the
+    /// modifiers), `"crosshair"` (a marquee is armed or running) or `"lasso"`
+    /// (a lasso is armed or running, or Alt is held with no drag: the next
+    /// press would arm one). A handle cursor never changes with Shift or Ctrl;
+    /// the move cursor follows the press, which Shift changes.
     #[must_use]
     pub fn cursor_hint(&self) -> String {
         if self.tool != Tool::Select {
             return "default".to_string();
+        }
+        if let Some(hint) = self.gesture_cursor() {
+            return hint.to_string();
         }
         let objects = self.objects();
         // The cursor arrows follow the box the maker sees: its direction is the
@@ -339,11 +342,14 @@ impl Session {
             objects,
             &self.selection,
             pointer,
-            self.segment_tolerance(),
+            self.object_tolerance(),
             self.transform_handle_tolerances(),
-            self.select_shift_held,
+            self.held,
         ) {
             PressTarget::InsideSelectedBox => "move",
+            // The 8 px band around the outline of the sole selected object:
+            // a press there selects it again and a drag moves it, as inside.
+            PressTarget::Object(id) if self.selection.ids() == [id] => "move",
             _ => "default",
         }
     }
@@ -395,7 +401,7 @@ impl Session {
         }
         let cursor = self.pointer_position?;
         self.select
-            .live_transform(cursor, self.select_shift_held, self.select_ctrl_held)
+            .live_transform(cursor, self.held.shift, self.held.ctrl)
     }
 
     /// The on-canvas numeric readout for an in-flight Select-tool resize,
@@ -411,6 +417,9 @@ impl Session {
         if self.tool != Tool::Select {
             return None;
         }
+        if let Some(legend) = self.gesture_readout() {
+            return Some(legend);
+        }
         if self.select.move_in_flight() {
             return self.move_readout();
         }
@@ -421,11 +430,9 @@ impl Session {
         let anchor = self.pointer_position?;
         let text = match handle {
             EditHandle::Skew(side) => {
-                let angle = self.select.live_skew_angle(
-                    anchor,
-                    self.select_shift_held,
-                    self.select_ctrl_held,
-                )?;
+                let angle = self
+                    .select
+                    .live_skew_angle(anchor, self.held.shift, self.held.ctrl)?;
                 skew_readout(side, angle.as_radians().to_degrees())
             }
             EditHandle::Rotate(_) => {
@@ -527,13 +534,13 @@ mod tests {
         let moved = session.select_decoration_input().selected[0].1;
         assert_ne!(moved, original, "a move: the box follows");
         // Ctrl pressed with the pointer at rest: the box jumps back.
-        session.modifiers_changed(false, true);
+        session.modifiers_changed(false, true, false);
         session.pointer_hover(to, false, true);
         assert_eq!(session.select_decoration_input().selected[0].1, original);
         let live = session.select_live_edit_in(&session.objects()).unwrap();
         assert!(live.copy && live.objects.len() == 1, "the copy still shows");
         // Released again: the box follows again.
-        session.modifiers_changed(false, false);
+        session.modifiers_changed(false, false, false);
         session.pointer_hover(to, false, false);
         assert_eq!(session.select_decoration_input().selected[0].1, moved);
     }
@@ -686,6 +693,7 @@ mod tests {
             .expect("rotate");
         // Deselect, then hover the rotated outline's turned top-left edge.
         session.pointer_down(Point::new(500.0, 500.0), false);
+        session.pointer_up(Point::new(500.0, 500.0), false, false);
         let on_outline = Point::new(5.0, 5.0).translated(
             curvyo_document_core::Vec2::new(-5.0, 0.0).rotated(Angle::from_radians(0.5)),
         );
@@ -846,9 +854,9 @@ mod tests {
     fn shift_adds_the_side_rotate_handles_and_modifiers_changed_needs_no_pointer() {
         let mut session = big_rect_session();
         assert_eq!(handle_count(&session), 13 + RADIUS_HANDLES);
-        session.modifiers_changed(true, false);
+        session.modifiers_changed(true, false, false);
         assert_eq!(handle_count(&session), 17 + RADIUS_HANDLES);
-        session.modifiers_changed(false, false);
+        session.modifiers_changed(false, false, false);
         assert_eq!(handle_count(&session), 13 + RADIUS_HANDLES);
     }
 
@@ -870,16 +878,16 @@ mod tests {
             12,
             "centre hidden during a rotate, and no radius handle during another drag"
         );
-        session.modifiers_changed(true, false);
+        session.modifiers_changed(true, false, false);
         assert_eq!(handle_count(&session), 12, "Shift mid-drag reveals nothing");
         session.escape();
-        session.modifiers_changed(false, false);
+        session.modifiers_changed(false, false, false);
 
         let side = Point::new(60.0, 20.0 - 32.0 / session.view().scale());
-        session.modifiers_changed(true, false);
+        session.modifiers_changed(true, false, false);
         session.pointer_hover(side, true, false);
         session.pointer_down(side, true);
-        session.modifiers_changed(false, false);
+        session.modifiers_changed(false, false, false);
         assert_eq!(handle_count(&session), 16, "the dragged side handle stays");
         session.escape();
         assert_eq!(handle_count(&session), 13 + RADIUS_HANDLES);
@@ -902,7 +910,7 @@ mod tests {
         );
         // Shift held over the corner rotate handle: the marker previews the
         // opposite corner (10, 80), the pivot a Shift drag would use.
-        session.modifiers_changed(true, false);
+        session.modifiers_changed(true, false, false);
         session.pointer_hover(ne_rotate, true, false);
         let preview = session
             .select_transform_decoration_input()
@@ -920,7 +928,7 @@ mod tests {
             .unwrap();
         assert!((preview.x - 60.0).abs() < 1e-9 && (preview.y - 50.0).abs() < 1e-9);
         // Shift released: the preview is gone again.
-        session.modifiers_changed(false, false);
+        session.modifiers_changed(false, false, false);
         session.pointer_hover(Point::new(110.0, 80.0), false, false);
         assert!(
             session
@@ -935,7 +943,7 @@ mod tests {
             .pivot_marker
             .unwrap();
         assert!((marker.x - 60.0).abs() < 1e-9 && (marker.y - 50.0).abs() < 1e-9);
-        session.modifiers_changed(true, false);
+        session.modifiers_changed(true, false, false);
         let marker = session
             .select_transform_decoration_input()
             .pivot_marker
@@ -1039,7 +1047,7 @@ mod tests {
         let pad = 16.0 / scale;
         assert!((guide.0.x - (10.0 - pad)).abs() < 1e-9 && (guide.0.y - 80.0).abs() < 1e-9);
         assert!((guide.1.x - (110.0 + pad)).abs() < 1e-9 && (guide.1.y - 80.0).abs() < 1e-9);
-        session.modifiers_changed(true, false);
+        session.modifiers_changed(true, false, false);
         let guide = session
             .select_transform_decoration_input()
             .skew_guide
@@ -1057,7 +1065,7 @@ mod tests {
         };
         assert_eq!(session.select_decoration_input().skew_guide, Some(guide));
         let centre_line = box_triangles(&session);
-        session.modifiers_changed(false, false);
+        session.modifiers_changed(false, false, false);
         let fixed_edge = box_triangles(&session);
         session.escape();
         assert!(session.select_decoration_input().skew_guide.is_none());

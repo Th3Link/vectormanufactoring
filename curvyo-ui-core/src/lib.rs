@@ -19,6 +19,7 @@ mod conversion;
 mod ellipse_tool;
 mod hit_test;
 mod hit_test_object;
+mod marquee;
 mod modifiers;
 mod move_entry;
 mod node_tool;
@@ -56,7 +57,8 @@ pub use angle_snap::{MAX_SKEW_SNAP_DEG, snap_angle, snap_skew_angle};
 pub use conversion::build_primitive_conversions;
 pub use ellipse_tool::EllipseTool;
 pub use hit_test::{Hit, hit_test};
-pub use hit_test_object::hit_test_object;
+pub use hit_test_object::{hit_test_object, hit_test_objects, hit_test_objects_along};
+pub use marquee::{MarqueeMode, objects_in_marquee};
 pub use modifiers::Modifiers;
 pub use move_entry::MoveEntry;
 pub use node_tool::{
@@ -64,7 +66,7 @@ pub use node_tool::{
     PointerDownOutcome as NodePointerDownOutcome, PointerUpOutcome as NodePointerUpOutcome,
 };
 pub use object_bounds::{object_bounds, object_outline_bounds};
-pub use object_selection::ObjectSelection;
+pub use object_selection::{ObjectSelection, SelectionCombine};
 pub use oriented_box::{OrientedBox, oriented_bounds};
 pub use param_edit::{
     MAX_INNER_RATIO, MIN_INNER_RATIO, ParamValue, apply_param, clamped_ratio, commit_param_batch,
@@ -84,9 +86,9 @@ pub use select_bar::{
     BarPreview, BarValue, ObjectKind, SelectBarState, ids_of_kind, select_bar_state,
 };
 pub use select_tool::{
-    Axis, EntryKey, KeyEntryRefusal, LiveEdit, MoveEntryMode, MoveResolution, PressTarget,
-    SelectDoubleClickOutcome, SelectPointerDownOutcome, SelectTool, TransformHandleTolerances,
-    classify_press, double_click, entry_anchor,
+    Axis, EntryKey, GestureKind, GestureShape, KeyEntryRefusal, LiveEdit, LiveGesture,
+    MoveEntryMode, MoveResolution, PressTarget, SelectDoubleClickOutcome, SelectPointerDownOutcome,
+    SelectTool, TransformHandleTolerances, classify_press, double_click, entry_anchor,
 };
 pub use selection::NodeSelection;
 pub use shape_tool_common::{CreateOutcome, CreatePreview};

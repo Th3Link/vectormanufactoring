@@ -7,7 +7,7 @@ use std::borrow::Cow;
 
 use curvyo_render_core::{
     DrawList, GradientFrame, TransformDecorationInput, build_artwork, build_decorations,
-    build_pen_preview, build_select_draw_list, build_transform_draw_list,
+    build_marquee_overlay, build_pen_preview, build_select_draw_list, build_transform_draw_list,
 };
 
 use curvyo_document_core::{FillKind, ObjectSnapshot, PathSnapshot};
@@ -84,6 +84,15 @@ impl Session {
             view,
             &self.select_transform_decoration_input_in(&live_objects),
         ));
+        // The marquee box or lasso line: above the boxes and handles, the
+        // topmost layer of a selection drag.
+        if let Some(overlay) = self.marquee_overlay() {
+            list.extend(build_marquee_overlay(
+                view,
+                &overlay,
+                self.device_pixel_ratio,
+            ));
+        }
         if let Some(preview) = self.live_preview() {
             list.extend(curvyo_render_core::build_shape_live_preview(
                 &preview.shape,

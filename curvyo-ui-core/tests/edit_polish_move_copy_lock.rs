@@ -94,7 +94,7 @@ impl Rig {
             at,
             SEGMENT_TOLERANCE,
             tolerances(),
-            shift,
+            Modifiers::new(shift, false),
         );
     }
 
@@ -509,7 +509,7 @@ fn the_press_classification_agrees_with_pointer_down_everywhere() {
                         at,
                         SEGMENT_TOLERANCE,
                         tolerances(),
-                        shift,
+                        Modifiers::new(shift, false),
                     );
                     rig.tool.pointer_down(
                         &objects,
@@ -517,7 +517,7 @@ fn the_press_classification_agrees_with_pointer_down_everywhere() {
                         at,
                         SEGMENT_TOLERANCE,
                         tolerances(),
-                        shift,
+                        Modifiers::new(shift, false),
                     );
                     assert_eq!(
                         target.begins_move(),
@@ -543,10 +543,13 @@ fn a_press_on_empty_canvas_starts_no_move() {
     rig.selection.select_single(rig.b);
     rig.press(pt(700.0, 700.0), false);
     assert!(!rig.tool.move_in_flight());
-    assert!(rig.selection.is_empty(), "a plain press clears");
+    // The click clears at the release (`advanced-selection` criterion 8).
+    rig.release(pt(700.0, 700.0), NONE);
+    assert!(rig.selection.is_empty(), "a plain click clears");
     rig.selection.select_single(rig.b);
     rig.press(pt(700.0, 700.0), true);
     assert!(!rig.tool.move_in_flight());
+    rig.release(pt(700.0, 700.0), Modifiers::new(true, false));
     assert_eq!(rig.selection.ids(), &[rig.b], "Shift keeps the selection");
 }
 

@@ -10,6 +10,7 @@ use super::handles::sole_selected;
 use super::move_drag::MoveDrag;
 use super::{SelectDrag, SelectTool};
 use crate::hit_test_object::{filled_interior_above, hit_test_object};
+use crate::modifiers::Modifiers;
 use crate::object_selection::ObjectSelection;
 use crate::oriented_box::oriented_bounds;
 use crate::transform_drag::DragOrigin;
@@ -25,17 +26,30 @@ pub enum PressTarget {
     /// modifier, and no modifier toggles the selection
     /// (`edit-interaction-polish` criterion 38).
     CentreHandle,
-    /// Inside the sole selected object's box but on no handle (Shift up) and
+    /// Inside the sole selected object's box but on no handle (Shift and Ctrl up) and
     /// on no filled object above it: a move begins.
     InsideSelectedBox,
     /// On this object's outline or filled interior: a move begins (and selects
     /// it, or, with Shift, toggles it).
     Object(NodeId),
-    /// On nothing the Select tool acts on.
+    /// On nothing the Select tool acts on: a marquee is armed.
     Empty,
+    /// Alt is down: a lasso is armed, wherever the press lands, handles and
+    /// objects included (`unified-object-editing` criterion 35;
+    /// `advanced-selection` criteria 16, 17).
+    Lasso,
 }
 
 impl PressTarget {
+    /// Whether a press with these modifiers arms the lasso, before anything
+    /// under the pointer is looked at. The one definition of the Alt rule:
+    /// [`classify_press`] returns [`PressTarget::Lasso`] by it, and the
+    /// cursor, which needs no object, asks it directly.
+    #[must_use]
+    pub const fn arms_lasso(modifiers: Modifiers) -> bool {
+        modifiers.alt
+    }
+
     /// Whether a press on this target begins a move drag, which a Ctrl held
     /// at the release turns into a copy: the target of every press except a
     /// handle drag and a press on nothing (and a Shift press inside the box
@@ -49,10 +63,14 @@ impl PressTarget {
     }
 }
 
-/// What a press at `point` lands on. `shift` is the Shift state of the press:
-/// it reveals the side rotate handles, and a Shift press inside the sole
-/// selected box away from the object is not a move, so the outline hit is
-/// tried first (a Shift-click adds to the selection over a filled shape).
+/// What a press at `point` lands on, with the modifiers of the press. Alt
+/// arms the lasso before anything else. Shift reveals the side rotate
+/// handles; Shift and Ctrl each make a press inside the sole selected box away
+/// from every object not a move, so the outline hit is tried first (a
+/// Shift-click adds to the selection over a filled shape) and an empty result
+/// arms the marquee: Shift adds, Ctrl removes (`edit-interaction-polish`
+/// criterion 37, `unified-object-editing` criterion 35). Ctrl on an outline or
+/// on the centre handle is still a move, which Ctrl turns into a copy.
 #[must_use]
 pub fn classify_press(
     objects: &[ObjectSnapshot],
@@ -60,8 +78,12 @@ pub fn classify_press(
     point: Point,
     tolerance: Tolerance,
     handle_tolerances: TransformHandleTolerances,
-    shift: bool,
+    modifiers: Modifiers,
 ) -> PressTarget {
+    let shift = modifiers.shift;
+    if PressTarget::arms_lasso(modifiers) {
+        return PressTarget::Lasso;
+    }
     if let Some((_, _, handle)) =
         SelectTool::handle_at(objects, selection, point, handle_tolerances, shift)
     {
@@ -80,7 +102,7 @@ pub fn classify_press(
     // exception is a *filled* object lying above the selected one at that
     // point: the press goes to it, or it could never be reached without
     // deselecting first (`0007` criterion 29).
-    if !shift && SelectTool::is_inside_selected_box(objects, selection, point) {
+    if !shift && !modifiers.ctrl && SelectTool::is_inside_selected_box(objects, selection, point) {
         let above = sole_selected(objects, selection)
             .and_then(|selected| filled_interior_above(objects, selected.id(), point));
         return above.map_or(PressTarget::InsideSelectedBox, PressTarget::Object);

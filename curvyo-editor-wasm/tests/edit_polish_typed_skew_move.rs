@@ -474,13 +474,13 @@ fn every_way_of_closing_writes_nothing() {
 fn an_open_entry_chip_shows_no_side_rotate_handle() {
     let mut session = selected(&path_document(100.0), pt(40.0, 20.0));
     let plain = session.draw_list().triangle_count();
-    session.modifiers_changed(true, false);
+    session.modifiers_changed(true, false, false);
     let shifted = session.draw_list().triangle_count();
     assert_ne!(plain, shifted, "Shift reveals the side rotate handles");
-    session.modifiers_changed(false, false);
+    session.modifiers_changed(false, false, false);
     key(&mut session, "m", false);
     let no_shift = session.draw_list().triangle_count();
-    session.modifiers_changed(true, false);
+    session.modifiers_changed(true, false, false);
     assert_eq!(
         session.draw_list().triangle_count(),
         no_shift,

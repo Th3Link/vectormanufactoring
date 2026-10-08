@@ -88,7 +88,7 @@ fn press(
         point,
         tolerance(),
         tolerances(),
-        shift,
+        Modifiers::new(shift, false),
     )
 }
 
@@ -112,7 +112,7 @@ fn ac28_a_drag_that_starts_inside_an_unselected_filled_shape_moves_it_not_a_marq
         pt(20.0, 20.0),
         tolerance(),
         tolerances(),
-        false,
+        Modifiers::NONE,
     );
     assert_eq!(outcome, SelectPointerDownOutcome::Selected);
     assert_eq!(selection.ids(), [id]);
@@ -153,7 +153,7 @@ fn ac28_a_shift_press_over_a_filled_shape_toggles_it_into_the_selection() {
         pt(120.0, 20.0),
         tolerance(),
         tolerances(),
-        true,
+        Modifiers::new(true, false),
     );
     tool.pointer_up(
         &document,
@@ -212,7 +212,7 @@ fn ac29_a_press_inside_the_selected_box_goes_to_a_filled_object_above() {
         pt(30.0, 30.0),
         tolerance(),
         tolerances(),
-        false,
+        Modifiers::NONE,
     );
     assert_eq!(selection.ids(), [e]);
     assert!(tool.live_move(pt(40.0, 30.0), false, false).is_some());

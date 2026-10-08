@@ -466,9 +466,10 @@ the parameter-handle threshold).
     first and toggles that object in the selection, so Shift-click
     add-to-selection works over a filled shape; else a plain press (no Shift)
     inside the selected box starts a move; else an outline hit within 4 px
-    selects, Shift toggles; else the marquee starts. The 4 px is the Select
-    tool's existing outline tolerance (`SEGMENT_TOLERANCE_PX`, unchanged since
-    slice 4); `specs/advanced-selection/` raises it to 8 px when it ships.
+    selects, Shift toggles; else the marquee starts. The Select tool's outline
+    tolerance was 4 px (`SEGMENT_TOLERANCE_PX`, unchanged since slice 4);
+    `specs/advanced-selection/` raises it to 8 px (`OBJECT_TOLERANCE_PX`). The
+    Node and shape tools stay at 4 px.
     Once `specs/advanced-selection/` ships, two clauses are added in front of
     and inside that order: Alt held at the press starts the lasso
     (`specs/advanced-selection/` criteria 16 and 17, also on a handle, and no

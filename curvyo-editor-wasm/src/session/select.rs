@@ -88,16 +88,27 @@ impl Session {
         self.limit_notice = None;
     }
 
-    /// The Shift and Ctrl modifiers changed with no pointer movement
+    /// The Shift, Ctrl and Alt modifiers changed with no pointer movement
     /// (`adrs.md`, "Shift state"): the host calls this from window-level key
-    /// events, and with `(false, false)` when the window or canvas loses
-    /// focus. The cached state is all the next frame, cursor and hint
-    /// queries need — side rotate handles appear and vanish in the frame the
-    /// key changes (criterion 6), the pivot marker and live preview follow
-    /// (criterion 14).
-    pub fn modifiers_changed(&mut self, shift: bool, ctrl: bool) {
-        self.select_shift_held = shift;
-        self.select_ctrl_held = ctrl;
+    /// events, before every pointer event with that event's modifiers, and
+    /// with `(false, false, false)` when the window or canvas loses focus.
+    /// The cached state is all the next frame, cursor and hint queries need —
+    /// side rotate handles appear and vanish in the frame the key changes
+    /// (criterion 6), the pivot marker and live preview follow (criterion 14),
+    /// and so do the marquee's mode and the lasso cursor
+    /// (`advanced-selection` criteria 11, 14).
+    ///
+    /// In the Select tool the hover is refreshed at the pointer's last position
+    /// with the new modifiers, so the hover box (an Alt press arms a lasso: no
+    /// object lights) and the object a press would select follow the key by
+    /// themselves, whatever the host re-sends.
+    pub fn modifiers_changed(&mut self, shift: bool, ctrl: bool, alt: bool) {
+        self.held = Modifiers::new(shift, ctrl).with_alt(alt);
+        if self.tool == Tool::Select
+            && let Some(point) = self.pointer_position
+        {
+            self.select_hover(point, self.held);
+        }
     }
 
     /// The Select tool's handle tolerances at the current zoom
@@ -115,15 +126,18 @@ impl Session {
     pub(super) fn select_pointer_down(&mut self, point: Point, shift: bool) {
         self.limit_notice = None;
         let objects = self.objects();
-        let tolerance = self.segment_tolerance();
+        let tolerance = self.object_tolerance();
         let handle_tolerances = self.transform_handle_tolerances();
+        // Ctrl and Alt are the cached state (the host sends them with the
+        // press); Alt decides at this press whether the drag is a lasso.
+        let modifiers = Modifiers { shift, ..self.held };
         self.select.pointer_down(
             &objects,
             &mut self.selection,
             point,
             tolerance,
             handle_tolerances,
-            shift,
+            modifiers,
         );
     }
 
@@ -137,7 +151,7 @@ impl Session {
             &objects,
             &mut self.selection,
             point,
-            Modifiers::new(shift, ctrl),
+            Modifiers::new(shift, ctrl).with_alt(self.held.alt),
             &mut self.minter,
         );
     }
@@ -154,6 +168,7 @@ impl Session {
         // Otherwise hover lights the object a press at this point would
         // select, and nothing where a press would grab a handle, move the
         // selection or start a marquee (`0007` criterion 28).
+        // (An Alt press arms a lasso, `PressTarget::Lasso`, so nothing lights.)
         self.hovered_object = if self.select.drag_in_flight() {
             None
         } else {
@@ -161,9 +176,9 @@ impl Session {
                 &objects,
                 &self.selection,
                 point,
-                self.segment_tolerance(),
+                self.object_tolerance(),
                 self.transform_handle_tolerances(),
-                modifiers.shift,
+                modifiers,
             ) {
                 curvyo_ui_core::PressTarget::Object(id) => Some(id),
                 _ => None,
@@ -184,7 +199,7 @@ impl Session {
     /// double-click switches to a primitive's own tool: there is none.
     pub(super) fn select_double_click(&mut self, point: Point, shift: bool, ctrl: bool) -> bool {
         let objects = self.objects();
-        let tolerance = self.segment_tolerance();
+        let tolerance = self.object_tolerance();
         let handle_tolerances = self.transform_handle_tolerances();
         let outcome = self.select.double_click(
             &objects,

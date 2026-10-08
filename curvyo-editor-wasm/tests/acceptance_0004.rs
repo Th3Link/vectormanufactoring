@@ -522,6 +522,8 @@ fn ac20_select_tool_shows_a_plain_box_while_its_own_tool_shows_handles_too() {
     // `nothing_selected` is a genuine empty baseline, not already
     // showing the plain box and transform handles.
     session.pointer_down(Point::new(500.0, 500.0), false);
+    // The click clears at the release (`advanced-selection` criterion 8).
+    session.pointer_up(Point::new(500.0, 500.0), false, false);
     let nothing_selected = session.draw_list().triangle_count();
     session.pointer_down(Point::new(0.0, 5.0), false);
     session.pointer_up(Point::new(0.0, 5.0), false, false);

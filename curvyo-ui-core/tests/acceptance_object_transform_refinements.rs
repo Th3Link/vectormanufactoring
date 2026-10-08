@@ -156,7 +156,7 @@ impl Rig {
             at,
             SEGMENT_TOLERANCE,
             tolerances(),
-            shift,
+            Modifiers::new(shift, false),
         )
     }
 
@@ -345,7 +345,7 @@ fn a_side_rotate_handle_starts_a_rotate_with_shift_and_is_empty_canvas_without()
     rig.tool.escape();
     assert_eq!(
         rig.press(top, false),
-        SelectPointerDownOutcome::Cleared,
+        SelectPointerDownOutcome::Marquee,
         "without Shift there is no handle there"
     );
 }

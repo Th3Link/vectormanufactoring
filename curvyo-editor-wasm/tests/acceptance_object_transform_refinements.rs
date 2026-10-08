@@ -191,13 +191,13 @@ fn shift_reveals_the_side_rotate_handles_with_no_pointer_movement() {
         "default",
         "no handle there without Shift"
     );
-    session.modifiers_changed(true, false);
+    session.modifiers_changed(true, false, false);
     assert_eq!(
         session.cursor_hint(),
         "rotate",
         "revealed in the frame Shift goes down"
     );
-    session.modifiers_changed(false, false);
+    session.modifiers_changed(false, false, false);
     assert_eq!(
         session.cursor_hint(),
         "default",
@@ -240,11 +240,11 @@ fn cursors_and_hints_follow_the_handle_under_the_pointer() {
         probe(&mut session, pt(10.0 - px(16.0), 50.0)),
         ("skew:90.0".into(), "skew-y".into())
     );
-    session.modifiers_changed(true, false);
+    session.modifiers_changed(true, false, false);
     session.pointer_hover(top_side_rotate(), true, false);
     assert_eq!(session.cursor_hint(), "rotate");
     assert_eq!(session.handle_hint(), "rotate-side");
-    session.modifiers_changed(false, false);
+    session.modifiers_changed(false, false, false);
     assert_eq!(
         probe(&mut session, pt(900.0, 900.0)),
         ("default".into(), String::new())
