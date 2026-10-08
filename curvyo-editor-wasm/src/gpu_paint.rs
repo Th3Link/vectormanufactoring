@@ -4,6 +4,10 @@
 //! Split from `gpu_pipeline.rs` (the shader and the vertex shape) so each file
 //! has one job. Compiles for `wasm32` only, like `gpu.rs`.
 
+// Every `as u32` below is of `RAMP_TEXELS` (256) or of a row count of at most
+// `MAX_GRADIENTS` (1024).
+#![allow(clippy::cast_possible_truncation)]
+
 use curvyo_render_core::{DrawList, RAMP_TEXELS};
 
 /// The ramp texture's format: unorm, so the sRGB-encoded texels are read back

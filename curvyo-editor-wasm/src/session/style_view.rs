@@ -3,7 +3,7 @@
 //! apart from `style.rs` so the conversion is plain Rust a host test can pin.
 
 use curvyo_document_core::{Color, FillMode, LineCap, LineJoin};
-use curvyo_ui_core::{BarValue, DashChoice, StylePanelState};
+use curvyo_ui_core::{BarValue, DashChoice, StopsPanel, StylePanelState};
 
 /// What the Style panel shows. A `*_mixed` flag means the edited objects
 /// differ (the field is empty with the placeholder "Mixed"); the value beside
@@ -60,6 +60,31 @@ pub struct StylePanelView {
     pub fill_opacity_mixed: bool,
     /// The solid fill opacity, percent.
     pub fill_opacity: f64,
+    /// The gradient stop editor: `"hidden"`, `"different-counts"` or
+    /// `"editor"`.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub stops_state: String,
+    /// How many objects the stop editor edits.
+    pub stops_objects: u32,
+    /// Add stop and a bar click work.
+    pub stops_can_add: bool,
+    /// Remove works.
+    pub stops_can_remove: bool,
+    /// The selection holds a polygon or star: the gradient box note shows.
+    pub stops_box_note: bool,
+    /// The bar shows its ramp and thumbs (every list equal in value).
+    pub stops_bar_shown: bool,
+    /// One row of the stop list per rank, six numbers each: position percent,
+    /// 1 if the positions differ, colour `0xRRGGBB`, 1 if the colours differ,
+    /// opacity percent, 1 if the opacities differ.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub stop_rows: Vec<f64>,
+    /// The bar's stops in position order, three numbers each: position percent,
+    /// colour `0xRRGGBB`, opacity percent; empty unless `stops_bar_shown`.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub stop_bar: Vec<f64>,
+    /// The selected stop's rank, or -1.
+    pub selected_stop: i32,
 }
 
 fn word<T: Copy>(value: BarValue<T>, name: impl Fn(T) -> &'static str) -> String {
@@ -89,10 +114,80 @@ fn percent(value: BarValue<curvyo_document_core::Opacity>) -> (bool, f64) {
     }
 }
 
+/// The stop editor's fields of the view.
+#[allow(clippy::struct_excessive_bools)] // independent flags, read by name
+struct StopsFields {
+    state: &'static str,
+    objects: u32,
+    can_add: bool,
+    can_remove: bool,
+    box_note: bool,
+    bar_shown: bool,
+    rows: Vec<f64>,
+    bar: Vec<f64>,
+}
+
+fn flag(mixed: bool) -> f64 {
+    f64::from(u8::from(mixed))
+}
+
+fn stops_fields(panel: &StopsPanel) -> StopsFields {
+    let mut fields = StopsFields {
+        state: "hidden",
+        objects: 0,
+        can_add: false,
+        can_remove: false,
+        box_note: false,
+        bar_shown: false,
+        rows: Vec::new(),
+        bar: Vec::new(),
+    };
+    match panel {
+        StopsPanel::Hidden => {}
+        StopsPanel::DifferentCounts => fields.state = "different-counts",
+        StopsPanel::Editor(view) => {
+            fields.state = "editor";
+            fields.objects = u32::try_from(view.objects).unwrap_or(u32::MAX);
+            fields.can_add = view.can_add;
+            fields.can_remove = view.can_remove;
+            fields.box_note = view.box_note;
+            for row in &view.rows {
+                let (position_mixed, position) = match row.position {
+                    BarValue::Uniform(position) => (false, position * 100.0),
+                    BarValue::Mixed => (true, 0.0),
+                };
+                let (color_mixed, color) = colour(row.color);
+                let (opacity_mixed, opacity) = percent(row.opacity);
+                fields.rows.extend([
+                    position,
+                    flag(position_mixed),
+                    f64::from(color),
+                    flag(color_mixed),
+                    opacity,
+                    flag(opacity_mixed),
+                ]);
+            }
+            if let Some(bar) = &view.bar {
+                fields.bar_shown = true;
+                for stop in bar {
+                    fields.bar.extend([
+                        stop.position * 100.0,
+                        f64::from(pack_rgb(stop.color)),
+                        stop.opacity.get() * 100.0,
+                    ]);
+                }
+            }
+        }
+    }
+    fields
+}
+
 impl StylePanelView {
-    /// The record for `state`, tagged with the key of the edited objects.
+    /// The record for `state`, tagged with the key of the edited objects and the
+    /// rank of the selected stop.
     #[must_use]
-    pub fn new(state: &StylePanelState, scope_key: String) -> Self {
+    pub fn new(state: &StylePanelState, scope_key: String, selected_stop: Option<usize>) -> Self {
+        let stops = stops_fields(&state.fill.stops);
         let (stroke_color_mixed, stroke_color) = colour(state.stroke.color);
         let (stroke_opacity_mixed, stroke_opacity) = percent(state.stroke.opacity);
         let (fill_color_mixed, fill_color) = colour(state.fill.color);
@@ -140,6 +235,17 @@ impl StylePanelView {
             fill_color,
             fill_opacity_mixed,
             fill_opacity,
+            stops_state: stops.state.to_string(),
+            stops_objects: stops.objects,
+            stops_can_add: stops.can_add,
+            stops_can_remove: stops.can_remove,
+            stops_box_note: stops.box_note,
+            stops_bar_shown: stops.bar_shown,
+            stop_rows: stops.rows,
+            stop_bar: stops.bar,
+            selected_stop: selected_stop
+                .and_then(|rank| i32::try_from(rank).ok())
+                .unwrap_or(-1),
         }
     }
 }

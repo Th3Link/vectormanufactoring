@@ -9,6 +9,7 @@ use curvyo_document_core::{
 
 use crate::select_bar::BarValue;
 use crate::style_scope::StyleScope;
+use crate::style_stops::{StopsPanel, stops_panel};
 
 /// Two stroke widths closer than this are one value, millimetres.
 const WIDTH_EQUAL_EPSILON_MM: f64 = 1e-9;
@@ -108,6 +109,8 @@ pub struct FillPanel {
     pub color: BarValue<Color>,
     /// The solid opacity.
     pub opacity: BarValue<Opacity>,
+    /// The gradient stop editor (criteria 16 to 20, 34, 35).
+    pub stops: StopsPanel,
 }
 
 /// Everything the panel shows.
@@ -180,6 +183,11 @@ pub fn style_panel_state(objects: &[ObjectSnapshot], scope: &StyleScope) -> Styl
             mode: shared(&column(&styles, fill_mode)),
             color: shared(&column(&styles, |s| s.fill.color)),
             opacity: shared(&column(&styles, |s| s.fill.opacity)),
+            stops: if enabled {
+                stops_panel(objects, &scope.ids)
+            } else {
+                StopsPanel::Hidden
+            },
         },
     }
 }

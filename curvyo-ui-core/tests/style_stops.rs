@@ -397,3 +397,160 @@ fn a_selected_stop_keeps_its_identity_when_an_edit_re_sorts_the_list() {
     assert_eq!(selected_rank(&objects(&document), &[a], &targets), None);
     assert_eq!(selected_rank(&objects(&document), &[], &targets), None);
 }
+
+// ---- a stop drag: one preview, one commit (criterion 36) ----------------------
+
+mod drag {
+    use super::*;
+    use curvyo_ui_core::StyleEditor;
+
+    fn gradient_rect(document: &Document) -> NodeId {
+        let id = rect(document, 0.0);
+        set(document, id, FillMode::Linear, &two_stops());
+        id
+    }
+
+    fn pos(v: f64) -> StopChange {
+        StopChange::Position(StopPosition::new(v).unwrap())
+    }
+
+    #[test]
+    fn the_preview_moves_the_stop_for_drawing_and_writes_nothing() {
+        let document = Document::new(1);
+        let id = gradient_rect(&document);
+        let targets = stop_targets(&objects(&document), &[id], 0);
+        let mut editor = StyleEditor::default();
+        editor.preview_stops(&targets, pos(0.4));
+        editor.preview_stops(&targets, pos(0.6));
+        let mut shown = objects(&document);
+        editor.apply_to(&mut shown);
+        let stops = &shown[0].style().fill.stops;
+        assert_eq!(stops[0].position.get(), 0.6);
+        assert_eq!(stops[1].position.get(), 1.0, "other stops untouched");
+        assert_eq!(
+            document.object(id).unwrap().style().fill.stops[0]
+                .position
+                .get(),
+            0.0,
+            "nothing stored"
+        );
+    }
+
+    #[test]
+    fn the_release_commits_to_the_stops_the_drag_started_on_even_after_a_re_sort() {
+        let document = Document::new(1);
+        let id = gradient_rect(&document);
+        let targets = stop_targets(&objects(&document), &[id], 0);
+        let mut editor = StyleEditor::default();
+        editor.preview_stops(&targets, pos(0.5));
+        // The thumb crossed the other stop: the host now names rank 1, but the
+        // drag keeps the stop it started on.
+        let crossed = stop_targets(&objects(&document), &[id], 1);
+        editor.preview_stops(&crossed, pos(1.0));
+        editor.commit(&document).unwrap();
+        let stops = document.object(id).unwrap().style().fill.stops.clone();
+        let first = stops.iter().find(|s| s.id == StopId::new(7, 1)).unwrap();
+        let second = stops.iter().find(|s| s.id == StopId::new(7, 2)).unwrap();
+        assert_eq!(first.position.get(), 1.0);
+        assert_eq!(second.position.get(), 1.0, "unchanged");
+        assert!(!editor.is_active());
+    }
+
+    #[test]
+    fn colour_and_opacity_drags_edit_only_that_value() {
+        let document = Document::new(1);
+        let id = gradient_rect(&document);
+        let targets = stop_targets(&objects(&document), &[id], 1);
+        let mut editor = StyleEditor::default();
+        editor.preview_stops(&targets, StopChange::Color(red()));
+        editor.preview_stops(&targets, StopChange::Opacity(Opacity::new(0.25).unwrap()));
+        editor.commit(&document).unwrap();
+        let stop = document.object(id).unwrap().style().fill.stops[1];
+        assert_eq!(stop.color, blue(), "the last preview was the opacity");
+        assert_eq!(stop.opacity.get(), 0.25);
+    }
+
+    #[test]
+    fn escape_drops_a_stop_preview_like_any_other() {
+        let document = Document::new(1);
+        let id = gradient_rect(&document);
+        let targets = stop_targets(&objects(&document), &[id], 0);
+        let mut editor = StyleEditor::default();
+        editor.preview_stops(&targets, pos(0.5));
+        editor.cancel();
+        editor.preview_stops(&targets, pos(0.7));
+        assert!(!editor.is_active());
+        editor.commit(&document).unwrap();
+        assert_eq!(
+            document.object(id).unwrap().style().fill.stops[0]
+                .position
+                .get(),
+            0.0
+        );
+    }
+}
+
+// ---- typed stop values (criteria 16, 20) ----------------------------------------
+
+mod entry {
+    use super::*;
+    use curvyo_ui_core::{StopField, StyleEntryError, parse_position_percent};
+
+    #[test]
+    fn a_position_is_a_percent_stored_as_typed() {
+        assert_eq!(parse_position_percent("12.5").unwrap().get(), 0.125);
+        assert_eq!(parse_position_percent(" 40 % ").unwrap().get(), 0.4);
+        assert_eq!(parse_position_percent("0,5").unwrap().get(), 0.005);
+        assert_eq!(parse_position_percent("100").unwrap().get(), 1.0);
+        assert_eq!(parse_position_percent("0").unwrap().get(), 0.0);
+        for bad in ["", "abc", "-1", "100.5", "1e1"] {
+            assert_eq!(
+                parse_position_percent(bad),
+                Err(StyleEntryError::Percent),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_stop_field_parses_each_kind_of_value() {
+        let field = |name| StopField::from_name(name).unwrap();
+        assert_eq!(
+            field("position").parse_text("25").unwrap(),
+            StopChange::Position(StopPosition::new(0.25).unwrap())
+        );
+        assert_eq!(
+            field("color").parse_text("#f00").unwrap(),
+            StopChange::Color(red())
+        );
+        assert_eq!(
+            field("opacity").parse_text("40").unwrap(),
+            StopChange::Opacity(Opacity::new(0.4).unwrap())
+        );
+        assert_eq!(
+            field("color").parse_text("12345678"),
+            Err(StyleEntryError::HexEightDigits)
+        );
+        assert!(StopField::from_name("angle").is_none());
+    }
+
+    #[test]
+    fn a_drag_tick_is_clamped_into_range() {
+        assert_eq!(
+            StopField::Position.drag_change(-5.0),
+            StopChange::Position(StopPosition::START)
+        );
+        assert_eq!(
+            StopField::Position.drag_change(250.0),
+            StopChange::Position(StopPosition::END)
+        );
+        assert_eq!(
+            StopField::Color.drag_change(f64::from(0x0000_00FF_u32)),
+            StopChange::Color(blue())
+        );
+        assert_eq!(
+            StopField::Opacity.drag_change(33.4),
+            StopChange::Opacity(Opacity::new(0.33).unwrap())
+        );
+    }
+}
