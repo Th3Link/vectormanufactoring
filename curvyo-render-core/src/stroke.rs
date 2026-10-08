@@ -5,13 +5,30 @@
 //! (ADR 0003 §7: "a separate, coarser display tolerance in
 //! `curvyo-render-core` must not be reused" for hit-testing).
 
-use curvyo_document_core::{AnchorSnapshot, Point, Vec2};
+use curvyo_document_core::{AnchorSnapshot, LineCap, LineJoin, Point, Vec2};
 use lyon::math::point;
 use lyon::path::Path;
 use lyon::tessellation::{
     BuffersBuilder, StrokeOptions, StrokeTessellator, StrokeVertex, StrokeVertexConstructor,
     VertexBuffers,
 };
+
+/// The miter limit of every stroke: a miter join whose point would reach
+/// farther than this many stroke widths from the vertex draws as a bevel
+/// instead (acceptance criterion 11; SVG's and Inkscape's default). Fixed;
+/// there is no control for it.
+const MITER_LIMIT: f32 = 4.0;
+
+/// How a stroke is shaped and painted: width, colour, display tolerance, join
+/// and cap.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct StrokeParams {
+    pub width_mm: f64,
+    pub color: RgbaColor,
+    pub tolerance_mm: f64,
+    pub join: LineJoin,
+    pub cap: LineCap,
+}
 
 use crate::color::RgbaColor;
 use crate::glyphs::{DrawList, Vertex};
@@ -28,7 +45,7 @@ impl StrokeVertexConstructor<Vertex> for WithColor {
     }
 }
 
-fn to_lyon(point_mm: Point) -> lyon::math::Point {
+pub(crate) fn to_lyon(point_mm: Point) -> lyon::math::Point {
     #[allow(clippy::cast_possible_truncation)]
     point(point_mm.x as f32, point_mm.y as f32)
 }
@@ -47,7 +64,18 @@ fn cubic_bezier_to(
 /// closing the loop with its own curved handles rather than `lyon`'s
 /// straight-line `close()` when `closed` is set). `None` when there are
 /// fewer than two anchors — nothing to stroke.
-fn build_path(anchors: &[AnchorSnapshot], closed: bool) -> Option<Path> {
+pub(crate) fn build_path(anchors: &[AnchorSnapshot], closed: bool) -> Option<Path> {
+    build_outline(anchors, closed, false)
+}
+
+/// The path a fill paints: [`build_path`]'s outline, but an open one is closed
+/// with a straight chord from its last anchor back to its first (acceptance
+/// criterion 15). The stroke keeps using the open path.
+pub(crate) fn build_fill_path(anchors: &[AnchorSnapshot], closed: bool) -> Option<Path> {
+    build_outline(anchors, closed, true)
+}
+
+fn build_outline(anchors: &[AnchorSnapshot], closed: bool, chord_close: bool) -> Option<Path> {
     if anchors.len() < 2 {
         return None;
     }
@@ -64,36 +92,57 @@ fn build_path(anchors: &[AnchorSnapshot], closed: bool) -> Option<Path> {
         cubic_bezier_to(&mut builder, last, &anchors[0]);
         builder.end(true);
     } else {
-        builder.end(false);
+        builder.end(chord_close);
     }
     Some(builder.build())
 }
 
-fn stroke(path: &Path, width_mm: f64, color: RgbaColor, tolerance_mm: f64) -> DrawList {
-    let mut buffers: VertexBuffers<Vertex, u16> = VertexBuffers::new();
-    let mut tessellator = StrokeTessellator::new();
+fn stroke_options(params: &StrokeParams) -> StrokeOptions {
+    let join = match params.join {
+        LineJoin::Miter => lyon::tessellation::LineJoin::Miter,
+        LineJoin::Round => lyon::tessellation::LineJoin::Round,
+        LineJoin::Bevel => lyon::tessellation::LineJoin::Bevel,
+    };
+    let cap = match params.cap {
+        LineCap::Butt => lyon::tessellation::LineCap::Butt,
+        LineCap::Round => lyon::tessellation::LineCap::Round,
+        LineCap::Square => lyon::tessellation::LineCap::Square,
+    };
     #[allow(clippy::cast_possible_truncation)]
-    let options = StrokeOptions::default()
-        .with_line_width(width_mm as f32)
-        .with_tolerance(tolerance_mm as f32);
-    let mut output = BuffersBuilder::new(&mut buffers, WithColor(color));
+    StrokeOptions::default()
+        .with_line_width(params.width_mm as f32)
+        .with_tolerance(params.tolerance_mm as f32)
+        .with_line_join(join)
+        .with_line_cap(cap)
+        .with_miter_limit(MITER_LIMIT)
+}
+
+/// Tessellates `path` as one stroke. Degrades to "nothing drawn" rather than
+/// panicking: this is rendering, not a correctness-critical write, and a
+/// malformed path (e.g. NaN coordinates from upstream corruption) should not
+/// be able to crash the editor.
+pub(crate) fn stroke(path: &Path, params: &StrokeParams) -> DrawList {
+    let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
+    let mut tessellator = StrokeTessellator::new();
+    let options = stroke_options(params);
+    let mut output = BuffersBuilder::new(&mut buffers, WithColor(params.color));
     if tessellator
         .tessellate_path(path, &options, &mut output)
         .is_err()
     {
-        // Degrades to "nothing drawn" rather than panicking: this is
-        // rendering, not a correctness-critical write, and a malformed
-        // path (e.g. NaN coordinates from upstream corruption) should
-        // not be able to crash the editor.
         return DrawList::default();
     }
+    triangles_of(&buffers)
+}
 
+/// The flat triangle list of an indexed buffer.
+pub(crate) fn triangles_of(buffers: &VertexBuffers<Vertex, u32>) -> DrawList {
     let mut list = DrawList::default();
     let (triangles, _remainder) = buffers.indices.as_chunks::<3>();
     for &[a, b, c] in triangles {
-        list.triangles.push(buffers.vertices[usize::from(a)]);
-        list.triangles.push(buffers.vertices[usize::from(b)]);
-        list.triangles.push(buffers.vertices[usize::from(c)]);
+        list.push_vertex(buffers.vertices[a as usize]);
+        list.push_vertex(buffers.vertices[b as usize]);
+        list.push_vertex(buffers.vertices[c as usize]);
     }
     list
 }
@@ -116,7 +165,7 @@ pub fn path_stroke(
     tolerance_mm: f64,
 ) -> DrawList {
     build_path(anchors, closed).map_or_else(DrawList::default, |path| {
-        stroke(&path, width_mm, color, tolerance_mm)
+        stroke(&path, &plain(width_mm, color, tolerance_mm))
     })
 }
 
@@ -140,7 +189,19 @@ pub fn segment_stroke(
     let c2 = end.translated(end_handle_in);
     builder.cubic_bezier_to(to_lyon(c1), to_lyon(c2), to_lyon(end));
     builder.end(false);
-    stroke(&builder.build(), width_mm, color, tolerance_mm)
+    stroke(&builder.build(), &plain(width_mm, color, tolerance_mm))
+}
+
+/// The default join and cap (miter, butt), as every stroke before
+/// `stroke-and-fill-styling` had.
+fn plain(width_mm: f64, color: RgbaColor, tolerance_mm: f64) -> StrokeParams {
+    StrokeParams {
+        width_mm,
+        color,
+        tolerance_mm,
+        join: LineJoin::Miter,
+        cap: LineCap::Butt,
+    }
 }
 
 #[cfg(test)]

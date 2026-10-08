@@ -13,8 +13,11 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+mod artwork;
 mod color;
+mod dash;
 mod decorations;
+mod fill;
 mod glyphs;
 mod live_preview;
 mod move_axes;
@@ -25,6 +28,7 @@ mod shape_preview;
 mod stroke;
 mod theme;
 
+pub use artwork::build_artwork;
 pub use color::RgbaColor;
 pub use decorations::{DecorationInput, Hovered};
 pub use glyphs::{DrawList, Vertex};
@@ -41,29 +45,31 @@ fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
     px / view.scale()
 }
 
-/// Builds the full draw list for one frame: every path's stroke
-/// (acceptance criterion 6), plus node/handle/segment decorations
-/// (acceptance criteria 7, 9, 10, 14) from `input`.
+/// Builds the draw list of `paths` as the Node tool shows them: every path's
+/// artwork (fill, then stroke, in the style it carries), plus node, handle and
+/// segment decorations (acceptance criteria 7, 9, 10, 14 of `path-node-
+/// editing`) from `input`. The whole document is drawn with [`build_artwork`]
+/// and [`build_decorations`] separately; this is the two combined for paths.
 #[must_use]
 pub fn build_draw_list(
     paths: &[PathSnapshot],
     view: ViewTransform,
     input: &DecorationInput,
 ) -> DrawList {
-    let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
-    let min_width_mm = screen_px_to_mm(view, theme::MIN_DISPLAY_STROKE_WIDTH_PX);
-    let mut list = DrawList::default();
-    for snapshot in paths {
-        list.extend(stroke::path_stroke(
-            &snapshot.anchors,
-            snapshot.closed,
-            snapshot.style.stroke.width.as_mm().max(min_width_mm),
-            snapshot.style.stroke.color.into(),
-            tolerance_mm,
-        ));
-    }
+    let mut list = artwork::paths_artwork(paths, view);
     list.extend(decorations::build(paths, view, input));
     list
+}
+
+/// Builds the Node tool's decorations alone (nodes, handles, hover rings and
+/// the selected-segment overlay) for `paths`, drawn over the artwork.
+#[must_use]
+pub fn build_decorations(
+    paths: &[PathSnapshot],
+    view: ViewTransform,
+    input: &DecorationInput,
+) -> DrawList {
+    decorations::build(paths, view, input)
 }
 
 /// Builds the Select tool's own decoration geometry for this frame: a

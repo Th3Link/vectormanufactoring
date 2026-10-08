@@ -33,10 +33,19 @@ pub struct Vertex {
 /// A flat list of triangles: every three consecutive [`Vertex`]es form
 /// one triangle. Ready for the host to upload as a single vertex buffer
 /// (ADR 0001 §5: typed arrays, never JSON, cross the wasm boundary).
+///
+/// The list is artwork followed by an overlay. The artwork is a prefix cut
+/// into **layers** (see [`DrawList::layers`]): every layer is painted at most
+/// once per pixel, and a later layer paints over an earlier one. The rest is
+/// the overlay, editor decorations that blend in list order as they always
+/// did.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct DrawList {
     /// The triangle list. `triangles.len()` is always a multiple of 3.
     pub triangles: Vec<Vertex>,
+    /// The vertex index at which each artwork layer ends, ascending. The
+    /// layers cover `triangles[..layers.last()]`; what follows is the overlay.
+    layers: Vec<usize>,
 }
 
 impl DrawList {
@@ -46,9 +55,78 @@ impl DrawList {
         self.triangles.len() / 3
     }
 
-    /// Appends another draw list's triangles to this one.
+    /// The vertex index at which each artwork layer ends, ascending. Layer
+    /// `i` covers the vertices from the end of layer `i - 1` (or 0) to
+    /// `layers()[i]`. A host that paints each layer at most once per pixel
+    /// (a depth test with one depth value per layer) gets the single coverage
+    /// that a translucent stroke needs: `lyon`'s stroke tessellator emits
+    /// overlapping triangles at joins and self-crossings, which would blend
+    /// twice.
+    #[must_use]
+    pub fn layers(&self) -> &[usize] {
+        &self.layers
+    }
+
+    /// The vertex index at which the overlay starts: the end of the last
+    /// artwork layer, or 0 when there is no artwork.
+    #[must_use]
+    pub fn overlay_start(&self) -> usize {
+        self.layers.last().copied().unwrap_or(0)
+    }
+
+    /// One depth value per vertex for a host that paints with a depth test of
+    /// "less" and a clear value of 1: artwork layer `k` of `n` gets
+    /// `1 - (k + 1) / (n + 1)`, so every later layer is nearer than every
+    /// earlier one and a pixel is written at most once per layer. Overlay
+    /// vertices get 0; a host draws them with the depth test off.
+    #[must_use]
+    pub fn vertex_depths(&self) -> Vec<f32> {
+        let count = self.layers.len();
+        let mut depths = Vec::with_capacity(self.triangles.len());
+        let mut start = 0;
+        for (index, &end) in self.layers.iter().enumerate() {
+            #[allow(clippy::cast_precision_loss)]
+            let depth = 1.0 - (index + 1) as f32 / (count + 1) as f32;
+            depths.resize(depths.len() + (end - start), depth);
+            start = end;
+        }
+        depths.resize(self.triangles.len(), 0.0);
+        depths
+    }
+
+    /// Closes the triangles pushed since the last boundary as one artwork
+    /// layer. Only the artwork builder calls this, on a list it is still
+    /// building (so there is no overlay yet); it does nothing when nothing
+    /// was pushed.
+    pub(crate) fn close_layer(&mut self) {
+        let end = self.triangles.len();
+        if end > self.overlay_start() {
+            self.layers.push(end);
+        }
+    }
+
+    /// Appends `layer` (one tessellation) as a new artwork layer. Only the
+    /// artwork builder calls this, before any overlay exists.
+    pub(crate) fn extend_artwork(&mut self, layer: Self) {
+        self.triangles.extend(layer.triangles);
+        self.close_layer();
+    }
+
+    pub(crate) fn push_vertex(&mut self, vertex: Vertex) {
+        self.triangles.push(vertex);
+    }
+
+    /// Appends another draw list to this one. Its artwork layers stay layers
+    /// when this list has no overlay yet (artwork is extended before
+    /// decorations); otherwise its triangles join this list's overlay.
     pub fn extend(&mut self, other: Self) {
+        let base = self.triangles.len();
+        let keeps_layers = self.overlay_start() == base;
         self.triangles.extend(other.triangles);
+        if keeps_layers {
+            self.layers
+                .extend(other.layers.into_iter().map(|end| end + base));
+        }
     }
 
     fn push_triangle(&mut self, a: Point, b: Point, c: Point, color: RgbaColor) {
@@ -470,5 +548,103 @@ mod tests {
         let min = radii.iter().copied().fold(f64::MAX, f64::min);
         assert!((max - 5.0).abs() < 1e-9);
         assert!((min - 3.0).abs() < 1e-9);
+    }
+}
+
+#[cfg(test)]
+mod layer_tests {
+    use super::*;
+
+    fn vertex() -> Vertex {
+        Vertex {
+            position: Point::new(0.0, 0.0),
+            color: RgbaColor::BLACK,
+        }
+    }
+
+    fn layered(layer_count: usize) -> DrawList {
+        let mut list = DrawList::default();
+        for _ in 0..layer_count {
+            let mut one = DrawList::default();
+            one.push_triangle(
+                Point::new(0.0, 0.0),
+                Point::new(1.0, 0.0),
+                Point::new(0.0, 1.0),
+                RgbaColor::BLACK,
+            );
+            list.extend_artwork(one);
+        }
+        list
+    }
+
+    #[test]
+    fn layers_are_vertex_boundaries_in_order() {
+        assert_eq!(layered(3).layers(), [3, 6, 9]);
+        assert_eq!(layered(0).layers().len(), 0);
+        assert_eq!(layered(2).overlay_start(), 6);
+    }
+
+    #[test]
+    fn extending_keeps_artwork_layers_until_an_overlay_exists() {
+        let mut frame = DrawList::default();
+        frame.extend(layered(2));
+        frame.extend(layered(1));
+        assert_eq!(
+            frame.layers(),
+            [3, 6, 9],
+            "artwork after artwork stays layered"
+        );
+        let overlay = DrawList {
+            triangles: vec![vertex(); 3],
+            ..DrawList::default()
+        };
+        frame.extend(overlay);
+        assert_eq!(frame.overlay_start(), 9);
+        frame.extend(layered(2));
+        assert_eq!(
+            frame.layers(),
+            [3, 6, 9],
+            "after an overlay, more artwork is overlay too"
+        );
+        assert_eq!(frame.triangles.len(), 9 + 3 + 6);
+    }
+
+    #[test]
+    fn vertex_depths_put_later_layers_nearer_and_the_overlay_at_zero() {
+        let mut frame = DrawList::default();
+        frame.extend(layered(3));
+        frame.extend(DrawList {
+            triangles: vec![vertex(); 3],
+            ..DrawList::default()
+        });
+        let depths = frame.vertex_depths();
+        assert_eq!(depths.len(), frame.triangles.len());
+        assert_eq!(depths[..3], [0.75; 3]);
+        assert_eq!(depths[3..6], [0.5; 3]);
+        assert_eq!(depths[6..9], [0.25; 3]);
+        assert_eq!(depths[9..], [0.0; 3]);
+        assert!(depths.iter().all(|d| (0.0..1.0).contains(d)));
+    }
+
+    #[test]
+    fn a_hundred_thousand_layers_keep_distinct_depths() {
+        let mut list = DrawList::default();
+        for _ in 0..100_000 {
+            let mut one = DrawList::default();
+            one.triangles.push(vertex());
+            list.extend_artwork(one);
+        }
+        let depths = list.vertex_depths();
+        assert!(
+            depths.windows(2).all(|w| w[1] < w[0]),
+            "strictly nearer, layer by layer"
+        );
+    }
+
+    #[test]
+    fn an_empty_layer_is_not_recorded() {
+        let mut list = DrawList::default();
+        list.extend_artwork(DrawList::default());
+        assert_eq!(list.layers().len(), 0);
     }
 }

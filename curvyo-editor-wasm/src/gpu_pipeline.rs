@@ -20,6 +20,7 @@ var<uniform> transform: ScreenTransform;
 struct VertexInput {
     @location(0) position: vec2<f32>,
     @location(1) color: vec4<f32>,
+    @location(2) depth: f32,
 };
 
 struct VertexOutput {
@@ -33,7 +34,7 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     out.clip_position = vec4<f32>(
         input.position.x * transform.scale_x + transform.offset_x,
         input.position.y * transform.scale_y + transform.offset_y,
-        0.0,
+        input.depth,
         1.0,
     );
     out.color = input.color;
@@ -47,13 +48,15 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 ";
 
 /// One triangle-list vertex in the shape the GPU pipeline below expects:
-/// a clip-ready `f32` position (before the per-frame screen transform)
-/// and a normalized `f32` color.
+/// a clip-ready `f32` position (before the per-frame screen transform),
+/// a normalized `f32` color and the depth of the vertex's artwork layer
+/// ([`layer_depth`]).
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(super) struct GpuVertex {
     position: [f32; 2],
     color: [f32; 4],
+    depth: f32,
 }
 
 /// Converts a draw-list vertex to the GPU's own vertex shape, **relative
@@ -71,7 +74,11 @@ pub(super) struct GpuVertex {
 /// screen, in pixels — regardless of where the document origin is.
 /// [`ScreenTransform`]'s own offset no longer needs `origin` at all,
 /// since every vertex arrives already shifted.
-pub(super) fn to_gpu_vertex(vertex: curvyo_render_core::Vertex, origin: Point) -> GpuVertex {
+pub(super) fn to_gpu_vertex(
+    vertex: curvyo_render_core::Vertex,
+    origin: Point,
+    depth: f32,
+) -> GpuVertex {
     let relative_x = vertex.position.x - origin.x;
     let relative_y = vertex.position.y - origin.y;
     #[allow(clippy::cast_possible_truncation)]
@@ -82,7 +89,11 @@ pub(super) fn to_gpu_vertex(vertex: curvyo_render_core::Vertex, origin: Point) -
         f32::from(vertex.color.b) / 255.0,
         f32::from(vertex.color.a) / 255.0,
     ];
-    GpuVertex { position, color }
+    GpuVertex {
+        position,
+        color,
+        depth,
+    }
 }
 
 /// The CPU-computed per-frame mapping from document millimetres straight
@@ -181,16 +192,38 @@ pub(super) fn create_transform_resources(device: &wgpu::Device) -> TransformReso
     }
 }
 
-/// Builds the one render pipeline this crate ever submits: the draw-list
-/// triangle list, transformed by the `transform_bind_group_layout` uniform,
-/// targeting `surface_format`. Split out of [`Gpu::attach`] for the same
+/// The depth attachment's format. 32-bit float keeps tens of thousands of
+/// layers apart ([`curvyo_render_core::DrawList::vertex_depths`]).
+pub(super) const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+
+/// How a pipeline treats depth.
+#[derive(Clone, Copy)]
+pub(super) enum DepthMode {
+    /// Artwork: a vertex of layer `k` passes only where nothing of its layer
+    /// or a later one was written, and writes its depth. A pixel is therefore
+    /// painted at most once per layer (single coverage), and later layers
+    /// still paint over earlier ones.
+    SingleCoverage,
+    /// Overlay (editor decorations): always passes, never writes, so
+    /// translucent glyphs blend in list order as they always did.
+    Overlay,
+}
+
+/// Builds a render pipeline for the draw-list triangle list, transformed by
+/// the `transform_bind_group_layout` uniform, targeting `surface_format`, with
+/// the depth behaviour of `depth`. Split out of [`Gpu::attach`] for the same
 /// `clippy::too_many_lines` reason as [`create_transform_resources`].
 pub(super) fn create_pipeline(
     device: &wgpu::Device,
     transform_bind_group_layout: &wgpu::BindGroupLayout,
     surface_format: wgpu::TextureFormat,
     sample_count: u32,
+    depth: DepthMode,
 ) -> wgpu::RenderPipeline {
+    let (depth_write_enabled, depth_compare) = match depth {
+        DepthMode::SingleCoverage => (true, wgpu::CompareFunction::Less),
+        DepthMode::Overlay => (false, wgpu::CompareFunction::Always),
+    };
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("curvyo draw-list shader"),
         source: wgpu::ShaderSource::Wgsl(SHADER_SOURCE.into()),
@@ -216,11 +249,19 @@ pub(super) fn create_pipeline(
                 offset: 8,
                 shader_location: 1,
             },
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Float32,
+                offset: 24,
+                shader_location: 2,
+            },
         ],
     };
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("curvyo draw-list pipeline"),
+        label: Some(match depth {
+            DepthMode::SingleCoverage => "curvyo artwork pipeline",
+            DepthMode::Overlay => "curvyo overlay pipeline",
+        }),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module: &shader,
@@ -239,7 +280,13 @@ pub(super) fn create_pipeline(
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         }),
         primitive: wgpu::PrimitiveState::default(),
-        depth_stencil: None,
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: Some(depth_write_enabled),
+            depth_compare: Some(depth_compare),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
         multisample: wgpu::MultisampleState {
             count: sample_count,
             mask: !0,
@@ -281,4 +328,30 @@ pub(super) fn create_msaa_view(
         view_formats: &[],
     });
     Some(texture.create_view(&wgpu::TextureViewDescriptor::default()))
+}
+
+/// (Re)creates the depth attachment for the current surface size, with the
+/// same sample count as the color target (a render pass refuses a mismatch).
+/// Must be called wherever [`create_msaa_view`] is. Roughly doubles the
+/// render target memory (`docs/technical-debt.md`, "MSAA x `HiDPI` memory").
+pub(super) fn create_depth_view(
+    device: &wgpu::Device,
+    config: &wgpu::SurfaceConfiguration,
+    sample_count: u32,
+) -> wgpu::TextureView {
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("curvyo depth target"),
+        size: wgpu::Extent3d {
+            width: config.width.max(1),
+            height: config.height.max(1),
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: sample_count.max(1),
+        dimension: wgpu::TextureDimension::D2,
+        format: DEPTH_FORMAT,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    texture.create_view(&wgpu::TextureViewDescriptor::default())
 }

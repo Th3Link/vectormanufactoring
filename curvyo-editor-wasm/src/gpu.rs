@@ -14,8 +14,8 @@ use wasm_bindgen::JsValue;
 use web_sys::HtmlCanvasElement;
 
 use crate::gpu_pipeline::{
-    GpuVertex, ScreenTransform, TransformResources, create_msaa_view, create_pipeline,
-    create_transform_resources, to_gpu_vertex,
+    DEPTH_FORMAT, DepthMode, GpuVertex, ScreenTransform, TransformResources, create_depth_view,
+    create_msaa_view, create_pipeline, create_transform_resources, to_gpu_vertex,
 };
 
 /// `--canvas-bg` (`docs/design-system.md`): cleared behind every frame's
@@ -77,10 +77,13 @@ const PREFERRED_SAMPLE_COUNTS: [u32; 2] = [8, 4];
 /// kept as a real fallback rather than an assumed-unreachable default,
 /// since a downlevel/software GL stack is exactly the kind of adapter
 /// this product's `WebKitGTK` target can hand back.
-fn choose_sample_count(flags: wgpu::TextureFormatFeatureFlags) -> u32 {
+fn choose_sample_count(
+    color: wgpu::TextureFormatFeatureFlags,
+    depth: wgpu::TextureFormatFeatureFlags,
+) -> u32 {
     PREFERRED_SAMPLE_COUNTS
         .into_iter()
-        .find(|&count| flags.sample_count_supported(count))
+        .find(|&count| color.sample_count_supported(count) && depth.sample_count_supported(count))
         .unwrap_or(1)
 }
 
@@ -90,7 +93,11 @@ pub struct Gpu {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    pipeline: wgpu::RenderPipeline,
+    /// Draws the artwork prefix of the draw list with single coverage per
+    /// layer (depth test "less", depth writes on).
+    artwork_pipeline: wgpu::RenderPipeline,
+    /// Draws the overlay (editor decorations): no depth test, no writes.
+    overlay_pipeline: wgpu::RenderPipeline,
     transform_buffer: wgpu::Buffer,
     transform_bind_group: wgpu::BindGroup,
     /// The offscreen multisampled color target every frame actually
@@ -103,6 +110,9 @@ pub struct Gpu {
     /// comment); [`Gpu::render`] then renders directly into the surface
     /// texture.
     msaa_view: Option<wgpu::TextureView>,
+    /// The depth attachment, with `sample_count` samples like the color
+    /// target; recreated with it on every resize.
+    depth_view: wgpu::TextureView,
     /// The multisample count [`choose_sample_count`] chose for this
     /// adapter at attach time — fixed for the life of this `Gpu` (a
     /// resize keeps it; only the surface/`msaa_view` sizes change).
@@ -197,8 +207,10 @@ async fn create_surface_and_device(
     // targets WebKitGTK on Linux, one of the weaker GL stacks among the
     // three engines ADR 0001 covers (`docs/technical-debt.md`'s canvas-
     // performance entry).
-    let sample_count =
-        choose_sample_count(adapter.get_texture_format_features(config.format).flags);
+    let sample_count = choose_sample_count(
+        adapter.get_texture_format_features(config.format).flags,
+        adapter.get_texture_format_features(DEPTH_FORMAT).flags,
+    );
 
     Ok(SurfaceAndDevice {
         surface,
@@ -245,23 +257,34 @@ impl Gpu {
             bind_group: transform_bind_group,
         } = create_transform_resources(&device);
 
-        let pipeline = create_pipeline(
+        let artwork_pipeline = create_pipeline(
             &device,
             &transform_bind_group_layout,
             config.format,
             sample_count,
+            DepthMode::SingleCoverage,
+        );
+        let overlay_pipeline = create_pipeline(
+            &device,
+            &transform_bind_group_layout,
+            config.format,
+            sample_count,
+            DepthMode::Overlay,
         );
         let msaa_view = create_msaa_view(&device, &config, sample_count);
+        let depth_view = create_depth_view(&device, &config, sample_count);
 
         Ok(Self {
             surface,
             device,
             queue,
             config,
-            pipeline,
+            artwork_pipeline,
+            overlay_pipeline,
             transform_buffer,
             transform_bind_group,
             msaa_view,
+            depth_view,
             sample_count,
             device_pixel_ratio: if device_pixel_ratio > 0.0 {
                 device_pixel_ratio
@@ -298,6 +321,7 @@ impl Gpu {
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
         self.msaa_view = create_msaa_view(&self.device, &self.config, self.sample_count);
+        self.depth_view = create_depth_view(&self.device, &self.config, self.sample_count);
     }
 
     /// Uploads `draw_list` and submits one frame, using `view` to build
@@ -328,11 +352,13 @@ impl Gpu {
         // vertex below is shifted by this same point in `f64`, before
         // its own `f32` cast (`to_gpu_vertex`'s own doc comment).
         let origin = view.screen_to_document(0.0, 0.0);
+        let depths = draw_list.vertex_depths();
         let vertices: Vec<GpuVertex> = draw_list
             .triangles
             .iter()
             .copied()
-            .map(|vertex| to_gpu_vertex(vertex, origin))
+            .zip(depths)
+            .map(|(vertex, depth)| to_gpu_vertex(vertex, origin, depth))
             .collect();
 
         let frame = match self.surface.get_current_texture() {
@@ -402,17 +428,34 @@ impl Gpu {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("curvyo draw-list pass"),
                 color_attachments: &[Some(color_attachment)],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Discard,
+                    }),
+                    stencil_ops: None,
+                }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
             if let Some(vertex_buffer) = &vertex_buffer {
-                pass.set_pipeline(&self.pipeline);
                 pass.set_bind_group(0, &self.transform_bind_group, &[]);
                 pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                // The artwork prefix first, one coverage per layer; then the
+                // overlay over it, in list order.
                 #[allow(clippy::cast_possible_truncation)]
-                pass.draw(0..vertices.len() as u32, 0..1);
+                let (overlay_start, end) =
+                    (draw_list.overlay_start() as u32, vertices.len() as u32);
+                if overlay_start > 0 {
+                    pass.set_pipeline(&self.artwork_pipeline);
+                    pass.draw(0..overlay_start, 0..1);
+                }
+                if end > overlay_start {
+                    pass.set_pipeline(&self.overlay_pipeline);
+                    pass.draw(overlay_start..end, 0..1);
+                }
             }
         }
 

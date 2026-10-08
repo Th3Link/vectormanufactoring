@@ -3,12 +3,14 @@
 //! `session/mod.rs` (`docs/technical-debt.md`, "`Session` is one module
 //! past the size limit").
 
+use std::borrow::Cow;
+
 use curvyo_render_core::{
-    DrawList, TransformDecorationInput, build_draw_list, build_pen_preview, build_select_draw_list,
-    build_transform_draw_list,
+    DrawList, TransformDecorationInput, build_artwork, build_decorations, build_pen_preview,
+    build_select_draw_list, build_transform_draw_list,
 };
 
-use curvyo_document_core::{ObjectSnapshot, PrimitiveSnapshot};
+use curvyo_document_core::{ObjectSnapshot, PathSnapshot};
 
 use super::{Session, Tool};
 
@@ -41,12 +43,17 @@ impl Session {
         let objects = self.objects();
         let live = self.select_live_edit_in(&objects);
         let paths = self.live_node_drag_paths_in(&objects);
-        let mut list = build_draw_list(&paths, view, &self.decoration_input());
-        let primitives = Self::primitives_in(&objects);
-        list.extend(curvyo_render_core::build_primitive_strokes(
-            &primitives,
-            view,
-        ));
+        // The artwork: every object in tree order, paths and primitives
+        // interleaved, each with its fill then its stroke
+        // (`specs/0007-stroke-and-fill-styling` criterion 26). The Node
+        // tool's live drag reshapes the paths it moves.
+        let artwork_objects = if self.tool == Tool::Node {
+            Cow::Owned(Self::with_paths(&objects, &paths))
+        } else {
+            Cow::Borrowed(&objects[..])
+        };
+        let mut list = build_artwork(&artwork_objects, view);
+        list.extend(build_decorations(&paths, view, &self.decoration_input()));
         // The origin axes of an axis-locked move: above the artwork, below the
         // blue outline, the boxes and the handles (criterion 27).
         if let Some(axes) = self.move_axes_in(&objects) {
@@ -112,13 +119,17 @@ impl Session {
         list
     }
 
-    /// The primitives among `objects`, in z-order.
-    fn primitives_in(objects: &[ObjectSnapshot]) -> Vec<PrimitiveSnapshot> {
+    /// `objects` with each path replaced by the next of `paths` (the same
+    /// paths, in the same order, possibly reshaped by a live drag).
+    fn with_paths(objects: &[ObjectSnapshot], paths: &[PathSnapshot]) -> Vec<ObjectSnapshot> {
+        let mut next = paths.iter();
         objects
             .iter()
-            .filter_map(|object| match object {
-                ObjectSnapshot::Primitive(primitive) => Some(primitive.clone()),
-                ObjectSnapshot::Path(_) => None,
+            .map(|object| match object {
+                ObjectSnapshot::Path(original) => {
+                    ObjectSnapshot::Path(next.next().unwrap_or(original).clone())
+                }
+                ObjectSnapshot::Primitive(_) => object.clone(),
             })
             .collect()
     }
