@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Canvas } from "@/components/Canvas";
 import { ErrorDialog } from "@/components/ErrorDialog";
 import { NodeToolbar } from "@/components/NodeToolbar";
+import { PropertiesPanel } from "@/components/PropertiesPanel";
 import { SelectToolbar } from "@/components/SelectToolbar";
 import { ShapeToolbar } from "@/components/ShapeToolbar";
 import { StatusBar } from "@/components/StatusBar";
@@ -153,7 +154,11 @@ function App() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
-      <div className="relative flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1">
+        {/* The canvas region: the rail and the bars' overlay row are anchored
+         * to it, not to the window, so no bar is ever drawn under the
+         * properties panel on its right (`0007` criterion 39). */}
+        <div className="relative flex min-h-0 min-w-0 flex-1">
         <ToolRail
           tool={editor.tool}
           selectionCount={editor.selectionCount}
@@ -216,6 +221,8 @@ function App() {
             />
           ) : null}
         </div>
+        </div>
+        <PropertiesPanel editor={editor} />
       </div>
       <StatusBar cursorMm={cursorMm} sizeMm={sizeMm} zoomPercent={editor.zoomPercent} />
       <ErrorDialog

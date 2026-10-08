@@ -237,13 +237,15 @@ function readToolbarState(raw: {
 }
 
 /** Whether a keyboard event's target is an interactive control (a switch,
- * button, input) rather than the canvas itself — canvas shortcuts must
- * ignore those. */
+ * button, input, slider, radio, select) rather than the canvas itself —
+ * canvas shortcuts must ignore those. The Style panel sits outside the canvas
+ * container, so its keys never get here; the roles are a second guard
+ * (`specs/0007-stroke-and-fill-styling` criterion 38). */
 function isFormControl(target: EventTarget): boolean {
   return (
     target instanceof HTMLElement &&
     target.closest(
-      'input, textarea, select, button, [role="switch"], [contenteditable]:not([contenteditable="false"])',
+      'input, textarea, select, button, [role="switch"], [role="slider"], [role="radio"], [role="combobox"], [role="option"], [role="dialog"], [contenteditable]:not([contenteditable="false"])',
     ) !== null
   );
 }
@@ -561,6 +563,11 @@ export interface EditorSession {
   setLinkCorners: (on: boolean) => void;
   /** What the Select bar shows for the current selection (criteria 21-22). */
   selectBar: SelectBarState;
+  /** Counts every re-read of the session's UI state: the Style panel reads
+   * its own state from the session whenever this changes. */
+  syncRevision: number;
+  /** The live wasm session, or `null` before the first attach. */
+  getSession: () => WasmSession | null;
   /** Enter in the bar's "Radius" field: `"committed"`, `"unchanged"`,
    * `"invalid:number"` or `"invalid:negative"`. */
   setSelectedRadius: (text: string) => string;
@@ -663,6 +670,7 @@ export function useEditorSession(
   const [scaleCornerRadius, setScaleCornerRadiusState] = useState(false);
   const [linkCorners, setLinkCornersState] = useState(true);
   const [selectBar, setSelectBar] = useState<SelectBarState>(EMPTY_SELECT_BAR_STATE);
+  const [syncRevision, setSyncRevision] = useState(0);
   const [cursorHint, setCursorHint] = useState("default");
   const [editHint, setEditHint] = useState<EditHint | null>(null);
   const editHintCounter = useRef(0);
@@ -740,9 +748,12 @@ export function useEditorSession(
     setSelectBar((previous) => (sameSelectBar(previous, nextBar) ? previous : nextBar));
     setZoomPercent(session.zoom_percent());
     setSelectionCount(session.selection_count());
+    setSyncRevision((revision) => revision + 1);
     syncEntry(session);
     syncBadges(session);
   }, [syncEntry, syncBadges]);
+
+  const getSession = useCallback(() => sessionRef.current, []);
 
   /** Frees whatever session is currently attached (if any), makes
    * `session` the live one, and attaches it to the host's `<canvas>` —
@@ -1446,6 +1457,8 @@ export function useEditorSession(
     linkCorners,
     setLinkCorners,
     selectBar,
+    syncRevision,
+    getSession,
     setSelectedRadius,
     setSelectedPointCount,
     previewSelectedRatio,

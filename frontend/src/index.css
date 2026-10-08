@@ -110,6 +110,21 @@
        numeric-entry field whose content was refused; 4.8:1 on
        --toolbar-bg, always paired with a message and aria-invalid. */
     --field-invalid: #B3261E;
+
+    /* 0007 stroke-and-fill-styling (docs/design-system.md, "Properties panel:
+       Style section"): the docked panel's ground, muted text, field states,
+       swatch and checkerboard tokens. Values and contrast figures are the
+       design system's. */
+    --panel-bg: var(--toolbar-bg);
+    --panel-muted-fg: #5A5A5F;
+    --field-placeholder: #6B6B6F;
+    --field-disabled-bg: #D0D0D4;
+    --field-disabled-fg: #58585D;
+    --swatch-border: var(--toolbar-icon);
+    --checker-a: #FFFFFF;
+    --checker-b: #C9C9CE;
+    --mixed-hatch: #8E8E93;
+    --no-paint-slash: var(--field-invalid);
 }
 
 .dark {
@@ -229,4 +244,60 @@ input[type="range"].select-bar-slider-mixed::-moz-range-thumb {
   [contenteditable="true"] {
     user-select: text;
   }
+}
+
+/* 0007: a panel field shows the "Mixed" placeholder in its own token, not the
+   browser default grey (4.6:1; this one is 5.3:1 on white). */
+.style-field::placeholder {
+  color: var(--field-placeholder);
+  opacity: 1;
+}
+
+/* The panel scrolls as a whole: one thin scrollbar, no scroll chaining. */
+.properties-panel {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+/* react-colorful, restyled to the design system (docs/design-system.md,
+   "Colour popover"): the saturation/value area 208 x 128, the hue and opacity
+   sliders 12 px high with a 16 px thumb, the opacity ramp over a checkerboard. */
+.colour-picker .react-colorful {
+  width: 208px;
+  height: auto;
+  gap: 10px;
+  display: flex;
+  flex-direction: column;
+}
+.colour-picker .react-colorful__saturation {
+  height: 128px;
+  border-radius: 5px;
+  border-bottom: 0;
+}
+.colour-picker .react-colorful__hue,
+.colour-picker .react-colorful__alpha {
+  height: 12px;
+  border-radius: 6px;
+}
+.colour-picker .react-colorful__alpha {
+  background-image:
+    linear-gradient(45deg, var(--checker-b) 25%, transparent 25%, transparent 75%, var(--checker-b) 75%),
+    linear-gradient(45deg, var(--checker-b) 25%, transparent 25%, transparent 75%, var(--checker-b) 75%);
+  background-color: var(--checker-a);
+  background-size: 12px 12px;
+  background-position: 0 0, 6px 6px;
+}
+.colour-picker .react-colorful__alpha-gradient {
+  border-radius: 6px;
+  box-shadow: none;
+}
+.colour-picker .react-colorful__pointer {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px var(--toolbar-icon);
+}
+.colour-picker .react-colorful__interactive:focus .react-colorful__pointer {
+  box-shadow: 0 0 0 1px var(--toolbar-icon), 0 0 0 3px var(--editor-accent);
 }
