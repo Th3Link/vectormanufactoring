@@ -26,8 +26,10 @@ use curvyo_render_core::{
 
 const ACCENT: RgbaColor = RgbaColor::opaque(0x2F, 0x6F, 0xEE);
 
+/// The hover box colour: `--hover-box`, `--accent` at 60% (`0007` criterion
+/// 41; it was 20% when this test was written).
 fn accent_hover() -> RgbaColor {
-    RgbaColor { a: 51, ..ACCENT }
+    RgbaColor { a: 153, ..ACCENT }
 }
 
 fn pt(x: f64, y: f64) -> Point {
@@ -262,14 +264,20 @@ fn ac66_hovering_an_unselected_object_draws_a_solid_accent_hover_box() {
     );
     assert_eq!(
         hover_only.triangle_count(),
-        8,
-        "four solid quads, two triangles each"
+        16,
+        "four solid quads and four casing quads, two triangles each"
     );
     assert!(
         hover_only
             .triangles
             .iter()
-            .all(|v| v.color == accent_hover())
+            .all(|v| v.color == accent_hover()
+                || v.color
+                    == RgbaColor {
+                        a: 153,
+                        ..RgbaColor::WHITE
+                    }),
+        "the hover line and its 60% white casing"
     );
     let _ = a;
     // the session's list has the hover box as a slice
@@ -288,7 +296,13 @@ fn ac66_hovering_an_unselected_object_draws_a_solid_accent_hover_box() {
         },
     );
     assert!(sel_only.triangle_count() > 8);
-    assert!(sel_only.triangles.iter().all(|v| v.color == ACCENT));
+    assert!(
+        sel_only
+            .triangles
+            .iter()
+            .all(|v| v.color == ACCENT || v.color == RgbaColor::WHITE),
+        "full accent dashes on their white casing (`0007` criterion 40)"
+    );
 }
 
 #[test]

@@ -540,8 +540,8 @@ mod tests {
         );
         assert_eq!(
             solid.triangle_count(),
-            8,
-            "the hover box is four solid quads"
+            16,
+            "the hover box is four solid quads on four casing quads"
         );
         let dashed = curvyo_render_core::build_select_draw_list(
             session.view(),

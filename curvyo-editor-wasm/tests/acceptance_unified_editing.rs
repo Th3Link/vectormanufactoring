@@ -381,15 +381,11 @@ fn ellipse_scene(pct: i64, w_px: f64, h_px: f64, th: f64) -> Scene {
 /// The count measures the handle tiers. It does not count every triangle
 /// because the dashed selection box (`edit-interaction-polish` criteria 63,
 /// 64) changes its triangle count with the box's size on screen, which would
-/// mask the tiers; the box and the arrows are never white.
+/// mask the tiers; the box and the arrows are never white. Their white casings
+/// (`0007` criterion 40) are, so [`white_count`] leaves out the isolated quads
+/// of a casing.
 fn tri_count(s: &Session) -> usize {
-    let white = curvyo_render_core::RgbaColor::WHITE;
-    s.draw_list()
-        .triangles
-        .iter()
-        .filter(|vertex| vertex.color == white)
-        .count()
-        / 3
+    white_count(&s.draw_list())
 }
 
 /// White triangles of the selection decoration (the handle glyphs): count with
@@ -3551,13 +3547,36 @@ fn ac12_inside_the_dead_zone_no_blue_outline_and_no_handle_change_is_drawn() {
     }
 }
 
+/// The white triangles that are part of a fan of three or more (a circle's or
+/// a rounded square's ground), not the isolated two-triangle quads of a white
+/// casing (`0007` criterion 40), whose number follows the length of the box
+/// edges and so differs between a large and a small object.
 fn white_count(dl: &DrawList) -> usize {
-    (0..dl.triangles.len() / 3)
-        .filter(|c| {
-            let v = &dl.triangles[3 * c];
-            v.color.r == 255 && v.color.g == 255 && v.color.b == 255 && v.color.a == 255
-        })
-        .count()
+    let white = |c: usize| {
+        let v = &dl.triangles[3 * c];
+        v.color.r == 255 && v.color.g == 255 && v.color.b == 255 && v.color.a == 255
+    };
+    let triangles = dl.triangles.len() / 3;
+    let mut total = 0;
+    let mut c = 0;
+    while c < triangles {
+        if !white(c) {
+            c += 1;
+            continue;
+        }
+        let mut run = 1;
+        while c + run < triangles
+            && white(c + run)
+            && dl.triangles[3 * (c + run)].position == dl.triangles[3 * c].position
+        {
+            run += 1;
+        }
+        if run >= 3 {
+            total += run;
+        }
+        c += run;
+    }
+    total
 }
 
 #[test]
