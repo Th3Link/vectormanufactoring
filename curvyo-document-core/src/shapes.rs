@@ -433,7 +433,7 @@ pub(crate) fn check_stroke_width(stroke_width: Option<Length>) -> Result<(), Sha
 /// operation).
 pub(crate) fn write_stroke_width_if_changed(meta: &loro::LoroMap, stroke_width: Option<Length>) {
     if let Some(width) = stroke_width
-        && crate::style_codec::read_stroke_width(meta) != width
+        && crate::style_codec::read_width(meta) != width
     {
         crate::style_codec::write_stroke_width(meta, width);
     }

@@ -313,7 +313,7 @@ pub(crate) fn read_shape(meta: &LoroMap, shape_tag: &str) -> Option<Shape> {
 /// `inner_ratio` outside `(0, 1)`. Reuses each parameter's own validated
 /// newtype for its range check rather than duplicating the bound.
 pub(crate) fn validate_primitive_node(meta: &LoroMap, shape: &str) -> bool {
-    if !path_codec::rotation_is_valid(meta) || !crate::style_codec::style_is_valid(meta) {
+    if !path_codec::rotation_is_valid(meta) || !crate::style_validation::style_is_valid(meta) {
         return false;
     }
     match shape {

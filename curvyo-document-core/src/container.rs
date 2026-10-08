@@ -160,6 +160,10 @@ fn read_member(archive: &mut ZipArchive<Cursor<&[u8]>>, name: &str) -> Result<Ve
 mod tests {
     use super::*;
 
+    /// The version the committed `future_format_version.curvyo` declares: far
+    /// enough ahead that no renumbering of `CURRENT_FORMAT_VERSION` can reach it.
+    const FAR_FUTURE_FORMAT_VERSION: u32 = 9999;
+
     #[test]
     fn pack_then_unpack_round_trips_size() {
         let original = Document::new(1);
@@ -276,7 +280,7 @@ mod tests {
         let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
         let options = SimpleFileOptions::default();
         let manifest = Manifest {
-            format_version: CURRENT_FORMAT_VERSION + 1,
+            format_version: FAR_FUTURE_FORMAT_VERSION,
             loro_snapshot_version: CURRENT_LORO_SNAPSHOT_VERSION,
             app_version: "99.0.0".to_string(),
         };

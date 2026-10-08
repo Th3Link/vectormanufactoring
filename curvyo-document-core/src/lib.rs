@@ -35,6 +35,7 @@ mod shape_radii;
 mod shapes;
 mod style_codec;
 mod style_model;
+mod style_validation;
 mod styles;
 mod units;
 

@@ -1,6 +1,6 @@
-//! The Loro keys, absent defaults, reads, writes and open-file validation of
-//! the style schema (`specs/0007-stroke-and-fill-styling/adrs.md`, "the
-//! style schema"), shared by paths and primitives.
+//! The Loro keys, absent defaults, reads and writes of the style schema
+//! (`specs/0007-stroke-and-fill-styling/adrs.md`, "the style schema"), shared
+//! by paths and primitives; open-file validation is `style_validation`.
 //!
 //! On-disk/in-CRDT shape, keys of an object's meta map, each its own LWW
 //! register unless noted. An absent key reads as the frozen default:
@@ -47,20 +47,20 @@ pub(crate) const KEY_FILL: &str = "fill";
 pub(crate) const KEY_FILL_OPACITY: &str = "fill_opacity";
 pub(crate) const KEY_FILL_STOPS: &str = "fill_stops";
 
-const KEY_STOP_ID: &str = "id";
-const KEY_STOP_POSITION: &str = "position";
-const KEY_STOP_COLOR: &str = "color";
-const KEY_STOP_OPACITY: &str = "opacity";
+pub(crate) const KEY_STOP_ID: &str = "id";
+pub(crate) const KEY_STOP_POSITION: &str = "position";
+pub(crate) const KEY_STOP_COLOR: &str = "color";
+pub(crate) const KEY_STOP_OPACITY: &str = "opacity";
 
-const JOIN_MITER: &str = "miter";
-const JOIN_ROUND: &str = "round";
-const JOIN_BEVEL: &str = "bevel";
-const CAP_BUTT: &str = "butt";
-const CAP_ROUND: &str = "round";
-const CAP_SQUARE: &str = "square";
-const KIND_SOLID: &str = "solid";
-const KIND_LINEAR: &str = "linear";
-const KIND_RADIAL: &str = "radial";
+pub(crate) const JOIN_MITER: &str = "miter";
+pub(crate) const JOIN_ROUND: &str = "round";
+pub(crate) const JOIN_BEVEL: &str = "bevel";
+pub(crate) const CAP_BUTT: &str = "butt";
+pub(crate) const CAP_ROUND: &str = "round";
+pub(crate) const CAP_SQUARE: &str = "square";
+pub(crate) const KIND_SOLID: &str = "solid";
+pub(crate) const KIND_LINEAR: &str = "linear";
+pub(crate) const KIND_RADIAL: &str = "radial";
 
 /// Every style key of an object's meta map, none of them a shape-parameter
 /// key: "object to path" strips `shape_codec::ALL_PRIMITIVE_KEYS` only, so
@@ -87,7 +87,7 @@ pub(crate) const ALL_STYLE_KEYS: &[&str] = &[
 // strict check)
 // ---------------------------------------------------------------------------
 
-fn read_value(meta: &LoroMap, key: &str) -> Option<LoroValue> {
+pub(crate) fn read_value(meta: &LoroMap, key: &str) -> Option<LoroValue> {
     meta.get(key).map(|v| v.get_deep_value())
 }
 
@@ -168,7 +168,7 @@ fn read_kind(meta: &LoroMap) -> FillKind {
     }
 }
 
-fn read_width(meta: &LoroMap) -> Length {
+pub(crate) fn read_width(meta: &LoroMap) -> Length {
     read_number(meta, KEY_STROKE_WIDTH)
         .filter(|mm| *mm > 0.0)
         .map_or_else(|| Style::default().stroke.width, Length::from_mm)
@@ -197,7 +197,7 @@ pub(crate) fn read_style(meta: &LoroMap) -> Style {
     }
 }
 
-fn read_stop(map: &LoroMap) -> Option<GradientStop> {
+pub(crate) fn read_stop(map: &LoroMap) -> Option<GradientStop> {
     Some(GradientStop {
         id: read_stop_id(map)?,
         position: StopPosition::new(read_number(map, KEY_STOP_POSITION)?).ok()?,
@@ -230,27 +230,28 @@ pub(crate) fn color_to_value(color: Color) -> Vec<i64> {
     vec![i64::from(color.r), i64::from(color.g), i64::from(color.b)]
 }
 
-// invariant for every insert below: inserting a plain value under a known key
-// on an attached map cannot fail.
-
-fn write_bool(meta: &LoroMap, key: &str, value: bool) {
+/// Inserts a plain value under a known key.
+fn insert(meta: &LoroMap, key: &str, value: impl Into<LoroValue>) {
+    // invariant: inserting a plain value under a known key on an attached map
+    // cannot fail.
     #[allow(clippy::unwrap_used)]
     meta.insert(key, value).unwrap();
+}
+
+fn write_bool(meta: &LoroMap, key: &str, value: bool) {
+    insert(meta, key, value);
 }
 
 fn write_number(meta: &LoroMap, key: &str, value: f64) {
-    #[allow(clippy::unwrap_used)]
-    meta.insert(key, value).unwrap();
+    insert(meta, key, value);
 }
 
 fn write_text(meta: &LoroMap, key: &str, value: &str) {
-    #[allow(clippy::unwrap_used)]
-    meta.insert(key, value).unwrap();
+    insert(meta, key, value);
 }
 
 fn write_color(meta: &LoroMap, key: &str, color: Color) {
-    #[allow(clippy::unwrap_used)]
-    meta.insert(key, color_to_value(color)).unwrap();
+    insert(meta, key, color_to_value(color));
 }
 
 /// Writes the width of a stroke whose width is already known valid (greater
@@ -264,12 +265,6 @@ pub(crate) fn write_stroke_width(meta: &LoroMap, width: Length) {
 /// number above zero (the open-file rule for `stroke_width`).
 pub(crate) fn stroke_width_is_writable(width: Option<Length>) -> bool {
     width.is_none_or(|w| w.as_mm().is_finite() && w.as_mm() > 0.0)
-}
-
-/// Reads only the stroke width, for the resize commands' "write only if
-/// changed" rule.
-pub(crate) fn read_stroke_width(meta: &LoroMap) -> Length {
-    read_width(meta)
 }
 
 const fn join_text(join: LineJoin) -> &'static str {
@@ -361,10 +356,7 @@ pub(crate) fn write_changes(meta: &LoroMap, old: &Style, new: &Style) -> bool {
 }
 
 fn write_dash(meta: &LoroMap, dash: &DashPattern) {
-    // invariant: see above.
-    #[allow(clippy::unwrap_used)]
-    meta.insert(KEY_STROKE_DASH, dash.as_slice().to_vec())
-        .unwrap();
+    insert(meta, KEY_STROKE_DASH, dash.as_slice().to_vec());
 }
 
 /// Writes a whole style onto a freshly created meta map (Split's new object):
@@ -393,9 +385,10 @@ pub(crate) fn stops_list(meta: &LoroMap) -> Option<LoroMovableList> {
     }
 }
 
-/// The `fill_stops` list, created if the object has none yet. Two peers that
-/// create it concurrently converge on one container under the key.
-pub(crate) fn ensure_stops_list(meta: &LoroMap) -> LoroMovableList {
+/// The `fill_stops` list, created if the object has none yet. Only
+/// [`write_stops`] creates it (the fill-mode switch and Split); two peers that
+/// create it concurrently keep one container under the key.
+fn ensure_stops_list(meta: &LoroMap) -> LoroMovableList {
     if let Some(list) = stops_list(meta) {
         return list;
     }
@@ -464,102 +457,6 @@ pub(crate) fn write_stop_color(map: &LoroMap, color: Color) {
 /// Writes one stop's opacity.
 pub(crate) fn write_stop_opacity(map: &LoroMap, opacity: Opacity) {
     write_number(map, KEY_STOP_OPACITY, opacity.get());
-}
-
-/// Reads one stop map fully, for the edit commands' "skip an unchanged
-/// value" check.
-pub(crate) fn read_stop_map(map: &LoroMap) -> Option<GradientStop> {
-    read_stop(map)
-}
-
-// ---------------------------------------------------------------------------
-// Open-file validation (strict)
-// ---------------------------------------------------------------------------
-
-/// A key that is absent is valid; a present key must satisfy `ok`.
-fn key_ok(meta: &LoroMap, key: &str, ok: impl Fn(&LoroValue) -> bool) -> bool {
-    read_value(meta, key).is_none_or(|v| ok(&v))
-}
-
-fn number_in(value: &LoroValue, accept: impl Fn(f64) -> bool) -> bool {
-    as_f64(value).is_some_and(|n| n.is_finite() && accept(n))
-}
-
-fn is_unit_number(value: &LoroValue) -> bool {
-    number_in(value, |n| (0.0..=1.0).contains(&n))
-}
-
-fn is_color(value: &LoroValue) -> bool {
-    match value {
-        LoroValue::List(list) if list.len() == 3 => list
-            .iter()
-            .all(|c| matches!(c, LoroValue::I64(n) if (0..=255).contains(n))),
-        _ => false,
-    }
-}
-
-fn is_one_of(value: &LoroValue, names: &[&str]) -> bool {
-    matches!(value, LoroValue::String(s) if names.contains(&s.as_str()))
-}
-
-fn is_dash(value: &LoroValue) -> bool {
-    match value {
-        LoroValue::List(list) => list
-            .iter()
-            .map(as_f64)
-            .collect::<Option<Vec<f64>>>()
-            .is_some_and(|lengths| DashPattern::new(lengths).is_ok()),
-        _ => false,
-    }
-}
-
-fn is_bool(value: &LoroValue) -> bool {
-    matches!(value, LoroValue::Bool(_))
-}
-
-/// Whether every style key of this object that is present has the right type
-/// and range, and every stop in `fill_stops` is complete. The stop count is
-/// never checked: a merged document may legitimately hold 0, 1 or more than
-/// 16 stops.
-pub(crate) fn style_is_valid(meta: &LoroMap) -> bool {
-    key_ok(meta, KEY_STROKE_ENABLED, is_bool)
-        && key_ok(meta, KEY_STROKE_WIDTH, |v| number_in(v, |n| n > 0.0))
-        && key_ok(meta, KEY_STROKE, is_color)
-        && key_ok(meta, KEY_STROKE_OPACITY, is_unit_number)
-        && key_ok(meta, KEY_STROKE_DASH, is_dash)
-        && key_ok(meta, KEY_STROKE_JOIN, |v| {
-            is_one_of(v, &[JOIN_MITER, JOIN_ROUND, JOIN_BEVEL])
-        })
-        && key_ok(meta, KEY_STROKE_CAP, |v| {
-            is_one_of(v, &[CAP_BUTT, CAP_ROUND, CAP_SQUARE])
-        })
-        && key_ok(meta, KEY_FILL_ENABLED, is_bool)
-        && key_ok(meta, KEY_FILL_KIND, |v| {
-            is_one_of(v, &[KIND_SOLID, KIND_LINEAR, KIND_RADIAL])
-        })
-        && key_ok(meta, KEY_FILL, is_color)
-        && key_ok(meta, KEY_FILL_OPACITY, is_unit_number)
-        && stops_are_valid(meta)
-}
-
-fn stops_are_valid(meta: &LoroMap) -> bool {
-    match meta.get(KEY_FILL_STOPS) {
-        None => true,
-        Some(ValueOrContainer::Container(Container::MovableList(list))) => (0..list.len())
-            .all(|index| stop_map_at(&list, index).is_some_and(|map| stop_is_valid(&map))),
-        Some(_) => false,
-    }
-}
-
-fn stop_is_valid(map: &LoroMap) -> bool {
-    let present =
-        |key: &str, ok: &dyn Fn(&LoroValue) -> bool| read_value(map, key).is_some_and(|v| ok(&v));
-    present(
-        KEY_STOP_ID,
-        &|v| matches!(v, LoroValue::String(s) if StopId::from_hex(s.as_str()).is_some()),
-    ) && present(KEY_STOP_POSITION, &is_unit_number)
-        && present(KEY_STOP_COLOR, &is_color)
-        && present(KEY_STOP_OPACITY, &is_unit_number)
 }
 
 #[cfg(test)]

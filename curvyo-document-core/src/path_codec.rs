@@ -28,9 +28,9 @@ use loro::{Container, LoroDoc, LoroMap, LoroMovableList, LoroTree, LoroValue, Va
 
 use crate::path_model::{AnchorId, AnchorKind, AnchorSnapshot, NewAnchor, NodeId, PathSnapshot};
 use crate::shape_codec::ShapeTag;
-use crate::style_codec;
 use crate::style_model::Style;
 use crate::units::{Point, Vec2};
+use crate::{style_codec, style_validation};
 
 pub(crate) const KEY_CLOSED: &str = "closed";
 pub(crate) const KEY_ANCHORS: &str = "anchors";
@@ -421,7 +421,7 @@ pub(crate) fn read_path_snapshot(id: NodeId, meta: &LoroMap) -> PathSnapshot {
 ///
 /// Checks the shapes this module's own helpers `.unwrap()` or `panic!()`
 /// on an unexpected value, and every present style key's type and range
-/// ([`style_codec::style_is_valid`]). `closed`/`point`/`handle_in`/
+/// ([`style_validation::style_is_valid`]). `closed`/`point`/`handle_in`/
 /// `handle_out`/`kind` all already degrade gracefully to a default on a
 /// missing or malformed value (see `read_closed` et al.), so a document with
 /// those fields merely absent or odd-shaped is not "damaged", just reverting
@@ -462,7 +462,7 @@ fn validate_path_node(meta: &LoroMap) -> bool {
         return false;
     };
     rotation_is_valid(meta)
-        && style_codec::style_is_valid(meta)
+        && style_validation::style_is_valid(meta)
         && (0..anchors.len()).all(|index| validate_anchor(&anchors, index))
 }
 

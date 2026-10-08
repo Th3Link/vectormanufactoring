@@ -70,7 +70,10 @@ readiness check section 10). PR 1 is invisible to the maker; PR 3 is the first d
   interior (AC 23, 27, 28, 29).
 - [ ] 8. Editor lines over fills: white casing for the selection box, hover box (60% accent),
   preview outline, glyphs, handle lines, guides, pivot; `--hover-box` token (AC 40, 41).
-- [ ] 9. `docs/technical-debt.md`: dated line on the `Session` size item; draw-list cache moves
+- [ ] 9. PR 1 review notes (`docs/technical-debt.md`, "Notes for the next parts"): guard dash and
+  render code against an unbounded stroke width; handle the `Result` of `document.resize_*` in
+  `commit_resize`/`commit_gesture` instead of `let _ =`.
+- [ ] 10. `docs/technical-debt.md`: dated line on the `Session` size item; draw-list cache moves
   into this PR if PR 1's benchmark passed 25 ms.
 
 ### PR 3: panel with stroke and solid fill (first demo)

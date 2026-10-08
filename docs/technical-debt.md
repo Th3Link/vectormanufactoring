@@ -816,3 +816,19 @@ does not grow either: its pipeline and depth code goes into `gpu_pipeline.rs`
 and `gpu_paint.rs` after a pure-move first task, and its panel state into a new
 `useStylePanel.ts`. `session/mod.rs` is at 499, so `0007` PR 3 starts with a
 pure move of the tolerance helpers to `session/tolerances.rs`.
+
+## Notes for the next parts of `stroke-and-fill-styling` (from the PR 1 review, 2026-10-08)
+
+- **Stroke width has no upper bound** (only "finite and above zero" is checked,
+  in the style codec and the resize commands). PR 2's dash and render code must
+  guard against overflow: a huge width times a dash ratio, a huge tessellation
+  size, a width that makes the dash count or the vertex count explode.
+- **`commit_resize` and `commit_gesture` still do `let _ = document.resize_*`.**
+  A resize the document refuses (now also for an invalid width) silently drops
+  the geometry resize. Unreachable today, because the sizes and the stroke
+  factor are validated before the call, but PR 2 should handle the `Result`.
+- **Concurrent first creation of `fill_stops` by two peers keeps only one
+  list** (a Loro map key holds one container; the other peer's stops are
+  lost). The ADR accepts this. For PR 4: consider Loro's mergeable movable list.
+  `add_stop` no longer creates the list (only the fill-mode switch and Split
+  do), so there is one creation path to reason about.

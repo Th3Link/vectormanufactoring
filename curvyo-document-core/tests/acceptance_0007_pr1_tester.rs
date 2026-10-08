@@ -1021,13 +1021,17 @@ fn add_stop_on_a_missing_object_is_refused() {
 }
 
 #[test]
-fn add_stop_to_an_object_without_a_list_creates_one() {
+fn add_stop_to_an_object_without_a_list_is_refused_and_writes_nothing() {
+    // Only the fill-mode switch and Split create the stop list (PR 1 review).
     let doc = Document::new(1);
     let id = rect(&doc);
-    doc.add_stop(id, stop(1, 1, 0.5, rgb(3, 3, 3), 1.0))
-        .unwrap();
-    assert_eq!(style_of(&doc, id).fill.stops.len(), 1);
-    assert_eq!(style_of(&reopen(&doc), id).fill.stops.len(), 1);
+    let ops = op_count(&doc);
+    assert_eq!(
+        doc.add_stop(id, stop(1, 1, 0.5, rgb(3, 3, 3), 1.0)),
+        Err(StyleEditError::NoStopList)
+    );
+    assert_eq!(op_count(&doc), ops);
+    assert_eq!(style_of(&doc, id).fill.stops.len(), 0);
 }
 
 #[test]
@@ -1049,8 +1053,11 @@ fn remove_stop_refuses_below_two_and_unknown_ids() {
     assert_eq!(op_count(&doc), ops);
     // 1 stop and 0 stops: remove is refused as well.
     let other = ellipse(&doc);
-    doc.add_stop(other, stop(1, 1, 0.5, Color::BLACK, 1.0))
-        .unwrap();
+    doc.set_fill_mode(
+        FillMode::Linear,
+        &[target(other, vec![stop(1, 1, 0.5, Color::BLACK, 1.0)])],
+    )
+    .unwrap();
     assert!(matches!(
         doc.remove_stop(other, StopId::new(1, 1)),
         Err(StyleEditError::TooFewStops)
@@ -2228,7 +2235,11 @@ fn a_long_random_command_sequence_keeps_every_invariant_and_survives_reopen() {
                     let r =
                         doc.add_stop(id, stop(1, next_stop, rng.unit(), rgb(1, 2, 3), rng.unit()));
                     let n = style_of(&doc, id).fill.stops.len();
-                    assert!(r.is_ok() || (r == Err(StyleEditError::TooManyStops) && n == 16));
+                    assert!(
+                        r.is_ok()
+                            || (r == Err(StyleEditError::TooManyStops) && n == 16)
+                            || (r == Err(StyleEditError::NoStopList) && n == 0)
+                    );
                 }
                 8 => {
                     let st = style_of(&doc, id).fill.stops;

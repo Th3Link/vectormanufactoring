@@ -15,9 +15,8 @@ use crate::path_codec::node_exists;
 use crate::path_model::{Color, NodeId};
 use crate::paths::tree_id_of;
 use crate::style_codec::{
-    ensure_stops_list, insert_stop_at, read_stop_map, read_style, stop_index, stop_map_at,
-    stops_list, write_changes, write_stop_color, write_stop_opacity, write_stop_position,
-    write_stops,
+    insert_stop_at, read_stop, read_style, stop_index, stop_map_at, stops_list, write_changes,
+    write_stop_color, write_stop_opacity, write_stop_position, write_stops,
 };
 use crate::style_model::{
     DashPattern, GradientStop, LineCap, LineJoin, Opacity, StopId, StopPosition, Style,
@@ -51,6 +50,10 @@ pub enum StyleEditError {
     /// Removing would leave fewer than [`MIN_GRADIENT_STOPS`].
     #[error("A gradient keeps at least 2 stops")]
     TooFewStops,
+    /// The object has no stop list: only the fill-mode switch and Split create
+    /// one, so a stop cannot be added to an object that never had a gradient.
+    #[error("this object has no gradient stops to add to")]
+    NoStopList,
     /// The object already has a stop with the id being added.
     #[error("a stop with this id already exists")]
     DuplicateStop,
@@ -254,12 +257,13 @@ impl Document {
     /// the position, colour and opacity (the ramp's own at that position).
     ///
     /// # Errors
-    /// [`StyleEditError::NoSuchObject`]; [`StyleEditError::TooManyStops`] at
-    /// 16 or more stops; [`StyleEditError::DuplicateStop`] if the id is
+    /// [`StyleEditError::NoSuchObject`]; [`StyleEditError::NoStopList`] if the
+    /// object never had a gradient; [`StyleEditError::TooManyStops`] at 16 or
+    /// more stops; [`StyleEditError::DuplicateStop`] if the id is
     /// already in the list.
     pub fn add_stop(&self, id: NodeId, stop: GradientStop) -> Result<(), StyleEditError> {
         let meta = self.style_meta(id)?;
-        let list = ensure_stops_list(&meta);
+        let list = stops_list(&meta).ok_or(StyleEditError::NoStopList)?;
         if list.len() >= MAX_GRADIENT_STOPS {
             return Err(StyleEditError::TooManyStops);
         }
@@ -269,7 +273,7 @@ impl Document {
         let index = (0..list.len())
             .find(|&index| {
                 stop_map_at(&list, index)
-                    .and_then(|map| read_stop_map(&map))
+                    .and_then(|map| read_stop(&map))
                     .is_some_and(|existing| existing.position.get() > stop.position.get())
             })
             .unwrap_or_else(|| list.len());
@@ -323,7 +327,7 @@ impl Document {
             .collect::<Result<_, StyleEditError>>()?;
         let mut wrote = false;
         for (map, edit) in &resolved {
-            let Some(current) = read_stop_map(map) else {
+            let Some(current) = read_stop(map) else {
                 continue;
             };
             match edit.change {
@@ -559,5 +563,34 @@ mod tests {
         ];
         assert_eq!(document.edit_stops(&edits), Err(StyleEditError::NoSuchStop));
         assert_eq!(counters(&document), before);
+    }
+
+    #[test]
+    fn add_stop_never_creates_the_stop_list() {
+        let document = Document::new(1);
+        let a = rect(&document);
+        let stop =
+            GradientStop::default_pair(Color::BLACK, StopId::new(1, 1), StopId::new(1, 2))[0];
+        let before = counters(&document);
+        assert_eq!(document.add_stop(a, stop), Err(StyleEditError::NoStopList));
+        assert_eq!(counters(&document), before);
+        assert_eq!(style_of(&document, a).fill.stops.len(), 0);
+        // Only the fill-mode switch creates it; then add works.
+        document
+            .set_fill_mode(
+                FillMode::Linear,
+                &[FillModeTarget {
+                    id: a,
+                    seed_stops: GradientStop::default_pair(
+                        Color::BLACK,
+                        StopId::new(1, 3),
+                        StopId::new(1, 4),
+                    )
+                    .to_vec(),
+                }],
+            )
+            .unwrap();
+        document.add_stop(a, stop).unwrap();
+        assert_eq!(style_of(&document, a).fill.stops.len(), 3);
     }
 }
