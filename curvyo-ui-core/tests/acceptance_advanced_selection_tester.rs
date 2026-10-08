@@ -250,7 +250,10 @@ fn ac3_hit_test_objects_lists_every_candidate_nearest_first() {
         vec![l11, l10, l12]
     );
     assert_eq!(hit_test_object(&objs, pt(10.6, 5.0), tol()), Some(l11));
-    assert!(hit_test_objects(&objs, pt(100.0, 100.0), tol()).is_empty());
+    assert_eq!(
+        hit_test_objects(&objs, pt(100.0, 100.0), tol()),
+        Vec::<NodeId>::new()
+    );
 }
 
 #[test]
@@ -1416,4 +1419,26 @@ fn a_stale_object_vanishing_mid_marquee_does_not_panic() {
 
 fn key(id: &NodeId) -> String {
     format!("{id:?}")
+}
+
+/// Defect (architect review, finding 1): the accepted specs say Ctrl at the
+/// press bypasses the move and arms the remove marquee, also inside the sole
+/// selected object's box.
+#[test]
+#[ignore = "defect: Ctrl inside the sole selected box starts a copy-move (architect finding 1)"]
+fn ctrl_inside_the_sole_selected_box_arms_the_remove_marquee() {
+    let (mut rig, [a, ..]) = scene();
+    rig.select(&[a]);
+    let before = rig.doc_fingerprint();
+    assert_eq!(
+        rig.press(pt(5.0, 5.0), CTRL),
+        SelectPointerDownOutcome::Marquee
+    );
+    rig.moved(pt(-30.0, 30.0), CTRL);
+    rig.release(pt(-30.0, 30.0), CTRL);
+    assert_eq!(rig.doc_fingerprint(), before, "nothing copied or moved");
+    assert!(
+        rig.selection.is_empty(),
+        "the leftward box touched A and removed it"
+    );
 }
