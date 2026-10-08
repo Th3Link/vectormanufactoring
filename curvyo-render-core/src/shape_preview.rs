@@ -53,11 +53,37 @@ pub(crate) fn outline_to_anchors(
 /// [`Shape`] it is given.
 #[must_use]
 pub fn build_shape_live_preview(shape: &Shape, rotation: Angle, view: ViewTransform) -> DrawList {
+    let mut list = shape_live_outline(shape, rotation, view, true);
+    list.extend(shape_live_outline(shape, rotation, view, false));
+    list
+}
+
+/// The hollow outline of `shape` at the live-preview weight: its white casing
+/// (one line width wider on each side, `0007` criterion 40) or the
+/// `--preview-new` line itself. [`crate::live_preview`] draws every object's
+/// casing before any line so that one outline's casing never covers another's
+/// line.
+pub(crate) fn shape_live_outline(
+    shape: &Shape,
+    rotation: Angle,
+    view: ViewTransform,
+    casing: bool,
+) -> DrawList {
     let outline = outline_of_rotated(shape, rotation);
     let anchors = outline_to_anchors(&outline);
     let width = screen_px_to_mm(view, theme::LIVE_PREVIEW_STROKE_PX);
     let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
-    stroke::path_stroke(&anchors, true, width, theme::ACCENT, tolerance_mm)
+    if casing {
+        stroke::path_stroke(
+            &anchors,
+            true,
+            width * theme::CASING_WIDTH_FACTOR,
+            theme::SELECTION_CASING,
+            tolerance_mm,
+        )
+    } else {
+        stroke::path_stroke(&anchors, true, width, theme::ACCENT, tolerance_mm)
+    }
 }
 
 /// A dashed guide line (`docs/design-system.md`: the radius guide and the skew

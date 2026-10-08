@@ -303,3 +303,24 @@ pub const PARAM_KNOB_DOT_PX: f64 = 4.0;
 /// 60%. `--accent-hover` at 20% measured about 1.1:1 on the canvas and was
 /// invisible.
 pub const SHAPE_HANDLE_GUIDE: RgbaColor = ACCENT.with_alpha(153); // 60% of 255, rounded
+
+/// `--selection-casing` (`docs/design-system.md`, "Casing over artwork"): the
+/// white drawn under every `--accent` editor line that has no white ground of
+/// its own, so it stays visible over a fill of any colour.
+pub const SELECTION_CASING: RgbaColor = RgbaColor::WHITE;
+
+/// A casing is the line's width plus one line width on each side: three times
+/// the line width (`docs/design-system.md`, "Casing over artwork").
+pub const CASING_WIDTH_FACTOR: f64 = 3.0;
+
+/// `--hover-box` (`0007` criterion 41): the Select tool's hover box,
+/// `--accent` at 60%. Raised from `--accent-hover`'s 20%, which measured 1.0
+/// to 1.3:1 on every fill. `--accent-hover` stays for rings, buttons and rows.
+pub const HOVER_BOX: RgbaColor = ACCENT.with_alpha(153); // 60% of 255, rounded
+
+/// The hover box's casing: `--selection-casing` at the same 60%.
+pub const HOVER_BOX_CASING: RgbaColor = SELECTION_CASING.with_alpha(153);
+
+/// One side of the pivot marker's casing, screen-space pixels: the marker is
+/// a dot, not a line, so its casing is a fixed ring one pixel wide.
+pub const PIVOT_MARKER_CASING_PX: f64 = 1.0;

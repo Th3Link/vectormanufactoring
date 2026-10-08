@@ -112,6 +112,15 @@ impl DrawList {
         self.close_layer();
     }
 
+    /// A list of overlay triangles from a flat vertex list (tests).
+    #[cfg(test)]
+    pub(crate) fn from_triangles(triangles: Vec<Vertex>) -> Self {
+        Self {
+            triangles,
+            ..Self::default()
+        }
+    }
+
     pub(crate) fn push_vertex(&mut self, vertex: Vertex) {
         self.triangles.push(vertex);
     }

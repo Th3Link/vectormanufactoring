@@ -133,6 +133,12 @@ fn push_node(
             list.extend(glyphs::thick_line(
                 anchor.point,
                 endpoint,
+                sizes.handle_line_width * theme::CASING_WIDTH_FACTOR,
+                theme::SELECTION_CASING,
+            ));
+            list.extend(glyphs::thick_line(
+                anchor.point,
+                endpoint,
                 sizes.handle_line_width,
                 theme::ACCENT,
             ));
@@ -216,15 +222,25 @@ fn selected_segment_overlay(
     let overlay_width = snapshot.style.stroke.width.as_mm().max(min_width_mm)
         + screen_px_to_mm(view, theme::SEGMENT_OVERLAY_EXTRA_PX);
     let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
-    Some(crate::stroke::segment_stroke(
-        start_anchor.point,
-        start_anchor.handle_out,
-        end_anchor.handle_in,
-        end_anchor.point,
-        overlay_width,
-        theme::ACCENT,
-        tolerance_mm,
-    ))
+    let mut overlay = DrawList::default();
+    for (width, color) in [
+        (
+            overlay_width * theme::CASING_WIDTH_FACTOR,
+            theme::SELECTION_CASING,
+        ),
+        (overlay_width, theme::ACCENT),
+    ] {
+        overlay.extend(crate::stroke::segment_stroke(
+            start_anchor.point,
+            start_anchor.handle_out,
+            end_anchor.handle_in,
+            end_anchor.point,
+            width,
+            color,
+            tolerance_mm,
+        ));
+    }
+    Some(overlay)
 }
 
 #[cfg(test)]
@@ -505,5 +521,46 @@ mod tests {
                 "the selected node ({selected:?}) must be drawn after every unselected glyph"
             );
         }
+    }
+
+    /// `0007` criterion 40: a Bézier handle line and the selected-segment
+    /// overlay each sit on a white casing three times as wide, under them.
+    #[test]
+    fn a_handle_line_and_the_segment_overlay_sit_on_a_white_casing() {
+        let (document, path, a, b) = two_node_path();
+        document
+            .set_handle(path, a, HandleSlot::Out, Vec2::new(10.0, 10.0))
+            .expect("pull a handle");
+        let paths = vec![document.path(path).unwrap()];
+        let list = build(
+            &paths,
+            ViewTransform::identity(),
+            &DecorationInput {
+                show_nodes: true,
+                selected_nodes: vec![(path, a)],
+                selected_segment: Some((path, a, b)),
+                ..DecorationInput::default()
+            },
+        );
+        let casing: Vec<_> = list
+            .triangles
+            .iter()
+            .filter(|v| v.color == theme::SELECTION_CASING)
+            .collect();
+        assert!(!casing.is_empty());
+        let first_accent = list
+            .triangles
+            .iter()
+            .position(|v| v.color == theme::ACCENT)
+            .unwrap();
+        let first_casing = list
+            .triangles
+            .iter()
+            .position(|v| v.color == theme::SELECTION_CASING)
+            .unwrap();
+        assert!(
+            first_casing < first_accent,
+            "a casing comes before the line it sits under"
+        );
     }
 }
