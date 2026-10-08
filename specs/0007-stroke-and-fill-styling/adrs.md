@@ -60,8 +60,8 @@ already there.
   boundary below.
 - [ADR 0004 §9](../../docs/adr/0004-persistence-and-cross-machine-sync.md):
   forces the `format_version` bump below.
-- [`specs/0002-path-node-editing/adrs.md`](../path-node-editing/adrs.md) and
-  [`specs/0003-primitive-shapes/adrs.md`](../primitive-shapes/adrs.md): caller-
+- [`specs/0002-path-node-editing/adrs.md`](../0002-path-node-editing/adrs.md) and
+  [`specs/0003-primitive-shapes/adrs.md`](../0003-primitive-shapes/adrs.md): caller-
   minted ids passed into `document-core`, "commands carry resolved data",
   "a press and release with no pointer movement writes nothing", open-file
   validation that dispatches on `shape` and tolerates unknown keys, and
@@ -376,13 +376,13 @@ already there.
 
 - **2026-10-05: `format_version` is 5, not 4.** `object-transform` is
   inserted before this slice and takes version 4 for its `rotation` field
-  (`specs/object-transform/adrs.md`). Everything in the decision above holds
+  (`specs/0005-object-transform/adrs.md`). Everything in the decision above holds
   with "version 3" read as "version 4". If the two slices ship in the other
   order, swap the numbers back.
 
 - **2026-10-05: `format_version` is 6, not 5.** `path-merge-split-and-node-types`
   is inserted before this slice and takes version 5 for its third anchor
-  kind (`specs/path-merge-split-and-node-types/adrs.md`). Everything above
+  kind (`specs/0006-path-merge-split-and-node-types/adrs.md`). Everything above
   holds with "version 3" read as "version 5". Two consequences for this
   slice's plan: Split writes its new object from the original's
   `PathSnapshot`, so once `PathSnapshot` carries `style: Style`, the new
@@ -400,7 +400,7 @@ already there.
 
 - **2026-10-07 (architect): ordering note.** Of the pending bumps, this slice
   stays at 6 only if it merges before `rectangle-corner-radii`; the
-  number is 7 if `rectangle-corner-radii` merges first (`specs/rectangle-
+  number is 7 if `rectangle-corner-radii` merges first (`specs/0013-rectangle-
   corner-radii/adrs.md`, decision 3). The merge rule above decides.
 
 - **2026-10-05 (architect): gradient box orientation vs. rotation — open,
@@ -451,7 +451,7 @@ already there.
 
 - **2026-10-06 (architect): what `object-transform-refinements` (PR #35)
   adds to the resize path.** Copied from
-  `specs/object-transform-refinements/adrs.md`; read the module names above
+  `specs/0008-object-transform-refinements/adrs.md`; read the module names above
   as these from now on.
   - The stroke factor is applied in `ui-core::transform_drag::scale_stroke`
     (called by `resize_by_local_delta`), and every resize write goes through
@@ -969,7 +969,7 @@ If the lead wants three PRs, merge 1 and 2; do not merge 3 and 4.
    preview (section 3), and that the shape tools keep their floating bar.
 7. **Statuses:** `0005`, `0006`, `edit-interaction-polish`, `unified-object-
    editing` and others read "Ready" but are merged; the PO sets them to Done
-   with the PR links (the index in `specs/index.md` is the PO's).
+   with the PR links (the index in `specs/README.md` is the PO's).
 
 ## Flagged to the lead
 

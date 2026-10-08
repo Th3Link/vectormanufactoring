@@ -115,7 +115,7 @@ every concurrent style edit.
 
 ## Rotation is a stored angle, and the per-node affine is still not built
 
-Every object stores a `rotation` angle (`specs/object-transform/adrs.md`):
+Every object stores a `rotation` angle (`specs/0005-object-transform/adrs.md`):
 a primitive's frame is its local geometry, rotated about the frame centre,
 and a path's anchors are baked with the angle kept only as its box
 orientation. [ADR 0002](adr/0002-document-model-units-and-svg-round-trip.md)
@@ -135,7 +135,7 @@ tool's turn). The shown angle is `ObjectSnapshot::orientation()`, with no
 stored change. The oriented selection box turns by `rotation` alone, so a shape
 created at 78.7° has an axis-aligned box. The primitives rework can fold
 `StarFrame.angle` into `rotation` with a real migration if the box should turn
-with the shape. See `specs/edit-interaction-polish/adrs.md`, decision 1.
+with the shape. See `specs/0010-edit-interaction-polish/adrs.md`, decision 1.
 
 *2026-10-07 (architect, `polygon-star-box-refit`):* the box limit above is
 removed without a migration: the oriented box of a polygon or star turns by
@@ -147,7 +147,7 @@ angle 0 (handles never add `StarFrame.angle`), and "Object to path" drops the fr
 angle, so the converted path's `rotation` is the register alone and its readout
 and box direction can differ from the shape's before the conversion. Fix that
 with one more argument to `convert_to_paths` (write `orientation()` as the path's
-`rotation`) when someone asks. See `specs/polygon-star-box-refit/adrs.md`.
+`rotation`) when someone asks. See `specs/0012-polygon-star-box-refit/adrs.md`.
 
 *2026-10-07 (architect, `0007-stroke-and-fill-styling`):* a gradient makes this
 visible. A polygon's or star's gradient box is its circumscribed square, a path's
@@ -777,7 +777,7 @@ the next slice that adds a tool. Revisit if a slice needs `mod.rs` above
 non-test code on `main`. The split is now task 1 of whichever of
 `object-transform-refinements`, `0007-stroke-and-fill-styling` and
 `advanced-selection` starts first, as a pure-move commit. The module list
-is in `specs/object-transform-refinements/adrs.md` ("split the oversized
+is in `specs/0008-object-transform-refinements/adrs.md` ("split the oversized
 modules first").
 
 **Done (2026-10-06, `object-transform-refinements` task 1, a pure-move
@@ -803,7 +803,7 @@ refinements: the Select preview accessors out of `select_tool.rs` into
 (`param_handles.rs`, `param_edit.rs`, `param_entry.rs`, `select_bar.rs`) and
 its new wasm calls into `wasm_select_bar.rs`, so none of the over-limit files
 grows. PR 2 removes about 80 lines from `wasm_api.rs` and most of
-`session/shapes.rs`. See `specs/unified-object-editing/adrs.md`, "size limits".
+`session/shapes.rs`. See `specs/0009-unified-object-editing/adrs.md`, "size limits".
 
 *2026-10-06 (implementer, `unified-object-editing` PR 1, "Left open" after the
 story):* `select_tool.rs` is 375 non-test lines (the handle queries moved to

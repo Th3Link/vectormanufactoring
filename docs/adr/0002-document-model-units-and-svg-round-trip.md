@@ -180,7 +180,7 @@ sensible granularity.
     unsupported; what the importer does with it (substitute, passthrough or
     reported loss) is decided in the SVG import story. Gradients may return
     later as a new requirement with a new design, not by reviving this list
-    entry. Follows from [`specs/style-panel-rework/`](../../specs/style-panel-rework/).
+    entry. Follows from [`specs/0017-style-panel-rework/`](../../specs/0017-style-panel-rework/).
 11. **The document is versioned** from the first commit (`format_version` plus
     a written migration policy, see ADR 0004 §9, which extends this to the Loro
     snapshot version).

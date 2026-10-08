@@ -26,10 +26,13 @@ What works today:
   tool.
 - Scale, rotate and skew a selection with on-canvas handles; typed values for
   angle, size, skew and move.
+- Select by marquee or lasso, and pick between overlapping objects.
+- A separate radius for each corner of a rectangle.
+- Stroke width, dash, join, cap and colour, and fill. The properties panel is
+  being reworked.
 
 What does not exist yet:
 
-- Stroke and fill styling. Paths use one fixed default stroke.
 - Undo and redo.
 - Boolean operations.
 - Groups and layers.
@@ -38,9 +41,8 @@ What does not exist yet:
 - Machine profiles, cut/engrave roles, material records and test patterns.
 - Job preview and G-code output.
 
-Slices 1 to 4 are accepted (`Done`). Slices 5 and 6 are merged but their
-specs still read `Ready`. The remaining slices are in
-[`specs/index.md`](specs/index.md).
+The feature list with the status of every spec is at the top of
+[`specs/README.md`](specs/README.md).
 
 ## Why
 
@@ -159,8 +161,8 @@ ADRs in `docs/adr/`. Workflow and rules: [`CLAUDE.md`](CLAUDE.md).
 - [`docs/adr/index.md`](docs/adr/index.md): ADRs 0001 to 0013. Twelve are
   accepted; 0012 was rejected. ADRs 0001 to 0012 keep the old name
   `vecmanf`; read it as `curvyo` (ADR 0013).
-- [`specs/index.md`](specs/index.md): the MVP as 16 ordered slices, with
-  status in each spec.
+- [`specs/README.md`](specs/README.md): the numbered list of all features
+  with status, then the spec convention.
 - [`docs/design-system.md`](docs/design-system.md),
   [`docs/technical-debt.md`](docs/technical-debt.md): UI design system, known
   issues.

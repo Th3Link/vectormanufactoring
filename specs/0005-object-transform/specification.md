@@ -371,13 +371,13 @@ unrequested capability smuggled in to make them compose.
 - **Skew/shear.** Not requested here, and this slice's oriented-bounding-box
   convention (criterion 18) is specifically designed so scale and rotate
   never need it. The customer has since asked for something close to it
-  (2026-10-06); that is open in `specs/object-transform-refinements/`.
+  (2026-10-06); that is open in `specs/0008-object-transform-refinements/`.
 - **Numeric transform entry** (typing an exact rotation angle, width or
   height into a field instead of dragging). Same deferral
   `primitive-shapes` and `canvas-navigation-and-selection` already made for
   their own numeric entry; criteria 14 and 22's live readouts are
   display-only. (The customer asked for typed entry on 2026-10-06; it is
-  specified separately in `specs/object-transform-refinements/`, not in
+  specified separately in `specs/0008-object-transform-refinements/`, not in
   this PR.)
 - **Multi-object transform** — scaling or rotating two or more selected
   objects together, whether as one rigid group sharing a single bounding

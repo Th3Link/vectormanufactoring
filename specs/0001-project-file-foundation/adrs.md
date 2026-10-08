@@ -1,7 +1,7 @@
 # ADRs for "Project file foundation: new, open, save a local project"
 
 This slice is the first thing to exercise the `.curvyo` container and the Loro
-backing already decided in ADR 0004 (`specs/index.md`, "Notes on ordering"). It
+backing already decided in ADR 0004 (`specs/README.md`, "Notes on ordering"). It
 reopens none of those decisions.
 
 ## Depends on

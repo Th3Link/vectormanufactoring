@@ -73,7 +73,7 @@ story has to be redesigned when sync or collaboration slices land.
 ## Out of scope
 
 - Any drawing or editing tool (paths, primitives, styling, layers) — slices
-  2–7 in `specs/index.md`.
+  2–7 in `specs/README.md`.
 - Unsaved-changes tracking and a "save before closing?" prompt. An empty
   canvas has nothing to lose yet; dirty-state tracking belongs with the
   first slice that can actually dirty the document (`path-node-editing`,
