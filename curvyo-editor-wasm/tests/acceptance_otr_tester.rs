@@ -725,31 +725,31 @@ fn ac06_modifiers_changed_alone_reveals_and_hides_side_handles() {
     let p = b.side_out(kk, 0.0, -1.0, 32.0);
     s.pointer_hover(p, false, false);
     assert_ne!(s.cursor_hint(), "rotate");
-    s.modifiers_changed(true, false);
+    s.modifiers_changed(true, false, false);
     assert_eq!(
         s.cursor_hint(),
         "rotate",
         "shift down, pointer did not move"
     );
     assert_eq!(s.handle_hint(), "rotate-side");
-    s.modifiers_changed(false, false);
+    s.modifiers_changed(false, false, false);
     assert_ne!(s.cursor_hint(), "rotate", "shift up, pointer did not move");
     assert_eq!(s.handle_hint(), "");
     // window blur style reset
-    s.modifiers_changed(true, true);
-    s.modifiers_changed(false, false);
+    s.modifiers_changed(true, true, false);
+    s.modifiers_changed(false, false, false);
     assert_ne!(s.cursor_hint(), "rotate");
 }
 
 #[test]
 fn ac06_modifiers_changed_before_any_pointer_position_does_not_panic() {
     let mut s = open_in_session(&rect_doc(0.0, 0.0, 40.0, 20.0));
-    s.modifiers_changed(true, true);
-    s.modifiers_changed(false, false);
+    s.modifiers_changed(true, true, false);
+    s.modifiers_changed(false, false, false);
     let _ = s.cursor_hint();
     let _ = s.draw_list();
     s.pointer_leave();
-    s.modifiers_changed(true, false);
+    s.modifiers_changed(true, false, false);
     let _ = s.draw_list();
 }
 
@@ -762,7 +762,7 @@ fn ac06_shift_pressed_during_a_drag_does_not_reveal_side_handles() {
     let h = b.rot_corner(kk, 1.0, -1.0);
     idle.pointer_hover(pt(500.0, 500.0), false, false);
     let t0 = idle.draw_list().triangle_count();
-    idle.modifiers_changed(true, false);
+    idle.modifiers_changed(true, false, false);
     let t1 = idle.draw_list().triangle_count();
     assert!(
         t1 > t0 + 20,
@@ -775,7 +775,7 @@ fn ac06_shift_pressed_during_a_drag_does_not_reveal_side_handles() {
     let to = swept_to(h, b.c, 20.0);
     s.pointer_hover(to, false, false);
     let n_no_shift = s.draw_list().triangle_count();
-    s.modifiers_changed(true, false);
+    s.modifiers_changed(true, false, false);
     let n_shift = s.draw_list().triangle_count();
     assert!(
         n_shift.abs_diff(n_no_shift) * 2 < t1 - t0,
@@ -1933,7 +1933,7 @@ fn ac22_pivot_of_the_entry_is_fixed_when_it_opens() {
         let h = b.rot_corner(k(&s), corner.0, corner.1);
         open_entry(&mut s, h, shift_open, false).unwrap();
         // Shift/Ctrl state afterwards is ignored
-        s.modifiers_changed(!shift_open, true);
+        s.modifiers_changed(!shift_open, true, false);
         assert_eq!(
             s.commit_transform_entry("50", "", 0),
             EntryOutcome::Committed
@@ -3586,10 +3586,10 @@ fn modifiers_do_not_change_the_cursor_over_a_handle() {
         s.pointer_hover(p, false, false);
         let base = s.cursor_hint();
         for (sh, ct) in [(true, false), (false, true), (true, true)] {
-            s.modifiers_changed(sh, ct);
+            s.modifiers_changed(sh, ct, false);
             assert_eq!(s.cursor_hint(), base, "shift {sh} ctrl {ct} at {p:?}");
         }
-        s.modifiers_changed(false, false);
+        s.modifiers_changed(false, false, false);
     }
 }
 
@@ -3970,9 +3970,9 @@ fn ac39_shift_pressed_with_modifiers_changed_only_switches_the_live_skew() {
     let to = pt(from.x + 10.0, from.y);
     s.pointer_hover(to, false, false);
     assert_eq!(s.live_readout().unwrap().text, "Skew x +26.6°");
-    s.modifiers_changed(true, false); // Shift: h halves -> atan(10/10) = 45
+    s.modifiers_changed(true, false, false); // Shift: h halves -> atan(10/10) = 45
     assert_eq!(s.live_readout().unwrap().text, "Skew x +45°");
-    s.modifiers_changed(false, false);
+    s.modifiers_changed(false, false, false);
     assert_eq!(s.live_readout().unwrap().text, "Skew x +26.6°");
     s.escape();
 }
@@ -3988,13 +3988,13 @@ fn ac14_modifiers_changed_alone_switches_the_live_rotate_pivot_and_readout() {
     s.pointer_hover(to, false, false);
     let t0 = s.live_readout().unwrap().text;
     assert_eq!(t0, "30°");
-    s.modifiers_changed(true, false);
+    s.modifiers_changed(true, false, false);
     let t1 = s.live_readout().unwrap().text;
     assert_ne!(
         t1, "30°",
         "the pivot moved, so the swept angle changed: {t1}"
     );
-    s.modifiers_changed(false, false);
+    s.modifiers_changed(false, false, false);
     assert_eq!(s.live_readout().unwrap().text, "30°");
     s.escape();
 }
@@ -4319,7 +4319,7 @@ fn ac41_ac56_escape_and_release_remove_every_drag_decoration() {
             "{name}: a drag draws something (pivot marker or guide)"
         );
         s.escape();
-        s.modifiers_changed(false, false);
+        s.modifiers_changed(false, false, false);
         s.pointer_leave();
         assert_eq!(
             s.draw_list().triangle_count(),
@@ -4361,7 +4361,7 @@ fn ac55_hovering_a_handle_with_shift_previews_the_pivot_marker() {
         shift_away, shift_on,
         "marker (and hover look) appear on a handle with Shift"
     );
-    s.modifiers_changed(false, false);
+    s.modifiers_changed(false, false, false);
     let released = s.draw_list().triangle_count();
     s.pointer_hover(h, false, false);
     assert_eq!(
@@ -4372,7 +4372,7 @@ fn ac55_hovering_a_handle_with_shift_previews_the_pivot_marker() {
     s.pointer_hover(pt(500.0, 500.0), false, false);
     s.pointer_hover(h, true, false);
     s.pointer_leave();
-    s.modifiers_changed(true, false);
+    s.modifiers_changed(true, false, false);
     assert_eq!(
         s.draw_list().triangle_count(),
         shift_away.min(shift_away),

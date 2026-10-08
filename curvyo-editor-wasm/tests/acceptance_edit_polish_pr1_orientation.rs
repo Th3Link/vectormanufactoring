@@ -481,14 +481,14 @@ fn ac05_ctrl_is_read_from_the_release_event_and_preview_follows_modifier_changes
     let raw_draw = s.draw_list();
     // the host (frontend `applyModifiers`) calls modifiers_changed and then
     // re-runs the hover at the last pointer position
-    s.modifiers_changed(false, true);
+    s.modifiers_changed(false, true, false);
     s.pointer_hover(pt(110.0, 48.0), false, true);
     let snapped_text = s.live_readout().unwrap().text;
     let snapped_draw = s.draw_list();
     assert_eq!(snapped_text, "r 10.2 mm, -15°");
     assert_eq!(raw_text, "r 10.2 mm, -11.3°");
     assert_ne!(raw_draw, snapped_draw, "preview changes on the next frame");
-    s.modifiers_changed(false, false);
+    s.modifiers_changed(false, false, false);
     s.pointer_hover(pt(110.0, 48.0), false, false);
     assert_eq!(s.live_readout().unwrap().text, raw_text);
     assert_eq!(s.draw_list(), raw_draw);

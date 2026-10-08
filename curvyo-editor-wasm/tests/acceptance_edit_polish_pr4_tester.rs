@@ -241,7 +241,7 @@ fn c30_the_axis_is_rechosen_on_every_event_and_shift_is_read_live() {
     assert_eq!(readout(&s).as_deref(), Some("Δ 31.0, 80.0 mm"));
     assert_eq!(s.move_indicators().lock, None);
     // 5. Shift pressed again, pointer at rest: |Dy| 80 beats |Dx| 31
-    s.modifiers_changed(true, false);
+    s.modifiers_changed(true, false, false);
     assert_eq!(readout(&s).as_deref(), Some("Δ 0.0, 80.0 mm"));
     assert_eq!(s.move_indicators().lock, Some(Axis::Y));
     // release with Shift: the commit is the readout
@@ -357,7 +357,7 @@ fn c31_a_locked_drag_back_to_the_start_writes_nothing() {
     s.pointer_hover(plus(p0, 30.0, 4.0), true, false);
     s.pointer_hover(p0, true, false);
     assert!(
-        readout(&s).is_none_or(|t| t.starts_with("Δ 0.0, 0.0")),
+        readout(&s).is_none_or(|t| !t.starts_with('Δ') || t.starts_with("Δ 0.0, 0.0")),
         "{:?}",
         readout(&s)
     );
@@ -465,9 +465,9 @@ fn c29_without_shift_at_the_press_a_mid_drag_shift_engages_and_releases_without_
     s.pointer_down(p0, false);
     s.pointer_hover(plus(p0, 30.0, 10.0), false, false);
     assert_eq!(readout(&s).as_deref(), Some("Δ 30.0, 10.0 mm"));
-    s.modifiers_changed(true, false);
+    s.modifiers_changed(true, false, false);
     assert_eq!(readout(&s).as_deref(), Some("Δ 30.0, 0.0 mm"));
-    s.modifiers_changed(false, false);
+    s.modifiers_changed(false, false, false);
     assert_eq!(readout(&s).as_deref(), Some("Δ 30.0, 10.0 mm"));
     s.pointer_up(plus(p0, 30.0, 10.0), false, false);
     assert_eq!(moved_a(&s), pt(40.0, 30.0));
@@ -481,7 +481,11 @@ fn c29_a_shift_press_inside_the_sole_selected_box_off_the_outline_starts_no_move
     s.pointer_hover(p0, true, false);
     s.pointer_down(p0, true);
     s.pointer_hover(plus(p0, 30.0, 10.0), true, false);
-    assert!(readout(&s).is_none(), "no move readout");
+    // The press arms an adding marquee, whose legend is no move readout.
+    assert!(
+        readout(&s).is_none_or(|text| !text.starts_with('Δ')),
+        "no move readout"
+    );
     s.pointer_up(plus(p0, 30.0, 10.0), true, false);
     assert_eq!(bytes_of(&s), before);
 }
@@ -531,7 +535,7 @@ fn run(press_ctrl: bool, mid_ctrl: Option<bool>, release_ctrl: bool) -> Session 
     s.pointer_down(o, false);
     s.pointer_hover(plus(o, 10.0, 5.0), false, press_ctrl);
     if let Some(m) = mid_ctrl {
-        s.modifiers_changed(false, m);
+        s.modifiers_changed(false, m, false);
     }
     s.pointer_hover(plus(o, 30.0, 12.0), false, mid_ctrl.unwrap_or(press_ctrl));
     s.pointer_up(plus(o, 30.0, 12.0), false, release_ctrl);
@@ -952,9 +956,9 @@ fn c26_escape_cancels_the_drag_with_ctrl_held_and_the_badge_stays() {
         "held Ctrl keeps the plus badge"
     );
     // and also with the pointer at rest after the cancel
-    s.modifiers_changed(false, true);
+    s.modifiers_changed(false, true, false);
     assert!(s.move_indicators().copy_badge);
-    s.modifiers_changed(false, false);
+    s.modifiers_changed(false, false, false);
     assert!(!s.move_indicators().copy_badge);
 }
 
@@ -1006,7 +1010,7 @@ fn c33_copy_preview_blue_outline_travels_alone_box_and_handles_stay() {
         "nearly everything at rest is still drawn"
     );
     // release Ctrl in the frame of the key: back to a move, box follows
-    s.modifiers_changed(false, false);
+    s.modifiers_changed(false, false, false);
     let moving = s.draw_list();
     assert!(
         !contains_all(&moving, &rest),
@@ -1017,7 +1021,7 @@ fn c33_copy_preview_blue_outline_travels_alone_box_and_handles_stay() {
         "the blue outline is the same result"
     );
     // press Ctrl again with the pointer at rest: copy in that frame
-    s.modifiers_changed(false, true);
+    s.modifiers_changed(false, true, false);
     assert_eq!(s.draw_list(), during);
     s.escape();
 }
@@ -1083,7 +1087,7 @@ fn c27_origin_axes_colours_geometry_and_draw_order() {
         "free move: no axes"
     );
     // Shift on, pointer at rest: axes in that frame
-    s.modifiers_changed(true, false);
+    s.modifiers_changed(true, false, false);
     let locked = s.draw_list();
     let active = with_color(&locked, axis_guide());
     let idle = with_color(&locked, axis_guide_idle());
@@ -1157,7 +1161,7 @@ fn c27_origin_axes_colours_geometry_and_draw_order() {
         "box and handles drawn after the blue outline"
     );
     // Shift released: axes gone in that frame
-    s.modifiers_changed(false, false);
+    s.modifiers_changed(false, false, false);
     let gone = s.draw_list();
     assert!(with_color(&gone, axis_guide()).is_empty());
     assert!(with_color(&gone, axis_guide_idle()).is_empty());
@@ -1216,12 +1220,12 @@ fn c33_plus_badge_follows_ctrl_and_the_press_hit_test_with_the_pointer_at_rest()
     for at in [p(A_OUTLINE), p(B_OUTLINE), p(A_CENTRE)] {
         s.pointer_hover(at, false, false);
         assert!(!s.move_indicators().copy_badge, "no Ctrl, no badge");
-        s.modifiers_changed(false, true);
+        s.modifiers_changed(false, true, false);
         assert!(
             s.move_indicators().copy_badge,
             "the frame of the key, pointer at rest: {at:?}"
         );
-        s.modifiers_changed(false, false);
+        s.modifiers_changed(false, false, false);
         assert!(!s.move_indicators().copy_badge);
     }
     // empty canvas: Ctrl belongs to the marquee
@@ -1242,10 +1246,10 @@ fn c33_the_badge_shows_during_a_copy_drag_and_follows_ctrl() {
     s.pointer_down(o, false);
     s.pointer_hover(plus(o, 30.0, 12.0), false, false);
     assert!(!s.move_indicators().copy_badge);
-    s.modifiers_changed(false, true);
+    s.modifiers_changed(false, true, false);
     assert!(s.move_indicators().copy_badge);
     assert!(readout(&s).unwrap().ends_with(" Copy"));
-    s.modifiers_changed(false, false);
+    s.modifiers_changed(false, false, false);
     assert!(!s.move_indicators().copy_badge);
     assert!(!readout(&s).unwrap().ends_with("Copy"));
     s.pointer_up(plus(o, 30.0, 12.0), false, false);
@@ -1255,7 +1259,7 @@ fn c33_the_badge_shows_during_a_copy_drag_and_follows_ctrl() {
 #[test]
 fn c26_a_press_without_a_prior_pointer_move_still_works_with_cached_ctrl() {
     let mut s = abc_with_a_selected();
-    s.modifiers_changed(false, true);
+    s.modifiers_changed(false, true, false);
     let o = p(A_INSIDE);
     s.pointer_down(o, false); // no pointer_hover first
     s.pointer_hover(plus(o, 30.0, 12.0), false, true);
@@ -1358,7 +1362,7 @@ fn c39_node_pen_and_creation_tools_give_shift_and_ctrl_no_move_meaning() {
     ] {
         let mut s = abc_with_a_selected();
         s.set_tool(tool);
-        s.modifiers_changed(true, true);
+        s.modifiers_changed(true, true, false);
         assert!(!s.move_indicators().copy_badge, "{tool:?}");
         assert_eq!(s.move_indicators().lock, None);
         let before_len = all(&s).len();
@@ -1696,12 +1700,12 @@ fn c23_ctrl_at_the_second_press_presets_the_check_other_routes_do_not() {
     );
     // the key M never presets, even with Ctrl cached
     let mut s = abc_with_a_selected();
-    s.modifiers_changed(false, true);
+    s.modifiers_changed(false, true, false);
     open_move_chip(&mut s);
     assert!(!s.move_entry().unwrap().copy_preset);
     // unchecked on every open: close and reopen
     s.escape();
-    s.modifiers_changed(false, false);
+    s.modifiers_changed(false, false, false);
     open_move_chip(&mut s);
     assert!(!s.move_entry().unwrap().copy_preset);
 }

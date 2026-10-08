@@ -9,12 +9,13 @@ use wasm_bindgen::prelude::*;
 use crate::wasm_api::WasmSession;
 
 /// Which badges the DOM shows by the pointer: `copy_badge` is the plus badge,
-/// `lock` is `""` (no lock badge), `"x"` or `"y"` (the axis the move is locked
+/// `remove_badge` the minus badge of a Ctrl marquee or lasso, `lock` is `""` (no lock badge), `"x"` or `"y"` (the axis the move is locked
 /// to).
 #[wasm_bindgen]
 #[derive(Debug, Clone)]
 pub struct MoveIndicatorsView {
     copy_badge: bool,
+    remove_badge: bool,
     lock: &'static str,
 }
 
@@ -25,6 +26,13 @@ impl MoveIndicatorsView {
     #[wasm_bindgen(getter)]
     pub fn copy_badge(&self) -> bool {
         self.copy_badge
+    }
+
+    /// Whether the minus badge shows (`advanced-selection`).
+    #[must_use]
+    #[wasm_bindgen(getter)]
+    pub fn remove_badge(&self) -> bool {
+        self.remove_badge
     }
 
     /// The lock badge's axis: `""`, `"x"` or `"y"`.
@@ -46,6 +54,7 @@ impl WasmSession {
         let indicators = self.session.move_indicators();
         MoveIndicatorsView {
             copy_badge: indicators.copy_badge,
+            remove_badge: indicators.remove_badge,
             lock: match indicators.lock {
                 Some(Axis::X) => "x",
                 Some(Axis::Y) => "y",

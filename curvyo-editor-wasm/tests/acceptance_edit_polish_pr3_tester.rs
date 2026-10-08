@@ -920,9 +920,9 @@ fn c10_the_shift_pivot_is_fixed_when_the_entry_opens_not_at_enter() {
         let h = skew_handle_pos(&s, &b, (0.0, -1.0));
         dbl(&mut s, h, h, open_shift, false);
         // flip the modifier state after opening
-        s.modifiers_changed(!open_shift, false);
-        s.modifiers_changed(open_shift, false);
-        s.modifiers_changed(!open_shift, false);
+        s.modifiers_changed(!open_shift, false, false);
+        s.modifiers_changed(open_shift, false, false);
+        s.modifiers_changed(!open_shift, false, false);
         assert_eq!(
             s.commit_transform_entry("45", "", 0),
             EntryOutcome::Committed
@@ -2877,7 +2877,7 @@ fn c57_s_with_ctrl_is_gated_and_does_not_open_a_linked_chip() {
     );
     assert!(s.transform_entry().is_none());
     // a Ctrl held while the pointer happens to be over the canvas does not link
-    s.modifiers_changed(false, true);
+    s.modifiers_changed(false, true, false);
     assert_eq!(press(&mut s, "s"), KeyOutcome::EntryOpened);
     assert!(!s.transform_entry().unwrap().linked);
 }
@@ -2887,7 +2887,7 @@ fn c57_s_ignores_the_shift_state_held_when_it_is_pressed() {
     // "The S route never reads a modifier": Shift held (as a pointer modifier
     // state) changes nothing about the fixed point.
     let mut a = select_at(&rect_doc(10.0, 10.0, 40.0, 20.0), pt(30.0, 10.0));
-    a.modifiers_changed(true, false);
+    a.modifiers_changed(true, false, false);
     size_entry_open(&mut a);
     a.commit_transform_entry("60", "30", 0);
     let mut b = select_at(&rect_doc(10.0, 10.0, 40.0, 20.0), pt(30.0, 10.0));

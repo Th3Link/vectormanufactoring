@@ -2469,7 +2469,7 @@ fn ac14_pressing_or_releasing_shift_or_ctrl_while_the_pointer_holds_still_update
         sc.s.pointer_down(from, false);
         sc.s.pointer_hover(to, false, false);
         let dl_plain = sc.s.draw_list();
-        sc.s.modifiers_changed(shift, ctrl);
+        sc.s.modifiers_changed(shift, ctrl, false);
         let dl_mod = sc.s.draw_list();
         sc.s.pointer_up(to, shift, ctrl);
         let committed = samples_of(&sc.s, 0);
@@ -2484,8 +2484,8 @@ fn ac14_pressing_or_releasing_shift_or_ctrl_while_the_pointer_holds_still_update
         sc2.s.pointer_hover(from, false, false);
         sc2.s.pointer_down(from, false);
         sc2.s.pointer_hover(to, shift, ctrl);
-        sc2.s.modifiers_changed(shift, ctrl);
-        sc2.s.modifiers_changed(false, false);
+        sc2.s.modifiers_changed(shift, ctrl, false);
+        sc2.s.modifiers_changed(false, false, false);
         let dl_back = sc2.s.draw_list();
         sc2.s.pointer_up(to, false, false);
         let plain = samples_of(&sc2.s, 0);
@@ -2788,12 +2788,18 @@ fn ac35_outline_hit_radius_is_screen_pixels_at_every_zoom() {
     }
 }
 
-/// Criterion 35, amended: the outline tolerance is 4 px
-/// (`SEGMENT_TOLERANCE_PX`, unchanged since slice 4); `advanced-selection`
-/// raises it to 8 px later.
+/// Criterion 35, amended twice: the outline tolerance was 4 px
+/// (`SEGMENT_TOLERANCE_PX`, slice 4); `advanced-selection` criterion 1 raised
+/// the Select tool's to 8 px (`OBJECT_TOLERANCE_PX`).
 #[test]
-fn ac35_outline_hit_radius_is_4_px_as_amended() {
-    for (dist, hit) in [(1.0, true), (3.5, true), (5.0, false), (9.0, false)] {
+fn ac35_outline_hit_radius_is_8_px_as_amended() {
+    for (dist, hit) in [
+        (1.0, true),
+        (3.5, true),
+        (7.5, true),
+        (9.0, false),
+        (12.0, false),
+    ] {
         outline_hit_case(dist, hit);
     }
 }

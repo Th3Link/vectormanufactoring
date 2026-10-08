@@ -187,8 +187,12 @@ impl WasmSession {
     /// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "all
     /// screen↔document conversion happens in Rust" — converted via
     /// [`crate::session::Session::screen_to_document`] before dispatch).
-    pub fn pointer_down(&mut self, x: f64, y: f64, shift: bool) {
+    /// `shift`, `ctrl` (Cmd folded in) and `alt` are the press event's
+    /// modifiers; Alt at the press arms the Select tool's lasso, Ctrl on empty
+    /// canvas its removing marquee (`advanced-selection`).
+    pub fn pointer_down(&mut self, x: f64, y: f64, shift: bool, ctrl: bool, alt: bool) {
         let point = self.session.screen_to_document(x, y);
+        self.session.modifiers_changed(shift, ctrl, alt);
         self.session.pointer_down(point, shift);
     }
 
@@ -197,13 +201,15 @@ impl WasmSession {
     /// the rectangle/ellipse tools' live create-drag preview (acceptance
     /// criteria 2, 8; `shift` centres the box on the press point) and, since `object-transform`, by the Select
     /// tool's own live resize/rotate preview alongside `shift`
-    /// (acceptance criteria 5, 7, 16, 17). Call this on every pointer
+    /// (acceptance criteria 5, 7, 16, 17); `alt` inverts a running marquee's
+    /// mode (`advanced-selection` criterion 11). Call this on every pointer
     /// move, not only while a button is held — it also feeds whatever
     /// shape-tool drag is in flight for the live preview (ux-engineer
     /// review), and the method itself is a no-op when no drag is in
     /// progress.
-    pub fn pointer_hover(&mut self, x: f64, y: f64, shift: bool, constrain: bool) {
+    pub fn pointer_hover(&mut self, x: f64, y: f64, shift: bool, constrain: bool, alt: bool) {
         let point = self.session.screen_to_document(x, y);
+        self.session.modifiers_changed(shift, constrain, alt);
         self.session.pointer_hover(point, shift, constrain);
     }
 
@@ -226,10 +232,13 @@ impl WasmSession {
     /// `constrain` is the Ctrl modifier's state at release (acceptance
     /// criteria 2, 8), consulted by the rectangle/ellipse tools and,
     /// since `object-transform`, by the Select tool's own resize/rotate
-    /// commit alongside `shift` (acceptance criteria 5, 7, 16, 17);
-    /// both are ignored outside those tools.
-    pub fn pointer_up(&mut self, x: f64, y: f64, shift: bool, constrain: bool) {
+    /// commit alongside `shift` (acceptance criteria 5, 7, 16, 17); the
+    /// Select tool's marquee and lasso combine their result with the
+    /// selection by `shift` and `constrain` and read `alt` as the box's mode
+    /// (`advanced-selection`); all three are ignored by the other tools.
+    pub fn pointer_up(&mut self, x: f64, y: f64, shift: bool, constrain: bool, alt: bool) {
         let point = self.session.screen_to_document(x, y);
+        self.session.modifiers_changed(shift, constrain, alt);
         self.session.pointer_up(point, shift, constrain);
     }
 
@@ -245,12 +254,12 @@ impl WasmSession {
         self.session.double_click(point, shift, ctrl)
     }
 
-    /// Shift or Ctrl changed with no pointer movement
+    /// Shift, Ctrl or Alt changed with no pointer movement
     /// (`object-transform-refinements`, "Shift reveal"): call from
-    /// window-level key events, and with `(false, false)` when the window or
-    /// canvas loses focus.
-    pub fn modifiers_changed(&mut self, shift: bool, ctrl: bool) {
-        self.session.modifiers_changed(shift, ctrl);
+    /// window-level key events, and with `(false, false, false)` when the
+    /// window or canvas loses focus.
+    pub fn modifiers_changed(&mut self, shift: bool, ctrl: bool, alt: bool) {
+        self.session.modifiers_changed(shift, ctrl, alt);
     }
 
     /// Acceptance criterion 13 (Delete/Backspace, or the toolbar).

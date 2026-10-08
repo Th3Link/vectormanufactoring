@@ -128,7 +128,7 @@ from the MVP list. All Done and merged:
 
 Not part of the MVP sequence above; each waits for the customer to schedule it.
 
-- `advanced-selection` (Ready)
+- `advanced-selection` (In progress)
 - `rectangle-corner-radii` (Draft)
 - `ellipse-arcs-and-shaping` (Draft)
 - `document-size-and-rulers` (Draft)

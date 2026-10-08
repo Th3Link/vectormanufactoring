@@ -829,6 +829,17 @@ and `gpu_paint.rs` after a pure-move first task, and its panel state into a new
 `useStylePanel.ts`. `session/mod.rs` is at 499, so `0007` PR 3 starts with a
 pure move of the tolerance helpers to `session/tolerances.rs`.
 
+**Done (2026-10-08, `advanced-selection` task 1, a pure-move commit):**
+`curvyo-editor-wasm/src/wasm_api.rs` is 281 lines. The calls moved into one
+`impl WasmSession` block per tool or concern: `wasm_navigation.rs`,
+`wasm_node_tool.rs`, `wasm_select_tool.rs` (with `TransformEntryView`),
+`wasm_shape_tools.rs` and `wasm_render.rs`, next to the existing
+`wasm_select_bar.rs`, `wasm_keys.rs`, `wasm_move.rs`, `wasm_move_entry.rs` and
+`wasm_properties_panel.rs`. `select_tool.rs` is 412 non-test lines
+(the marquee, lasso and cycle are in `select_tool/gesture.rs` and
+`select_tool/cycle.rs`). Left open: the test module of `select_tool.rs` is
+about 2,000 lines; the ADR suggested moving it to `tests/`.
+
 ## Notes for the next parts of `stroke-and-fill-styling` (from the PR 1 review, 2026-10-08)
 
 - **Stroke width has no upper bound** (only "finite and above zero" is checked,

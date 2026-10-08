@@ -192,7 +192,7 @@ fn ctrl_is_read_live_and_at_the_release() {
     session.pointer_hover(b, false, false);
     let free = session.live_readout().unwrap().text;
     // Ctrl pressed with the pointer still: the host re-runs the hover.
-    session.modifiers_changed(false, true);
+    session.modifiers_changed(false, true, false);
     session.pointer_hover(b, false, true);
     let snapped = session.live_readout().unwrap().text;
     assert_ne!(free, snapped);

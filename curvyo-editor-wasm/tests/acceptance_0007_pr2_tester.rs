@@ -883,9 +883,8 @@ fn ac28_a_drag_starting_in_an_unselected_filled_shape_moves_it_and_in_a_hollow_o
 
 #[test]
 fn ac28_a_drag_from_empty_canvas_is_a_marquee_that_moves_and_writes_nothing() {
-    // Marquee selection itself does not exist yet in this codebase (a press on
-    // empty canvas clears the selection and starts one); what must hold with
-    // fills around is that nothing moves.
+    // A press on empty canvas starts a marquee (`advanced-selection`); what
+    // must hold with fills around is that nothing moves.
     let d = Document::new(1);
     let a = rect(&d, 10.0, 10.0, 30.0, 30.0);
     fill(&d, a);
@@ -897,8 +896,8 @@ fn ac28_a_drag_from_empty_canvas_is_a_marquee_that_moves_and_writes_nothing() {
     drag(&mut s, pt(-10.0, -10.0), pt(120.0, 60.0));
     assert_eq!(
         selected(&s),
-        "none",
-        "the press on empty canvas cleared the selection"
+        "2 objects",
+        "the rightward box contains both rectangles and replaces the selection"
     );
     assert_eq!(s.pack("0.1.0").unwrap(), bytes);
 }

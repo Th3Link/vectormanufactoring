@@ -19,6 +19,11 @@
  * - `"pointer"`: the built-in `pointer` cursor, hovering and dragging a
  *   parameter handle (`specs/unified-object-editing/` criterion 5): not a
  *   resize or move cursor, so it does not promise one.
+ * - `"crosshair"`: the built-in crosshair, a marquee armed or running
+ *   (`specs/advanced-selection/`).
+ * - `"lasso"`: a small freehand-loop glyph, a lasso armed or running, or Alt
+ *   held over the canvas (the next press arms one); `crosshair` where
+ *   custom cursor images are ignored.
  * - anything else: no override (the tool's normal cursor).
  */
 
@@ -48,6 +53,9 @@ const DOUBLE_ARROW = "M4 12 H20 M4 12 L8 8.5 M4 12 L8 15.5 M20 12 L16 8.5 M20 12
 const SHEAR_ARROWS =
   "M4 9 H20 M20 9 L16.5 6 M20 9 L16.5 12 M20 15 H4 M4 15 L7.5 12 M4 15 L7.5 18";
 const CIRCULAR_ARROW = "M17.5 8 A7 7 0 1 0 19 12.5 M17.5 8 L17.5 3.5 M17.5 8 L13 8";
+/** A freehand loop with a tail: a loop closed at the top, trailing to the
+ * bottom left, where the hotspot sits. */
+const LASSO_LOOP = "M5 20 C5 17 8 16 10 15 C6 11 6 5 12 4 C18 3 21 8 18 12 C16 15 12 16 10 15";
 
 /** The built-in resize cursor nearest to a double arrow at `degrees`. */
 export function nearestBuiltInResizeCursor(degrees: number): string {
@@ -72,6 +80,16 @@ export function cursorForHint(hint: string): string | undefined {
   }
   if (hint === "move") {
     return "move";
+  }
+  if (hint === "crosshair") {
+    return "crosshair";
+  }
+  if (hint === "lasso") {
+    return `url("data:image/svg+xml,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">` +
+        outlined(LASSO_LOOP) +
+        `</svg>`,
+    )}") 5 20, crosshair`;
   }
   if (hint === "pointer") {
     return "pointer";

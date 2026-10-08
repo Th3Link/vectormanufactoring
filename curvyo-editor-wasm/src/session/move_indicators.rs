@@ -4,7 +4,7 @@
 
 use curvyo_document_core::{ObjectSnapshot, Point, Vec2};
 use curvyo_render_core::{LockedAxis, MoveAxes};
-use curvyo_ui_core::{Axis, classify_press, oriented_bounds};
+use curvyo_ui_core::{Axis, PressTarget, classify_press, oriented_bounds};
 
 use super::shapes::LiveReadout;
 use super::{Session, Tool};
@@ -20,6 +20,10 @@ pub struct MoveIndicators {
     /// The plus badge: a copy drag runs, or a press with Ctrl held here would
     /// start a move.
     pub copy_badge: bool,
+    /// The minus badge: a Ctrl marquee or lasso runs, or a press with Ctrl
+    /// held here would arm one. It removes from the selection what the
+    /// gesture finds (`advanced-selection`).
+    pub remove_badge: bool,
     /// The lock badge: the axis a move past the dead zone is locked to.
     pub lock: Option<Axis>,
 }
@@ -35,6 +39,7 @@ impl Session {
     pub fn move_indicators(&self) -> MoveIndicators {
         let none = MoveIndicators {
             copy_badge: false,
+            remove_badge: false,
             lock: None,
         };
         if self.tool != Tool::Select {
@@ -45,23 +50,37 @@ impl Session {
         };
         let lock = self
             .select
-            .live_move(pointer, self.select_shift_held, self.select_ctrl_held)
+            .live_move(pointer, self.held.shift, self.held.ctrl)
             .and_then(|live| live.axis);
-        let copy_badge = self.select_ctrl_held
-            && if self.select.drag_in_flight() {
-                self.select.move_in_flight()
-            } else {
-                classify_press(
-                    &self.objects(),
-                    &self.selection,
-                    pointer,
-                    self.segment_tolerance(),
-                    self.transform_handle_tolerances(),
-                    self.select_shift_held,
-                )
-                .begins_move()
-            };
-        MoveIndicators { copy_badge, lock }
+        // With Ctrl held a press either begins a move (copy: plus), or arms
+        // a marquee or, with Alt, a lasso (remove: minus), never both, as
+        // `classify_press` and the Alt rule of `SelectTool::pointer_down` are
+        // the very rules the press acts on.
+        let (copy_badge, remove_badge) = if !self.held.ctrl {
+            (false, false)
+        } else if self.select.drag_in_flight() {
+            (
+                self.select.move_in_flight(),
+                self.select.gesture_kind().is_some(),
+            )
+        } else if self.held.alt {
+            (false, true)
+        } else {
+            let target = classify_press(
+                &self.objects(),
+                &self.selection,
+                pointer,
+                self.object_tolerance(),
+                self.transform_handle_tolerances(),
+                self.held.shift,
+            );
+            (target.begins_move(), target == PressTarget::Empty)
+        };
+        MoveIndicators {
+            copy_badge,
+            remove_badge,
+            lock,
+        }
     }
 
     /// The origin axes of an axis-locked move: through the selection's start
@@ -74,7 +93,7 @@ impl Session {
         let pointer = self.pointer_position?;
         let live = self
             .select
-            .live_move(pointer, self.select_shift_held, self.select_ctrl_held)?;
+            .live_move(pointer, self.held.shift, self.held.ctrl)?;
         let locked = match live.axis? {
             Axis::X => LockedAxis::Horizontal,
             Axis::Y => LockedAxis::Vertical,
@@ -132,7 +151,7 @@ impl Session {
         let anchor = self.pointer_position?;
         let live = self
             .select
-            .live_move(anchor, self.select_shift_held, self.select_ctrl_held)?;
+            .live_move(anchor, self.held.shift, self.held.ctrl)?;
         Some(LiveReadout {
             text: move_readout_text(live.offset, live.copy),
             anchor,

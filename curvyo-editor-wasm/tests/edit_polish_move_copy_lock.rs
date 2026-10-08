@@ -86,7 +86,7 @@ fn origin_of(object: &ObjectSnapshot) -> Point {
 /// A modifier state as the host reports it: the cached state and a hover at
 /// the pointer, as `applyModifiers` does.
 fn hold(session: &mut Session, at: Point, shift: bool, ctrl: bool) {
-    session.modifiers_changed(shift, ctrl);
+    session.modifiers_changed(shift, ctrl, false);
     session.pointer_hover(at, shift, ctrl);
 }
 
@@ -261,6 +261,7 @@ fn escape_cancels_a_copy_drag_and_ctrl_keeps_showing_the_badge() {
         session.move_indicators(),
         MoveIndicators {
             copy_badge: true,
+            remove_badge: false,
             lock: None
         }
     );
@@ -286,10 +287,10 @@ fn the_plus_badge_follows_ctrl_and_the_press_classification() {
     hold(&mut session, on_edge, false, false);
     assert!(!session.move_indicators().copy_badge);
     // Ctrl pressed with the pointer at rest: the badge appears at once.
-    session.modifiers_changed(false, true);
+    session.modifiers_changed(false, true, false);
     assert!(session.move_indicators().copy_badge);
     // Released: it is gone in the same frame, with no pointer motion.
-    session.modifiers_changed(false, false);
+    session.modifiers_changed(false, false, false);
     assert!(!session.move_indicators().copy_badge);
     // Empty canvas: Ctrl belongs to the marquee.
     hold(&mut session, pt(500.0, 500.0), false, true);

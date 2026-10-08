@@ -1,6 +1,6 @@
 # Advanced selection: bigger hit area, candidate disambiguation, marquee and lasso select
 
-Status: Ready
+Status: In progress
 Priority: Must
 Origin: Customer
 
