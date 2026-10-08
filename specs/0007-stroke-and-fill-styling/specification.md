@@ -5,6 +5,16 @@ Delivered in four PRs: #54 (model, format version 7), #55 (rendering, hit-testin
 Priority: Must
 Origin: Customer
 
+> **Superseded in part by [`style-panel-rework`](../style-panel-rework/specification.md)
+> (customer decisions after trying this slice, 2026-10-08).** Gradient fills are
+> removed completely (criteria 16 to 22, 34, 35 and every gradient clause), the
+> panel is empty when nothing is selected and hides controls instead of disabling
+> them, colour is 8-digit RGBA hex chosen inline with no popups, dash has a custom
+> text line, and number fields become drag-or-type value fields. Each affected
+> criterion range carries a note below. Where the two specs disagree,
+> `style-panel-rework` wins. The text below is kept as the record of what was
+> built.
+
 ## User value
 
 As a maker I want to set stroke width, dash pattern, line join, line cap and
@@ -60,6 +70,10 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
 
 ### Stroke: width and on/off
 
+*Superseded in part by `style-panel-rework` criteria 5 to 10: criterion 5's
+disabled Dash, Join and Cap (and enabled Colour and Width) become hidden rows;
+width 0 sets Paint None and keeps the last non-zero width.*
+
 4. Given a selected path or primitive, when the maker sets its stroke width
    to a value V mm (V > 0), then its stroke renders at width V, and the
    value is still V after deselecting and reselecting the object.
@@ -80,6 +94,10 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
 
 ### Stroke: color
 
+*Superseded in part by `style-panel-rework` criteria 11 to 16: the hex field is
+8 digits (`#RRGGBBAA`) and 8 digits are no longer refused; 3 and 6 digits keep
+the alpha. The integer-percent opacity rule of criterion 6 is kept.*
+
 6. Given a selected object with a stroke enabled, when the maker sets the
    stroke's color (as a hex RGB value) and its alpha (0–100%) independently,
    then the stroke renders in that color composited at that alpha over
@@ -94,6 +112,11 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
    viewing or by pressing Enter on the unedited field.
 
 ### Stroke: dash pattern
+
+*Superseded in part by `style-panel-rework` criteria 28 to 33: the dash choice is
+an inline preset group plus a text line for a custom pattern; there is no
+read-only "Custom" entry (criterion 8) and criterion 9's "no UI for a custom array"
+no longer holds. The stored format of criterion 9 is unchanged.*
 
 7. Given a selected object with a stroke enabled, when the maker chooses
    "Solid" (the default), then the stroke renders as one unbroken line with
@@ -156,6 +179,10 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
 
 ### Fill: none and solid
 
+*Superseded in part by `style-panel-rework` criteria 6, 49 to 54: fill is None or
+Solid only; the gradient sentences of criterion 13 are void. Criterion 14's hex
+rule follows the 8-digit rule of `style-panel-rework`.*
+
 13. Given a selected object, when the maker sets fill to **None**, then its
     interior renders with no fill at all (slice 2/3's original default),
     regardless of any solid color or gradient configured earlier, which is
@@ -176,6 +203,9 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
     rendering, which still stops at the real endpoints.
 
 ### Fill: gradients — shared stop model
+
+*Removed (criteria 16 to 20) by `style-panel-rework` criteria 49 to 54. Built in
+PR 4, deleted in the rework; not to be implemented.*
 
 16. A gradient (linear or radial) holds an ordered list of stops. Each stop
     has its own position (0.0–1.0 along the gradient), its own color (hex
@@ -229,6 +259,8 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
 
 ### Fill: gradients — linear and radial rendering
 
+*Removed (criteria 21, 22) by `style-panel-rework` criteria 49 to 54.*
+
 21. Given an object with fill set to **linear gradient**, then its interior
     renders with the stop colors interpolated along a straight axis; this
     slice's default axis runs across the object's own **selection box** (the
@@ -259,6 +291,10 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
 
 ### Fill affects hit-testing
 
+*Changed by `style-panel-rework` criterion 51 for criterion 23: a fill paints
+exactly when it is Solid; "linear or radial" and "at least one stop" are void.
+Criteria 27 to 29 are unchanged.*
+
 23. Given an object with any non-None fill (solid, linear or radial), when
     the maker clicks anywhere inside its filled interior — not on its
     stroke/outline — then the object is selected, the same as clicking its
@@ -277,6 +313,9 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
     segment.
 
 ### Multi-object editing and persistence
+
+*Criterion 25: the "multi-stop gradient" and "ordered stop list" clauses are void
+(`style-panel-rework` criteria 49 to 54); the rest holds.*
 
 24. Given two or more objects selected together (any mix of paths and
     primitives), when the maker changes one style property through the
@@ -373,6 +412,10 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
 
 ### Style across duplicate, split, join and "Object to path"
 
+*Criteria 30 to 33: the gradient clauses (stops copied, ramp restarting per half,
+re-fit at conversion) are void (`style-panel-rework` criteria 49 to 54); the rest
+holds.*
+
 30. Given a path or primitive with any stroke and fill style, including a
     multi-stop gradient, when the maker copies it (Ctrl-drag copy or a typed
     copy), then the copy has exactly the same style, the same gradient stops
@@ -394,6 +437,9 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
     criterion 21 names for polygons and stars.
 
 ### Gradients across a multi-selection, and degenerate stop lists
+
+*Removed (criteria 34, 35) by `style-panel-rework` criteria 49 to 54. Files that
+hold gradient data: `style-panel-rework` criterion 53.*
 
 34. Given two or more objects selected together that are all in the same
     gradient fill mode with the same stop count, when the maker edits a stop
@@ -433,6 +479,13 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
     tooltip "A gradient keeps at least 2 stops".
 
 ### Live preview and the panel's selection scope
+
+*Superseded in part by `style-panel-rework`: in criterion 36 the colour-popover
+sentences are void and the typed-value and no-arrow-stepping rules are replaced by
+the value field (criteria 34 to 48); preview, one commit on release, Escape
+revert, key-up commit and "commit goes to the objects the edit started on" are
+kept. In criterion 37 the "disabled state" is replaced by an empty panel
+(criteria 1 to 4).*
 
 36. Given the Select tool's geometry preview (a resize, rotate, skew or move
     drag, and the bar's edits), when the maker is mid-drag, then it stays what
@@ -489,6 +542,10 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
     section to the panel.
 
 ### Panel keys and focus
+
+*Superseded in part by `style-panel-rework` criteria 57 and 60: no popover or
+select exists to close, the Escape order is in criterion 60, the gradient-thumb
+sentence is void. The rest is kept.*
 
 38. Given focus is in any panel control (field, select, toggle, slider,
     colour area, gradient thumb, button), when the maker presses
@@ -664,6 +721,12 @@ are merged, and their statuses read Done. Technical detail is in the
   names, not part of this one.
 
 ## UX notes
+
+*Superseded in part by `style-panel-rework`: sections 2 (Select dropdown, Fill
+mode with gradients, disabled rows), 3 (disabled state), 4 (colour popover, hex
+rule, eyedropper "decided no"), 5 (gradients, entire), 7 (popover and typed-value
+rules), 8 (popover names) and 9 (gradient question 2). The ux-engineer rewrites
+them in that spec.*
 
 Decided 2026-10-07 (ux-engineer), against `main` at `e285c2d`, after the
 architect's readiness check (`adrs.md`, "2026-10-07 readiness check"). Sizes,
