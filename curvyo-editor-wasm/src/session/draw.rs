@@ -117,7 +117,7 @@ impl Session {
         objects
             .iter()
             .filter_map(|object| match object {
-                ObjectSnapshot::Primitive(primitive) => Some(*primitive),
+                ObjectSnapshot::Primitive(primitive) => Some(primitive.clone()),
                 ObjectSnapshot::Path(_) => None,
             })
             .collect()

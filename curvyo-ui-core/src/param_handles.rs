@@ -292,9 +292,7 @@ mod tests {
                 },
                 corner_radii: CornerRadii::uniform(Length::from_mm(radius)),
             },
-            stroke_width: Length::from_mm(0.25),
-            stroke: curvyo_document_core::Color::BLACK,
-            fill: None,
+            style: curvyo_document_core::Style::default(),
             rotation: Angle::from_radians(rotation),
         })
     }
@@ -318,9 +316,7 @@ mod tests {
                     bl: Length::from_mm(0.0),
                 },
             },
-            stroke_width: Length::from_mm(0.25),
-            stroke: curvyo_document_core::Color::BLACK,
-            fill: None,
+            style: curvyo_document_core::Style::default(),
             rotation: Angle::from_radians(0.0),
         });
         let t = tolerances(1.0);
@@ -372,9 +368,7 @@ mod tests {
                 point_count: PointCount::new(points).unwrap(),
                 inner_ratio: InnerRatio::new(ratio).unwrap(),
             },
-            stroke_width: Length::from_mm(0.25),
-            stroke: curvyo_document_core::Color::BLACK,
-            fill: None,
+            style: curvyo_document_core::Style::default(),
             rotation: Angle::from_radians(rotation),
         })
     }
@@ -506,9 +500,7 @@ mod tests {
                     ry: Length::from_mm(80.0),
                 },
             },
-            stroke_width: Length::from_mm(0.25),
-            stroke: curvyo_document_core::Color::BLACK,
-            fill: None,
+            style: curvyo_document_core::Style::default(),
             rotation: Angle::from_radians(0.0),
         });
         assert_eq!(
@@ -659,9 +651,7 @@ mod tests {
                 },
                 corner_radii: radii,
             },
-            stroke_width: Length::from_mm(0.25),
-            stroke: curvyo_document_core::Color::BLACK,
-            fill: None,
+            style: curvyo_document_core::Style::default(),
             rotation: Angle::from_radians(rotation),
         })
     }

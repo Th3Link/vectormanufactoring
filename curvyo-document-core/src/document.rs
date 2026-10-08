@@ -63,7 +63,24 @@ use crate::units::{DocumentSize, Length};
 /// damaged, and an old file is not rewritten on open. The number is
 /// provisional by the rule above: whichever PR merges takes `main`'s current
 /// number plus one.
-pub const CURRENT_FORMAT_VERSION: u32 = 6;
+///
+/// Bumped to 7 in `stroke-and-fill-styling` (`specs/0007-stroke-and-fill-
+/// styling/adrs.md`, "`format_version`" and the 2026-10-07 readiness check):
+/// every object node may carry the style keys of `crate::style_codec`
+/// (`stroke_enabled`, `stroke_opacity`, `stroke_dash`, `stroke_join`,
+/// `stroke_cap`, `fill_enabled`, `fill_kind`, `fill`, `fill_opacity` and the
+/// `fill_stops` list), and `document.json` writes one `style` object per
+/// object. A version-6 reader tolerates unknown keys, so it would open a
+/// version-7 file and draw every dash, fill and gradient as a thin black
+/// outline, the silent partial read ADR 0004 §9 forbids; with the bump it
+/// says "saved by a newer version". Migration from version 6 is empty by
+/// construction: every new key is absent in an older file and an absent key
+/// reads as the frozen default, which is what older builds drew (0.25 mm
+/// solid black stroke, no fill), and an old file is not rewritten on open.
+/// The stroke `stroke_width` and `stroke` keys keep their meaning. This is
+/// the complete format of the slice: later parts of the story add no key
+/// and need no further bump. The number is provisional by the rule above.
+pub const CURRENT_FORMAT_VERSION: u32 = 7;
 
 const ROOT_MAP: &str = "root";
 const KEY_FORMAT_VERSION: &str = "format_version";
@@ -273,9 +290,7 @@ enum ObjectJson {
     Path {
         id: crate::path_model::NodeId,
         closed: bool,
-        stroke_width: Length,
-        stroke: crate::path_model::Color,
-        fill: Option<crate::path_model::Color>,
+        style: crate::style_model::Style,
         anchors: Vec<crate::path_model::AnchorSnapshot>,
         /// The path's own `rotation` register (`specs/0005-object-
         /// transform/adrs.md`): orientation only, never consulted to
@@ -286,26 +301,20 @@ enum ObjectJson {
         id: crate::path_model::NodeId,
         bounds: crate::primitive_model::RectBounds,
         corner_radii: crate::corner_radii::CornerRadii,
-        stroke_width: Length,
-        stroke: crate::path_model::Color,
-        fill: Option<crate::path_model::Color>,
+        style: crate::style_model::Style,
         rotation: crate::units::Angle,
     },
     Ellipse {
         id: crate::path_model::NodeId,
         frame: crate::primitive_model::EllipseFrame,
-        stroke_width: Length,
-        stroke: crate::path_model::Color,
-        fill: Option<crate::path_model::Color>,
+        style: crate::style_model::Style,
         rotation: crate::units::Angle,
     },
     Polygon {
         id: crate::path_model::NodeId,
         frame: crate::primitive_model::StarFrame,
         point_count: u32,
-        stroke_width: Length,
-        stroke: crate::path_model::Color,
-        fill: Option<crate::path_model::Color>,
+        style: crate::style_model::Style,
         rotation: crate::units::Angle,
     },
     Star {
@@ -313,9 +322,7 @@ enum ObjectJson {
         frame: crate::primitive_model::StarFrame,
         point_count: u32,
         inner_ratio: f64,
-        stroke_width: Length,
-        stroke: crate::path_model::Color,
-        fill: Option<crate::path_model::Color>,
+        style: crate::style_model::Style,
         rotation: crate::units::Angle,
     },
 }
@@ -327,17 +334,13 @@ impl From<crate::primitive_model::ObjectSnapshot> for ObjectJson {
             ObjectSnapshot::Path(path) => Self::Path {
                 id: path.id,
                 closed: path.closed,
-                stroke_width: path.stroke_width,
-                stroke: path.stroke,
-                fill: path.fill,
+                style: path.style,
                 anchors: path.anchors,
                 rotation: path.rotation,
             },
             ObjectSnapshot::Primitive(primitive) => {
                 let id = primitive.id;
-                let stroke_width = primitive.stroke_width;
-                let stroke = primitive.stroke;
-                let fill = primitive.fill;
+                let style = primitive.style;
                 let rotation = primitive.rotation;
                 match primitive.shape {
                     Shape::Rect {
@@ -347,26 +350,20 @@ impl From<crate::primitive_model::ObjectSnapshot> for ObjectJson {
                         id,
                         bounds,
                         corner_radii,
-                        stroke_width,
-                        stroke,
-                        fill,
+                        style,
                         rotation,
                     },
                     Shape::Ellipse { frame } => Self::Ellipse {
                         id,
                         frame,
-                        stroke_width,
-                        stroke,
-                        fill,
+                        style,
                         rotation,
                     },
                     Shape::Polygon { frame, point_count } => Self::Polygon {
                         id,
                         frame,
                         point_count: point_count.get(),
-                        stroke_width,
-                        stroke,
-                        fill,
+                        style,
                         rotation,
                     },
                     Shape::Star {
@@ -378,9 +375,7 @@ impl From<crate::primitive_model::ObjectSnapshot> for ObjectJson {
                         frame,
                         point_count: point_count.get(),
                         inner_ratio: inner_ratio.get(),
-                        stroke_width,
-                        stroke,
-                        fill,
+                        style,
                         rotation,
                     },
                 }

@@ -12,7 +12,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::corner_radii::CornerRadii;
-use crate::path_model::{Color, NodeId, PathSnapshot};
+use crate::path_model::{NodeId, PathSnapshot};
+use crate::style_model::Style;
 use crate::units::{Angle, Length, Point, Tolerance, Vec2};
 
 /// A rectangle's bounding box, normalized so `origin` is always the
@@ -247,21 +248,17 @@ pub enum Shape {
 /// A primitive's full data as read from the document — the primitive
 /// counterpart to [`PathSnapshot`]. `Serialize` only, not
 /// `Deserialize`: it holds a [`Shape`], which does not derive
-/// `Deserialize` either.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+/// `Deserialize` either. Not `Copy`: the style holds the gradient stop list.
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PrimitiveSnapshot {
     /// This primitive's identity — the same [`NodeId`] a path or any
     /// other object would carry (ADR 0002 §5: one shared tree).
     pub id: NodeId,
     /// This primitive's kind and parameters.
     pub shape: Shape,
-    /// Stroke width — this slice's one placeholder default, same as a
-    /// path's (acceptance criterion 16).
-    pub stroke_width: Length,
-    /// Stroke color — same placeholder default as a path's.
-    pub stroke: Color,
-    /// Fill — always `None` in this slice, same as a path's.
-    pub fill: Option<Color>,
+    /// This primitive's whole style: stroke and fill, the same type a path
+    /// carries (`specs/0007-stroke-and-fill-styling/adrs.md`).
+    pub style: Style,
     /// The angle of this primitive's local x-axis in document space
     /// (`specs/0005-object-transform/adrs.md`: "one `rotation` register
     /// per object"). `0` for every shape this crate creates; a Select-
@@ -355,7 +352,7 @@ impl ObjectSnapshot {
         match self {
             Self::Path(path) => Self::Path(path.rotated(pivot, angle)),
             Self::Primitive(primitive) => {
-                let mut primitive = *primitive;
+                let mut primitive = primitive.clone();
                 primitive.shape = rotate_shape(primitive.shape, pivot, angle);
                 primitive.rotation =
                     Angle::from_radians(primitive.rotation.as_radians() + angle.as_radians())
@@ -385,7 +382,7 @@ impl ObjectSnapshot {
                 Self::Path(path)
             }
             Self::Primitive(primitive) => {
-                let mut primitive = *primitive;
+                let mut primitive = primitive.clone();
                 primitive.shape = translate_shape(primitive.shape, offset);
                 Self::Primitive(primitive)
             }
@@ -538,9 +535,7 @@ mod tests {
                 },
                 corner_radii: CornerRadii::uniform(Length::from_mm(0.0)),
             },
-            stroke_width: Length::from_mm(0.25),
-            stroke: Color::BLACK,
-            fill: None,
+            style: Style::default(),
             rotation: Angle::from_radians(0.0),
         }
     }
@@ -685,9 +680,7 @@ mod tests {
                 },
                 point_count: PointCount::new(5).unwrap(),
             },
-            stroke_width: Length::from_mm(0.25),
-            stroke: Color::BLACK,
-            fill: None,
+            style: Style::default(),
             rotation: Angle::from_radians(rotation.to_radians()),
         })
     }
@@ -731,18 +724,14 @@ mod tests {
                 },
                 corner_radii: CornerRadii::uniform(Length::from_mm(0.0)),
             },
-            stroke_width: Length::from_mm(0.25),
-            stroke: Color::BLACK,
-            fill: None,
+            style: Style::default(),
             rotation: Angle::from_radians(0.5),
         });
         assert!((rect.orientation().as_radians() - 0.5).abs() < 1e-12);
         let path = ObjectSnapshot::Path(PathSnapshot {
             id: NodeId::from_parts(1, 4),
             closed: false,
-            stroke_width: Length::from_mm(0.25),
-            stroke: Color::BLACK,
-            fill: None,
+            style: Style::default(),
             anchors: Vec::new(),
             rotation: Angle::from_radians(-0.25),
         });
@@ -790,9 +779,7 @@ mod tests {
         let snapshot = PrimitiveSnapshot {
             id: NodeId::from_parts(1, 1),
             shape,
-            stroke_width: Length::from_mm(0.25),
-            stroke: Color::BLACK,
-            fill: None,
+            style: Style::default(),
             rotation: Angle::from_radians(0.0),
         };
         let moved = ObjectSnapshot::Primitive(snapshot).translated(Vec2::new(3.0, 4.0));
@@ -825,9 +812,7 @@ mod tests {
         let path = PathSnapshot {
             id: NodeId::from_parts(1, 2),
             closed: false,
-            stroke_width: Length::from_mm(0.25),
-            stroke: Color::BLACK,
-            fill: None,
+            style: Style::default(),
             anchors: vec![anchor],
             rotation: Angle::from_radians(0.0),
         };

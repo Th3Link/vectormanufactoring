@@ -94,14 +94,18 @@ pub(crate) fn commit_resize(
                 bounds,
                 corner_radii,
             } => {
-                let _ =
-                    document.resize_rect(id, bounds, corner_radii, width(primitive.stroke_width));
+                let _ = document.resize_rect(
+                    id,
+                    bounds,
+                    corner_radii,
+                    width(primitive.style.stroke.width),
+                );
             }
             Shape::Ellipse { frame } => {
-                let _ = document.resize_ellipse(id, frame, width(primitive.stroke_width));
+                let _ = document.resize_ellipse(id, frame, width(primitive.style.stroke.width));
             }
             Shape::Polygon { frame, .. } | Shape::Star { frame, .. } => {
-                let _ = document.resize_star_frame(id, frame, width(primitive.stroke_width));
+                let _ = document.resize_star_frame(id, frame, width(primitive.style.stroke.width));
             }
         },
         ObjectSnapshot::Path(path) => {
@@ -110,7 +114,7 @@ pub(crate) fn commit_resize(
                 .iter()
                 .map(|a| (a.id, a.point, a.handle_in, a.handle_out))
                 .collect();
-            let _ = document.resize_path(id, &anchors, width(path.stroke_width));
+            let _ = document.resize_path(id, &anchors, width(path.style.stroke.width));
         }
     }
 }
@@ -155,7 +159,7 @@ const SAME_ANGLE_EPSILON_RAD: f64 = 1e-12;
 fn numbers_of(object: &ObjectSnapshot) -> (Vec<f64>, f64) {
     match object {
         ObjectSnapshot::Path(path) => {
-            let mut v = vec![path.stroke_width.as_mm()];
+            let mut v = vec![path.style.stroke.width.as_mm()];
             for a in &path.anchors {
                 v.extend([
                     a.point.x,
@@ -169,7 +173,7 @@ fn numbers_of(object: &ObjectSnapshot) -> (Vec<f64>, f64) {
             (v, path.rotation.as_radians())
         }
         ObjectSnapshot::Primitive(p) => {
-            let mut v = vec![p.stroke_width.as_mm()];
+            let mut v = vec![p.style.stroke.width.as_mm()];
             match p.shape {
                 Shape::Rect {
                     bounds,

@@ -1625,7 +1625,11 @@ fn same_rect_state(a: &Session, b: &Session, eps: f64, ctx: &str) {
         "{ctx}: rotation"
     );
     assert!(
-        near(pa.stroke_width.as_mm(), pb.stroke_width.as_mm(), eps),
+        near(
+            pa.style.stroke.width.as_mm(),
+            pb.style.stroke.width.as_mm(),
+            eps
+        ),
         "{ctx}: stroke"
     );
 }
@@ -2378,7 +2382,7 @@ fn ac27_stroke_switch_value_is_honoured_and_corner_radius_scales() {
         a.set_scale_corner_radius(true); // off by default since `unified-object-editing`
         a.set_scale_stroke_width(on);
         click(&mut a, pt(20.0, 0.0));
-        let sw0 = prim(&a).stroke_width.as_mm();
+        let sw0 = prim(&a).style.stroke.width.as_mm();
         open_entry(&mut a, pt(40.0, 20.0), false, false).unwrap();
         assert_eq!(
             a.commit_transform_entry("80", "40", 0),
@@ -2392,7 +2396,7 @@ fn ac27_stroke_switch_value_is_honoured_and_corner_radius_scales() {
         same_rect_state(&a, &dr, 1e-9, &format!("stroke switch {on}"));
         let want_sw = if on { sw0 * 2.0 } else { sw0 };
         assert!(
-            near(prim(&a).stroke_width.as_mm(), want_sw, 1e-9),
+            near(prim(&a).style.stroke.width.as_mm(), want_sw, 1e-9),
             "on={on}"
         );
         let Shape::Rect { corner_radii, .. } = prim(&a).shape else {
@@ -2893,7 +2897,10 @@ fn ac38_skew_matches_the_reference_for_every_side_rotation_and_shift() {
                         assert_eq!(a.id, o.id, "node order/identity");
                         assert_eq!(a.kind, o.kind, "node kind");
                     }
-                    assert_eq!(after.stroke_width.as_mm(), before.stroke_width.as_mm());
+                    assert_eq!(
+                        after.style.stroke.width.as_mm(),
+                        before.style.stroke.width.as_mm()
+                    );
                     assert_eq!(
                         after.rotation.as_radians(),
                         before.rotation.as_radians(),
@@ -3167,10 +3174,10 @@ fn ac42_skew_ignores_the_stroke_scale_switch_in_both_positions() {
         let mut s = open_in_session(&doc);
         s.set_scale_stroke_width(on);
         click(&mut s, pt(20.0, 0.0));
-        let sw = path_of(&s).stroke_width.as_mm();
+        let sw = path_of(&s).style.stroke.width.as_mm();
         let b = Bx::rect(0.0, 0.0, 40.0, 20.0, 0.0);
         skew_drag(&mut s, &b, (0.0, -1.0), 6.0, 0.0, false, false);
-        assert_eq!(path_of(&s).stroke_width.as_mm(), sw, "switch {on}");
+        assert_eq!(path_of(&s).style.stroke.width.as_mm(), sw, "switch {on}");
         assert_eq!(s.scale_stroke_width(), on, "switch unchanged by a skew");
     }
 }
@@ -3848,7 +3855,7 @@ fn ac27_path_size_entry_equals_a_drag_on_a_rotated_path_with_the_stroke_switch_o
             }
             let (mut a, b) = select_path(&doc);
             a.set_scale_stroke_width(on);
-            let sw0 = path_of(&a).stroke_width.as_mm();
+            let sw0 = path_of(&a).style.stroke.width.as_mm();
             let h = b.corner(1.0, 1.0);
             open_entry(&mut a, h, false, false).unwrap();
             let (hw, hh) = (b.hw * 2.0, b.hh * 2.0);
@@ -3871,7 +3878,11 @@ fn ac27_path_size_entry_equals_a_drag_on_a_rotated_path_with_the_stroke_switch_o
                 );
             }
             assert!(
-                near(pa.stroke_width.as_mm(), pd.stroke_width.as_mm(), 1e-9),
+                near(
+                    pa.style.stroke.width.as_mm(),
+                    pd.style.stroke.width.as_mm(),
+                    1e-9
+                ),
                 "stroke th {th} on {on}"
             );
             let want = if on {
@@ -3880,9 +3891,9 @@ fn ac27_path_size_entry_equals_a_drag_on_a_rotated_path_with_the_stroke_switch_o
                 sw0
             };
             assert!(
-                near(pa.stroke_width.as_mm(), want, 1e-9),
+                near(pa.style.stroke.width.as_mm(), want, 1e-9),
                 "stroke {} want {want}",
-                pa.stroke_width.as_mm()
+                pa.style.stroke.width.as_mm()
             );
             assert_eq!(pa.rotation.as_radians(), pd.rotation.as_radians());
         }

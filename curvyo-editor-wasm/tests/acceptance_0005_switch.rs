@@ -208,8 +208,8 @@ fn snapshot(s: &Session) -> ObjectSnapshot {
 
 fn stroke(o: &ObjectSnapshot) -> f64 {
     match o {
-        ObjectSnapshot::Primitive(p) => p.stroke_width.as_mm(),
-        ObjectSnapshot::Path(p) => p.stroke_width.as_mm(),
+        ObjectSnapshot::Primitive(p) => p.style.stroke.width.as_mm(),
+        ObjectSnapshot::Path(p) => p.style.stroke.width.as_mm(),
     }
 }
 
@@ -377,7 +377,7 @@ fn ac8_a_rect_with_a_one_millimetre_stroke_resized_to_300_percent_keeps_one_mill
         panic!()
     };
     assert!(close(bounds.width.as_mm(), 120.0) && close(bounds.height.as_mm(), 60.0));
-    assert_eq!(p.stroke_width.as_mm(), 1.0);
+    assert_eq!(p.style.stroke.width.as_mm(), 1.0);
 }
 
 // ---------------------------------------------------------------------
@@ -408,7 +408,10 @@ fn poly_ratios(kind: Kind, width: f64, hi: usize, shift: bool, f: f64) -> (f64, 
     let (Shape::Polygon { frame, .. } | Shape::Star { frame, .. }) = p.shape else {
         panic!()
     };
-    (p.stroke_width.as_mm() / width, frame.radius.as_mm() / 10.0)
+    (
+        p.style.stroke.width.as_mm() / width,
+        frame.radius.as_mm() / 10.0,
+    )
 }
 
 #[test]
@@ -748,7 +751,7 @@ fn radius_and_stroke(s: &Session) -> (f64, f64) {
     let Shape::Rect { corner_radii, .. } = p.shape else {
         panic!()
     };
-    (uniform_mm(corner_radii), p.stroke_width.as_mm())
+    (uniform_mm(corner_radii), p.style.stroke.width.as_mm())
 }
 
 #[test]

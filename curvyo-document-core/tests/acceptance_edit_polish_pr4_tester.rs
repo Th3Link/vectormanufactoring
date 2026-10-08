@@ -148,9 +148,7 @@ fn assert_is_moved_copy(orig: &ObjectSnapshot, copy: &ObjectSnapshot, off: Vec2)
     match (orig, copy) {
         (ObjectSnapshot::Path(a), ObjectSnapshot::Path(b)) => {
             assert_eq!(a.closed, b.closed);
-            assert_eq!(a.stroke_width, b.stroke_width);
-            assert_eq!(a.stroke, b.stroke);
-            assert_eq!(a.fill, b.fill);
+            assert_eq!(a.style, b.style);
             assert!(close(a.rotation.as_radians(), b.rotation.as_radians()));
             assert_eq!(a.anchors.len(), b.anchors.len());
             for (x, y) in a.anchors.iter().zip(&b.anchors) {
@@ -165,9 +163,7 @@ fn assert_is_moved_copy(orig: &ObjectSnapshot, copy: &ObjectSnapshot, off: Vec2)
             }
         }
         (ObjectSnapshot::Primitive(a), ObjectSnapshot::Primitive(b)) => {
-            assert_eq!(a.stroke_width, b.stroke_width);
-            assert_eq!(a.stroke, b.stroke);
-            assert_eq!(a.fill, b.fill);
+            assert_eq!(a.style, b.style);
             assert!(close(a.rotation.as_radians(), b.rotation.as_radians()));
             match (&a.shape, &b.shape) {
                 (

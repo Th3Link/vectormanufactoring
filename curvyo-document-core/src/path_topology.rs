@@ -389,8 +389,7 @@ impl Document {
         let new_path = self.create_path_uncommitted(
             &new_path_anchors,
             false,
-            snapshot.stroke_width.as_mm(),
-            snapshot.stroke,
+            &snapshot.style,
             snapshot.rotation,
         );
 
@@ -978,7 +977,7 @@ mod tests {
         );
         let tree = document.loro().get_tree(OBJECTS_TREE);
         let meta = tree.get_meta(crate::paths::tree_id_of(id)).expect("meta");
-        meta.insert(crate::path_codec::KEY_STROKE_WIDTH, 3.0)
+        meta.insert(crate::style_codec::KEY_STROKE_WIDTH, 3.0)
             .expect("set width");
         document.commit_with_label("test setup");
 
@@ -986,7 +985,7 @@ mod tests {
             .split_at_anchor(id, AnchorId::new(1, 2), AnchorId::new(9, 1))
             .expect("split");
         let second = document.path(second_path).expect("exists");
-        assert!((second.stroke_width.as_mm() - 3.0).abs() < 1e-9);
+        assert!((second.style.stroke.width.as_mm() - 3.0).abs() < 1e-9);
     }
 
     /// `specs/0005-object-transform/adrs.md`'s architect note: the new

@@ -33,6 +33,10 @@ mod primitive_outline;
 mod shape_codec;
 mod shape_radii;
 mod shapes;
+mod style_codec;
+mod style_model;
+mod style_validation;
+mod styles;
 mod units;
 
 pub use container::{CURRENT_LORO_SNAPSHOT_VERSION, pack, unpack};
@@ -54,4 +58,12 @@ pub use primitive_outline::{
     rect_outline, star_outline,
 };
 pub use shapes::ShapeEditError;
+pub use style_model::{
+    DashPattern, Fill, FillKind, GradientStop, LineCap, LineJoin, Opacity, StopId, StopPosition,
+    Stroke, Style, StyleParamError,
+};
+pub use styles::{
+    FillMode, FillModeTarget, MAX_GRADIENT_STOPS, MIN_GRADIENT_STOPS, StopChange, StopEdit,
+    StyleEdit, StyleEditError,
+};
 pub use units::{Angle, DocumentSize, Length, Point, Tolerance, Vec2, ViewTransform};

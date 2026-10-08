@@ -33,7 +33,7 @@ fn a_default_width_rect_stroke_does_not_vanish_at_2_percent_zoom() {
     let snapshot = document.primitive(rect).expect("exists");
     // The stored stroke width is this slice's 0.25mm placeholder default
     // — unmodified by this test, matching a real document.
-    assert!((snapshot.stroke_width.as_mm() - 0.25).abs() < 1e-9);
+    assert!((snapshot.style.stroke.width.as_mm() - 0.25).abs() < 1e-9);
 
     let view = ViewTransform::new(SCALE_AT_2_PERCENT, Point::new(0.0, 0.0));
     // No selection/hover: only the placeholder stroke itself draws, no

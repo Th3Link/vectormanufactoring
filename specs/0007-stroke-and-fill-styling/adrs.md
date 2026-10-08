@@ -468,6 +468,24 @@ already there.
     sizes ≤ 0 are refused before resolution and the factor `√(sx·sy)` is
     then > 0.
 
+- **2026-10-07 (implementer): `format_version` is 7.** `rectangle-corner-radii`
+  merged first and took 6 (`main` at `bdf4a11`), so this slice takes
+  `CURRENT_FORMAT_VERSION + 1` = **7**, by the merge rule above. Read "6" in
+  the readiness check, section 1 as 7; the golden fixture is
+  `styles_v7.curvyo`, and `rotation_v5.curvyo`, `legacy_corner_radius_v5.curvyo`
+  and `corner_radii_per_corner.curvyo` stay as the genuine older containers
+  that must open at the defaults.
+- **2026-10-07 (implementer): three small decisions in PR 1.** (1) Editing the
+  stroke **opacity** also switches an off stroke back on, like the colour and
+  the width: the opacity field sits in the colour row of the panel and an
+  edit that shows nothing would look broken. Dash, join and cap never switch
+  it on. (2) `GradientStop::default_pair` (criterion 17's two starting stops)
+  lives in `document-core` beside the types, as a pure function of the stored
+  fill colour and two caller-minted ids; `ui-core` only mints the ids (PR 4).
+  (3) The four resize commands refuse a width that is not a finite number above
+  zero (`ShapeEditError::InvalidStrokeWidth`, `PathEditError::InvalidStrokeWidth`),
+  as section 3 of the readiness check requires, before any write.
+
 ## 2026-10-07 readiness check (architect)
 
 Reference state: `main` at `e285c2d` (slices 5 and 6, `object-transform-

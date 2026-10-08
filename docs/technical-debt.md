@@ -494,6 +494,18 @@ frame, not only from drag frames. The `Session.drag_objects` snapshot assumes
 the document does not change under a Select drag: no remote merge and no undo
 may run during one. Revisit it when sync or undo reaches the session.
 
+**Measured 2026-10-07 (`stroke-and-fill-styling` PR 1, release build, same
+machine, same document):** every object now reads about 13 more keys (the style
+schema, `curvyo-document-core/src/style_codec.rs`). The `unified_object_editing`
+benchmark gives 16.5 to 21.6 ms per frame at rest (main: 16.6 to 17.4 ms on
+this machine) and 13.8 to 15.6 ms for the 200-object move frame (main: 12.1 to
+14.1 ms). A new `#[ignore]` benchmark, `curvyo-editor-wasm/tests/style_read_cost.rs`,
+gives 14 ms per frame at rest for the 200 default-styled objects and 16 ms with
+every style key set on every object (dash, join, cap, a 2-stop gradient). That
+is below the 25 ms line the architect set (readiness check, section 5), so the
+draw-list cache stays deferred for now; PR 2 adds fills and dashes, which are
+tessellated every frame, and measures again.
+
 ## The canvas does not react to a `devicePixelRatio` change with no resize event
 
 The fix below sizes the backing store once, at attach and on every
@@ -804,3 +816,19 @@ does not grow either: its pipeline and depth code goes into `gpu_pipeline.rs`
 and `gpu_paint.rs` after a pure-move first task, and its panel state into a new
 `useStylePanel.ts`. `session/mod.rs` is at 499, so `0007` PR 3 starts with a
 pure move of the tolerance helpers to `session/tolerances.rs`.
+
+## Notes for the next parts of `stroke-and-fill-styling` (from the PR 1 review, 2026-10-08)
+
+- **Stroke width has no upper bound** (only "finite and above zero" is checked,
+  in the style codec and the resize commands). PR 2's dash and render code must
+  guard against overflow: a huge width times a dash ratio, a huge tessellation
+  size, a width that makes the dash count or the vertex count explode.
+- **`commit_resize` and `commit_gesture` still do `let _ = document.resize_*`.**
+  A resize the document refuses (now also for an invalid width) silently drops
+  the geometry resize. Unreachable today, because the sizes and the stroke
+  factor are validated before the call, but PR 2 should handle the `Result`.
+- **Concurrent first creation of `fill_stops` by two peers keeps only one
+  list** (a Loro map key holds one container; the other peer's stops are
+  lost). The ADR accepts this. For PR 4: consider Loro's mergeable movable list.
+  `add_stop` no longer creates the list (only the fill-mode switch and Split
+  do), so there is one creation path to reason about.

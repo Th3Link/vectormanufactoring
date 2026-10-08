@@ -57,8 +57,8 @@ pub fn build_draw_list(
         list.extend(stroke::path_stroke(
             &snapshot.anchors,
             snapshot.closed,
-            snapshot.stroke_width.as_mm().max(min_width_mm),
-            snapshot.stroke.into(),
+            snapshot.style.stroke.width.as_mm().max(min_width_mm),
+            snapshot.style.stroke.color.into(),
             tolerance_mm,
         ));
     }

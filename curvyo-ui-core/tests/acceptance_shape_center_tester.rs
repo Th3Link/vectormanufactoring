@@ -522,10 +522,10 @@ fn ac13_stroke_fill_defaults_identical_in_all_modes() {
             panic!()
         };
         let p = d.primitive(id).unwrap();
-        let key = (p.stroke_width, p.stroke, p.fill, p.rotation);
-        assert!(p.fill.is_none());
-        if let Some(r) = reference {
-            assert_eq!(r, key);
+        let key = (p.style.clone(), p.rotation);
+        assert!(!p.style.fill.enabled);
+        if let Some(r) = &reference {
+            assert_eq!(*r, key);
         } else {
             reference = Some(key);
         }
@@ -536,10 +536,7 @@ fn ac13_stroke_fill_defaults_identical_in_all_modes() {
             panic!()
         };
         let p = d2.primitive(id).unwrap();
-        assert_eq!(
-            (p.stroke_width, p.stroke, p.fill, p.rotation),
-            reference.unwrap()
-        );
+        assert_eq!(Some((p.style.clone(), p.rotation)), reference);
     }
 }
 

@@ -11,8 +11,7 @@
 //! ```text
 //! meta map:
 //!   closed       : bool                     LWW register
-//!   stroke_width : f64 (mm)                  LWW register
-//!   stroke       : [r, g, b] (i64 each)      LWW register
+//!   (style keys   : see [`crate::style_codec`])
 //!   anchors      : movable list (ADR 0009 §3), each element a map:
 //!     id         : hex string of the AnchorId's u128   written once
 //!     point      : [x, y] (f64)              ONE LWW register
@@ -24,23 +23,16 @@
 //!                  the architect's resolution: a version-4 writer never
 //!                  writes "smooth")
 //! ```
-//!
-//! `fill` is not stored: this slice's fill is always `None` (acceptance
-//! criterion 6), so there is nothing to persist yet — `PathSnapshot::fill`
-//! reads back as `None` unconditionally until `stroke-and-fill-styling`
-//! (slice 4) gives it a value to write.
 
 use loro::{Container, LoroDoc, LoroMap, LoroMovableList, LoroTree, LoroValue, ValueOrContainer};
 
-use crate::path_model::{
-    AnchorId, AnchorKind, AnchorSnapshot, Color, NewAnchor, NodeId, PathSnapshot,
-};
+use crate::path_model::{AnchorId, AnchorKind, AnchorSnapshot, NewAnchor, NodeId, PathSnapshot};
 use crate::shape_codec::ShapeTag;
-use crate::units::{Length, Point, Vec2};
+use crate::style_model::Style;
+use crate::units::{Point, Vec2};
+use crate::{style_codec, style_validation};
 
 pub(crate) const KEY_CLOSED: &str = "closed";
-pub(crate) const KEY_STROKE_WIDTH: &str = "stroke_width";
-pub(crate) const KEY_STROKE: &str = "stroke";
 pub(crate) const KEY_ANCHORS: &str = "anchors";
 /// `specs/0005-object-transform/adrs.md`: "one key, one meaning" — shared
 /// by both a path's and a primitive's meta map, which is exactly why
@@ -63,9 +55,6 @@ const KIND_ASYMMETRIC: &str = "asymmetric";
 /// written again — see [`read_kind`]).
 const KIND_SMOOTH_LEGACY: &str = "smooth";
 
-/// This slice's one placeholder stroke width (acceptance criterion 6).
-pub(crate) const DEFAULT_STROKE_WIDTH_MM: f64 = 0.25;
-
 /// Whether a path's tree node is live — never created, or created and then
 /// deleted, both read as "does not exist" here.
 ///
@@ -78,27 +67,17 @@ pub(crate) fn node_exists(tree: &LoroTree, id: loro::TreeID) -> bool {
     tree.contains(id) && matches!(tree.is_node_deleted(&id), Ok(false))
 }
 
-/// Writes a brand-new path's `closed`/`stroke_width`/`stroke` fields.
-/// Takes the style explicitly (rather than always writing this slice's
-/// placeholder black/0.25mm default) so `Document::split_at_anchor`'s new
-/// object can copy the split path's own style instead of resetting it
-/// (`specs/0006-path-merge-split-and-node-types/adrs.md`, "written from
-/// the original's `PathSnapshot`... copies every register the snapshot
-/// carries"); `Document::create_path` passes this slice's own default
-/// explicitly at its one call site.
-pub(crate) fn write_path_style(meta: &LoroMap, closed: bool, stroke_width_mm: f64, stroke: Color) {
-    // invariant: inserting known-valid keys into a freshly created, empty
+/// Writes a brand-new path's `closed` flag and its whole style. Takes the
+/// style explicitly so `Document::split_at_anchor`'s new object copies the
+/// split path's own style, stops included, instead of resetting it
+/// (`specs/0007-stroke-and-fill-styling/adrs.md`, section 3);
+/// `Document::create_path` passes the creation default.
+pub(crate) fn write_path_style(meta: &LoroMap, closed: bool, style: &Style) {
+    // invariant: inserting a known-valid key into a freshly created, empty
     // meta map cannot fail.
     #[allow(clippy::unwrap_used)]
-    {
-        meta.insert(KEY_CLOSED, closed).unwrap();
-        meta.insert(KEY_STROKE_WIDTH, stroke_width_mm).unwrap();
-        meta.insert(KEY_STROKE, color_to_value(stroke)).unwrap();
-    }
-}
-
-pub(crate) fn color_to_value(color: Color) -> Vec<i64> {
-    vec![i64::from(color.r), i64::from(color.g), i64::from(color.b)]
+    meta.insert(KEY_CLOSED, closed).unwrap();
+    style_codec::write_style(meta, style);
 }
 
 pub(crate) fn read_closed(meta: &LoroMap) -> bool {
@@ -106,35 +85,6 @@ pub(crate) fn read_closed(meta: &LoroMap) -> bool {
         meta.get(KEY_CLOSED).map(|v| v.get_deep_value()),
         Some(LoroValue::Bool(true))
     )
-}
-
-pub(crate) fn read_stroke_width(meta: &LoroMap) -> Length {
-    match meta.get(KEY_STROKE_WIDTH).map(|v| v.get_deep_value()) {
-        Some(LoroValue::Double(mm)) => Length::from_mm(mm),
-        _ => Length::from_mm(DEFAULT_STROKE_WIDTH_MM),
-    }
-}
-
-/// Writes a new stroke width, overwriting whatever this node had before —
-/// `object-transform`'s resize commands are the first callers that ever
-/// need to *write* this register (`stroke-and-fill-styling` is a later
-/// slice; `write_path_style`/`write_primitive_style_fields` only ever
-/// write the slice-2/3 placeholder default at creation time).
-pub(crate) fn write_stroke_width(meta: &LoroMap, width_mm: f64) {
-    // invariant: see `write_point`.
-    #[allow(clippy::unwrap_used)]
-    meta.insert(KEY_STROKE_WIDTH, width_mm).unwrap();
-}
-
-pub(crate) fn read_stroke(meta: &LoroMap) -> Color {
-    match meta.get(KEY_STROKE).map(|v| v.get_deep_value()) {
-        Some(LoroValue::List(list)) if list.len() == 3 => Color {
-            r: as_u8(&list[0]),
-            g: as_u8(&list[1]),
-            b: as_u8(&list[2]),
-        },
-        _ => Color::BLACK,
-    }
 }
 
 pub(crate) fn as_u8(value: &LoroValue) -> u8 {
@@ -452,9 +402,7 @@ pub(crate) fn read_path_snapshot(id: NodeId, meta: &LoroMap) -> PathSnapshot {
     PathSnapshot {
         id,
         closed: read_closed(meta),
-        stroke_width: read_stroke_width(meta),
-        stroke: read_stroke(meta),
-        fill: None,
+        style: style_codec::read_style(meta),
         anchors,
         rotation: read_rotation(meta),
     }
@@ -471,13 +419,13 @@ pub(crate) fn read_path_snapshot(id: NodeId, meta: &LoroMap) -> PathSnapshot {
 /// document's lifetime, instead of re-checking the same shape on every
 /// read.
 ///
-/// Checks only the shapes this module's own helpers `.unwrap()` or
-/// `panic!()` on an unexpected value — `closed`/`stroke_width`/`stroke`/
-/// `point`/`handle_in`/`handle_out`/`kind` all already degrade gracefully
-/// to a default on a missing or malformed value (see `read_closed` et
-/// al.), so a document with those fields merely absent or odd-shaped is
-/// not "damaged", just reverting to defaults, matching slice 1's
-/// forward-compatible reading stance.
+/// Checks the shapes this module's own helpers `.unwrap()` or `panic!()`
+/// on an unexpected value, and every present style key's type and range
+/// ([`style_validation::style_is_valid`]). `closed`/`point`/`handle_in`/
+/// `handle_out`/`kind` all already degrade gracefully to a default on a
+/// missing or malformed value (see `read_closed` et al.), so a document with
+/// those fields merely absent or odd-shaped is not "damaged", just reverting
+/// to defaults, matching slice 1's forward-compatible reading stance.
 pub(crate) fn validate_path_tree(loro: &LoroDoc, paths_tree_key: &str) -> bool {
     let tree = loro.get_tree(paths_tree_key);
     tree.roots()
@@ -513,7 +461,9 @@ fn validate_path_node(meta: &LoroMap) -> bool {
     else {
         return false;
     };
-    rotation_is_valid(meta) && (0..anchors.len()).all(|index| validate_anchor(&anchors, index))
+    rotation_is_valid(meta)
+        && style_validation::style_is_valid(meta)
+        && (0..anchors.len()).all(|index| validate_anchor(&anchors, index))
 }
 
 fn validate_anchor(anchors: &LoroMovableList, index: usize) -> bool {

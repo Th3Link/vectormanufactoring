@@ -992,7 +992,7 @@ mod tests {
         );
         let snapshot = document.primitive(id).expect("exists");
         // 1.5x proportional resize -> stroke width also 1.5x (0.25 -> 0.375).
-        assert!((snapshot.stroke_width.as_mm() - 0.375).abs() < 1e-9);
+        assert!((snapshot.style.stroke.width.as_mm() - 0.375).abs() < 1e-9);
     }
 
     // --- "Scale stroke width" switch (AC 8, 26-31) ---
@@ -1069,8 +1069,8 @@ mod tests {
                 let after = document.object(id).expect("exists");
                 assert_ne!(after, before, "{direction:?}: the resize happened");
                 let width = |o: &ObjectSnapshot| match o {
-                    ObjectSnapshot::Primitive(p) => p.stroke_width,
-                    ObjectSnapshot::Path(p) => p.stroke_width,
+                    ObjectSnapshot::Primitive(p) => p.style.stroke.width,
+                    ObjectSnapshot::Path(p) => p.style.stroke.width,
                 };
                 assert_eq!(width(&after), width(&before), "{direction:?} on {id:?}");
             }
@@ -1093,7 +1093,9 @@ mod tests {
             Point::new(20.0, -20.0),
             |_| {},
         );
-        assert!((document.primitive(star).unwrap().stroke_width.as_mm() - 0.25).abs() < 1e-12);
+        assert!(
+            (document.primitive(star).unwrap().style.stroke.width.as_mm() - 0.25).abs() < 1e-12
+        );
     }
 
     /// AC 26: with the switch on a proportional resize scales the width by
@@ -1111,7 +1113,7 @@ mod tests {
             on,
         );
         assert!(
-            (document.primitive(id).unwrap().stroke_width.as_mm() - 0.5).abs() < 1e-9,
+            (document.primitive(id).unwrap().style.stroke.width.as_mm() - 0.5).abs() < 1e-9,
             "0.25 × √4"
         );
         let document = Document::new(1);
@@ -1123,7 +1125,7 @@ mod tests {
             Point::new(-80.0, 5.0),
             on,
         );
-        let w = document.primitive(id).unwrap().stroke_width.as_mm();
+        let w = document.primitive(id).unwrap().style.stroke.width.as_mm();
         assert!((w - 0.01).abs() < 1e-12, "floored at 0.01 mm, got {w}");
     }
 
@@ -1158,7 +1160,7 @@ mod tests {
             panic!("primitive");
         };
         assert!(
-            (preview.stroke_width.as_mm() - 0.25).abs() < 1e-12,
+            (preview.style.stroke.width.as_mm() - 0.25).abs() < 1e-12,
             "preview unchanged"
         );
         tool.pointer_up(
@@ -1169,7 +1171,7 @@ mod tests {
             Modifiers::new(false, false),
             &mut AnchorIdMinter::new(99),
         );
-        assert!((document.primitive(id).unwrap().stroke_width.as_mm() - 0.25).abs() < 1e-12);
+        assert!((document.primitive(id).unwrap().style.stroke.width.as_mm() - 0.25).abs() < 1e-12);
 
         // The next drag picks up the new mode: 2x -> stroke 0.5.
         let objects = vec![document.object(id).expect("exists")];
@@ -1194,7 +1196,7 @@ mod tests {
             Modifiers::new(false, true),
             &mut AnchorIdMinter::new(99),
         );
-        assert!((document.primitive(id).unwrap().stroke_width.as_mm() - 0.5).abs() < 1e-9);
+        assert!((document.primitive(id).unwrap().style.stroke.width.as_mm() - 0.5).abs() < 1e-9);
     }
 
     /// AC 29: toggling writes nothing — the saved bytes are identical.
@@ -1833,7 +1835,7 @@ mod tests {
         );
         let snapshot = document.primitive(id).expect("exists");
         assert!(
-            (snapshot.stroke_width.as_mm() - 0.5).abs() < 1e-9,
+            (snapshot.style.stroke.width.as_mm() - 0.5).abs() < 1e-9,
             "0.25 × √4"
         );
     }
@@ -1868,10 +1870,10 @@ mod tests {
         );
         let snapshot = document.primitive(id).expect("exists");
         assert!(
-            snapshot.stroke_width.as_mm() > 0.0,
+            snapshot.style.stroke.width.as_mm() > 0.0,
             "never zero or negative"
         );
-        assert!(snapshot.stroke_width.as_mm() < 0.25);
+        assert!(snapshot.style.stroke.width.as_mm() < 0.25);
     }
 
     /// Acceptance criterion 10: an ellipse resizes through the Select

@@ -113,7 +113,7 @@ pub(crate) fn resize_primitive(
     (
         PrimitiveSnapshot {
             shape: pinned,
-            ..*primitive
+            ..primitive.clone()
         },
         factor,
     )

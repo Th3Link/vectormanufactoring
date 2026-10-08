@@ -953,8 +953,7 @@ fn ac13_split_new_object_copies_the_original_paths_style() {
     let new_id = AnchorId::new(9, 1);
     let (_, (second_path, _)) = document.split_at_anchor(path, mid, new_id).expect("split");
     let new_object = document.path(second_path).expect("exists");
-    assert_eq!(new_object.stroke_width, original_style.stroke_width);
-    assert_eq!(new_object.stroke, original_style.stroke);
+    assert_eq!(new_object.style, original_style.style);
 }
 
 // ---------------------------------------------------------------------

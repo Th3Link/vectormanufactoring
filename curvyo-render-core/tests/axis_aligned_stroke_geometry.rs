@@ -179,5 +179,5 @@ fn ac6_placeholder_stroke_is_black() {
     let document = two_node_path(Point::new(0.0, 0.0), Point::new(1.0, 0.0));
     let id = document.object_ids()[0];
     let snapshot = document.path(id).unwrap();
-    assert_eq!(snapshot.stroke, Color::BLACK);
+    assert_eq!(snapshot.style.stroke.color, Color::BLACK);
 }

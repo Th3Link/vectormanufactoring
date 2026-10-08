@@ -12,7 +12,7 @@
 //! meta map:
 //!   shape         : "rect" | "ellipse" | "polygon" | "star"   written
 //!                   once at creation, deleted by "object to path"
-//!   stroke_width, stroke   same keys/defaults as a path's (path_codec)
+//!   (style keys    same keys/defaults as a path's, see `crate::style_codec`)
 //!   rect:     rect_bounds   [x, y, w, h] mm        ONE LWW register
 //!             corner_radius_tl/_tr/_br/_bl  mm, stored raw, one LWW
 //!                           register per corner (`crate::corner_radii_codec`;
@@ -40,7 +40,7 @@ use crate::corner_radii_codec::{
     KEY_CORNER_RADIUS_BL, KEY_CORNER_RADIUS_BR, KEY_CORNER_RADIUS_TL, KEY_CORNER_RADIUS_TR,
     KEY_LEGACY_CORNER_RADIUS, corner_radii_are_valid, read_corner_radii,
 };
-use crate::path_codec::{self, KEY_STROKE, KEY_STROKE_WIDTH};
+use crate::path_codec;
 use crate::path_model::NewAnchor;
 use crate::primitive_model::{
     EllipseFrame, InnerRatio, PointCount, PrimitiveSnapshot, RectBounds, Shape, StarFrame,
@@ -122,22 +122,6 @@ pub(crate) fn write_shape_tag(meta: &LoroMap, shape: &str) {
     // attached, freshly created meta map cannot fail.
     #[allow(clippy::unwrap_used)]
     meta.insert(KEY_SHAPE, shape).unwrap();
-}
-
-/// Writes a freshly created primitive's shared style fields — the same
-/// keys and placeholder default a path gets (acceptance criterion 16).
-pub(crate) fn write_primitive_style_fields(meta: &LoroMap) {
-    // invariant: see `write_shape_tag`.
-    #[allow(clippy::unwrap_used)]
-    {
-        meta.insert(KEY_STROKE_WIDTH, path_codec::DEFAULT_STROKE_WIDTH_MM)
-            .unwrap();
-        meta.insert(
-            KEY_STROKE,
-            path_codec::color_to_value(crate::path_model::Color::BLACK),
-        )
-        .unwrap();
-    }
 }
 
 fn write_mm_list(map: &LoroMap, key: &str, values: &[f64]) {
@@ -295,9 +279,7 @@ pub(crate) fn read_primitive_snapshot(
     PrimitiveSnapshot {
         id,
         shape,
-        stroke_width: path_codec::read_stroke_width(meta),
-        stroke: path_codec::read_stroke(meta),
-        fill: None,
+        style: crate::style_codec::read_style(meta),
         rotation: path_codec::read_rotation(meta),
     }
 }
@@ -331,7 +313,7 @@ pub(crate) fn read_shape(meta: &LoroMap, shape_tag: &str) -> Option<Shape> {
 /// `inner_ratio` outside `(0, 1)`. Reuses each parameter's own validated
 /// newtype for its range check rather than duplicating the bound.
 pub(crate) fn validate_primitive_node(meta: &LoroMap, shape: &str) -> bool {
-    if !path_codec::rotation_is_valid(meta) {
+    if !path_codec::rotation_is_valid(meta) || !crate::style_validation::style_is_valid(meta) {
         return false;
     }
     match shape {

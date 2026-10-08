@@ -179,8 +179,8 @@ fn ac13_stroke_and_fill_defaults_match_across_modes() {
         let mut s = session(Tool::Rectangle);
         drag(&mut s, A, pt(130.0, 40.0), sh, ct);
         let p = &prims(&s)[0];
-        keys.push((p.stroke_width, p.stroke, p.fill, p.rotation));
-        assert!(p.fill.is_none());
+        keys.push((p.style.clone(), p.rotation));
+        assert!(!p.style.fill.enabled);
     }
     assert!(keys.windows(2).all(|w| w[0] == w[1]));
 }
@@ -214,8 +214,8 @@ fn ac13_format_version_unchanged_and_no_modifier_trace_in_the_file() {
         v["format_version"].clone()
     };
     let base = version_and_objects(false, false);
-    // 6 since `rectangle-corner-radii`; this story itself changed no format.
-    assert_eq!(base, 6);
+    // This story itself changed no format: the file says the current version.
+    assert_eq!(base, curvyo_document_core::CURRENT_FORMAT_VERSION);
     for (sh, ct) in ALL {
         assert_eq!(version_and_objects(sh, ct), base);
     }
@@ -226,10 +226,7 @@ fn ac13_format_version_unchanged_and_no_modifier_trace_in_the_file() {
     drag(&mut b, pt(25.0, 25.0), pt(40.0, 40.0), true, false);
     close(rect_box(&prims(&a)[0]), rect_box(&prims(&b)[0]));
     let (pa, pb) = (&prims(&a)[0], &prims(&b)[0]);
-    assert_eq!(
-        (pa.stroke_width, pa.stroke, pa.fill, pa.rotation),
-        (pb.stroke_width, pb.stroke, pb.fill, pb.rotation)
-    );
+    assert_eq!((&pa.style, pa.rotation), (&pb.style, pb.rotation));
 }
 
 // ---------------------------------------------------------------------
@@ -588,7 +585,7 @@ fn ac17_polygon_and_star_shift_is_inert_through_session() {
             press(&mut s, pt(113.0, 41.0), sh, false);
             let live2 = (readout(&s), s.draw_list());
             s.pointer_up(pt(113.0, 41.0), sh, false);
-            let p = prims(&s)[0];
+            let p = prims(&s)[0].clone();
             (live, live2, p.shape, p.rotation)
         };
         let plain = make(false);

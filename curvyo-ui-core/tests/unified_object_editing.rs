@@ -479,7 +479,7 @@ fn ac24_a_radius_drag_writes_only_the_corner_radius() {
     };
     assert_eq!(ba, bb);
     assert_eq!(a.rotation, b.rotation);
-    assert_eq!(a.stroke_width, b.stroke_width);
+    assert_eq!(a.style.stroke.width, b.style.stroke.width);
     assert!(rig.radius() > 0.0);
 }
 

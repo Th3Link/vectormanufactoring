@@ -452,10 +452,10 @@ fn scale_stroke(object: &mut ObjectSnapshot, factor: f64) {
     let floor = Length::from_mm(MIN_STROKE_WIDTH_MM);
     match object {
         ObjectSnapshot::Primitive(p) => {
-            p.stroke_width = scaled_and_floored(p.stroke_width, factor, floor);
+            p.style.stroke.width = scaled_and_floored(p.style.stroke.width, factor, floor);
         }
         ObjectSnapshot::Path(p) => {
-            p.stroke_width = scaled_and_floored(p.stroke_width, factor, floor);
+            p.style.stroke.width = scaled_and_floored(p.style.stroke.width, factor, floor);
         }
     }
 }

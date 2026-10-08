@@ -59,7 +59,7 @@ fn equal_radii_render_exactly_like_the_old_outline() {
                     .set_corner_radii(&[(id, CornerRadii::uniform(Length::from_mm(r)))])
                     .unwrap();
                 let prim = rect_doc.primitive(id).unwrap();
-                let a = build_primitive_strokes(&[prim], view);
+                let a = build_primitive_strokes(std::slice::from_ref(&prim), view);
 
                 let path_doc = Document::new(2);
                 let anchors: Vec<NewAnchor> = old_outline(5.0, -3.0, w, h, r)
@@ -75,7 +75,7 @@ fn equal_radii_render_exactly_like_the_old_outline() {
                     .collect();
                 let pid = path_doc.create_path(&anchors, true);
                 let path = path_doc.path(pid).unwrap();
-                assert_eq!(path.stroke_width, prim.stroke_width);
+                assert_eq!(path.style.stroke.width, prim.style.stroke.width);
                 let input = DecorationInput::default();
                 let b = build_draw_list(&[path], view, &input);
                 assert_eq!(

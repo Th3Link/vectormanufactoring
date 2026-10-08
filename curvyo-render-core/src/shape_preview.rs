@@ -56,8 +56,8 @@ fn primitive_stroke(snapshot: &PrimitiveSnapshot, view: ViewTransform) -> DrawLi
     stroke::path_stroke(
         &anchors,
         true,
-        snapshot.stroke_width.as_mm().max(min_width_mm),
-        snapshot.stroke.into(),
+        snapshot.style.stroke.width.as_mm().max(min_width_mm),
+        snapshot.style.stroke.color.into(),
         tolerance_mm,
     )
 }

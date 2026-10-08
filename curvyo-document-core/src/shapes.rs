@@ -44,6 +44,11 @@ pub enum ShapeEditError {
     /// written. A negative radius is not an error: it is floored to 0.
     #[error("a corner radius must be a finite number")]
     InvalidRadius,
+    /// A resize carried a stroke width that is not a finite number greater
+    /// than zero. Nothing is written: a stored width of zero or less would
+    /// make the file refuse to open.
+    #[error("a stroke width must be a finite number greater than zero")]
+    InvalidStrokeWidth,
 }
 
 impl Document {
@@ -148,7 +153,7 @@ impl Document {
         #[allow(clippy::unwrap_used)]
         let meta = tree.get_meta(tree_id).unwrap();
         shape_codec::write_shape_tag(&meta, shape);
-        shape_codec::write_primitive_style_fields(&meta);
+        crate::style_codec::write_creation_style(&meta);
         NodeId::from_parts(tree_id.peer, tree_id.counter)
     }
 
@@ -232,13 +237,16 @@ impl Document {
     ///
     /// # Errors
     /// [`ShapeEditError::NoSuchObject`] / [`ShapeEditError::NotAPrimitive`]
-    /// / [`ShapeEditError::WrongShape`] if `id` is not an ellipse.
+    /// / [`ShapeEditError::WrongShape`] if `id` is not an ellipse;
+    /// [`ShapeEditError::InvalidStrokeWidth`] for a width that is not above
+    /// zero.
     pub fn resize_ellipse(
         &self,
         id: NodeId,
         frame: EllipseFrame,
         stroke_width: Option<Length>,
     ) -> Result<(), ShapeEditError> {
+        check_stroke_width(stroke_width)?;
         let meta = self.require_shape(id, SHAPE_ELLIPSE)?;
         shape_codec::write_ellipse_frame(&meta, frame);
         write_stroke_width_if_changed(&meta, stroke_width);
@@ -252,13 +260,16 @@ impl Document {
     ///
     /// # Errors
     /// [`ShapeEditError::NoSuchObject`] / [`ShapeEditError::NotAPrimitive`]
-    /// if `id` is neither a polygon nor a star.
+    /// if `id` is neither a polygon nor a star;
+    /// [`ShapeEditError::InvalidStrokeWidth`] for a width that is not above
+    /// zero.
     pub fn resize_star_frame(
         &self,
         id: NodeId,
         frame: StarFrame,
         stroke_width: Option<Length>,
     ) -> Result<(), ShapeEditError> {
+        check_stroke_width(stroke_width)?;
         let meta = self.require_polygon_or_star(id)?;
         shape_codec::write_star_frame(&meta, frame);
         write_stroke_width_if_changed(&meta, stroke_width);
@@ -405,6 +416,15 @@ impl Document {
     }
 }
 
+/// Refuses a resize width that is not a finite number above zero.
+pub(crate) fn check_stroke_width(stroke_width: Option<Length>) -> Result<(), ShapeEditError> {
+    if crate::style_codec::stroke_width_is_writable(stroke_width) {
+        Ok(())
+    } else {
+        Err(ShapeEditError::InvalidStrokeWidth)
+    }
+}
+
 /// Writes `stroke_width` only if it is `Some` and differs from the stored
 /// value. `None` leaves the key untouched (a resize with "Scale stroke
 /// width" off: `specs/0005-object-transform/adrs.md`, 2026-10-06 — a
@@ -413,9 +433,9 @@ impl Document {
 /// operation).
 pub(crate) fn write_stroke_width_if_changed(meta: &loro::LoroMap, stroke_width: Option<Length>) {
     if let Some(width) = stroke_width
-        && crate::path_codec::read_stroke_width(meta) != width
+        && crate::style_codec::read_width(meta) != width
     {
-        crate::path_codec::write_stroke_width(meta, width.as_mm());
+        crate::style_codec::write_stroke_width(meta, width);
     }
 }
 
@@ -451,7 +471,7 @@ mod tests {
                 corner_radii: CornerRadii::uniform(Length::from_mm(0.0))
             }
         );
-        assert_eq!(snapshot.stroke, crate::path_model::Color::BLACK);
+        assert_eq!(snapshot.style, crate::style_model::Style::default());
     }
 
     #[test]
@@ -514,7 +534,7 @@ mod tests {
         };
         assert!((bounds.width.as_mm() - 20.0).abs() < 1e-9);
         assert!((corner_radii.tl.as_mm() - 2.0).abs() < 1e-9);
-        assert!((snapshot.stroke_width.as_mm() - 0.5).abs() < 1e-9);
+        assert!((snapshot.style.stroke.width.as_mm() - 0.5).abs() < 1e-9);
     }
 
     #[test]
@@ -541,7 +561,7 @@ mod tests {
             panic!("expected ellipse");
         };
         assert!((frame.rx.as_mm() - 10.0).abs() < 1e-9);
-        assert!((snapshot.stroke_width.as_mm() - 0.6).abs() < 1e-9);
+        assert!((snapshot.style.stroke.width.as_mm() - 0.6).abs() < 1e-9);
     }
 
     #[test]
@@ -575,7 +595,7 @@ mod tests {
         };
         assert!((resized_frame.radius.as_mm() - 15.0).abs() < 1e-9);
         assert!((inner_ratio.get() - 0.5).abs() < 1e-9, "ratio untouched");
-        assert!((snapshot.stroke_width.as_mm() - 0.4).abs() < 1e-9);
+        assert!((snapshot.style.stroke.width.as_mm() - 0.4).abs() < 1e-9);
     }
 
     /// Two peers open the same one-rectangle document; returns them and
@@ -598,7 +618,7 @@ mod tests {
     fn set_stroke_directly(doc: &Document, id: NodeId, mm: f64) {
         let tree = doc.loro().get_tree(OBJECTS_TREE);
         let meta = tree.get_meta(tree_id_of(id)).expect("meta");
-        meta.insert(crate::path_codec::KEY_STROKE_WIDTH, mm)
+        meta.insert(crate::style_codec::KEY_STROKE_WIDTH, mm)
             .expect("insert");
         doc.commit_with_label("test: peer stroke edit");
     }
@@ -621,7 +641,7 @@ mod tests {
         for peer in [&a, &b] {
             let p = peer.primitive(id).expect("exists");
             assert!(
-                (p.stroke_width.as_mm() - 2.0).abs() < 1e-12,
+                (p.style.stroke.width.as_mm() - 2.0).abs() < 1e-12,
                 "peer edit kept"
             );
             let Shape::Rect { bounds, .. } = p.shape else {
@@ -641,7 +661,7 @@ mod tests {
             id,
             rect_bounds(0.0, 0.0, 30.0, 10.0),
             CornerRadii::uniform(Length::from_mm(0.0)),
-            Some(Length::from_mm(crate::path_codec::DEFAULT_STROKE_WIDTH_MM)),
+            Some(Length::from_mm(crate::style_model::DEFAULT_STROKE_WIDTH_MM)),
         )
         .expect("A resizes");
         set_stroke_directly(&b, id, 2.0);
@@ -650,7 +670,7 @@ mod tests {
         merge(&a, &b);
         for peer in [&a, &b] {
             let p = peer.primitive(id).expect("exists");
-            assert!((p.stroke_width.as_mm() - 2.0).abs() < 1e-12);
+            assert!((p.style.stroke.width.as_mm() - 2.0).abs() < 1e-12);
             let Shape::Rect { corner_radii, .. } = p.shape else {
                 panic!("rect");
             };
@@ -671,7 +691,7 @@ mod tests {
                 Some(Length::from_mm(0.5)),
             )
             .expect("resize");
-        assert!((document.primitive(id).unwrap().stroke_width.as_mm() - 0.5).abs() < 1e-12);
+        assert!((document.primitive(id).unwrap().style.stroke.width.as_mm() - 0.5).abs() < 1e-12);
     }
 
     #[test]
