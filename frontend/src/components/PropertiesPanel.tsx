@@ -92,7 +92,7 @@ export function PropertiesPanel({ editor }: PropertiesPanelProps) {
         className="relative shrink-0"
         style={{ width: open ? PANEL_WIDTH_PX : 0 }}
       >
-        <Tooltip content="Properties (Shift+Ctrl+F)">
+        <Tooltip side="left" content="Properties (Shift+Ctrl+F)">
           <button
             type="button"
             aria-label={label}

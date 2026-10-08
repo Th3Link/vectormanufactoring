@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
+import { usePreviewGesture } from "@/hooks/usePreviewGesture";
 import type { WasmSession } from "@/lib/editorSession";
 
 /** A property edited with typed text or a colour area; the names
@@ -126,17 +127,11 @@ interface EditorHandle {
   syncRevision: number;
 }
 
-type Preview =
-  | { kind: "color"; field: StyleFieldName; rgb: number }
-  | { kind: "opacity"; field: StyleFieldName; percent: number };
-
 /**
  * The Style panel's state and commands. Everything with a rule is the
  * session's (`curvyo-ui-core::style_panel`, `style_edit`); this holds the
- * snapshot the panel renders and the gesture bookkeeping of a drag: ticks are
- * coalesced to one session update per animation frame, the first tick
- * installs window listeners for the release, Escape drops the preview, and
- * the release commits once, even outside the control.
+ * snapshot the panel renders and forwards each control's command. A drag's
+ * gesture bookkeeping is `usePreviewGesture`.
  */
 export function useStylePanel(editor: EditorHandle): StylePanelApi {
   const { getSession, syncRevision } = editor;
@@ -146,95 +141,7 @@ export function useStylePanel(editor: EditorHandle): StylePanelApi {
   // (`syncRevision`) or this panel changed something (`local`).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const view = useMemo(() => readView(getSession()), [getSession, syncRevision, local]);
-
-  const pending = useRef<Preview | null>(null);
-  const frame = useRef(0);
-  const endGesture = useRef<(() => void) | null>(null);
-
-  const flushPending = useCallback(() => {
-    window.cancelAnimationFrame(frame.current);
-    frame.current = 0;
-    const tick = pending.current;
-    pending.current = null;
-    const session = getSession();
-    if (!tick || !session) {
-      return;
-    }
-    if (tick.kind === "color") {
-      session.preview_style_color(tick.field, tick.rgb);
-    } else {
-      session.preview_style_opacity(tick.field, tick.percent);
-    }
-    refresh();
-  }, [getSession, refresh]);
-
-  /** The release: flushes the last tick, commits once, removes the listeners. */
-  const commit = useCallback(() => {
-    flushPending();
-    endGesture.current?.();
-    endGesture.current = null;
-    getSession()?.commit_style_preview();
-    refresh();
-  }, [flushPending, getSession, refresh]);
-
-  const beginGesture = useCallback(() => {
-    if (endGesture.current) {
-      return;
-    }
-    const onRelease = () => commit();
-    const onArrowUp = (event: KeyboardEvent) => {
-      if (event.key.startsWith("Arrow")) {
-        commit();
-      }
-    };
-    const onEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
-        return;
-      }
-      // Escape during a drag drops the preview; the release then writes
-      // nothing. It never reaches the popover or the canvas.
-      event.preventDefault();
-      event.stopPropagation();
-      window.cancelAnimationFrame(frame.current);
-      frame.current = 0;
-      pending.current = null;
-      getSession()?.cancel_style_preview();
-      refresh();
-    };
-    window.addEventListener("pointerup", onRelease, true);
-    window.addEventListener("pointercancel", onRelease, true);
-    window.addEventListener("blur", onRelease);
-    window.addEventListener("keyup", onArrowUp, true);
-    window.addEventListener("keydown", onEscape, true);
-    endGesture.current = () => {
-      window.removeEventListener("pointerup", onRelease, true);
-      window.removeEventListener("pointercancel", onRelease, true);
-      window.removeEventListener("blur", onRelease);
-      window.removeEventListener("keyup", onArrowUp, true);
-      window.removeEventListener("keydown", onEscape, true);
-    };
-  }, [commit, getSession, refresh]);
-
-  const queue = useCallback(
-    (tick: Preview) => {
-      beginGesture();
-      pending.current = tick;
-      if (frame.current === 0) {
-        frame.current = window.requestAnimationFrame(flushPending);
-      }
-    },
-    [beginGesture, flushPending],
-  );
-
-  // A panel that goes away mid-gesture must not leave listeners behind.
-  useEffect(
-    () => () => {
-      window.cancelAnimationFrame(frame.current);
-      endGesture.current?.();
-      endGesture.current = null;
-    },
-    [],
-  );
+  const preview = usePreviewGesture(getSession, refresh);
 
   const setText = useCallback(
     (field: StyleFieldName, text: string): TextOutcome => {
@@ -263,8 +170,8 @@ export function useStylePanel(editor: EditorHandle): StylePanelApi {
   return {
     view,
     setText,
-    previewColor: (field, rgb) => queue({ kind: "color", field, rgb }),
-    previewOpacity: (field, percent) => queue({ kind: "opacity", field, percent }),
+    previewColor: (field, rgb) => preview((s) => s.preview_style_color(field, rgb)),
+    previewOpacity: (field, percent) => preview((s) => s.preview_style_opacity(field, percent)),
     setStrokePaint: (on) => act((s) => s.set_stroke_paint(on)),
     setStrokeDash: (name) => act((s) => s.set_stroke_dash(name)),
     setStrokeJoin: (name) => act((s) => s.set_stroke_join(name)),

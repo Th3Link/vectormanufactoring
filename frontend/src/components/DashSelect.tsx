@@ -36,7 +36,7 @@ export function DashSelect({ value, disabled, onChange, onReturnFocus }: DashSel
       disabled={disabled}
       onValueChange={(next) => onChange(next as DashName)}
     >
-      <Tooltip content="Patterns scale with the stroke width and draw solid when too small to see">
+      <Tooltip side="left" content="Patterns scale with the stroke width and draw solid when too small to see">
         <SelectTrigger
           aria-label="Stroke dash pattern"
           placeholder="Mixed"

@@ -22,9 +22,16 @@ export function percentText(percent: number): string {
   return String(Math.round(percent));
 }
 
-/** A width in millimetres: up to three decimals, no trailing zeros ("0.125"). */
+/** A width in millimetres: up to three decimals, no trailing zeros ("0.125").
+ * A positive width that three decimals would show as "0" keeps enough digits to
+ * show it ("0.0004"), so a stroke that is on never reads as no stroke. */
 export function widthText(mm: number): string {
-  return String(Math.round(mm * 1000) / 1000);
+  const rounded = Math.round(mm * 1000) / 1000;
+  if (rounded !== 0 || !(mm > 0)) {
+    return String(rounded);
+  }
+  const digits = Math.min(20, 2 - Math.floor(Math.log10(mm)));
+  return mm.toFixed(digits).replace(/0+$/, "");
 }
 
 /** The CSS colour of a packed colour at an opacity percent. */

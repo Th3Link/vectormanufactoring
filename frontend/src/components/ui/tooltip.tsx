@@ -8,8 +8,9 @@ export const TooltipProvider = TooltipPrimitive.Provider;
 interface TooltipProps {
   /** The text after a 400 ms rest. */
   content: ReactNode;
-  /** Which side opens; the panel's tooltips open left, over the canvas. */
-  side?: "top" | "right" | "bottom" | "left";
+  /** Which side opens. No default: the panel's tooltips open left, over the
+   * canvas, and the tool rail's open right. */
+  side: "top" | "right" | "bottom" | "left";
   /** The trigger: one element that takes a ref. */
   children: ReactElement;
 }
@@ -18,7 +19,7 @@ interface TooltipProps {
  * A tooltip in the house style: 400 ms, `bg-popover`, rendered in a portal so
  * it may cover the canvas but never the panel row it belongs to.
  */
-export function Tooltip({ content, side = "left", children }: TooltipProps) {
+export function Tooltip({ content, side, children }: TooltipProps) {
   return (
     <TooltipPrimitive.Root delayDuration={400}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
