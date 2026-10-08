@@ -6,6 +6,8 @@
 
 use curvyo_document_core::{Angle, GradientStop, Point, ramp_at, sorted_stops};
 
+use crate::glyphs::DrawList;
+
 /// How many texels a ramp has. 256 steps per ramp are finer than 8-bit
 /// channels can show along any realistic object.
 pub const RAMP_TEXELS: usize = 256;
@@ -124,6 +126,60 @@ impl GradientFill {
         } else {
             self.frame.linear(point)
         }
+    }
+}
+
+impl DrawList {
+    /// The gradient fills among the artwork: each names the vertices of its
+    /// fill and carries its ramp. Those vertices hold the ramp's first colour
+    /// as their flat colour.
+    #[must_use]
+    pub fn gradients(&self) -> &[GradientFill] {
+        &self.gradients
+    }
+
+    /// Records a gradient fill. Only the artwork builder calls this, right
+    /// after it appended the fill's vertices.
+    pub(crate) fn push_gradient(&mut self, fill: GradientFill) {
+        self.gradients.push(fill);
+    }
+
+    /// The gradient fills a host paints from a ramp texture: the first
+    /// [`MAX_GRADIENTS`] of them. Later ones stay flat in their first colour.
+    #[must_use]
+    pub fn painted_gradients(&self) -> &[GradientFill] {
+        self.gradients
+            .get(..MAX_GRADIENTS)
+            .unwrap_or(&self.gradients)
+    }
+
+    /// Per-vertex gradient attributes for a host with a ramp texture of `rows`
+    /// rows (one per painted gradient, in order): `[x, y, v, mode]`. `x` and
+    /// `y` are the vertex's [`GradientFill::coordinate`]; `v` is the texture
+    /// coordinate of the ramp's row (its centre, so linear filtering never mixes
+    /// two ramps); `mode` is 0 for a flat vertex, 1 for a linear and 2 for a
+    /// radial gradient. The host takes `t` as `x` (linear) or `length(x, y)`
+    /// (radial) and clamps it to 0 to 1 (SVG's "pad").
+    #[must_use]
+    pub fn gradient_attributes(&self, rows: usize) -> Vec<[f32; 4]> {
+        let mut attributes = vec![[0.0_f32; 4]; self.triangles.len()];
+        let rows = rows.max(1);
+        for (index, fill) in self.painted_gradients().iter().enumerate() {
+            #[allow(clippy::cast_precision_loss)]
+            let v = (index as f32 + 0.5) / rows as f32;
+            let mode = if fill.radial { 2.0 } else { 1.0 };
+            let (Some(vertices), Some(slots)) = (
+                self.triangles.get(fill.start..fill.end),
+                attributes.get_mut(fill.start..fill.end),
+            ) else {
+                continue;
+            };
+            for (vertex, attribute) in vertices.iter().zip(slots) {
+                let [x, y] = fill.coordinate(vertex.position);
+                *attribute = [x, y, v, mode];
+            }
+        }
+        attributes
     }
 }
 

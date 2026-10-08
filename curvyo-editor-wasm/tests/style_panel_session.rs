@@ -382,17 +382,17 @@ fn switching_to_linear_seeds_red_to_white_in_one_commit() {
 #[test]
 fn a_gradient_fill_reaches_the_draw_list_with_its_box() {
     let mut session = session_with_rectangles(1);
-    assert_eq!(session.draw_list().gradients.len(), 0);
+    assert_eq!(session.draw_list().gradients().len(), 0);
     session.set_fill_mode(FillMode::Linear);
     let list = session.draw_list();
-    assert_eq!(list.gradients.len(), 1);
-    let fill = &list.gradients[0];
+    assert_eq!(list.gradients().len(), 1);
+    let fill = &list.gradients()[0];
     assert!(!fill.radial);
     assert!((fill.frame.max.x - fill.frame.min.x - 10.0).abs() < 1e-9);
     session.set_fill_mode(FillMode::Radial);
-    assert!(session.draw_list().gradients[0].radial);
+    assert!(session.draw_list().gradients()[0].radial);
     session.set_fill_mode(FillMode::None);
-    assert_eq!(session.draw_list().gradients.len(), 0);
+    assert_eq!(session.draw_list().gradients().len(), 0);
 }
 
 /// Criterion 17 again, across a selection: each object takes its own colour.
@@ -496,7 +496,7 @@ fn a_stop_drag_previews_in_the_draw_list_and_commits_once() {
     match session.style_panel_state().fill.stops {
         StopsPanel::Editor(view) => assert_eq!(
             view.rows[0].position,
-            BarValue::Uniform(0.5),
+            BarValue::Uniform(curvyo_document_core::StopPosition::new(0.5).unwrap()),
             "the row follows the drag"
         ),
         other => panic!("{other:?}"),
@@ -556,7 +556,7 @@ fn a_gradient_without_stops_is_a_state_and_add_creates_the_first_stop() {
         .unwrap();
     let bytes = curvyo_document_core::pack(&document, "0.1.0").unwrap();
     let mut session = Session::open(3, &bytes).unwrap();
-    assert_eq!(session.draw_list().gradients.len(), 0);
+    assert_eq!(session.draw_list().gradients().len(), 0);
     session.set_tool(Tool::Select);
     session.pointer_down(Point::new(0.0, 5.0), false);
     session.pointer_up(Point::new(0.0, 5.0), false, false);

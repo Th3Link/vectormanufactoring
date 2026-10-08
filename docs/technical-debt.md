@@ -504,7 +504,9 @@ gives 14 ms per frame at rest for the 200 default-styled objects and 16 ms with
 every style key set on every object (dash, join, cap, a 2-stop gradient). That
 is below the 25 ms line the architect set (readiness check, section 5), so the
 draw-list cache stays deferred for now; PR 2 adds fills and dashes, which are
-tessellated every frame, and measures again.
+tessellated every frame, and measures again. PR 4 adds gradient ramps, which
+are rebuilt and uploaded every frame as well (at most 1024 of them); a cache
+would cover them with the tessellation.
 
 ## The canvas does not react to a `devicePixelRatio` change with no resize event
 
@@ -841,7 +843,9 @@ pure move of the tolerance helpers to `session/tolerances.rs`.
   list** (a Loro map key holds one container; the other peer's stops are
   lost). The ADR accepts this. For PR 4: consider Loro's mergeable movable list.
   `add_stop` no longer creates the list (only the fill-mode switch and Split
-  do), so there is one creation path to reason about.
+  do), so there is one creation path to reason about. **Resolved in PR 4
+  (2026-10-08):** new lists are a mergeable child container, so both peers'
+  stops merge; see the PR 4 entry below.
 
 **2026-10-08 (`stroke-and-fill-styling` PR 2):** `gpu.rs` was 695 lines; its
 shader, vertex shape, screen transform, pipeline and MSAA target moved to
@@ -914,7 +918,7 @@ box size; those tests count fans only (`white_count` in
   painted. Add a stop.") follow it; the subject line stays as the one exception
   until a localisation story moves it.
 
-**2026-10-09 (`stroke-and-fill-styling` PR 4):**
+**2026-10-08 (`stroke-and-fill-styling` PR 4):**
 
 - **A polygon or star's gradient spans the square around it, not a tight box**
   (criterion 21, accepted). A triangle's ramp starts about a quarter of the way
@@ -935,3 +939,12 @@ box size; those tests count fans only (`white_count` in
 - **The pixel result of the ramp shader was checked by eye in the Browser pane,
   not by an automated pixel test** (the GPU modules compile for wasm32 only). The
   ramp, the coordinates and the vertex ranges are tested natively.
+- **`AnchorIdMinter` also mints `StopId`s** (`mint_stop`, one counter for both
+  kinds), so the name is too narrow. A `chore/` can rename it to `IdMinter`.
+- **`DrawList` and `Vertex` live in `glyphs.rs`**, a module about decoration
+  glyph geometry. The gradient methods moved to `gradient.rs` to keep the file
+  under the limit; moving `DrawList` and `Vertex` to a `draw_list.rs` is the
+  cleaner end state.
+- **Ramps are rebuilt and uploaded every frame** (256 `ramp_at` calls per
+  gradient plus the texture write). Bounded by the 1024 cap and fine today; the
+  draw-list cache of the canvas performance item above should cover them.

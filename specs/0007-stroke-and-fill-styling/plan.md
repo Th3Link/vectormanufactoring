@@ -130,7 +130,7 @@ readiness check section 10). PR 1 is invisible to the maker; PR 3 is the first d
   re-fit of a polygon, coincident stops, zero-size box. One line on the polygon/star box limit in
   `docs/technical-debt.md` (AC 21, 22).
 
-**As built (PR 4, 2026-10-09):**
+**As built (PR 4, 2026-10-08):**
 
 - The ramp and the stop rules are `document-core/gradient_ramp.rs` (`sorted_stops`,
   `ramp_at`), not `render-core/gradient.rs` alone: the renderer's ramp and the

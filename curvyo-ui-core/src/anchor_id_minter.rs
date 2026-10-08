@@ -1,4 +1,5 @@
-//! Minting fresh [`AnchorId`]s for one session.
+//! Minting fresh [`AnchorId`]s (and [`curvyo_document_core::StopId`]s, from the
+//! same counter) for one session.
 //!
 //! `specs/0002-path-node-editing/adrs.md`: "`AnchorId` is minted by the
 //! creating peer and is globally unique... passed into

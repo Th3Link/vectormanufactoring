@@ -153,7 +153,7 @@ fn stops_fields(panel: &StopsPanel) -> StopsFields {
             fields.box_note = view.box_note;
             for row in &view.rows {
                 let (position_mixed, position) = match row.position {
-                    BarValue::Uniform(position) => (false, position * 100.0),
+                    BarValue::Uniform(position) => (false, position.get() * 100.0),
                     BarValue::Mixed => (true, 0.0),
                 };
                 let (color_mixed, color) = colour(row.color);
@@ -171,7 +171,7 @@ fn stops_fields(panel: &StopsPanel) -> StopsFields {
                 fields.bar_shown = true;
                 for stop in bar {
                     fields.bar.extend([
-                        stop.position * 100.0,
+                        stop.position.get() * 100.0,
                         f64::from(pack_rgb(stop.color)),
                         stop.opacity.get() * 100.0,
                     ]);

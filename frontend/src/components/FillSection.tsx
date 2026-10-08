@@ -2,7 +2,7 @@ import { ColorAlphaPicker } from "@/components/ColorAlphaPicker";
 import { GradientEditor } from "@/components/GradientEditor";
 import { FILL_OPTIONS } from "@/components/styleOptions";
 import { ToggleGroup } from "@/components/ui/toggle-group";
-import { colourPanelOf } from "@/hooks/useStylePanel";
+import { colourPanelOf } from "@/lib/colourPanel";
 import type { StylePanelApi } from "@/hooks/useStylePanel";
 
 interface FillSectionProps {

@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import { ColorAlphaPicker } from "@/components/ColorAlphaPicker";
 import { NumberField } from "@/components/NumberField";
 import { Tooltip } from "@/components/ui/tooltip";
-import { stopColourPanel } from "@/hooks/useStylePanel";
+import { stopColourPanel } from "@/lib/colourPanel";
 import type { StylePanelApi } from "@/hooks/useStylePanel";
 
 const POSITION_MESSAGES = { percent: "Enter a number from 0 to 100" } as const;

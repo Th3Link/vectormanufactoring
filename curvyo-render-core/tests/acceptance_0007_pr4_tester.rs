@@ -515,7 +515,7 @@ fn zero_size_and_inverted_boxes_give_finite_coordinates() {
 // --------------------------------------------- draw list: ranges, kinds
 
 fn fills_of(list: &DrawList) -> &[curvyo_render_core::GradientFill] {
-    &list.gradients
+    list.gradients()
 }
 
 #[test]
@@ -573,16 +573,16 @@ fn gradient_attributes_carry_the_coordinate_row_and_mode_per_vertex() {
         }],
         view(),
     );
-    assert_eq!(list.gradients.len(), 2);
-    assert!(!list.gradients[0].radial && list.gradients[1].radial);
+    assert_eq!(list.gradients().len(), 2);
+    assert!(!list.gradients()[0].radial && list.gradients()[1].radial);
     assert!(
-        list.gradients[0].end <= list.gradients[1].start,
+        list.gradients()[0].end <= list.gradients()[1].start,
         "ranges are disjoint and in order"
     );
     let rows = 4;
     let attrs = list.gradient_attributes(rows);
     assert_eq!(attrs.len(), list.triangles.len());
-    for (i, g) in list.gradients.iter().enumerate() {
+    for (i, g) in list.gradients().iter().enumerate() {
         let want_v = (i as f32 + 0.5) / rows as f32;
         let want_mode = if g.radial { 2.0 } else { 1.0 };
         for k in g.start..g.end {
@@ -594,17 +594,20 @@ fn gradient_attributes_carry_the_coordinate_row_and_mode_per_vertex() {
         }
     }
     // Linear: x spans 0..1 over the first rect; radial: length <= sqrt 2.
-    let (lo, hi) = (list.gradients[0].start..list.gradients[0].end)
+    let (lo, hi) = (list.gradients()[0].start..list.gradients()[0].end)
         .map(|k| attrs[k][0])
         .fold((f32::MAX, f32::MIN), |(l, h), x| (l.min(x), h.max(x)));
     assert!(lo.abs() < 1e-5 && (hi - 1.0).abs() < 1e-5);
-    for k in list.gradients[1].start..list.gradients[1].end {
+    for k in list.gradients()[1].start..list.gradients()[1].end {
         let len = attrs[k][0].hypot(attrs[k][1]);
         assert!(len <= 2.0_f32.sqrt() + 1e-4);
     }
     // Everything outside the ranges is flat (mode 0).
     for (k, a) in attrs.iter().enumerate() {
-        let inside = list.gradients.iter().any(|g| (g.start..g.end).contains(&k));
+        let inside = list
+            .gradients()
+            .iter()
+            .any(|g| (g.start..g.end).contains(&k));
         if !inside {
             assert_eq!(a[3], 0.0, "vertex {k} is not a gradient vertex");
         }
@@ -656,14 +659,17 @@ fn mixed_fill_types_keep_tree_order_and_only_gradients_get_ranges() {
         })
         .collect();
     let list = build_artwork(&objects(&d), &frames, view());
-    assert_eq!(list.gradients.len(), 3, "linear, radial, open linear");
+    assert_eq!(list.gradients().len(), 3, "linear, radial, open linear");
     assert_eq!(
-        list.gradients.iter().map(|g| g.radial).collect::<Vec<_>>(),
+        list.gradients()
+            .iter()
+            .map(|g| g.radial)
+            .collect::<Vec<_>>(),
         vec![false, true, false]
     );
     // Ranges ascend, never overlap, and the solid / none objects' vertices are
     // outside every range.
-    for w in list.gradients.windows(2) {
+    for w in list.gradients().windows(2) {
         assert!(w[0].end <= w[1].start);
     }
     let solid_vertices = list
@@ -675,10 +681,15 @@ fn mixed_fill_types_keep_tree_order_and_only_gradients_get_ranges() {
         .collect::<Vec<_>>();
     assert!(!solid_vertices.is_empty());
     for k in solid_vertices {
-        assert!(!list.gradients.iter().any(|g| (g.start..g.end).contains(&k)));
+        assert!(
+            !list
+                .gradients()
+                .iter()
+                .any(|g| (g.start..g.end).contains(&k))
+        );
     }
     // The open path's fill is closed by a chord: a triangle (3 vertices at least).
-    let g = &list.gradients[2];
+    let g = &list.gradients()[2];
     assert!(g.end - g.start >= 3);
 }
 
@@ -699,7 +710,7 @@ fn zero_stops_paint_nothing_one_stop_paints_uniformly() {
     .unwrap();
     let list = build_artwork(&objects(&d), &[Some(frame(10.0, 10.0))], view());
     assert_eq!(list.triangles.len(), 0, "no stops, nothing painted");
-    assert!(list.gradients.is_empty());
+    assert!(list.gradients().is_empty());
 
     let d = Document::new(1);
     let one = rect(&d, 0.0, 0.0, 10.0, 10.0);
@@ -717,7 +728,7 @@ fn zero_stops_paint_nothing_one_stop_paints_uniformly() {
         assert_eq!(v.color.a, 51);
     }
     // Whether recorded as a gradient or painted flat, the ramp is uniform.
-    for g in &list.gradients {
+    for g in list.gradients() {
         assert!(g.ramp.0.iter().all(|t| *t == g.ramp.0[0]));
     }
 }
@@ -770,7 +781,7 @@ fn more_than_1024_gradients_stay_flat_beyond_the_cap() {
         .collect();
     let list = build_artwork(&objects(&d), &frames, view());
     assert_eq!(list.painted_gradients().len(), MAX_GRADIENTS);
-    assert!(list.gradients.len() >= MAX_GRADIENTS);
+    assert!(list.gradients().len() >= MAX_GRADIENTS);
     let attrs = list.gradient_attributes(MAX_GRADIENTS);
     assert_eq!(attrs.len(), list.triangles.len());
     // Rows are distinct, in order, inside (0, 1).
@@ -782,7 +793,7 @@ fn more_than_1024_gradients_stay_flat_beyond_the_cap() {
         assert_eq!(attrs[g.start][3], 1.0);
     }
     // Beyond the cap: flat vertices carrying the first colour, no mode.
-    for g in &list.gradients[MAX_GRADIENTS..] {
+    for g in &list.gradients()[MAX_GRADIENTS..] {
         for k in g.start..g.end {
             assert_eq!(attrs[k][3], 0.0, "vertex {k} beyond the cap is flat");
             let v = list.triangles[k].color;
@@ -816,8 +827,8 @@ fn extending_a_list_moves_the_gradient_ranges_with_the_vertices() {
     let b = make(100.0);
     let a_len = a.triangles.len();
     a.extend(b);
-    assert_eq!(a.gradients.len(), 2);
-    let second = &a.gradients[1];
+    assert_eq!(a.gradients().len(), 2);
+    let second = &a.gradients()[1];
     assert!(second.start >= a_len, "{} vs {a_len}", second.start);
     for v in &a.triangles[second.start..second.end] {
         assert!(
@@ -852,7 +863,7 @@ fn draw_lists_with_gradients_survive_a_zoomed_view() {
         ViewTransform::new(1.0, pt(0.0, 0.0)),
     );
     let attrs = list.gradient_attributes(1);
-    let g = &list.gradients[0];
+    let g = &list.gradients()[0];
     let xs: Vec<f32> = (g.start..g.end).map(|k| attrs[k][0]).collect();
     assert!(xs.iter().all(|x| x.is_finite()));
 }

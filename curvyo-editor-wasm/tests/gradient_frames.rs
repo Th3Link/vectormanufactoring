@@ -41,8 +41,8 @@ fn session_of(document: &Document) -> Session {
 
 fn only_fill(session: &Session) -> GradientFill {
     let list = session.draw_list();
-    assert_eq!(list.gradients.len(), 1);
-    list.gradients[0].clone()
+    assert_eq!(list.gradients().len(), 1);
+    list.gradients()[0].clone()
 }
 
 fn near(a: f32, b: f32) -> bool {

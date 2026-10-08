@@ -379,7 +379,10 @@ fn ac34_same_mode_same_count_shows_rows_by_rank_with_mixed_fields() {
     let v = editor(stops_panel(&objs(&d), &[a, b]));
     assert_eq!(v.objects, 2);
     assert_eq!(v.rows.len(), 2);
-    assert_eq!(v.rows[0].position, BarValue::Uniform(0.0));
+    assert_eq!(
+        v.rows[0].position,
+        BarValue::Uniform(StopPosition::new(0.0).unwrap())
+    );
     assert_eq!(v.rows[0].color, BarValue::Uniform(rgb(255, 0, 0)));
     assert_eq!(v.rows[1].color, BarValue::Uniform(rgb(0, 0, 255)));
     assert!(
@@ -400,7 +403,10 @@ fn ac34_same_mode_same_count_shows_rows_by_rank_with_mixed_fields() {
     let v = editor(stops_panel(&objs(&d), &[a, b, c]));
     assert_eq!(v.rows[0].color, BarValue::Uniform(rgb(255, 0, 0)));
     assert_eq!(v.rows[0].opacity, BarValue::Mixed);
-    assert_eq!(v.rows[0].position, BarValue::Uniform(0.0));
+    assert_eq!(
+        v.rows[0].position,
+        BarValue::Uniform(StopPosition::new(0.0).unwrap())
+    );
     assert_eq!(v.rows[1].position, BarValue::Mixed);
     assert!(
         v.bar.is_none(),

@@ -7,7 +7,7 @@ import { StyleRow } from "@/components/StyleRow";
 import { CAP_OPTIONS, JOIN_OPTIONS, PAINT_OPTIONS } from "@/components/styleOptions";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { Tooltip } from "@/components/ui/tooltip";
-import { colourPanelOf } from "@/hooks/useStylePanel";
+import { colourPanelOf } from "@/lib/colourPanel";
 import type { StylePanelApi } from "@/hooks/useStylePanel";
 import { widthText } from "@/lib/styleColor";
 

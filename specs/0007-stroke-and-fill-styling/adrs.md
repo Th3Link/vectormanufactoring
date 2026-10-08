@@ -517,7 +517,7 @@ already there.
   `Session::set_fill_mode` for linear and radial returns without writing,
   because a gradient without stops is a dead fill (no paint, no clickable
   interior). PR 4 adds the minted seed stops and removes the early return.
-- **2026-10-09 (implementer): decisions in PR 4.** (1) **The stop list is a
+- **2026-10-08 (implementer): decisions in PR 4.** (1) **The stop list is a
   mergeable child container** (`LoroMap::ensure_mergeable_movable_list`), which
   answers the review note on concurrent first creation. Two peers that switch the
   same object to a gradient at once now keep both lists' stops and any edits made

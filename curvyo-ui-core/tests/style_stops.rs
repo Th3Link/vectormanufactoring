@@ -29,6 +29,10 @@ fn blue() -> Color {
     Color { r: 0, g: 0, b: 255 }
 }
 
+fn position(v: f64) -> StopPosition {
+    StopPosition::new(v).unwrap()
+}
+
 fn stop(counter: u64, at: f64, color: Color, alpha: f64) -> GradientStop {
     GradientStop {
         id: StopId::new(7, counter),
@@ -167,7 +171,7 @@ fn a_row_is_the_stop_of_that_rank_and_differing_fields_read_mixed() {
         &[stop(1, 0.0, red(), 1.0), stop(2, 0.5, blue(), 0.5)],
     );
     let view = editor(stops_panel(&objects(&document), &[a, b]));
-    assert_eq!(view.rows[0].position, BarValue::Uniform(0.0));
+    assert_eq!(view.rows[0].position, BarValue::Uniform(position(0.0)));
     assert_eq!(view.rows[0].color, BarValue::Uniform(red()));
     assert_eq!(view.rows[1].position, BarValue::Mixed);
     assert_eq!(view.rows[1].color, BarValue::Uniform(blue()));
@@ -191,8 +195,8 @@ fn identical_lists_show_the_ramp_in_position_order() {
     let view = editor(stops_panel(&objects(&document), &[a, b]));
     let bar = view.bar.expect("identical in value");
     assert_eq!(bar.len(), 2);
-    assert_eq!((bar[0].position, bar[0].color), (0.1, red()));
-    assert_eq!((bar[1].position, bar[1].color), (0.9, blue()));
+    assert_eq!((bar[0].position, bar[0].color), (position(0.1), red()));
+    assert_eq!((bar[1].position, bar[1].color), (position(0.9), blue()));
 }
 
 #[test]

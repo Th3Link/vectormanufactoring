@@ -15,8 +15,8 @@ use web_sys::HtmlCanvasElement;
 
 use crate::gpu_paint::{RampTexture, create_ramp_layout};
 use crate::gpu_pipeline::{
-    DEPTH_FORMAT, DepthMode, GpuVertex, ScreenTransform, TransformResources, create_depth_view,
-    create_msaa_view, create_pipeline, create_transform_resources, to_gpu_vertex,
+    DEPTH_FORMAT, DepthMode, ScreenTransform, TransformResources, create_depth_view,
+    create_msaa_view, create_pipeline, create_transform_resources, gpu_vertices,
 };
 
 /// `--canvas-bg` (`docs/design-system.md`): cleared behind every frame's
@@ -487,23 +487,4 @@ impl Gpu {
             pass.draw(overlay_start..end, 0..1);
         }
     }
-}
-
-/// Every draw-list vertex in the GPU's shape, shifted by `origin` (the
-/// document point at screen pixel (0, 0)) in `f64` before its own `f32` cast
-/// ([`to_gpu_vertex`]'s doc comment), tagged with its layer's depth and, for a
-/// gradient fill, its coordinate into a ramp texture of `ramp_rows` rows.
-fn gpu_vertices(
-    draw_list: &DrawList,
-    origin: curvyo_document_core::Point,
-    ramp_rows: usize,
-) -> Vec<GpuVertex> {
-    draw_list
-        .triangles
-        .iter()
-        .copied()
-        .zip(draw_list.vertex_depths())
-        .zip(draw_list.gradient_attributes(ramp_rows))
-        .map(|((vertex, depth), gradient)| to_gpu_vertex(vertex, origin, depth, gradient))
-        .collect()
 }

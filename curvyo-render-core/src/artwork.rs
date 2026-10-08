@@ -56,6 +56,10 @@ pub fn build_artwork(
     frames: &[Option<GradientFrame>],
     view: ViewTransform,
 ) -> DrawList {
+    debug_assert!(
+        frames.is_empty() || frames.len() == objects.len(),
+        "one frame per object, or none"
+    );
     let mut budget = DashBudget::per_frame();
     let mut list = DrawList::default();
     for (index, object) in objects.iter().enumerate() {
@@ -162,7 +166,7 @@ fn draw_fill(
     let start = list.triangles.len();
     list.extend_artwork(fill::fill(&path, color, tolerance_mm));
     if let Some((ramp, frame)) = gradient {
-        list.gradients.push(GradientFill {
+        list.push_gradient(GradientFill {
             start,
             end: list.triangles.len(),
             frame,

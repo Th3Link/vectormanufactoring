@@ -5,6 +5,7 @@
 //! item). Compiles for `wasm32` only, like `gpu.rs`.
 
 use curvyo_document_core::{Point, ViewTransform};
+use curvyo_render_core::DrawList;
 
 const SHADER_SOURCE: &str = r"
 struct ScreenTransform {
@@ -119,6 +120,25 @@ pub(super) fn to_gpu_vertex(
         depth,
         gradient,
     }
+}
+
+/// Every draw-list vertex in the GPU's shape, shifted by `origin` (the
+/// document point at screen pixel (0, 0)) in `f64` before its own `f32` cast
+/// ([`to_gpu_vertex`]'s doc comment), tagged with its layer's depth and, for a
+/// gradient fill, its coordinate into a ramp texture of `ramp_rows` rows.
+pub(super) fn gpu_vertices(
+    draw_list: &DrawList,
+    origin: curvyo_document_core::Point,
+    ramp_rows: usize,
+) -> Vec<GpuVertex> {
+    draw_list
+        .triangles
+        .iter()
+        .copied()
+        .zip(draw_list.vertex_depths())
+        .zip(draw_list.gradient_attributes(ramp_rows))
+        .map(|((vertex, depth), gradient)| to_gpu_vertex(vertex, origin, depth, gradient))
+        .collect()
 }
 
 /// The CPU-computed per-frame mapping from document millimetres straight

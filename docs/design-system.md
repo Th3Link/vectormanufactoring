@@ -755,7 +755,7 @@ differs from the rows above:
   with no node selected edits the paths of the object selection, and shows
   "Nothing selected" when the selection holds none.
 
-**As built (PR 4 of `0007`, 2026-10-09): the gradient stop editor.** The Fill type
+**As built (PR 4 of `0007`, 2026-10-08): the gradient stop editor.** The Fill type
 group has its four entries (None, Solid, Linear, Radial, 44 px each, 176 px with
 no label) and shows nothing pressed for several objects in different modes. Under
 a gradient mode come the bar (`GradientBar`), the stop list (`StopRows`), Add stop

@@ -20,8 +20,8 @@ const POSITION_STEPS_PER_UNIT: f64 = 1000.0;
 /// One row of the stop list: the stop of one rank in every edited object.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StopRowView {
-    /// The position, as a fraction 0 to 1.
-    pub position: BarValue<f64>,
+    /// The position.
+    pub position: BarValue<StopPosition>,
     /// The colour.
     pub color: BarValue<Color>,
     /// The stop's own opacity.
@@ -31,8 +31,8 @@ pub struct StopRowView {
 /// One stop of the gradient bar, in position order.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BarStop {
-    /// The position, as a fraction 0 to 1.
-    pub position: f64,
+    /// The position.
+    pub position: StopPosition,
     /// The colour.
     pub color: Color,
     /// The opacity.
@@ -121,7 +121,7 @@ pub fn stops_panel(objects: &[ObjectSnapshot], ids: &[NodeId]) -> StopsPanel {
     }
     let rows = (0..count)
         .map(|rank| StopRowView {
-            position: shared(lists.iter().map(|list| list[rank].position.get())),
+            position: shared(lists.iter().map(|list| list[rank].position)),
             color: shared(lists.iter().map(|list| list[rank].color)),
             opacity: shared(lists.iter().map(|list| list[rank].opacity)),
         })
@@ -135,7 +135,7 @@ pub fn stops_panel(objects: &[ObjectSnapshot], ids: &[NodeId]) -> StopsPanel {
         lists[0]
             .iter()
             .map(|stop| BarStop {
-                position: stop.position.get(),
+                position: stop.position,
                 color: stop.color,
                 opacity: stop.opacity,
             })

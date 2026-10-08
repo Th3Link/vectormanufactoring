@@ -119,7 +119,7 @@ fn gradient(d: &Document, id: NodeId, mode: FillMode, stops: Vec<GradientStop>) 
 }
 
 fn fills(s: &Session) -> Vec<GradientFill> {
-    s.draw_list().gradients
+    s.draw_list().gradients().to_vec()
 }
 
 // ------------------------------------------- AC 13, 17: switching fill type

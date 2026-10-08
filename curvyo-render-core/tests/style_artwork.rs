@@ -519,8 +519,8 @@ fn a_gradient_fill_is_a_layer_with_a_ramp_and_a_frame() {
     gradient(&document, id, FillMode::Linear, &red_to_white());
     let list = build_artwork(&objects_of(&document), &[Some(frame())], view());
     assert_eq!(list.layers().len(), 1);
-    assert_eq!(list.gradients.len(), 1);
-    let fill = &list.gradients[0];
+    assert_eq!(list.gradients().len(), 1);
+    let fill = &list.gradients()[0];
     assert_eq!((fill.start, fill.end), (0, list.triangles.len()));
     assert!(!fill.radial);
     assert_eq!(fill.ramp.first(), [255, 0, 0, 255]);
@@ -533,7 +533,7 @@ fn a_gradient_fill_is_a_layer_with_a_ramp_and_a_frame() {
     // Radial is the same layer with the flag.
     gradient(&document, id, FillMode::Radial, &[]);
     let radial = build_artwork(&objects_of(&document), &[Some(frame())], view());
-    assert!(radial.gradients[0].radial);
+    assert!(radial.gradients()[0].radial);
 }
 
 /// Without a frame to span a gradient paints flat in its first stop's colour.
@@ -543,7 +543,7 @@ fn a_gradient_without_a_frame_is_flat_in_the_first_colour() {
     let id = rect(&document, 0.0, 0.0, 10.0, 10.0);
     gradient(&document, id, FillMode::Linear, &red_to_white());
     let list = build_artwork(&objects_of(&document), &[None], view());
-    assert_eq!(list.gradients.len(), 0);
+    assert_eq!(list.gradients().len(), 0);
     assert_eq!(list.layers().len(), 1);
 }
 
@@ -568,7 +568,7 @@ fn zero_and_one_stop_gradients_follow_the_svg_rules() {
     };
     gradient(&document, id, FillMode::Linear, &[one]);
     let list = build_artwork(&objects_of(&document), &[Some(frame())], view());
-    assert_eq!(list.gradients.len(), 0, "uniform, no ramp lookup");
+    assert_eq!(list.gradients().len(), 0, "uniform, no ramp lookup");
     assert!(
         list.triangles
             .iter()
@@ -592,8 +592,8 @@ fn gradient_ranges_follow_the_tree_order() {
         &[Some(frame()), None, Some(frame())],
         view(),
     );
-    assert_eq!(list.gradients.len(), 2);
-    let (first, second) = (&list.gradients[0], &list.gradients[1]);
+    assert_eq!(list.gradients().len(), 2);
+    let (first, second) = (&list.gradients()[0], &list.gradients()[1]);
     assert!(first.end <= second.start, "ordered and disjoint");
     assert_eq!(second.end, list.triangles.len());
     assert!(second.radial && !first.radial);
@@ -617,7 +617,7 @@ fn gradient_attributes_tag_only_the_gradient_vertices() {
     );
     let attributes = list.gradient_attributes(2);
     assert_eq!(attributes.len(), list.triangles.len());
-    let (first, second) = (&list.gradients[0], &list.gradients[1]);
+    let (first, second) = (&list.gradients()[0], &list.gradients()[1]);
     for (index, attribute) in attributes.iter().enumerate() {
         if (first.start..first.end).contains(&index) {
             assert_eq!(attribute[2..], [0.25, 1.0], "row 0 of 2, linear");

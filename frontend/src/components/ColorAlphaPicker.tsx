@@ -7,7 +7,7 @@ import { StyleRow } from "@/components/StyleRow";
 import { Swatch } from "@/components/Swatch";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip } from "@/components/ui/tooltip";
-import type { ColourPanel } from "@/hooks/useStylePanel";
+import type { ColourPanel } from "@/lib/colourPanel";
 import { percentText, toHex } from "@/lib/styleColor";
 
 const HEX_MESSAGES = {
