@@ -542,12 +542,12 @@ mod tests {
                 ..DecorationInput::default()
             },
         );
-        let casing: Vec<_> = list
-            .triangles
-            .iter()
-            .filter(|v| v.color == theme::SELECTION_CASING)
-            .collect();
-        assert!(!casing.is_empty());
+        assert!(
+            list.triangles
+                .iter()
+                .any(|v| v.color == theme::SELECTION_CASING),
+            "a white casing is drawn"
+        );
         let first_accent = list
             .triangles
             .iter()
