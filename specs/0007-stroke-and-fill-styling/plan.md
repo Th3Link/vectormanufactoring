@@ -50,31 +50,34 @@ readiness check section 10). PR 1 is invisible to the maker; PR 3 is the first d
 
 ### PR 2: rendering and hit-testing (visible: draw order)
 
-- [ ] 1. `gpu.rs` pure move of pipeline and shader set-up into `gpu_pipeline.rs` (no behaviour
+- [x] 1. `gpu.rs` pure move of pipeline and shader set-up into `gpu_pipeline.rs` (no behaviour
   change; keeps `gpu.rs` under the module limit).
-- [ ] 2. `render-core/artwork.rs`: one pass over `&[ObjectSnapshot]` in tree order, each object
+- [x] 2. `render-core/artwork.rs`: one pass over `&[ObjectSnapshot]` in tree order, each object
   fill then stroke; `Session` hands it the objects with the live node-drag paths substituted;
-  decorations split out of `build_draw_list` (AC 26).
-- [ ] 3. Stroke on/off, opacity, join, cap (miter limit 4, `Miter` not `MiterClip`) (AC 5, 6,
+  decorations split out of `build_draw_list` (`build_decorations`) (AC 26).
+- [x] 3. Stroke on/off, opacity, join, cap (miter limit 4, `Miter` not `MiterClip`) (AC 5, 6,
   10, 11, 12).
-- [ ] 4. `dash.rs`: dashes from the document width times the ratios, each dash a real sub-curve
+- [x] 4. `dash.rs`: dashes from the document width times the ratios, each dash a real sub-curve
   with its own caps; period under 2 screen px, more than 2000 dashes for one object, or more than
-  50 000 in a frame draws solid (AC 7, 8, 9).
-- [ ] 5. `fill.rs`: non-zero fill, open paths closed with a chord for the fill only (AC 13, 14,
-  15).
-- [ ] 6. Depth layers in `gpu.rs`/`gpu_pipeline.rs`: one depth value per paint layer, `Less`
-  test, so a translucent stroke covers each pixel once; MSAA sample count of the depth attachment
-  equal to the colour target; recorded browser pixel check (AC 6).
-- [ ] 7. `geometry-core` winding function; `ui-core` `hit_test_object` rule (criterion 27), press
-  order with option B (criteria 28, 29), hover following the press, double-click on a filled
-  interior (AC 23, 27, 28, 29).
-- [ ] 8. Editor lines over fills: white casing for the selection box, hover box (60% accent),
+  50 000 in a frame draws solid; an unbounded width is capped for display (AC 7, 8, 9).
+- [x] 5. `fill.rs`: non-zero fill, open paths closed with a chord for the fill only (AC 13, 14,
+  15). Gradient kinds are not painted before PR 4.
+- [x] 6. Depth layers in `gpu.rs`/`gpu_pipeline.rs`: one depth value per paint layer
+  (`DrawList::vertex_depths`, native tests), `Less` test, so a translucent stroke covers each pixel
+  once; a second pipeline for the overlay; depth attachment with the colour target's sample count
+  (AC 6). The recorded browser pixel check is in the PR description.
+- [x] 7. `geometry-core` winding function (`contains_point`); `ui-core` `hit_test_object` rule
+  (criterion 27), press order with option B (criteria 28, 29), hover following the press,
+  double-click on a filled interior (AC 23, 27, 28, 29). The cursor is unchanged: it never had an
+  outline-hit cursor (open point for the lead).
+- [x] 8. Editor lines over fills: white casing for the selection box, hover box (60% accent),
   preview outline, glyphs, handle lines, guides, pivot; `--hover-box` token (AC 40, 41).
-- [ ] 9. PR 1 review notes (`docs/technical-debt.md`, "Notes for the next parts"): guard dash and
-  render code against an unbounded stroke width; handle the `Result` of `document.resize_*` in
-  `commit_resize`/`commit_gesture` instead of `let _ =`.
-- [ ] 10. `docs/technical-debt.md`: dated line on the `Session` size item; draw-list cache moves
-  into this PR if PR 1's benchmark passed 25 ms.
+- [x] 9. PR 1 review notes: dash and render code guard against an unbounded stroke width;
+  `commit_resize` repeats a resize without the width when the document refuses the width, instead of
+  dropping the geometry.
+- [x] 10. `docs/technical-debt.md`: dated lines (depth memory, `gpu.rs` split, gradient not painted).
+- [x] 11. The tester's literal format version pin in `acceptance_0007_pr1_tester.rs` made
+  renumber-proof.
 
 ### PR 3: panel with stroke and solid fill (first demo)
 

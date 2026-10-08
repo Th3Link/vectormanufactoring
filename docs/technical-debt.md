@@ -559,6 +559,16 @@ cost) or make the choice DPR-conditional (e.g. no MSAA once the backing
 buffer is already oversampled past some ratio) before reaching for anything
 more invasive.
 
+**2026-10-08 (`stroke-and-fill-styling` PR 2):** the render pass now has a
+`Depth32Float` attachment with the same sample count as the color target (a
+render pass refuses a mismatch), and the sample count is chosen among those
+supported by both formats. That roughly doubles the memory of the multisampled
+target again (4 bytes per sample for depth against 4 for color). Not measured on
+the customer's WebKitGTK machine; the lever is unchanged
+(`PREFERRED_SAMPLE_COUNTS`). It buys single coverage per paint layer: a
+translucent stroke with a join or a self-crossing is painted once per pixel
+instead of blending twice at every node.
+
 ## MSAA has a sharpness ceiling Inkscape's Cairo backend does not
 
 The customer compared this slice's lines directly against Inkscape's and
@@ -832,3 +842,13 @@ pure move of the tolerance helpers to `session/tolerances.rs`.
   lost). The ADR accepts this. For PR 4: consider Loro's mergeable movable list.
   `add_stop` no longer creates the list (only the fill-mode switch and Split
   do), so there is one creation path to reason about.
+
+**2026-10-08 (`stroke-and-fill-styling` PR 2):** `gpu.rs` was 695 lines; its
+shader, vertex shape, screen transform, pipeline and MSAA target moved to
+`gpu_pipeline.rs` (a pure move, `gpu.rs` is now about 470 lines with the depth
+attachment), so the depth state and, in PR 4, the ramp texture go there.
+Gradient fills are stored and hit-tested (`Fill::paints`) but not painted until
+PR 4; a file with a gradient fill shows it as no fill until then. The editor
+lines' white casing makes the white-triangle counts of older tests depend on
+box size; those tests count fans only (`white_count` in
+`acceptance_unified_editing.rs`).
