@@ -10,8 +10,10 @@ const HATCH = "repeating-linear-gradient(45deg, var(--checker-a) 0 4px, var(--mi
 interface RampTrackProps {
   /** The stops in position order; `null` is a neutral hatched track. */
   stops: BarStop[] | null;
-  /** A press on the track (not a thumb) at `clientX`. */
+  /** A press with the primary button on the track (not a thumb) at `clientX`. */
   onPress: (clientX: number) => void;
+  /** Adding is refused (16 stops): the cursor says so. */
+  blocked: boolean;
 }
 
 /**
@@ -22,7 +24,7 @@ interface RampTrackProps {
  * checkerboard; with several objects whose lists differ, a hatched track.
  */
 export const RampTrack = forwardRef<HTMLDivElement, RampTrackProps>(function RampTrack(
-  { stops, onPress },
+  { stops, onPress, blocked },
   ref,
 ) {
   const gradientId = useId().replace(/:/g, "");
@@ -30,14 +32,14 @@ export const RampTrack = forwardRef<HTMLDivElement, RampTrackProps>(function Ram
     <div
       ref={ref}
       data-testid="gradient-bar"
-      className="relative h-4 cursor-crosshair rounded-[3px] border border-[color-mix(in_srgb,var(--toolbar-icon)_60%,transparent)]"
+      className={`relative h-4 ${blocked ? "cursor-not-allowed" : "cursor-crosshair"} rounded-[3px] border border-[color-mix(in_srgb,var(--toolbar-icon)_60%,transparent)]`}
       style={{
         backgroundImage: stops ? CHECKER : HATCH,
         backgroundSize: "12px 12px",
         backgroundPosition: "0 0, 6px 6px",
         backgroundColor: "var(--checker-a)",
       }}
-      onPointerDown={(event) => onPress(event.clientX)}
+      onPointerDown={(event) => event.button === 0 && onPress(event.clientX)}
       aria-hidden={stops ? undefined : true}
     >
       {stops && stops.length > 0 && (

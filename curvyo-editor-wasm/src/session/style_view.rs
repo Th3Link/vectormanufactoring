@@ -144,7 +144,10 @@ fn stops_fields(panel: &StopsPanel) -> StopsFields {
     };
     match panel {
         StopsPanel::Hidden => {}
-        StopsPanel::DifferentCounts => fields.state = "different-counts",
+        StopsPanel::DifferentCounts { box_note } => {
+            fields.state = "different-counts";
+            fields.box_note = *box_note;
+        }
         StopsPanel::Editor(view) => {
             fields.state = "editor";
             fields.objects = u32::try_from(view.objects).unwrap_or(u32::MAX);

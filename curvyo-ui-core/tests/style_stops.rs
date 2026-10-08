@@ -118,8 +118,29 @@ fn the_same_mode_with_different_counts_says_so() {
     document.add_stop(b, stop(3, 0.5, red(), 1.0)).unwrap();
     assert!(matches!(
         stops_panel(&objects(&document), &[a, b]),
-        StopsPanel::DifferentCounts
+        StopsPanel::DifferentCounts { box_note: false }
     ));
+}
+
+#[test]
+fn the_different_counts_message_keeps_the_box_note() {
+    let document = Document::new(1);
+    let star = document.create_polygon(
+        StarFrame {
+            center: Point::new(50.0, 50.0),
+            radius: Length::from_mm(10.0),
+            angle: curvyo_document_core::Angle::from_radians(0.0),
+        },
+        PointCount::new(5).unwrap(),
+    );
+    let a = rect(&document, 0.0);
+    set(&document, star, FillMode::Linear, &two_stops());
+    set(&document, a, FillMode::Linear, &two_stops());
+    document.add_stop(a, stop(3, 0.5, red(), 1.0)).unwrap();
+    assert_eq!(
+        stops_panel(&objects(&document), &[a, star]),
+        StopsPanel::DifferentCounts { box_note: true }
+    );
 }
 
 #[test]
@@ -536,6 +557,20 @@ mod entry {
             Err(StyleEntryError::HexEightDigits)
         );
         assert!(StopField::from_name("angle").is_none());
+    }
+
+    /// A position set by a drag or a key is stored to 0.1 %, so a 1 % step from
+    /// it lands on a round number.
+    #[test]
+    fn a_dragged_position_is_rounded_to_a_tenth_of_a_percent() {
+        assert_eq!(
+            StopField::Position.drag_change(52.049),
+            StopChange::Position(StopPosition::new(0.52).unwrap())
+        );
+        assert_eq!(
+            StopField::Position.drag_change(79.918),
+            StopChange::Position(StopPosition::new(0.799).unwrap())
+        );
     }
 
     #[test]

@@ -946,5 +946,9 @@ box size; those tests count fans only (`white_count` in
   under the limit; moving `DrawList` and `Vertex` to a `draw_list.rs` is the
   cleaner end state.
 - **Ramps are rebuilt and uploaded every frame** (256 `ramp_at` calls per
-  gradient plus the texture write). Bounded by the 1024 cap and fine today; the
-  draw-list cache of the canvas performance item above should cover them.
+  gradient plus the texture write). Measured in the UX review (the Browser
+  pane's software GL, so absolute values are high): 199 gradient rectangles
+  render in 10.7 ms per frame against 6.2 ms for the same 199 solid fills, about
+  23 us per gradient, which extrapolates to about +23 ms per frame at the 1024
+  cap. Fine at 200; the draw-list cache of the canvas performance item above
+  should cover the ramps.

@@ -11,7 +11,7 @@ interface StopThumbProps {
   row: StopRow | undefined;
   selected: boolean;
   canRemove: boolean;
-  onPress: (event: PointerEvent<HTMLElement>, rank: number) => void;
+  onPress: (event: PointerEvent<HTMLElement>, rank: number, position: number) => void;
 }
 
 /**
@@ -51,8 +51,14 @@ export function StopThumb({
     } else if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
       event.stopPropagation();
-      if (canRemove) {
-        panel.removeStop(rank);
+      if (canRemove && panel.removeStop(rank)) {
+        // The thumb unmounts: focus goes to its neighbour (the same rank, or the
+        // last), so the keyboard does not fall to the page.
+        const bar = event.currentTarget.parentElement;
+        window.setTimeout(() => {
+          const thumbs = bar?.querySelectorAll<HTMLElement>('[role="slider"]');
+          thumbs?.[Math.min(rank, thumbs.length - 1)]?.focus();
+        }, 0);
       }
     }
   };
@@ -65,7 +71,7 @@ export function StopThumb({
       aria-valuemax={100}
       aria-valuenow={Math.round(stop.position * 10) / 10}
       aria-valuetext={`${percentText(stop.position)}%, ${toHex(stop.color)}`}
-      onPointerDown={(event) => onPress(event, rank)}
+      onPointerDown={(event) => onPress(event, rank, stop.position)}
       onKeyDown={onKey}
       onFocus={() => !selected && panel.selectStop(rank)}
       className={`absolute top-0 h-4 w-3 -translate-x-1/2 cursor-pointer rounded-b-[3px] border-[1.5px] border-[var(--toolbar-icon)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--editor-accent)] ${

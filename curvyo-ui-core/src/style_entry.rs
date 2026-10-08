@@ -272,8 +272,10 @@ impl StopField {
     #[must_use]
     pub fn drag_change(self, value: f64) -> StopChange {
         match self {
+            // To 0.1 %: a position set by the pointer or a key is a round number.
             Self::Position => StopChange::Position(
-                StopPosition::new((value / 100.0).clamp(0.0, 1.0)).unwrap_or(StopPosition::START),
+                StopPosition::new(((value * 10.0).round() / 1000.0).clamp(0.0, 1.0))
+                    .unwrap_or(StopPosition::START),
             ),
             Self::Color => {
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]

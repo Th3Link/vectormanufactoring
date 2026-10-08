@@ -431,7 +431,10 @@ fn ac34_different_counts_message_but_different_modes_or_solid_hide_the_editor() 
     ];
     set(&d, a, FillMode::Linear, two.clone());
     set(&d, b, FillMode::Linear, three.clone());
-    assert_eq!(stops_panel(&objs(&d), &[a, b]), StopsPanel::DifferentCounts);
+    assert_eq!(
+        stops_panel(&objs(&d), &[a, b]),
+        StopsPanel::DifferentCounts { box_note: false }
+    );
     set(&d, b, FillMode::Radial, three);
     assert_eq!(
         stops_panel(&objs(&d), &[a, b]),

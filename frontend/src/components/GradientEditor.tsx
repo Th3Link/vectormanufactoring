@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import { GradientBar } from "@/components/GradientBar";
 import { StopRows } from "@/components/StopRows";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -18,11 +20,16 @@ interface GradientEditorProps {
  */
 export function GradientEditor({ panel, closeKey, onReturnFocus }: GradientEditorProps) {
   const { view } = panel;
+  const root = useRef<HTMLDivElement>(null);
+  useFocusFollowsSelection(root, view.selectedStop);
   if (view.stopsState === "different-counts") {
     return (
-      <p className="text-xs text-[var(--panel-muted-fg)]">
-        Selected gradients have different numbers of stops.
-      </p>
+      <div className="flex flex-col gap-2">
+        <p className="text-xs text-[var(--panel-muted-fg)]">
+          Selected gradients have different numbers of stops.
+        </p>
+        <BoxNote show={view.stopsBoxNote} />
+      </div>
     );
   }
   if (view.stopsState !== "editor") {
@@ -30,7 +37,7 @@ export function GradientEditor({ panel, closeKey, onReturnFocus }: GradientEdito
   }
   const single = view.stopsObjects === 1;
   return (
-    <div className="flex flex-col gap-2">
+    <div ref={root} className="flex flex-col gap-2">
       <GradientBar
         panel={panel}
         stops={view.stopsBarShown ? view.stopBar : null}
@@ -69,12 +76,49 @@ export function GradientEditor({ panel, closeKey, onReturnFocus }: GradientEdito
           </span>
         </Tooltip>
       )}
-      {view.stopsBoxNote && (
-        <p className="text-xs text-[var(--panel-muted-fg)]">
-          Gradient spans the shape&apos;s selection box, which is the square around a polygon or
-          star.
-        </p>
-      )}
+      <BoxNote show={view.stopsBoxNote} />
     </div>
   );
+}
+
+/** The known limit of a polygon's or star's gradient box (criterion 21). */
+function BoxNote({ show }: { show: boolean }) {
+  return show ? (
+    <p className="text-xs text-[var(--panel-muted-fg)]">
+      Gradient spans the shape&apos;s selection box, which is the square around a polygon or star.
+    </p>
+  ) : null;
+}
+
+/**
+ * Thumbs and rows are keyed by rank, so when an edit re-sorts the stops the
+ * keyboard focus would stay on the old rank, which is another stop now. The
+ * selection follows the stop; this moves the focus with it: from a thumb to the
+ * thumb of the selected stop, from a control of a row to the same control of the
+ * selected stop's row.
+ */
+function useFocusFollowsSelection(root: React.RefObject<HTMLDivElement | null>, selected: number) {
+  useEffect(() => {
+    const container = root.current;
+    const active = document.activeElement;
+    if (!container || selected < 0 || !active || !container.contains(active)) {
+      return;
+    }
+    const thumbs = Array.from(container.querySelectorAll<HTMLElement>('[role="slider"]'));
+    const thumb = thumbs.indexOf(active as HTMLElement);
+    if (thumb >= 0) {
+      if (thumb !== selected) {
+        thumbs[selected]?.focus();
+      }
+      return;
+    }
+    const rows = Array.from(container.querySelectorAll<HTMLElement>("ol > li"));
+    const row = rows.findIndex((item) => item.contains(active));
+    if (row >= 0 && row !== selected) {
+      const controls = (item: HTMLElement | undefined) =>
+        Array.from(item?.querySelectorAll<HTMLElement>("input, button") ?? []);
+      const index = controls(rows[row]).indexOf(active as HTMLElement);
+      controls(rows[selected])[index]?.focus();
+    }
+  }, [root, selected]);
 }

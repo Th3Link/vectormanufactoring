@@ -64,8 +64,10 @@ export function StopRows({ panel, closeKey, onReturnFocus }: StopRowsProps) {
             }
             after={
               view.stopsObjects === 1 ? (
+                // Opens well to the left, clear of the row's own fields.
                 <Tooltip
                   side="left"
+                  offset={252}
                   content={view.stopsCanRemove ? "Remove stop" : "A gradient keeps at least 2 stops"}
                 >
                   <span className="inline-flex">
@@ -74,9 +76,21 @@ export function StopRows({ panel, closeKey, onReturnFocus }: StopRowsProps) {
                       aria-label={`Remove stop ${rank + 1}`}
                       disabled={!view.stopsCanRemove}
                       onClick={(event) => {
-                        panel.removeStop(rank);
+                        const list = event.currentTarget.closest("ol");
+                        if (!panel.removeStop(rank)) {
+                          return;
+                        }
                         if (event.detail > 0) {
                           onReturnFocus();
+                        } else {
+                          // From the keyboard the button unmounts: focus goes to
+                          // the Remove button of the neighbouring row.
+                          window.setTimeout(() => {
+                            const buttons = list?.querySelectorAll<HTMLElement>(
+                              'button:not(:disabled)[aria-label^="Remove stop"]',
+                            );
+                            buttons?.[Math.min(rank, buttons.length - 1)]?.focus();
+                          }, 0);
                         }
                       }}
                       className="flex size-7 items-center justify-center rounded-[5px] text-[var(--toolbar-icon)] outline-none enabled:hover:bg-[var(--editor-accent-hover)] focus-visible:ring-2 focus-visible:ring-[var(--editor-accent)] disabled:text-[var(--field-disabled-fg)] disabled:opacity-60"

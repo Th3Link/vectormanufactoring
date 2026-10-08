@@ -11,6 +11,8 @@ interface TooltipProps {
   /** Which side opens. No default: the panel's tooltips open left, over the
    * canvas, and the tool rail's open right. */
   side: "top" | "right" | "bottom" | "left";
+  /** Distance from the trigger, px (default 8). */
+  offset?: number;
   /** The trigger: one element that takes a ref. */
   children: ReactElement;
 }
@@ -19,15 +21,15 @@ interface TooltipProps {
  * A tooltip in the house style: 400 ms, `bg-popover`, rendered in a portal so
  * it may cover the canvas but never the panel row it belongs to.
  */
-export function Tooltip({ content, side, children }: TooltipProps) {
+export function Tooltip({ content, side, offset = 8, children }: TooltipProps) {
   return (
     <TooltipPrimitive.Root delayDuration={400}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
         <TooltipPrimitive.Content
           side={side}
-          sideOffset={8}
-          className="z-[60] max-w-64 rounded-md bg-popover px-2 py-1 text-xs text-popover-foreground ring-1 ring-foreground/10"
+          sideOffset={offset}
+          className="pointer-events-none z-[60] max-w-64 rounded-md bg-popover px-2 py-1 text-xs text-popover-foreground ring-1 ring-foreground/10"
         >
           {content}
         </TooltipPrimitive.Content>

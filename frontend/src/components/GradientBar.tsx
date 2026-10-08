@@ -2,6 +2,7 @@ import { useRef } from "react";
 
 import { RampTrack } from "@/components/RampTrack";
 import { StopThumb } from "@/components/StopThumb";
+import { Tooltip } from "@/components/ui/tooltip";
 import type { BarStop, StopRow, StylePanelApi } from "@/hooks/useStylePanel";
 import { useThumbDrag } from "@/hooks/useThumbDrag";
 
@@ -40,14 +41,26 @@ export function GradientBar({
     return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
   };
   const press = useThumbDrag(panel, fractionAt);
+  const full = stops !== null && stops.length >= 16;
+
+  const rampTrack = (
+    <RampTrack
+      ref={track}
+      stops={stops}
+      blocked={full}
+      onPress={(clientX) => stops && canAdd && panel.addStopAt(fractionAt(clientX))}
+    />
+  );
 
   return (
     <div className="flex flex-col" style={{ width: BAR_WIDTH }}>
-      <RampTrack
-        ref={track}
-        stops={stops}
-        onPress={(clientX) => stops && canAdd && panel.addStopAt(fractionAt(clientX))}
-      />
+      {full ? (
+        <Tooltip side="left" content="A gradient holds at most 16 stops">
+          <span className="block">{rampTrack}</span>
+        </Tooltip>
+      ) : (
+        rampTrack
+      )}
       {stops && (
         <div className="relative h-4">
           {stops.map((stop, rank) => (

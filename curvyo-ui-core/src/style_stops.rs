@@ -66,7 +66,10 @@ pub enum StopsPanel {
     Hidden,
     /// Every edited object is in the same gradient mode, with different stop
     /// counts: the editor is replaced by a message.
-    DifferentCounts,
+    DifferentCounts {
+        /// The selection holds a polygon or star: the box note still shows.
+        box_note: bool,
+    },
     /// The editor.
     Editor(StopEditorView),
 }
@@ -117,7 +120,9 @@ pub fn stops_panel(objects: &[ObjectSnapshot], ids: &[NodeId]) -> StopsPanel {
     let lists: Vec<Vec<GradientStop>> = objects_edited.iter().map(|o| sorted_of(o)).collect();
     let count = lists[0].len();
     if lists.iter().any(|list| list.len() != count) {
-        return StopsPanel::DifferentCounts;
+        return StopsPanel::DifferentCounts {
+            box_note: objects_edited.iter().any(|o| is_polygon_or_star(o)),
+        };
     }
     let rows = (0..count)
         .map(|rank| StopRowView {
