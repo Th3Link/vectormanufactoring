@@ -288,6 +288,24 @@ pub enum ObjectSnapshot {
 }
 
 impl ObjectSnapshot {
+    /// This object's style, whichever kind it is.
+    #[must_use]
+    pub const fn style(&self) -> &Style {
+        match self {
+            Self::Path(snapshot) => &snapshot.style,
+            Self::Primitive(snapshot) => &snapshot.style,
+        }
+    }
+
+    /// This object's style, mutably: the editor's ephemeral panel preview
+    /// replaces it for drawing; nothing is written to the document.
+    pub const fn style_mut(&mut self) -> &mut Style {
+        match self {
+            Self::Path(snapshot) => &mut snapshot.style,
+            Self::Primitive(snapshot) => &mut snapshot.style,
+        }
+    }
+
     /// This object's identity, whichever kind it is.
     #[must_use]
     pub const fn id(&self) -> NodeId {
@@ -538,6 +556,19 @@ mod tests {
             style: Style::default(),
             rotation: Angle::from_radians(0.0),
         }
+    }
+
+    /// `style()` and `style_mut()` read and change the style of either kind.
+    #[test]
+    fn style_accessors_reach_the_style_of_either_kind() {
+        let mut object = ObjectSnapshot::Primitive(rect_primitive(Point::new(0.0, 0.0), 1.0, 1.0));
+        assert_eq!(object.style(), &Style::default());
+        object.style_mut().stroke.enabled = false;
+        assert!(!object.style().stroke.enabled);
+        let ObjectSnapshot::Primitive(inner) = &object else {
+            panic!("a primitive");
+        };
+        assert!(!inner.style.stroke.enabled);
     }
 
     #[test]

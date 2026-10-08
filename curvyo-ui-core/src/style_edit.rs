@@ -76,12 +76,8 @@ impl StyleEditor {
             return;
         };
         for object in objects.iter_mut().filter(|o| pending.ids.contains(&o.id())) {
-            let style = match object {
-                ObjectSnapshot::Path(path) => &mut path.style,
-                ObjectSnapshot::Primitive(primitive) => &mut primitive.style,
-            };
             // A refused edit (a negative width) previews as nothing.
-            let _ = pending.edit.apply_to(style);
+            let _ = pending.edit.apply_to(object.style_mut());
         }
     }
 }

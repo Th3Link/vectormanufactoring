@@ -210,7 +210,11 @@ impl Viewport {
     /// criterion 39). A later resize that does not match it (another width
     /// change, or a height change) is an ordinary window resize.
     pub fn keep_origin_for_width_change(&mut self, delta: f64) {
-        self.keep_origin_for = Some(delta);
+        // Two toggles before the browser reports a resize add up: a panel that
+        // opened and closed again changes nothing, so nothing is left pending
+        // for a later window resize to be mistaken for.
+        let total = self.keep_origin_for.unwrap_or(0.0) + delta;
+        self.keep_origin_for = (total.abs() > PANEL_TOGGLE_TOLERANCE_PX).then_some(total);
     }
 
     /// The canvas's size in CSS pixels, `(0.0, 0.0)` before the host's first
@@ -459,5 +463,19 @@ mod tests {
         viewport.resize(440.0, 500.0);
         let after = viewport.screen_to_document(220.0, 250.0);
         assert!((centre.x - after.x).abs() < 1e-9);
+    }
+
+    /// A panel opened and closed again before any resize reported leaves no
+    /// request behind: a later window resize of the same width keeps the centre.
+    #[test]
+    fn two_toggles_before_a_resize_leave_nothing_pending() {
+        let mut viewport = Viewport::new();
+        viewport.resize(1000.0, 600.0);
+        viewport.keep_origin_for_width_change(-280.0);
+        viewport.keep_origin_for_width_change(280.0);
+        let centre = viewport.screen_to_document(500.0, 300.0);
+        viewport.resize(1280.0, 600.0);
+        let after = viewport.screen_to_document(640.0, 300.0);
+        assert!((centre.x - after.x).abs() < 1e-9, "an ordinary resize");
     }
 }

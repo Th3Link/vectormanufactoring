@@ -1,7 +1,8 @@
-//! Typed values of the Style panel: how the text of a field becomes the style
-//! edit it commits (`specs/0007-stroke-and-fill-styling` criteria 5, 6, 14).
+//! How the host's input to the Style panel (typed text and choice words)
+//! becomes the style edit it commits (`specs/0007-stroke-and-fill-styling`
+//! criteria 5, 6, 13, 14).
 
-use curvyo_document_core::{Color, Length, Opacity, StyleEdit};
+use curvyo_document_core::{Color, FillMode, Length, LineCap, LineJoin, Opacity, StyleEdit};
 
 use crate::transform_entry::parse_entry_number;
 
@@ -175,5 +176,39 @@ impl StyleField {
             Self::FillOpacity => Some(StyleEdit::FillOpacity(opacity_from_percent(percent))),
             _ => None,
         }
+    }
+}
+
+/// Parses the host's join word.
+#[must_use]
+pub fn join_from_name(name: &str) -> Option<LineJoin> {
+    match name {
+        "miter" => Some(LineJoin::Miter),
+        "round" => Some(LineJoin::Round),
+        "bevel" => Some(LineJoin::Bevel),
+        _ => None,
+    }
+}
+
+/// Parses the host's cap word.
+#[must_use]
+pub fn cap_from_name(name: &str) -> Option<LineCap> {
+    match name {
+        "butt" => Some(LineCap::Butt),
+        "round" => Some(LineCap::Round),
+        "square" => Some(LineCap::Square),
+        _ => None,
+    }
+}
+
+/// Parses the host's fill-mode word.
+#[must_use]
+pub fn fill_mode_from_name(name: &str) -> Option<FillMode> {
+    match name {
+        "none" => Some(FillMode::None),
+        "solid" => Some(FillMode::Solid),
+        "linear" => Some(FillMode::Linear),
+        "radial" => Some(FillMode::Radial),
+        _ => None,
     }
 }

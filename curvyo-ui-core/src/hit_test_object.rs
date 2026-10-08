@@ -8,7 +8,7 @@
 //! definition of "near an outline"; the shape tools no longer hit-test at all.
 
 use curvyo_document_core::{
-    NodeId, ObjectSnapshot, Point, Style, Tolerance, Vec2, outline_of_rotated, shape_frame_bounds,
+    NodeId, ObjectSnapshot, Point, Tolerance, Vec2, outline_of_rotated, shape_frame_bounds,
 };
 use curvyo_geometry_core::{OutlineTriple, contains_point, nearest_point_on_segment};
 
@@ -136,20 +136,13 @@ fn outline_of(object: &ObjectSnapshot) -> (Vec<OutlineTriple>, bool) {
     }
 }
 
-pub(crate) const fn style_of(object: &ObjectSnapshot) -> &Style {
-    match object {
-        ObjectSnapshot::Path(path) => &path.style,
-        ObjectSnapshot::Primitive(primitive) => &primitive.style,
-    }
-}
-
 /// Whether `object` paints a fill whose interior contains `point`: the
 /// object takes part exactly when the renderer would paint a fill for it
 /// (`Fill::paints`; opacity 0 still counts), and the point lies in the area
 /// that fill covers. An open path's interior is closed with a chord, a closed
 /// one's is bounded by its real closing segment (acceptance criterion 23).
 fn fills_point(object: &ObjectSnapshot, point: Point) -> bool {
-    if !style_of(object).fill.paints() || certainly_farther_than(object, point, 0.0) {
+    if !object.style().fill.paints() || certainly_farther_than(object, point, 0.0) {
         return false;
     }
     let (outline, closed) = outline_of(object);
