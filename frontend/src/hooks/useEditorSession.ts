@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { modifiersAfterKeyEvent } from "@/lib/keyModifiers";
+import { ModifierTracker } from "@/lib/keyModifiers";
 import { createSession, openSession } from "@/lib/editorSession";
 import type { WasmSession } from "@/lib/editorSession";
 import type { EditHint } from "@/components/EditHintChip";
@@ -692,6 +692,20 @@ export function useEditorSession(
    * pivot marker and live preview react the instant Shift/Ctrl change,
    * with no pointer motion needed. */
   const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  /** The Shift, Ctrl and Alt keys that are down (`lib/keyModifiers.ts`). */
+  const modifierTrackerRef = useRef(new ModifierTracker());
+  /** A pointer event's flags are right: they correct the tracked keys, so a
+   * key-up that never arrived is forgotten. */
+  const syncTrackedModifiers = useCallback(
+    (event: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean; altKey: boolean }) => {
+      modifierTrackerRef.current.pointerFlags({
+        shift: event.shiftKey,
+        ctrl: event.ctrlKey || event.metaKey,
+        alt: event.altKey,
+      });
+    },
+    [],
+  );
   const [zoomPercent, setZoomPercent] = useState(100);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceHeld, setIsSpaceHeld] = useState(false);
@@ -1092,6 +1106,7 @@ export function useEditorSession(
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
+      syncTrackedModifiers(event);
       const session = sessionRef.current;
       if (!session) {
         return;
@@ -1155,11 +1170,12 @@ export function useEditorSession(
       setCursorHint(session.cursor_hint());
       syncFromSession();
     },
-    [canvasPoint, isSpaceHeld, syncFromSession],
+    [canvasPoint, isSpaceHeld, syncFromSession, syncTrackedModifiers],
   );
 
   const onPointerMove = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
+      syncTrackedModifiers(event);
       const session = sessionRef.current;
       const { x, y } = canvasPoint(event);
       lastPointerRef.current = { x, y };
@@ -1191,11 +1207,12 @@ export function useEditorSession(
         syncBadges(session);
       }
     },
-    [canvasPoint, onCursorMove, syncEntry, syncBadges],
+    [canvasPoint, onCursorMove, syncEntry, syncBadges, syncTrackedModifiers],
   );
 
   const onPointerUp = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
+      syncTrackedModifiers(event);
       const session = sessionRef.current;
       if (!session) {
         return;
@@ -1262,7 +1279,7 @@ export function useEditorSession(
       setCursorHint(session.cursor_hint());
       syncFromSession();
     },
-    [canvasPoint, syncFromSession],
+    [canvasPoint, syncFromSession, syncTrackedModifiers],
   );
 
   const onPointerCancel = useCallback(() => {
@@ -1319,24 +1336,33 @@ export function useEditorSession(
       ) {
         event.preventDefault();
       }
-      // The modifier key's own flag is read from the event type, not from
-      // `shiftKey` and its siblings (`lib/keyModifiers.ts`).
-      const held = modifiersAfterKeyEvent(event);
+      // Tracked by key, not read from the event's flags (`lib/keyModifiers.ts`).
+      const held = modifierTrackerRef.current.keyEvent(event);
       applyModifiers(held.shift, held.ctrl, held.alt);
     };
     // A key released outside the window must not leave Shift stuck: the
     // side rotate handles and the pivot follow `modifiers_changed`.
     const onWindowBlur = () => {
       sessionRef.current?.pointer_cancelled();
+      modifierTrackerRef.current.reset();
       applyModifiers(false, false, false);
+    };
+    // A hidden page gets no key-up either.
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        modifierTrackerRef.current.reset();
+        applyModifiers(false, false, false);
+      }
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKey);
     window.addEventListener("blur", onWindowBlur);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKey);
       window.removeEventListener("blur", onWindowBlur);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [applyModifiers]);
 
@@ -1347,6 +1373,7 @@ export function useEditorSession(
       if (next instanceof Node && event.currentTarget.contains(next)) {
         return;
       }
+      modifierTrackerRef.current.reset();
       applyModifiers(false, false, false);
     },
     [applyModifiers],

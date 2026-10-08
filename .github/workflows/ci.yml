@@ -127,6 +127,12 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
+      - name: Unit tests (node:test)
+        # The pure modifier-key tracking (`src/lib/keyModifiers.ts`) runs on
+        # Node's own test runner with type stripping: no test dependency.
+        working-directory: frontend
+        run: npm test
+
       - name: Build (produces frontend/dist)
         working-directory: frontend
         run: npm run build
