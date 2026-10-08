@@ -35,17 +35,21 @@ mod select;
 mod select_bar;
 mod select_view;
 mod shapes;
+mod style;
+mod style_view;
 mod tolerances;
 mod transform_entry;
 
 use curvyo_document_core::{Document, NodeId, ObjectSnapshot, OpenError, Point, SaveError};
 use curvyo_ui_core::{
     AnchorIdMinter, EllipseTool, Hit, Modifiers, NodeTool, ObjectSelection, PenTool,
-    PolygonStarTool, RectangleTool, SelectTool, Viewport, hit_test,
+    PolygonStarTool, RectangleTool, SelectTool, StyleEditor, Viewport, hit_test,
 };
 
 pub use keys::{EscapeStep, KeyHint, KeyInput, KeyOutcome};
 pub use move_indicators::MoveIndicators;
+#[cfg(target_arch = "wasm32")]
+pub use style_view::StylePanelView;
 
 #[cfg(target_arch = "wasm32")]
 pub use open_error::map_open_error;
@@ -118,6 +122,10 @@ pub struct Session {
     /// object selection, shared by the Select tool and the shape tools").
     selection: ObjectSelection,
     tool: Tool,
+    /// The Style panel's drag in flight: the ephemeral override drawn in place
+    /// of the stored style, committed once on release
+    /// (`specs/0007-stroke-and-fill-styling` criterion 36).
+    style: StyleEditor,
     /// Pan/zoom view state (ADR 0009 §2: ephemeral — never written to
     /// the document, resets on `New`/`Open`).
     viewport: Viewport,
@@ -189,6 +197,7 @@ impl Session {
             // slice's own spec explicitly flagged "revisit once a general
             // selection tool exists").
             tool: Tool::Select,
+            style: StyleEditor::default(),
             viewport: Viewport::new(),
             hovered: None,
             hovered_object: None,
@@ -220,6 +229,7 @@ impl Session {
             select: SelectTool::new(),
             selection: ObjectSelection::new(),
             tool: Tool::Select,
+            style: StyleEditor::default(),
             viewport: Viewport::new(),
             hovered: None,
             hovered_object: None,
@@ -267,6 +277,7 @@ impl Session {
         // preview would otherwise sit unflushed until some later event
         // commits it against whatever is selected *then* instead).
         self.flush_select_bar_preview();
+        self.flush_style_preview();
         self.select.cancel_entry();
         self.select.forget_press();
         // A creation tool starts from an empty selection: no selection box
@@ -323,6 +334,7 @@ impl Session {
         // chance to commit against the selection it was previewed
         // against, if the mouse was released outside the slider itself.
         self.flush_select_bar_preview();
+        self.flush_style_preview();
         self.button_down = true;
         match self.tool {
             Tool::Select => {

@@ -96,8 +96,8 @@ pub use style_entry::{
     parse_opacity_percent, parse_stroke_width,
 };
 pub use style_panel::{
-    DashChoice, FillPanel, StrokePanel, StylePanelState, StyleScope, StyleTool, style_panel_state,
-    style_scope,
+    DashChoice, FillPanel, StrokePanel, StylePanelState, StyleScope, StyleTool, cap_from_name,
+    fill_mode_from_name, join_from_name, style_panel_state, style_scope,
 };
 pub use transform_drag::{
     CornerLinking, CornerRadiusScaling, ParamDragInfo, ScaleModes, StrokeScaling,

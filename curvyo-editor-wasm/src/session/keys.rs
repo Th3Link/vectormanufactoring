@@ -403,6 +403,7 @@ impl Session {
     /// Select or Node tool is active. A no-op for every other tool.
     pub fn delete_selected(&mut self) {
         self.flush_select_bar_preview();
+        self.flush_style_preview();
         match self.tool {
             Tool::Select => {
                 let objects = self.objects();

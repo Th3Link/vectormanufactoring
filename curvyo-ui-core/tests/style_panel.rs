@@ -465,3 +465,13 @@ fn a_cancel_with_no_drag_running_does_not_block_the_next_one() {
     editor.preview(&[a], StyleEdit::FillOpacity(percent(10)));
     assert!(editor.is_active());
 }
+
+#[test]
+fn the_host_words_parse_back() {
+    use curvyo_ui_core::{cap_from_name, fill_mode_from_name, join_from_name};
+    assert_eq!(join_from_name("bevel"), Some(LineJoin::Bevel));
+    assert_eq!(cap_from_name("square"), Some(LineCap::Square));
+    assert_eq!(fill_mode_from_name("solid"), Some(FillMode::Solid));
+    assert_eq!(join_from_name("mixed"), None);
+    assert_eq!(fill_mode_from_name("custom"), None);
+}

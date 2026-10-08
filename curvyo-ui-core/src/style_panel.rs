@@ -176,6 +176,40 @@ fn same_dash(a: &[f64], b: &[f64]) -> bool {
             .all(|(x, y)| (x - y).abs() <= DASH_EQUAL_EPSILON)
 }
 
+/// Parses the host's join word.
+#[must_use]
+pub fn join_from_name(name: &str) -> Option<LineJoin> {
+    match name {
+        "miter" => Some(LineJoin::Miter),
+        "round" => Some(LineJoin::Round),
+        "bevel" => Some(LineJoin::Bevel),
+        _ => None,
+    }
+}
+
+/// Parses the host's cap word.
+#[must_use]
+pub fn cap_from_name(name: &str) -> Option<LineCap> {
+    match name {
+        "butt" => Some(LineCap::Butt),
+        "round" => Some(LineCap::Round),
+        "square" => Some(LineCap::Square),
+        _ => None,
+    }
+}
+
+/// Parses the host's fill-mode word.
+#[must_use]
+pub fn fill_mode_from_name(name: &str) -> Option<FillMode> {
+    match name {
+        "none" => Some(FillMode::None),
+        "solid" => Some(FillMode::Solid),
+        "linear" => Some(FillMode::Linear),
+        "radial" => Some(FillMode::Radial),
+        _ => None,
+    }
+}
+
 /// The stroke rows of the panel.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StrokePanel {
