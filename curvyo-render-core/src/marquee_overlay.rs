@@ -117,7 +117,7 @@ fn lasso_line(view: ViewTransform, points: &[Point]) -> DrawList {
     let mut piece_start: Option<Point> = points.first().copied();
     for (index, pair) in points.windows(2).enumerate() {
         let (a, b) = (pair[0], pair[1]);
-        let last = index + 2 == points.len();
+        let final_pair = index + 2 == points.len();
         let length = a.vector_to(b).length();
         if length <= f64::EPSILON {
             continue;
@@ -146,7 +146,7 @@ fn lasso_line(view: ViewTransform, points: &[Point]) -> DrawList {
         // line's end).
         if drawing && let Some(start) = piece_start.replace(b) {
             list.extend(thick_line(start, b, width, color));
-            if !last {
+            if !final_pair {
                 list.extend(circle(b, width, color));
             }
         }
