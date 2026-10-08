@@ -305,7 +305,7 @@ mod select_tool_state {
             ne,
             Tolerance::from_mm(1.0),
             tol(),
-            false,
+            Modifiers::NONE,
         );
         assert!(
             !tool.side_rotate_revealed(true),
@@ -333,7 +333,14 @@ mod select_tool_state {
             .find(|(h, _)| *h == EditHandle::Rotate(ResizeDirection::N))
             .unwrap()
             .1;
-        tool.pointer_down(&objects, &mut sel, n, Tolerance::from_mm(1.0), tol(), true);
+        tool.pointer_down(
+            &objects,
+            &mut sel,
+            n,
+            Tolerance::from_mm(1.0),
+            tol(),
+            Modifiers::new(true, false),
+        );
         assert!(
             tool.side_rotate_revealed(false),
             "dragged side handle stays visible"
@@ -353,7 +360,7 @@ mod select_tool_state {
             pt(20.0, 20.0),
             Tolerance::from_mm(1.0),
             tol(),
-            false,
+            Modifiers::NONE,
         );
         assert!(!tool.side_rotate_revealed(true));
         // and one started WITH Shift is frozen as revealed? Shift-click on
@@ -408,7 +415,7 @@ mod select_tool_state {
             top,
             Tolerance::from_mm(1.0),
             tol(),
-            false,
+            Modifiers::NONE,
         );
         let (a, b) = tool
             .skew_guide(false, 6.0)
@@ -444,7 +451,7 @@ mod select_tool_state {
             se,
             Tolerance::from_mm(1.0),
             tol(),
-            false,
+            Modifiers::NONE,
         );
         assert!(tool.skew_guide(false, 6.0).is_none());
     }

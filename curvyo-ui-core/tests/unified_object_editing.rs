@@ -104,7 +104,7 @@ impl Rig {
             at,
             SEGMENT_TOLERANCE,
             tolerances(),
-            false,
+            Modifiers::NONE,
         )
     }
 
@@ -513,7 +513,7 @@ fn ac35_inside_the_selected_primitive_box_a_press_moves_it_before_any_outline_hi
         pt(30.0, 50.0),
         SEGMENT_TOLERANCE,
         tolerances(),
-        false,
+        Modifiers::NONE,
     );
     assert_eq!(outcome, SelectPointerDownOutcome::Selected);
     assert_eq!(selection.ids(), &[big], "the selection did not change");
@@ -719,7 +719,7 @@ fn ac11_a_multi_object_move_previews_every_selected_object() {
         pt(0.0, 5.0),
         SEGMENT_TOLERANCE,
         tolerances(),
-        false,
+        Modifiers::NONE,
     );
     let to = pt(10.0, 9.0);
     tool.pointer_moved(to, Modifiers::NONE, &mut selection);
@@ -820,7 +820,7 @@ impl Zoomed {
             from,
             Tolerance::from_mm(0.5),
             zoomed_tolerances(),
-            false,
+            Modifiers::NONE,
         );
         self.tool.pointer_up(
             &self.document,

@@ -141,6 +141,11 @@ impl DragOrigin {
         }
     }
 
+    /// The radius of the dead zone around the press, millimetres.
+    pub(crate) const fn dead_zone_mm(&self) -> f64 {
+        self.dead_zone_mm
+    }
+
     /// Records a pointer position: once it is outside the dead zone the drag
     /// stays active.
     pub(crate) fn note(&mut self, point: Point) {

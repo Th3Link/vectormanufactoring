@@ -23,6 +23,36 @@
 
 use curvyo_document_core::{NodeId, ObjectSnapshot};
 
+/// How the result of a marquee or lasso combines with the current selection
+/// (`specs/advanced-selection/specification.md`, "Modifier scheme"): Shift
+/// adds, Ctrl strictly removes, neither replaces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionCombine {
+    /// The selection becomes exactly the result.
+    Replace,
+    /// The result joins the selection; nothing is deselected.
+    Add,
+    /// The result leaves the selection; an object of the result that was not
+    /// selected is ignored (never a toggle).
+    Remove,
+}
+
+impl SelectionCombine {
+    /// The combine mode of the Shift and Ctrl state: Ctrl wins when both are
+    /// down (the key pressed last in the realistic sequence of a held Shift
+    /// and a Ctrl added for one drag), else Shift adds, else replace.
+    #[must_use]
+    pub const fn from_modifiers(shift: bool, ctrl: bool) -> Self {
+        if ctrl {
+            Self::Remove
+        } else if shift {
+            Self::Add
+        } else {
+            Self::Replace
+        }
+    }
+}
+
 /// The current set of selected objects, any kind (acceptance criteria 17,
 /// 22: two or more, possibly of different kinds, can be selected
 /// together). Order is selection order, not z-order.
@@ -88,6 +118,24 @@ impl ObjectSelection {
         }
     }
 
+    /// Combines a gesture's `result` with the selection (`result` in the
+    /// order the gesture found it): [`SelectionCombine::Replace`] selects
+    /// exactly `result`, [`SelectionCombine::Add`] appends every id not yet
+    /// selected and keeps the order, [`SelectionCombine::Remove`] deselects
+    /// every id of `result` and leaves the rest as it was. An empty `result`
+    /// therefore clears on Replace and changes nothing otherwise.
+    pub fn apply(&mut self, combine: SelectionCombine, result: &[NodeId]) {
+        match combine {
+            SelectionCombine::Replace => self.set(result),
+            SelectionCombine::Add => {
+                for &id in result {
+                    self.add(id);
+                }
+            }
+            SelectionCombine::Remove => self.ids.retain(|id| !result.contains(id)),
+        }
+    }
+
     /// Clears the selection.
     pub fn clear(&mut self) {
         self.ids.clear();
@@ -146,6 +194,88 @@ mod tests {
         assert_eq!(selection.ids(), &[a, b]);
         selection.toggle(a);
         assert_eq!(selection.ids(), &[b]);
+    }
+
+    fn three_ids() -> (NodeId, NodeId, NodeId) {
+        let document = Document::new(1);
+        let make = |x: f64| {
+            document.create_rect(curvyo_document_core::RectBounds {
+                origin: curvyo_document_core::Point::new(x, 0.0),
+                width: curvyo_document_core::Length::from_mm(1.0),
+                height: curvyo_document_core::Length::from_mm(1.0),
+            })
+        };
+        (make(0.0), make(5.0), make(10.0))
+    }
+
+    /// Ctrl wins over Shift (the realistic sequence: Shift stays down, Ctrl is
+    /// added for one drag), Shift alone adds, nothing replaces.
+    #[test]
+    fn the_combine_mode_follows_the_modifiers() {
+        assert_eq!(
+            SelectionCombine::from_modifiers(false, false),
+            SelectionCombine::Replace
+        );
+        assert_eq!(
+            SelectionCombine::from_modifiers(true, false),
+            SelectionCombine::Add
+        );
+        assert_eq!(
+            SelectionCombine::from_modifiers(false, true),
+            SelectionCombine::Remove
+        );
+        assert_eq!(
+            SelectionCombine::from_modifiers(true, true),
+            SelectionCombine::Remove
+        );
+    }
+
+    #[test]
+    fn replace_selects_exactly_the_result_in_its_order() {
+        let (a, b, c) = three_ids();
+        let mut selection = ObjectSelection::new();
+        selection.select_single(a);
+        selection.apply(SelectionCombine::Replace, &[c, b]);
+        assert_eq!(selection.ids(), &[c, b]);
+    }
+
+    #[test]
+    fn replace_with_an_empty_result_clears() {
+        let (a, ..) = three_ids();
+        let mut selection = ObjectSelection::new();
+        selection.select_single(a);
+        selection.apply(SelectionCombine::Replace, &[]);
+        assert!(selection.is_empty());
+    }
+
+    #[test]
+    fn add_appends_only_new_ids_and_keeps_the_order() {
+        let (a, b, c) = three_ids();
+        let mut selection = ObjectSelection::new();
+        selection.set(&[b, a]);
+        selection.apply(SelectionCombine::Add, &[a, c]);
+        assert_eq!(selection.ids(), &[b, a, c]);
+    }
+
+    /// Remove is a set difference, never a toggle: `c` was not selected and
+    /// stays unselected.
+    #[test]
+    fn remove_deselects_the_result_and_never_adds() {
+        let (a, b, c) = three_ids();
+        let mut selection = ObjectSelection::new();
+        selection.set(&[a, b]);
+        selection.apply(SelectionCombine::Remove, &[b, c]);
+        assert_eq!(selection.ids(), &[a]);
+    }
+
+    #[test]
+    fn add_and_remove_with_an_empty_result_change_nothing() {
+        let (a, b, _) = three_ids();
+        let mut selection = ObjectSelection::new();
+        selection.set(&[a, b]);
+        selection.apply(SelectionCombine::Add, &[]);
+        selection.apply(SelectionCombine::Remove, &[]);
+        assert_eq!(selection.ids(), &[a, b]);
     }
 
     #[test]

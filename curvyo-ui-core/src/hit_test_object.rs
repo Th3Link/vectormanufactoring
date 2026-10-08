@@ -13,6 +13,7 @@ use curvyo_document_core::{
 use curvyo_geometry_core::{OutlineTriple, contains_point, nearest_point_on_segment};
 
 use crate::hit_test::segment_pairs;
+use crate::object_bounds::object_outline_bounds;
 
 /// The distance from `point` to the nearest point on any segment of an
 /// anchor run of `len` anchors (`closed` or not), within `tolerance` — the
@@ -211,6 +212,142 @@ pub fn hit_test_object(
     }
     best.map(|(_, id)| id)
         .or_else(|| floor.map(|index| objects[index].id()))
+}
+
+/// Every object a click at `point` could mean, in the order an Alt-click
+/// cycles through them (`specs/advanced-selection/specification.md`, criteria
+/// 3 to 7). The first element is always [`hit_test_object`]'s answer, so a
+/// plain click and the cycle's first step cannot disagree. After it, with F
+/// the topmost object whose filled interior contains the point (as in
+/// [`hit_test_object`]):
+///
+/// 1. the other objects at or above F whose outline is within `tolerance`,
+///    nearest first, an exact tie going to the topmost (all objects when
+///    there is no F);
+/// 2. F itself when no outline of group 1 was within tolerance;
+/// 3. the objects below F that F covers and that either have an outline
+///    within `tolerance` or a filled interior containing the point: nearest
+///    outline first (an interior-only object after those), ties topmost.
+///    A plain click never reaches them, an Alt-click does ("look past the
+///    obvious candidate").
+///
+/// Empty when nothing is under the point. `objects` is in z-order.
+#[must_use]
+pub fn hit_test_objects(
+    objects: &[ObjectSnapshot],
+    point: Point,
+    tolerance: Tolerance,
+) -> Vec<NodeId> {
+    let floor = objects
+        .iter()
+        .rposition(|object| fills_point(object, point));
+    let mut visible: Vec<(f64, usize)> = Vec::new();
+    let mut covered: Vec<(f64, usize)> = Vec::new();
+    for (index, object) in objects.iter().enumerate() {
+        let distance = distance_to_object(object, point, tolerance);
+        if floor.is_some_and(|floor| index < floor) {
+            if distance.is_some() || fills_point(object, point) {
+                covered.push((distance.unwrap_or(f64::INFINITY), index));
+            }
+        } else if let Some(distance) = distance {
+            visible.push((distance, index));
+        }
+    }
+    let nearest_first = |candidates: &mut Vec<(f64, usize)>| {
+        candidates.sort_by(|a, b| a.0.total_cmp(&b.0).then(b.1.cmp(&a.1)));
+    };
+    nearest_first(&mut visible);
+    nearest_first(&mut covered);
+    let mut order: Vec<usize> = visible.iter().map(|&(_, index)| index).collect();
+    if let Some(floor) = floor.filter(|floor| !order.contains(floor)) {
+        order.push(floor);
+    }
+    order.extend(covered.iter().map(|&(_, index)| index));
+    order.into_iter().map(|index| objects[index].id()).collect()
+}
+
+/// The most samples one stretch of a lasso line is tested at: a stretch
+/// longer than this many tolerances is sampled more coarsely rather than
+/// without end (a line across a 1e9 mm object).
+const MAX_SAMPLES_PER_STRETCH: f64 = 20_000.0;
+
+/// The objects whose outline comes within `tolerance` of any point along
+/// `line` (a polyline in document space), in z-order: the lasso's release
+/// (`specs/advanced-selection/specification.md`, criterion 18). The same
+/// outline-proximity test a click uses, evaluated at samples spaced at most
+/// one tolerance apart along the line, so no crossing is missed: it lies at
+/// most half a spacing from a sample. A stretch of the line that stays
+/// farther than `tolerance` from an object's bounds is skipped without
+/// sampling. The unfilled interior of a closed object is not part of it: a
+/// line that stays inside without crossing the outline selects nothing.
+#[must_use]
+pub fn hit_test_objects_along(
+    objects: &[ObjectSnapshot],
+    line: &[Point],
+    tolerance: Tolerance,
+) -> Vec<NodeId> {
+    objects
+        .iter()
+        .filter(|object| line_touches(object, line, tolerance))
+        .map(ObjectSnapshot::id)
+        .collect()
+}
+
+fn line_touches(object: &ObjectSnapshot, line: &[Point], tolerance: Tolerance) -> bool {
+    let (low, high) = object_outline_bounds(object);
+    let margin = tolerance.as_mm();
+    let near = |point: Point| distance_to_object(object, point, tolerance).is_some();
+    if let [only] = line {
+        return near(*only);
+    }
+    line.windows(2).any(|pair| {
+        let Some((from, to)) = clipped_to_box(pair[0], pair[1], low, high, margin) else {
+            return false;
+        };
+        let length = from.vector_to(to).length();
+        let step = margin.max(length / MAX_SAMPLES_PER_STRETCH);
+        // `length / step` is at most MAX_SAMPLES_PER_STRETCH: the cast is exact enough.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let samples = (length / step).ceil().max(1.0) as u32;
+        (0..=samples).any(|i| {
+            let t = f64::from(i) / f64::from(samples);
+            near(Point::new(
+                from.x + (to.x - from.x) * t,
+                from.y + (to.y - from.y) * t,
+            ))
+        })
+    })
+}
+
+/// The part of the segment `a` to `b` inside the box `low` to `high` widened
+/// by `margin` (slab clipping), or `None` when the segment misses it.
+fn clipped_to_box(
+    a: Point,
+    b: Point,
+    low: Point,
+    high: Point,
+    margin: f64,
+) -> Option<(Point, Point)> {
+    let (mut t0, mut t1) = (0.0_f64, 1.0_f64);
+    for (from, delta, min, max) in [
+        (a.x, b.x - a.x, low.x - margin, high.x + margin),
+        (a.y, b.y - a.y, low.y - margin, high.y + margin),
+    ] {
+        if delta.abs() < f64::EPSILON {
+            if from < min || from > max {
+                return None;
+            }
+            continue;
+        }
+        let (enter, leave) = ((min - from) / delta, (max - from) / delta);
+        t0 = t0.max(enter.min(leave));
+        t1 = t1.min(enter.max(leave));
+        if t0 > t1 {
+            return None;
+        }
+    }
+    let at = |t: f64| Point::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+    Some((at(t0), at(t1)))
 }
 
 /// The topmost object above `selected` in tree order whose filled interior

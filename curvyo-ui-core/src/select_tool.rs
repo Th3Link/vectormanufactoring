@@ -28,16 +28,21 @@ use crate::transform_handle_layout::EditHandle;
 pub use crate::transform_handle_layout::TransformHandleTolerances;
 
 mod bar;
+mod cycle;
 mod entry;
+mod gesture;
 mod handles;
 mod move_drag;
 mod press;
 mod preview;
 
+use cycle::ClickCycle;
 use entry::OpenEntry;
+use gesture::{LassoDrag, MarqueeDrag};
 use handles::sole_selected;
 
 pub use entry::{EntryKey, KeyEntryRefusal, MoveEntryMode, double_click};
+pub use gesture::{GestureKind, GestureShape, LiveGesture};
 pub use handles::entry_anchor;
 use move_drag::MoveDrag;
 pub use move_drag::{Axis, MoveResolution};
@@ -53,6 +58,13 @@ enum SelectDrag {
     Moving(MoveDrag),
     /// A resize, rotate or skew drag in progress.
     Transforming(TransformDrag),
+    /// A marquee in progress (`specs/advanced-selection/`): armed by a press
+    /// on empty canvas with Alt up.
+    Marquee(MarqueeDrag),
+    /// A lasso in progress: armed by a press with Alt down, anywhere. Never a
+    /// marquee, and a marquee never becomes one: the gesture is chosen at the
+    /// press.
+    Lasso(LassoDrag),
 }
 
 /// What [`SelectTool::pointer_down`] did.
@@ -63,9 +75,15 @@ pub enum SelectPointerDownOutcome {
     /// because it was already part of one (so the whole group can be
     /// dragged, acceptance criterion 18) — and a move-drag began.
     Selected,
-    /// Nothing was hit; the selection was cleared (acceptance criterion
-    /// 15) unless Shift was held.
-    Cleared,
+    /// Nothing was hit; a marquee is armed (`specs/advanced-selection/`
+    /// criterion 8). The selection is untouched until the release: a click
+    /// there clears it (acceptance criterion 15 of slice 4) unless Shift or
+    /// Ctrl is held, a drag combines the box's result with it.
+    Marquee,
+    /// Alt was held: a lasso is armed (`specs/advanced-selection/`
+    /// criteria 16, 17); nothing changed yet. Released without movement it is
+    /// one step of the Alt-click cycle.
+    Lasso,
     /// A transform handle was hit; a resize, rotate or skew drag began
     /// (`specs/0005-object-transform/specification.md`, acceptance
     /// criterion 1).
@@ -116,6 +134,10 @@ pub struct SelectTool {
     /// that is not selected yet (whose handles appear after the first click)
     /// still hands off.
     last_press_handle: Option<EditHandle>,
+    /// The Alt-click cycle (`specs/advanced-selection/`, criteria 3 to 7):
+    /// begun by a plain click that acted on an object, dropped by anything
+    /// else that is not an Alt-click on the same point.
+    cycle: Option<ClickCycle>,
 }
 
 impl SelectTool {
@@ -184,7 +206,7 @@ impl SelectTool {
         match &self.drag {
             // In a move drag Shift means "lock": no side rotate handles
             // (`edit-interaction-polish`, UX review of PR 4).
-            SelectDrag::Moving(_) => false,
+            SelectDrag::Moving(_) | SelectDrag::Marquee(_) | SelectDrag::Lasso(_) => false,
             SelectDrag::Transforming(drag) => drag.origin.shift_at_press,
             SelectDrag::None => match &self.entry {
                 Some(OpenEntry::Transform(entry)) => entry.side_rotate_revealed(),
@@ -202,6 +224,12 @@ impl SelectTool {
     /// body — updates `selection` and starts whichever drag matches. Also
     /// closes an open numeric entry (the press itself is processed as
     /// usual, criterion 20).
+    ///
+    /// With Alt down (`specs/advanced-selection/` criteria 16, 17) the press
+    /// arms a lasso wherever it lands, before any of the above is tried. On
+    /// empty canvas without Alt it arms a marquee (criterion 8) and changes no
+    /// selection until the release, so Shift or Ctrl pressed during the drag
+    /// still combine with it (criteria 12, 13).
     pub fn pointer_down(
         &mut self,
         objects: &[ObjectSnapshot],
@@ -209,7 +237,7 @@ impl SelectTool {
         point: Point,
         tolerance: Tolerance,
         handle_tolerances: TransformHandleTolerances,
-        shift: bool,
+        modifiers: Modifiers,
     ) -> SelectPointerDownOutcome {
         self.entry = None;
         self.last_press_handle = None;
@@ -218,16 +246,32 @@ impl SelectTool {
         // edit in a different tool, or a collaborator) has since removed,
         // before this click can act on it.
         selection.retain_existing(objects);
+        let shift = modifiers.shift;
         let origin = DragOrigin::new(point, handle_tolerances.drag_threshold_mm, shift);
+        if modifiers.alt {
+            // The cycle survives: a release without movement continues it.
+            self.drag = SelectDrag::Lasso(LassoDrag::new(origin, tolerance));
+            return SelectPointerDownOutcome::Lasso;
+        }
 
-        match classify_press(
+        let target = classify_press(
             objects,
             selection,
             point,
             tolerance,
             handle_tolerances,
             shift,
-        ) {
+        );
+        self.cycle = match target {
+            PressTarget::Object(hit) => Some(ClickCycle::after_click(point, hit)),
+            PressTarget::InsideSelectedBox => sole_selected(objects, selection)
+                .map(|selected| ClickCycle::after_click(point, selected.id())),
+            PressTarget::Handle(_) | PressTarget::CentreHandle | PressTarget::Empty => None,
+        };
+        if shift {
+            self.cycle = None;
+        }
+        match target {
             PressTarget::Handle(handle) => {
                 self.begin_handle_press(objects, selection, origin, handle, &handle_tolerances);
                 SelectPointerDownOutcome::Handle
@@ -245,11 +289,8 @@ impl SelectTool {
                 SelectPointerDownOutcome::Selected
             }
             PressTarget::Empty => {
-                if !shift {
-                    selection.clear();
-                }
-                self.drag = SelectDrag::None;
-                SelectPointerDownOutcome::Cleared
+                self.drag = SelectDrag::Marquee(MarqueeDrag { origin });
+                SelectPointerDownOutcome::Marquee
             }
             PressTarget::Object(hit) => {
                 self.drag = SelectDrag::Moving(begin_object_press(selection, hit, shift, origin));
@@ -320,20 +361,29 @@ impl SelectTool {
                     drag.commit(document, &result);
                 }
             }
+            SelectDrag::Marquee(drag) => {
+                self.finish_marquee(&drag, objects, selection, point, modifiers);
+            }
+            SelectDrag::Lasso(drag) => {
+                self.finish_lasso(&drag, objects, selection, point, modifiers);
+            }
         }
     }
 
-    /// Cancels whichever drag is in flight, writing nothing.
+    /// Cancels whichever drag is in flight, writing nothing, and ends the
+    /// Alt-click cycle.
     pub fn escape(&mut self) {
         self.drag = SelectDrag::None;
         self.last_press_handle = None;
+        self.cycle = None;
     }
 
     /// Forgets which handle the last press grabbed: the Select tool was left
     /// or re-entered, so a later double-click's first press may never have
-    /// reached it.
+    /// reached it. Also ends the Alt-click cycle.
     pub fn forget_press(&mut self) {
         self.last_press_handle = None;
+        self.cycle = None;
     }
 
     /// Acceptance criteria 19, 21: deletes every selected object as one
@@ -349,6 +399,7 @@ impl SelectTool {
         self.drag = SelectDrag::None;
         self.entry = None;
         self.last_press_handle = None;
+        self.cycle = None;
         selection.retain_existing(objects);
         if selection.is_empty() {
             return;
@@ -362,6 +413,8 @@ impl SelectTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const NONE: Modifiers = Modifiers::NONE;
     use curvyo_document_core::CornerRadii;
 
     /// The one radius of a rectangle whose four corner radii are equal (asserted).
@@ -434,7 +487,7 @@ mod tests {
             Point::new(5.0, 0.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         assert_eq!(outcome, SelectPointerDownOutcome::Selected);
         assert_eq!(selection.ids(), &[id]);
@@ -454,7 +507,16 @@ mod tests {
             Point::new(500.0, 500.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
+        );
+        // A click clears at the release (`advanced-selection` criterion 8).
+        tool.pointer_up(
+            &document,
+            &objects,
+            &mut selection,
+            Point::new(500.0, 500.0),
+            NONE,
+            &mut AnchorIdMinter::new(99),
         );
         assert!(selection.is_empty());
     }
@@ -476,7 +538,7 @@ mod tests {
             Point::new(5.0, 0.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         assert_eq!(selection.ids(), &[a]);
         tool.pointer_down(
@@ -485,7 +547,7 @@ mod tests {
             Point::new(55.0, 0.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         assert_eq!(
             selection.ids(),
@@ -511,7 +573,7 @@ mod tests {
             Point::new(5.0, 0.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         tool.pointer_down(
             &objects,
@@ -519,7 +581,7 @@ mod tests {
             Point::new(55.0, 0.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            true,
+            Modifiers::new(true, false),
         );
         // `edit-interaction-polish` criterion 29: the toggle happens at the
         // release, and only if the pointer never left the dead zone.
@@ -557,7 +619,7 @@ mod tests {
             Point::new(5.0, 0.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         assert_eq!(
             selection.ids(),
@@ -622,7 +684,7 @@ mod tests {
             Point::new(0.0, 5.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
 
         let offset = tool
@@ -663,7 +725,7 @@ mod tests {
             Point::new(0.0, 5.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         assert_eq!(
             selection.ids(),
@@ -710,7 +772,7 @@ mod tests {
             Point::new(0.0, 5.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         assert_eq!(selection.ids(), &[live]);
 
@@ -862,7 +924,7 @@ mod tests {
             Point::new(10.0, 10.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         assert_eq!(outcome, SelectPointerDownOutcome::Handle);
 
@@ -910,7 +972,7 @@ mod tests {
             Point::new(10.0, 10.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         tool.pointer_up(
             &document,
@@ -946,7 +1008,7 @@ mod tests {
             Point::new(10.0, 5.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         tool.pointer_up(
             &document,
@@ -980,7 +1042,7 @@ mod tests {
             Point::new(10.0, 10.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         tool.pointer_up(
             &document,
@@ -1018,7 +1080,7 @@ mod tests {
             at,
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         tool.pointer_up(
             document,
@@ -1151,7 +1213,7 @@ mod tests {
             se,
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         tool.set_stroke_scaling(StrokeScaling::Proportional); // mid-drag
         let to = Point::new(20.0, 20.0);
@@ -1186,7 +1248,7 @@ mod tests {
             se,
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         tool.pointer_up(
             &document,
@@ -1295,7 +1357,7 @@ mod tests {
             Point::new(10.0, 10.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         tool.set_corner_radius_scaling(CornerRadiusScaling::Proportional); // mid-drag
         tool.pointer_up(
@@ -1335,7 +1397,7 @@ mod tests {
             Point::new(10.0, 10.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         tool.pointer_up(
             &document,
@@ -1447,7 +1509,7 @@ mod tests {
             *ne_position,
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         let drag_to = ne_position.translated(Vec2::new(1.0, -1.0));
         tool.pointer_up(
@@ -1496,7 +1558,7 @@ mod tests {
             Point::new(10.0, 10.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         tool.pointer_up(
             &document,
@@ -1532,7 +1594,7 @@ mod tests {
             Point::new(10.0, 5.0), // E handle
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         tool.pointer_up(
             &document,
@@ -1569,7 +1631,7 @@ mod tests {
             *rotate_position,
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         assert_eq!(outcome, SelectPointerDownOutcome::Handle);
         // Swing the rotate handle a quarter turn around the center (5,5).
@@ -1620,7 +1682,7 @@ mod tests {
             *rotate_position,
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         let center = Point::new(5.0, 5.0);
         let to_rotate_handle = center.vector_to(*rotate_position);
@@ -1684,7 +1746,7 @@ mod tests {
             se,
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         // Drag 5 mm along the object's own local X axis.
         let drag_to = se.translated(Vec2::new(5.0, 0.0).rotated(angle));
@@ -1749,7 +1811,7 @@ mod tests {
                 at,
                 TOLERANCE,
                 HANDLE_TOLERANCES,
-                false,
+                NONE,
             );
             assert_eq!(outcome, SelectPointerDownOutcome::Handle);
             tool.pointer_up(
@@ -1781,7 +1843,7 @@ mod tests {
             n,
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         tool.pointer_up(
             &document,
@@ -1823,7 +1885,7 @@ mod tests {
             e,
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         tool.pointer_up(
             &document,
@@ -1858,7 +1920,7 @@ mod tests {
             e,
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         tool.pointer_up(
             &document,
@@ -1901,7 +1963,7 @@ mod tests {
             se,
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         tool.pointer_up(
             &document,
@@ -1943,7 +2005,7 @@ mod tests {
             r,
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         assert_eq!(tool.live_pivot(true), Some(Point::new(0.0, 10.0)));
         assert_eq!(tool.live_pivot(false), Some(Point::new(5.0, 5.0)));
@@ -2006,7 +2068,7 @@ mod tests {
                 r,
                 TOLERANCE,
                 HANDLE_TOLERANCES,
-                false,
+                NONE,
             );
             let b = oriented_bounds(&objects[0]);
             let pivot = b.to_document(b.local_center());
@@ -2135,7 +2197,7 @@ mod tests {
                 // Inside press: a move, not a handle drag.
                 let mut tool = SelectTool::new();
                 let outcome =
-                    tool.pointer_down(&objects, &mut selection, centre, TOLERANCE, wide, false);
+                    tool.pointer_down(&objects, &mut selection, centre, TOLERANCE, wide, NONE);
                 assert_eq!(outcome, SelectPointerDownOutcome::Selected, "{size} {turn}");
                 assert!(tool.dragging_handle().is_none(), "{size} {turn}");
                 assert_eq!(selection.ids(), &[id], "still selected");
@@ -2169,12 +2231,12 @@ mod tests {
                 let se = at(EditHandle::Resize(ResizeDirection::Se));
                 let mut tool = SelectTool::new();
                 assert_eq!(
-                    tool.pointer_down(&objects, &mut selection, rotate, TOLERANCE, wide, false),
+                    tool.pointer_down(&objects, &mut selection, rotate, TOLERANCE, wide, NONE),
                     SelectPointerDownOutcome::Handle
                 );
                 tool.escape();
                 assert_eq!(
-                    tool.pointer_down(&objects, &mut selection, se, TOLERANCE, wide, false),
+                    tool.pointer_down(&objects, &mut selection, se, TOLERANCE, wide, NONE),
                     SelectPointerDownOutcome::Handle
                 );
                 tool.escape();
@@ -2187,9 +2249,19 @@ mod tests {
                         Point::new(900.0, 900.0),
                         TOLERANCE,
                         wide,
-                        false
+                        NONE
                     ),
-                    SelectPointerDownOutcome::Cleared
+                    SelectPointerDownOutcome::Marquee
+                );
+                // The click clears at the release, not the press
+                // (`advanced-selection` criterion 8).
+                tool.pointer_up(
+                    &document,
+                    &objects,
+                    &mut selection,
+                    Point::new(900.0, 900.0),
+                    NONE,
+                    &mut AnchorIdMinter::new(99),
                 );
                 assert!(selection.is_empty());
             }
@@ -2212,9 +2284,9 @@ mod tests {
                 Point::new(5.0, 5.0),
                 TOLERANCE,
                 HANDLE_TOLERANCES,
-                false
+                NONE
             ),
-            SelectPointerDownOutcome::Cleared
+            SelectPointerDownOutcome::Marquee
         );
     }
 
@@ -2234,7 +2306,7 @@ mod tests {
             Point::new(10.0, 0.0),
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         assert_eq!(outcome, SelectPointerDownOutcome::Handle);
     }
@@ -2271,7 +2343,7 @@ mod tests {
             ne,
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         tool.pointer_up(
             &document,
@@ -2326,7 +2398,7 @@ mod tests {
                     at,
                     TOLERANCE,
                     HANDLE_TOLERANCES,
-                    false,
+                    NONE,
                 );
                 tool.pointer_up(
                     &document,
@@ -2362,7 +2434,7 @@ mod tests {
             r,
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         let to = Point::new(-3.0, 4.0);
         let preview = tool.live_transform(to, true, false).expect("rotating");
@@ -2408,7 +2480,7 @@ mod tests {
             body_point,
             TOLERANCE,
             HANDLE_TOLERANCES,
-            false,
+            NONE,
         );
         assert_eq!(outcome, SelectPointerDownOutcome::Selected);
         tool.pointer_up(

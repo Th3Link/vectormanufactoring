@@ -125,6 +125,7 @@ impl SelectTool {
                 }
             }
             SelectDrag::Transforming(drag) => drag.origin.note(point),
+            SelectDrag::Marquee(_) | SelectDrag::Lasso(_) => self.gesture_pointer_moved(point),
             SelectDrag::None => {}
         }
     }
@@ -140,7 +141,11 @@ impl SelectTool {
             SelectDrag::Moving(drag) if drag.origin.is_active_at(pointer) => {
                 Some(drag.resolve(pointer, Modifiers::new(shift, ctrl)))
             }
-            SelectDrag::Moving(_) | SelectDrag::Transforming(_) | SelectDrag::None => None,
+            SelectDrag::Moving(_)
+            | SelectDrag::Transforming(_)
+            | SelectDrag::Marquee(_)
+            | SelectDrag::Lasso(_)
+            | SelectDrag::None => None,
         }
     }
 

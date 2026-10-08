@@ -83,7 +83,7 @@ impl Rig {
             at,
             SEGMENT_TOLERANCE,
             tolerances(),
-            shift,
+            Modifiers::new(shift, false),
         );
     }
 

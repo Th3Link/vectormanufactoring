@@ -100,7 +100,8 @@ impl SelectTool {
     #[must_use]
     pub fn param_handles_visible(&self) -> bool {
         match &self.drag {
-            SelectDrag::None => true,
+            // A marquee or lasso changes nothing under the handles.
+            SelectDrag::None | SelectDrag::Marquee(_) | SelectDrag::Lasso(_) => true,
             SelectDrag::Transforming(drag) => matches!(drag.handle, EditHandle::Param(_)),
             SelectDrag::Moving(_) => false,
         }
@@ -114,7 +115,10 @@ impl SelectTool {
         match &self.drag {
             SelectDrag::Transforming(drag) => Some(drag.handle),
             SelectDrag::Moving(drag) if drag.from_center => Some(EditHandle::Move),
-            SelectDrag::Moving(_) | SelectDrag::None => None,
+            SelectDrag::Moving(_)
+            | SelectDrag::Marquee(_)
+            | SelectDrag::Lasso(_)
+            | SelectDrag::None => None,
         }
     }
 
@@ -130,7 +134,7 @@ impl SelectTool {
             SelectDrag::Transforming(drag) => {
                 pivot_for(drag.handle, &drag.start, &drag.start_box, shift)
             }
-            SelectDrag::Moving(_) => None,
+            SelectDrag::Moving(_) | SelectDrag::Marquee(_) | SelectDrag::Lasso(_) => None,
             SelectDrag::None => match &self.entry {
                 Some(OpenEntry::Transform(entry)) => Some(entry.pivot()),
                 Some(OpenEntry::Skew(entry)) => Some(entry.pivot()),
@@ -167,7 +171,11 @@ impl SelectTool {
             SelectDrag::Transforming(drag) if drag.origin.is_active_at(current) => {
                 Some(drag.resolve(current, shift, ctrl))
             }
-            SelectDrag::Transforming(_) | SelectDrag::Moving(_) | SelectDrag::None => None,
+            SelectDrag::Transforming(_)
+            | SelectDrag::Moving(_)
+            | SelectDrag::Marquee(_)
+            | SelectDrag::Lasso(_)
+            | SelectDrag::None => None,
         }
     }
 
@@ -180,7 +188,11 @@ impl SelectTool {
             SelectDrag::Transforming(drag) if drag.origin.is_active_at(current) => {
                 drag.param_info(current)
             }
-            SelectDrag::Transforming(_) | SelectDrag::Moving(_) | SelectDrag::None => None,
+            SelectDrag::Transforming(_)
+            | SelectDrag::Moving(_)
+            | SelectDrag::Marquee(_)
+            | SelectDrag::Lasso(_)
+            | SelectDrag::None => None,
         }
     }
 
@@ -207,7 +219,11 @@ impl SelectTool {
             SelectDrag::Transforming(drag) if drag.origin.is_active_at(current) => {
                 drag.skew_angle_at(current, shift, ctrl)
             }
-            SelectDrag::Transforming(_) | SelectDrag::Moving(_) | SelectDrag::None => None,
+            SelectDrag::Transforming(_)
+            | SelectDrag::Moving(_)
+            | SelectDrag::Marquee(_)
+            | SelectDrag::Lasso(_)
+            | SelectDrag::None => None,
         }
     }
 
