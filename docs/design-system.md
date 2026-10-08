@@ -73,13 +73,13 @@ role) also plugs into. Decided now, concretely:
   `stroke-and-fill-styling` specified); add tabs only once a second section
   makes a single scroll genuinely unwieldy — revisit then, not speculatively
   now.
-- **Empty/placeholder state, generalized from `stroke-and-fill-styling`'s
-  own rule:** when nothing selected, or when a section has nothing relevant
-  to the current selection, that section's controls show disabled/blank
-  (per-control mixed-state rules already specified), never collapse or
-  disappear. This keeps the panel's own shape stable across every selection
-  change — required by the no-layout-shift rule below, not just a style
-  preference.
+- **Empty/placeholder state — superseded 2026-10-08 (`style-panel-rework`,
+  customer):** the first version of this rule showed every control disabled
+  when nothing applied. The panel is now empty when nothing is selected (frame
+  and collapse tab only), and a control that cannot apply is removed, not
+  disabled. The panel's width and the canvas never change with the selection,
+  which is what the no-layout-shift rule below needs; the height of the content
+  does change, and the panel scrolls. See "Properties panel: Style section".
 - Placement, width (280px), collapsibility and the `Shift+Ctrl+F` shortcut
   from `stroke-and-fill-styling`'s UX notes all carry over unchanged; see
   that spec's amended UX notes for the renamed `PropertiesPanel` framing.
@@ -176,12 +176,15 @@ values, not an implementation site, for those four rows.
 | `--axis-guide` | `--accent` at 50% opacity (blended on `--canvas-bg` about 1.7:1; deliberately faint) | `edit-interaction-polish` (2026-10-06): the origin axis line the locked move runs along (see "Move axis guide"). Informational only: the lock is also readable from the motion, the lock badge and the readout, so it is exempt from the 3:1 non-text rule on purpose. Not a new colour: `--accent` with the opacity step between the hover (20%) and selected (100%) states |
 | `--axis-guide-idle` | `--accent-hover` (`--accent` at 20%) | The other origin axis line, the one the move is not locked to |
 | `--panel-muted-fg` | `--toolbar-icon` at 80% on `--panel-bg` = `#5A5A5F` | `0007`: subject line, info lines and other muted panel text. 5.0:1 on the panel |
-| `--field-placeholder` | `--toolbar-icon` at 75% on white = `#6B6B6F` | `0007`: the "Mixed" placeholder of a field and the Select trigger. 5.3:1 on a white field (the browser default grey is 4.6:1; this one is owned) |
-| `--field-disabled-bg`, `--field-disabled-fg` | `#D0D0D4` (no border), `--toolbar-icon` at 80% on it = `#58585D` | `0007`: a disabled field. Value 4.6:1; labels stay at full `--toolbar-icon` (8.3:1). The ground is not a 3:1 boundary on purpose: a disabled control is not operable |
-| `--swatch-border` | `--toolbar-icon` | `0007`: 1px border of a colour swatch and a stop thumb, 8.3:1 on the panel, so any swatch colour is bounded against it |
-| `--checker-a`, `--checker-b` | `#FFFFFF`, `#C9C9CE` | `0007`: the checkerboard under a translucent swatch, the gradient bar and the opacity slider (7px cells in a 28px swatch, 6px in a 24px one). Means "transparency shows through", nothing else |
-| `--mixed-hatch` | `#8E8E93` | `0007`: the 45 degree hatch (4px stripes of `--checker-a` and this, 3.3:1 between stripes) of a swatch or gradient track whose value differs across the selection. **Not a checkerboard**: a checkerboard is how a transparent colour looks, and the two must not be confusable |
-| `--no-paint-slash` | `--field-invalid` (`#B3261E`) | `0007`: the slash over the swatch of a paint that is off, drawn over a 3px white line so it shows on any colour. 6.5:1 on white |
+| `--field-placeholder` | `--toolbar-icon` at 75% on white = `#6B6B6F` | `0007`: the "Mixed" placeholder of a field. 5.3:1 on a white field (the browser default grey is 4.6:1; this one is owned) |
+| `--field-disabled-bg`, `--field-disabled-fg` | `#D0D0D4` (no border), `--toolbar-icon` at 80% on it = `#58585D` | `0007`: a disabled field. **Not used in the properties panel since `style-panel-rework`** (no control is disabled there); kept for the bars. Value 4.6:1; labels stay at full `--toolbar-icon` (8.3:1). The ground is not a 3:1 boundary on purpose: a disabled control is not operable |
+| `--swatch-border` | `--toolbar-icon` | `0007`: 1px border of a colour swatch, 8.3:1 on the panel, so any swatch colour is bounded against it |
+| `--checker-a`, `--checker-b` | `#FFFFFF`, `#C9C9CE` | `0007`: the checkerboard under a translucent swatch and the eyedropper chip's swatch (7px cells in a 28px swatch, 4px in the 16px chip swatch). Means "transparency shows through", nothing else |
+| `--mixed-hatch` | `#8E8E93` | `0007`: the 45 degree hatch (4px stripes of `--checker-a` and this, 3.3:1 between stripes) of a swatch whose colour differs across the selection. **Not a checkerboard**: a checkerboard is how a transparent colour looks, and the two must not be confusable |
+| `--no-paint-slash` | removed | `style-panel-rework`: there is no swatch of an off paint any more (Paint None hides the colour). Delete from `index.css` |
+| `--value-fill` | `--accent` at 28% over white = `#C5D7FA` | `style-panel-rework`: the filled part of a value field. Label and value on it 7.8:1, unit 4.7:1; 1.45:1 to the white ground, so the position is carried by the number and by `--value-edge`. A dark theme swaps the value, not the name |
+| `--value-edge` | `--accent` | 2px line at the right end of the fill bar; 4.5:1 on white |
+| `--picker-thumb-ring`, `--picker-thumb-casing` | `#FFFFFF`, `#000000` at 40% | `style-panel-rework`: the 2px ring and the 1px casing of the colour area and hue thumbs, so a thumb reads on every colour |
 | `--selection-casing` | `#FFFFFF` | `0007`: white casing one line width wider on each side under every `--accent` line or glyph stroke without a white ground, so it stays visible over a fill (see "Casing over artwork") |
 | `--hover-box` | `--accent` at 65%, with `--selection-casing` at 65% | `0007`: hover box of an object under the Select tool. Raised from `--accent-hover` (20%), which measured 1.0 to 1.3:1 on every fill. `--accent-hover` stays for rings, buttons and rows |
 
@@ -297,11 +300,10 @@ values, not an implementation site, for those four rows.
   of selection or tool (the customer's "right side, fixed" ask). Collapsible
   via a chevron tab on its canvas-facing edge and `Shift+Ctrl+F`; collapsed
   width is 0. Structured as one scrolling column of named, stacked sections
-  (not tabs — see the 2026-10-05 section above for why), each independently
-  showing a disabled/placeholder state when nothing relevant is selected,
-  rather than collapsing or disappearing — so the panel's own shape never
-  changes as selection or active tool changes, keeping with the
-  no-layout-shift rule. `stroke-and-fill-styling`'s stroke/fill controls are
+  (not tabs — see the 2026-10-05 section above for why). When nothing
+  relevant is selected the panel is empty (superseded 2026-10-08: it no
+  longer shows disabled controls), so its width never changes as selection or
+  active tool changes, keeping with the no-layout-shift rule. `stroke-and-fill-styling`'s stroke/fill controls are
   its first and, since 2026-10-07, only section (no "Shape tool options"
   section; see the correction in the 2026-10-05 section). It sits beside the
   canvas region, not over it: the tool rail and the bars' overlay row are
@@ -309,29 +311,47 @@ values, not an implementation site, for those four rows.
   ordinary DOM app chrome, not canvas editing UI — it does not go through the
   WebGL draw list rule above. Reference: "Properties panel: Style section".
 - **Segmented icon control (`ToggleGroup`)**: the pattern for any small set
-  of mutually-exclusive icon choices — started as a two-state toggle
-  (`primitive-shapes`' Polygon/Star mode), generalized here to n states
-  (join, cap, fill mode). One Tab stop per group; arrow keys move the
-  selection within it (native `role="radiogroup"` behavior); each icon has
-  its own `aria-label`. Reuse this instead of a `Select` dropdown whenever
-  the choice set is small (≤4) and icons read faster than words — Join/Cap/
-  Fill-mode all qualify, a longer list (e.g. the dash preset, 4 options but
-  pattern samples read better in a list) uses `Select` instead. Also used
-  for the node-tool's kind control (`path-merge-split-and-node-types`):
-  Make corner / Make symmetric / Make asymmetric, icons being the node
-  glyphs themselves (square/diamond/triangle), replacing the two flat
-  "Make corner"/"Make smooth" buttons `path-node-editing` shipped.
-- **`ColorAlphaPicker`**: the one shared color-with-alpha control
-  (swatch + popover: saturation/hue area, hex input, alpha or opacity
-  slider), introduced in `stroke-and-fill-styling` for stroke color, solid
-  fill color, and gradient stop color/opacity. Don't add a second color
-  picker component for a future feature that also needs color+alpha — reuse
-  this one, same instinct as the single `--accent` rule above applied to
-  color controls instead of selection color.
+  of mutually-exclusive choices (a Paint switch, Join, Cap, the dash presets, the
+  marker choices) — started as a two-state toggle (`primitive-shapes`'
+  Polygon/Star mode), generalized to n states. One Tab stop per group; arrow
+  keys move the selection within it (`role="radiogroup"`); each item has its
+  own `aria-label`; items show an icon or, where the choice has no icon that
+  reads ("Spaced", "At nodes"), text. In the properties panel this is the
+  only way to pick from a set: a `Select` dropdown is a popup and is not used
+  there (see the rule below). Also used for the node-tool's kind control
+  (`path-merge-split-and-node-types`): Make corner / Make symmetric / Make
+  asymmetric, icons being the node glyphs themselves (square/diamond/triangle).
+- **No popups in the properties panel** (customer, final, 2026-10-08,
+  `style-panel-rework`). No control in the panel opens a popover, dropdown list,
+  menu, dialog or any other layer over the canvas or over other panel content.
+  Everything the maker can set is a control in the panel's own column. Text-only
+  tooltips and the field validation message are the only transient layers; they
+  contain no controls and never take focus. It holds for every later section of
+  the panel, not only Style. Consequences: choices are segmented groups, text
+  lines and value fields, never a `Select`; a colour picker, a palette or a
+  history is inline (tabs in the panel, not a popover); the eyedropper's colour
+  chip over the canvas is a readout, like the transform readout, with no
+  control in it. Reference: "Properties panel: Style section".
+- **Value field** (`style-panel-rework`): the one component for a number the
+  panel edits by dragging: GIMP's tool-option field. Label inside at the left,
+  value and unit at the right, a bar filled to the value (a slightly
+  logarithmic scale for Width and Opacity), a small reset icon. Drag inside the
+  field, even outside its bounds, or click and type; Shift is ten times coarser,
+  Ctrl (Cmd) ten times finer; no +/- buttons, no steppers, no text selection by
+  dragging. A spinbutton for the keyboard; preview per frame and one commit on
+  release. The bars' number fields (Radius, Points, Ratio, entry chips) keep
+  their own look until a story moves them (open question 5 of the spec). Rows
+  and numbers: "Value field".
+- **Colour block** (`style-panel-rework`; replaces `ColorAlphaPicker`): per
+  colour a display-only swatch, an eyedropper button, an 8-digit RGBA hex field
+  and, below, an inline saturation/value area and hue slider. Opacity is its
+  own value field. One implementation for stroke and fill; do not add a second
+  colour control for a future feature. A later palette, history or colour model
+  goes into tabs of this block (`color-management`), never into a popover.
 - **Mixed-state display on multi-select**: when selected objects differ on
   a property, show a type-appropriate placeholder rather than the
-  first-selected object's value — empty field with muted "Mixed" text for
-  numeric fields, a 45 degree **hatch** swatch for `ColorAlphaPicker`
+  first-selected object's value — muted "Mixed" text in place of the value (and
+  no fill bar in a value field) for numeric fields, a 45 degree **hatch** colour swatch
   (changed 2026-10-07 from a checkerboard: a transparent colour is drawn as a
   checkerboard, and a mixed swatch must not look like one), no option
   highlighted for a segmented control. Established in
@@ -647,153 +667,208 @@ values, not an implementation site, for those four rows.
     tools while the switch has focus unmounts it; focus falls back to the
     canvas as it does for the other bars.
 
-## Properties panel: Style section (`stroke-and-fill-styling`, 2026-10-07)
+## Properties panel: Style section (`stroke-and-fill-styling`, rewritten by `style-panel-rework`, 2026-10-08)
 
 Sizes, tokens and component rules for the right-docked `PropertiesPanel` and its
-first (and, in this slice, only) section, "Style". The decisions and reasoning
-are in `specs/0007-stroke-and-fill-styling/specification.md`, "UX notes"; this
-section is the reference an implementer builds from.
+first section, "Style". The decisions and reasoning are in
+`specs/style-panel-rework/specification.md`, "UX notes" (and
+`specs/stroke-markers/specification.md` for the Markers block); this section is
+the reference an implementer builds from. It replaces the `0007` version: there
+is no colour popover, no dash dropdown, no gradient bar or stop list, and no
+disabled control any more. The history of those is in git.
+
+**The rule (customer, 2026-10-08): no popups in the properties panel.** See the
+convention of that name under "Interaction conventions"; it is binding for
+every row below and for every later section.
 
 **Layout.**
 
 | Item | Value |
 |---|---|
 | Regions | Below the native menu, above the status bar: the canvas region (`relative flex-1 min-w-0`) and the panel (280px, `shrink-0`, full height). The tool rail and the bars' overlay row are children of the canvas region |
-| Overlay row | `absolute top-3 right-3 left-[72px] z-20` **inside the canvas region** (it was anchored to the window edge). Its right limit is the canvas region's right edge less 12px, so a bar never runs under the panel. Bars wrap by whole groups as before |
-| Panel | `<aside aria-label="Properties">`, `--panel-bg`, `overflow-y: auto`, `overscroll-behavior: contain`, `scrollbar-width: thin`, one scrollbar for the whole panel, no inner scroll areas; no shadow (docked); 1px left edge line `--toolbar-icon` at 25% |
+| Overlay row | `absolute top-3 right-3 left-[72px] z-20` **inside the canvas region**. Its right limit is the canvas region's right edge less 12px, so a bar never runs under the panel. Bars wrap by whole groups as before |
+| Panel | `<aside aria-label="Properties">`, `--panel-bg`, `overflow-y: auto`, `overscroll-behavior: contain`, `scrollbar-width: thin`, one scrollbar for the whole panel, no inner scroll areas; no shadow (docked); 1px left edge line `--toolbar-icon` at 25%; `user-select: none` except in its text inputs |
 | Padding, content width | 12px, content 244px (280 less 24 less a thin scrollbar) |
 | Collapse tab | 16 x 48px, on the panel's canvas-facing edge, vertically centred, `--toolbar-bg`, `--panel-elevation-shadow` on its canvas side, 1px `--toolbar-icon` at 25% outline, chevron 12px; first Tab stop of the panel; collapsed it sits on the canvas region's right edge and the panel content is `inert`. Name "Hide properties panel" / "Show properties panel", `aria-expanded`, `aria-controls`; tooltip "Properties (Shift+Ctrl+F)". State per session, default open, not saved |
 | Opening and closing | Resizes the canvas region through the existing `ResizeObserver` path; the document does not move on screen (the view keeps its top-left origin) |
-| Window minimum | 800 x 600 (`tauri.conf.json` `minWidth`, `minHeight`; none is set today). The floor is the widest unbreakable row of the three bars + 84px (rail clearance 72 + 12) + 280px; at 800 the Select bar's settings row (about 400px) fits the 436px available. Measure at build and raise the minimum if a bar overflows; the panel never shrinks, never auto-collapses and is never an overlay |
-| Portals | Popovers and tooltips render in a portal over everything (z above the overlay row), may cover the canvas, never the panel |
+| Window minimum | 800 x 600 (`tauri.conf.json` `minWidth`, `minHeight`). Measured at the build of `0007` PR 3, no raise needed: at 800 the canvas region is 520px; the Select bar wraps to three rows, the Node bar is one row of about 300px, the polygon/star bar about 310px. The panel never shrinks, never auto-collapses and is never an overlay |
+| Empty | Nothing selected, Pen active, or a Node tool with nothing to edit: the frame and the collapse tab only. No heading, text, icon or control; no live region. Switching empty and filled is instant and changes no size |
+| Hidden, not disabled | A control that cannot apply is removed from the tree (not `disabled`, not `aria-disabled`, not greyed). Rows leave and enter instantly: no height animation, no reserved space. The section title row (with the Paint switch) is the anchor: it never moves when its own rows come and go |
+| Tooltips and validation chips | The only layers that may appear over content, and only text: tooltips (Radix `Tooltip`, 400ms, `side="left"`, no controls, no focus) and the validation chip (see below). Both render in a portal over everything (z above the overlay row), may cover the canvas, never take focus |
+| Heights | Header 24px + 8; Stroke (Solid, no markers) 404px; Markers block 132px (204px with Place and Count); Fill (Solid) 224px; section gap 16px; paddings 12px top and bottom. Whole panel 700px (no markers), 832px (markers), 904px (markers with a Middle shape). At 800 x 600 the viewport is about 570px: the header and Stroke to the Cap row show, Fill is reached by scrolling |
 
 **Rows.**
 
 | Item | Value |
 |---|---|
-| Row | 28px high, 8px between rows; label column 60px, 8px gap, control column 176px; labels 14px `--toolbar-icon` (8.3:1); the control height of the bars (28px) |
-| Subsection gap, rule | 16px between Stroke and Fill; 1px `--toolbar-icon` at 25% line between them; sub-headings "Stroke" and "Fill" 12px semibold |
-| Header | "Style" 14px semibold; below it the **subject line**, 12px `--panel-muted-fg`: "Nothing selected", "Pen: finish the path to style it", kind ("Rectangle"), count ("3 rectangles", "4 objects", "2 paths") |
-| Number field | The bar number field (28px, white, 14px tabular text, right-aligned, fixed unit suffix inside the right edge). Width 96px with "mm"; hex 84px (`#RRGGBB`, upper case, left-aligned); opacity 56px with "%"; stop position 52px, "%", one decimal at most. Enter commits and returns focus to the canvas; Tab commits and moves on; Escape or a press elsewhere restores. Invalid: 2px `--field-invalid`, `aria-invalid`, message chip as an overlay below the field (no row shifts), cleared on the next keystroke. Messages: "Enter a number from 0 to 1000" (width), "Enter 3 or 6 hex digits" / "Use 6 digits; set opacity separately", "Enter a number from 0 to 100" |
-| `ToggleGroup` item | 40px wide (Join, Cap), 44px (Paint, Fill type), 28px high, 32px high for Fill type; icon 16px, 1.5px absolute stroke; group is one 1px `--toolbar-icon` at 60% bordered strip, items separated by 1px; pressed: `--toolbar-icon-active-bg` ground, `--toolbar-icon-active-fg` glyph (4.5:1; 3.3:1 against the panel); unpressed `--toolbar-icon` glyph; hover `--editor-accent-hover`; focus-visible 2px `--editor-accent` ring with a 1px `--toolbar-bg` offset (inside the strip for the roving item); `role="radiogroup"` / `radio`, one Tab stop per group, arrows move and select; mixed: nothing pressed; disabled: pressed item on `--toolbar-icon` at 30% ground, glyph 4.9:1 |
-| Select (dash) | Radix `Select`, 176px trigger, 28px, white, same border as a field; trigger shows the 64 x 8px line sample and the name; list items 28px with the sample and the name; checkmark on the current; "Custom" shown (not selectable) when the stored pattern is none of the presets; mixed: "Mixed" in `--field-placeholder`. Samples at 2px thickness in `--toolbar-icon`: Solid unbroken, Dash 12 / 8, Dot 2 / 6, Dash-Dot 12 / 6 / 2 / 6 px |
-| Dash presets | Multiples of the stroke width: Dash `[6, 4]`, Dot `[1, 3]`, Dash-Dot `[6, 3, 1, 3]`, Solid `[]`; every "on" > 0; a pattern whose period is under 2 screen px draws solid (architect) |
-| Swatch | 28 x 28px (24 in a stop row), `rounded-[5px]`, 1px `--swatch-border`, 1px white inner line; shows the colour at its opacity over the checkerboard (`--checker-a`, `--checker-b`, 7px cells; 6px at 24px); mixed: 45 degree hatch, 4px stripes (`--checker-a`, `--mixed-hatch`); stroke off: the stored colour with a slash (3px white under 1.5px `--no-paint-slash`, corner to corner); disabled: unchanged but not focusable |
-| Colour popover | Radix `Popover` (non-modal), 232px wide, 12px padding, `--popover` ground, 8px radius, `--panel-elevation-shadow`; `side="left"`, `align="start"`, offset 8, collision padding 8; saturation/value area 208 x 128 (`react-colorful`, `role="slider"`, name "Saturation and value"), 10px gap, hue slider 12px high with a 16px thumb ("Hue"), 10px gap, opacity slider 12px high over a checkerboard ("Opacity"); no fields (the inline hex and opacity are the fields); the picker keeps its own HSV state so the hue does not jump through greys; arrow keys 1% (Shift 10%) preview on key-down and commit on key-up |
-| Gradient bar | 244 x 16px, checkerboard under an inline SVG `linearGradient` (sRGB, not premultiplied, as the renderer), 1px `--toolbar-icon` at 60% border; thumbs 12 x 16px pins below it (stop colour fill, 1.5px `--toolbar-icon` outline, selected raised with a 2px `--editor-accent` ring and a white casing, focus ring as above); `role="slider"`, "Stop 2 of 3 position"; mixed (several objects with different stops): neutral hatched track, no thumbs |
-| Stop row | 28px: position 52, swatch 24, hex 72, opacity 48, remove 28, 5px gaps (244); 12px text; selected row marked by a 3px `--editor-accent` bar on its left edge and `aria-current="true"`; remove button is a 28px icon button (Lucide `X`), disabled at 2 stops or fewer |
-| Add stop | 28px high, full width, text "Add stop"; disabled at 16 stops or more; hidden for several selected objects |
-| Info line | 12px `--panel-muted-fg`, under the stop editor, for polygons and stars only: "Gradient spans the shape's selection box, which is the square around a polygon or star." Also the message "Selected gradients have different numbers of stops." and "No stops. Nothing is painted. Add a stop." |
-| Reserved heights | Stroke about 232px, Fill 76px (None) to 260px (3 stops); 16 stops make the panel scroll |
+| Row | 28px high, 8px between rows; label column 60px, 8px gap, control column 176px; labels 14px `--toolbar-icon` (8.3:1). Rows without a label (Color, picker, the value fields) use the full 244px |
+| Subsection gap, rule | 16px between Stroke and Fill, a 1px `--toolbar-icon` at 25% line in the middle |
+| Header | One 24px row: "Style" 14px semibold at the left, the **subject line** right-aligned, 12px `--panel-muted-fg` ("Rectangle", "3 rectangles", "4 objects", "2 paths"). Not a live region |
+| Section title row | The title ("Stroke", "Fill"; 12px semibold) in the label column, the Paint group None / Solid (2 x 44px) in the control column. With Paint None this row is the whole section |
+| Color row | Swatch 28, 4px, eyedropper button 28, 4px, hex field (the rest, about 180px). No label |
+| Picker | Under the Color row, 8px gap: saturation/value area 244 x 96, 8px gap, hue slider 244 x 12. Always visible while the paint is Solid. Block height 116px |
+| Value field | See "Value field" below. 244 x 28 |
+| Dash | Preset group 4 x 44px (176px) in the control column; under it the Pattern row |
+| Pattern | Label "Pattern", text input 176px |
+| Join, Cap | `ToggleGroup`, 3 x 40px |
+| Markers | `stroke-markers`: "Markers block" below |
 
-**Colour model.** The picker works in sRGB hex plus an opacity fraction. Opacity
-is shown and typed as an integer percent and stored as N / 100, so what was set
-reads back; a stored value off that grid is shown rounded and is never rewritten
-by looking at it. Stop positions: percent, one decimal, stored as typed. New
-gradient: stop 0 = the stored solid colour (black if never set) at 100%, stop 1 =
-white at 100% (black if stop 0 is white). Added stop: midpoint of the widest gap
-(0 to the first stop and last stop to 1 count as gaps), rounded to 0.1%, with the
-colour and opacity of the ramp at that point; a click on the bar adds one at the
-clicked position the same way.
+**Text field (hex, pattern).** 28px high, white ground, 14px tabular text, 1px
+border `--toolbar-icon` at 60% (3.1:1 on the panel), `rounded-[5px]`; hex
+left-aligned and about 180px; pattern left-aligned, 176px, with a fixed suffix
+"x width" inside the right edge (12px, `--panel-muted-fg`). Enter commits and
+returns focus to the canvas, Tab commits and moves on, Escape or a press elsewhere
+restores and writes nothing, Enter on text the maker did not edit writes nothing.
+Focus: 1px `--editor-accent` border plus inset 1px. Mixed: empty with the
+placeholder "Mixed" (`--field-placeholder`, 5.3:1). Invalid: 2px `--field-invalid`,
+`aria-invalid`, validation chip, cleared on the next keystroke.
 
-**Behaviour.** Preview and commit: drags in the panel render the selected objects
-in the new style on every pointer move (one update per animation frame, through
-the ephemeral `StyleOverride`) and make one commit on pointer-up; Escape during
-the drag reverts and the release writes nothing; keys on a slider preview on
-key-down and commit on key-up; typed values do not preview; discrete controls
-commit on the click. The commit goes to the objects the edit started on. Focus:
-mouse use of a button-like control returns focus to the canvas, keyboard use does
-not; a popover opened by keyboard returns focus to its swatch; Escape in the panel
-closes a popover or select, else restores a field and focuses the canvas, and
-never reaches the canvas Escape cascade. The panel is a sibling of the canvas
-container and its popovers are portalled outside it, so canvas key handling
-never sees panel keys; `isFormControl` also lists `[role="slider"]`,
-`[role="radio"]`, `[role="combobox"]`, `[role="option"]`, `[role="dialog"]` as a
-second guard. Backspace and Delete in a field or on a control never delete the
-object; Delete on a focused gradient thumb removes that stop.
+**Validation chip.** An overlay below the field, right-aligned to it, so no row
+shifts: 12px text, `--field-invalid` text and 1px ring, a 12px alert glyph,
+`--popover` ground, `role="alert"`, `pointer-events: none`, maximum width 244px.
+Messages: hex "Enter 3, 4, 6 or 8 hex digits"; Width "Enter a number from 0 to
+1000"; Opacity "Enter a number from 0 to 100"; Count "Enter a whole number from
+1 to 500"; Pattern "Enter 1 to 16 numbers from 0 to 1000, for example 1 2 4 2".
 
-**Frontend components to add** (`frontend/src/components/ui/`, by hand over the
-`radix-ui` umbrella package already in `package.json`; not the `shadcn` CLI, see
-the technical-debt item on its `braces` dependency): `popover.tsx`, `select.tsx`,
-`toggle-group.tsx`, `slider.tsx`, `tooltip.tsx` (the existing `Tooltip.Provider`
-and content classes of `ToolRail` and `ToolbarSwitch` become this one wrapper).
-The colour area is `react-colorful` (MIT, no dependencies). Domain components:
-`ColorAlphaPicker` (swatch, inline hex and opacity fields, popover), `NumberField`
-(the bars' field rules), `GradientEditor` (bar, thumbs, rows, Add), all fed by
-`useStylePanel.ts`, not `useEditorSession.ts`.
+**Value field** (`ValueField`; Width, Opacity, Count; the model for every
+number the panel edits by dragging). The GIMP tool-option field: a label at the
+left, the value at the right, a bar filled to the value. Customer decisions:
+drag inside the field, even outside its bounds, or type; no +/- buttons; no text
+selection by dragging; a slightly logarithmic scale for Width and Opacity.
 
-**As built (PR 3 of `0007`, 2026-10-08).** `ui/tooltip.tsx` (no default side: the panel's open left, the rail's will open
-right), `ui/popover.tsx`, `ui/select.tsx` and `ui/toggle-group.tsx` exist; `ui/slider.tsx` does not (the
-hue and opacity sliders are react-colorful's, and the stop thumbs arrive with the
-gradient editor). The panel's tokens (`--panel-bg`, `--panel-muted-fg`,
-`--field-placeholder`, `--field-disabled-bg`, `--field-disabled-fg`,
-`--swatch-border`, `--checker-a`, `--checker-b`, `--mixed-hatch`,
-`--no-paint-slash`) are in `index.css` with the values above. Where the build
-differs from the rows above:
+| Part | Rule |
+|---|---|
+| Box | 244 x 28px, `rounded-[5px]`, white ground, 1px border `--toolbar-icon` at 60%; a `div` with `role="spinbutton"` and `tabindex="0"` outside the typing state (not an `input`); `user-select: none`, `-webkit-user-drag: none`, `touch-action: pan-y`; cursor `ew-resize` |
+| Fill bar | Behind the content from the left edge to the value's position `p` on the field's scale; `--value-fill`; the right edge has a 2px `--value-edge` line (4.5:1 on white). Nothing is drawn at 0; "Mixed" draws no bar. No thumb, no tick marks, no stepper |
+| Label | 8px from the left, 14px `--toolbar-icon`: "Width", "Opacity", "Count" |
+| Value and unit | Right-aligned, value 14px tabular `--toolbar-icon`, unit ("mm", "%") 14px `--panel-muted-fg`, 4px apart, ending 32px from the right edge. Width: up to 3 decimals, no trailing zeros; Opacity and Count: integers. Count has no unit |
+| Reset slot | 24px at the right end, always reserved. Icon Lucide `RotateCcw` 12px, 1.5px stroke, `--toolbar-icon` at 80% (6.2:1 on white, 4.3:1 on the bar); shown when the value differs from the default or is Mixed. A `button`, `tabindex="-1"`, name "Reset stroke width to 0.25 mm", sibling of the spinbutton in the DOM, not inside it. Defaults: Width 0.25 mm, Opacity 100 %, Count 1 |
+| Hover | Border `--toolbar-icon` at 100% (8.3:1). The bar does not change (a darker tint would put the unit below 4.5:1) |
+| Focus | The panel's focus ring: 2px `--editor-accent` with a 1px `--toolbar-bg` offset, `focus-visible` only |
+| Drag | Pointer captured; the cursor stays `ew-resize` in the whole window until release; with Shift or Ctrl down, the muted 12px word "coarse" or "fine" shows centred in the field (`aria-hidden`); no tooltip while dragging |
+| Typing | Bar hidden, border 2px `--editor-accent`, number selected, unit stays, text right-aligned where the value was, cursor `text`. Invalid: border `--field-invalid` |
+| Mixed | "Mixed" in `--field-placeholder` in place of value and unit; no bar; reset icon shown |
+| Disabled | Does not exist |
+| Mapping | `p` is 0 at the left end, 1 at the right end. Width (mm): `v = 20 (100^p - 1) / 99`, inverse `p = ln(1 + 99 v / 20) / ln 100`, drag 0 to 20, typed 0 to 1000, grid 0.01 (Shift 0.1, Ctrl 0.001). Opacity (%): `v = 100 (4^p - 1) / 3`, inverse `p = ln(1 + 3 v / 100) / ln 4`, integers. Count: linear, `p = (v - 1) / 49`, drag 1 to 50, typed 1 to 500. A value above the drag maximum draws a full bar |
+| Modifiers | Shift: `p` moves ten times as fast (arrow keys: step x10). Ctrl (Cmd on macOS): ten times slower (step never below the grid). Same keys for mouse and keyboard. Value is `clamp(p0 + dx / W)` from the press, no re-basing at the ends; a modifier change mid-drag re-bases |
+| Keys | Arrows step on the grid (preview on key-down, one commit on key-up); Home / End: scale minimum / end; Enter, F2, a digit, `.`, `,`, `-` start typing; `Ctrl+Backspace` (Cmd on macOS) resets; Backspace and Delete alone do nothing and never reach the canvas |
+| Semantics | `aria-label` "Stroke width" (contains the visible "Width"), `aria-valuemin`, `aria-valuemax` (typed maximum), `aria-valuenow`, `aria-valuetext` ("0.25 millimetres", "50 percent", "3 markers"; Mixed: "Mixed", no `valuenow`), `aria-keyshortcuts="Control+Backspace"` |
+| Tooltip | "Drag to change, click to type. Shift: coarse. Ctrl: fine. Ctrl+Backspace: reset." (Cmd on macOS) |
 
-- **`ToggleGroup` is built on Radix `RadioGroup`**, not Radix's `ToggleGroup`:
-  a radio group moves and selects with the arrow keys, keeps one Tab stop and
-  handles Home and End; the toggle group selects only on activation.
-- **The colour popover is anchored to the whole Color row**, not to the swatch,
-  so `side="left"` puts it beside the panel edge and it never covers the hex and
-  opacity fields it updates.
-- **react-colorful's sliders are renamed** to "Saturation and value", "Hue" and
-  "Opacity" after mount, and every arrow key on them is handled by the popover:
-  1 % of the range, Shift 10 % (the library's own step is 5 %). After Escape in a
-  drag the picker restarts from the committed colour, and the committed colour
-  never resets it during a drag (it lags the pointer by a frame, and a reset
-  would make the hue jump through a grey).
-- **Panel details found in the UX review:** the pressed look of a toggle item is
-  keyed on `aria-checked` (the tooltip trigger replaces `data-state`); an error
-  chip is right-aligned to its field and wraps at 168 px, so it never widens the
-  panel; a mixed field hides its unit so "Mixed" fits the 56 px field; the
-  collapse tab is drawn 16 px wide inside a 24 px hit target; the popover opens
-  44 px from the Color row so it clears the tab; Escape in the panel returns
-  focus to the canvas even when a tooltip took the key; a press on dead space in
-  the panel leaves the focus where it was (the canvas); a control focused by
-  `Shift+Ctrl+F` carries a ring of its own. The tooltip of the tab reads
-  "Shift+Ctrl+F" on every platform, like every other shortcut label in the app
-  (the key handler accepts Cmd as well); a platform-aware label is a change for
-  all labels at once.
-- **Window minimum 800 x 600, measured, no raise needed.** At 800 the canvas
-  region is 520 px. The Select bar wraps to three rows (the two switches; Radius
-  with the link switch and Remove rounding; Object to path), the Node bar is one
-  row of about 300 px and the polygon/star bar about 310 px in either mode; none
-  runs under the panel.
-- **Opening and closing keeps the document where it is on screen.** The view
-  normally keeps its centre on a resize, so a toggle announces its width change
-  to the viewport first and that one resize keeps the top-left origin.
-- **Fill type shows None and Solid only** until the gradient editor ships; a
-  stored gradient reads as no item pressed.
-- **A disabled panel keeps its pressed items** at the 30 % ground; the Node tool
-  with no node selected edits the paths of the object selection, and shows
-  "Nothing selected" when the selection holds none.
+**Swatch.** 28 x 28px, `rounded-[5px]`, 1px `--swatch-border`, 1px white inner
+line; shows the colour at its alpha over the checkerboard (`--checker-a`,
+`--checker-b`, 7px cells); mixed: 45 degree hatch, 4px stripes (`--checker-a`,
+`--mixed-hatch`). Display only: `aria-hidden`, no hover state, not a Tab stop.
 
-**As built (PR 4 of `0007`, 2026-10-08): the gradient stop editor.** The Fill type
-group has its four entries (None, Solid, Linear, Radial, 44 px each, 176 px with
-no label) and shows nothing pressed for several objects in different modes. Under
-a gradient mode come the bar (`GradientBar`), the stop list (`StopRows`), Add stop
-and the info lines (`GradientEditor`). Where the build adds to the rows above:
+**Eyedropper button.** 28 x 28px, Lucide `Pipette` 16px, 1.5px stroke, 1px
+`--toolbar-icon` at 60% outline, hover `--editor-accent-hover`, focus ring as
+above. Pressed (`aria-pressed="true"`, while picking): `--toolbar-icon-active-bg`
+ground, `--toolbar-icon-active-fg` glyph. Names "Pick stroke color from the
+drawing" / "Pick fill color from the drawing". Tooltip "Pick a color from the
+drawing (Esc cancels)". While picking: canvas cursor an eyedropper image (24px,
+black with a white casing, hotspot at the tip, fallback `crosshair`); no object
+hover highlight; the **colour chip** follows the pointer: the "Live transform
+readout" surface (`--toolbar-bg`, 8px radius, 12px up and right of the pointer,
+flips at the canvas edges, `pointer-events: none`) with a 16px swatch and the
+colour as `#RRGGBBAA` in 12px tabular text, a muted word "stroke" or "fill" after
+it when the architect's sampling rule has one, and "No paint here" without a
+swatch where nothing is painted. Updated at most once per animation frame. It is
+a readout, not a popup: no control, no focus. Pan, zoom and the wheel work while
+picking.
 
-- **Thumbs** are `role="slider"` pins under the bar; a press selects the stop and
-  starts a drag (one preview per animation frame, one commit on release, Escape
-  reverts). Arrows step 1 %, Shift 10 %, Home and End go to 0 and 100 %, Delete or
-  Backspace removes the stop (ignored at two stops, and never reaches the canvas).
-  A click on the bar away from a thumb adds a stop there, with the colour and
-  opacity the ramp has there.
-- **A stop row** reuses the colour controls of the stroke and fill rows in their
-  compact form (24 px swatch, 12 px text, hex 72, opacity 48, position 52); its
-  popover opens beside the panel like theirs. The selected row has a 3 px
-  `--editor-accent` bar on its left edge and `aria-current`; focusing or pressing
-  anything in a row selects it. The selection is the stop, not the row: it follows
-  the stop when a position edit re-sorts the list.
-- **States:** 0 stops reads "No stops. Nothing is painted. Add a stop."; several
-  gradients with different stop counts read "Selected gradients have different
-  numbers of stops." in place of the editor; several gradients with lists that
-  differ in value show a hatched bar with no thumbs, and Add stop and Remove are
-  not shown. Add stop is disabled at 16 stops with the tooltip "A gradient holds
-  at most 16 stops"; Remove is disabled at 2 with "A gradient keeps at least 2
-  stops". A polygon or star in the selection adds the line about the square box.
+**Colour picker (inline).** Area 244 x 96, `crosshair`, `role="slider"`, name
+"Stroke saturation and value" (Fill likewise), `aria-valuetext` "Saturation 50 %,
+value 40 %"; hue slider 244 x 12 with the sRGB rainbow ramp, `role="slider"`,
+"Stroke hue", `aria-valuetext` "Hue 215 degrees". Thumbs: area 14px, hue 16px,
+a 2px `--picker-thumb-ring` inside a 1px `--picker-thumb-casing`, so they read on
+every colour. No alpha slider. The picker keeps its own HSV state and re-derives
+it from the stored colour only when the colour changed from outside it, so the
+hue does not jump through greys; mixed colours show no thumb. A press on the area
+moves the thumb to the press point. Arrow keys 1 % (Shift 10 %), preview on
+key-down, commit on key-up. Built on `react-colorful`'s saturation and hue parts
+(MIT, as chosen for `0007`); its alpha part is not used.
+
+**`ToggleGroup` item.** 40px wide (Join, Cap, marker choices), 44px (Paint, Dash
+presets), 28px high; icon 16px, 1.5px absolute stroke; the group is one 1px
+`--toolbar-icon` at 60% bordered strip, items separated by 1px; pressed:
+`--toolbar-icon-active-bg` ground, `--toolbar-icon-active-fg` glyph (4.5:1; 3.3:1
+against the panel); unpressed `--toolbar-icon` glyph; hover `--editor-accent-hover`;
+focus-visible 2px `--editor-accent` ring with a 1px `--toolbar-bg` offset (inside
+the strip for the roving item); `role="radiogroup"` / `radio`, one Tab stop per
+group, arrows move and select; mixed: nothing pressed. Built on Radix
+`RadioGroup`, not Radix's `ToggleGroup` (it moves and selects with the arrows,
+keeps one Tab stop and handles Home and End).
+
+**Dash preset group.** Four items (Solid, Dash, Dot, Dash-Dot) in one
+`ToggleGroup` strip, 44 x 28px each. Each shows a 2px line sample in
+`--toolbar-icon` (pressed: `--toolbar-icon-active-fg`), centred, 32 to 34px wide,
+at the stored ratios with whole repeats: Solid unbroken; Dash 8 on / 5 off (three
+dashes); Dot 2 / 6 (five dots); Dash-Dot 9 / 4 / 2 / 4 (dash, dot, dash, dot).
+The stored lists are multiples of the stroke width: Solid `[]`, Dash `[6, 4]`,
+Dot `[1, 3]`, Dash-Dot `[6, 3, 1, 3]` (every "on" above 0); a pattern whose
+period is under 2 screen px draws solid. The group's tooltip carries the note
+"Patterns scale with the stroke width and draw solid when too small to see". A
+list that equals no preset leaves all four unpressed and shows its numbers in
+the Pattern line; there is no "Custom" entry. Pattern line: numbers separated by
+spaces, commas or both, 1 to 16 numbers from 0 to 1000, shown back as numbers
+with one space ("1 2 4 2"); tooltip "Lengths in multiples of the stroke width: on,
+off, on, off. Example: 1 2 4 2".
+
+**Markers block** (`stroke-markers`). Under Cap, 8px below it: a title row
+"Markers" (12px semibold, 16px), then Start, Middle, End (label column + a
+three-item `ToggleGroup` of 40px items: None, Arrow, Dot; 16px glyphs showing a
+line with the decoration at its left end, in the middle, or at its right end; the
+Start arrow points away from the line), then, when Middle is not None, Place (two
+88px text items "Spaced", "At nodes") and, when Place is Spaced, Count (value
+field, linear 1 to 50, typed 1 to 500). When every selected path is closed and a
+Start or End shape is set, one muted 12px line under End: "Closed paths have no
+start or end." The block is removed with the stroke (Paint None), with only
+primitives selected, and when nothing is selected.
+
+**Colour model.** The picker works in sRGB. The hex field shows and takes
+`#RRGGBBAA`; the Opacity field shows alpha as an integer percent. Alpha set by
+the hex field is stored as `AA / 255`; alpha set by the Opacity field as `N / 100`;
+a value off both grids is shown rounded and is never rewritten by looking at it.
+Opacity 0 is still a paint (the swatch is a checkerboard). No paint is the Paint
+switch, not a swatch item.
+
+**Behaviour.** Preview and commit: drags (picker area and hue, value fields)
+render the selected objects in the new style on every pointer move (one update
+per animation frame, through the ephemeral `StyleOverride`) and make one commit
+on pointer-up, also outside the control; Escape during a drag reverts and the
+release writes nothing; keys on a slider or value field preview on key-down and
+commit on key-up; typed values do not preview; discrete controls (Paint, Dash
+presets, Join, Cap, marker choices, reset) commit on the click. The commit goes
+to the objects the edit started on. Focus: a mouse press on a button-like
+control or the end of a drag returns focus to the canvas, keyboard use does not;
+when a focused control leaves the tree focus goes to its section's Paint group
+(the canvas if the panel became empty). Escape in the panel: ends eyedropper
+picking, else reverts a running drag, else restores an edited field and
+returns focus to the canvas; it never clears the selection and never reaches
+the canvas cascade. Backspace, Delete and letters in any panel control never
+reach the canvas. The panel is a sibling of the canvas container, so canvas key
+handling does not see its keys; `isFormControl` also lists `[role="slider"]`,
+`[role="spinbutton"]`, `[role="radio"]` as a second guard.
+
+**Frontend components** (`frontend/src/components/`): `ValueField`, `TextField`
+(the typed-field rules of the former `NumberField`, for hex and Pattern),
+`ColourPicker` (area and hue), `EyedropperButton`, `DashPresets`, `MarkerRows`,
+`ToggleGroup` (over Radix `RadioGroup`), `Tooltip`. `ui/popover.tsx` and
+`ui/select.tsx` are deleted and must not come back; so are the colour popover,
+the dash dropdown and the gradient components. Fed by `useStylePanel.ts`, not
+`useEditorSession.ts`.
+
+**Carried over from the `0007` build.** Panel details found in the UX review that
+still hold: the pressed look of a toggle item is keyed on `aria-checked` (the
+tooltip trigger replaces `data-state`); the collapse tab is drawn 16px wide inside
+a 24px hit target; Escape in the panel returns focus to the canvas even when a
+tooltip took the key; a press on dead space in the panel leaves focus where it was
+(the canvas); a control focused by `Shift+Ctrl+F` carries a ring of its own; the
+tab's tooltip reads "Shift+Ctrl+F" on every platform like every shortcut label in
+the app; opening and closing the panel keeps the document where it is on screen
+(the toggle announces its width change to the viewport first, and that one resize
+keeps the top-left origin); the Node tool with no node selected edits the paths of
+the object selection.
 
 **Casing over artwork.** Fills make artwork the background of every line the
 editor draws on top. Measured 2026-10-07 (WCAG ratio, 1px `--accent` against the
@@ -844,7 +919,10 @@ canvas 2.16; yellow read from the GL buffer 1.97), where 20% measured 1.0 to 1.3
 | Nudge | not built; proposal Arrow = 1 mm, Shift+Arrow = 10 mm | Needs a decision (scope growth) |
 | Keyboard help | not built; proposal `?` | Separate story |
 | Any letter shortcut | ignored while a drag, a chip, a focused control or an unfinished Pen path is active, with Ctrl, Cmd or Alt down, and on key repeat | Not a per-shortcut rule; see "Keyboard concept". Built in PR 1. An ignored key gives no feedback (no hint, no `preventDefault`). A tool switched by clicking a rail button leaves focus on that button, so letters are ignored until the canvas is clicked or tabbed to (existing behaviour, not changed by PR 1) |
-| Open/focus the style panel | Shift+Ctrl+F (Cmd on macOS) | Matches Inkscape's Fill & Stroke binding; app-global, not canvas-focus-scoped (`stroke-and-fill-styling`). Expands the panel if collapsed and moves focus to its first enabled control (Stroke Paint), or to the panel itself when every control is disabled; never closes it; ignored while a canvas drag runs. Collapse and expand by the panel's edge tab. In the panel: Escape closes a popover or select, else restores a field and returns focus to the canvas, and never clears the selection; Enter commits a field and returns to the canvas, Tab commits and moves on; Delete and Backspace never reach the canvas (on a gradient thumb Delete removes that stop). See "Properties panel: Style section" |
+| Open/focus the style panel | Shift+Ctrl+F (Cmd on macOS) | Matches Inkscape's Fill & Stroke binding; app-global, not canvas-focus-scoped (`stroke-and-fill-styling`). Expands the panel if collapsed and moves focus to its first control (Stroke Paint), or to the panel itself when it is empty (`style-panel-rework`); never closes it; ignored while a canvas drag runs. Collapse and expand by the panel's edge tab. In the panel: Escape ends eyedropper picking, else reverts a running drag, else restores an edited field and returns focus to the canvas, and never clears the selection; Enter commits a field and returns to the canvas, Tab commits and moves on; Delete and Backspace never reach the canvas. See "Properties panel: Style section" |
+| Change a panel value field | drag in the field; or focus it and use arrows (Shift = 10x, Ctrl/Cmd = 1/10), Home, End; click, Enter, F2 or a digit to type | `style-panel-rework`; preview per frame, one commit on release or key-up; Escape reverts a drag |
+| Reset a panel value field | `Ctrl+Backspace` (`Cmd+Backspace` on macOS) on the focused field, or its reset icon | `style-panel-rework`; Width 0.25 mm, Opacity 100 %, Count 1. Bare Backspace and Delete do nothing |
+| Pick a colour from the drawing | the eyedropper button next to the swatch; no key | `style-panel-rework`; Escape or a right-click cancels; pointer-only in this slice |
 
 Single-letter shortcuts (tools and, since `edit-interaction-polish`, the selection entries M, R, S, K) are a different category from the File menu's
 native accelerators (table above) — they're bound at canvas-focus scope, the

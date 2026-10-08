@@ -1,5 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 
 import { Canvas } from "@/components/Canvas";
@@ -20,6 +18,8 @@ import type {
   RequestPackPayload,
   SaveErrorPayload,
 } from "@/lib/projectState";
+import { BrowserBar } from "@/platform/BrowserBar";
+import { invoke, isTauri, listen } from "@/platform/host";
 
 const DEFAULT_SIZE_MM = { width: 210, height: 297 };
 
@@ -154,6 +154,7 @@ function App() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
+      {isTauri ? null : <BrowserBar />}
       <div className="flex min-h-0 flex-1">
         {/* The canvas region: the rail and the bars' overlay row are anchored
          * to it, not to the window, so no bar is ever drawn under the

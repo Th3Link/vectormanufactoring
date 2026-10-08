@@ -6,6 +6,10 @@ import { defineConfig } from "vite";
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Relative asset URLs: the same build works from the root of
+  // demo.curvyo.org and from a sub-path (curvyo.github.io/curvyo/), and
+  // inside the Tauri webview (docs/deploy-demo.md).
+  base: "./",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
