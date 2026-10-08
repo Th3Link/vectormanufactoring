@@ -1,7 +1,9 @@
-//! The Style panel's `wasm-bindgen` surface (`specs/0007-stroke-and-fill-
-//! styling`, criteria 5, 6, 13, 14, 24, 36, 37): a `impl WasmSession` block of
-//! its own, so `wasm_api.rs` does not grow. Strings and scalars only (ADR 0001
-//! §5); every method is a direct pass-through to `Session`, which holds the
+//! The properties panel's `wasm-bindgen` surface (`specs/0007-stroke-and-fill-
+//! styling`, criteria 5, 6, 13, 14, 24, 36 to 39): the Style section's reads and
+//! commands, plus the two calls the panel's shell needs (the view origin on a
+//! toggle and the pointer state for its shortcut). A `impl WasmSession` block
+//! of its own, so `wasm_api.rs` does not grow. Strings and scalars only (ADR
+//! 0001 §5); every method is a direct pass-through to `Session`, which holds the
 //! orchestration, over `curvyo-ui-core`'s rules.
 
 use curvyo_document_core::Color;

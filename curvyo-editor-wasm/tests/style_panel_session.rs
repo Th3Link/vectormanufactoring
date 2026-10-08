@@ -6,7 +6,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 
 use curvyo_document_core::{
-    Document, FillMode, Length, LineCap, ObjectSnapshot, Opacity, Point, Style, unpack,
+    Color, Document, FillMode, Length, LineCap, ObjectSnapshot, Opacity, Point, Style, unpack,
 };
 use curvyo_editor_wasm::{Session, Tool};
 use curvyo_render_core::DrawList;
@@ -49,6 +49,29 @@ fn stored_styles(session: &Session) -> Vec<Style> {
             ObjectSnapshot::Primitive(p) => p.style,
         })
         .collect()
+}
+
+fn loro_of(session: &Session) -> loro::LoroDoc {
+    let document = unpack(9, &session.pack("0.1.0").unwrap()).unwrap();
+    let loro = loro::LoroDoc::new();
+    loro.import(&document.export_loro_snapshot().unwrap())
+        .unwrap();
+    loro
+}
+
+/// How many commits the session's document holds, counted from its Loro
+/// snapshot (the way `acceptance_unified_editing.rs` counts one interaction).
+/// Consecutive commits of one peer with the same label can merge into one
+/// change, so a count of one is only proof where the last change before the
+/// gesture has another label; `op_count` is the check that cannot merge away.
+fn change_count(session: &Session) -> usize {
+    loro_of(session).len_changes()
+}
+
+/// How many operations the document has recorded: a gesture that wrote once per
+/// tick would record more than one that wrote once on release.
+fn op_count(session: &Session) -> i32 {
+    loro_of(session).oplog_vv().values().copied().sum()
 }
 
 fn has_alpha(list: &DrawList, alpha: u8) -> bool {
@@ -232,4 +255,82 @@ fn a_panel_toggle_does_not_move_the_document_on_screen() {
     session.keep_view_origin_for_width_change(280.0);
     session.resize_viewport(1000.0, 600.0);
     assert_eq!(session.view().screen_to_document(0.0, 0.0), corner);
+}
+
+#[test]
+fn a_gradient_mode_writes_nothing_until_it_can_seed_stops() {
+    let mut session = session_with_rectangles(1);
+    let before = change_count(&session);
+    session.set_fill_mode(FillMode::Linear);
+    session.set_fill_mode(FillMode::Radial);
+    assert_eq!(change_count(&session), before, "no commit");
+    assert_eq!(stored_styles(&session)[0], Style::default(), "no dead fill");
+}
+
+#[test]
+fn a_drag_of_many_ticks_records_what_one_typed_value_records() {
+    let mut dragged = session_with_rectangles(1);
+    let mut typed = session_with_rectangles(1);
+    let (n_dragged, n_typed) = (op_count(&dragged), op_count(&typed));
+    let changes = change_count(&dragged);
+    for percent in [90.0, 80.0, 70.0, 60.0, 50.0] {
+        dragged.preview_style_opacity(StyleField::StrokeOpacity, percent);
+    }
+    assert_eq!(op_count(&dragged), n_dragged, "ticks write nothing");
+    dragged.commit_style_preview();
+    typed
+        .set_style_text(StyleField::StrokeOpacity, "50")
+        .unwrap();
+    let written = op_count(&dragged) - n_dragged;
+    assert!(written > 0);
+    assert_eq!(
+        written,
+        op_count(&typed) - n_typed,
+        "one write of one value"
+    );
+    assert_eq!(change_count(&dragged), changes + 1);
+    dragged.commit_style_preview();
+    assert_eq!(
+        op_count(&dragged) - n_dragged,
+        written,
+        "a second release is a no-op"
+    );
+}
+
+#[test]
+fn escape_then_the_release_records_nothing() {
+    let mut session = session_with_rectangles(1);
+    let before = op_count(&session);
+    session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+    session.cancel_style_preview();
+    session.preview_style_opacity(StyleField::StrokeOpacity, 30.0);
+    session.commit_style_preview();
+    assert_eq!(op_count(&session), before);
+}
+
+#[test]
+fn an_edit_over_three_objects_is_one_commit_of_three_writes() {
+    let written = |n: u32, drag: bool| {
+        let mut session = session_with_rectangles(n);
+        select_first(&mut session, n);
+        let (ops, changes) = (op_count(&session), change_count(&session));
+        if drag {
+            session.preview_style_color(StyleField::StrokeColor, Color { r: 1, g: 2, b: 3 });
+            session.preview_style_color(StyleField::StrokeColor, Color { r: 4, g: 5, b: 6 });
+            session.commit_style_preview();
+        } else {
+            session
+                .set_style_text(StyleField::StrokeColor, "#040506")
+                .unwrap();
+        }
+        assert_eq!(change_count(&session), changes + 1, "one commit");
+        for style in stored_styles(&session) {
+            assert_eq!(style.stroke.color, Color { r: 4, g: 5, b: 6 });
+        }
+        op_count(&session) - ops
+    };
+    let one = written(1, false);
+    assert!(one > 0);
+    assert_eq!(written(3, false), 3 * one, "typed");
+    assert_eq!(written(3, true), 3 * one, "dragged");
 }

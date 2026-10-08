@@ -150,8 +150,14 @@ impl Session {
     }
 
     /// The Fill type row (criterion 13): one commit. Every stored colour,
-    /// opacity and stop stays.
+    /// opacity and stop stays. `None` and `Solid` only until PR 4.
     pub fn set_fill_mode(&mut self, mode: FillMode) {
+        // A gradient on an object without stops would be a dead fill (no paint,
+        // no clickable interior). The seed stops need the minted ids PR 4 adds,
+        // so until then the gradient modes write nothing.
+        if matches!(mode, FillMode::Linear | FillMode::Radial) {
+            return;
+        }
         self.flush_style_preview();
         let targets: Vec<FillModeTarget> = self
             .style_scope()
