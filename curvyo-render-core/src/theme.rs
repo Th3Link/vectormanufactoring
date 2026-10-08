@@ -253,6 +253,26 @@ pub const SELECTION_BOX_GUIDE_TOLERANCE_PX: f64 = 1.0;
 /// the draw list at an absurd zoom, where the edge is far off screen anyway.
 pub const SELECTION_BOX_MAX_DASHED_EDGE_PX: f64 = 50_000.0;
 
+/// `--marquee-touch`: the marquee box in touch mode and the lasso line
+/// (`advanced-selection`, `docs/design-system.md`).
+pub const MARQUEE_TOUCH: RgbaColor = RgbaColor::opaque(0x2F, 0xAE, 0x57);
+
+/// `--marquee-contain`: the marquee box in contain mode.
+pub const MARQUEE_CONTAIN: RgbaColor = RgbaColor::opaque(0xE5, 0x48, 0x4D);
+
+/// The alpha of `--marquee-touch-fill` and `--marquee-contain-fill`: 12 % of
+/// 255, rounded.
+pub const MARQUEE_FILL_ALPHA: u8 = 31;
+
+/// The marquee border's and the lasso line's weight, screen-space pixels.
+pub const MARQUEE_STROKE_PX: f64 = 1.5;
+
+/// The lasso line's dash length, screen-space pixels (4 on, 3 off).
+pub const LASSO_DASH_PX: f64 = 4.0;
+
+/// The lasso line's gap, screen-space pixels.
+pub const LASSO_GAP_PX: f64 = 3.0;
+
 /// The curve-approximation display tolerance for stroking, in screen
 /// pixels (`specs/0004-canvas-navigation-and-selection/adrs.md`: "Display
 /// tolerance becomes screen-space... Use 0.25 px / scale. ADR 0003 §7's
