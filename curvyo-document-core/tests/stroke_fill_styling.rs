@@ -1115,3 +1115,38 @@ fn two_peers_removing_different_stops_leave_a_one_stop_gradient_that_still_opens
         "a stored count outside 2 to 16 is valid"
     );
 }
+
+#[test]
+fn two_peers_creating_the_stop_list_at_once_keep_both_peers_stops() {
+    let (a, b, id) = two_peers(rect);
+    let mine = [stop(1, 0.0, red(), 1.0), stop(2, 1.0, blue(), 1.0)];
+    let theirs = [
+        GradientStop {
+            id: StopId::new(8, 1),
+            ..stop(1, 0.0, red(), 1.0)
+        },
+        GradientStop {
+            id: StopId::new(8, 2),
+            ..stop(2, 1.0, blue(), 1.0)
+        },
+    ];
+    set_mode(&a, FillMode::Linear, id, &mine);
+    // A edits a stop of the list it just created; B created its own list
+    // concurrently. The edit must not vanish with a losing list.
+    a.edit_stops(&[StopEdit {
+        id,
+        stop: StopId::new(7, 1),
+        change: StopChange::Color(Color::BLACK),
+    }])
+    .unwrap();
+    set_mode(&b, FillMode::Linear, id, &theirs);
+    let style = style_of(&merged(&a, &b), id);
+    assert_eq!(style.fill.stops.len(), 4, "both lists merge into one");
+    let edited = style
+        .fill
+        .stops
+        .iter()
+        .find(|s| s.id == StopId::new(7, 1))
+        .unwrap();
+    assert_eq!(edited.color, Color::BLACK, "A's edit survives");
+}

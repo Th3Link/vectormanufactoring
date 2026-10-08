@@ -386,17 +386,20 @@ pub(crate) fn stops_list(meta: &LoroMap) -> Option<LoroMovableList> {
 }
 
 /// The `fill_stops` list, created if the object has none yet. Only
-/// [`write_stops`] creates it (the fill-mode switch and Split); two peers that
-/// create it concurrently keep one container under the key.
+/// [`write_stops`] creates it (the fill-mode switch and Split). It is a
+/// **mergeable** child container (its id follows from the map and the key), so
+/// two peers that create it concurrently end up with one list holding both
+/// peers' stops, instead of one list replacing the other and taking its edits
+/// with it. A merge can therefore hold more than the two seed stops; that is
+/// a stored count the format accepts (acceptance criteria 16 and 35).
 fn ensure_stops_list(meta: &LoroMap) -> LoroMovableList {
     if let Some(list) = stops_list(meta) {
         return list;
     }
-    // invariant: inserting a brand-new container under a fresh key on an
-    // attached map cannot fail.
+    // invariant: the key holds no value (`stops_list` found none), so
+    // activating a mergeable child under it on an attached map cannot fail.
     #[allow(clippy::unwrap_used)]
-    meta.insert_container(KEY_FILL_STOPS, LoroMovableList::new())
-        .unwrap()
+    meta.ensure_mergeable_movable_list(KEY_FILL_STOPS).unwrap()
 }
 
 pub(crate) fn stop_map_at(list: &LoroMovableList, index: usize) -> Option<LoroMap> {
