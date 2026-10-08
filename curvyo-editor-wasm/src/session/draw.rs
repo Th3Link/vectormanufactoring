@@ -3,12 +3,14 @@
 //! `session/mod.rs` (`docs/technical-debt.md`, "`Session` is one module
 //! past the size limit").
 
+use std::borrow::Cow;
+
 use curvyo_render_core::{
-    DrawList, TransformDecorationInput, build_draw_list, build_pen_preview, build_select_draw_list,
-    build_transform_draw_list,
+    DrawList, TransformDecorationInput, build_artwork, build_decorations, build_pen_preview,
+    build_select_draw_list, build_transform_draw_list,
 };
 
-use curvyo_document_core::{ObjectSnapshot, PrimitiveSnapshot};
+use curvyo_document_core::{ObjectSnapshot, PathSnapshot};
 
 use super::{Session, Tool};
 
@@ -41,12 +43,17 @@ impl Session {
         let objects = self.objects();
         let live = self.select_live_edit_in(&objects);
         let paths = self.live_node_drag_paths_in(&objects);
-        let mut list = build_draw_list(&paths, view, &self.decoration_input());
-        let primitives = Self::primitives_in(&objects);
-        list.extend(curvyo_render_core::build_primitive_strokes(
-            &primitives,
-            view,
-        ));
+        // The artwork: every object in tree order, paths and primitives
+        // interleaved, each with its fill then its stroke
+        // (`specs/0007-stroke-and-fill-styling` criterion 26). The Node
+        // tool's live drag reshapes the paths it moves.
+        let artwork_objects = if self.tool == Tool::Node {
+            Cow::Owned(Self::with_paths(&objects, &paths))
+        } else {
+            Cow::Borrowed(&objects[..])
+        };
+        let mut list = build_artwork(&artwork_objects, view);
+        list.extend(build_decorations(&paths, view, &self.decoration_input()));
         // The origin axes of an axis-locked move: above the artwork, below the
         // blue outline, the boxes and the handles (criterion 27).
         if let Some(axes) = self.move_axes_in(&objects) {
@@ -112,14 +119,61 @@ impl Session {
         list
     }
 
-    /// The primitives among `objects`, in z-order.
-    fn primitives_in(objects: &[ObjectSnapshot]) -> Vec<PrimitiveSnapshot> {
+    /// `objects` with each path replaced by the path of the same id in `paths`
+    /// (possibly reshaped by a live drag); a path with no match stays as it is.
+    fn with_paths(objects: &[ObjectSnapshot], paths: &[PathSnapshot]) -> Vec<ObjectSnapshot> {
         objects
             .iter()
-            .filter_map(|object| match object {
-                ObjectSnapshot::Primitive(primitive) => Some(primitive.clone()),
-                ObjectSnapshot::Path(_) => None,
+            .map(|object| match object {
+                ObjectSnapshot::Path(original) => ObjectSnapshot::Path(
+                    paths
+                        .iter()
+                        .find(|path| path.id == original.id)
+                        .unwrap_or(original)
+                        .clone(),
+                ),
+                ObjectSnapshot::Primitive(_) => object.clone(),
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use curvyo_document_core::{AnchorId, Document, NewAnchor, Point};
+
+    use super::*;
+
+    /// The live drag's paths replace the artwork's by id, whatever their
+    /// order, and a path with no match keeps its own geometry.
+    #[test]
+    fn dragged_paths_replace_objects_by_id_not_by_position() {
+        let document = Document::new(1);
+        let make = |y: f64, n: u64| {
+            document.create_path(
+                &[
+                    NewAnchor::corner(AnchorId::new(1, n), Point::new(0.0, y)),
+                    NewAnchor::corner(AnchorId::new(1, n + 1), Point::new(10.0, y)),
+                ],
+                false,
+            )
+        };
+        let (first, second) = (make(0.0, 1), make(50.0, 3));
+        let objects: Vec<ObjectSnapshot> = [first, second]
+            .iter()
+            .map(|id| document.object(*id).unwrap())
+            .collect();
+        let mut moved = document.path(second).unwrap();
+        moved.anchors[0].point = Point::new(0.0, 99.0);
+        // Only the second path is in the list, and it is listed alone.
+        let replaced = Session::with_paths(&objects, std::slice::from_ref(&moved));
+        let ObjectSnapshot::Path(a) = &replaced[0] else {
+            panic!("a path");
+        };
+        let ObjectSnapshot::Path(b) = &replaced[1] else {
+            panic!("a path");
+        };
+        assert_eq!(a.anchors[0].point, Point::new(0.0, 0.0), "untouched");
+        assert_eq!(b.anchors[0].point, Point::new(0.0, 99.0), "the dragged one");
     }
 }

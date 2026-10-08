@@ -23,8 +23,21 @@ use curvyo_render_core::{DrawList, RgbaColor, SelectDecorationInput, build_selec
 
 const ACCENT: RgbaColor = RgbaColor::opaque(0x2F, 0x6F, 0xEE);
 
+/// The hover box colour: `--hover-box`, `--accent` at 65% (`0007` criterion
+/// 41; it was `--accent-hover` at 20% when this test was written).
 fn accent_hover() -> RgbaColor {
-    RgbaColor { a: 51, ..ACCENT }
+    RgbaColor { a: 166, ..ACCENT }
+}
+
+/// The white casings drawn under the box lines (`0007` criterion 40): not part
+/// of the box lines these tests measure.
+fn is_casing(colour: RgbaColor) -> bool {
+    colour == RgbaColor::WHITE
+        || colour
+            == (RgbaColor {
+                a: 166,
+                ..RgbaColor::WHITE
+            })
 }
 
 fn pt(x: f64, y: f64) -> Point {
@@ -108,7 +121,7 @@ fn device_tris(list: &DrawList, view: ViewTransform, dpr: f64, colour: RgbaColor
 fn all_colours(list: &DrawList) -> Vec<RgbaColor> {
     let mut out: Vec<RgbaColor> = Vec::new();
     for v in &list.triangles {
-        if !out.contains(&v.color) {
+        if !out.contains(&v.color) && !is_casing(v.color) {
             out.push(v.color);
         }
     }
@@ -677,7 +690,7 @@ fn ac65_pixel_pattern_of_a_snapped_box_is_still_fitted_and_closed() {
 // ---------------------------------------------------------------------
 
 #[test]
-fn ac66_hover_box_is_solid_accent_hover_and_pixel_aligned() {
+fn ac66_hover_box_is_solid_hover_box_and_pixel_aligned() {
     for dpr in [1.0, 1.5, 2.0] {
         for deg in [0.0, 25.0] {
             let view = ViewTransform::identity();

@@ -1,16 +1,12 @@
-//! A primitive's own draw-list geometry
-//! (`specs/0003-primitive-shapes/specification.md`, acceptance criterion 16)
-//! and the shape tools' create-drag preview: its placeholder stroke (reusing
-//! [`crate::stroke::path_stroke`] on
-//! [`curvyo_document_core::outline_of`]'s output, so AC16's identical stroke
-//! holds by construction and AC17's "visually identical" conversion holds
-//! exactly, not just within a tolerance, `adrs.md`) and the live outline of a
+//! A primitive's outline for drawing and the shape tools' create-drag preview
+//! (`specs/0003-primitive-shapes/specification.md`, acceptance criterion 16):
+//! the outline anchors [`crate::artwork`] draws a primitive from (the same
+//! [`curvyo_document_core::outline_of`] output "object to path" converts, so
+//! the conversion is visually identical, `adrs.md`) and the live outline of a
 //! shape being created. Selection boxes and handles are the Select tool's
 //! (`crate::select_decoration`); the shape tools only create.
 
-use curvyo_document_core::{
-    Angle, Point, PrimitiveSnapshot, Shape, ViewTransform, outline_of_rotated,
-};
+use curvyo_document_core::{Angle, Point, Shape, ViewTransform, outline_of_rotated};
 
 use crate::color::RgbaColor;
 use crate::glyphs::{self, DrawList};
@@ -42,26 +38,6 @@ pub(crate) fn outline_to_anchors(
         .collect()
 }
 
-/// A primitive's own placeholder stroke (acceptance criterion 16):
-/// identical weight/color/no-fill to a path's, built from the exact
-/// same outline "object to path" would convert. `view` feeds the
-/// screen-space display tolerance and the minimum on-screen stroke width
-/// (`specs/0004-canvas-navigation-and-selection/adrs.md`), the same way
-/// [`crate::build_draw_list`] does for a path's own stroke.
-fn primitive_stroke(snapshot: &PrimitiveSnapshot, view: ViewTransform) -> DrawList {
-    let outline = outline_of_rotated(&snapshot.shape, snapshot.rotation);
-    let anchors = outline_to_anchors(&outline);
-    let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
-    let min_width_mm = screen_px_to_mm(view, theme::MIN_DISPLAY_STROKE_WIDTH_PX);
-    stroke::path_stroke(
-        &anchors,
-        true,
-        snapshot.style.stroke.width.as_mm().max(min_width_mm),
-        snapshot.style.stroke.color.into(),
-        tolerance_mm,
-    )
-}
-
 /// A shape tool's live, uncommitted create-drag preview
 /// (`specs/0003-primitive-shapes/specification.md`'s "Live creation
 /// feedback": "a maker dragging out a rectangle sees a rectangle
@@ -75,11 +51,37 @@ fn primitive_stroke(snapshot: &PrimitiveSnapshot, view: ViewTransform) -> DrawLi
 /// [`Shape`] it is given.
 #[must_use]
 pub fn build_shape_live_preview(shape: &Shape, rotation: Angle, view: ViewTransform) -> DrawList {
+    let mut list = shape_live_outline(shape, rotation, view, true);
+    list.extend(shape_live_outline(shape, rotation, view, false));
+    list
+}
+
+/// The hollow outline of `shape` at the live-preview weight: its white casing
+/// (one line width wider on each side, `0007` criterion 40) or the
+/// `--preview-new` line itself. [`crate::live_preview`] draws every object's
+/// casing before any line so that one outline's casing never covers another's
+/// line.
+pub(crate) fn shape_live_outline(
+    shape: &Shape,
+    rotation: Angle,
+    view: ViewTransform,
+    casing: bool,
+) -> DrawList {
     let outline = outline_of_rotated(shape, rotation);
     let anchors = outline_to_anchors(&outline);
     let width = screen_px_to_mm(view, theme::LIVE_PREVIEW_STROKE_PX);
     let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
-    stroke::path_stroke(&anchors, true, width, theme::ACCENT, tolerance_mm)
+    if casing {
+        stroke::path_stroke(
+            &anchors,
+            true,
+            width * theme::CASING_WIDTH_FACTOR,
+            theme::SELECTION_CASING,
+            tolerance_mm,
+        )
+    } else {
+        stroke::path_stroke(&anchors, true, width, theme::ACCENT, tolerance_mm)
+    }
 }
 
 /// A dashed guide line (`docs/design-system.md`: the radius guide and the skew
@@ -114,20 +116,12 @@ pub(crate) fn dashed_guide(
     list
 }
 
-/// Builds every primitive's own stroke.
-#[must_use]
-pub fn build_primitive_strokes(primitives: &[PrimitiveSnapshot], view: ViewTransform) -> DrawList {
-    let mut list = DrawList::default();
-    for snapshot in primitives {
-        list.extend(primitive_stroke(snapshot, view));
-    }
-    list
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use curvyo_document_core::{Document, Length, NodeId, Point, RectBounds};
+    use curvyo_document_core::{
+        Document, Length, NodeId, ObjectSnapshot, Point, PrimitiveSnapshot, RectBounds,
+    };
 
     fn rect_snapshot(document: &Document) -> (NodeId, PrimitiveSnapshot) {
         let id = document.create_rect(RectBounds {
@@ -170,7 +164,10 @@ mod tests {
             ))
             .expect("rotate");
         let snapshot = document.primitive(id).expect("exists");
-        let list = build_primitive_strokes(&[snapshot], ViewTransform::identity());
+        let list = crate::build_artwork(
+            &[ObjectSnapshot::Primitive(snapshot)],
+            ViewTransform::identity(),
+        );
         let reaches = |target: Point| {
             list.triangles
                 .iter()
@@ -192,7 +189,10 @@ mod tests {
     fn a_primitive_draws_only_its_stroke() {
         let document = Document::new(1);
         let (_, snapshot) = rect_snapshot(&document);
-        let list = build_primitive_strokes(&[snapshot], ViewTransform::identity());
+        let list = crate::build_artwork(
+            &[ObjectSnapshot::Primitive(snapshot)],
+            ViewTransform::identity(),
+        );
         assert!(!list.triangles.is_empty(), "the stroke itself draws");
         assert!(
             list.triangles.iter().all(|v| v.color == RgbaColor::BLACK),

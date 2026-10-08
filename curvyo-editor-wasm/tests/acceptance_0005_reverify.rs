@@ -259,8 +259,10 @@ fn a_selected_rect_outline_press_is_a_handle_or_a_move_at_every_zoom() {
                 );
                 tested_handle += 1;
             } else if nearest_px > 17.0 {
-                assert_eq!(
-                    hint, "default",
+                // No handle cursor: the arrow, or the move cursor where a
+                // press inside the selected box moves the object.
+                assert!(
+                    hint == "default" || hint == "move",
                     "{percent}%: {p:?} is {nearest_px:.1}px from every handle, hint {hint}"
                 );
                 tested_body += 1;
@@ -429,10 +431,11 @@ fn rotate_and_resize_hit_areas_never_swallow_each_other_on_small_objects() {
             }
             // The centre of the box is never a resize or rotate handle: it
             // is the body (a move), and from 48 px up the centre move
-            // handle gives it the `move` cursor.
+            // handle gives it the `move` cursor; below 48 px a press at the
+            // centre still moves the object, so the cursor is `move` too
+            // (`0007` criterion 28: the cursor mirrors the press).
             let hint = hint_at(&mut s, c);
-            let expected = if size >= 48.0 { "move" } else { "default" };
-            assert_eq!(hint, expected, "{size}px {deg}deg centre");
+            assert_eq!(hint, "move", "{size}px {deg}deg centre");
         }
     }
 }
@@ -879,7 +882,8 @@ fn a_selected_elongated_rect_and_a_small_ellipse_can_be_moved_by_an_outline_pres
     let (mut s, c, w, h, _) = small_session(Kind::Rect, 40.0, 22.0, 0.0);
     click(&mut s, pt(c.x, c.y - h / 2.0));
     let p = pt(c.x - w / 4.0, c.y - h / 2.0);
-    assert_eq!(hint_at(&mut s, p), "default");
+    // A press here moves the selected object, so the cursor says move.
+    assert_eq!(hint_at(&mut s, p), "move");
     let before = rect_bounds_of(&s);
     drag(&mut s, p, pt(p.x + 2.0, p.y + 1.0));
     let after = rect_bounds_of(&s);
@@ -889,7 +893,8 @@ fn a_selected_elongated_rect_and_a_small_ellipse_can_be_moved_by_an_outline_pres
     click(&mut s, pt(c.x, c.y - h / 2.0));
     let k = std::f64::consts::FRAC_1_SQRT_2;
     let p = pt(c.x + w / 2.0 * k, c.y + h / 2.0 * k);
-    assert_eq!(hint_at(&mut s, p), "default");
+    // Inside the selected box on no handle: a press moves it (`0007` 28).
+    assert_eq!(hint_at(&mut s, p), "move");
 }
 
 /// The one radius of a rectangle whose four corner radii are equal (asserted).

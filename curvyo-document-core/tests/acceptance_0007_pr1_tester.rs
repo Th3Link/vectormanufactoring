@@ -323,8 +323,9 @@ fn every_new_object_kind_starts_in_the_frozen_default_style() {
 }
 
 #[test]
-fn the_current_format_version_is_seven_and_one_higher_is_refused() {
-    assert_eq!(CURRENT_FORMAT_VERSION, 7);
+fn one_format_version_above_the_current_one_is_refused() {
+    // The number itself is pinned once, in `style_format.rs`; this test must
+    // survive a renumbering at merge.
     let doc = Document::new(1);
     let _ = rect(&doc);
     let bytes = container_from_loro(
@@ -333,8 +334,8 @@ fn the_current_format_version_is_seven_and_one_higher_is_refused() {
     );
     match unpack(1, &bytes) {
         Err(OpenError::FormatTooNew { found, supported }) => {
-            assert_eq!(found, 8);
-            assert_eq!(supported, 7);
+            assert_eq!(found, CURRENT_FORMAT_VERSION + 1);
+            assert_eq!(supported, CURRENT_FORMAT_VERSION);
         }
         other => panic!("expected FormatTooNew, got {:?}", other.err()),
     }

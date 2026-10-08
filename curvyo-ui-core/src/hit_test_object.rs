@@ -7,8 +7,10 @@
 //! through its own anchors, a primitive through its outline). It is the one
 //! definition of "near an outline"; the shape tools no longer hit-test at all.
 
-use curvyo_document_core::{NodeId, ObjectSnapshot, Point, Tolerance, Vec2, outline_of_rotated};
-use curvyo_geometry_core::nearest_point_on_segment;
+use curvyo_document_core::{
+    NodeId, ObjectSnapshot, Point, Style, Tolerance, Vec2, outline_of_rotated, shape_frame_bounds,
+};
+use curvyo_geometry_core::{OutlineTriple, contains_point, nearest_point_on_segment};
 
 use crate::hit_test::segment_pairs;
 
@@ -49,7 +51,52 @@ where
     best
 }
 
+/// Whether `point` is certainly farther than `margin` from everything `object`
+/// draws, by a bound that allocates nothing: the control-point box of a path,
+/// or the circle around a primitive's frame centre that holds the frame (a
+/// rotation about the centre cannot leave it). A hover over thousands of
+/// objects rejects almost all of them here, before any outline is built.
+fn certainly_farther_than(object: &ObjectSnapshot, point: Point, margin: f64) -> bool {
+    match object {
+        ObjectSnapshot::Path(path) => {
+            let mut hull = (
+                f64::INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::NEG_INFINITY,
+            );
+            for a in &path.anchors {
+                for q in [
+                    a.point,
+                    a.point.translated(a.handle_in),
+                    a.point.translated(a.handle_out),
+                ] {
+                    hull = (
+                        hull.0.min(q.x),
+                        hull.1.min(q.y),
+                        hull.2.max(q.x),
+                        hull.3.max(q.y),
+                    );
+                }
+            }
+            point.x < hull.0 - margin
+                || point.x > hull.2 + margin
+                || point.y < hull.1 - margin
+                || point.y > hull.3 + margin
+        }
+        ObjectSnapshot::Primitive(primitive) => {
+            let (min, max) = shape_frame_bounds(&primitive.shape);
+            let centre = Point::new(f64::midpoint(min.x, max.x), f64::midpoint(min.y, max.y));
+            let radius = (max.x - min.x).hypot(max.y - min.y) / 2.0;
+            point.vector_to(centre).length() > radius + margin
+        }
+    }
+}
+
 fn distance_to_object(object: &ObjectSnapshot, point: Point, tolerance: Tolerance) -> Option<f64> {
+    if certainly_farther_than(object, point, tolerance.as_mm()) {
+        return None;
+    }
     match object {
         ObjectSnapshot::Path(path) => {
             nearest_distance_on_run(path.anchors.len(), path.closed, point, tolerance, |i| {
@@ -67,22 +114,95 @@ fn distance_to_object(object: &ObjectSnapshot, point: Point, tolerance: Toleranc
     }
 }
 
+/// An object's outline as `(point, handle_in, handle_out)` triples and
+/// whether it is closed: a path's own anchors, a primitive's rotation-aware
+/// outline.
+fn outline_of(object: &ObjectSnapshot) -> (Vec<OutlineTriple>, bool) {
+    match object {
+        ObjectSnapshot::Path(path) => (
+            path.anchors
+                .iter()
+                .map(|a| (a.point, a.handle_in, a.handle_out))
+                .collect(),
+            path.closed,
+        ),
+        ObjectSnapshot::Primitive(primitive) => (
+            outline_of_rotated(&primitive.shape, primitive.rotation)
+                .iter()
+                .map(|a| (a.point, a.handle_in, a.handle_out))
+                .collect(),
+            true,
+        ),
+    }
+}
+
+const fn style_of(object: &ObjectSnapshot) -> &Style {
+    match object {
+        ObjectSnapshot::Path(path) => &path.style,
+        ObjectSnapshot::Primitive(primitive) => &primitive.style,
+    }
+}
+
+/// Whether `object` paints a fill whose interior contains `point`: the
+/// object takes part exactly when the renderer would paint a fill for it
+/// (`Fill::paints`; opacity 0 still counts), and the point lies in the area
+/// that fill covers. An open path's interior is closed with a chord, a closed
+/// one's is bounded by its real closing segment (acceptance criterion 23).
+fn fills_point(object: &ObjectSnapshot, point: Point) -> bool {
+    if !style_of(object).fill.paints() || certainly_farther_than(object, point, 0.0) {
+        return false;
+    }
+    let (outline, closed) = outline_of(object);
+    // Cheap reject first: a point outside the control hull's box is outside
+    // the shape, so a hover over thousands of objects does not run the
+    // winding test on every one.
+    let mut hull = (
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    );
+    for (p, handle_in, handle_out) in &outline {
+        for q in [*p, p.translated(*handle_in), p.translated(*handle_out)] {
+            hull = (
+                hull.0.min(q.x),
+                hull.1.min(q.y),
+                hull.2.max(q.x),
+                hull.3.max(q.y),
+            );
+        }
+    }
+    if point.x < hull.0 || point.x > hull.2 || point.y < hull.1 || point.y > hull.3 {
+        return false;
+    }
+    contains_point(&outline, closed, point)
+}
+
 /// Hit-tests `point` against every object in `objects` — a path through
 /// its own anchors, a primitive through its own (rotation-aware)
-/// outline ([`curvyo_document_core::outline_of_rotated`]) — returning
-/// the nearest one
-/// within `tolerance`. A tie goes to the topmost object in z-order:
-/// `objects` is expected in z-order (as
-/// [`curvyo_document_core::Document::object_ids`] already returns it),
-/// and the last-indexed (topmost) candidate wins an exact distance tie.
+/// outline ([`curvyo_document_core::outline_of_rotated`]) — returning the one
+/// object a click there selects (`specs/0007-stroke-and-fill-styling`,
+/// criterion 27). `objects` is expected in z-order (as
+/// [`curvyo_document_core::Document::object_ids`] already returns it).
+///
+/// Let F be the topmost object whose **filled interior** contains the point.
+/// Among the objects at or above F (all objects when there is no F) the one
+/// whose **outline** is nearest to the point within `tolerance` wins, an exact
+/// distance tie going to the topmost. If no outline is within tolerance, F
+/// wins. An object below F never wins, because F covers it. When nothing under
+/// the point is filled this is exactly the earlier rule: nearest outline, a
+/// tie to the topmost.
 #[must_use]
 pub fn hit_test_object(
     objects: &[ObjectSnapshot],
     point: Point,
     tolerance: Tolerance,
 ) -> Option<NodeId> {
+    let floor = objects
+        .iter()
+        .rposition(|object| fills_point(object, point));
     let mut best: Option<(f64, NodeId)> = None;
-    for object in objects {
+    for object in &objects[floor.unwrap_or(0)..] {
         let Some(distance) = distance_to_object(object, point, tolerance) else {
             continue;
         };
@@ -97,6 +217,26 @@ pub fn hit_test_object(
         }
     }
     best.map(|(_, id)| id)
+        .or_else(|| floor.map(|index| objects[index].id()))
+}
+
+/// The topmost object above `selected` in tree order whose filled interior
+/// contains `point` (criterion 29): the object a plain press inside the sole
+/// selected object's box goes to instead of moving the selection. An outline
+/// of another object, an unfilled object and an object below `selected` never
+/// qualify. `None` when `selected` is not among `objects`.
+#[must_use]
+pub(crate) fn filled_interior_above(
+    objects: &[ObjectSnapshot],
+    selected: NodeId,
+    point: Point,
+) -> Option<NodeId> {
+    let index = objects.iter().position(|object| object.id() == selected)?;
+    objects[index + 1..]
+        .iter()
+        .rev()
+        .find(|object| fills_point(object, point))
+        .map(ObjectSnapshot::id)
 }
 
 #[cfg(test)]
@@ -269,6 +409,308 @@ mod tests {
             hit,
             Some(top),
             "the later (topmost) object must win the tie"
+        );
+    }
+
+    // -----------------------------------------------------------------
+    // `0007` criteria 23, 27 and 29: a filled interior is hittable
+    // -----------------------------------------------------------------
+
+    use curvyo_document_core::{
+        FillMode, FillModeTarget, GradientStop, Opacity, StopId, StyleEdit,
+    };
+
+    fn fill(document: &Document, id: NodeId) {
+        document
+            .set_fill_mode(
+                FillMode::Solid,
+                &[FillModeTarget {
+                    id,
+                    seed_stops: vec![],
+                }],
+            )
+            .expect("fill on");
+    }
+
+    fn square(document: &Document, x: f64, y: f64, size: f64) -> NodeId {
+        document.create_rect(RectBounds {
+            origin: Point::new(x, y),
+            width: Length::from_mm(size),
+            height: Length::from_mm(size),
+        })
+    }
+
+    fn circle(document: &Document, x: f64, y: f64, r: f64) -> NodeId {
+        document.create_ellipse(EllipseFrame {
+            center: Point::new(x, y),
+            rx: Length::from_mm(r),
+            ry: Length::from_mm(r),
+        })
+    }
+
+    fn objects_of(document: &Document) -> Vec<ObjectSnapshot> {
+        document
+            .object_ids()
+            .into_iter()
+            .filter_map(|id| document.object(id))
+            .collect()
+    }
+
+    const TOL: Tolerance = Tolerance::from_mm(1.0);
+
+    #[test]
+    fn ac23_the_interior_of_a_filled_object_is_hit_and_an_unfilled_one_is_not() {
+        let document = Document::new(1);
+        let hollow = square(&document, 0.0, 0.0, 20.0);
+        let filled = square(&document, 100.0, 0.0, 20.0);
+        fill(&document, filled);
+        let objects = objects_of(&document);
+        assert_eq!(
+            hit_test_object(&objects, Point::new(110.0, 10.0), TOL),
+            Some(filled)
+        );
+        assert_eq!(hit_test_object(&objects, Point::new(10.0, 10.0), TOL), None);
+        assert_eq!(
+            hit_test_object(&objects, Point::new(0.0, 10.0), TOL),
+            Some(hollow)
+        );
+        assert_eq!(
+            hit_test_object(&objects, Point::new(130.0, 10.0), TOL),
+            None
+        );
+    }
+
+    #[test]
+    fn ac23_a_fill_at_opacity_zero_is_still_hit() {
+        let document = Document::new(1);
+        let id = square(&document, 0.0, 0.0, 20.0);
+        fill(&document, id);
+        document
+            .edit_style(&[id], &StyleEdit::FillOpacity(Opacity::new(0.0).unwrap()))
+            .expect("opacity");
+        assert_eq!(
+            hit_test_object(&objects_of(&document), Point::new(10.0, 10.0), TOL),
+            Some(id)
+        );
+    }
+
+    #[test]
+    fn ac23_a_gradient_without_stops_paints_nothing_and_is_not_hit() {
+        let document = Document::new(1);
+        let id = square(&document, 0.0, 0.0, 20.0);
+        document
+            .set_fill_mode(
+                FillMode::Linear,
+                &[FillModeTarget {
+                    id,
+                    seed_stops: vec![],
+                }],
+            )
+            .expect("gradient mode");
+        assert_eq!(
+            hit_test_object(&objects_of(&document), Point::new(10.0, 10.0), TOL),
+            None
+        );
+        document
+            .set_fill_mode(
+                FillMode::Linear,
+                &[FillModeTarget {
+                    id,
+                    seed_stops: GradientStop::default_pair(
+                        curvyo_document_core::Color::BLACK,
+                        StopId::new(1, 1),
+                        StopId::new(1, 2),
+                    )
+                    .to_vec(),
+                }],
+            )
+            .expect("seeded");
+        assert_eq!(
+            hit_test_object(&objects_of(&document), Point::new(10.0, 10.0), TOL),
+            Some(id)
+        );
+    }
+
+    #[test]
+    fn ac23_an_open_filled_path_is_hit_inside_the_chord_closed_area() {
+        let document = Document::new(1);
+        let id = document.create_path(
+            &[
+                NewAnchor::corner(AnchorId::new(1, 1), Point::new(0.0, 0.0)),
+                NewAnchor::corner(AnchorId::new(1, 2), Point::new(0.0, 20.0)),
+                NewAnchor::corner(AnchorId::new(1, 3), Point::new(20.0, 20.0)),
+                NewAnchor::corner(AnchorId::new(1, 4), Point::new(20.0, 0.0)),
+            ],
+            false,
+        );
+        fill(&document, id);
+        let objects = objects_of(&document);
+        assert_eq!(
+            hit_test_object(&objects, Point::new(10.0, 10.0), TOL),
+            Some(id)
+        );
+        assert_eq!(
+            hit_test_object(&objects, Point::new(10.0, 5.0), TOL),
+            Some(id),
+            "above the bottom edge, inside the chord-closed area"
+        );
+        assert_eq!(hit_test_object(&objects, Point::new(10.0, -5.0), TOL), None);
+    }
+
+    /// Criterion 27, first example: a filled rectangle with a hollow ellipse
+    /// above it.
+    #[test]
+    fn ac27_a_click_on_the_ellipse_outline_selects_it_and_inside_it_selects_the_rectangle() {
+        let document = Document::new(1);
+        let rectangle = square(&document, 0.0, 0.0, 100.0);
+        fill(&document, rectangle);
+        let ellipse = circle(&document, 50.0, 50.0, 20.0);
+        let objects = objects_of(&document);
+        assert_eq!(
+            hit_test_object(&objects, Point::new(70.0, 50.0), TOL),
+            Some(ellipse)
+        );
+        assert_eq!(
+            hit_test_object(&objects, Point::new(50.0, 50.0), TOL),
+            Some(rectangle)
+        );
+    }
+
+    /// Criterion 27, second example: a hollow circle below a filled, opaque
+    /// rectangle; its outline under the rectangle is covered.
+    #[test]
+    fn ac27_an_outline_hidden_under_a_filled_object_does_not_win() {
+        let document = Document::new(1);
+        let circle_id = circle(&document, 50.0, 50.0, 20.0);
+        let rectangle = square(&document, 0.0, 0.0, 100.0);
+        fill(&document, rectangle);
+        let objects = objects_of(&document);
+        assert_eq!(
+            hit_test_object(&objects, Point::new(70.0, 50.0), TOL),
+            Some(rectangle),
+            "the circle's outline lies under the rectangle"
+        );
+        // Outside the rectangle the circle is not involved either way; and a
+        // circle that sticks out of it is hit there.
+        let _ = circle_id;
+        let wide = circle(&document, 100.0, 50.0, 20.0);
+        let objects = objects_of(&document);
+        assert_eq!(
+            hit_test_object(&objects, Point::new(120.0, 50.0), TOL),
+            Some(wide)
+        );
+    }
+
+    #[test]
+    fn ac27_the_nearest_outline_among_those_at_or_above_the_floor_wins() {
+        let document = Document::new(1);
+        let below = square(&document, 0.0, 0.0, 100.0);
+        let floor = square(&document, 10.0, 10.0, 80.0);
+        fill(&document, floor);
+        // A hollow square above the floor whose outline is nearer to the
+        // click than the floor's own.
+        let above = square(&document, 30.0, 30.0, 40.0);
+        let objects = objects_of(&document);
+        let _ = below;
+        assert_eq!(
+            hit_test_object(&objects, Point::new(30.0, 50.0), TOL),
+            Some(above)
+        );
+        // Click on the floor's own outline, where the hollow square is far.
+        assert_eq!(
+            hit_test_object(&objects, Point::new(10.0, 50.0), TOL),
+            Some(floor)
+        );
+        // Inside the floor and away from every outline: the floor wins.
+        assert_eq!(
+            hit_test_object(&objects, Point::new(20.0, 50.0), TOL),
+            Some(floor)
+        );
+    }
+
+    #[test]
+    fn ac27_with_two_filled_objects_the_topmost_floor_wins_inside_both() {
+        let document = Document::new(1);
+        let lower = square(&document, 0.0, 0.0, 100.0);
+        fill(&document, lower);
+        let upper = square(&document, 20.0, 20.0, 60.0);
+        fill(&document, upper);
+        let objects = objects_of(&document);
+        assert_eq!(
+            hit_test_object(&objects, Point::new(50.0, 50.0), TOL),
+            Some(upper)
+        );
+        assert_eq!(
+            hit_test_object(&objects, Point::new(5.0, 50.0), TOL),
+            Some(lower)
+        );
+    }
+
+    #[test]
+    fn ac29_only_a_filled_interior_above_the_selected_object_qualifies() {
+        let document = Document::new(1);
+        let selected = square(&document, 0.0, 0.0, 100.0);
+        fill(&document, selected);
+        let small = circle(&document, 50.0, 50.0, 5.0);
+        fill(&document, small);
+        let hollow_above = circle(&document, 20.0, 20.0, 5.0);
+        let objects = objects_of(&document);
+        assert_eq!(
+            filled_interior_above(&objects, selected, Point::new(50.0, 50.0)),
+            Some(small)
+        );
+        assert_eq!(
+            filled_interior_above(&objects, selected, Point::new(20.0, 20.0)),
+            None,
+            "an unfilled object above does not qualify"
+        );
+        assert_eq!(
+            filled_interior_above(&objects, selected, Point::new(25.0, 20.0)),
+            None,
+            "nor does its outline"
+        );
+        assert_eq!(
+            filled_interior_above(&objects, small, Point::new(50.0, 50.0)),
+            None,
+            "the filled square lies below the circle"
+        );
+        document.delete_objects(&[hollow_above]).expect("delete");
+        assert_eq!(
+            filled_interior_above(&objects_of(&document), hollow_above, Point::new(0.0, 0.0)),
+            None,
+            "an id that is gone"
+        );
+    }
+
+    /// The cheap reject must never drop a real hit: the apex of a square
+    /// turned 45 degrees lies at the farthest reach of its frame, and a filled
+    /// path's far corner at the edge of its control box.
+    #[test]
+    fn the_cheap_reject_keeps_every_real_hit_at_the_farthest_reach() {
+        let document = Document::new(1);
+        let diamond = square(&document, -5.0, -5.0, 10.0);
+        fill(&document, diamond);
+        document
+            .rotate_object(&document.object(diamond).unwrap().rotated(
+                Point::new(0.0, 0.0),
+                curvyo_document_core::Angle::from_radians(std::f64::consts::FRAC_PI_4),
+            ))
+            .unwrap();
+        let objects = objects_of(&document);
+        let apex = 50.0_f64.sqrt();
+        assert_eq!(
+            hit_test_object(&objects, Point::new(0.0, -apex + 0.1), TOL),
+            Some(diamond),
+            "just inside the apex"
+        );
+        assert_eq!(
+            hit_test_object(&objects, Point::new(0.0, -apex - 0.5), TOL),
+            Some(diamond),
+            "within the tolerance outside the apex"
+        );
+        assert_eq!(
+            hit_test_object(&objects, Point::new(0.0, -apex - 2.0), TOL),
+            None
         );
     }
 }

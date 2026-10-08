@@ -15,8 +15,8 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use curvyo_document_core::{Document, Length, Point, RectBounds, ViewTransform};
-use curvyo_render_core::build_primitive_strokes;
+use curvyo_document_core::{Document, Length, ObjectSnapshot, Point, RectBounds, ViewTransform};
+use curvyo_render_core::build_artwork;
 
 /// 2% zoom, in the same CSS-reference-pixel terms acceptance criterion 7
 /// defines (`96.0 / 25.4` px/mm at 100%).
@@ -38,7 +38,7 @@ fn a_default_width_rect_stroke_does_not_vanish_at_2_percent_zoom() {
     let view = ViewTransform::new(SCALE_AT_2_PERCENT, Point::new(0.0, 0.0));
     // No selection/hover: only the placeholder stroke itself draws, no
     // bounding box and no handles to confound the measurement.
-    let list = build_primitive_strokes(&[snapshot], view);
+    let list = build_artwork(&[ObjectSnapshot::Primitive(snapshot)], view);
     assert!(
         list.triangle_count() > 0,
         "the stroke must tessellate to something"

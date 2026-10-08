@@ -8,10 +8,15 @@
 //! only compiles for that target, so `cargo test`/`cargo clippy` on the
 //! host never needs a GPU driver.
 
-use curvyo_document_core::{Point, ViewTransform};
+use curvyo_document_core::ViewTransform;
 use curvyo_render_core::DrawList;
 use wasm_bindgen::JsValue;
 use web_sys::HtmlCanvasElement;
+
+use crate::gpu_pipeline::{
+    DEPTH_FORMAT, DepthMode, GpuVertex, ScreenTransform, TransformResources, create_depth_view,
+    create_msaa_view, create_pipeline, create_transform_resources, to_gpu_vertex,
+};
 
 /// `--canvas-bg` (`docs/design-system.md`): cleared behind every frame's
 /// geometry.
@@ -72,138 +77,14 @@ const PREFERRED_SAMPLE_COUNTS: [u32; 2] = [8, 4];
 /// kept as a real fallback rather than an assumed-unreachable default,
 /// since a downlevel/software GL stack is exactly the kind of adapter
 /// this product's `WebKitGTK` target can hand back.
-fn choose_sample_count(flags: wgpu::TextureFormatFeatureFlags) -> u32 {
+fn choose_sample_count(
+    color: wgpu::TextureFormatFeatureFlags,
+    depth: wgpu::TextureFormatFeatureFlags,
+) -> u32 {
     PREFERRED_SAMPLE_COUNTS
         .into_iter()
-        .find(|&count| flags.sample_count_supported(count))
+        .find(|&count| color.sample_count_supported(count) && depth.sample_count_supported(count))
         .unwrap_or(1)
-}
-
-const SHADER_SOURCE: &str = r"
-struct ScreenTransform {
-    scale_x: f32,
-    offset_x: f32,
-    scale_y: f32,
-    offset_y: f32,
-};
-
-@group(0) @binding(0)
-var<uniform> transform: ScreenTransform;
-
-struct VertexInput {
-    @location(0) position: vec2<f32>,
-    @location(1) color: vec4<f32>,
-};
-
-struct VertexOutput {
-    @builtin(position) clip_position: vec4<f32>,
-    @location(0) color: vec4<f32>,
-};
-
-@vertex
-fn vs_main(input: VertexInput) -> VertexOutput {
-    var out: VertexOutput;
-    out.clip_position = vec4<f32>(
-        input.position.x * transform.scale_x + transform.offset_x,
-        input.position.y * transform.scale_y + transform.offset_y,
-        0.0,
-        1.0,
-    );
-    out.color = input.color;
-    return out;
-}
-
-@fragment
-fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    return input.color;
-}
-";
-
-/// One triangle-list vertex in the shape the GPU pipeline below expects:
-/// a clip-ready `f32` position (before the per-frame screen transform)
-/// and a normalized `f32` color.
-#[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-struct GpuVertex {
-    position: [f32; 2],
-    color: [f32; 4],
-}
-
-/// Converts a draw-list vertex to the GPU's own vertex shape, **relative
-/// to `origin`** (the document point currently at screen pixel `(0, 0)`)
-/// — subtracted in `f64`, before the `f32` cast
-/// (`specs/0004-canvas-navigation-and-selection/adrs.md`: "The GPU upload
-/// subtracts the view origin in `f64` before the `f32` cast"). Casting
-/// an *absolute* document-mm position straight to `f32` (the previous
-/// behaviour) loses precision proportional to its distance from the
-/// document origin; panning far from the origin at high zoom (pan is
-/// unbounded, and nothing in this spec limits it) made that loss
-/// catastrophic once it approached half the stroke width. Subtracting
-/// `origin` first keeps the `f32` error proportional to distance from
-/// the *viewport's* origin — i.e. roughly proportional to distance on
-/// screen, in pixels — regardless of where the document origin is.
-/// [`ScreenTransform`]'s own offset no longer needs `origin` at all,
-/// since every vertex arrives already shifted.
-fn to_gpu_vertex(vertex: curvyo_render_core::Vertex, origin: Point) -> GpuVertex {
-    let relative_x = vertex.position.x - origin.x;
-    let relative_y = vertex.position.y - origin.y;
-    #[allow(clippy::cast_possible_truncation)]
-    let position = [relative_x as f32, relative_y as f32];
-    let color = [
-        f32::from(vertex.color.r) / 255.0,
-        f32::from(vertex.color.g) / 255.0,
-        f32::from(vertex.color.b) / 255.0,
-        f32::from(vertex.color.a) / 255.0,
-    ];
-    GpuVertex { position, color }
-}
-
-/// The CPU-computed per-frame mapping from document millimetres straight
-/// to clip space — a document point's screen pixel position (via
-/// [`ViewTransform`]) further mapped to `[-1, 1]` by the canvas's own
-/// pixel size, folded into one scale-and-offset per axis so the vertex
-/// shader does only a multiply-add (`specs/0002-path-node-editing/adrs.md`:
-/// this is the view transform ADR 0011 §3 shares with `ui-core`,
-/// applied once, uniformly, here rather than baked into any vertex).
-#[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-struct ScreenTransform {
-    scale_x: f32,
-    offset_x: f32,
-    scale_y: f32,
-    offset_y: f32,
-}
-
-impl ScreenTransform {
-    /// `css_width`/`css_height` are the canvas's CSS (layout) pixel size
-    /// — *not* its backing-buffer resolution. The two differ whenever
-    /// `devicePixelRatio` is not `1` (every modern `HiDPI` display): the clip-
-    /// space fraction a document point maps to depends only on where it
-    /// sits within the canvas's displayed box, so computing this ratio
-    /// against the (possibly DPR-scaled) physical buffer size instead
-    /// would be wrong by exactly a factor of the device pixel ratio.
-    /// [`Gpu::render`] is the one caller, and it is the one place the
-    /// physical-vs-CSS distinction is resolved — nothing downstream of
-    /// this type needs to know about `devicePixelRatio` at all.
-    ///
-    /// The offset is now a fixed `-1`/`+1`, not derived from `view`'s
-    /// origin: every vertex [`to_gpu_vertex`] hands the GPU has already
-    /// been shifted by that same origin in `f64`, so this uniform no
-    /// longer needs to repeat that subtraction (`specs/0004-canvas-
-    /// navigation-and-selection/adrs.md`: "the shader is unchanged; only
-    /// the offset term changes").
-    fn new(view: ViewTransform, css_width: f64, css_height: f64) -> Self {
-        let (width, height) = (css_width.max(1.0), css_height.max(1.0));
-        let scale_x = 2.0 * view.scale() / width;
-        let scale_y = -2.0 * view.scale() / height;
-        #[allow(clippy::cast_possible_truncation)]
-        Self {
-            scale_x: scale_x as f32,
-            offset_x: -1.0,
-            scale_y: scale_y as f32,
-            offset_y: 1.0,
-        }
-    }
 }
 
 /// The `wgpu` state for one attached canvas.
@@ -212,7 +93,11 @@ pub struct Gpu {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    pipeline: wgpu::RenderPipeline,
+    /// Draws the artwork prefix of the draw list with single coverage per
+    /// layer (depth test "less", depth writes on).
+    artwork_pipeline: wgpu::RenderPipeline,
+    /// Draws the overlay (editor decorations): no depth test, no writes.
+    overlay_pipeline: wgpu::RenderPipeline,
     transform_buffer: wgpu::Buffer,
     transform_bind_group: wgpu::BindGroup,
     /// The offscreen multisampled color target every frame actually
@@ -225,6 +110,9 @@ pub struct Gpu {
     /// comment); [`Gpu::render`] then renders directly into the surface
     /// texture.
     msaa_view: Option<wgpu::TextureView>,
+    /// The depth attachment, with `sample_count` samples like the color
+    /// target; recreated with it on every resize.
+    depth_view: wgpu::TextureView,
     /// The multisample count [`choose_sample_count`] chose for this
     /// adapter at attach time — fixed for the life of this `Gpu` (a
     /// resize keeps it; only the surface/`msaa_view` sizes change).
@@ -236,156 +124,6 @@ pub struct Gpu {
     /// canvas's *CSS* pixel size (what `ScreenTransform` actually needs)
     /// from `config.width`/`height` (the physical buffer size).
     device_pixel_ratio: f64,
-}
-
-/// The buffer/bind-group pair that feeds [`ScreenTransform`] to the vertex
-/// shader, plus the layout the pipeline needs to match it. Split out of
-/// [`Gpu::attach`] purely to keep that function under the `clippy::
-/// too_many_lines` budget — these three objects have no life of their own
-/// outside `attach`.
-struct TransformResources {
-    buffer: wgpu::Buffer,
-    bind_group_layout: wgpu::BindGroupLayout,
-    bind_group: wgpu::BindGroup,
-}
-
-fn create_transform_resources(device: &wgpu::Device) -> TransformResources {
-    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("curvyo screen transform"),
-        size: std::mem::size_of::<ScreenTransform>() as u64,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: false,
-    });
-
-    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("curvyo transform layout"),
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }],
-    });
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("curvyo transform bind group"),
-        layout: &bind_group_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: buffer.as_entire_binding(),
-        }],
-    });
-
-    TransformResources {
-        buffer,
-        bind_group_layout,
-        bind_group,
-    }
-}
-
-/// Builds the one render pipeline this crate ever submits: the draw-list
-/// triangle list, transformed by the `transform_bind_group_layout` uniform,
-/// targeting `surface_format`. Split out of [`Gpu::attach`] for the same
-/// `clippy::too_many_lines` reason as [`create_transform_resources`].
-fn create_pipeline(
-    device: &wgpu::Device,
-    transform_bind_group_layout: &wgpu::BindGroupLayout,
-    surface_format: wgpu::TextureFormat,
-    sample_count: u32,
-) -> wgpu::RenderPipeline {
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("curvyo draw-list shader"),
-        source: wgpu::ShaderSource::Wgsl(SHADER_SOURCE.into()),
-    });
-
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("curvyo pipeline layout"),
-        bind_group_layouts: &[Some(transform_bind_group_layout)],
-        immediate_size: 0,
-    });
-
-    let vertex_layout = wgpu::VertexBufferLayout {
-        array_stride: std::mem::size_of::<GpuVertex>() as wgpu::BufferAddress,
-        step_mode: wgpu::VertexStepMode::Vertex,
-        attributes: &[
-            wgpu::VertexAttribute {
-                format: wgpu::VertexFormat::Float32x2,
-                offset: 0,
-                shader_location: 0,
-            },
-            wgpu::VertexAttribute {
-                format: wgpu::VertexFormat::Float32x4,
-                offset: 8,
-                shader_location: 1,
-            },
-        ],
-    };
-
-    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("curvyo draw-list pipeline"),
-        layout: Some(&pipeline_layout),
-        vertex: wgpu::VertexState {
-            module: &shader,
-            entry_point: Some("vs_main"),
-            buffers: &[Some(vertex_layout)],
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: Some("fs_main"),
-            targets: &[Some(wgpu::ColorTargetState {
-                format: surface_format,
-                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-        }),
-        primitive: wgpu::PrimitiveState::default(),
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState {
-            count: sample_count,
-            mask: !0,
-            alpha_to_coverage_enabled: false,
-        },
-        multiview_mask: None,
-        cache: None,
-    })
-}
-
-/// (Re)creates the offscreen multisampled color target
-/// [`Gpu::render`] draws into when `sample_count > 1` — must be called
-/// after every [`wgpu::Surface::configure`] that changes `config.width`/
-/// `height`, since the two textures must match size exactly. `None` when
-/// `sample_count` is `1`: `wgpu` refuses a "multisampled" texture with a
-/// sample count of `1`, and there is nothing to resolve from in that
-/// case anyway — [`Gpu::render`] renders directly into the surface
-/// texture instead (see [`choose_sample_count`]'s own doc comment).
-fn create_msaa_view(
-    device: &wgpu::Device,
-    config: &wgpu::SurfaceConfiguration,
-    sample_count: u32,
-) -> Option<wgpu::TextureView> {
-    if sample_count <= 1 {
-        return None;
-    }
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("curvyo msaa color target"),
-        size: wgpu::Extent3d {
-            width: config.width.max(1),
-            height: config.height.max(1),
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count,
-        dimension: wgpu::TextureDimension::D2,
-        format: config.format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        view_formats: &[],
-    });
-    Some(texture.create_view(&wgpu::TextureViewDescriptor::default()))
 }
 
 /// The surface, its backing adapter-derived device/queue, the
@@ -469,8 +207,10 @@ async fn create_surface_and_device(
     // targets WebKitGTK on Linux, one of the weaker GL stacks among the
     // three engines ADR 0001 covers (`docs/technical-debt.md`'s canvas-
     // performance entry).
-    let sample_count =
-        choose_sample_count(adapter.get_texture_format_features(config.format).flags);
+    let sample_count = choose_sample_count(
+        adapter.get_texture_format_features(config.format).flags,
+        adapter.get_texture_format_features(DEPTH_FORMAT).flags,
+    );
 
     Ok(SurfaceAndDevice {
         surface,
@@ -517,23 +257,34 @@ impl Gpu {
             bind_group: transform_bind_group,
         } = create_transform_resources(&device);
 
-        let pipeline = create_pipeline(
+        let artwork_pipeline = create_pipeline(
             &device,
             &transform_bind_group_layout,
             config.format,
             sample_count,
+            DepthMode::SingleCoverage,
+        );
+        let overlay_pipeline = create_pipeline(
+            &device,
+            &transform_bind_group_layout,
+            config.format,
+            sample_count,
+            DepthMode::Overlay,
         );
         let msaa_view = create_msaa_view(&device, &config, sample_count);
+        let depth_view = create_depth_view(&device, &config, sample_count);
 
         Ok(Self {
             surface,
             device,
             queue,
             config,
-            pipeline,
+            artwork_pipeline,
+            overlay_pipeline,
             transform_buffer,
             transform_bind_group,
             msaa_view,
+            depth_view,
             sample_count,
             device_pixel_ratio: if device_pixel_ratio > 0.0 {
                 device_pixel_ratio
@@ -570,6 +321,7 @@ impl Gpu {
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
         self.msaa_view = create_msaa_view(&self.device, &self.config, self.sample_count);
+        self.depth_view = create_depth_view(&self.device, &self.config, self.sample_count);
     }
 
     /// Uploads `draw_list` and submits one frame, using `view` to build
@@ -599,23 +351,9 @@ impl Gpu {
         // The document point currently at screen pixel (0, 0) — every
         // vertex below is shifted by this same point in `f64`, before
         // its own `f32` cast (`to_gpu_vertex`'s own doc comment).
-        let origin = view.screen_to_document(0.0, 0.0);
-        let vertices: Vec<GpuVertex> = draw_list
-            .triangles
-            .iter()
-            .copied()
-            .map(|vertex| to_gpu_vertex(vertex, origin))
-            .collect();
+        let vertices = gpu_vertices(draw_list, view.screen_to_document(0.0, 0.0));
 
-        let frame = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(texture)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(texture) => texture,
-            other => {
-                return Err(JsValue::from_str(&format!(
-                    "acquiring the surface texture failed: {other:?}"
-                )));
-            }
-        };
+        let frame = self.acquire_frame()?;
         let view_texture = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -642,16 +380,64 @@ impl Gpu {
             )
         });
 
-        // Multisampled: draw into `msaa_view`, resolved into the surface's
-        // own (single-sampled) `view_texture` at the end of the pass —
-        // that resolve is the actual anti-aliasing step. `Discard`:
-        // nothing downstream ever reads the multisampled texture itself,
-        // only its resolved result. No multisampling support at all
-        // (`msaa_view` is `None`, see `choose_sample_count`): draw
-        // straight into `view_texture`, no resolve.
-        let color_attachment = self.msaa_view.as_ref().map_or(
+        let color_attachment = self.color_attachment(&view_texture);
+
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("curvyo draw-list pass"),
+                color_attachments: &[Some(color_attachment)],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Discard,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            if let Some(vertex_buffer) = &vertex_buffer {
+                #[allow(clippy::cast_possible_truncation)]
+                let (overlay_start, end) =
+                    (draw_list.overlay_start() as u32, vertices.len() as u32);
+                self.record_draws(&mut pass, vertex_buffer, overlay_start, end);
+            }
+        }
+
+        self.queue.submit(Some(encoder.finish()));
+        self.queue.present(frame);
+        Ok(())
+    }
+}
+
+impl Gpu {
+    /// The surface texture to draw this frame into.
+    fn acquire_frame(&self) -> Result<wgpu::SurfaceTexture, JsValue> {
+        match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(texture)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(texture) => Ok(texture),
+            other => Err(JsValue::from_str(&format!(
+                "acquiring the surface texture failed: {other:?}"
+            ))),
+        }
+    }
+
+    /// The pass's colour attachment. Multisampled: draw into `msaa_view`,
+    /// resolved into the surface's own (single-sampled) `view_texture` at the
+    /// end of the pass; that resolve is the actual anti-aliasing step.
+    /// `Discard`: nothing downstream ever reads the multisampled texture
+    /// itself, only its resolved result. No multisampling support at all
+    /// (`msaa_view` is `None`, see `choose_sample_count`): draw straight into
+    /// `view_texture`, no resolve.
+    fn color_attachment<'a>(
+        &'a self,
+        view_texture: &'a wgpu::TextureView,
+    ) -> wgpu::RenderPassColorAttachment<'a> {
+        self.msaa_view.as_ref().map_or(
             wgpu::RenderPassColorAttachment {
-                view: &view_texture,
+                view: view_texture,
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
@@ -662,34 +448,46 @@ impl Gpu {
             |msaa_view| wgpu::RenderPassColorAttachment {
                 view: msaa_view,
                 depth_slice: None,
-                resolve_target: Some(&view_texture),
+                resolve_target: Some(view_texture),
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(CANVAS_BACKGROUND),
                     store: wgpu::StoreOp::Discard,
                 },
             },
-        );
-
-        {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("curvyo draw-list pass"),
-                color_attachments: &[Some(color_attachment)],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-            if let Some(vertex_buffer) = &vertex_buffer {
-                pass.set_pipeline(&self.pipeline);
-                pass.set_bind_group(0, &self.transform_bind_group, &[]);
-                pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                #[allow(clippy::cast_possible_truncation)]
-                pass.draw(0..vertices.len() as u32, 0..1);
-            }
-        }
-
-        self.queue.submit(Some(encoder.finish()));
-        self.queue.present(frame);
-        Ok(())
+        )
     }
+
+    /// Issues the frame's draw calls: the artwork prefix first, with single
+    /// coverage per layer, then the overlay over it in list order.
+    fn record_draws(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        vertex_buffer: &wgpu::Buffer,
+        overlay_start: u32,
+        end: u32,
+    ) {
+        pass.set_bind_group(0, &self.transform_bind_group, &[]);
+        pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        if overlay_start > 0 {
+            pass.set_pipeline(&self.artwork_pipeline);
+            pass.draw(0..overlay_start, 0..1);
+        }
+        if end > overlay_start {
+            pass.set_pipeline(&self.overlay_pipeline);
+            pass.draw(overlay_start..end, 0..1);
+        }
+    }
+}
+
+/// Every draw-list vertex in the GPU's shape, shifted by `origin` (the
+/// document point at screen pixel (0, 0)) in `f64` before its own `f32` cast
+/// ([`to_gpu_vertex`]'s doc comment) and tagged with its layer's depth.
+fn gpu_vertices(draw_list: &DrawList, origin: curvyo_document_core::Point) -> Vec<GpuVertex> {
+    draw_list
+        .triangles
+        .iter()
+        .copied()
+        .zip(draw_list.vertex_depths())
+        .map(|(vertex, depth)| to_gpu_vertex(vertex, origin, depth))
+        .collect()
 }

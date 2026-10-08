@@ -292,6 +292,7 @@ fn dashed_edge(
     width_px: f64,
     cut: Option<(f64, f64)>,
     color: RgbaColor,
+    thickness_factor: f64,
 ) -> DrawList {
     let mut list = DrawList::default();
     let length = (to.0 - from.0).hypot(to.1 - from.1);
@@ -300,7 +301,9 @@ fn dashed_edge(
     }
     let (ux, uy) = ((to.0 - from.0) / length, (to.1 - from.1) / length);
     let at = |along: f64| view.screen_to_document(from.0 + ux * along, from.1 + uy * along);
-    let width_mm = width_px / view.scale();
+    // The dashes are fitted to the line width; a casing keeps the same dashes
+    // and is only thicker across.
+    let width_mm = width_px * thickness_factor / view.scale();
     let mut spans = edge_spans(length, width_px);
     if let Some(cut) = cut {
         spans = cut_span_interval(spans, cut);
@@ -312,9 +315,13 @@ fn dashed_edge(
 }
 
 /// Builds the Select tool's decoration geometry for this frame: one dashed
-/// `--accent` box per selected object, plus a solid `--accent-hover` box for a
+/// `--accent` box per selected object, plus a solid `--hover-box` box for a
 /// hovered-but-unselected one (`docs/design-system.md`'s "Bounding-box
-/// selection outline").
+/// selection outline"). Both are drawn over a white casing one line width
+/// wider on each side (`0007` criterion 40): under the dashes only for the
+/// selected box, so their rhythm and pixel snapping are unchanged. All
+/// casings of the selected boxes come before any dash, so a casing never
+/// covers a neighbouring dash.
 #[must_use]
 pub fn build(view: ViewTransform, input: &SelectDecorationInput) -> DrawList {
     let ratio = effective_ratio(input.device_pixel_ratio);
@@ -322,28 +329,37 @@ pub fn build(view: ViewTransform, input: &SelectDecorationInput) -> DrawList {
     let guide = input
         .skew_guide
         .map(|(a, b)| (view.document_to_screen(a), view.document_to_screen(b)));
-    for &(_, corners) in &input.selected {
-        let screen = ScreenBox::new(view, corners, ratio);
-        for i in 0..4 {
-            let (from, to) = (screen.corners[i], screen.corners[(i + 1) % 4]);
-            let cut = guide.and_then(|g| guide_cover(from, to, g));
-            list.extend(dashed_edge(
-                view,
-                from,
-                to,
-                screen.width_px,
-                cut,
-                theme::ACCENT,
-            ));
+    for (color, factor) in [
+        (theme::SELECTION_CASING, theme::CASING_WIDTH_FACTOR),
+        (theme::ACCENT, 1.0),
+    ] {
+        for &(_, corners) in &input.selected {
+            let screen = ScreenBox::new(view, corners, ratio);
+            for i in 0..4 {
+                let (from, to) = (screen.corners[i], screen.corners[(i + 1) % 4]);
+                let cut = guide.and_then(|g| guide_cover(from, to, g));
+                list.extend(dashed_edge(
+                    view,
+                    from,
+                    to,
+                    screen.width_px,
+                    cut,
+                    color,
+                    factor,
+                ));
+            }
         }
     }
     if let Some((_, corners)) = input.hovered {
         let screen = ScreenBox::new(view, corners, ratio);
+        let corners = screen.document_corners(view);
+        let width_mm = screen.width_px / view.scale();
         list.extend(quad_outline(
-            screen.document_corners(view),
-            screen.width_px / view.scale(),
-            theme::ACCENT_HOVER,
+            corners,
+            width_mm * theme::CASING_WIDTH_FACTOR,
+            theme::HOVER_BOX_CASING,
         ));
+        list.extend(quad_outline(corners, width_mm, theme::HOVER_BOX));
     }
     list
 }
@@ -351,6 +367,19 @@ pub fn build(view: ViewTransform, input: &SelectDecorationInput) -> DrawList {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// [`build`] without the casings: the lines the older tests measure.
+    fn build_lines(view: ViewTransform, input: &SelectDecorationInput) -> DrawList {
+        let all = build(view, input);
+        DrawList::from_triangles(
+            all.triangles
+                .into_iter()
+                .filter(|v| {
+                    v.color != theme::SELECTION_CASING && v.color != theme::HOVER_BOX_CASING
+                })
+                .collect(),
+        )
+    }
 
     fn fixture_id() -> NodeId {
         // `NodeId` has no public constructor outside `document-core`; any
@@ -391,7 +420,7 @@ mod tests {
             hovered: None,
             ..SelectDecorationInput::default()
         };
-        let list = build(ViewTransform::identity(), &input);
+        let list = build_lines(ViewTransform::identity(), &input);
         let reaches = |target: Point| {
             list.triangles
                 .iter()
@@ -406,7 +435,7 @@ mod tests {
 
     #[test]
     fn no_selection_and_no_hover_draws_nothing() {
-        let list = build(ViewTransform::identity(), &SelectDecorationInput::default());
+        let list = build_lines(ViewTransform::identity(), &SelectDecorationInput::default());
         assert_eq!(list.triangles.len(), 0);
     }
 
@@ -417,7 +446,7 @@ mod tests {
             hovered: None,
             ..SelectDecorationInput::default()
         };
-        let list = build(ViewTransform::identity(), &input);
+        let list = build_lines(ViewTransform::identity(), &input);
         assert_ne!(list.triangles.len(), 0);
     }
 
@@ -428,7 +457,7 @@ mod tests {
             hovered: Some((fixture_id(), axis_box(0.0, 0.0, 10.0, 10.0))),
             ..SelectDecorationInput::default()
         };
-        let list = build(ViewTransform::identity(), &input);
+        let list = build_lines(ViewTransform::identity(), &input);
         assert_ne!(list.triangles.len(), 0);
     }
 
@@ -450,8 +479,8 @@ mod tests {
             hovered: None,
             ..SelectDecorationInput::default()
         };
-        let one_list = build(ViewTransform::identity(), &one);
-        let two_list = build(ViewTransform::identity(), &two);
+        let one_list = build_lines(ViewTransform::identity(), &one);
+        let two_list = build_lines(ViewTransform::identity(), &two);
         assert!(two_list.triangle_count() > one_list.triangle_count());
     }
 
@@ -628,7 +657,7 @@ mod tests {
                         (w, h)
                     };
                     let corners = turned_box(40.5, 55.5, w, h, degrees, view.scale());
-                    let list = build(view, &selected_input(corners));
+                    let list = build_lines(view, &selected_input(corners));
                     let triangles = screen_triangles(&list, view);
                     let screen = corners.map(|c| view.document_to_screen(c));
                     for i in 0..4 {
@@ -674,9 +703,9 @@ mod tests {
     #[test]
     fn short_edges_are_solid_and_long_edges_are_dashed() {
         let view = view_at(1.0);
-        let short = build(view, &selected_input(px_box(0.5, 0.5, 8.0, 8.0, 1.0)));
+        let short = build_lines(view, &selected_input(px_box(0.5, 0.5, 8.0, 8.0, 1.0)));
         assert_eq!(short.triangle_count(), 8, "four solid edges");
-        let long = build(view, &selected_input(px_box(0.5, 0.5, 100.0, 8.0, 1.0)));
+        let long = build_lines(view, &selected_input(px_box(0.5, 0.5, 100.0, 8.0, 1.0)));
         // Two long edges of 100 px (15 dashes each) and two solid short ones.
         assert_eq!(long.triangle_count(), 2 * (15 * 2) + 2 * 2);
     }
@@ -686,15 +715,10 @@ mod tests {
     fn the_hover_box_is_solid_and_the_selection_box_is_dashed() {
         let view = view_at(1.0);
         let corners = px_box(0.5, 0.5, 100.0, 100.0, 1.0);
-        let hover = build(view, &hovered_input(corners));
+        let hover = build_lines(view, &hovered_input(corners));
         assert_eq!(hover.triangle_count(), 8, "four solid edges");
-        assert!(
-            hover
-                .triangles
-                .iter()
-                .all(|v| v.color == theme::ACCENT_HOVER)
-        );
-        let selected = build(view, &selected_input(corners));
+        assert!(hover.triangles.iter().all(|v| v.color == theme::HOVER_BOX));
+        let selected = build_lines(view, &selected_input(corners));
         assert!(selected.triangle_count() > hover.triangle_count());
         assert!(selected.triangles.iter().all(|v| v.color == theme::ACCENT));
     }
@@ -705,9 +729,9 @@ mod tests {
         let view = view_at(1.0);
         let a = px_box(0.5, 0.5, 60.0, 40.0, 1.0);
         let b = px_box(200.5, 100.5, 80.0, 50.0, 1.0);
-        let one = build(view, &selected_input(a)).triangle_count();
-        let other = build(view, &selected_input(b)).triangle_count();
-        let both = build(
+        let one = build_lines(view, &selected_input(a)).triangle_count();
+        let other = build_lines(view, &selected_input(b)).triangle_count();
+        let both = build_lines(
             view,
             &SelectDecorationInput {
                 selected: vec![(fixture_id(), a), (fixture_id(), b)],
@@ -725,7 +749,7 @@ mod tests {
         let (w, h, degrees) = (137.0, 61.0, 30.0);
         let reference_view = view_at(1.0);
         let reference = screen_triangles(
-            &build(
+            &build_lines(
                 reference_view,
                 &selected_input(turned_box(10.0, 20.0, w, h, degrees, 1.0)),
             ),
@@ -739,7 +763,8 @@ mod tests {
                 let view = ViewTransform::new(scale, Point::new(pan_x / scale, pan_y / scale));
                 let corners =
                     turned_box(10.0 + dx + pan_x, 20.0 + dy + pan_y, w, h, degrees, scale);
-                let triangles = screen_triangles(&build(view, &selected_input(corners)), view);
+                let triangles =
+                    screen_triangles(&build_lines(view, &selected_input(corners)), view);
                 assert_eq!(triangles.len(), reference.len(), "scale {scale}");
                 for (got, want) in triangles.iter().zip(&reference) {
                     for (g, r) in got.iter().zip(want) {
@@ -759,7 +784,7 @@ mod tests {
         let view = view_at(1.0);
         let corners = turned_box(50.0, 50.0, 90.0, 40.0, 30.0, 1.0);
         let screen = corners.map(|c| view.document_to_screen(c));
-        let triangles = screen_triangles(&build(view, &selected_input(corners)), view);
+        let triangles = screen_triangles(&build_lines(view, &selected_input(corners)), view);
         let distance_to_edge = |p: Pt, a: Pt, b: Pt| {
             let (ex, ey) = (b.0 - a.0, b.1 - a.1);
             let t = (((p.0 - a.0) * ex + (p.1 - a.1) * ey) / (ex * ex + ey * ey)).clamp(0.0, 1.0);
@@ -781,7 +806,10 @@ mod tests {
     fn equal_inputs_give_equal_draw_lists() {
         let view = view_at(3.0);
         let input = selected_input(turned_box(33.3, 71.1, 90.0, 40.0, 12.0, 3.0));
-        assert_eq!(build(view, &input).triangles, build(view, &input).triangles);
+        assert_eq!(
+            build_lines(view, &input).triangles,
+            build_lines(view, &input).triangles
+        );
     }
 
     /// Criterion 67: the dashes knock nothing out; every triangle is the
@@ -790,7 +818,7 @@ mod tests {
     fn the_dashes_leave_the_gaps_empty() {
         let view = view_at(1.0);
         let triangles = screen_triangles(
-            &build(view, &selected_input(px_box(10.5, 10.5, 100.0, 60.0, 1.0))),
+            &build_lines(view, &selected_input(px_box(10.5, 10.5, 100.0, 60.0, 1.0))),
             view,
         );
         // The top edge is 100 px: 15 dashes at 4 on / 3 off from x = 10.5; the
@@ -852,7 +880,7 @@ mod tests {
                         device_pixel_ratio: ratio,
                         ..SelectDecorationInput::default()
                     };
-                    let list = build(view, &input);
+                    let list = build_lines(view, &input);
                     assert_eq!(list.triangle_count(), 8);
                     for vertex in screen_triangles(&list, view).iter().flatten() {
                         // A vertex of a vertical quad sits on a device column
@@ -895,7 +923,7 @@ mod tests {
                 device_pixel_ratio: ratio,
                 ..SelectDecorationInput::default()
             };
-            let list = build(view, &input);
+            let list = build_lines(view, &input);
             for vertex in screen_triangles(&list, view).iter().flatten() {
                 let on = |v: f64| (v * ratio - (v * ratio).round()).abs() < 1e-6;
                 // Across the line a whole device pixel; along it the dash ends
@@ -911,7 +939,7 @@ mod tests {
         let view = view_at(1.0);
         let corners = turned_box(50.3, 50.7, 90.0, 40.0, 30.0, 1.0);
         let at = |ratio: f64| {
-            build(
+            build_lines(
                 view,
                 &SelectDecorationInput {
                     hovered: Some((fixture_id(), corners)),
@@ -921,7 +949,7 @@ mod tests {
             )
         };
         assert_eq!(at(1.0).triangles, at(2.0).triangles);
-        let reference = quad_outline(corners, 1.0, theme::ACCENT_HOVER);
+        let reference = quad_outline(corners, 1.0, theme::HOVER_BOX);
         assert_eq!(at(1.0).triangles, reference.triangles);
     }
 
@@ -931,10 +959,10 @@ mod tests {
     fn a_quarter_turned_box_counts_as_axis_aligned() {
         let view = view_at(1.0);
         let corners = turned_box(100.0, 20.3, 50.0, 30.0, 90.0, 1.0);
-        let hover = build(view, &hovered_input(corners));
+        let hover = build_lines(view, &hovered_input(corners));
         assert_ne!(
             hover.triangles,
-            quad_outline(corners, 1.0, theme::ACCENT_HOVER).triangles
+            quad_outline(corners, 1.0, theme::HOVER_BOX).triangles
         );
     }
 
@@ -944,7 +972,7 @@ mod tests {
         let view = view_at(1.0);
         let corners = px_box(10.3, 20.7, 50.0, 30.0, 1.0);
         let at = |ratio: f64| {
-            build(
+            build_lines(
                 view,
                 &SelectDecorationInput {
                     selected: vec![(fixture_id(), corners)],
@@ -963,7 +991,7 @@ mod tests {
     #[test]
     fn an_absurdly_long_edge_is_solid() {
         let view = view_at(1.0);
-        let list = build(view, &selected_input(px_box(0.5, 0.5, 100_000.0, 8.0, 1.0)));
+        let list = build_lines(view, &selected_input(px_box(0.5, 0.5, 100_000.0, 8.0, 1.0)));
         assert_eq!(list.triangle_count(), 8);
     }
 
@@ -995,8 +1023,8 @@ mod tests {
         let screen = corners.map(|c| view.document_to_screen(c));
         let (a, b) = (screen[edge], screen[(edge + 1) % 4]);
         let length = (b.0 - a.0).hypot(b.1 - a.1);
-        let plain = screen_triangles(&build(view, &selected_input(corners)), view);
-        let cut_list = screen_triangles(&build(view, &with_guide(corners, guide, 1.0)), view);
+        let plain = screen_triangles(&build_lines(view, &selected_input(corners)), view);
+        let cut_list = screen_triangles(&build_lines(view, &with_guide(corners, guide, 1.0)), view);
         let mut inside_seen = false;
         let mut t = 1.0;
         while t < length - 1.0 {
@@ -1022,8 +1050,8 @@ mod tests {
         let corners = px_box(10.5, 10.5, 100.0, 60.0, 1.0);
         // The fixed (bottom) edge, the guide reaching 16 px past both ends.
         let guide = (Point::new(-5.5, 70.5), Point::new(126.5, 70.5));
-        let plain = build(view, &selected_input(corners)).triangle_count();
-        let cut = build(view, &with_guide(corners, guide, 1.0)).triangle_count();
+        let plain = build_lines(view, &selected_input(corners)).triangle_count();
+        let cut = build_lines(view, &with_guide(corners, guide, 1.0)).triangle_count();
         // The 100 px bottom edge is 15 dashes of two triangles.
         assert_eq!(plain - cut, 30);
         assert_cut(view, corners, 2, guide, (0.0, 100.0 + 32.0));
@@ -1059,8 +1087,8 @@ mod tests {
         let corners = px_box(10.5, 10.5, 100.0, 60.0, 1.0);
         let centre = (Point::new(-5.5, 40.5), Point::new(126.5, 40.5));
         assert_eq!(
-            build(view, &with_guide(corners, centre, 1.0)).triangles,
-            build(view, &selected_input(corners)).triangles
+            build_lines(view, &with_guide(corners, centre, 1.0)).triangles,
+            build_lines(view, &selected_input(corners)).triangles
         );
     }
 
@@ -1070,8 +1098,8 @@ mod tests {
         let view = view_at(1.0);
         let corners = px_box(10.5, 10.7, 100.0, 60.0, 1.0);
         let guide = (Point::new(-5.5, 70.7), Point::new(126.5, 70.7));
-        let plain = build(view, &selected_input(corners)).triangle_count();
-        let cut = build(view, &with_guide(corners, guide, 1.0)).triangle_count();
+        let plain = build_lines(view, &selected_input(corners)).triangle_count();
+        let cut = build_lines(view, &with_guide(corners, guide, 1.0)).triangle_count();
         assert_eq!(plain - cut, 30);
     }
 
@@ -1104,5 +1132,158 @@ mod tests {
         let (from, to) = (Point::new(3.3, 4.4), Point::new(90.1, 52.7));
         let rotated = snap_guide_line(view_at(2.0), from, to, 2.0);
         assert_eq!(rotated, (from, to, 1.0));
+    }
+
+    // -----------------------------------------------------------------
+    // `0007` criteria 40 and 41: casing under the lines, a stronger hover box
+    // -----------------------------------------------------------------
+
+    fn dashes_and_casings(list: &DrawList, line: RgbaColor, casing: RgbaColor) -> (usize, usize) {
+        let count = |colour: RgbaColor| list.triangles.iter().filter(|v| v.color == colour).count();
+        (count(line), count(casing))
+    }
+
+    /// The selection box's dashes sit on a casing of the same dashes, three
+    /// times as wide across, and every casing triangle comes before every dash
+    /// triangle, so a casing never covers a neighbouring dash.
+    #[test]
+    fn the_selected_boxs_dashes_sit_on_a_three_times_wider_casing_drawn_first() {
+        let input = SelectDecorationInput {
+            selected: vec![(fixture_id(), axis_box(0.0, 0.0, 100.0, 60.0))],
+            ..SelectDecorationInput::default()
+        };
+        let list = build(ViewTransform::identity(), &input);
+        let (dashes, casings) = dashes_and_casings(&list, theme::ACCENT, theme::SELECTION_CASING);
+        assert!(dashes > 0);
+        assert_eq!(dashes, casings, "one casing quad per dash");
+        let last_casing = list
+            .triangles
+            .iter()
+            .rposition(|v| v.color == theme::SELECTION_CASING)
+            .unwrap();
+        let first_dash = list
+            .triangles
+            .iter()
+            .position(|v| v.color == theme::ACCENT)
+            .unwrap();
+        assert!(last_casing < first_dash);
+        // Across the top edge: 1 px line, 3 px casing.
+        let thickness = |colour: RgbaColor| {
+            let ys: Vec<f64> = list
+                .triangles
+                .iter()
+                .filter(|v| v.color == colour && v.position.x > 20.0 && v.position.x < 80.0)
+                .filter(|v| v.position.y < 30.0)
+                .map(|v| v.position.y)
+                .collect();
+            ys.iter().copied().fold(f64::MIN, f64::max)
+                - ys.iter().copied().fold(f64::MAX, f64::min)
+        };
+        assert!((thickness(theme::ACCENT) - 1.0).abs() < 1e-9);
+        assert!((thickness(theme::SELECTION_CASING) - 3.0).abs() < 1e-9);
+    }
+
+    /// Criterion 41: the hover box is `--accent` at 65% on a white casing at
+    /// 65%, solid; the casing is three times as wide and comes first.
+    #[test]
+    fn the_hover_box_is_sixty_five_percent_accent_on_a_sixty_five_percent_white_casing() {
+        let input = SelectDecorationInput {
+            hovered: Some((fixture_id(), axis_box(0.0, 0.0, 100.0, 60.0))),
+            ..SelectDecorationInput::default()
+        };
+        let list = build(ViewTransform::identity(), &input);
+        let colours: std::collections::BTreeSet<[u8; 4]> = list
+            .triangles
+            .iter()
+            .map(|v| [v.color.r, v.color.g, v.color.b, v.color.a])
+            .collect();
+        assert_eq!(
+            colours,
+            [
+                [255, 255, 255, 166],
+                [theme::ACCENT.r, theme::ACCENT.g, theme::ACCENT.b, 166]
+            ]
+            .into_iter()
+            .collect()
+        );
+        let first_line = list
+            .triangles
+            .iter()
+            .position(|v| v.color == theme::HOVER_BOX)
+            .unwrap();
+        let last_casing = list
+            .triangles
+            .iter()
+            .rposition(|v| v.color == theme::HOVER_BOX_CASING)
+            .unwrap();
+        assert!(last_casing < first_line);
+    }
+
+    // ---- contrast, measured on the composited colours ----
+
+    type Rgb = [f64; 3];
+
+    fn lum(c: Rgb) -> f64 {
+        let lin = |v: f64| {
+            let v = v / 255.0;
+            if v <= 0.03928 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2])
+    }
+
+    fn contrast(a: Rgb, b: Rgb) -> f64 {
+        let (la, lb) = (lum(a), lum(b));
+        (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
+    }
+
+    fn over(top: RgbaColor, below: Rgb) -> Rgb {
+        let alpha = f64::from(top.a) / 255.0;
+        [
+            f64::from(top.r) * alpha + below[0] * (1.0 - alpha),
+            f64::from(top.g) * alpha + below[1] * (1.0 - alpha),
+            f64::from(top.b) * alpha + below[2] * (1.0 - alpha),
+        ]
+    }
+
+    const FILLS: [(&str, Rgb); 7] = [
+        ("black", [0.0, 0.0, 0.0]),
+        ("white", [255.0, 255.0, 255.0]),
+        ("accent", [47.0, 111.0, 238.0]),
+        ("grey", [128.0, 128.0, 128.0]),
+        ("red", [255.0, 0.0, 0.0]),
+        ("yellow", [255.0, 220.0, 0.0]),
+        ("canvas", [232.0, 232.0, 235.0]),
+    ];
+
+    /// Criterion 40: over each fill the better of line and casing is at
+    /// least 3:1 for the selection box (and the preview outline, which draws
+    /// the same accent over the same casing).
+    #[test]
+    fn the_selection_box_is_at_least_three_to_one_over_every_fill() {
+        for (name, fill) in FILLS {
+            let line = contrast(over(theme::ACCENT, fill), fill);
+            let casing = contrast(over(theme::SELECTION_CASING, fill), fill);
+            assert!(
+                line.max(casing) >= 3.0,
+                "{name}: line {line:.2}, casing {casing:.2}"
+            );
+        }
+    }
+
+    /// Criterion 40, hover box: the line (65% accent over the 65% casing) and
+    /// the casing (65% white) over each fill; the better of the two is at
+    /// least 2:1 on all of them (analytic: yellow 2.04, red 2.14, canvas 2.16; read from the GL buffer the weakest, yellow, measured 1.97).
+    #[test]
+    fn the_hover_box_is_at_least_two_to_one_over_every_fill() {
+        for (name, fill) in FILLS {
+            let casing_px = over(theme::HOVER_BOX_CASING, fill);
+            let line_px = over(theme::HOVER_BOX, casing_px);
+            let best = contrast(line_px, fill).max(contrast(casing_px, fill));
+            assert!(best >= 2.0, "{name}: {best:.2}");
+        }
     }
 }

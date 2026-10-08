@@ -11,9 +11,9 @@ use curvyo_render_core::{
     SelectDecorationInput, TransformDecorationInput, TransformGlyphKind, TransformHandleGlyph,
 };
 use curvyo_ui_core::{
-    EditHandle, LiveEdit, ParamHandle, SelectTool, Side, corner_local_position, format_degrees,
-    is_corner, is_drawn_handle, oriented_bounds, resize_cursor_angle_degrees,
-    skew_cursor_angle_degrees,
+    EditHandle, LiveEdit, ParamHandle, PressTarget, SelectTool, Side, classify_press,
+    corner_local_position, format_degrees, is_corner, is_drawn_handle, oriented_bounds,
+    resize_cursor_angle_degrees, skew_cursor_angle_degrees,
 };
 
 use super::Session;
@@ -285,8 +285,10 @@ impl Session {
     /// handles), `"resize:<degrees>"` or `"skew:<degrees>"` (a double or
     /// paired arrow rotated to that on-screen angle, clockwise from
     /// horizontal: the handle's own base angle plus the object's rotation),
-    /// `"move"` (the centre handle) or `"pointer"` (a parameter handle, hover
-    /// and drag, whatever the modifiers). Never changes with Shift or Ctrl.
+    /// `"move"` (the centre handle, and anywhere a press would move the selected
+    /// object) or `"pointer"` (a parameter handle, hover and drag, whatever the
+    /// modifiers). A handle cursor never changes with Shift or Ctrl; the move
+    /// cursor follows the press, which Shift changes.
     #[must_use]
     pub fn cursor_hint(&self) -> String {
         if self.tool != Tool::Select {
@@ -316,7 +318,33 @@ impl Session {
             }
             Some(EditHandle::Move) => "move".to_string(),
             Some(EditHandle::Param(_)) => "pointer".to_string(),
-            None => "default".to_string(),
+            None => self.press_cursor(&objects).to_string(),
+        }
+    }
+
+    /// The cursor where no handle is under the pointer: `"move"` where a plain
+    /// press would move the selected object, the arrow everywhere else (where
+    /// it would select an object by its outline or filled interior, start a
+    /// marquee, or while a drag runs). It asks [`classify_press`], the one
+    /// function the press itself acts on, so cursor and press cannot disagree
+    /// (`0007` criterion 28).
+    fn press_cursor(&self, objects: &[ObjectSnapshot]) -> &'static str {
+        let Some(pointer) = self.pointer_position else {
+            return "default";
+        };
+        if self.select.drag_in_flight() {
+            return "default";
+        }
+        match classify_press(
+            objects,
+            &self.selection,
+            pointer,
+            self.segment_tolerance(),
+            self.transform_handle_tolerances(),
+            self.select_shift_held,
+        ) {
+            PressTarget::InsideSelectedBox => "move",
+            _ => "default",
         }
     }
 
@@ -540,8 +568,8 @@ mod tests {
         );
         assert_eq!(
             solid.triangle_count(),
-            8,
-            "the hover box is four solid quads"
+            16,
+            "the hover box is four solid quads on four casing quads"
         );
         let dashed = curvyo_render_core::build_select_draw_list(
             session.view(),

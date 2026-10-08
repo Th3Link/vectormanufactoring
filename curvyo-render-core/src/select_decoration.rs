@@ -133,6 +133,15 @@ fn rotate_handle_glyph(
         if hovered {
             list.extend(glyphs::circle(center, size, theme::ACCENT_HOVER));
         }
+        // The transparent ground is the glyph's weak point over a fill: the
+        // arc and arrowhead sit on a white casing one stroke wider on each
+        // side (`0007` criterion 40).
+        list.extend(glyphs::arc_arrow(
+            center,
+            size * 0.75 + 2.0 * thickness,
+            thickness * theme::CASING_WIDTH_FACTOR,
+            theme::SELECTION_CASING,
+        ));
         theme::ACCENT
     };
     // The arc fills 90% of the 12px footprint; the arrowhead flares to
@@ -251,25 +260,22 @@ fn skew_handle_glyph(
     let head = screen_px_to_mm(view, theme::TRANSFORM_ARROW_HEAD_PX);
     let radius = screen_px_to_mm(view, theme::TRANSFORM_SKEW_HANDLE_CORNER_RADIUS_PX);
     let unit = direction.normalized_to(1.0);
-    let mut list = DrawList::default();
-    let arrow_color = if dragging {
-        list.extend(glyphs::rounded_rect(
+    let ground = |color: RgbaColor| {
+        glyphs::rounded_rect(
             center,
             (length, width),
             radius,
             Angle::from_radians(unit.y.atan2(unit.x)),
-            theme::ACCENT,
-        ));
+            color,
+        )
+    };
+    let mut list = DrawList::default();
+    let arrow_color = if dragging {
+        list.extend(ground(theme::ACCENT));
         RgbaColor::WHITE
     } else {
         if hovered {
-            list.extend(glyphs::rounded_rect(
-                center,
-                (length, width),
-                radius,
-                Angle::from_radians(unit.y.atan2(unit.x)),
-                theme::ACCENT_HOVER,
-            ));
+            list.extend(ground(theme::ACCENT_HOVER));
         }
         theme::ACCENT
     };
@@ -277,18 +283,35 @@ fn skew_handle_glyph(
     // pointing each way: the footprint is `length` by `width`.
     let across = Vec2::new(-unit.y, unit.x).scaled(width / 2.0 - head);
     let half = unit.scaled(length / 2.0);
-    for (offset, from, to) in [
+    let arrows = [
         (across, half.negated(), half),
         (across.negated(), half, half.negated()),
-    ] {
-        list.extend(glyphs::arrow(
-            center.translated(offset).translated(from),
-            center.translated(offset).translated(to),
-            stroke,
-            head,
-            arrow_color,
+    ];
+    let draw_arrows = |stroke: f64, head: f64, color: RgbaColor| {
+        let mut list = DrawList::default();
+        for (offset, from, to) in arrows {
+            list.extend(glyphs::arrow(
+                center.translated(offset).translated(from),
+                center.translated(offset).translated(to),
+                stroke,
+                head,
+                color,
+            ));
+        }
+        list
+    };
+    // Idle and hovered, the arrows have no ground of their own over a fill:
+    // each sits on a white casing one stroke wider on each side, with a head
+    // that much larger (`0007` criterion 40). While dragging they are white
+    // on an `--accent` ground and need none.
+    if !dragging {
+        list.extend(draw_arrows(
+            stroke * theme::CASING_WIDTH_FACTOR,
+            head + 2.0 * stroke,
+            theme::SELECTION_CASING,
         ));
     }
+    list.extend(draw_arrows(stroke, head, arrow_color));
     list
 }
 
@@ -296,13 +319,57 @@ fn skew_handle_glyph(
 #[must_use]
 pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationInput) -> DrawList {
     let mut list = DrawList::default();
+    push_handle_glyphs(&mut list, view, input);
+    for &(corner, handle) in &input.param_guides {
+        list.extend(cased_dashed_guide(
+            (corner, handle),
+            screen_px_to_mm(view, 1.0),
+            theme::SHAPE_HANDLE_GUIDE,
+            (
+                screen_px_to_mm(view, theme::GUIDE_DASH_PX),
+                screen_px_to_mm(view, theme::GUIDE_GAP_PX),
+            ),
+        ));
+    }
+    // Parameter handles sit above every other handle (`docs/design-system.md`).
+    for handle in input
+        .handles
+        .iter()
+        .filter(|handle| handle.kind == TransformGlyphKind::Parameter)
+    {
+        list.extend(parameter_handle_glyph(
+            view,
+            handle.position,
+            handle.dragging,
+            handle.hovered,
+        ));
+    }
+    if let Some((from, to)) = input.skew_guide {
+        let (from, to, width_px) =
+            select_box::snap_guide_line(view, from, to, input.device_pixel_ratio);
+        list.extend(cased_dashed_guide(
+            (from, to),
+            screen_px_to_mm(view, width_px),
+            theme::TRANSFORM_SKEW_GUIDE_COLOR,
+            (
+                screen_px_to_mm(view, theme::SKEW_GUIDE_DASH_PX),
+                screen_px_to_mm(view, theme::SKEW_GUIDE_GAP_PX),
+            ),
+        ));
+    }
+    if let Some(pivot) = input.pivot_marker {
+        push_pivot_marker(&mut list, view, pivot, input.pivot_marker_full);
+    }
+    list
+}
+
+/// Every handle glyph except the parameter handles, in input order.
+fn push_handle_glyphs(list: &mut DrawList, view: ViewTransform, input: &TransformDecorationInput) {
     // A handle exactly at the active pivot (Shift put the pivot on it, or
     // a resize anchors on the opposite corner) is not drawn: the pivot
     // dot replaces it, so it never reads as a pressed handle with a dot
     // on top. "At" is within one screen pixel.
     let at_pivot_mm = screen_px_to_mm(view, 1.0);
-    // Parameter handles sit above every other handle (`docs/design-system.md`):
-    // their guides and knobs are drawn after the loop below.
     let transform_handles = input
         .handles
         .iter()
@@ -333,57 +400,58 @@ pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationI
             }
         });
     }
-    for &(corner, handle) in &input.param_guides {
-        list.extend(shape_preview::dashed_guide(
-            corner,
-            handle,
-            screen_px_to_mm(view, 1.0),
-            theme::SHAPE_HANDLE_GUIDE,
-            screen_px_to_mm(view, theme::GUIDE_DASH_PX),
-            screen_px_to_mm(view, theme::GUIDE_GAP_PX),
-        ));
-    }
-    for handle in input
-        .handles
-        .iter()
-        .filter(|handle| handle.kind == TransformGlyphKind::Parameter)
-    {
-        list.extend(parameter_handle_glyph(
+}
+
+/// A dashed guide `(from, to)` of `width_mm` over its white casing:
+/// `dash_gap` is the (dash, gap) length in millimetres.
+fn cased_dashed_guide(
+    (from, to): (Point, Point),
+    width_mm: f64,
+    color: RgbaColor,
+    (dash_mm, gap_mm): (f64, f64),
+) -> DrawList {
+    glyphs::cased(width_mm, color, theme::SELECTION_CASING, |width, colour| {
+        shape_preview::dashed_guide(from, to, width, colour, dash_mm, gap_mm)
+    })
+}
+
+/// The pivot marker: a dot on a one-pixel white ring.
+fn push_pivot_marker(list: &mut DrawList, view: ViewTransform, pivot: Point, full: bool) {
+    list.extend(glyphs::circle(
+        pivot,
+        screen_px_to_mm(
             view,
-            handle.position,
-            handle.dragging,
-            handle.hovered,
-        ));
-    }
-    if let Some((from, to)) = input.skew_guide {
-        let (from, to, width_px) =
-            select_box::snap_guide_line(view, from, to, input.device_pixel_ratio);
-        list.extend(shape_preview::dashed_guide(
-            from,
-            to,
-            screen_px_to_mm(view, width_px),
-            theme::TRANSFORM_SKEW_GUIDE_COLOR,
-            screen_px_to_mm(view, theme::SKEW_GUIDE_DASH_PX),
-            screen_px_to_mm(view, theme::SKEW_GUIDE_GAP_PX),
-        ));
-    }
-    if let Some(pivot) = input.pivot_marker {
-        list.extend(glyphs::circle(
-            pivot,
-            screen_px_to_mm(view, theme::TRANSFORM_PIVOT_MARKER_SIZE_PX),
-            if input.pivot_marker_full {
-                theme::ACCENT
-            } else {
-                theme::TRANSFORM_PIVOT_MARKER_COLOR
-            },
-        ));
-    }
-    list
+            theme::TRANSFORM_PIVOT_MARKER_SIZE_PX + 2.0 * theme::PIVOT_MARKER_CASING_PX,
+        ),
+        theme::SELECTION_CASING,
+    ));
+    list.extend(glyphs::circle(
+        pivot,
+        screen_px_to_mm(view, theme::TRANSFORM_PIVOT_MARKER_SIZE_PX),
+        if full {
+            theme::ACCENT
+        } else {
+            theme::TRANSFORM_PIVOT_MARKER_COLOR
+        },
+    ));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `list` without its white casing triangles: the glyph or line itself,
+    /// which is what most of these tests measure. The casing has its own tests
+    /// (`0007` criterion 40) at the end.
+    fn lines(list: &DrawList) -> DrawList {
+        DrawList::from_triangles(
+            list.triangles
+                .iter()
+                .copied()
+                .filter(|v| v.color != theme::SELECTION_CASING)
+                .collect(),
+        )
+    }
 
     /// No handles and no pivot marker draws nothing (acceptance
     /// criterion 2: multi/no selection shows no transform handles).
@@ -444,8 +512,8 @@ mod tests {
             };
             build_transform_handles(ViewTransform::identity(), &input)
         };
-        let idle = count(false, false);
-        let hover = count(false, true);
+        let idle = lines(&count(false, false));
+        let hover = lines(&count(false, true));
         let drag = count(true, false);
         assert!(hover.triangle_count() > idle.triangle_count());
         assert!(drag.triangle_count() > idle.triangle_count());
@@ -467,7 +535,7 @@ mod tests {
             ..dim.clone()
         };
         let colours = |input: &TransformDecorationInput| {
-            let list = build_transform_handles(view, input);
+            let list = lines(&build_transform_handles(view, input));
             list.triangles.iter().map(|v| v.color).collect::<Vec<_>>()
         };
         assert!(
@@ -607,8 +675,18 @@ mod tests {
             false,
         ));
         let extent = |list: &DrawList| {
-            let xs = list.triangles.iter().map(|v| v.position.x);
-            let ys = list.triangles.iter().map(|v| v.position.y);
+            let list = lines(list);
+            let xs = list
+                .triangles
+                .iter()
+                .map(|v| v.position.x)
+                .collect::<Vec<_>>();
+            let ys = list
+                .triangles
+                .iter()
+                .map(|v| v.position.y)
+                .collect::<Vec<_>>();
+            let (xs, ys) = (xs.into_iter(), ys.into_iter());
             (
                 xs.clone().fold(f64::MIN, f64::max) - xs.fold(f64::MAX, f64::min),
                 ys.clone().fold(f64::MIN, f64::max) - ys.fold(f64::MAX, f64::min),
@@ -623,7 +701,7 @@ mod tests {
         let direction = Vec2::new(1.0, 0.0);
         let hover = build_one(glyph(TransformGlyphKind::Skew { direction }, false, true));
         let drag = build_one(glyph(TransformGlyphKind::Skew { direction }, true, false));
-        assert!(hover.triangle_count() > along_x.triangle_count());
+        assert!(lines(&hover).triangle_count() > lines(&along_x).triangle_count());
         assert!(drag.triangles.iter().any(|v| v.color == RgbaColor::WHITE));
     }
 
@@ -637,7 +715,7 @@ mod tests {
             param_guides: Vec::new(),
             ..TransformDecorationInput::default()
         };
-        let list = build_transform_handles(ViewTransform::identity(), &input);
+        let list = lines(&build_transform_handles(ViewTransform::identity(), &input));
         // 70 px at 2 on / 2 off (criterion 68): eighteen dashes of two triangles each.
         assert_eq!(list.triangle_count(), 36);
     }
@@ -684,7 +762,9 @@ mod tests {
         ];
         for (kind, bound) in cases {
             for (dragging, hovered) in [(false, false), (false, true), (true, false)] {
-                let list = glyph_list(kind, dragging, hovered);
+                // The glyph itself: its casing is a halo under it, not part of
+                // the footprint the clearance is derived from.
+                let list = lines(&glyph_list(kind, dragging, hovered));
                 assert_ne!(list.triangle_count(), 0, "{kind:?}");
                 assert!(
                     extent(&list) <= bound + 1e-9,
@@ -763,7 +843,7 @@ mod tests {
             param_guides: vec![(Point::new(0.0, 0.0), Point::new(30.0, 30.0))],
             ..TransformDecorationInput::default()
         };
-        let list = build_transform_handles(ViewTransform::identity(), &input);
+        let list = lines(&build_transform_handles(ViewTransform::identity(), &input));
         assert_ne!(list.triangle_count(), 0);
         assert!(
             list.triangles
@@ -783,7 +863,7 @@ mod tests {
                 device_pixel_ratio: ratio,
                 ..TransformDecorationInput::default()
             };
-            let list = build_transform_handles(ViewTransform::identity(), &input);
+            let list = lines(&build_transform_handles(ViewTransform::identity(), &input));
             assert_ne!(list.triangle_count(), 0);
             let width = crate::select_box::device_line_width(ratio);
             for v in &list.triangles {
@@ -815,7 +895,7 @@ mod tests {
             device_pixel_ratio: 1.0,
             ..TransformDecorationInput::default()
         };
-        let list = build_transform_handles(ViewTransform::identity(), &input);
+        let list = lines(&build_transform_handles(ViewTransform::identity(), &input));
         for v in &list.triangles {
             assert!(
                 (v.position.x - v.position.x.round()).abs() < 1e-6,
@@ -835,7 +915,7 @@ mod tests {
             ..TransformDecorationInput::default()
         };
         let view = ViewTransform::identity();
-        let got = build_transform_handles(view, &input);
+        let got = lines(&build_transform_handles(view, &input));
         let want = shape_preview::dashed_guide(
             from,
             to,
@@ -845,5 +925,124 @@ mod tests {
             theme::SKEW_GUIDE_GAP_PX,
         );
         assert_eq!(got.triangles, want.triangles);
+    }
+
+    // -----------------------------------------------------------------
+    // `0007` criterion 40: casing under the accent lines without a ground
+    // -----------------------------------------------------------------
+
+    /// The number of white triangles.
+    fn white(list: &DrawList) -> usize {
+        list.triangles
+            .iter()
+            .filter(|v| v.color == theme::SELECTION_CASING)
+            .count()
+            / 3
+    }
+
+    fn thickness_y(list: &DrawList, colour: RgbaColor) -> f64 {
+        let ys: Vec<f64> = list
+            .triangles
+            .iter()
+            .filter(|v| v.color == colour)
+            .map(|v| v.position.y)
+            .collect();
+        ys.iter().copied().fold(f64::MIN, f64::max) - ys.iter().copied().fold(f64::MAX, f64::min)
+    }
+
+    #[test]
+    fn the_idle_and_hovered_rotate_and_skew_glyphs_have_a_casing_and_the_dragging_ones_do_not() {
+        for kind in [
+            TransformGlyphKind::Rotate,
+            TransformGlyphKind::Skew {
+                direction: Vec2::new(1.0, 0.0),
+            },
+        ] {
+            let idle = glyph_list(kind, false, false);
+            let hover = glyph_list(kind, false, true);
+            let drag = glyph_list(kind, true, false);
+            assert!(white(&idle) > 0, "{kind:?} idle casing");
+            assert!(white(&hover) > 0, "{kind:?} hover casing");
+            // Dragging, the glyph itself is white on an accent ground: its
+            // triangles are the glyph, not a casing, and there are no more of
+            // them than glyph pieces.
+            let glyph_pieces = lines(&idle).triangle_count();
+            assert!(
+                white(&drag) <= glyph_pieces,
+                "{kind:?} dragging has no casing under it"
+            );
+            // The casing comes before the glyph it sits under.
+            let first_accent = idle
+                .triangles
+                .iter()
+                .position(|v| v.color == theme::ACCENT)
+                .unwrap();
+            let last_white = idle
+                .triangles
+                .iter()
+                .rposition(|v| v.color == theme::SELECTION_CASING)
+                .unwrap();
+            assert!(last_white < first_accent);
+        }
+    }
+
+    #[test]
+    fn the_resize_and_parameter_glyphs_keep_their_white_ground_and_get_no_casing() {
+        for kind in [
+            TransformGlyphKind::Resize,
+            TransformGlyphKind::Move,
+            TransformGlyphKind::Parameter,
+        ] {
+            let idle = glyph_list(kind, false, false);
+            // Their white is the ground inside an accent outline, so it never
+            // reaches farther out than the accent does.
+            let reach = |colour: RgbaColor| {
+                idle.triangles
+                    .iter()
+                    .filter(|v| v.color == colour)
+                    .map(|v| v.position.vector_to(Point::new(0.0, 0.0)).length())
+                    .fold(0.0, f64::max)
+            };
+            assert!(
+                reach(RgbaColor::WHITE) <= reach(theme::ACCENT) + 1e-9,
+                "{kind:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_skew_guide_and_the_radius_guide_sit_on_a_three_times_wider_casing() {
+        let skew = TransformDecorationInput {
+            skew_guide: Some((Point::new(0.0, 5.0), Point::new(70.0, 5.0))),
+            ..TransformDecorationInput::default()
+        };
+        let list = build_transform_handles(ViewTransform::identity(), &skew);
+        let line = thickness_y(&list, theme::TRANSFORM_SKEW_GUIDE_COLOR);
+        assert!((thickness_y(&list, theme::SELECTION_CASING) - 3.0 * line).abs() < 1e-9);
+        let radius = TransformDecorationInput {
+            param_guides: vec![(Point::new(0.0, 0.0), Point::new(60.0, 0.0))],
+            ..TransformDecorationInput::default()
+        };
+        let list = build_transform_handles(ViewTransform::identity(), &radius);
+        let line = thickness_y(&list, theme::SHAPE_HANDLE_GUIDE);
+        assert!((thickness_y(&list, theme::SELECTION_CASING) - 3.0 * line).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_pivot_marker_has_a_one_pixel_white_ring_under_it() {
+        let input = TransformDecorationInput {
+            pivot_marker: Some(Point::new(0.0, 0.0)),
+            ..TransformDecorationInput::default()
+        };
+        let list = build_transform_handles(ViewTransform::identity(), &input);
+        let reach = |colour: RgbaColor| {
+            list.triangles
+                .iter()
+                .filter(|v| v.color == colour)
+                .map(|v| v.position.vector_to(Point::new(0.0, 0.0)).length())
+                .fold(0.0, f64::max)
+        };
+        let marker = reach(theme::TRANSFORM_PIVOT_MARKER_COLOR);
+        assert!((reach(theme::SELECTION_CASING) - marker - 1.0).abs() < 1e-6);
     }
 }

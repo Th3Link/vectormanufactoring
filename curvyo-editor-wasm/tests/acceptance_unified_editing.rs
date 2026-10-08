@@ -381,15 +381,11 @@ fn ellipse_scene(pct: i64, w_px: f64, h_px: f64, th: f64) -> Scene {
 /// The count measures the handle tiers. It does not count every triangle
 /// because the dashed selection box (`edit-interaction-polish` criteria 63,
 /// 64) changes its triangle count with the box's size on screen, which would
-/// mask the tiers; the box and the arrows are never white.
+/// mask the tiers; the box and the arrows are never white. Their white casings
+/// (`0007` criterion 40) are, so [`white_count`] leaves out the isolated quads
+/// of a casing.
 fn tri_count(s: &Session) -> usize {
-    let white = curvyo_render_core::RgbaColor::WHITE;
-    s.draw_list()
-        .triangles
-        .iter()
-        .filter(|vertex| vertex.color == white)
-        .count()
-        / 3
+    white_count(&s.draw_list())
 }
 
 /// White triangles of the selection decoration (the handle glyphs): count with
@@ -657,11 +653,13 @@ fn ac06_at_the_tier_the_same_press_changes_the_radius_not_the_position() {
 }
 
 #[test]
-fn ac06_centre_handle_has_no_hover_or_cursor_below_48() {
+fn ac06_centre_handle_has_no_hover_hint_below_48_and_the_box_gives_the_move_cursor() {
     for (pct, s) in [(100, 47.9), (100, 47.5), (400, 30.0), (100, 20.0)] {
         let mut sc = rect_scene(pct, s, s, 0.0, 0.0);
         let (cur, h) = hint(&mut sc.s, sc.fr.c);
-        assert_eq!(cur, "default", "{pct}% {s}");
+        // No handle is drawn, but a press inside the selected box moves the
+        // selection, and the cursor mirrors the press (`0007` criterion 28).
+        assert_eq!(cur, "move", "{pct}% {s}");
         assert_eq!(h, "", "{pct}% {s}");
     }
     for (pct, s) in [(100, 48.0), (100, 60.0), (400, 71.9)] {
@@ -1028,7 +1026,9 @@ fn ac08_centre_handle_yields_when_a_parameter_handle_is_within_20_px() {
         let mut full = rect_scene(pct, s, s, s / 2.0, 0.0);
         let mid = full.fr.at(0.0, -s / 4.0);
         let (cur, h) = hint(&mut full.s, mid);
-        assert_eq!((cur.as_str(), h.as_str()), ("default", ""), "{pct}% s={s}");
+        // No handle here, and a press moves the object: the move cursor
+        // (`0007` criterion 28).
+        assert_eq!((cur.as_str(), h.as_str()), ("move", ""), "{pct}% s={s}");
         let before = rect_of(&full.s, 0);
         drag(
             &mut full.s,
@@ -1054,7 +1054,7 @@ fn ac08_body_between_the_centre_and_each_edge_is_a_move_at_every_radius() {
                 let (cur, h) = hint(&mut sc.s, p);
                 assert_eq!(
                     (cur.as_str(), h.as_str()),
-                    ("default", ""),
+                    ("move", ""),
                     "s={s} rho={rho} ({nx},{ny})"
                 );
             }
@@ -2987,7 +2987,8 @@ fn ac08_the_old_north_east_south_west_handles_of_polygon_and_star_are_gone() {
         let (cur, h) = hint(&mut sc.s, p);
         assert_eq!(
             (cur.as_str(), h.as_str()),
-            ("default", ""),
+            // Inside the polygon's square box, on no handle: a press moves it.
+            ("move", ""),
             "E point of the outer circle"
         );
     }
@@ -3551,13 +3552,36 @@ fn ac12_inside_the_dead_zone_no_blue_outline_and_no_handle_change_is_drawn() {
     }
 }
 
+/// The white triangles that are part of a fan of three or more (a circle's or
+/// a rounded square's ground), not the isolated two-triangle quads of a white
+/// casing (`0007` criterion 40), whose number follows the length of the box
+/// edges and so differs between a large and a small object.
 fn white_count(dl: &DrawList) -> usize {
-    (0..dl.triangles.len() / 3)
-        .filter(|c| {
-            let v = &dl.triangles[3 * c];
-            v.color.r == 255 && v.color.g == 255 && v.color.b == 255 && v.color.a == 255
-        })
-        .count()
+    let white = |c: usize| {
+        let v = &dl.triangles[3 * c];
+        v.color.r == 255 && v.color.g == 255 && v.color.b == 255 && v.color.a == 255
+    };
+    let triangles = dl.triangles.len() / 3;
+    let mut total = 0;
+    let mut c = 0;
+    while c < triangles {
+        if !white(c) {
+            c += 1;
+            continue;
+        }
+        let mut run = 1;
+        while c + run < triangles
+            && white(c + run)
+            && dl.triangles[3 * (c + run)].position == dl.triangles[3 * c].position
+        {
+            run += 1;
+        }
+        if run >= 3 {
+            total += run;
+        }
+        c += run;
+    }
+    total
 }
 
 #[test]
@@ -3670,8 +3694,10 @@ fn ac06_a_centre_handle_that_yields_has_no_hover_or_cursor_state() {
             "scene: {dist_from_centre}"
         );
         let (cur, hnt) = hint(&mut sc.s, sc.fr.c);
-        assert_ne!(cur, "move", "s={s}: the centre handle is not drawn");
-        assert_eq!(hnt, "", "s={s}");
+        // The handle is not drawn (no hint), but a press at the centre still
+        // moves the selection, so the cursor says so (`0007` criterion 28).
+        assert_eq!(cur, "move", "s={s}: the press inside the box moves");
+        assert_eq!(hnt, "", "s={s}: the centre handle is not drawn");
     }
 }
 

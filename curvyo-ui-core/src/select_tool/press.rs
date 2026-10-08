@@ -9,7 +9,7 @@ use curvyo_document_core::{NodeId, ObjectSnapshot, Point, Tolerance};
 use super::handles::sole_selected;
 use super::move_drag::MoveDrag;
 use super::{SelectDrag, SelectTool};
-use crate::hit_test_object::hit_test_object;
+use crate::hit_test_object::{filled_interior_above, hit_test_object};
 use crate::object_selection::ObjectSelection;
 use crate::oriented_box::oriented_bounds;
 use crate::transform_drag::DragOrigin;
@@ -25,11 +25,11 @@ pub enum PressTarget {
     /// modifier, and no modifier toggles the selection
     /// (`edit-interaction-polish` criterion 38).
     CentreHandle,
-    /// Inside the sole selected object's box but on no handle (Shift up): a
-    /// move begins.
+    /// Inside the sole selected object's box but on no handle (Shift up) and
+    /// on no filled object above it: a move begins.
     InsideSelectedBox,
-    /// On this object's outline or body: a move begins (and selects it, or,
-    /// with Shift, toggles it).
+    /// On this object's outline or filled interior: a move begins (and selects
+    /// it, or, with Shift, toggles it).
     Object(NodeId),
     /// On nothing the Select tool acts on.
     Empty,
@@ -76,9 +76,14 @@ pub fn classify_press(
     // A plain press inside the sole selected object's box that is on no
     // handle is a move, before any outline hit (an outline of another object
     // inside the box does not take the press): without it a small unfilled
-    // object could not be moved at all (slice 5 criterion 23).
+    // object could not be moved at all (slice 5 criterion 23). The one
+    // exception is a *filled* object lying above the selected one at that
+    // point: the press goes to it, or it could never be reached without
+    // deselecting first (`0007` criterion 29).
     if !shift && SelectTool::is_inside_selected_box(objects, selection, point) {
-        return PressTarget::InsideSelectedBox;
+        let above = sole_selected(objects, selection)
+            .and_then(|selected| filled_interior_above(objects, selected.id(), point));
+        return above.map_or(PressTarget::InsideSelectedBox, PressTarget::Object);
     }
     hit_test_object(objects, point, tolerance).map_or(PressTarget::Empty, PressTarget::Object)
 }

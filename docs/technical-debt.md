@@ -559,6 +559,16 @@ cost) or make the choice DPR-conditional (e.g. no MSAA once the backing
 buffer is already oversampled past some ratio) before reaching for anything
 more invasive.
 
+**2026-10-08 (`stroke-and-fill-styling` PR 2):** the render pass now has a
+`Depth32Float` attachment with the same sample count as the color target (a
+render pass refuses a mismatch), and the sample count is chosen among those
+supported by both formats. That roughly doubles the memory of the multisampled
+target again (4 bytes per sample for depth against 4 for color). Not measured on
+the customer's WebKitGTK machine; the lever is unchanged
+(`PREFERRED_SAMPLE_COUNTS`). It buys single coverage per paint layer: a
+translucent stroke with a join or a self-crossing is painted once per pixel
+instead of blending twice at every node.
+
 ## MSAA has a sharpness ceiling Inkscape's Cairo backend does not
 
 The customer compared this slice's lines directly against Inkscape's and
@@ -832,3 +842,39 @@ pure move of the tolerance helpers to `session/tolerances.rs`.
   lost). The ADR accepts this. For PR 4: consider Loro's mergeable movable list.
   `add_stop` no longer creates the list (only the fill-mode switch and Split
   do), so there is one creation path to reason about.
+
+**2026-10-08 (`stroke-and-fill-styling` PR 2):** `gpu.rs` was 695 lines; its
+shader, vertex shape, screen transform, pipeline and MSAA target moved to
+`gpu_pipeline.rs` (a pure move, `gpu.rs` is now about 470 lines with the depth
+attachment), so the depth state and, in PR 4, the ramp texture go there.
+Gradient fills are stored and hit-tested (`Fill::paints`) but not painted until
+PR 4; a file with a gradient fill shows it as no fill until then. The editor
+lines' white casing makes the white-triangle counts of older tests depend on
+box size; those tests count fans only (`white_count` in
+`acceptance_unified_editing.rs`).
+
+**2026-10-08 (`stroke-and-fill-styling` PR 2 review):**
+
+- **A straight corner-anchor segment is tessellated by its length.** A path
+  segment between two corner anchors is a cubic with zero handles, and `lyon`
+  flattens it into a number of line segments that grows with its length at the
+  display tolerance: a segment of 1e9 mm yields about 0.8 million triangles,
+  1e15 mm about 58 million, and 75 to 190 s of CPU. File validation bounds
+  numbers to finite values only. A stroke of a huge coordinate range, or a
+  zoom far out over one, is a way to hang a frame. Resolution: emit a straight
+  segment as one line (`line_to`) when both handles are zero, and clip the
+  tessellated outline to the visible rectangle before tessellating.
+- **Hover now runs the whole press check on every pointer move.**
+  `Session::select_hover` calls `classify_press` (handles, centre handle, the
+  selected box, then `hit_test_object`). Both object tests now reject by an
+  allocation-free bound first (a path's control box, a primitive's frame
+  circle), which took 1000 filled objects from over 100 ms per hover in a
+  debug build on the Windows runner to about 27 ms locally; the rest is
+  `Session::objects()` reading every object out of the document on each move
+  (the draw-list cache item above), and a surviving object still builds its
+  outline twice. Fine at today's object counts. When
+  `advanced-selection` adds the cycle list, compute each object's outline once
+  per call, and reject by a cached bounding box first.
+- **SVG import and dashes.** A zero-length "on" entry of a dash pattern is
+  skipped, so a round-capped `[0, 3]` pattern draws nothing where SVG draws
+  dots. The presets have `on > 0`; revisit when `svg-import-export` is planned.

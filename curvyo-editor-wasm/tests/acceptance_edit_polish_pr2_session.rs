@@ -20,14 +20,15 @@ use curvyo_document_core::{
 };
 use curvyo_editor_wasm::{Session, Tool};
 use curvyo_render_core::{
-    DrawList, RgbaColor, SelectDecorationInput, Vertex, build_primitive_strokes,
-    build_select_draw_list,
+    DrawList, RgbaColor, SelectDecorationInput, Vertex, build_artwork, build_select_draw_list,
 };
 
 const ACCENT: RgbaColor = RgbaColor::opaque(0x2F, 0x6F, 0xEE);
 
+/// The hover box colour: `--hover-box`, `--accent` at 65% (`0007` criterion
+/// 41; it was 20% when this test was written).
 fn accent_hover() -> RgbaColor {
-    RgbaColor { a: 51, ..ACCENT }
+    RgbaColor { a: 166, ..ACCENT }
 }
 
 fn pt(x: f64, y: f64) -> Point {
@@ -129,7 +130,11 @@ fn ac65_ac67_the_session_draws_strokes_then_the_dashed_box_then_the_handles() {
             panic!("dpr {dpr}: the session's draw list holds the box built with this ratio")
         });
         // artwork first: the stroke triangles all precede the box
-        let strokes = build_primitive_strokes(&prims_of(&s), view);
+        let objects: Vec<ObjectSnapshot> = prims_of(&s)
+            .into_iter()
+            .map(ObjectSnapshot::Primitive)
+            .collect();
+        let strokes = build_artwork(&objects, view);
         assert_ne!(strokes.triangles.len(), 0);
         let stroke_at =
             find_slice(&list.triangles, &strokes.triangles).expect("strokes in the list");
@@ -262,14 +267,20 @@ fn ac66_hovering_an_unselected_object_draws_a_solid_accent_hover_box() {
     );
     assert_eq!(
         hover_only.triangle_count(),
-        8,
-        "four solid quads, two triangles each"
+        16,
+        "four solid quads and four casing quads, two triangles each"
     );
     assert!(
         hover_only
             .triangles
             .iter()
-            .all(|v| v.color == accent_hover())
+            .all(|v| v.color == accent_hover()
+                || v.color
+                    == RgbaColor {
+                        a: 166,
+                        ..RgbaColor::WHITE
+                    }),
+        "the hover line and its 65% white casing"
     );
     let _ = a;
     // the session's list has the hover box as a slice
@@ -288,7 +299,13 @@ fn ac66_hovering_an_unselected_object_draws_a_solid_accent_hover_box() {
         },
     );
     assert!(sel_only.triangle_count() > 8);
-    assert!(sel_only.triangles.iter().all(|v| v.color == ACCENT));
+    assert!(
+        sel_only
+            .triangles
+            .iter()
+            .all(|v| v.color == ACCENT || v.color == RgbaColor::WHITE),
+        "full accent dashes on their white casing (`0007` criterion 40)"
+    );
 }
 
 #[test]

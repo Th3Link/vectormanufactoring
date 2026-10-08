@@ -130,11 +130,11 @@ fn push_node(
                 continue;
             }
             let endpoint = anchor.point.translated(handle);
-            list.extend(glyphs::thick_line(
-                anchor.point,
-                endpoint,
+            list.extend(glyphs::cased(
                 sizes.handle_line_width,
                 theme::ACCENT,
+                theme::SELECTION_CASING,
+                |width, color| glyphs::thick_line(anchor.point, endpoint, width, color),
             ));
             // Idle handle style: accent outline, white fill
             // (`docs/design-system.md`).
@@ -216,14 +216,21 @@ fn selected_segment_overlay(
     let overlay_width = snapshot.style.stroke.width.as_mm().max(min_width_mm)
         + screen_px_to_mm(view, theme::SEGMENT_OVERLAY_EXTRA_PX);
     let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
-    Some(crate::stroke::segment_stroke(
-        start_anchor.point,
-        start_anchor.handle_out,
-        end_anchor.handle_in,
-        end_anchor.point,
+    Some(glyphs::cased(
         overlay_width,
         theme::ACCENT,
-        tolerance_mm,
+        theme::SELECTION_CASING,
+        |width, color| {
+            crate::stroke::segment_stroke(
+                start_anchor.point,
+                start_anchor.handle_out,
+                end_anchor.handle_in,
+                end_anchor.point,
+                width,
+                color,
+                tolerance_mm,
+            )
+        },
     ))
 }
 
@@ -505,5 +512,46 @@ mod tests {
                 "the selected node ({selected:?}) must be drawn after every unselected glyph"
             );
         }
+    }
+
+    /// `0007` criterion 40: a Bézier handle line and the selected-segment
+    /// overlay each sit on a white casing three times as wide, under them.
+    #[test]
+    fn a_handle_line_and_the_segment_overlay_sit_on_a_white_casing() {
+        let (document, path, a, b) = two_node_path();
+        document
+            .set_handle(path, a, HandleSlot::Out, Vec2::new(10.0, 10.0))
+            .expect("pull a handle");
+        let paths = vec![document.path(path).unwrap()];
+        let list = build(
+            &paths,
+            ViewTransform::identity(),
+            &DecorationInput {
+                show_nodes: true,
+                selected_nodes: vec![(path, a)],
+                selected_segment: Some((path, a, b)),
+                ..DecorationInput::default()
+            },
+        );
+        assert!(
+            list.triangles
+                .iter()
+                .any(|v| v.color == theme::SELECTION_CASING),
+            "a white casing is drawn"
+        );
+        let first_accent = list
+            .triangles
+            .iter()
+            .position(|v| v.color == theme::ACCENT)
+            .unwrap();
+        let first_casing = list
+            .triangles
+            .iter()
+            .position(|v| v.color == theme::SELECTION_CASING)
+            .unwrap();
+        assert!(
+            first_casing < first_accent,
+            "a casing comes before the line it sits under"
+        );
     }
 }

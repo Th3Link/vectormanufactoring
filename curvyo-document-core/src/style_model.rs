@@ -372,6 +372,17 @@ pub struct Fill {
     pub stops: Vec<GradientStop>,
 }
 
+impl Fill {
+    /// Whether this fill paints anything: it is on and, for a gradient, at
+    /// least one stop exists. A fill at opacity 0 still counts, because it is
+    /// a non-None fill (acceptance criterion 23). The one rule the renderer
+    /// and the interior hit-test share.
+    #[must_use]
+    pub fn paints(&self) -> bool {
+        self.enabled && (self.kind == FillKind::Solid || !self.stops.is_empty())
+    }
+}
+
 impl Default for Fill {
     fn default() -> Self {
         Self {
@@ -456,6 +467,24 @@ mod tests {
         assert_eq!(style.fill.color, Color::BLACK);
         assert_eq!(style.fill.opacity, Opacity::OPAQUE);
         assert_eq!(style.fill.stops.len(), 0);
+    }
+
+    #[test]
+    fn a_fill_paints_when_it_is_on_and_a_gradient_has_a_stop() {
+        let mut fill = Fill::default();
+        assert!(!fill.paints(), "off");
+        fill.enabled = true;
+        assert!(fill.paints(), "solid");
+        fill.opacity = Opacity::new(0.0).unwrap();
+        assert!(fill.paints(), "opacity 0 still counts");
+        fill.kind = FillKind::Linear;
+        assert!(!fill.paints(), "a gradient without stops paints nothing");
+        fill.stops.push(
+            GradientStop::default_pair(Color::BLACK, StopId::new(1, 1), StopId::new(1, 2))[0],
+        );
+        assert!(fill.paints());
+        fill.enabled = false;
+        assert!(!fill.paints());
     }
 
     #[test]
