@@ -97,8 +97,18 @@ impl Session {
     /// (criterion 6), the pivot marker and live preview follow (criterion 14),
     /// and so do the marquee's mode and the lasso cursor
     /// (`advanced-selection` criteria 11, 14).
+    ///
+    /// In the Select tool the hover is refreshed at the pointer's last position
+    /// with the new modifiers, so the hover box (an Alt press arms a lasso: no
+    /// object lights) and the object a press would select follow the key by
+    /// themselves, whatever the host re-sends.
     pub fn modifiers_changed(&mut self, shift: bool, ctrl: bool, alt: bool) {
         self.held = Modifiers::new(shift, ctrl).with_alt(alt);
+        if self.tool == Tool::Select
+            && let Some(point) = self.pointer_position
+        {
+            self.select_hover(point, self.held);
+        }
     }
 
     /// The Select tool's handle tolerances at the current zoom

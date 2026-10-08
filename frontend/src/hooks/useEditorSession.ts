@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { modifiersAfterKeyEvent } from "@/lib/keyModifiers";
 import { createSession, openSession } from "@/lib/editorSession";
 import type { WasmSession } from "@/lib/editorSession";
 import type { EditHint } from "@/components/EditHintChip";
@@ -1318,7 +1319,10 @@ export function useEditorSession(
       ) {
         event.preventDefault();
       }
-      applyModifiers(event.shiftKey, event.ctrlKey || event.metaKey, event.altKey);
+      // The modifier key's own flag is read from the event type, not from
+      // `shiftKey` and its siblings (`lib/keyModifiers.ts`).
+      const held = modifiersAfterKeyEvent(event);
+      applyModifiers(held.shift, held.ctrl, held.alt);
     };
     // A key released outside the window must not leave Shift stuck: the
     // side rotate handles and the pivot follow `modifiers_changed`.

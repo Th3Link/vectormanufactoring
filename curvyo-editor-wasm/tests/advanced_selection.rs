@@ -475,3 +475,110 @@ fn the_move_cursor_covers_the_hit_band_of_the_selected_object() {
         assert_eq!(s.cursor_hint(), cursor, "{px} px outside the outline");
     }
 }
+
+// ---- a modifier key alone, with no pointer event ----
+//
+// The host reports a key change with `modifiers_changed` (and re-sends the
+// hover); the customer saw a running marquee ignore Shift, Ctrl and Alt until
+// the pointer moved. The frontend side was the cause (the modifier key's own
+// flag arrives stale in some webviews, `frontend/src/lib/keyModifiers.ts`);
+// these tests pin the session side: `modifiers_changed` alone is enough.
+
+fn colour_count(session: &Session, rgb: (u8, u8, u8)) -> usize {
+    session
+        .draw_list()
+        .triangles
+        .iter()
+        .filter(|v| (v.color.r, v.color.g, v.color.b) == rgb)
+        .count()
+}
+
+const TOUCH_GREEN: (u8, u8, u8) = (0x1C, 0x93, 0x47);
+const CONTAIN_RED: (u8, u8, u8) = (0xE5, 0x48, 0x4D);
+
+#[test]
+fn a_running_marquee_follows_each_modifier_key_with_no_pointer_event() {
+    let mut s = session();
+    let from = pt(60.0, 40.0);
+    let to = pt(-5.0, -5.0);
+    hold(&mut s, from, false, false, false);
+    s.pointer_down(from, false);
+    hold(&mut s, to, false, false, false);
+    let legend = |s: &Session| s.live_readout().expect("a marquee runs").text;
+    assert_eq!(legend(&s), "Touch \u{b7} Replace");
+    assert!(colour_count(&s, TOUCH_GREEN) > 0 && colour_count(&s, CONTAIN_RED) == 0);
+
+    // Each key goes down and up again; only `modifiers_changed` is called.
+    s.modifiers_changed(true, false, false);
+    assert_eq!(legend(&s), "Touch \u{b7} +Add");
+    s.modifiers_changed(false, false, false);
+    assert_eq!(legend(&s), "Touch \u{b7} Replace", "Shift released");
+
+    s.modifiers_changed(false, true, false);
+    assert_eq!(legend(&s), "Touch \u{b7} \u{2212}Remove");
+    assert!(
+        s.move_indicators().remove_badge,
+        "the minus badge follows Ctrl"
+    );
+    s.modifiers_changed(false, false, false);
+    assert_eq!(legend(&s), "Touch \u{b7} Replace", "Ctrl released");
+    assert!(!s.move_indicators().remove_badge);
+
+    s.modifiers_changed(false, false, true);
+    assert_eq!(legend(&s), "Contain \u{b7} Replace", "Alt inverts the mode");
+    assert!(colour_count(&s, CONTAIN_RED) > 0 && colour_count(&s, TOUCH_GREEN) == 0);
+    s.modifiers_changed(false, false, false);
+    assert_eq!(legend(&s), "Touch \u{b7} Replace", "Alt released");
+    assert!(colour_count(&s, TOUCH_GREEN) > 0 && colour_count(&s, CONTAIN_RED) == 0);
+    s.pointer_up(to, false, false);
+}
+
+/// The Alt (lasso) switch over a filled object: the object stops lighting up
+/// the moment Alt goes down (a press would arm a lasso, not select it), the
+/// cursor is the lasso, and both come back when Alt is released.
+#[test]
+fn alt_over_a_filled_object_switches_hover_and_cursor_with_no_pointer_event() {
+    let document = Document::new(1);
+    let id = document.create_rect(RectBounds {
+        origin: pt(0.0, 0.0),
+        width: Length::from_mm(100.0),
+        height: Length::from_mm(100.0),
+    });
+    document
+        .set_fill_mode(
+            curvyo_document_core::FillMode::Solid,
+            &[curvyo_document_core::FillModeTarget {
+                id,
+                seed_stops: vec![],
+            }],
+        )
+        .unwrap();
+    let mut s = Session::open(2, &pack(&document, "0.1.0").unwrap()).unwrap();
+    s.resize_viewport(1200.0, 800.0);
+    s.pointer_hover(pt(400.0, 400.0), false, false);
+    let nothing_lit = s.draw_list().triangle_count();
+    let inside = pt(50.0, 50.0);
+    s.pointer_hover(inside, false, false);
+    let lit = s.draw_list().triangle_count();
+    assert!(
+        lit > nothing_lit,
+        "the filled object lights under the pointer"
+    );
+    assert_eq!(s.cursor_hint(), "default");
+
+    s.modifiers_changed(false, false, true);
+    assert_eq!(
+        s.draw_list().triangle_count(),
+        nothing_lit,
+        "Alt: no hover box"
+    );
+    assert_eq!(s.cursor_hint(), "lasso");
+
+    s.modifiers_changed(false, false, false);
+    assert_eq!(
+        s.draw_list().triangle_count(),
+        lit,
+        "Alt released: it lights again"
+    );
+    assert_eq!(s.cursor_hint(), "default");
+}
