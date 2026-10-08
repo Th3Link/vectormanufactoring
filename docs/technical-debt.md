@@ -952,3 +952,14 @@ box size; those tests count fans only (`white_count` in
   23 us per gradient, which extrapolates to about +23 ms per frame at the 1024
   cap. Fine at 200; the draw-list cache of the canvas performance item above
   should cover the ramps.
+- **`curvyo-ui-core/src/session/transform_entry.rs` is 548 lines**, over the
+  500-line rule, and is not split by `multi-object-transform` (found in the
+  2026-10-08 architect review). Split typed-entry parsing from the entry state
+  when the next story touches it.
+- **A frame at rest costs 14 to 18 ms at 200 objects** (measured 2026-10-08):
+  almost all of it is reading every object and rebuilding the draw list, so the
+  cost grows linearly and reaches roughly 0.7 to 0.9 s at 10,000 objects. A
+  draw-list cache keyed on the document revision would remove it; it is a
+  separate `chore/` and a precondition for any interactive 10 fps target above
+  a few thousand objects. `multi-object-transform` gates only the group box
+  (under 20 ms at 10,000 objects) and reports the rest.
