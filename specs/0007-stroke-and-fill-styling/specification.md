@@ -132,11 +132,14 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
     stroke edges — and a rounded rectangle's curved corners (effective
     radius > 0, no sharp vertex) are unaffected by the join setting, since
     there is no vertex for it to apply to.
-11. Given join = miter on a corner sharp enough that the mitered point would
-    extend more than 4 times the stroke width from the vertex (SVG's and
-    Inkscape's default miter-limit ratio), then that corner renders as a
-    bevel instead of an unbounded spike. This slice fixes the limit at 4 and
-    does not expose it as a separate numeric control (see "Out of scope").
+11. Given join = miter, when the ratio of the miter length (from the tip of
+    the miter to the inner corner where the two stroke edges meet) to the
+    stroke width exceeds the miter limit, then that corner renders as a
+    bevel instead of an unbounded spike. The limit is the SVG and Inkscape
+    default of 4, so joins sharper than about 29 degrees (the angle at
+    which the ratio is 4) fall back to a bevel. This slice fixes the limit
+    at 4 and does not expose it as a separate numeric control (see "Out of
+    scope").
 
 ### Stroke: cap
 
@@ -303,7 +306,10 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
 
 27. Given a point under which several objects have a filled interior or an
     outline within the Select tool's outline tolerance, when the maker
-    clicks, hovers or double-clicks it, then one object wins by this rule:
+    clicks, hovers or double-clicks it, then one object wins by this rule
+    (an object with stroke off and fill None draws nothing but is still
+    selectable by clicking its outline, and hover and click agree on it,
+    because the outline is its geometry, not its paint):
     let F be the topmost object whose filled interior contains the point
     (criterion 23); among the objects at or above F in tree order (all
     objects when there is no F), the one whose outline is nearest to the
@@ -350,7 +356,10 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
     S's selection box, when the point also lies in the filled interior of
     another object T that is above S in tree order, then the press goes to T
     instead of moving S: T becomes the selection, and a drag from that press
-    moves T. Hover at that point lights T (criterion 28). When there is no such T, the press moves S as before. If several
+    moves T. Hover at that point lights T (criterion 28). The centre move
+    handle of the selected object S takes press priority over a filled T
+    lying exactly under it (drawn handles come first, criterion 28); zooming
+    in gets around it. This is intended. When there is no such T, the press moves S as before. If several
     objects qualify as T, the topmost wins. The outline of another object
     never takes a press inside the selected box (unchanged from
     `unified-object-editing` criterion 35), and neither does an unfilled
@@ -535,9 +544,12 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
     the preview outline, and at least 2:1 for the hover box. On the plain
     canvas colour the lines look as before.
 41. **Customer-visible change to an accepted look** (told to the customer,
-    default applies): the hover box is raised from 20% to 60% accent, with
-    the same white casing at 60%, everywhere, filled or not. It stays solid
-    (the selected box stays dashed), so hovered and selected stay apart.
+    default applies): the hover box is raised from 20% to 65% accent
+    (alpha 166/255), for both the line and its white casing, everywhere,
+    filled or not. It stays solid (the selected box stays dashed), so
+    hovered and selected stay apart. Measured from the rendered buffer, the
+    better of line and casing is at least 2:1 on all six reference fills of
+    criterion 40 (yellow 2.04, red 2.14, canvas 2.16 are the weakest).
     At 20% it measured 1.0 to 1.3:1 on every fill and on the canvas, which
     is no hover feedback over a filled shape. If the customer vetoes this,
     the hover box returns to 20% on unfilled objects and the casing rule of
@@ -958,11 +970,12 @@ invisible (1.2:1) and the line looks as it did.
 - **Selection box (dashed, 1 px):** casing under the dashes only (the 4 / 3
   rhythm and the pixel snapping do not change). On a blue fill you see two thin
   white lines, on any other fill the blue line.
-- **Hover box: raised from 20% to 60% accent, with the casing at 60%
-  (customer question, below).** At 20% the hover box measured 1.0 to 1.3:1 on
+- **Hover box: raised from 20% to 65% accent (alpha 166/255), line and casing
+  alike (customer question, below).** At 20% the hover box measured 1.0 to 1.3:1 on
   every fill in the table and on the canvas, which is no feedback, and AC 28
-  promises hover feedback over a filled interior. At 60% the better of line and
-  casing is 2.0 to 7.4:1 (red is the weakest at 2.0). It stays solid, so
+  promises hover feedback over a filled interior. At 65% the better of line and
+  casing is at least 2:1 on all six reference fills (measured: yellow 2.04, red
+  2.14, canvas 2.16). It stays solid, so
   selected (dashed) and hovered (solid) stay apart. New token `--hover-box`;
   `--accent-hover` (20%) stays for ring, button and row backgrounds.
 - **Blue preview outline (1.5 px):** casing 1.5 px each side, always drawn above
@@ -1109,8 +1122,8 @@ criterion 41; question 2 is the Out of scope entry on gradient direction.*
 
 1. **Hover box strength.** Fills make the 20% hover box invisible (measured
    1.0 to 1.3:1 on every fill). *Option A (recommended, the default):* raise the
-   hover box to 60% accent with a white casing, everywhere (about 2 to 7:1, still
-   softer than the selection). *Option B:* keep 20% on unfilled objects and use A
+   hover box to 65% accent with a white casing at 65%, everywhere (at least 2:1
+   on every reference fill, still softer than the selection). *Option B:* keep 20% on unfilled objects and use A
    only where the hovered object is filled (two looks to learn). *Option C:* keep
    20% and accept no hover feedback over filled shapes. This changes an accepted
    look (the customer called the hover "dezent").
@@ -1164,7 +1177,7 @@ criterion 41; question 2 is the Out of scope entry on gradient direction.*
     preview outline and the rotate and skew glyphs stay visible over a black,
     white, `--accent` blue, mid-grey, red and yellow fill (the better of line and
     casing at least 3:1 for the box and the preview; 2:1 for hover), measured from
-    the GL buffer as in the UX reviews; hover is 60% accent with casing (question
+    the GL buffer as in the UX reviews; hover is 65% accent with casing (question
     1).
 15. **Out of scope, add:** recent colours, swatch library, eyedropper, width
     stepping with the arrow keys, a gradient angle control (question 2), a
@@ -1182,7 +1195,7 @@ UX side. Where each gap is decided:
 |---|---|
 | 1. Default gradient colours; "Add stop" position rule | UX notes 5 ("Defaults", "Added stop"), criteria changes 4, 5 |
 | 2. Dash preset ratios, line samples | UX notes 2 ("Dash presets"), criteria change 3 |
-| 3. Contrast of box, hover box, preview and handles over fills | UX notes 6 (casing rule, hover 60%), question 1, criteria change 14 |
+| 3. Contrast of box, hover box, preview and handles over fills | UX notes 6 (casing rule, hover 65%), question 1, criteria change 14 |
 | 4. Panel rows, tokens, popover, alpha percent, narrow window | UX notes 1, 2, 4, `docs/design-system.md` "Properties panel: Style section" |
 | 5. Stop list: multi-selection, 0, 1, more than 16, selection | UX notes 5, criteria changes 8, 9 |
 | 6. Scope under Node and Pen, focus return, Backspace and Delete | UX notes 3, 7, criteria changes 11, 12 |
