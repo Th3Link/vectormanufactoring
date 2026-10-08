@@ -1276,7 +1276,7 @@ mod tests {
 
     /// Criterion 40, hover box: the line (65% accent over the 65% casing) and
     /// the casing (65% white) over each fill; the better of the two is at
-    /// least 2:1 on all of them (yellow 2.04, red 2.14, canvas 2.16).
+    /// least 2:1 on all of them (analytic: yellow 2.04, red 2.14, canvas 2.16; read from the GL buffer the weakest, yellow, measured 1.97).
     #[test]
     fn the_hover_box_is_at_least_two_to_one_over_every_fill() {
         for (name, fill) in FILLS {

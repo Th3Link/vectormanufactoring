@@ -723,8 +723,8 @@ centre, parameter handles, node glyphs, handle endpoints), the marquee and lasso
 (a drag mode), or the axis guide (informational). Hover box: `--hover-box`
 (`--accent` at 65%, casing at 65%; both, because a 65% line over a 60% casing
 leaves red at 1.96:1), pending customer confirmation (default accepted); better
-of line and casing at least 2.0:1 on the fills above (yellow 2.04, red 2.14,
-canvas 2.16), where 20% measured 1.0 to 1.3:1 and 60% measured 1.92 on yellow.
+of line and casing at least 2.0:1 analytically on the fills above (yellow 2.04, red 2.14,
+canvas 2.16; yellow read from the GL buffer 1.97), where 20% measured 1.0 to 1.3:1 and 60% measured 1.92 on yellow.
 
 ## Keyboard shortcuts established so far
 
