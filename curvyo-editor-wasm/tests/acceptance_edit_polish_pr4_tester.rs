@@ -526,11 +526,14 @@ fn c38_ctrl_on_the_centre_handle_copies() {
 
 // ---------------------------------------------------------------------
 // Criterion 33 to 37: Ctrl copy
+// (These tests press the selected object's outline: a Ctrl press inside its
+// box, away from the outline, arms the remove marquee since
+// `advanced-selection`, `edit-interaction-polish` criterion 37.)
 // ---------------------------------------------------------------------
 
 fn run(press_ctrl: bool, mid_ctrl: Option<bool>, release_ctrl: bool) -> Session {
     let mut s = abc_with_a_selected();
-    let o = p(A_INSIDE);
+    let o = p(A_OUTLINE);
     s.pointer_hover(o, false, press_ctrl);
     s.pointer_down(o, false);
     s.pointer_hover(plus(o, 10.0, 5.0), false, press_ctrl);
@@ -592,8 +595,8 @@ fn c34_one_commit_and_new_ids_originals_keep_theirs() {
     let n = change_count(&s);
     drag_mod(
         &mut s,
-        p(A_INSIDE),
-        plus(p(A_INSIDE), 30.0, 12.0),
+        p(A_OUTLINE),
+        plus(p(A_OUTLINE), 30.0, 12.0),
         false,
         true,
     );
@@ -612,8 +615,8 @@ fn c35_a_single_copy_shows_its_full_handle_set_at_once() {
     let mut s = abc_with_a_selected();
     drag_mod(
         &mut s,
-        p(A_INSIDE),
-        plus(p(A_INSIDE), 100.0, 100.0),
+        p(A_OUTLINE),
+        plus(p(A_OUTLINE), 100.0, 100.0),
         false,
         true,
     );
@@ -889,7 +892,7 @@ fn c34_every_kind_is_copied_with_every_field_and_the_selection_is_the_copies() {
 fn c36_a_copy_dragged_back_to_the_start_makes_no_copy() {
     let mut s = abc_with_a_selected();
     let before = bytes_of(&s);
-    let o = p(A_INSIDE);
+    let o = p(A_OUTLINE);
     s.pointer_hover(o, false, true);
     s.pointer_down(o, false);
     s.pointer_hover(plus(o, 30.0, 12.0), false, true);
@@ -967,7 +970,7 @@ fn c26_escape_cancels_the_drag_with_ctrl_held_and_the_badge_stays() {
 // ---------------------------------------------------------------------
 
 fn start_drag(s: &mut Session, ctrl: bool) -> (Point, DrawList) {
-    let o = p(A_INSIDE);
+    let o = p(A_OUTLINE);
     s.pointer_hover(o, false, ctrl);
     let rest = s.draw_list();
     s.pointer_down(o, false);
@@ -1260,7 +1263,7 @@ fn c33_the_badge_shows_during_a_copy_drag_and_follows_ctrl() {
 fn c26_a_press_without_a_prior_pointer_move_still_works_with_cached_ctrl() {
     let mut s = abc_with_a_selected();
     s.modifiers_changed(false, true, false);
-    let o = p(A_INSIDE);
+    let o = p(A_OUTLINE);
     s.pointer_down(o, false); // no pointer_hover first
     s.pointer_hover(plus(o, 30.0, 12.0), false, true);
     assert!(s.move_indicators().copy_badge);

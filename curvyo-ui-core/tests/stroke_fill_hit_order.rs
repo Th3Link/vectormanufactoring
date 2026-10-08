@@ -88,7 +88,7 @@ fn press(
         point,
         tolerance(),
         tolerances(),
-        shift,
+        Modifiers::new(shift, false),
     )
 }
 

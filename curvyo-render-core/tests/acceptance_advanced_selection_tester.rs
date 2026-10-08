@@ -137,7 +137,6 @@ fn lasso_degenerate_inputs_do_not_panic() {
 
 /// Defect (architect review, finding 2): no cap on the dash count.
 #[test]
-#[ignore = "defect: lasso_line has no cap on its dash count (architect finding 2)"]
 fn a_huge_lasso_line_has_a_bounded_triangle_count() {
     let tris = |len: f64| {
         build_marquee_overlay(

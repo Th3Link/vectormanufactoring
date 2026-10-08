@@ -224,7 +224,7 @@ pub fn hit_test_object(
 /// 1. the other objects at or above F whose outline is within `tolerance`,
 ///    nearest first, an exact tie going to the topmost (all objects when
 ///    there is no F);
-/// 2. F itself when no outline of group 1 was within tolerance;
+/// 2. F itself, when its own outline is not already in group 1;
 /// 3. the objects below F that F covers and that either have an outline
 ///    within `tolerance` or a filled interior containing the point: nearest
 ///    outline first (an interior-only object after those), ties topmost.

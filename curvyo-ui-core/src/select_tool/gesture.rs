@@ -122,6 +122,21 @@ impl SelectTool {
         }
     }
 
+    /// Ends a marquee or lasso in flight without resolving it (the tool was
+    /// switched away from): its legend and overlay must not return with the
+    /// Select tool. A move or transform drag is left as it is.
+    pub fn cancel_gesture(&mut self) {
+        if self.gesture_kind().is_some() {
+            self.drag = SelectDrag::None;
+        }
+    }
+
+    /// Ends the Alt-click cycle: the selection was cleared by Escape, so the
+    /// next Alt-click starts again at the nearest candidate.
+    pub fn end_cycle(&mut self) {
+        self.cycle = None;
+    }
+
     /// The marquee or lasso armed by the press in flight, even before it has
     /// left the dead zone.
     #[must_use]

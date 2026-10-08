@@ -54,8 +54,7 @@ impl Session {
             .and_then(|live| live.axis);
         // With Ctrl held a press either begins a move (copy: plus), or arms
         // a marquee or, with Alt, a lasso (remove: minus), never both, as
-        // `classify_press` and the Alt rule of `SelectTool::pointer_down` are
-        // the very rules the press acts on.
+        // `classify_press` is the very rule the press acts on.
         let (copy_badge, remove_badge) = if !self.held.ctrl {
             (false, false)
         } else if self.select.drag_in_flight() {
@@ -63,8 +62,6 @@ impl Session {
                 self.select.move_in_flight(),
                 self.select.gesture_kind().is_some(),
             )
-        } else if self.held.alt {
-            (false, true)
         } else {
             let target = classify_press(
                 &self.objects(),
@@ -72,9 +69,12 @@ impl Session {
                 pointer,
                 self.object_tolerance(),
                 self.transform_handle_tolerances(),
-                self.held.shift,
+                self.held,
             );
-            (target.begins_move(), target == PressTarget::Empty)
+            (
+                target.begins_move(),
+                matches!(target, PressTarget::Empty | PressTarget::Lasso),
+            )
         };
         MoveIndicators {
             copy_badge,

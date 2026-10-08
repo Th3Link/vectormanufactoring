@@ -344,7 +344,7 @@ impl Session {
             pointer,
             self.object_tolerance(),
             self.transform_handle_tolerances(),
-            self.held.shift,
+            self.held,
         ) {
             PressTarget::InsideSelectedBox => "move",
             _ => "default",

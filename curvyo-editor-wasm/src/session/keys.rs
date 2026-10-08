@@ -364,6 +364,7 @@ impl Session {
             Tool::Select => {
                 let had = !self.selection.is_empty();
                 self.selection.clear();
+                self.select.end_cycle();
                 had
             }
         };

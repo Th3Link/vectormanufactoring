@@ -1425,7 +1425,6 @@ fn key(id: &NodeId) -> String {
 /// press bypasses the move and arms the remove marquee, also inside the sole
 /// selected object's box.
 #[test]
-#[ignore = "defect: Ctrl inside the sole selected box starts a copy-move (architect finding 1)"]
 fn ctrl_inside_the_sole_selected_box_arms_the_remove_marquee() {
     let (mut rig, [a, ..]) = scene();
     rig.select(&[a]);

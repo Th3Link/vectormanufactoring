@@ -509,7 +509,7 @@ fn the_press_classification_agrees_with_pointer_down_everywhere() {
                         at,
                         SEGMENT_TOLERANCE,
                         tolerances(),
-                        shift,
+                        Modifiers::new(shift, false),
                     );
                     rig.tool.pointer_down(
                         &objects,

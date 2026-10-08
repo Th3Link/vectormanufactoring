@@ -350,7 +350,6 @@ fn ac4_a_session_alt_click_with_a_few_pixels_of_jitter_still_cycles() {
 }
 
 #[test]
-#[ignore = "defect (low): Session::escape that clears the selection does not end the Alt-click cycle, plan task 6 says it does"]
 fn ac6_escape_ends_the_cycle() {
     let scale = k(&session());
     let p = pt(1100.0 + 1.0 / scale, 50.0);
@@ -946,7 +945,6 @@ fn pointer_cancelled_mid_marquee_applies_nothing() {
 }
 
 #[test]
-#[ignore = "defect: a marquee in flight survives a tool switch: its legend and overlay reappear when the Select tool returns (cosmetic, a later click behaves)"]
 fn switching_tools_mid_marquee_leaves_no_stale_gesture() {
     let mut s = session();
     click(&mut s, pt(300.0, 50.0));
@@ -1089,7 +1087,6 @@ fn nan_infinite_and_huge_coordinates_never_panic_or_change_the_selection() {
 /// billions of triangles. Run on its own, with a modest 5e5 mm line, it
 /// already allocates tens of millions of vertices.
 #[test]
-#[ignore = "defect: the lasso overlay has no cap on its dash count (architect finding 2); can exhaust memory"]
 fn a_far_pointer_during_a_lasso_does_not_blow_up_the_draw_list() {
     let mut s = session();
     hold(&mut s, pt(450.0, 300.0), ALT);
@@ -1101,11 +1098,12 @@ fn a_far_pointer_during_a_lasso_does_not_blow_up_the_draw_list() {
 /// Defect (architect review, finding 1): per the accepted specs a Ctrl press
 /// inside the sole selected object's box arms the remove marquee.
 #[test]
-#[ignore = "defect: Ctrl inside the sole selected box starts a copy-move, not the remove marquee (architect finding 1)"]
 fn ctrl_inside_the_sole_selected_box_arms_the_remove_marquee() {
     let mut s = session();
     click(&mut s, pt(300.0, 50.0)); // B selected
-    let inside = pt(350.0, 50.0);
+    // Inside B's box, away from its outline and from its centre handle (350,
+    // 50), where Ctrl still copies (`edit-interaction-polish` criterion 38).
+    let inside = pt(320.0, 30.0);
     hold(&mut s, inside, CTRL);
     let b = s.move_indicators();
     assert!(b.remove_badge && !b.copy_badge, "minus badge, no plus");

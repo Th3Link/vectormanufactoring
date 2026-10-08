@@ -109,6 +109,20 @@ fn lasso_line(view: ViewTransform, points: &[Point]) -> DrawList {
     let width = theme::MARQUEE_STROKE_PX / scale;
     let (dash, gap) = (theme::LASSO_DASH_PX / scale, theme::LASSO_GAP_PX / scale);
     let color = theme::MARQUEE_TOUCH;
+    let on_screen_px: f64 = points
+        .windows(2)
+        .map(|pair| pair[0].vector_to(pair[1]).length() * scale)
+        .sum();
+    if on_screen_px.is_nan() || on_screen_px > theme::LASSO_MAX_DASHED_PX {
+        // Past the cap the line is solid: a dash count in the billions would
+        // hang the frame. A segment that is not finite draws nothing.
+        for pair in points.windows(2) {
+            if pair[0].vector_to(pair[1]).length().is_finite() {
+                list.extend(thick_line(pair[0], pair[1], width, color));
+            }
+        }
+        return list;
+    }
     // Where we are in the pattern: drawing a dash, with `remaining` of it still to
     // go, or skipping a gap.
     let mut drawing = true;
@@ -295,6 +309,25 @@ mod tests {
         for x in (0..100).map(|i| f64::from(i) + 0.5) {
             assert_eq!(covered(&straight, x), covered(&bent, x), "x = {x}");
         }
+    }
+
+    /// Past the cap the line is solid: a 1e9 mm segment is one quad, not a
+    /// billion dashes.
+    #[test]
+    fn a_line_past_the_cap_is_solid_and_bounded() {
+        let list = build_marquee_overlay(
+            ViewTransform::identity(),
+            &MarqueeOverlay::Lasso(vec![Point::new(0.0, 0.0), Point::new(1e9, 0.0)]),
+        );
+        assert_eq!(list.triangle_count(), 2);
+        let near_cap = build_marquee_overlay(
+            ViewTransform::identity(),
+            &MarqueeOverlay::Lasso(vec![Point::new(0.0, 0.0), Point::new(49_000.0, 0.0)]),
+        );
+        assert!(
+            near_cap.triangle_count() <= 2 * 7_100,
+            "dashed below the cap"
+        );
     }
 
     #[test]

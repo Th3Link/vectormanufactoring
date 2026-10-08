@@ -273,6 +273,12 @@ pub const LASSO_DASH_PX: f64 = 4.0;
 /// The lasso line's gap, screen-space pixels.
 pub const LASSO_GAP_PX: f64 = 3.0;
 
+/// A lasso line longer than this on screen is drawn solid, screen-space
+/// pixels: it bounds the draw list when a far pointer or a wheel zoom makes
+/// the line astronomically long (the same cap, for the same reason, as
+/// [`SELECTION_BOX_MAX_DASHED_EDGE_PX`]).
+pub const LASSO_MAX_DASHED_PX: f64 = 50_000.0;
+
 /// The curve-approximation display tolerance for stroking, in screen
 /// pixels (`specs/0004-canvas-navigation-and-selection/adrs.md`: "Display
 /// tolerance becomes screen-space... Use 0.25 px / scale. ADR 0003 §7's

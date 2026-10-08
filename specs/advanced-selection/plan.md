@@ -73,16 +73,18 @@ the point is listed under "Reconciliation" for the lead.
    keeps `hit_test_object`'s answer unchanged; `hit_test_objects` returns that answer first, then
    the other outline candidates nearest first, then objects covered by a filled object above them
    (outline in tolerance or filled interior), so an Alt-click can reach what a fill hides.
-2. **Ctrl inside the sole selected box.** The Select tool UX note says Ctrl at the press bypasses
-   the move and arms the marquee. `edit-interaction-polish` (accepted, on `main`) makes a Ctrl
-   press inside the box a move that Ctrl turns into a copy, with the plus badge. Kept: the Ctrl
-   marquee arms on empty canvas outside the box; Shift inside the box arms the add marquee (as
-   today it cannot move).
-3. **Clearing on an empty press.** The ADR defers the clear of a plain empty click to release.
-   Existing tests and behaviour clear at the press; kept, the marquee replaces the (empty)
-   selection at release either way.
-4. **Alt over a handle.** The ADR and AC 16/17 say Alt at the press arms the lasso anywhere; the
-   spec leaves handle interaction out. Implemented literally: Alt wins at every press point.
+2. **Ctrl inside the sole selected box.** First built as a copy-move (read from the code on
+   `main`), corrected after review: `edit-interaction-polish` criterion 37, `unified-object-editing`
+   criterion 35 and this spec's UX note agree that Ctrl, like Shift, bypasses the inside-box move
+   and arms the marquee (Ctrl removes, Shift adds). `classify_press` takes `Modifiers` for it.
+   Ctrl-copy stays on an outline and on the centre handle (criterion 38).
+3. **Clearing on an empty press.** The clear of a plain empty click is at the **release**, as the
+   ADR describes (`PendingEmpty`), because criteria 12 and 13 read Shift and Ctrl at the release.
+   Nine existing tests that asserted an empty selection after the press now release first.
+4. **Alt over a handle.** Not a deviation: `unified-object-editing` criterion 35 already decides
+   that Alt at the press arms the lasso wherever it lands, a handle included. The Alt rule lives
+   in `classify_press` (`PressTarget::Lasso`, `PressTarget::arms_lasso`), read by the press, the
+   hover, the cursor and the badges.
 5. **Lasso and fills.** Outline proximity only (AC 18); a line inside a filled shape that never
    crosses its outline selects nothing, as AC 20 words it.
 

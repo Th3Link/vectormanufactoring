@@ -4,7 +4,10 @@
 
 use curvyo_document_core::{NodeId, ObjectSnapshot, Point, Tolerance};
 
+use super::PressTarget;
+use super::handles::sole_selected;
 use crate::hit_test_object::hit_test_objects;
+use crate::object_selection::ObjectSelection;
 
 /// A cycle through the candidates under one point. The candidate list is
 /// captured the first time the cycle advances and kept, so the order stays
@@ -22,6 +25,30 @@ pub(super) struct ClickCycle {
 }
 
 impl ClickCycle {
+    /// The cycle a plain press on `target` begins: one on an object, or inside
+    /// the sole selected box (its object); none for a handle, nothing, Alt
+    /// (that press continues the cycle at its release) or with Shift held.
+    pub(super) fn begun_by(
+        target: PressTarget,
+        point: Point,
+        objects: &[ObjectSnapshot],
+        selection: &ObjectSelection,
+        shift: bool,
+    ) -> Option<Self> {
+        if shift {
+            return None;
+        }
+        match target {
+            PressTarget::Object(hit) => Some(Self::after_click(point, hit)),
+            PressTarget::InsideSelectedBox => sole_selected(objects, selection)
+                .map(|selected| Self::after_click(point, selected.id())),
+            PressTarget::Handle(_)
+            | PressTarget::CentreHandle
+            | PressTarget::Empty
+            | PressTarget::Lasso => None,
+        }
+    }
+
     /// The cycle a plain click at `at` begins: the click selected `selected`,
     /// so the next step is the candidate after it.
     pub(super) const fn after_click(at: Point, selected: NodeId) -> Self {

@@ -226,8 +226,8 @@ impl SelectTool {
     /// usual, criterion 20).
     ///
     /// With Alt down (`specs/advanced-selection/` criteria 16, 17) the press
-    /// arms a lasso wherever it lands, before any of the above is tried. On
-    /// empty canvas without Alt it arms a marquee (criterion 8) and changes no
+    /// arms a lasso wherever it lands, before any of the above is tried
+    /// ([`classify_press`]). On empty canvas without Alt it arms a marquee (criterion 8) and changes no
     /// selection until the release, so Shift or Ctrl pressed during the drag
     /// still combine with it (criteria 12, 13).
     pub fn pointer_down(
@@ -248,28 +248,18 @@ impl SelectTool {
         selection.retain_existing(objects);
         let shift = modifiers.shift;
         let origin = DragOrigin::new(point, handle_tolerances.drag_threshold_mm, shift);
-        if modifiers.alt {
-            // The cycle survives: a release without movement continues it.
-            self.drag = SelectDrag::Lasso(LassoDrag::new(origin, tolerance));
-            return SelectPointerDownOutcome::Lasso;
-        }
-
         let target = classify_press(
             objects,
             selection,
             point,
             tolerance,
             handle_tolerances,
-            shift,
+            modifiers,
         );
-        self.cycle = match target {
-            PressTarget::Object(hit) => Some(ClickCycle::after_click(point, hit)),
-            PressTarget::InsideSelectedBox => sole_selected(objects, selection)
-                .map(|selected| ClickCycle::after_click(point, selected.id())),
-            PressTarget::Handle(_) | PressTarget::CentreHandle | PressTarget::Empty => None,
-        };
-        if shift {
-            self.cycle = None;
+        // An Alt press keeps the cycle: its release without movement
+        // continues it.
+        if target != PressTarget::Lasso {
+            self.cycle = ClickCycle::begun_by(target, point, objects, selection, shift);
         }
         match target {
             PressTarget::Handle(handle) => {
@@ -295,6 +285,11 @@ impl SelectTool {
             PressTarget::Object(hit) => {
                 self.drag = SelectDrag::Moving(begin_object_press(selection, hit, shift, origin));
                 SelectPointerDownOutcome::Selected
+            }
+            // The cycle survives: a release without movement continues it.
+            PressTarget::Lasso => {
+                self.drag = SelectDrag::Lasso(LassoDrag::new(origin, tolerance));
+                SelectPointerDownOutcome::Lasso
             }
         }
     }

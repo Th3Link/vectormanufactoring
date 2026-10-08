@@ -283,6 +283,7 @@ impl Session {
         self.flush_style_preview();
         self.select.cancel_entry();
         self.select.forget_press();
+        self.select.cancel_gesture();
         // A creation tool starts from an empty selection: no selection box
         // stays behind from the Select tool. Creating a shape then selects
         // the new one (`shape_pointer_up`).

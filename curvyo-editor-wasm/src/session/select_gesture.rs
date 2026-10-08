@@ -5,7 +5,9 @@
 //! frame with the pointer at rest (criterion 14).
 
 use curvyo_render_core::MarqueeOverlay;
-use curvyo_ui_core::{GestureKind, GestureShape, LiveGesture, MarqueeMode, SelectionCombine};
+use curvyo_ui_core::{
+    GestureKind, GestureShape, LiveGesture, MarqueeMode, PressTarget, SelectionCombine,
+};
 
 use super::shapes::LiveReadout;
 use super::{Session, Tool};
@@ -68,7 +70,9 @@ impl Session {
         match self.select.gesture_kind() {
             Some(GestureKind::Marquee) => Some("crosshair"),
             Some(GestureKind::Lasso) => Some("lasso"),
-            None if !self.select.drag_in_flight() && self.held.alt => Some("lasso"),
+            None if !self.select.drag_in_flight() && PressTarget::arms_lasso(self.held) => {
+                Some("lasso")
+            }
             None => None,
         }
     }
