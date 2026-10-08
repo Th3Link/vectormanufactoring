@@ -4,7 +4,7 @@
 //! Editor decorations are not artwork; they are drawn after it.
 
 use curvyo_document_core::{
-    ObjectSnapshot, Opacity, PathSnapshot, PrimitiveSnapshot, Style, ViewTransform,
+    FillKind, ObjectSnapshot, Opacity, PathSnapshot, PrimitiveSnapshot, Style, ViewTransform,
     outline_of_rotated,
 };
 
@@ -12,6 +12,7 @@ use crate::color::RgbaColor;
 use crate::dash::{self, DashBudget};
 use crate::fill;
 use crate::glyphs::DrawList;
+use crate::gradient::{GradientFill, GradientFrame, Ramp};
 use crate::shape_preview::outline_to_anchors;
 use crate::stroke::{self, StrokeParams};
 use crate::theme;
@@ -44,15 +45,27 @@ fn paint(color: curvyo_document_core::Color, opacity: Opacity) -> RgbaColor {
 /// A path and a primitive are drawn through the same code: a primitive's
 /// outline is the one "object to path" would convert, so the conversion is
 /// visually identical.
+///
+/// `frames[i]` is the box a gradient fill of `objects[i]` spans (the object's
+/// oriented selection box, which only the editor can compute); `None`, or a
+/// list shorter than `objects`, paints a gradient fill flat in its first
+/// stop's colour.
 #[must_use]
-pub fn build_artwork(objects: &[ObjectSnapshot], view: ViewTransform) -> DrawList {
+pub fn build_artwork(
+    objects: &[ObjectSnapshot],
+    frames: &[Option<GradientFrame>],
+    view: ViewTransform,
+) -> DrawList {
     let mut budget = DashBudget::per_frame();
     let mut list = DrawList::default();
-    for object in objects {
+    for (index, object) in objects.iter().enumerate() {
+        let frame = frames.get(index).copied().flatten();
         match object {
-            ObjectSnapshot::Path(path) => draw_path(&mut list, path, view, &mut budget),
+            ObjectSnapshot::Path(path) => {
+                draw_path(&mut list, path, frame, view, &mut budget);
+            }
             ObjectSnapshot::Primitive(primitive) => {
-                draw_primitive(&mut list, primitive, view, &mut budget);
+                draw_primitive(&mut list, primitive, frame, view, &mut budget);
             }
         }
     }
@@ -62,43 +75,100 @@ pub fn build_artwork(objects: &[ObjectSnapshot], view: ViewTransform) -> DrawLis
 fn draw_path(
     list: &mut DrawList,
     path: &PathSnapshot,
+    frame: Option<GradientFrame>,
     view: ViewTransform,
     budget: &mut DashBudget,
 ) {
-    draw_object(list, &path.anchors, path.closed, &path.style, view, budget);
+    let outline = Outline {
+        anchors: &path.anchors,
+        closed: path.closed,
+    };
+    draw_object(list, &outline, &path.style, frame, view, budget);
 }
 
 fn draw_primitive(
     list: &mut DrawList,
     primitive: &PrimitiveSnapshot,
+    frame: Option<GradientFrame>,
     view: ViewTransform,
     budget: &mut DashBudget,
 ) {
     let anchors = outline_to_anchors(&outline_of_rotated(&primitive.shape, primitive.rotation));
-    draw_object(list, &anchors, true, &primitive.style, view, budget);
+    let outline = Outline {
+        anchors: &anchors,
+        closed: true,
+    };
+    draw_object(list, &outline, &primitive.style, frame, view, budget);
+}
+
+/// An object's outline as the fill and the stroke read it.
+struct Outline<'a> {
+    anchors: &'a [curvyo_document_core::AnchorSnapshot],
+    closed: bool,
 }
 
 fn draw_object(
     list: &mut DrawList,
-    anchors: &[curvyo_document_core::AnchorSnapshot],
-    closed: bool,
+    outline: &Outline<'_>,
     style: &Style,
+    frame: Option<GradientFrame>,
     view: ViewTransform,
     budget: &mut DashBudget,
 ) {
-    let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
     // The fill is painted first, with the outline closed by a chord when the
     // path is open; the stroke below keeps the real open path.
-    if style.fill.paints() && style.fill.kind == curvyo_document_core::FillKind::Solid {
-        let color = paint(style.fill.color, style.fill.opacity);
-        if color.a > 0
-            && let Some(path) = stroke::build_fill_path(anchors, closed)
-        {
-            list.extend_artwork(fill::fill(&path, color, tolerance_mm));
-        }
+    if style.fill.paints() {
+        draw_fill(list, outline, style, frame, view);
     }
     if style.stroke.enabled {
-        draw_stroke(list, anchors, closed, style, view, budget);
+        draw_stroke(list, outline.anchors, outline.closed, style, view, budget);
+    }
+}
+
+/// The fill layer of an object whose fill paints. A solid fill is one flat
+/// colour. A gradient with one stop is uniform in that stop's colour; with two
+/// or more it is a [`GradientFill`] the host paints from its ramp, or, with no
+/// frame to span, flat in the first stop's colour.
+fn draw_fill(
+    list: &mut DrawList,
+    outline: &Outline<'_>,
+    style: &Style,
+    frame: Option<GradientFrame>,
+    view: ViewTransform,
+) {
+    let fill_style = &style.fill;
+    let ramp = (fill_style.kind != FillKind::Solid)
+        .then(|| Ramp::from_stops(&fill_style.stops))
+        .flatten();
+    let color = match &ramp {
+        Some(ramp) => {
+            let [r, g, b, a] = ramp.first();
+            RgbaColor { r, g, b, a }
+        }
+        None => paint(fill_style.color, fill_style.opacity),
+    };
+    let gradient = (fill_style.stops.len() > 1)
+        .then_some(ramp)
+        .flatten()
+        .zip(frame);
+    // A fully transparent flat fill draws nothing; a gradient's alpha varies.
+    if gradient.is_none() && color.a == 0 {
+        return;
+    }
+    let Some(path) = stroke::build_fill_path(outline.anchors, outline.closed) else {
+        return;
+    };
+    let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
+    let start = list.triangles.len();
+    list.extend_artwork(fill::fill(&path, color, tolerance_mm));
+    if let Some((ramp, frame)) = gradient {
+        list.gradients.push(GradientFill {
+            start,
+            end: list.triangles.len(),
+            frame,
+            radial: fill_style.kind == FillKind::Radial,
+            ramp,
+        });
     }
 }
 

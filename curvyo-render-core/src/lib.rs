@@ -19,6 +19,7 @@ mod dash;
 mod decorations;
 mod fill;
 mod glyphs;
+mod gradient;
 mod live_preview;
 mod move_axes;
 mod pen_preview;
@@ -32,6 +33,7 @@ pub use artwork::build_artwork;
 pub use color::RgbaColor;
 pub use decorations::{DecorationInput, Hovered};
 pub use glyphs::{DrawList, Vertex};
+pub use gradient::{GradientFill, GradientFrame, MAX_GRADIENTS, RAMP_TEXELS, Ramp};
 pub use live_preview::build_live_edit_preview;
 pub use move_axes::{LockedAxis, MoveAxes, build_move_axes};
 pub use pen_preview::build_pen_preview;
@@ -97,6 +99,7 @@ mod tests {
         let snapshot = document.path(path).expect("exists");
         let artwork = build_artwork(
             &[ObjectSnapshot::Path(snapshot.clone())],
+            &[],
             ViewTransform::identity(),
         );
         assert_ne!(artwork.triangles.len(), 0);
@@ -110,7 +113,7 @@ mod tests {
 
     #[test]
     fn an_empty_document_produces_an_empty_draw_list() {
-        let list = build_artwork(&[], ViewTransform::identity());
+        let list = build_artwork(&[], &[], ViewTransform::identity());
         assert_eq!(list.triangles.len(), 0);
     }
 }

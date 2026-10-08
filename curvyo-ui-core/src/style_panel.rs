@@ -137,7 +137,7 @@ fn shared<T: Copy + PartialEq>(values: &[T]) -> BarValue<T> {
     shared_by(values, |a, b| a == b)
 }
 
-fn fill_mode(style: &Style) -> FillMode {
+pub(crate) fn fill_mode(style: &Style) -> FillMode {
     match (style.fill.enabled, style.fill.kind) {
         (false, _) => FillMode::None,
         (true, FillKind::Solid) => FillMode::Solid,

@@ -22,6 +22,8 @@ mod session;
 #[cfg(target_arch = "wasm32")]
 mod gpu;
 #[cfg(target_arch = "wasm32")]
+mod gpu_paint;
+#[cfg(target_arch = "wasm32")]
 mod gpu_pipeline;
 #[cfg(target_arch = "wasm32")]
 mod wasm_api;

@@ -16,6 +16,7 @@
 use curvyo_document_core::{Angle, Point, Vec2};
 
 use crate::color::RgbaColor;
+use crate::gradient::{GradientFill, MAX_GRADIENTS};
 
 /// One draw-list vertex: a document-space position plus a flat color.
 /// No texture coordinate and no normal — every shape this crate produces
@@ -46,6 +47,10 @@ pub struct DrawList {
     /// The vertex index at which each artwork layer ends, ascending. The
     /// layers cover `triangles[..layers.last()]`; what follows is the overlay.
     layers: Vec<usize>,
+    /// The gradient fills among the artwork: each names the vertices of its
+    /// fill and carries its ramp. Those vertices hold the ramp's first colour
+    /// as their flat colour.
+    pub gradients: Vec<GradientFill>,
 }
 
 impl DrawList {
@@ -94,6 +99,39 @@ impl DrawList {
         depths
     }
 
+    /// The gradient fills a host paints from a ramp texture: the first
+    /// [`MAX_GRADIENTS`] of them. Later ones stay flat in their first colour.
+    #[must_use]
+    pub fn painted_gradients(&self) -> &[GradientFill] {
+        &self.gradients[..self.gradients.len().min(MAX_GRADIENTS)]
+    }
+
+    /// Per-vertex gradient attributes for a host with a ramp texture of `rows`
+    /// rows (one per painted gradient, in order): `[x, y, v, mode]`. `x` and
+    /// `y` are the vertex's [`GradientFill::coordinate`]; `v` is the texture
+    /// coordinate of the ramp's row (its centre, so linear filtering never mixes
+    /// two ramps); `mode` is 0 for a flat vertex, 1 for a linear and 2 for a
+    /// radial gradient. The host takes `t` as `x` (linear) or `length(x, y)`
+    /// (radial) and clamps it to 0 to 1 (SVG's "pad").
+    #[must_use]
+    pub fn gradient_attributes(&self, rows: usize) -> Vec<[f32; 4]> {
+        let mut attributes = vec![[0.0_f32; 4]; self.triangles.len()];
+        let rows = rows.max(1);
+        for (index, fill) in self.painted_gradients().iter().enumerate() {
+            #[allow(clippy::cast_precision_loss)]
+            let v = (index as f32 + 0.5) / rows as f32;
+            let mode = if fill.radial { 2.0 } else { 1.0 };
+            for (vertex, attribute) in self.triangles[fill.start..fill.end]
+                .iter()
+                .zip(&mut attributes[fill.start..fill.end])
+            {
+                let [x, y] = fill.coordinate(vertex.position);
+                *attribute = [x, y, v, mode];
+            }
+        }
+        attributes
+    }
+
     /// Closes the triangles pushed since the last boundary as one artwork
     /// layer. Only the artwork builder calls this, on a list it is still
     /// building (so there is no overlay yet); it does nothing when nothing
@@ -135,6 +173,12 @@ impl DrawList {
         if keeps_layers {
             self.layers
                 .extend(other.layers.into_iter().map(|end| end + base));
+            self.gradients
+                .extend(other.gradients.into_iter().map(|mut fill| {
+                    fill.start += base;
+                    fill.end += base;
+                    fill
+                }));
         }
     }
 

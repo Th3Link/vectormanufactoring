@@ -166,6 +166,7 @@ mod tests {
         let snapshot = document.primitive(id).expect("exists");
         let list = crate::build_artwork(
             &[ObjectSnapshot::Primitive(snapshot)],
+            &[],
             ViewTransform::identity(),
         );
         let reaches = |target: Point| {
@@ -191,6 +192,7 @@ mod tests {
         let (_, snapshot) = rect_snapshot(&document);
         let list = crate::build_artwork(
             &[ObjectSnapshot::Primitive(snapshot)],
+            &[],
             ViewTransform::identity(),
         );
         assert!(!list.triangles.is_empty(), "the stroke itself draws");

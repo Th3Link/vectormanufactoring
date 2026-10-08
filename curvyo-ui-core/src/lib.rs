@@ -42,6 +42,7 @@ mod style_edit;
 mod style_entry;
 mod style_panel;
 mod style_scope;
+mod style_stops;
 mod transform_commit;
 mod transform_drag;
 mod transform_entry;
@@ -98,6 +99,10 @@ pub use style_entry::{
 };
 pub use style_panel::{DashChoice, FillPanel, StrokePanel, StylePanelState, style_panel_state};
 pub use style_scope::{StyleScope, StyleTool, style_scope};
+pub use style_stops::{
+    BarStop, NewStop, StopEditorView, StopRowView, StopsPanel, fill_targets, new_stop_values,
+    selected_rank, stop_edits, stop_targets, stops_panel,
+};
 pub use transform_drag::{
     CornerLinking, CornerRadiusScaling, ParamDragInfo, ScaleModes, StrokeScaling,
 };
