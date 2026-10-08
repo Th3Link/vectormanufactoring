@@ -215,7 +215,7 @@ pub fn hit_test_object(
 }
 
 /// Every object a click at `point` could mean, in the order an Alt-click
-/// cycles through them (`specs/advanced-selection/specification.md`, criteria
+/// cycles through them (`specs/0014-advanced-selection/specification.md`, criteria
 /// 3 to 7). The first element is always [`hit_test_object`]'s answer, so a
 /// plain click and the cycle's first step cannot disagree. After it, with F
 /// the topmost object whose filled interior contains the point (as in
@@ -279,7 +279,7 @@ const MAX_SAMPLES_PER_STRETCH: f64 = 100_000.0;
 
 /// The objects whose outline comes within `tolerance` of any point along
 /// `line` (a polyline in document space), in z-order: the lasso's release
-/// (`specs/advanced-selection/specification.md`, criterion 18). The same
+/// (`specs/0014-advanced-selection/specification.md`, criterion 18). The same
 /// outline-proximity test a click uses, evaluated at samples spaced a
 /// twentieth of the tolerance apart along the line (see
 /// `LASSO_SAMPLES_PER_TOLERANCE` for what that guarantees). A stretch of the line that stays

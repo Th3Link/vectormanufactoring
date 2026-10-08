@@ -1,5 +1,5 @@
 //! The Loro keys of a rectangle's corner radii
-//! (`specs/rectangle-corner-radii/adrs.md`, decisions 1, 2, 4 and 10): four flat
+//! (`specs/0013-rectangle-corner-radii/adrs.md`, decisions 1, 2, 4 and 10): four flat
 //! last-writer-wins registers, one per corner, each a millimetre `f64` stored
 //! raw, and the read of the legacy single `corner_radius` key.
 //!

@@ -381,7 +381,7 @@ pub fn rotate_delta_angle(pivot: Point, down_at: Point, current: Point, ctrl: bo
 }
 
 /// The rotate drag's delta angle for `object`
-/// (`specs/edit-interaction-polish/` criterion 7): [`rotate_delta_angle`],
+/// (`specs/0010-edit-interaction-polish/` criterion 7): [`rotate_delta_angle`],
 /// except that Ctrl on a polygon or star snaps the angle the maker *sees*
 /// ([`ObjectSnapshot::orientation`]) to the table instead of the turn since
 /// the drag began, so a shape created at a free angle reaches clean angles.

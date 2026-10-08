@@ -1,6 +1,6 @@
 //! Shared types and pure helpers of the three shape-creation tools
 //! (`specs/0003-primitive-shapes/specification.md`, acceptance criteria 1, 2,
-//! 7, 8, 11, 12; `specs/unified-object-editing/`, criteria 25 and 26):
+//! 7, 8, 11, 12; `specs/0009-unified-object-editing/`, criteria 25 and 26):
 //! [`crate::RectangleTool`], [`crate::EllipseTool`] and
 //! [`crate::PolygonStarTool`] each `use` these rather than duplicating them.
 //! The shape tools only create; every edit of an existing shape is the
@@ -76,7 +76,7 @@ pub(crate) struct CreateDragBox {
 }
 
 /// The one computation of a rectangle or ellipse create-drag from press point
-/// `a` and pointer `b` (`specs/shape-creation-from-center/`, "The rule"):
+/// `a` and pointer `b` (`specs/0011-shape-creation-from-center/`, "The rule"):
 /// Ctrl moves the endpoint to E so both extents are equal
 /// ([`constrained_endpoint`]); without Shift the box spans `a` and E, with
 /// Shift it spans E and its mirror `2a - E`, so `a` is the centre. `None` when

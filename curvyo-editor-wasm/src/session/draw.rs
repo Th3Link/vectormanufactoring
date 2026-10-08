@@ -68,7 +68,7 @@ impl Session {
         }
         // The blue half of blue-new, black-old: the geometry a release would
         // commit, over the committed objects drawn above and under the boxes
-        // and handles below (`specs/unified-object-editing` criterion 10).
+        // and handles below (`specs/0009-unified-object-editing` criterion 10).
         if let Some(live) = &live {
             list.extend(curvyo_render_core::build_live_edit_preview(
                 &live.objects,

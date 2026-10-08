@@ -1,5 +1,5 @@
 //! `Session`'s keyboard: the one gate and key table, the Escape cascade and
-//! Delete (`specs/edit-interaction-polish/`, Parts D and F; `adrs.md`
+//! Delete (`specs/0010-edit-interaction-polish/`, Parts D and F; `adrs.md`
 //! decisions 4 and 6).
 
 use curvyo_ui_core::{EntryKey, KeyEntryRefusal};
@@ -325,7 +325,7 @@ impl Session {
     }
 
     /// Escape: exactly one step per press, the first that applies
-    /// (`specs/edit-interaction-polish/` criterion 42), and the document is
+    /// (`specs/0010-edit-interaction-polish/` criterion 42), and the document is
     /// never written:
     ///
     /// 1. an open entry chip closes;

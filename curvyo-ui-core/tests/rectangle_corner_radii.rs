@@ -1,4 +1,4 @@
-//! `curvyo-ui-core`'s share of PR 2 of `specs/rectangle-corner-radii/`: the
+//! `curvyo-ui-core`'s share of PR 2 of `specs/0013-rectangle-corner-radii/`: the
 //! "Link corners" switch and Shift (criteria 2 and 3), the per-corner drag and
 //! its limit (4, 5), the typed entry's scope (6), Remove rounding (8) and the
 //! drag facts for the readout and the follower knobs (7, 23). The pure value

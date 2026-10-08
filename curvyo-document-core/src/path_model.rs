@@ -303,7 +303,7 @@ impl PathSnapshot {
     }
 
     /// This path sheared about the line through `pivot` along the path's own
-    /// local axes (`specs/object-transform-refinements/adrs.md`, "skew
+    /// local axes (`specs/0008-object-transform-refinements/adrs.md`, "skew
     /// (Part B) writes anchors only"): in local coordinates the linear part
     /// is `L = [[1, ku], [kv, 1]]` (an x skew sets `ku`, a y skew `kv`; the
     /// caller passes one of them as zero), applied to every anchor's offset

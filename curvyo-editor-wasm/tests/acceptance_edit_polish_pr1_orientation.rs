@@ -1,5 +1,5 @@
 //! Independent tester acceptance tests for PR 1 of
-//! `specs/edit-interaction-polish/specification.md`, Part A (criteria 1 to 8:
+//! `specs/0010-edit-interaction-polish/specification.md`, Part A (criteria 1 to 8:
 //! the shown angle of a polygon or star, Ctrl snap of the create-drag and of
 //! an absolute Ctrl rotate, typed angle, old files). Written from the
 //! specification before the implementation diff was read. Everything goes

@@ -1,5 +1,5 @@
 //! Independent tester acceptance tests for
-//! `specs/object-transform-refinements/specification.md`, `curvyo-ui-core`
+//! `specs/0008-object-transform-refinements/specification.md`, `curvyo-ui-core`
 //! share: the 22.5 degree snap stops (criteria 33-36, 47) and the entry
 //! parser (criteria 19, 21, 30). Expected values come from the specification
 //! text and from a brute-force reference written here, never from the code

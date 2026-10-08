@@ -80,7 +80,7 @@ impl Side {
 }
 
 /// One of the Select tool's own transform handles
-/// (`specs/object-transform-refinements/adrs.md`, "handle set, hit test and
+/// (`specs/0008-object-transform-refinements/adrs.md`, "handle set, hit test and
 /// the Shift reveal").
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditHandle {
@@ -97,7 +97,7 @@ pub enum EditHandle {
     /// of its own (a press on it is a body press).
     Move,
     /// A parameter handle of a primitive: the corner radius of a rectangle
-    /// or a star's inner radius (`specs/unified-object-editing/`).
+    /// or a star's inner radius (`specs/0009-unified-object-editing/`).
     Param(ParamHandle),
 }
 

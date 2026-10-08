@@ -1,5 +1,5 @@
 //! Independent tester acceptance tests for PR 2 of
-//! `specs/unified-object-editing/specification.md` (criteria 25-34: the shape
+//! `specs/0009-unified-object-editing/specification.md` (criteria 25-34: the shape
 //! tools only create, double-click) plus a regression sweep of the flows that
 //! cross the change (draw with a shape tool, then edit through the Select
 //! tool; pen and node untouched). Written from the specification before the

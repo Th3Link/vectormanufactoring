@@ -1,5 +1,5 @@
 //! The typed skew entry of a path
-//! (`specs/edit-interaction-polish/specification.md`, criteria 9 to 14, 58):
+//! (`specs/0010-edit-interaction-polish/specification.md`, criteria 9 to 14, 58):
 //! its state, validation and commit. The typed angle goes through
 //! the skew drag's own arithmetic (`skew_by_angle`, through its unchecked
 //! half), so a typed value and a

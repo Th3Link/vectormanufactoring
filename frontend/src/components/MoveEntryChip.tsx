@@ -33,7 +33,7 @@ interface MoveEntryChipProps {
 }
 
 /**
- * The typed move chip (`specs/edit-interaction-polish/specification.md`
+ * The typed move chip (`specs/0010-edit-interaction-polish/specification.md`
  * criteria 15 to 25; `docs/design-system.md`, "Move entry chip"): two fields
  * X and Y and a Relative | Absolute switch, opened on the object by a
  * double-click on the centre handle or by the key M. It holds only the text,

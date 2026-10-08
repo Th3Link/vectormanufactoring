@@ -1,5 +1,5 @@
 //! The typed numeric entry on a parameter handle: a rectangle's corner radius
-//! and a star's inner ratio (`specs/unified-object-editing/specification.md`,
+//! and a star's inner ratio (`specs/0009-unified-object-editing/specification.md`,
 //! criteria 18 and 19). One field, validated here; the DOM chip only holds the
 //! text, the caret and the focus. The typed value goes through the same
 //! [`apply_param`] a drag and the bar use, so the three cannot disagree, and
@@ -21,7 +21,7 @@ use crate::transform_entry::{
 };
 use crate::transform_handle_layout::EditHandle;
 
-/// The scope row of a corner radius entry (`specs/rectangle-corner-radii/`
+/// The scope row of a corner radius entry (`specs/0013-rectangle-corner-radii/`
 /// criterion 6): which corners a typed value writes.
 const SCOPE_ALL_FOUR: &str = "All four corners";
 const SCOPE_ONE_CORNER: &str = "This corner only";

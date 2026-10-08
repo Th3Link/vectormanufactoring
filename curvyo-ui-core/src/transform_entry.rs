@@ -1,5 +1,5 @@
 //! The typed numeric entry for an angle, a size or a radius
-//! (`specs/object-transform-refinements/specification.md`, acceptance
+//! (`specs/0008-object-transform-refinements/specification.md`, acceptance
 //! criteria 18-32): its state, the number parser, the linked width/height
 //! rule, and the resolution of a typed target into the same inputs a drag
 //! produces, so a typed value and a dragged value never disagree
@@ -54,7 +54,7 @@ pub enum EntryKind {
     /// (criterion 26).
     OuterRadius,
     /// One field: a rectangle's corner radius, in millimetres
-    /// (`specs/unified-object-editing/`, criterion 18).
+    /// (`specs/0009-unified-object-editing/`, criterion 18).
     CornerRadius,
     /// One field: a star's inner ratio (criterion 19).
     InnerRatio,

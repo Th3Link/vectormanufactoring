@@ -1,4 +1,4 @@
-//! Independent black-box tests for `specs/rectangle-corner-radii/` PART 1
+//! Independent black-box tests for `specs/0013-rectangle-corner-radii/` PART 1
 //! (model, codec, format, outline; criteria 9 to 11, 16 to 21), written from
 //! the specification and `adrs.md` before reading the implementation. They use
 //! the public API and raw `loro` documents only.

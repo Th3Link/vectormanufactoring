@@ -1,4 +1,4 @@
-//! The keyboard's `wasm-bindgen` surface (`specs/edit-interaction-polish/`,
+//! The keyboard's `wasm-bindgen` surface (`specs/0010-edit-interaction-polish/`,
 //! Parts D and F): a second `impl WasmSession` block, so `wasm_api.rs` does
 //! not grow. Strings and scalars only (ADR 0001 §5); every method passes
 //! straight through to `Session`, which holds the key table, the gate and the

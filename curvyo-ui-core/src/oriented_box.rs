@@ -119,7 +119,7 @@ impl OrientedBox {
 /// (`specs/0005-object-transform/adrs.md`). For a polygon or star the shown
 /// angle is `StarFrame.angle + rotation`, so the box direction is the number in
 /// the readout and the first outer vertex sits on the middle of the box's
-/// right-hand side (`specs/polygon-star-box-refit/`).
+/// right-hand side (`specs/0012-polygon-star-box-refit/`).
 #[must_use]
 pub fn oriented_bounds(object: &ObjectSnapshot) -> OrientedBox {
     match object {

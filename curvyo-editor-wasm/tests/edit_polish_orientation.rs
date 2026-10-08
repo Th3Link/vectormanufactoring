@@ -1,4 +1,4 @@
-//! `Session`-level tests of Part A of `specs/edit-interaction-polish/
+//! `Session`-level tests of Part A of `specs/0010-edit-interaction-polish/
 //! specification.md` (criteria 1 to 8): the angle of a created polygon or
 //! star is its real orientation (`StarFrame.angle + rotation`), the create
 //! readout shows it, Ctrl snaps it, a typed angle and a Ctrl rotate land on
@@ -77,7 +77,7 @@ fn polygon_session(count: u32) -> Session {
 
 /// The NE rotate handle of a shape of radius `r` at `c` whose shown angle is
 /// `shown_degrees`: its box is turned by that angle
-/// (`specs/polygon-star-box-refit/`).
+/// (`specs/0012-polygon-star-box-refit/`).
 fn ne_rotate(c: Point, r: f64, shown_degrees: f64) -> Point {
     let out = r + CORNER_OFFSET_PX / SCALE;
     let (sin, cos) = shown_degrees.to_radians().sin_cos();

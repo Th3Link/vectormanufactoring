@@ -1,5 +1,5 @@
 //! Independent black-box tests of `curvyo-ui-core`'s share of PART 2 of
-//! `specs/rectangle-corner-radii/` (criteria 1 to 8, 12, 14 and 23 as far as
+//! `specs/0013-rectangle-corner-radii/` (criteria 1 to 8, 12, 14 and 23 as far as
 //! they are pure tool behaviour): knob layout and the diagonal cap, the Link
 //! switch and Shift as an exclusive-or, the per-corner drag and its limit, the
 //! effective-value writes on a shrunk rectangle, the 72 px threshold and the

@@ -14,7 +14,7 @@ interface KeyHintChipProps {
 
 /**
  * The one-line message of a key that could not act, for example R with
- * several objects selected (`specs/edit-interaction-polish/` criterion 59):
+ * several objects selected (`specs/0010-edit-interaction-polish/` criterion 59):
  * the hint chip's surface, text only, no pointer events, announced politely.
  * The hook clears the hint after 2 s.
  */

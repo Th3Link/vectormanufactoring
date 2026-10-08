@@ -1,5 +1,5 @@
 //! What the Select tool's top bar shows and which objects each of its kind
-//! controls acts on (`specs/unified-object-editing/specification.md`, criteria
+//! controls acts on (`specs/0009-unified-object-editing/specification.md`, criteria
 //! 21, 21a and 22): one rule for all of them. A control is shown when the
 //! selection contains at least one object of the kind it acts on, it acts on
 //! exactly those objects, and it is enabled when it would change something.
@@ -94,7 +94,7 @@ pub struct SelectBarState {
     pub radius_limited: Option<Length>,
     /// For one selected rectangle whose four effective radii differ (the field
     /// reads "Mixed"): those radii in the rectangle's own frame, for the tooltip
-    /// ("Top-left 12, top-right 0, ...", `specs/rectangle-corner-radii/`
+    /// ("Top-left 12, top-right 0, ...", `specs/0013-rectangle-corner-radii/`
     /// criterion 22). `None` otherwise.
     pub radius_corners: Option<CornerRadii>,
     /// "Remove rounding" is shown: the selection holds a rectangle.

@@ -1,4 +1,4 @@
-//! The Alt-click cycle (`specs/advanced-selection/specification.md`,
+//! The Alt-click cycle (`specs/0014-advanced-selection/specification.md`,
 //! criteria 3 to 7): which objects lie under the point of the last plain
 //! click and which one an Alt-click on that point selects next.
 

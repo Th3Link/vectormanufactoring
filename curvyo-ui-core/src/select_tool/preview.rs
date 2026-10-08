@@ -18,7 +18,7 @@ use crate::transform_drag::{ParamDragInfo, pivot_for};
 use crate::transform_handle_layout::EditHandle;
 
 /// The geometry a release would commit right now, for the blue half of
-/// blue-new, black-old (`specs/unified-object-editing/`, criteria 10 to 14):
+/// blue-new, black-old (`specs/0009-unified-object-editing/`, criteria 10 to 14):
 /// the resolved objects of a move (every selected one), a resize, rotate,
 /// skew or parameter drag (the one object). The same resolved snapshots
 /// [`SelectTool::pointer_up`] commits, so preview and release cannot
@@ -180,7 +180,7 @@ impl SelectTool {
     }
 
     /// The facts a corner radius drag's readout and followers need with the
-    /// pointer at `current` (`specs/rectangle-corner-radii/` criteria 4, 7, 23):
+    /// pointer at `current` (`specs/0013-rectangle-corner-radii/` criteria 4, 7, 23):
     /// `None` unless such a drag is in flight and past the dead zone.
     #[must_use]
     pub fn live_param_drag(&self, current: Point) -> Option<ParamDragInfo> {

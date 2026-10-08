@@ -1,5 +1,5 @@
 //! The move drag's modifier badges over `wasm-bindgen`
-//! (`specs/edit-interaction-polish/`, criteria 26, 27, 33): a second
+//! (`specs/0010-edit-interaction-polish/`, criteria 26, 27, 33): a second
 //! `impl WasmSession` block, so `wasm_api.rs` does not grow. Scalars and
 //! strings only (ADR 0001 §5).
 

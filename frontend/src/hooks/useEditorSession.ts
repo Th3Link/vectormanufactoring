@@ -67,7 +67,7 @@ const EMPTY_TOOLBAR_STATE: NodeToolbarState = {
   canSplit: false,
 };
 
-/** A plain-JS copy of the Rust `SelectBarView` (`specs/unified-object-editing/`
+/** A plain-JS copy of the Rust `SelectBarView` (`specs/0009-unified-object-editing/`
  * criteria 21, 21a, 22): which kind controls the Select bar shows and their
  * values. A `*Mixed` flag means the selected objects differ (the field is
  * empty with the placeholder "Mixed"). */
@@ -82,7 +82,7 @@ export interface SelectBarState {
   radiusStored: number;
   /** One rectangle with unequal corners: its four effective radii in its own
    * frame, millimetres (top-left, top-right, bottom-right, bottom-left) for the
-   * "Mixed" tooltip (`specs/rectangle-corner-radii/` criterion 22); `null`
+   * "Mixed" tooltip (`specs/0013-rectangle-corner-radii/` criterion 22); `null`
    * otherwise. */
   radiusCorners: [number, number, number, number] | null;
   removeRoundingShown: boolean;
@@ -180,7 +180,7 @@ function sameSelectBar(a: SelectBarState, b: SelectBarState): boolean {
  * up with (matching Inkscape).
  */
 /** How long the "max" notice of a limited typed corner radius stays at its knob
- * (`specs/rectangle-corner-radii/` criterion 6). */
+ * (`specs/0013-rectangle-corner-radii/` criterion 6). */
 const LIMIT_NOTICE_MS = 1500;
 
 const DOUBLE_CLICK_MS = 400;
@@ -308,7 +308,7 @@ export interface TransformEntryState {
   kind: "angle" | "size" | "radius" | "corner-radius" | "inner-ratio" | "skew";
   fields: TransformEntryField[];
   /** The muted second row of a corner radius entry ("All four corners" or "This
-   * corner only", `specs/rectangle-corner-radii/` criterion 6); empty for every
+   * corner only", `specs/0013-rectangle-corner-radii/` criterion 6); empty for every
    * other entry. */
   scope: string;
   /** Whether the two fields are linked (Ctrl at the second press). */
@@ -378,7 +378,7 @@ function sameEntry<T>(a: T | null, b: T | null): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-/** The open typed move (`specs/edit-interaction-polish/` criteria 15 to 25):
+/** The open typed move (`specs/0010-edit-interaction-polish/` criteria 15 to 25):
  * where to put the chip and what an untouched field shows in each mode.
  * Positions are canvas-relative CSS pixels, already converted by Rust. */
 export interface MoveEntryState {
@@ -419,7 +419,7 @@ function readMoveEntry(
   return entry;
 }
 
-/** The modifier badges of a move (`specs/edit-interaction-polish/` criteria
+/** The modifier badges of a move (`specs/0010-edit-interaction-polish/` criteria
  * 26, 27, 33): which show, and where the pointer is, canvas-relative CSS
  * pixels. Rust decides everything but the placement
  * (`Session::move_indicators`). */
@@ -427,7 +427,7 @@ export interface MoveBadgeState {
   /** The plus badge: a copy drag runs, or a press with Ctrl would start a move. */
   copy: boolean;
   /** The minus badge: a Ctrl marquee or lasso runs, or a press with Ctrl would
-   * arm one (`specs/advanced-selection/`): it removes from the selection. */
+   * arm one (`specs/0014-advanced-selection/`): it removes from the selection. */
   remove: boolean;
   /** The lock badge's axis: `""` (none), `"x"` or `"y"`. */
   lock: "" | "x" | "y";
@@ -439,7 +439,7 @@ export interface MoveBadgeState {
 const NO_BADGES: MoveBadgeState = { copy: false, remove: false, lock: "", x: 0, y: 0 };
 
 /** A key that could not act, shown for 2 s next to the pointer
- * (`specs/edit-interaction-polish/` criterion 59). */
+ * (`specs/0010-edit-interaction-polish/` criterion 59). */
 export interface KeyHint {
   text: string;
   /** Changes on every message, so the 2 s life restarts. */
@@ -561,7 +561,7 @@ export interface EditorSession {
    * rectangle's corner radius. Session state, off in every new session. */
   scaleCornerRadius: boolean;
   setScaleCornerRadius: (on: boolean) => void;
-  /** The "Link corners" switch (`specs/rectangle-corner-radii/` criterion 2):
+  /** The "Link corners" switch (`specs/0013-rectangle-corner-radii/` criterion 2):
    * on, a corner handle sets all four radii. On in every new or opened project. */
   linkCorners: boolean;
   setLinkCorners: (on: boolean) => void;
@@ -1129,7 +1129,7 @@ export function useEditorSession(
 
       const now = performance.now();
       const last = lastPressRef.current;
-      // Alt-clicks step through overlapping objects (`specs/advanced-selection/`
+      // Alt-clicks step through overlapping objects (`specs/0014-advanced-selection/`
       // criterion 5), quickly and at one point: never a double-click.
       const isDoubleClick =
         !event.altKey &&
@@ -1328,7 +1328,7 @@ export function useEditorSession(
       // A lone Alt press or release would focus the menu bar in some browsers
       // and on Windows; with the pointer on the canvas and the Select tool
       // active Alt belongs to the lasso and the Alt-click cycle
-      // (`specs/advanced-selection/`).
+      // (`specs/0014-advanced-selection/`).
       if (
         event.key === "Alt" &&
         lastPointerRef.current !== null &&

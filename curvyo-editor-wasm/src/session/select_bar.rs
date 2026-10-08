@@ -1,4 +1,4 @@
-//! `Session`'s glue for the Select bar (`specs/unified-object-editing`,
+//! `Session`'s glue for the Select bar (`specs/0009-unified-object-editing`,
 //! criteria 21, 21a, 22, 23): the bar's state for the current selection and the
 //! commands its controls issue. All rules live in `curvyo_ui_core`
 //! (`select_bar_state`, `SelectTool`'s bar edits); the DOM holds only the

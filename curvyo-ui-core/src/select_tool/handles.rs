@@ -1,6 +1,6 @@
 //! Which handles the Select tool's sole selected object offers, and the one
 //! hit rule over them for a press, a hover, a cursor and a double-click
-//! (`specs/0005-object-transform/adrs.md`; `specs/unified-object-editing/`):
+//! (`specs/0005-object-transform/adrs.md`; `specs/0009-unified-object-editing/`):
 //! the drawn set (transform handles of the box's tiers, the centre handle where
 //! it is drawn, the parameter handles from 72 px) and the queries over it.
 //! Split out of `select_tool.rs`; a child module of it.
@@ -39,7 +39,7 @@ fn handle_spec_for(object: &ObjectSnapshot, side_rotate: bool) -> HandleSpec {
 /// [`crate::is_drawn_handle`]), the centre handle only where it is drawn,
 /// and the parameter handles from 72 px. A parameter handle that is not drawn
 /// is not in the list and so has no hit area (criteria 6, 7, 8 of
-/// `specs/unified-object-editing/`).
+/// `specs/0009-unified-object-editing/`).
 fn drawn_edit_handles(
     object: &ObjectSnapshot,
     box_: &OrientedBox,
@@ -62,7 +62,7 @@ fn drawn_edit_handles(
 }
 
 /// Where the typed-entry chip of `handle` is anchored, in document space
-/// (`specs/edit-interaction-polish/adrs.md`, decision 3): the handle's own
+/// (`specs/0010-edit-interaction-polish/adrs.md`, decision 3): the handle's own
 /// position computed from the box, not looked up in the drawn set, so a key
 /// can open the chip of a handle that is hidden by size (a skew handle on a
 /// narrow path, the centre handle on a small object). `None` for a parameter

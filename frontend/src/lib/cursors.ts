@@ -17,10 +17,10 @@
  *   for left and right), with `ew-resize`/`ns-resize` as the fallback.
  * - `"move"`: the built-in `move` cursor (the centre handle).
  * - `"pointer"`: the built-in `pointer` cursor, hovering and dragging a
- *   parameter handle (`specs/unified-object-editing/` criterion 5): not a
+ *   parameter handle (`specs/0009-unified-object-editing/` criterion 5): not a
  *   resize or move cursor, so it does not promise one.
  * - `"crosshair"`: the built-in crosshair, a marquee armed or running
- *   (`specs/advanced-selection/`).
+ *   (`specs/0014-advanced-selection/`).
  * - `"lasso"`: an arrow with a dashed squiggle trailing from its lower right,
  *   a lasso armed or running, or Alt held over the canvas (the next press
  *   arms one); hotspot at the arrow tip, `crosshair` where custom cursor

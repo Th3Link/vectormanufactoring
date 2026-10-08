@@ -1,5 +1,5 @@
 //! Independent tester acceptance tests for
-//! `specs/shape-creation-from-center/specification.md`, written from the
+//! `specs/0011-shape-creation-from-center/specification.md`, written from the
 //! specification (and the public tool API) before the implementation diff was
 //! read. Everything goes through `RectangleTool`, `EllipseTool` and
 //! `PolygonStarTool`. Expected boxes come from a reference model written here

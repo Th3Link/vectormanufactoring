@@ -1,4 +1,4 @@
-//! `Document::duplicate_objects` (`specs/edit-interaction-polish/adrs.md`,
+//! `Document::duplicate_objects` (`specs/0010-edit-interaction-polish/adrs.md`,
 //! decision 2; criteria 34 and 35 of the specification): a copy is every
 //! stored value of its original under fresh ids, directly above it, in one
 //! commit, and a merge with a concurrent edit of the original converges.

@@ -1,5 +1,5 @@
 //! The candidate list and the lasso test of `advanced-selection`
-//! (`specs/advanced-selection/specification.md`, criteria 3 to 7 and 18):
+//! (`specs/0014-advanced-selection/specification.md`, criteria 3 to 7 and 18):
 //! `hit_test_objects` orders every object under a point, nearest first, and
 //! always starts with the answer of a plain click; `hit_test_objects_along`
 //! tests an outline against a drawn line.

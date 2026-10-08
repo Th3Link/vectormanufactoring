@@ -51,7 +51,7 @@ use crate::units::{DocumentSize, Length};
 /// (`path_codec::read_rotation`), so every version-4 object opens with
 /// zero rotation, unchanged.
 ///
-/// Bumped to 6 in `rectangle-corner-radii` (`specs/rectangle-corner-radii/
+/// Bumped to 6 in `rectangle-corner-radii` (`specs/0013-rectangle-corner-radii/
 /// adrs.md`, decisions 2 and 3): a rectangle stores four corner radius
 /// registers (`corner_radius_tl`, `_tr`, `_br`, `_bl`) and the single
 /// `corner_radius` key is no longer written. A version-5 reader would refuse

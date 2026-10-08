@@ -1,4 +1,4 @@
-//! `specs/polygon-star-box-refit/` criteria 13, 14 and 15 through `Session`'s
+//! `specs/0012-polygon-star-box-refit/` criteria 13, 14 and 15 through `Session`'s
 //! public API: files saved before the refit open with the same outlines and
 //! the box of the shown angle, no gesture writes a stored field it did not
 //! write before, and the format is unchanged. The drawn box, hit rule, cursors

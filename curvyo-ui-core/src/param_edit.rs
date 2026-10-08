@@ -2,7 +2,7 @@
 //! typed entry and a bar control each turn their input into a
 //! [`ParamValue`], and [`apply_param`] turns that into the resulting
 //! snapshot, clamps included, so the three can never disagree
-//! (`specs/unified-object-editing/adrs.md`, "one resolving function per
+//! (`specs/0009-unified-object-editing/adrs.md`, "one resolving function per
 //! parameter"). Writing the result is [`commit_param`] and
 //! [`commit_param_batch`], over the `Document` commands the shape tools
 //! already used.
@@ -48,7 +48,7 @@ pub(crate) fn max_corner_radius(bounds: RectBounds) -> f64 {
 /// The largest radius `corner` can take that leaves the other three effective
 /// radii as they are: `min(W - r_h, H - r_v)`, with `r_h` and `r_v` the
 /// effective radii of the corners that share its horizontal and its vertical
-/// side (`specs/rectangle-corner-radii/` criterion 4). Never below 0.
+/// side (`specs/0013-rectangle-corner-radii/` criterion 4). Never below 0.
 #[must_use]
 pub(crate) fn corner_radius_limit(
     bounds: RectBounds,
@@ -332,7 +332,7 @@ pub(crate) fn commit_param(document: &Document, handle: ParamHandle, result: &Ob
 
 /// Writes `value` to every primitive in `ids` as one commit: the bar's
 /// "Remove rounding", "Radius", "Points" and "Ratio" controls
-/// (`specs/unified-object-editing/`, criteria 21, 21a). `ids` holds only the
+/// (`specs/0009-unified-object-editing/`, criteria 21, 21a). `ids` holds only the
 /// objects the control acts on ([`crate::ids_of_kind`]).
 ///
 /// # Errors

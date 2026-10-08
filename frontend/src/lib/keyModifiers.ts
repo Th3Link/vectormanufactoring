@@ -1,6 +1,6 @@
 /**
  * The Shift, Ctrl and Alt state the Select tool's marquee and lasso follow
- * (`specs/advanced-selection/`: a running gesture must follow a modifier key
+ * (`specs/0014-advanced-selection/`: a running gesture must follow a modifier key
  * with the pointer at rest).
  *
  * The flags of a keyboard event (`shiftKey` and its siblings) are not reliable

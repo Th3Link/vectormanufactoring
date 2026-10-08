@@ -1,5 +1,5 @@
 //! The Ctrl angle-snap table for rotate and skew drags
-//! (`specs/object-transform-refinements/specification.md`, acceptance
+//! (`specs/0008-object-transform-refinements/specification.md`, acceptance
 //! criteria 33-36, 47): the stops are the union of multiples of 15° and of
 //! 22.5°, repeated through every quadrant, nearest stop wins.
 

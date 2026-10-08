@@ -1,5 +1,5 @@
 //! The ellipse/circle tool's create-drag (`specs/0003-primitive-shapes/
-//! specification.md`, acceptance criteria 7 and 8; `specs/unified-object-
+//! specification.md`, acceptance criteria 7 and 8; `specs/0009-unified-object-
 //! editing/`, criteria 25 and 26): see [`crate::rectangle_tool`], whose
 //! pattern this follows.
 
@@ -38,7 +38,7 @@ impl EllipseTool {
     }
 
     /// The pointer moved, or a modifier changed with the pointer at rest
-    /// (`specs/shape-creation-from-center/` criterion 8), with the drag in
+    /// (`specs/0011-shape-creation-from-center/` criterion 8), with the drag in
     /// flight; writes nothing.
     pub fn pointer_move(&mut self, point: Point, modifiers: Modifiers) {
         if let Some(drag) = &mut self.drag {
@@ -61,7 +61,7 @@ impl EllipseTool {
 
     /// Acceptance criteria 7, 8: commits the create-drag, built from the
     /// release event's position and `modifiers` (criterion 10 of
-    /// `specs/shape-creation-from-center/`), the same computation as the
+    /// `specs/0011-shape-creation-from-center/`), the same computation as the
     /// preview.
     pub fn pointer_up(
         &mut self,

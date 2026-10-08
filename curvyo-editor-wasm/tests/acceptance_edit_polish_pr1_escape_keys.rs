@@ -1,5 +1,5 @@
 //! Independent tester acceptance tests for PR 1 of
-//! `specs/edit-interaction-polish/specification.md`, Part D (criteria 42 to
+//! `specs/0010-edit-interaction-polish/specification.md`, Part D (criteria 42 to
 //! 52: the Escape cascade per tool, Split selects one node) and the PR 1
 //! subset of Part F (criteria 54, 55, 57, 60, 61: key table, one gate, R and
 //! S entries, held Escape, Delete). Written from the specification before the

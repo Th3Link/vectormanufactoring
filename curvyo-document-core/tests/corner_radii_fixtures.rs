@@ -1,5 +1,5 @@
 //! Golden-file and file-format tests for `rectangle-corner-radii`
-//! (`specs/rectangle-corner-radii/adrs.md`, decisions 2, 3, 10 and 11;
+//! (`specs/0013-rectangle-corner-radii/adrs.md`, decisions 2, 3, 10 and 11;
 //! `CLAUDE.md` §5): the version-6 container with per-corner radii, a
 //! genuine-shape version-5 container with the legacy single `corner_radius`,
 //! the outline anchors for mixed radii, the refusal cases, and the rule that

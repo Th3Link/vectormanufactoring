@@ -1,6 +1,6 @@
 //! The Select tool's move drag: what a release would commit for a press
 //! point, a pointer position and the Shift and Ctrl of that moment
-//! (`specs/edit-interaction-polish/adrs.md`, decision 5; criteria 26 to 38).
+//! (`specs/0010-edit-interaction-polish/adrs.md`, decision 5; criteria 26 to 38).
 //! [`MoveDrag::resolve`] is the one resolving function the live preview and
 //! the release both call.
 

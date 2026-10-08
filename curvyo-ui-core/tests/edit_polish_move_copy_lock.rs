@@ -1,5 +1,5 @@
 //! `curvyo-ui-core`'s share of Part C of
-//! `specs/edit-interaction-polish/specification.md`, PR 4: the axis lock, the
+//! `specs/0010-edit-interaction-polish/specification.md`, PR 4: the axis lock, the
 //! copy by Ctrl, Shift and Ctrl at the press, and the press classification the
 //! plus badge shares with `pointer_down`. Session-level behaviour (readout,
 //! badges, axes input, commit counts) is in

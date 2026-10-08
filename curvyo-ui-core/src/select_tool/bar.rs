@@ -1,4 +1,4 @@
-//! The Select bar's edits (`specs/unified-object-editing/specification.md`,
+//! The Select bar's edits (`specs/0009-unified-object-editing/specification.md`,
 //! criteria 21, 21a and 22): a slider edit previewed and committed once, the
 //! one-shot commits of "Remove rounding", "Points", "Ratio" and the typed
 //! "Radius" field. Every value goes through [`crate::apply_param`] and

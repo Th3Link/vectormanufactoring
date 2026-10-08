@@ -1,4 +1,4 @@
-//! Independent black-box tests for `specs/rectangle-corner-radii/` PART 1 at
+//! Independent black-box tests for `specs/0013-rectangle-corner-radii/` PART 1 at
 //! the `Session` level (criteria 12 to 15 for the model-visible parts, 16 to 22
 //! data layer): resize with "Scale corner radius" off and on, rotation and
 //! flips, op-log writes, legacy files untouched by open/select/hover, the Select

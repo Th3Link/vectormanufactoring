@@ -149,7 +149,7 @@ const NODE_TIE_EPSILON_MM: f64 = 1e-9;
 
 /// The nearest node within `tolerance`; of two at the same distance (within
 /// [`NODE_TIE_EPSILON_MM`]) a selected one wins over an unselected one
-/// (`specs/edit-interaction-polish/` criterion 50: what is drawn highlighted
+/// (`specs/0010-edit-interaction-polish/` criterion 50: what is drawn highlighted
 /// is what the next drag moves), and otherwise the first in document order.
 fn hit_test_node(
     paths: &[PathSnapshot],
