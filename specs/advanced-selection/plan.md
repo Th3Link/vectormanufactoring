@@ -95,6 +95,12 @@ the point is listed under "Reconciliation" for the lead.
   release (the page prevents that default while the pointer is on the canvas in the Select tool).
   Inkscape has the same limit. To be checked once on the customer's desktop; if it bites, the
   Alt gestures need another binding, which is a decision for the customer.
+- **Shift keyup is not delivered on the customer's Linux/WebKitGTK setup** (found with the
+  customer's `[shiftdiag]` console log, 2026-10-09: no `keyup Shift` event ever arrives, Ctrl and
+  Alt keyups do). The modifier state is tracked by key (`frontend/src/lib/keyModifiers.ts`) and
+  corrected at the next pointer event, so with a stationary pointer a running marquee keeps
+  showing `+Add` after Shift is released until the pointer moves. Not fixable in the page; a
+  native Linux modifier poll is an open decision (lead, customer).
 - **The lasso tests outlines only**, also over filled shapes (criterion 18 and 20); a fill-aware
   lasso is a follow-up.
 - A marquee or lasso shows no preview of what it will select; the legend names mode and combine.

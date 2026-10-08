@@ -572,6 +572,15 @@ values, not an implementation site, for those four rows.
   Optional, flagged as scope: a polygon-group button "Edge to axis" in the
   Select bar that turns the polygon by the smallest angle that puts an edge on
   an axis; not for stars.
+- **Modifier keys follow the keyboard, with one known gap** (`advanced-selection`):
+  the marquee's mode and combine, the lasso, the badges and the hover follow
+  Shift, Ctrl and Alt the frame the key changes, with the pointer at rest. The
+  host tracks the keys by `code` (left and right separately), corrects the
+  record from every pointer event and forgets it on blur. **Known limit:** on
+  the customer's Linux/WebKitGTK setup the Shift keyup is never delivered to
+  the page, so after Shift is released a stationary pointer keeps the `+Add`
+  legend until the next pointer event corrects it. Ctrl and Alt are
+  unaffected.
 - **Marquee and lasso cursors** (`advanced-selection`): the built-in `crosshair`
   from the press of a marquee (empty canvas, Alt up) to its release, whatever
   Alt does afterwards (a box inverted by Alt is told by its colour, not by the
