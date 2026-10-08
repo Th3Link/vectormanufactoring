@@ -266,17 +266,23 @@ pub fn hit_test_objects(
     order.into_iter().map(|index| objects[index].id()).collect()
 }
 
+/// How many samples per tolerance the lasso line is tested at. A line that
+/// passes `d` from an outline has a sample within half a spacing of its closest
+/// approach, so the test finds every outline within `tolerance` less 1/40 of
+/// it (2.5 %, a fifth of a pixel at 8 px) and none farther than `tolerance`.
+const LASSO_SAMPLES_PER_TOLERANCE: f64 = 20.0;
+
 /// The most samples one stretch of a lasso line is tested at: a stretch
-/// longer than this many tolerances is sampled more coarsely rather than
+/// longer than this many spacings is sampled more coarsely rather than
 /// without end (a line across a 1e9 mm object).
-const MAX_SAMPLES_PER_STRETCH: f64 = 20_000.0;
+const MAX_SAMPLES_PER_STRETCH: f64 = 100_000.0;
 
 /// The objects whose outline comes within `tolerance` of any point along
 /// `line` (a polyline in document space), in z-order: the lasso's release
 /// (`specs/advanced-selection/specification.md`, criterion 18). The same
-/// outline-proximity test a click uses, evaluated at samples spaced at most
-/// one tolerance apart along the line, so no crossing is missed: it lies at
-/// most half a spacing from a sample. A stretch of the line that stays
+/// outline-proximity test a click uses, evaluated at samples spaced a
+/// twentieth of the tolerance apart along the line (see
+/// `LASSO_SAMPLES_PER_TOLERANCE` for what that guarantees). A stretch of the line that stays
 /// farther than `tolerance` from an object's bounds is skipped without
 /// sampling. The unfilled interior of a closed object is not part of it: a
 /// line that stays inside without crossing the outline selects nothing.
@@ -305,7 +311,7 @@ fn line_touches(object: &ObjectSnapshot, line: &[Point], tolerance: Tolerance) -
             return false;
         };
         let length = from.vector_to(to).length();
-        let step = margin.max(length / MAX_SAMPLES_PER_STRETCH);
+        let step = (margin / LASSO_SAMPLES_PER_TOLERANCE).max(length / MAX_SAMPLES_PER_STRETCH);
         // `length / step` is at most MAX_SAMPLES_PER_STRETCH: the cast is exact enough.
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let samples = (length / step).ceil().max(1.0) as u32;

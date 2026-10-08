@@ -307,3 +307,22 @@ fn axis_parallel_and_very_long_lines_resolve() {
         Vec::<NodeId>::new()
     );
 }
+
+/// Found by the tester's property test on CI: the line passes 1.93 mm from the
+/// rectangle's corner region at a point between two coarse samples, inside the
+/// 2 mm tolerance.
+#[test]
+fn a_grazing_line_between_two_samples_is_still_within_tolerance() {
+    let document = Document::new(1);
+    let target = document.create_rect(RectBounds {
+        origin: pt(25.0, 23.0),
+        width: Length::from_mm(11.0),
+        height: Length::from_mm(2.0),
+    });
+    let objects = objects(&document);
+    let line = [pt(31.13, 37.29), pt(72.13, -33.71)];
+    assert_eq!(
+        hit_test_objects_along(&objects, &line, Tolerance::from_mm(2.0)),
+        vec![target]
+    );
+}
