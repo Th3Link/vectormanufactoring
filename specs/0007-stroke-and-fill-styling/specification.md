@@ -541,15 +541,20 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
     parameter handles, node glyphs) are unchanged, and so are the marquee
     and lasso. Measured from the rendered buffer, the better of line and
     casing is at least 3:1 against each fill above for the selection box and
-    the preview outline, and at least 2:1 for the hover box. On the plain
+    the preview outline, and about 2:1 or better for the hover box on all
+    six reference fills (weakest measured: yellow 1.97:1, accepted by the
+    customer-delegated lead decision of 2026-10-08). On the plain
     canvas colour the lines look as before.
 41. **Customer-visible change to an accepted look** (told to the customer,
     default applies): the hover box is raised from 20% to 65% accent
     (alpha 166/255), for both the line and its white casing, everywhere,
     filled or not. It stays solid (the selected box stays dashed), so
     hovered and selected stay apart. Measured from the rendered buffer, the
-    better of line and casing is at least 2:1 on all six reference fills of
-    criterion 40 (yellow 2.04, red 2.14, canvas 2.16 are the weakest).
+    better of line and casing is about 2:1 or better on all six reference
+    fills of criterion 40; weakest measured: yellow 1.97:1, accepted by the
+    customer-delegated lead decision of 2026-10-08 (red 2.1, canvas about
+    2.0 to 2.5, others higher; on a fill with no stroke the line falls on
+    the canvas pixel beside the edge).
     At 20% it measured 1.0 to 1.3:1 on every fill and on the canvas, which
     is no hover feedback over a filled shape. If the customer vetoes this,
     the hover box returns to 20% on unfilled objects and the casing rule of
@@ -628,6 +633,9 @@ are merged, and their statuses read Done. Technical detail is in the
      casing and hover box over fills), which belong with the rendering the
      panel makes visible.
   4. **Gradient**: stop editor, linear and radial. Criteria 16 to 22, 34, 35.
+
+  Until the gradient slice (PR 4), a gradient fill is hit-testable (hover
+  and select work) but is not painted, so such a shape looks hollow.
 
   The UX notes below are done (2026-10-07), so all four PRs can start.
 - **`format_version`**: `main` is at 5, so this slice takes **6**,
@@ -974,8 +982,9 @@ invisible (1.2:1) and the line looks as it did.
   alike (customer question, below).** At 20% the hover box measured 1.0 to 1.3:1 on
   every fill in the table and on the canvas, which is no feedback, and AC 28
   promises hover feedback over a filled interior. At 65% the better of line and
-  casing is at least 2:1 on all six reference fills (measured: yellow 2.04, red
-  2.14, canvas 2.16). It stays solid, so
+  casing is about 2:1 or better on all six reference fills (weakest measured:
+  yellow 1.97:1, accepted by the customer-delegated lead decision of
+  2026-10-08; red 2.1, canvas about 2.0 to 2.5, others higher). It stays solid, so
   selected (dashed) and hovered (solid) stay apart. New token `--hover-box`;
   `--accent-hover` (20%) stays for ring, button and row backgrounds.
 - **Blue preview outline (1.5 px):** casing 1.5 px each side, always drawn above
