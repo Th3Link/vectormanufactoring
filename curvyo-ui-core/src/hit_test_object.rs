@@ -136,7 +136,7 @@ fn outline_of(object: &ObjectSnapshot) -> (Vec<OutlineTriple>, bool) {
     }
 }
 
-const fn style_of(object: &ObjectSnapshot) -> &Style {
+pub(crate) const fn style_of(object: &ObjectSnapshot) -> &Style {
     match object {
         ObjectSnapshot::Path(path) => &path.style,
         ObjectSnapshot::Primitive(primitive) => &primitive.style,

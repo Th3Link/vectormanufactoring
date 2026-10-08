@@ -38,6 +38,9 @@ mod selection;
 mod shape_tool_common;
 mod skew_entry;
 mod skew_math;
+mod style_edit;
+mod style_entry;
+mod style_panel;
 mod transform_commit;
 mod transform_drag;
 mod transform_entry;
@@ -87,6 +90,15 @@ pub use selection::NodeSelection;
 pub use shape_tool_common::{CreateOutcome, CreatePreview};
 pub use skew_entry::SkewEntry;
 pub use skew_math::{SkewFrame, skew_angle, skew_factor, skew_frame};
+pub use style_edit::StyleEditor;
+pub use style_entry::{
+    MAX_STROKE_WIDTH_MM, StyleEntryError, StyleField, opacity_from_percent, parse_hex,
+    parse_opacity_percent, parse_stroke_width,
+};
+pub use style_panel::{
+    DashChoice, FillPanel, StrokePanel, StylePanelState, StyleScope, StyleTool, style_panel_state,
+    style_scope,
+};
 pub use transform_drag::{
     CornerLinking, CornerRadiusScaling, ParamDragInfo, ScaleModes, StrokeScaling,
 };
