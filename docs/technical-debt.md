@@ -866,9 +866,13 @@ box size; those tests count fans only (`white_count` in
   tessellated outline to the visible rectangle before tessellating.
 - **Hover now runs the whole press check on every pointer move.**
   `Session::select_hover` calls `classify_press` (handles, centre handle, the
-  selected box, then `hit_test_object`), and `fills_point` builds an object's
-  outline before the hull reject while `distance_to_object` builds a
-  primitive's outline a second time. Fine at today's object counts. When
+  selected box, then `hit_test_object`). Both object tests now reject by an
+  allocation-free bound first (a path's control box, a primitive's frame
+  circle), which took 1000 filled objects from over 100 ms per hover in a
+  debug build on the Windows runner to about 27 ms locally; the rest is
+  `Session::objects()` reading every object out of the document on each move
+  (the draw-list cache item above), and a surviving object still builds its
+  outline twice. Fine at today's object counts. When
   `advanced-selection` adds the cycle list, compute each object's outline once
   per call, and reject by a cached bounding box first.
 - **SVG import and dashes.** A zero-length "on" entry of a dash pattern is

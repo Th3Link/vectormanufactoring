@@ -8,7 +8,7 @@
 //! definition of "near an outline"; the shape tools no longer hit-test at all.
 
 use curvyo_document_core::{
-    NodeId, ObjectSnapshot, Point, Style, Tolerance, Vec2, outline_of_rotated,
+    NodeId, ObjectSnapshot, Point, Style, Tolerance, Vec2, outline_of_rotated, shape_frame_bounds,
 };
 use curvyo_geometry_core::{OutlineTriple, contains_point, nearest_point_on_segment};
 
@@ -51,7 +51,52 @@ where
     best
 }
 
+/// Whether `point` is certainly farther than `margin` from everything `object`
+/// draws, by a bound that allocates nothing: the control-point box of a path,
+/// or the circle around a primitive's frame centre that holds the frame (a
+/// rotation about the centre cannot leave it). A hover over thousands of
+/// objects rejects almost all of them here, before any outline is built.
+fn certainly_farther_than(object: &ObjectSnapshot, point: Point, margin: f64) -> bool {
+    match object {
+        ObjectSnapshot::Path(path) => {
+            let mut hull = (
+                f64::INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::NEG_INFINITY,
+            );
+            for a in &path.anchors {
+                for q in [
+                    a.point,
+                    a.point.translated(a.handle_in),
+                    a.point.translated(a.handle_out),
+                ] {
+                    hull = (
+                        hull.0.min(q.x),
+                        hull.1.min(q.y),
+                        hull.2.max(q.x),
+                        hull.3.max(q.y),
+                    );
+                }
+            }
+            point.x < hull.0 - margin
+                || point.x > hull.2 + margin
+                || point.y < hull.1 - margin
+                || point.y > hull.3 + margin
+        }
+        ObjectSnapshot::Primitive(primitive) => {
+            let (min, max) = shape_frame_bounds(&primitive.shape);
+            let centre = Point::new(f64::midpoint(min.x, max.x), f64::midpoint(min.y, max.y));
+            let radius = (max.x - min.x).hypot(max.y - min.y) / 2.0;
+            point.vector_to(centre).length() > radius + margin
+        }
+    }
+}
+
 fn distance_to_object(object: &ObjectSnapshot, point: Point, tolerance: Tolerance) -> Option<f64> {
+    if certainly_farther_than(object, point, tolerance.as_mm()) {
+        return None;
+    }
     match object {
         ObjectSnapshot::Path(path) => {
             nearest_distance_on_run(path.anchors.len(), path.closed, point, tolerance, |i| {
@@ -104,7 +149,7 @@ const fn style_of(object: &ObjectSnapshot) -> &Style {
 /// that fill covers. An open path's interior is closed with a chord, a closed
 /// one's is bounded by its real closing segment (acceptance criterion 23).
 fn fills_point(object: &ObjectSnapshot, point: Point) -> bool {
-    if !style_of(object).fill.paints() {
+    if !style_of(object).fill.paints() || certainly_farther_than(object, point, 0.0) {
         return false;
     }
     let (outline, closed) = outline_of(object);
@@ -634,6 +679,38 @@ mod tests {
             filled_interior_above(&objects_of(&document), hollow_above, Point::new(0.0, 0.0)),
             None,
             "an id that is gone"
+        );
+    }
+
+    /// The cheap reject must never drop a real hit: the apex of a square
+    /// turned 45 degrees lies at the farthest reach of its frame, and a filled
+    /// path's far corner at the edge of its control box.
+    #[test]
+    fn the_cheap_reject_keeps_every_real_hit_at_the_farthest_reach() {
+        let document = Document::new(1);
+        let diamond = square(&document, -5.0, -5.0, 10.0);
+        fill(&document, diamond);
+        document
+            .rotate_object(&document.object(diamond).unwrap().rotated(
+                Point::new(0.0, 0.0),
+                curvyo_document_core::Angle::from_radians(std::f64::consts::FRAC_PI_4),
+            ))
+            .unwrap();
+        let objects = objects_of(&document);
+        let apex = 50.0_f64.sqrt();
+        assert_eq!(
+            hit_test_object(&objects, Point::new(0.0, -apex + 0.1), TOL),
+            Some(diamond),
+            "just inside the apex"
+        );
+        assert_eq!(
+            hit_test_object(&objects, Point::new(0.0, -apex - 0.5), TOL),
+            Some(diamond),
+            "within the tolerance outside the apex"
+        );
+        assert_eq!(
+            hit_test_object(&objects, Point::new(0.0, -apex - 2.0), TOL),
+            None
         );
     }
 }
