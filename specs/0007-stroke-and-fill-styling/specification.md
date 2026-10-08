@@ -1,6 +1,7 @@
 # Stroke and fill styling: width/dash/join/cap/color, solid and gradient fill
 
-Status: In progress
+Status: Done
+Delivered in four PRs: #54 (model, format version 7), #55 (rendering, hit-testing), #58 (properties panel), #59 (gradients).
 Priority: Must
 Origin: Customer
 
