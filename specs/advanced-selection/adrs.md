@@ -258,6 +258,41 @@ are under "Flagged to the lead", each with a default.
   impl` per tool as `wasm_select_bar.rs` already does, no behaviour change.
   It owns the `docs/technical-debt.md` entry on `wasm_api.rs`.**
 
+- **2026-10-08 (implementer): what the build changed against the notes above.**
+  - **The clear of an empty click moves to the release.** A plain press on empty
+    canvas used to clear the selection at the press. Criteria 12 and 13 read
+    Shift and Ctrl at the *release*, so a Shift pressed during a drag must still
+    find the old selection: the press changes nothing and the release combines
+    (`SelectionCombine::Replace` clears, so the plain click and the plain
+    marquee are the same call). Existing tests that pressed on empty canvas
+    and asserted an empty selection without releasing now release first (listed
+    in the PR description).
+  - **One drag variant per gesture, the dead zone in `DragOrigin`.** The
+    `PendingEmpty`/`PendingAlt` states of the table are not separate variants:
+    `SelectDrag::Marquee` and `SelectDrag::Lasso` carry the `DragOrigin`, whose
+    `is_active_at` is the click-versus-drag test, so a release inside the dead
+    zone is the click (clear, or a cycle step) and past it the gesture.
+  - **Alt at the press wins over every other press target**, drawn handles
+    included (criteria 16 and 17 say "anywhere"; the specification leaves the
+    handle interaction open). Ctrl at a press inside the sole selected box
+    stays a move that Ctrl turns into a copy (`edit-interaction-polish`, on
+    `main`), not a marquee; the Ctrl marquee arms on empty canvas outside the
+    box. Shift inside the box arms the add marquee, as it cannot move.
+  - **The candidate list with fills.** `hit_test_objects` returns the plain
+    click's answer first (`hit_test_object` stays the single-pass function the
+    hover uses; a test pins the equality), then the other outlines within
+    tolerance nearest first, then objects hidden under a filled one, so an
+    Alt-click can reach what a fill covers. This is the reconciliation of
+    flag 2 below.
+  - **The overlay has its own input.** `render-core` takes a `MarqueeOverlay`
+    (`build_marquee_overlay`), not an optional field of
+    `SelectDecorationInput`, which keeps `select_box.rs` from growing.
+  - **Modifiers reach the session through the cache.** `Session::
+    modifiers_changed(shift, ctrl, alt)` is the one place the held state is
+    stored (`Session::held`); the wasm pointer calls carry `ctrl` and `alt` and
+    pass them through it before the pointer event, so Rust tests drive the same
+    path as the host. `Session::pointer_down/hover/up` keep their signatures.
+
 ## Flagged to the lead
 
 1. **Ctrl-click on empty canvas (new with the rework).** A Ctrl press on

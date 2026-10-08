@@ -112,6 +112,9 @@ fn hover_uses_the_same_radius() {
     assert!(s.draw_list().triangle_count() > idle, "7 px away lights it");
     s.pointer_hover(pt(25.0, -10.0 / k(&s)), false, false);
     assert_eq!(s.draw_list().triangle_count(), idle, "10 px away does not");
+    // With Alt held a press would arm a lasso: nothing lights.
+    hold(&mut s, pt(25.0, -7.0 / k(&s)), false, false, true);
+    assert_eq!(s.draw_list().triangle_count(), idle, "Alt lights nothing");
 }
 
 /// Criterion 2: the Node tool's segment pick stays at 4 px.

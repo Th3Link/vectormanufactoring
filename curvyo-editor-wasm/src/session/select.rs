@@ -158,7 +158,9 @@ impl Session {
         // Otherwise hover lights the object a press at this point would
         // select, and nothing where a press would grab a handle, move the
         // selection or start a marquee (`0007` criterion 28).
-        self.hovered_object = if self.select.drag_in_flight() {
+        // With Alt held a press would arm a lasso, which selects nothing at
+        // the press, so nothing lights up (`advanced-selection` criterion 16).
+        self.hovered_object = if self.select.drag_in_flight() || modifiers.alt {
             None
         } else {
             match curvyo_ui_core::classify_press(
