@@ -1,6 +1,6 @@
 # ADR 0002: Internal document model, units and SVG round-trip
 
-**Status:** Accepted (customer sign-off, 2026-10-02)
+**Status:** Accepted (customer sign-off, 2026-10-02); §10 amended 2026-10-08 (gradients removed from the modelled SVG subset)
 
 Reconciled with [ADR 0004](0004-persistence-and-cross-machine-sync.md) (an open
 document is a Loro CRDT replica) and
@@ -171,6 +171,16 @@ sensible granularity.
     behaviour is pinned by golden files in `tests/fixtures/`. Export reads a
     version snapshot, not live state (ADR 0009 §4), which is what keeps the
     golden files meaningful under collaboration.
+
+    Amended 2026-10-08 (customer decision, YAGNI): **gradients are not part of
+    the modelled subset.** The document model carries no gradient paint; a
+    fill is none or a solid color (R-EDIT-006). The gradient fill that
+    `0007-stroke-and-fill-styling` added is removed by `style-panel-rework`,
+    which also says what happens to saved documents that contain one. SVG import treats gradient paint as
+    unsupported; what the importer does with it (substitute, passthrough or
+    reported loss) is decided in the SVG import story. Gradients may return
+    later as a new requirement with a new design, not by reviving this list
+    entry. Follows from [`specs/style-panel-rework/`](../../specs/style-panel-rework/).
 11. **The document is versioned** from the first commit (`format_version` plus
     a written migration policy, see ADR 0004 §9, which extends this to the Loro
     snapshot version).
