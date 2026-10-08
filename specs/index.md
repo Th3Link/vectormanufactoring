@@ -132,6 +132,8 @@ Not part of the MVP sequence above; each waits for the customer to schedule it.
 - `rectangle-corner-radii` (Draft)
 - `ellipse-arcs-and-shaping` (Draft)
 - `document-size-and-rulers` (Draft)
+- `multi-object-transform` (Ready; depends on `advanced-selection`; runs after
+  `style-panel-rework`)
 
 ## Out of sequence (tracked in `docs/requirements.md`, not listed above)
 
