@@ -230,7 +230,7 @@ fn moved(before: &[ObjectSnapshot], after: &[ObjectSnapshot]) -> Vec<usize> {
 }
 
 /// The accent hover box of the frame: the bounding box of the vertices drawn
-/// in accent at about 60 percent alpha (criterion 41), if any.
+/// in accent at about 65 percent alpha (criterion 41, 65% since the PO's revision), if any.
 fn hover_box(s: &Session) -> Option<(f64, f64, f64, f64)> {
     let list = s.draw_list();
     let mut it = list
@@ -238,7 +238,7 @@ fn hover_box(s: &Session) -> Option<(f64, f64, f64, f64)> {
         .iter()
         .filter(|v| {
             (v.color.r, v.color.g, v.color.b) == (0x2F, 0x6F, 0xEE)
-                && (145..=160).contains(&v.color.a)
+                && (160..=170).contains(&v.color.a)
         })
         .map(|v| v.position)
         .peekable();
@@ -960,7 +960,6 @@ fn ac28_hover_inside_the_sole_selected_box_lights_nothing_where_a_press_would_mo
 }
 
 #[test]
-#[ignore = "PR 2 leaves the cursor unchanged (plan.md task 7 open point); criterion 28 asks for a move cursor where a press would move the selection"]
 fn ac28_the_cursor_mirrors_the_press() {
     let (_d, mut s) = two_rects_selected_first();
     let hint = |s: &mut Session, p: Point| {
@@ -972,7 +971,7 @@ fn ac28_the_cursor_mirrors_the_press() {
     let moving = hint(&mut s, pt(20.0, 20.0));
     assert_eq!(moving, "move", "a press would move the selection");
     // Where a press would select the ellipse above, it is not the move cursor.
-    let selecting = hint(&mut s, pt(50.0, 50.0));
+    let selecting = hint(&mut s, pt(35.0, 65.0));
     assert_ne!(selecting, "move");
     // And a filled interior of an unselected object reads like its outline.
     let d = Document::new(1);

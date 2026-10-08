@@ -37,28 +37,12 @@ pub use move_axes::{LockedAxis, MoveAxes, build_move_axes};
 pub use pen_preview::build_pen_preview;
 pub use select_box::{SelectDecorationInput, SelectionBox};
 pub use select_decoration::{TransformDecorationInput, TransformGlyphKind, TransformHandleGlyph};
-pub use shape_preview::{build_primitive_strokes, build_shape_live_preview};
+pub use shape_preview::build_shape_live_preview;
 
 use curvyo_document_core::{PathSnapshot, ViewTransform};
 
 fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
     px / view.scale()
-}
-
-/// Builds the draw list of `paths` as the Node tool shows them: every path's
-/// artwork (fill, then stroke, in the style it carries), plus node, handle and
-/// segment decorations (acceptance criteria 7, 9, 10, 14 of `path-node-
-/// editing`) from `input`. The whole document is drawn with [`build_artwork`]
-/// and [`build_decorations`] separately; this is the two combined for paths.
-#[must_use]
-pub fn build_draw_list(
-    paths: &[PathSnapshot],
-    view: ViewTransform,
-    input: &DecorationInput,
-) -> DrawList {
-    let mut list = artwork::paths_artwork(paths, view);
-    list.extend(decorations::build(paths, view, input));
-    list
 }
 
 /// Builds the Node tool's decorations alone (nodes, handles, hover rings and
@@ -96,12 +80,12 @@ pub fn build_transform_draw_list(
 
 #[cfg(test)]
 mod tests {
-    use curvyo_document_core::{AnchorId, Document, NewAnchor, Point};
+    use curvyo_document_core::{AnchorId, Document, NewAnchor, ObjectSnapshot, Point};
 
     use super::*;
 
     #[test]
-    fn build_draw_list_includes_both_stroke_and_decorations() {
+    fn build_artwork_draws_a_path_and_decorations_are_separate() {
         let document = Document::new(1);
         let path = document.create_path(
             &[
@@ -110,18 +94,23 @@ mod tests {
             ],
             false,
         );
-        let paths = vec![document.path(path).expect("exists")];
-        let list = build_draw_list(
-            &paths,
+        let snapshot = document.path(path).expect("exists");
+        let artwork = build_artwork(
+            &[ObjectSnapshot::Path(snapshot.clone())],
+            ViewTransform::identity(),
+        );
+        assert_ne!(artwork.triangles.len(), 0);
+        let decorations = build_decorations(
+            &[snapshot],
             ViewTransform::identity(),
             &DecorationInput::default(),
         );
-        assert_ne!(list.triangles.len(), 0);
+        assert_eq!(decorations.triangles.len(), 0, "no nodes unless asked for");
     }
 
     #[test]
     fn an_empty_document_produces_an_empty_draw_list() {
-        let list = build_draw_list(&[], ViewTransform::identity(), &DecorationInput::default());
+        let list = build_artwork(&[], ViewTransform::identity());
         assert_eq!(list.triangles.len(), 0);
     }
 }

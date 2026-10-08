@@ -5,7 +5,7 @@
 //! path_stroke`] needs only the anchors, not a document identity), and a
 //! rubber-band line to the live cursor.
 //!
-//! A separate entry point from [`crate::build_draw_list`] rather than a
+//! A separate entry point from [`crate::build_artwork`] rather than a
 //! synthetic [`curvyo_document_core::PathSnapshot`]: an in-progress pen
 //! path has no [`curvyo_document_core::NodeId`] yet (ADR 0009 §2 — it is
 //! ephemeral `curvyo-ui-core::PenTool` state, not a document node), and

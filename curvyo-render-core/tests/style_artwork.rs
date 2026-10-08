@@ -16,7 +16,7 @@ use curvyo_document_core::{
     Length, LineCap, LineJoin, NewAnchor, NodeId, ObjectSnapshot, Opacity, Point, RectBounds,
     StopId, StyleEdit, ViewTransform,
 };
-use curvyo_render_core::{DecorationInput, DrawList, build_artwork};
+use curvyo_render_core::{DrawList, build_artwork};
 
 const SCALE: f64 = 4.0;
 
@@ -146,7 +146,7 @@ fn ac3_a_default_styled_object_is_one_opaque_black_stroke_layer_as_before() {
     let snapshot = document.path(path).unwrap();
     let list = build_artwork(&[ObjectSnapshot::Path(snapshot.clone())], view());
     assert_eq!(list.layers().len(), 1, "no fill: only a stroke layer");
-    let old = curvyo_render_core::build_draw_list(&[snapshot], view(), &DecorationInput::default());
+    let old = build_artwork(&[ObjectSnapshot::Path(snapshot)], view());
     let (a, b) = (&list.triangles, &old.triangles);
     assert!(b.len() >= a.len());
     assert_eq!(

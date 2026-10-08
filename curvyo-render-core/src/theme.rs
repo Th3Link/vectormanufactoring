@@ -314,12 +314,13 @@ pub const SELECTION_CASING: RgbaColor = RgbaColor::WHITE;
 pub const CASING_WIDTH_FACTOR: f64 = 3.0;
 
 /// `--hover-box` (`0007` criterion 41): the Select tool's hover box,
-/// `--accent` at 60%. Raised from `--accent-hover`'s 20%, which measured 1.0
+/// `--accent` at 65%. Raised from `--accent-hover`'s 20%, which measured 1.0
 /// to 1.3:1 on every fill. `--accent-hover` stays for rings, buttons and rows.
-pub const HOVER_BOX: RgbaColor = ACCENT.with_alpha(153); // 60% of 255, rounded
+pub const HOVER_BOX: RgbaColor = ACCENT.with_alpha(166); // 65% of 255, rounded
 
-/// The hover box's casing: `--selection-casing` at the same 60%.
-pub const HOVER_BOX_CASING: RgbaColor = SELECTION_CASING.with_alpha(153);
+/// The hover box's casing: `--selection-casing` at the same 65%. Both must be
+/// 65%: with the line at 65% over a 60% casing, red stays at 1.96:1.
+pub const HOVER_BOX_CASING: RgbaColor = SELECTION_CASING.with_alpha(166);
 
 /// One side of the pivot marker's casing, screen-space pixels: the marker is
 /// a dot, not a line, so its casing is a fixed ring one pixel wide.

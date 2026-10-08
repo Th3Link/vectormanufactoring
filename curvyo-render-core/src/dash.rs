@@ -60,7 +60,13 @@ pub(crate) fn dashed(
     budget: &mut DashBudget,
 ) -> Option<Path> {
     let ratios = pattern.as_slice();
-    if ratios.is_empty() || !width_mm.is_finite() || width_mm <= 0.0 {
+    // A width past the display cap draws solid, like the stroke it belongs to:
+    // `ratio * width` would overflow `f32` in the tessellator.
+    if ratios.is_empty()
+        || !width_mm.is_finite()
+        || width_mm <= 0.0
+        || width_mm > crate::artwork::MAX_DISPLAY_STROKE_WIDTH_MM
+    {
         return None;
     }
     let period_mm = ratios.iter().sum::<f64>() * width_mm;
@@ -267,5 +273,13 @@ mod tests {
         )
         .expect("dashed");
         assert_eq!(subpaths(&path), 5);
+    }
+
+    #[test]
+    fn a_width_past_the_display_cap_draws_solid() {
+        let mut budget = DashBudget::per_frame();
+        let p = pattern(&[6.0, 4.0]);
+        let cap = crate::artwork::MAX_DISPLAY_STROKE_WIDTH_MM;
+        assert!(dashed(&line(1e9), &p, cap * 2.0, 1e-9, 1.0, &mut budget).is_none());
     }
 }

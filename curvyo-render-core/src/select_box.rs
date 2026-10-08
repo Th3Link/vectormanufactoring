@@ -1183,10 +1183,10 @@ mod tests {
         assert!((thickness(theme::SELECTION_CASING) - 3.0).abs() < 1e-9);
     }
 
-    /// Criterion 41: the hover box is `--accent` at 60% on a white casing at
-    /// 60%, solid; the casing is three times as wide and comes first.
+    /// Criterion 41: the hover box is `--accent` at 65% on a white casing at
+    /// 65%, solid; the casing is three times as wide and comes first.
     #[test]
-    fn the_hover_box_is_sixty_percent_accent_on_a_sixty_percent_white_casing() {
+    fn the_hover_box_is_sixty_five_percent_accent_on_a_sixty_five_percent_white_casing() {
         let input = SelectDecorationInput {
             hovered: Some((fixture_id(), axis_box(0.0, 0.0, 100.0, 60.0))),
             ..SelectDecorationInput::default()
@@ -1200,8 +1200,8 @@ mod tests {
         assert_eq!(
             colours,
             [
-                [255, 255, 255, 153],
-                [theme::ACCENT.r, theme::ACCENT.g, theme::ACCENT.b, 153]
+                [255, 255, 255, 166],
+                [theme::ACCENT.r, theme::ACCENT.g, theme::ACCENT.b, 166]
             ]
             .into_iter()
             .collect()
@@ -1274,19 +1274,16 @@ mod tests {
         }
     }
 
-    /// Criterion 40, hover box: the line (60% accent over the 60% casing) and
-    /// the casing (60% white) over each fill. Measured on the composited
-    /// colours the weakest fills are yellow at 1.92:1 and red at 1.96:1, a
-    /// little under the 2:1 the criterion and the design system state (65%
-    /// would give 2.04:1 on yellow). The test pins what the specified 60%
-    /// does, and the finding goes to the lead.
+    /// Criterion 40, hover box: the line (65% accent over the 65% casing) and
+    /// the casing (65% white) over each fill; the better of the two is at
+    /// least 2:1 on all of them (yellow 2.04, red 2.14, canvas 2.16).
     #[test]
-    fn the_hover_box_is_about_two_to_one_over_every_fill() {
+    fn the_hover_box_is_at_least_two_to_one_over_every_fill() {
         for (name, fill) in FILLS {
             let casing_px = over(theme::HOVER_BOX_CASING, fill);
             let line_px = over(theme::HOVER_BOX, casing_px);
             let best = contrast(line_px, fill).max(contrast(casing_px, fill));
-            assert!(best >= 1.9, "{name}: {best:.2}");
+            assert!(best >= 2.0, "{name}: {best:.2}");
         }
     }
 }

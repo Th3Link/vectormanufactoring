@@ -6,9 +6,7 @@
 //! shape being created. Selection boxes and handles are the Select tool's
 //! (`crate::select_decoration`); the shape tools only create.
 
-use curvyo_document_core::{
-    Angle, Point, PrimitiveSnapshot, Shape, ViewTransform, outline_of_rotated,
-};
+use curvyo_document_core::{Angle, Point, Shape, ViewTransform, outline_of_rotated};
 
 use crate::color::RgbaColor;
 use crate::glyphs::{self, DrawList};
@@ -118,18 +116,12 @@ pub(crate) fn dashed_guide(
     list
 }
 
-/// Builds every primitive's own artwork (fill, then stroke, in its style),
-/// through the same code a path's is drawn with. The whole document is drawn
-/// with [`crate::build_artwork`]; this is its primitives alone.
-#[must_use]
-pub fn build_primitive_strokes(primitives: &[PrimitiveSnapshot], view: ViewTransform) -> DrawList {
-    crate::artwork::primitives_artwork(primitives, view)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use curvyo_document_core::{Document, Length, NodeId, Point, RectBounds};
+    use curvyo_document_core::{
+        Document, Length, NodeId, ObjectSnapshot, Point, PrimitiveSnapshot, RectBounds,
+    };
 
     fn rect_snapshot(document: &Document) -> (NodeId, PrimitiveSnapshot) {
         let id = document.create_rect(RectBounds {
@@ -172,7 +164,10 @@ mod tests {
             ))
             .expect("rotate");
         let snapshot = document.primitive(id).expect("exists");
-        let list = build_primitive_strokes(&[snapshot], ViewTransform::identity());
+        let list = crate::build_artwork(
+            &[ObjectSnapshot::Primitive(snapshot)],
+            ViewTransform::identity(),
+        );
         let reaches = |target: Point| {
             list.triangles
                 .iter()
@@ -194,7 +189,10 @@ mod tests {
     fn a_primitive_draws_only_its_stroke() {
         let document = Document::new(1);
         let (_, snapshot) = rect_snapshot(&document);
-        let list = build_primitive_strokes(&[snapshot], ViewTransform::identity());
+        let list = crate::build_artwork(
+            &[ObjectSnapshot::Primitive(snapshot)],
+            ViewTransform::identity(),
+        );
         assert!(!list.triangles.is_empty(), "the stroke itself draws");
         assert!(
             list.triangles.iter().all(|v| v.color == RgbaColor::BLACK),

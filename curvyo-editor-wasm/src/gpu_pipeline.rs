@@ -209,6 +209,31 @@ pub(super) enum DepthMode {
     Overlay,
 }
 
+/// The layout of [`GpuVertex`]: position, colour, layer depth.
+fn vertex_layout() -> wgpu::VertexBufferLayout<'static> {
+    wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<GpuVertex>() as wgpu::BufferAddress,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &[
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Float32x2,
+                offset: 0,
+                shader_location: 0,
+            },
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Float32x4,
+                offset: 8,
+                shader_location: 1,
+            },
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Float32,
+                offset: 24,
+                shader_location: 2,
+            },
+        ],
+    }
+}
+
 /// Builds a render pipeline for the draw-list triangle list, transformed by
 /// the `transform_bind_group_layout` uniform, targeting `surface_format`, with
 /// the depth behaviour of `depth`. Split out of [`Gpu::attach`] for the same
@@ -235,28 +260,6 @@ pub(super) fn create_pipeline(
         immediate_size: 0,
     });
 
-    let vertex_layout = wgpu::VertexBufferLayout {
-        array_stride: std::mem::size_of::<GpuVertex>() as wgpu::BufferAddress,
-        step_mode: wgpu::VertexStepMode::Vertex,
-        attributes: &[
-            wgpu::VertexAttribute {
-                format: wgpu::VertexFormat::Float32x2,
-                offset: 0,
-                shader_location: 0,
-            },
-            wgpu::VertexAttribute {
-                format: wgpu::VertexFormat::Float32x4,
-                offset: 8,
-                shader_location: 1,
-            },
-            wgpu::VertexAttribute {
-                format: wgpu::VertexFormat::Float32,
-                offset: 24,
-                shader_location: 2,
-            },
-        ],
-    };
-
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some(match depth {
             DepthMode::SingleCoverage => "curvyo artwork pipeline",
@@ -266,7 +269,7 @@ pub(super) fn create_pipeline(
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: Some("vs_main"),
-            buffers: &[Some(vertex_layout)],
+            buffers: &[Some(vertex_layout())],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
         fragment: Some(wgpu::FragmentState {

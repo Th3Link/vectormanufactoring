@@ -119,18 +119,61 @@ impl Session {
         list
     }
 
-    /// `objects` with each path replaced by the next of `paths` (the same
-    /// paths, in the same order, possibly reshaped by a live drag).
+    /// `objects` with each path replaced by the path of the same id in `paths`
+    /// (possibly reshaped by a live drag); a path with no match stays as it is.
     fn with_paths(objects: &[ObjectSnapshot], paths: &[PathSnapshot]) -> Vec<ObjectSnapshot> {
-        let mut next = paths.iter();
         objects
             .iter()
             .map(|object| match object {
-                ObjectSnapshot::Path(original) => {
-                    ObjectSnapshot::Path(next.next().unwrap_or(original).clone())
-                }
+                ObjectSnapshot::Path(original) => ObjectSnapshot::Path(
+                    paths
+                        .iter()
+                        .find(|path| path.id == original.id)
+                        .unwrap_or(original)
+                        .clone(),
+                ),
                 ObjectSnapshot::Primitive(_) => object.clone(),
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use curvyo_document_core::{AnchorId, Document, NewAnchor, Point};
+
+    use super::*;
+
+    /// The live drag's paths replace the artwork's by id, whatever their
+    /// order, and a path with no match keeps its own geometry.
+    #[test]
+    fn dragged_paths_replace_objects_by_id_not_by_position() {
+        let document = Document::new(1);
+        let make = |y: f64, n: u64| {
+            document.create_path(
+                &[
+                    NewAnchor::corner(AnchorId::new(1, n), Point::new(0.0, y)),
+                    NewAnchor::corner(AnchorId::new(1, n + 1), Point::new(10.0, y)),
+                ],
+                false,
+            )
+        };
+        let (first, second) = (make(0.0, 1), make(50.0, 3));
+        let objects: Vec<ObjectSnapshot> = [first, second]
+            .iter()
+            .map(|id| document.object(*id).unwrap())
+            .collect();
+        let mut moved = document.path(second).unwrap();
+        moved.anchors[0].point = Point::new(0.0, 99.0);
+        // Only the second path is in the list, and it is listed alone.
+        let replaced = Session::with_paths(&objects, std::slice::from_ref(&moved));
+        let ObjectSnapshot::Path(a) = &replaced[0] else {
+            panic!("a path");
+        };
+        let ObjectSnapshot::Path(b) = &replaced[1] else {
+            panic!("a path");
+        };
+        assert_eq!(a.anchors[0].point, Point::new(0.0, 0.0), "untouched");
+        assert_eq!(b.anchors[0].point, Point::new(0.0, 99.0), "the dragged one");
     }
 }

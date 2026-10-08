@@ -181,7 +181,7 @@ pub fn hit_test_object(
 /// of another object, an unfilled object and an object below `selected` never
 /// qualify. `None` when `selected` is not among `objects`.
 #[must_use]
-pub fn filled_interior_above(
+pub(crate) fn filled_interior_above(
     objects: &[ObjectSnapshot],
     selected: NodeId,
     point: Point,

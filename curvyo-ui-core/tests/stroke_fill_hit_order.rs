@@ -283,3 +283,27 @@ fn ac29_a_shift_press_is_not_redirected() {
         PressTarget::Object(r)
     );
 }
+
+/// Criterion 29, as the PO worded it: a drawn handle comes first in the press
+/// order, so the centre move handle of the selected object wins over a filled
+/// object lying under it; a press just off the handle goes to that object.
+#[test]
+fn ac29_the_centre_move_handle_beats_a_filled_object_under_it() {
+    let document = Document::new(1);
+    let big = square(&document, 0.0, 0.0, 100.0);
+    fill(&document, big);
+    let small = circle(&document, 50.0, 50.0, 8.0);
+    fill(&document, small);
+    let selection = selected(&[big]);
+    // The centre handle sits at (50, 50): its press is the handle's own.
+    assert_eq!(
+        press(&document, &selection, pt(50.0, 50.0), false),
+        PressTarget::CentreHandle
+    );
+    // Off the handle (its hit area is about 3 mm at this scale) but still
+    // inside the small circle: the filled object takes the press.
+    assert_eq!(
+        press(&document, &selection, pt(56.0, 50.0), false),
+        PressTarget::Object(small)
+    );
+}

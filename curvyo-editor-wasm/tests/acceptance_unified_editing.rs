@@ -653,11 +653,13 @@ fn ac06_at_the_tier_the_same_press_changes_the_radius_not_the_position() {
 }
 
 #[test]
-fn ac06_centre_handle_has_no_hover_or_cursor_below_48() {
+fn ac06_centre_handle_has_no_hover_hint_below_48_and_the_box_gives_the_move_cursor() {
     for (pct, s) in [(100, 47.9), (100, 47.5), (400, 30.0), (100, 20.0)] {
         let mut sc = rect_scene(pct, s, s, 0.0, 0.0);
         let (cur, h) = hint(&mut sc.s, sc.fr.c);
-        assert_eq!(cur, "default", "{pct}% {s}");
+        // No handle is drawn, but a press inside the selected box moves the
+        // selection, and the cursor mirrors the press (`0007` criterion 28).
+        assert_eq!(cur, "move", "{pct}% {s}");
         assert_eq!(h, "", "{pct}% {s}");
     }
     for (pct, s) in [(100, 48.0), (100, 60.0), (400, 71.9)] {
@@ -3689,8 +3691,10 @@ fn ac06_a_centre_handle_that_yields_has_no_hover_or_cursor_state() {
             "scene: {dist_from_centre}"
         );
         let (cur, hnt) = hint(&mut sc.s, sc.fr.c);
-        assert_ne!(cur, "move", "s={s}: the centre handle is not drawn");
-        assert_eq!(hnt, "", "s={s}");
+        // The handle is not drawn (no hint), but a press at the centre still
+        // moves the selection, so the cursor says so (`0007` criterion 28).
+        assert_eq!(cur, "move", "s={s}: the press inside the box moves");
+        assert_eq!(hnt, "", "s={s}: the centre handle is not drawn");
     }
 }
 

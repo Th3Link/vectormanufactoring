@@ -260,25 +260,22 @@ fn skew_handle_glyph(
     let head = screen_px_to_mm(view, theme::TRANSFORM_ARROW_HEAD_PX);
     let radius = screen_px_to_mm(view, theme::TRANSFORM_SKEW_HANDLE_CORNER_RADIUS_PX);
     let unit = direction.normalized_to(1.0);
-    let mut list = DrawList::default();
-    let arrow_color = if dragging {
-        list.extend(glyphs::rounded_rect(
+    let ground = |color: RgbaColor| {
+        glyphs::rounded_rect(
             center,
             (length, width),
             radius,
             Angle::from_radians(unit.y.atan2(unit.x)),
-            theme::ACCENT,
-        ));
+            color,
+        )
+    };
+    let mut list = DrawList::default();
+    let arrow_color = if dragging {
+        list.extend(ground(theme::ACCENT));
         RgbaColor::WHITE
     } else {
         if hovered {
-            list.extend(glyphs::rounded_rect(
-                center,
-                (length, width),
-                radius,
-                Angle::from_radians(unit.y.atan2(unit.x)),
-                theme::ACCENT_HOVER,
-            ));
+            list.extend(ground(theme::ACCENT_HOVER));
         }
         theme::ACCENT
     };
@@ -290,30 +287,31 @@ fn skew_handle_glyph(
         (across, half.negated(), half),
         (across.negated(), half, half.negated()),
     ];
+    let draw_arrows = |stroke: f64, head: f64, color: RgbaColor| {
+        let mut list = DrawList::default();
+        for (offset, from, to) in arrows {
+            list.extend(glyphs::arrow(
+                center.translated(offset).translated(from),
+                center.translated(offset).translated(to),
+                stroke,
+                head,
+                color,
+            ));
+        }
+        list
+    };
     // Idle and hovered, the arrows have no ground of their own over a fill:
     // each sits on a white casing one stroke wider on each side, with a head
     // that much larger (`0007` criterion 40). While dragging they are white
     // on an `--accent` ground and need none.
     if !dragging {
-        for (offset, from, to) in arrows {
-            list.extend(glyphs::arrow(
-                center.translated(offset).translated(from),
-                center.translated(offset).translated(to),
-                stroke * theme::CASING_WIDTH_FACTOR,
-                head + 2.0 * stroke,
-                theme::SELECTION_CASING,
-            ));
-        }
-    }
-    for (offset, from, to) in arrows {
-        list.extend(glyphs::arrow(
-            center.translated(offset).translated(from),
-            center.translated(offset).translated(to),
-            stroke,
-            head,
-            arrow_color,
+        list.extend(draw_arrows(
+            stroke * theme::CASING_WIDTH_FACTOR,
+            head + 2.0 * stroke,
+            theme::SELECTION_CASING,
         ));
     }
+    list.extend(draw_arrows(stroke, head, arrow_color));
     list
 }
 
@@ -321,13 +319,57 @@ fn skew_handle_glyph(
 #[must_use]
 pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationInput) -> DrawList {
     let mut list = DrawList::default();
+    push_handle_glyphs(&mut list, view, input);
+    for &(corner, handle) in &input.param_guides {
+        list.extend(cased_dashed_guide(
+            (corner, handle),
+            screen_px_to_mm(view, 1.0),
+            theme::SHAPE_HANDLE_GUIDE,
+            (
+                screen_px_to_mm(view, theme::GUIDE_DASH_PX),
+                screen_px_to_mm(view, theme::GUIDE_GAP_PX),
+            ),
+        ));
+    }
+    // Parameter handles sit above every other handle (`docs/design-system.md`).
+    for handle in input
+        .handles
+        .iter()
+        .filter(|handle| handle.kind == TransformGlyphKind::Parameter)
+    {
+        list.extend(parameter_handle_glyph(
+            view,
+            handle.position,
+            handle.dragging,
+            handle.hovered,
+        ));
+    }
+    if let Some((from, to)) = input.skew_guide {
+        let (from, to, width_px) =
+            select_box::snap_guide_line(view, from, to, input.device_pixel_ratio);
+        list.extend(cased_dashed_guide(
+            (from, to),
+            screen_px_to_mm(view, width_px),
+            theme::TRANSFORM_SKEW_GUIDE_COLOR,
+            (
+                screen_px_to_mm(view, theme::SKEW_GUIDE_DASH_PX),
+                screen_px_to_mm(view, theme::SKEW_GUIDE_GAP_PX),
+            ),
+        ));
+    }
+    if let Some(pivot) = input.pivot_marker {
+        push_pivot_marker(&mut list, view, pivot, input.pivot_marker_full);
+    }
+    list
+}
+
+/// Every handle glyph except the parameter handles, in input order.
+fn push_handle_glyphs(list: &mut DrawList, view: ViewTransform, input: &TransformDecorationInput) {
     // A handle exactly at the active pivot (Shift put the pivot on it, or
     // a resize anchors on the opposite corner) is not drawn: the pivot
     // dot replaces it, so it never reads as a pressed handle with a dot
     // on top. "At" is within one screen pixel.
     let at_pivot_mm = screen_px_to_mm(view, 1.0);
-    // Parameter handles sit above every other handle (`docs/design-system.md`):
-    // their guides and knobs are drawn after the loop below.
     let transform_handles = input
         .handles
         .iter()
@@ -358,73 +400,40 @@ pub fn build_transform_handles(view: ViewTransform, input: &TransformDecorationI
             }
         });
     }
-    for &(corner, handle) in &input.param_guides {
-        for (width, color) in [
-            (theme::CASING_WIDTH_FACTOR, theme::SELECTION_CASING),
-            (1.0, theme::SHAPE_HANDLE_GUIDE),
-        ] {
-            list.extend(shape_preview::dashed_guide(
-                corner,
-                handle,
-                screen_px_to_mm(view, width),
-                color,
-                screen_px_to_mm(view, theme::GUIDE_DASH_PX),
-                screen_px_to_mm(view, theme::GUIDE_GAP_PX),
-            ));
-        }
-    }
-    for handle in input
-        .handles
-        .iter()
-        .filter(|handle| handle.kind == TransformGlyphKind::Parameter)
-    {
-        list.extend(parameter_handle_glyph(
+}
+
+/// A dashed guide `(from, to)` of `width_mm` over its white casing:
+/// `dash_gap` is the (dash, gap) length in millimetres.
+fn cased_dashed_guide(
+    (from, to): (Point, Point),
+    width_mm: f64,
+    color: RgbaColor,
+    (dash_mm, gap_mm): (f64, f64),
+) -> DrawList {
+    glyphs::cased(width_mm, color, theme::SELECTION_CASING, |width, colour| {
+        shape_preview::dashed_guide(from, to, width, colour, dash_mm, gap_mm)
+    })
+}
+
+/// The pivot marker: a dot on a one-pixel white ring.
+fn push_pivot_marker(list: &mut DrawList, view: ViewTransform, pivot: Point, full: bool) {
+    list.extend(glyphs::circle(
+        pivot,
+        screen_px_to_mm(
             view,
-            handle.position,
-            handle.dragging,
-            handle.hovered,
-        ));
-    }
-    if let Some((from, to)) = input.skew_guide {
-        let (from, to, width_px) =
-            select_box::snap_guide_line(view, from, to, input.device_pixel_ratio);
-        for (width, color) in [
-            (
-                width_px * theme::CASING_WIDTH_FACTOR,
-                theme::SELECTION_CASING,
-            ),
-            (width_px, theme::TRANSFORM_SKEW_GUIDE_COLOR),
-        ] {
-            list.extend(shape_preview::dashed_guide(
-                from,
-                to,
-                screen_px_to_mm(view, width),
-                color,
-                screen_px_to_mm(view, theme::SKEW_GUIDE_DASH_PX),
-                screen_px_to_mm(view, theme::SKEW_GUIDE_GAP_PX),
-            ));
-        }
-    }
-    if let Some(pivot) = input.pivot_marker {
-        list.extend(glyphs::circle(
-            pivot,
-            screen_px_to_mm(
-                view,
-                theme::TRANSFORM_PIVOT_MARKER_SIZE_PX + 2.0 * theme::PIVOT_MARKER_CASING_PX,
-            ),
-            theme::SELECTION_CASING,
-        ));
-        list.extend(glyphs::circle(
-            pivot,
-            screen_px_to_mm(view, theme::TRANSFORM_PIVOT_MARKER_SIZE_PX),
-            if input.pivot_marker_full {
-                theme::ACCENT
-            } else {
-                theme::TRANSFORM_PIVOT_MARKER_COLOR
-            },
-        ));
-    }
-    list
+            theme::TRANSFORM_PIVOT_MARKER_SIZE_PX + 2.0 * theme::PIVOT_MARKER_CASING_PX,
+        ),
+        theme::SELECTION_CASING,
+    ));
+    list.extend(glyphs::circle(
+        pivot,
+        screen_px_to_mm(view, theme::TRANSFORM_PIVOT_MARKER_SIZE_PX),
+        if full {
+            theme::ACCENT
+        } else {
+            theme::TRANSFORM_PIVOT_MARKER_COLOR
+        },
+    ));
 }
 
 #[cfg(test)]

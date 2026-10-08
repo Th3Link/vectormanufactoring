@@ -130,17 +130,11 @@ fn push_node(
                 continue;
             }
             let endpoint = anchor.point.translated(handle);
-            list.extend(glyphs::thick_line(
-                anchor.point,
-                endpoint,
-                sizes.handle_line_width * theme::CASING_WIDTH_FACTOR,
-                theme::SELECTION_CASING,
-            ));
-            list.extend(glyphs::thick_line(
-                anchor.point,
-                endpoint,
+            list.extend(glyphs::cased(
                 sizes.handle_line_width,
                 theme::ACCENT,
+                theme::SELECTION_CASING,
+                |width, color| glyphs::thick_line(anchor.point, endpoint, width, color),
             ));
             // Idle handle style: accent outline, white fill
             // (`docs/design-system.md`).
@@ -222,25 +216,22 @@ fn selected_segment_overlay(
     let overlay_width = snapshot.style.stroke.width.as_mm().max(min_width_mm)
         + screen_px_to_mm(view, theme::SEGMENT_OVERLAY_EXTRA_PX);
     let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
-    let mut overlay = DrawList::default();
-    for (width, color) in [
-        (
-            overlay_width * theme::CASING_WIDTH_FACTOR,
-            theme::SELECTION_CASING,
-        ),
-        (overlay_width, theme::ACCENT),
-    ] {
-        overlay.extend(crate::stroke::segment_stroke(
-            start_anchor.point,
-            start_anchor.handle_out,
-            end_anchor.handle_in,
-            end_anchor.point,
-            width,
-            color,
-            tolerance_mm,
-        ));
-    }
-    Some(overlay)
+    Some(glyphs::cased(
+        overlay_width,
+        theme::ACCENT,
+        theme::SELECTION_CASING,
+        |width, color| {
+            crate::stroke::segment_stroke(
+                start_anchor.point,
+                start_anchor.handle_out,
+                end_anchor.handle_in,
+                end_anchor.point,
+                width,
+                color,
+                tolerance_mm,
+            )
+        },
+    ))
 }
 
 #[cfg(test)]

@@ -852,3 +852,25 @@ PR 4; a file with a gradient fill shows it as no fill until then. The editor
 lines' white casing makes the white-triangle counts of older tests depend on
 box size; those tests count fans only (`white_count` in
 `acceptance_unified_editing.rs`).
+
+**2026-10-08 (`stroke-and-fill-styling` PR 2 review):**
+
+- **A straight corner-anchor segment is tessellated by its length.** A path
+  segment between two corner anchors is a cubic with zero handles, and `lyon`
+  flattens it into a number of line segments that grows with its length at the
+  display tolerance: a segment of 1e9 mm yields about 0.8 million triangles,
+  1e15 mm about 58 million, and 75 to 190 s of CPU. File validation bounds
+  numbers to finite values only. A stroke of a huge coordinate range, or a
+  zoom far out over one, is a way to hang a frame. Resolution: emit a straight
+  segment as one line (`line_to`) when both handles are zero, and clip the
+  tessellated outline to the visible rectangle before tessellating.
+- **Hover now runs the whole press check on every pointer move.**
+  `Session::select_hover` calls `classify_press` (handles, centre handle, the
+  selected box, then `hit_test_object`), and `fills_point` builds an object's
+  outline before the hull reject while `distance_to_object` builds a
+  primitive's outline a second time. Fine at today's object counts. When
+  `advanced-selection` adds the cycle list, compute each object's outline once
+  per call, and reject by a cached bounding box first.
+- **SVG import and dashes.** A zero-length "on" entry of a dash pattern is
+  skipped, so a round-capped `[0, 3]` pattern draws nothing where SVG draws
+  dots. The presets have `on > 0`; revisit when `svg-import-export` is planned.

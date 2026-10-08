@@ -20,7 +20,7 @@ use crate::theme;
 /// upper bound; this keeps a crafted one from producing absurd geometry (and
 /// `f32` overflow in the tessellator). Display only: the stored width is
 /// never touched.
-const MAX_DISPLAY_STROKE_WIDTH_MM: f64 = 100_000.0;
+pub(crate) const MAX_DISPLAY_STROKE_WIDTH_MM: f64 = 100_000.0;
 
 fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
     px / view.scale()
@@ -55,29 +55,6 @@ pub fn build_artwork(objects: &[ObjectSnapshot], view: ViewTransform) -> DrawLis
                 draw_primitive(&mut list, primitive, view, &mut budget);
             }
         }
-    }
-    list
-}
-
-/// The artwork of `paths` alone, in the order given.
-pub(crate) fn paths_artwork(paths: &[PathSnapshot], view: ViewTransform) -> DrawList {
-    let mut budget = DashBudget::per_frame();
-    let mut list = DrawList::default();
-    for path in paths {
-        draw_path(&mut list, path, view, &mut budget);
-    }
-    list
-}
-
-/// The artwork of `primitives` alone, in the order given.
-pub(crate) fn primitives_artwork(
-    primitives: &[PrimitiveSnapshot],
-    view: ViewTransform,
-) -> DrawList {
-    let mut budget = DashBudget::per_frame();
-    let mut list = DrawList::default();
-    for primitive in primitives {
-        draw_primitive(&mut list, primitive, view, &mut budget);
     }
     list
 }

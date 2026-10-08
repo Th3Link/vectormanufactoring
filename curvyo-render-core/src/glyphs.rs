@@ -153,6 +153,23 @@ impl DrawList {
     }
 }
 
+/// A line-like shape drawn over its white casing (`0007` criterion 40): `draw`
+/// is called twice, first with `width_mm` times [`crate::theme::CASING_WIDTH_FACTOR`]
+/// and the casing colour, then with `width_mm` and `color`, and the two results
+/// are concatenated, casing first. The one place the rule "casing one line
+/// width wider on each side, under the line" lives for everything that is a
+/// line of one width.
+pub(crate) fn cased(
+    width_mm: f64,
+    color: RgbaColor,
+    casing: RgbaColor,
+    mut draw: impl FnMut(f64, RgbaColor) -> DrawList,
+) -> DrawList {
+    let mut list = draw(width_mm * crate::theme::CASING_WIDTH_FACTOR, casing);
+    list.extend(draw(width_mm, color));
+    list
+}
+
 /// An axis-aligned square centered at `center`, `size_mm` wide — a
 /// corner node glyph (`docs/design-system.md`).
 #[must_use]

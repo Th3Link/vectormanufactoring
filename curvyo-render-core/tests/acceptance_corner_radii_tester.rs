@@ -12,10 +12,10 @@
 )]
 
 use curvyo_document_core::{
-    AnchorId, AnchorKind, CornerRadii, Document, Length, NewAnchor, Point, RectBounds, Vec2,
-    ViewTransform,
+    AnchorId, AnchorKind, CornerRadii, Document, Length, NewAnchor, ObjectSnapshot, Point,
+    RectBounds, Vec2, ViewTransform,
 };
-use curvyo_render_core::{DecorationInput, build_draw_list, build_primitive_strokes};
+use curvyo_render_core::build_artwork;
 
 fn old_outline(x: f64, y: f64, w: f64, h: f64, radius: f64) -> Vec<(Point, Vec2, Vec2)> {
     let r = radius.clamp(0.0, (w.min(h) / 2.0).max(0.0));
@@ -59,7 +59,7 @@ fn equal_radii_render_exactly_like_the_old_outline() {
                     .set_corner_radii(&[(id, CornerRadii::uniform(Length::from_mm(r)))])
                     .unwrap();
                 let prim = rect_doc.primitive(id).unwrap();
-                let a = build_primitive_strokes(std::slice::from_ref(&prim), view);
+                let a = build_artwork(&[ObjectSnapshot::Primitive(prim.clone())], view);
 
                 let path_doc = Document::new(2);
                 let anchors: Vec<NewAnchor> = old_outline(5.0, -3.0, w, h, r)
@@ -76,8 +76,7 @@ fn equal_radii_render_exactly_like_the_old_outline() {
                 let pid = path_doc.create_path(&anchors, true);
                 let path = path_doc.path(pid).unwrap();
                 assert_eq!(path.style.stroke.width, prim.style.stroke.width);
-                let input = DecorationInput::default();
-                let b = build_draw_list(&[path], view, &input);
+                let b = build_artwork(&[ObjectSnapshot::Path(path)], view);
                 assert_eq!(
                     format!("{:?}", a.triangles),
                     format!("{:?}", b.triangles),
@@ -99,7 +98,7 @@ fn unequal_radii_draw_something_different_and_finite() {
         height: Length::from_mm(20.0),
     });
     let view = ViewTransform::new(3.78, Point::new(0.0, 0.0));
-    let sharp = build_primitive_strokes(&[d.primitive(id).unwrap()], view);
+    let sharp = build_artwork(&[ObjectSnapshot::Primitive(d.primitive(id).unwrap())], view);
     d.set_corner_radii(&[(
         id,
         CornerRadii {
@@ -110,7 +109,7 @@ fn unequal_radii_draw_something_different_and_finite() {
         },
     )])
     .unwrap();
-    let mixed = build_primitive_strokes(&[d.primitive(id).unwrap()], view);
+    let mixed = build_artwork(&[ObjectSnapshot::Primitive(d.primitive(id).unwrap())], view);
     assert_ne!(
         format!("{:?}", sharp.triangles),
         format!("{:?}", mixed.triangles)

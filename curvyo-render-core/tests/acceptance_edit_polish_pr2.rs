@@ -23,10 +23,10 @@ use curvyo_render_core::{DrawList, RgbaColor, SelectDecorationInput, build_selec
 
 const ACCENT: RgbaColor = RgbaColor::opaque(0x2F, 0x6F, 0xEE);
 
-/// The hover box colour: `--hover-box`, `--accent` at 60% (`0007` criterion
+/// The hover box colour: `--hover-box`, `--accent` at 65% (`0007` criterion
 /// 41; it was `--accent-hover` at 20% when this test was written).
 fn accent_hover() -> RgbaColor {
-    RgbaColor { a: 153, ..ACCENT }
+    RgbaColor { a: 166, ..ACCENT }
 }
 
 /// The white casings drawn under the box lines (`0007` criterion 40): not part
@@ -35,7 +35,7 @@ fn is_casing(colour: RgbaColor) -> bool {
     colour == RgbaColor::WHITE
         || colour
             == (RgbaColor {
-                a: 153,
+                a: 166,
                 ..RgbaColor::WHITE
             })
 }

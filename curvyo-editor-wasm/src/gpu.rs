@@ -351,25 +351,9 @@ impl Gpu {
         // The document point currently at screen pixel (0, 0) — every
         // vertex below is shifted by this same point in `f64`, before
         // its own `f32` cast (`to_gpu_vertex`'s own doc comment).
-        let origin = view.screen_to_document(0.0, 0.0);
-        let depths = draw_list.vertex_depths();
-        let vertices: Vec<GpuVertex> = draw_list
-            .triangles
-            .iter()
-            .copied()
-            .zip(depths)
-            .map(|(vertex, depth)| to_gpu_vertex(vertex, origin, depth))
-            .collect();
+        let vertices = gpu_vertices(draw_list, view.screen_to_document(0.0, 0.0));
 
-        let frame = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(texture)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(texture) => texture,
-            other => {
-                return Err(JsValue::from_str(&format!(
-                    "acquiring the surface texture failed: {other:?}"
-                )));
-            }
-        };
+        let frame = self.acquire_frame()?;
         let view_texture = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -396,33 +380,7 @@ impl Gpu {
             )
         });
 
-        // Multisampled: draw into `msaa_view`, resolved into the surface's
-        // own (single-sampled) `view_texture` at the end of the pass —
-        // that resolve is the actual anti-aliasing step. `Discard`:
-        // nothing downstream ever reads the multisampled texture itself,
-        // only its resolved result. No multisampling support at all
-        // (`msaa_view` is `None`, see `choose_sample_count`): draw
-        // straight into `view_texture`, no resolve.
-        let color_attachment = self.msaa_view.as_ref().map_or(
-            wgpu::RenderPassColorAttachment {
-                view: &view_texture,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(CANVAS_BACKGROUND),
-                    store: wgpu::StoreOp::Store,
-                },
-            },
-            |msaa_view| wgpu::RenderPassColorAttachment {
-                view: msaa_view,
-                depth_slice: None,
-                resolve_target: Some(&view_texture),
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(CANVAS_BACKGROUND),
-                    store: wgpu::StoreOp::Discard,
-                },
-            },
-        );
+        let color_attachment = self.color_attachment(&view_texture);
 
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -441,21 +399,10 @@ impl Gpu {
                 multiview_mask: None,
             });
             if let Some(vertex_buffer) = &vertex_buffer {
-                pass.set_bind_group(0, &self.transform_bind_group, &[]);
-                pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                // The artwork prefix first, one coverage per layer; then the
-                // overlay over it, in list order.
                 #[allow(clippy::cast_possible_truncation)]
                 let (overlay_start, end) =
                     (draw_list.overlay_start() as u32, vertices.len() as u32);
-                if overlay_start > 0 {
-                    pass.set_pipeline(&self.artwork_pipeline);
-                    pass.draw(0..overlay_start, 0..1);
-                }
-                if end > overlay_start {
-                    pass.set_pipeline(&self.overlay_pipeline);
-                    pass.draw(overlay_start..end, 0..1);
-                }
+                self.record_draws(&mut pass, vertex_buffer, overlay_start, end);
             }
         }
 
@@ -463,4 +410,84 @@ impl Gpu {
         self.queue.present(frame);
         Ok(())
     }
+}
+
+impl Gpu {
+    /// The surface texture to draw this frame into.
+    fn acquire_frame(&self) -> Result<wgpu::SurfaceTexture, JsValue> {
+        match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(texture)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(texture) => Ok(texture),
+            other => Err(JsValue::from_str(&format!(
+                "acquiring the surface texture failed: {other:?}"
+            ))),
+        }
+    }
+
+    /// The pass's colour attachment. Multisampled: draw into `msaa_view`,
+    /// resolved into the surface's own (single-sampled) `view_texture` at the
+    /// end of the pass; that resolve is the actual anti-aliasing step.
+    /// `Discard`: nothing downstream ever reads the multisampled texture
+    /// itself, only its resolved result. No multisampling support at all
+    /// (`msaa_view` is `None`, see `choose_sample_count`): draw straight into
+    /// `view_texture`, no resolve.
+    fn color_attachment<'a>(
+        &'a self,
+        view_texture: &'a wgpu::TextureView,
+    ) -> wgpu::RenderPassColorAttachment<'a> {
+        self.msaa_view.as_ref().map_or(
+            wgpu::RenderPassColorAttachment {
+                view: view_texture,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(CANVAS_BACKGROUND),
+                    store: wgpu::StoreOp::Store,
+                },
+            },
+            |msaa_view| wgpu::RenderPassColorAttachment {
+                view: msaa_view,
+                depth_slice: None,
+                resolve_target: Some(view_texture),
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(CANVAS_BACKGROUND),
+                    store: wgpu::StoreOp::Discard,
+                },
+            },
+        )
+    }
+
+    /// Issues the frame's draw calls: the artwork prefix first, with single
+    /// coverage per layer, then the overlay over it in list order.
+    fn record_draws(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        vertex_buffer: &wgpu::Buffer,
+        overlay_start: u32,
+        end: u32,
+    ) {
+        pass.set_bind_group(0, &self.transform_bind_group, &[]);
+        pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        if overlay_start > 0 {
+            pass.set_pipeline(&self.artwork_pipeline);
+            pass.draw(0..overlay_start, 0..1);
+        }
+        if end > overlay_start {
+            pass.set_pipeline(&self.overlay_pipeline);
+            pass.draw(overlay_start..end, 0..1);
+        }
+    }
+}
+
+/// Every draw-list vertex in the GPU's shape, shifted by `origin` (the
+/// document point at screen pixel (0, 0)) in `f64` before its own `f32` cast
+/// ([`to_gpu_vertex`]'s doc comment) and tagged with its layer's depth.
+fn gpu_vertices(draw_list: &DrawList, origin: curvyo_document_core::Point) -> Vec<GpuVertex> {
+    draw_list
+        .triangles
+        .iter()
+        .copied()
+        .zip(draw_list.vertex_depths())
+        .map(|(vertex, depth)| to_gpu_vertex(vertex, origin, depth))
+        .collect()
 }

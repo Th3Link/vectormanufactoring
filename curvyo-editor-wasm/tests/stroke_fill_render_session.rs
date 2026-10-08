@@ -61,9 +61,9 @@ fn click(s: &mut Session, p: Point) {
     s.pointer_up(p, false, false);
 }
 
-/// Whether the draw list holds the hover box (`--accent` at 60%).
+/// Whether the draw list holds the hover box (`--accent` at 65%).
 fn hover_box_shown(list: &DrawList) -> bool {
-    let hover = RgbaColor { a: 153, ..ACCENT };
+    let hover = RgbaColor { a: 166, ..ACCENT };
     list.triangles.iter().any(|v| v.color == hover)
 }
 
