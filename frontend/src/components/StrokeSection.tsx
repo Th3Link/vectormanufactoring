@@ -7,6 +7,7 @@ import { StyleRow } from "@/components/StyleRow";
 import { CAP_OPTIONS, JOIN_OPTIONS, PAINT_OPTIONS } from "@/components/styleOptions";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { Tooltip } from "@/components/ui/tooltip";
+import { colourPanelOf } from "@/hooks/useStylePanel";
 import type { StylePanelApi } from "@/hooks/useStylePanel";
 import { widthText } from "@/lib/styleColor";
 
@@ -71,6 +72,7 @@ export function StrokeSection({ panel, closeKey, onReturnFocus }: StrokeSectionP
         />
       </StyleRow>
       <ColorAlphaPicker
+        label="Color"
         name="Stroke"
         rgb={view.strokeColor}
         rgbMixed={view.strokeColorMixed}
@@ -80,7 +82,7 @@ export function StrokeSection({ panel, closeKey, onReturnFocus }: StrokeSectionP
         disabled={off}
         colorField="stroke-color"
         opacityField="stroke-opacity"
-        panel={panel}
+        panel={colourPanelOf(panel)}
         closeKey={closeKey}
         onReturnFocus={onReturnFocus}
       />

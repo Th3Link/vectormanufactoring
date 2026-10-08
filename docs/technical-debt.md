@@ -913,3 +913,25 @@ box size; those tests count fans only (`white_count` in
   localisation touches one layer. PR 4's stop messages ("No stops. Nothing is
   painted. Add a stop.") follow it; the subject line stays as the one exception
   until a localisation story moves it.
+
+**2026-10-09 (`stroke-and-fill-styling` PR 4):**
+
+- **A polygon or star's gradient spans the square around it, not a tight box**
+  (criterion 21, accepted). A triangle's ramp starts about a quarter of the way
+  along, where the shape begins; the panel says so in a muted line, and "Object to
+  path" re-fits it (tested: a triangle's box goes from 2 R to 1.5 R wide). A tight
+  box for polygons and stars is `polygon-star-box-refit`'s follow-up.
+- **The concurrent first creation of `fill_stops` is no longer lossy** (the PR 1
+  review note): the list is a mergeable container, so both peers' stops merge.
+  A merge can hold more than two seed stops; nothing removes duplicates.
+- **At most 1024 gradient fills are painted from a ramp per frame**; later ones
+  paint flat in their first stop's colour. The ramp texture grows by powers of two
+  and never shrinks. A document with more than 1024 gradient fills in view is far
+  beyond what the editor keeps interactive today.
+- **Each vertex carries four more floats** (the gradient attribute, zero for flat
+  vertices), which is 57 % more vertex memory. A separate buffer for the gradient
+  ranges would remove it, at the cost of a second vertex stream; not worth it
+  until the vertex counts of a frame matter (see the canvas performance item).
+- **The pixel result of the ramp shader was checked by eye in the Browser pane,
+  not by an automated pixel test** (the GPU modules compile for wasm32 only). The
+  ramp, the coordinates and the vertex ranges are tested natively.

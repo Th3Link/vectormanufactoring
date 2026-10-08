@@ -755,6 +755,32 @@ differs from the rows above:
   with no node selected edits the paths of the object selection, and shows
   "Nothing selected" when the selection holds none.
 
+**As built (PR 4 of `0007`, 2026-10-09): the gradient stop editor.** The Fill type
+group has its four entries (None, Solid, Linear, Radial, 44 px each, 176 px with
+no label) and shows nothing pressed for several objects in different modes. Under
+a gradient mode come the bar (`GradientBar`), the stop list (`StopRows`), Add stop
+and the info lines (`GradientEditor`). Where the build adds to the rows above:
+
+- **Thumbs** are `role="slider"` pins under the bar; a press selects the stop and
+  starts a drag (one preview per animation frame, one commit on release, Escape
+  reverts). Arrows step 1 %, Shift 10 %, Home and End go to 0 and 100 %, Delete or
+  Backspace removes the stop (ignored at two stops, and never reaches the canvas).
+  A click on the bar away from a thumb adds a stop there, with the colour and
+  opacity the ramp has there.
+- **A stop row** reuses the colour controls of the stroke and fill rows in their
+  compact form (24 px swatch, 12 px text, hex 72, opacity 48, position 52); its
+  popover opens beside the panel like theirs. The selected row has a 3 px
+  `--editor-accent` bar on its left edge and `aria-current`; focusing or pressing
+  anything in a row selects it. The selection is the stop, not the row: it follows
+  the stop when a position edit re-sorts the list.
+- **States:** 0 stops reads "No stops. Nothing is painted. Add a stop."; several
+  gradients with different stop counts read "Selected gradients have different
+  numbers of stops." in place of the editor; several gradients with lists that
+  differ in value show a hatched bar with no thumbs, and Add stop and Remove are
+  not shown. Add stop is disabled at 16 stops with the tooltip "A gradient holds
+  at most 16 stops"; Remove is disabled at 2 with "A gradient keeps at least 2
+  stops". A polygon or star in the selection adds the line about the square box.
+
 **Casing over artwork.** Fills make artwork the background of every line the
 editor draws on top. Measured 2026-10-07 (WCAG ratio, 1px `--accent` against the
 fill / white against the fill): black 4.6 / 21.0, white 4.5 / 1.0, `--accent`

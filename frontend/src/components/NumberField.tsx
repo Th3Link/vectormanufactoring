@@ -24,6 +24,8 @@ export interface NumberFieldProps {
   /** Marks the field as the panel's first focus target when it is the first
    * enabled control. */
   firstFocus?: boolean;
+  /** 12 px text and a narrower unit gutter, for the rows of the stop list. */
+  compact?: boolean;
 }
 
 /**
@@ -48,6 +50,7 @@ export function NumberField({
   messages,
   onReturnFocus,
   firstFocus = false,
+  compact = false,
 }: NumberFieldProps) {
   const messageId = useId();
   const display = mixed ? "" : shown;
@@ -132,9 +135,9 @@ export function NumberField({
             onReturnFocus();
           }
         }}
-        className={`style-field h-7 w-full rounded-[5px] border bg-white pl-1.5 text-sm tabular-nums outline-none disabled:border-transparent disabled:bg-[var(--field-disabled-bg)] disabled:text-[var(--field-disabled-fg)] ${
+        className={`style-field h-7 w-full rounded-[5px] border bg-white pl-1.5 ${compact ? "text-xs" : "text-sm"} tabular-nums outline-none disabled:border-transparent disabled:bg-[var(--field-disabled-bg)] disabled:text-[var(--field-disabled-fg)] ${
           align === "right" ? "text-right" : "text-left"
-        } ${suffix && !mixed ? (suffix === "mm" ? "pr-8" : "pr-6") : "pr-1.5"} ${
+        } ${suffix && !mixed ? (suffix === "mm" ? "pr-8" : compact ? "pr-[18px]" : "pr-6") : "pr-1.5"} ${
           invalid
             ? "border-[var(--field-invalid)] shadow-[inset_0_0_0_2px_var(--field-invalid)]"
             : "border-[color-mix(in_srgb,var(--toolbar-icon)_60%,transparent)] focus:border-[var(--editor-accent)] focus:shadow-[inset_0_0_0_1px_var(--editor-accent)]"
@@ -143,7 +146,7 @@ export function NumberField({
       {suffix && !mixed && (
         <span
           aria-hidden
-          className={`pointer-events-none absolute top-1/2 right-1.5 -translate-y-1/2 text-sm ${
+          className={`pointer-events-none absolute top-1/2 right-1.5 -translate-y-1/2 ${compact ? "text-xs" : "text-sm"} ${
             disabled ? "text-[var(--field-disabled-fg)]" : "text-[var(--toolbar-icon)]"
           }`}
         >

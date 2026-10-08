@@ -117,18 +117,42 @@ readiness check section 10). PR 1 is invisible to the maker; PR 3 is the first d
 
 ### PR 4: gradient
 
-- [ ] 1. `StopId` minting in `ui-core` (the minter serves two id types); default stops via
+- [x] 1. `StopId` minting in `ui-core` (the minter serves two id types); default stops via
   `GradientStop::default_pair`; the add-stop rule (widest gap, ramp colour at the position)
   (AC 17, 18).
-- [ ] 2. `render-core/gradient.rs`: stable sort by position, the 0- and 1-stop rules, colour at
+- [x] 2. `render-core/gradient.rs`: stable sort by position, the 0- and 1-stop rules, colour at
   t, sRGB-encoded interpolation pinned by a golden ramp (AC 16, 35).
-- [ ] 3. `Vertex` widening, ramp texture, shader, `gpu_paint.rs`; `editor-wasm` passes the
+- [x] 3. `Vertex` widening, ramp texture, shader, `gpu_paint.rs`; `editor-wasm` passes the
   `OrientedBox` values in the fill command (AC 21, 22).
-- [ ] 4. Stop editor: gradient bar, thumbs, stop list, Add/Remove, multi-selection by rank, the
+- [x] 4. Stop editor: gradient bar, thumbs, stop list, Add/Remove, multi-selection by rank, the
   0/1/more-than-16 states (AC 16 to 20, 34, 35).
-- [ ] 5. Tester cases from the ADR: rotated 90 degrees, path skewed 30 degrees, "Object to path"
+- [x] 5. Tester cases from the ADR: rotated 90 degrees, path skewed 30 degrees, "Object to path"
   re-fit of a polygon, coincident stops, zero-size box. One line on the polygon/star box limit in
   `docs/technical-debt.md` (AC 21, 22).
+
+**As built (PR 4, 2026-10-09):**
+
+- The ramp and the stop rules are `document-core/gradient_ramp.rs` (`sorted_stops`,
+  `ramp_at`), not `render-core/gradient.rs` alone: the renderer's ramp and the
+  editor's "a new stop gets the colour the ramp has there" must be one function,
+  and `ui-core` does not depend on `render-core`. `render-core/gradient.rs` holds
+  the ramp as texels, the box a gradient spans and the per-vertex attributes.
+- **`Vertex` is not widened.** A gradient fill is a layer whose vertex range, ramp
+  and box the `DrawList` records (`DrawList::gradients`); the host computes each
+  vertex's coordinate from the box (`DrawList::gradient_attributes`) and uploads it
+  as an extra vertex attribute. Every other vertex, and every decoration, is
+  unchanged, and the pure part (coordinates, ramps, ranges) is tested natively.
+- `build_artwork` takes the gradient boxes (`&[Option<GradientFrame>]`), which
+  `editor-wasm` fills from `ui-core::oriented_bounds`; no box paints flat in the
+  first stop's colour. The GPU side is `gpu_paint.rs` (ramp texture, one row per
+  gradient, at most 1024 per frame, flat beyond) and the shader in
+  `gpu_pipeline.rs`.
+- The stop list is created as a **mergeable** child container, so two peers that
+  switch to a gradient at once keep both peers' stops and edits (the merge can hold
+  four stops, which the format allows).
+- Stop commands address a stop by rank (position order, ties in list order); the
+  session holds the selected stop as `(object, stop id)`, so the selection follows
+  the stop when a position edit re-sorts the list.
 
 ## Validation
 
