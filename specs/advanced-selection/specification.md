@@ -43,9 +43,10 @@ segment test) and what happens when more than one object lies within it.
 1. Given the Select tool is active, when the maker clicks or hovers within
    **8 screen pixels** of any object's outline (a path's anchor-run
    segments, or a primitive's outline), then that object is hit, exactly as
-   if the click had landed on the outline itself — double today's shipped
-   4px tolerance (`curvyo-editor-wasm`'s `SEGMENT_TOLERANCE_PX`, which the
-   Select tool currently reuses from the Node tool's segment test). This is
+   if the click had landed on the outline itself. The 8 px is the constant
+   `OBJECT_TOLERANCE_PX`, the Select tool's own; it doubles the 4px
+   tolerance slice 4 shipped (`SEGMENT_TOLERANCE_PX`, still the Node tool's
+   segment tolerance, criterion 2). This is
    the same Fitts's-law-margin doubling `canvas-navigation-and-selection`
    already applied to the node (8px→16px) and handle (8px→16px) hit-test
    radii, applied here to whole-object selection for the first time.
@@ -67,42 +68,58 @@ it would collide here with this tool's own existing rule that a plain click
 on an already-selected single object is a no-op (slice 4 criterion 16), and
 with telling a second click-in-place apart from the start of a tiny drag.
 Inkscape already solves exactly this with **Alt**: a plain click selects the
-topmost (or, here, nearest) candidate as today; each further Alt-click at
+one candidate `hit_test_object` returns, as today; each further Alt-click at
 the same point steps to the next candidate in the stack, wrapping around.
-Inkscape's version orders that stack by z-order, because its hit test is
-fill-based — every shape whose fill covers the point is a candidate,
-regardless of distance to its own outline. This product has no fill hit-
-test yet (`canvas-navigation-and-selection/adrs.md`: "Filled-interior
-hit-testing... no object has a fill yet"), so the candidate set here is
-already the same distance-limited set `hit_test_object` computes for a
-plain click — the cycle just continues through it instead of stopping at
-the nearest. Grounding this in Inkscape rather than Blender also keeps one
+Inkscape orders that stack by z-order, because its hit test is fill-based.
+Since `stroke-and-fill-styling` shipped, this product's plain click is
+fill-aware too (its criterion 27): an outline within tolerance wins, and a
+filled shape's interior is hit where no outline is. The candidate set is
+the set `hit_test_objects` computes for that same click, and the cycle
+continues through it instead of stopping at the first. Its order, with F
+the filled shape(s) under the point:
+
+1. the plain-click answer (what `hit_test_object` returns);
+2. the other outlines within tolerance, nearest first, that lie at or above F;
+3. F itself, the filled shape(s) under the point;
+4. the objects F hides: their outlines nearest first, then objects hit only
+   through their filled interior, topmost first.
+
+This is "visible before covered". It differs from the wording in
+`stroke-and-fill-styling` only when an outline below F is in tolerance;
+that spec now points here. With no filled shape under the point the order
+is simply nearest outline first. Grounding this in Inkscape rather than Blender also keeps one
 coherent story for the Alt key: it is the modifier for "look past the
 obvious candidate," both for a single point (this section) and, held
 through a drag, for the freehand line (criteria 16-20 below) — the same key
 Inkscape itself already overloads the same way, disambiguated the same way
 (held-in-place vs. held-through-a-drag).
 
-3. Given the Select tool is active and two or more objects each lie within
-   criterion 1's 8px tolerance of the same screen point, when the maker
-   clicks that point once with no modifier, then the nearest candidate to
-   the point is selected — unchanged from today's rule (an exact distance
-   tie still favors the topmost in z-order).
+3. Given the Select tool is active and two or more objects are candidates
+   at the same screen point (each within criterion 1's 8px tolerance, or
+   hit through a filled interior), when the maker clicks that point once
+   with no modifier, then the plain-click answer is selected — unchanged
+   from today's rule (`stroke-and-fill-styling` criterion 27; among
+   outlines the nearest wins, and an exact distance tie favors the topmost
+   in z-order). This is the first element of the cycle order above.
 4. Given the same situation, when the maker holds Alt and clicks the same
-   screen point again without dragging, then the next-nearest candidate at
-   that point is selected instead, replacing the previous selection.
+   screen point again without dragging, then the next candidate in the cycle
+   order above is selected instead (other outlines within tolerance, nearest
+   first, then the filled shape(s) under the point, then the objects they
+   hide), replacing the previous selection.
 5. Given a cycle has started (criterion 4), when the maker Alt-clicks the
    same point again, then the cycle advances by exactly one more candidate
-   each time, in the same nearest-to-farthest order, so that after as many
-   Alt-clicks as there are candidates at that point, the selection returns
-   to the first (nearest) one.
+   each time, in the same order, so that after as many Alt-clicks as there
+   are candidates at that point, the selection returns to the first one (the
+   plain-click answer).
 6. Given a cycle has started, when the maker clicks or Alt-clicks at a
    screen point more than 8px from the point the cycle started at, then the
-   cycle resets — the next Alt-click there starts again from the nearest
+   cycle resets — the next Alt-click there starts again from the first
    candidate at the *new* point, not wherever the old cycle left off.
 7. Given only one object lies within tolerance of a point, then Alt-clicking
    it repeatedly leaves it selected — a one-candidate "cycle" is a no-op,
-   not an error.
+   not an error. Given no candidate lies at the point (empty canvas), then
+   an Alt-click leaves the selection unchanged; unlike a plain click on
+   empty canvas (criterion 8), it does not clear.
 
 ### Marquee (drag-box) select
 
@@ -173,16 +190,15 @@ Alt's mode-invert (which LightBurn has no equivalent of at all) remain
 genuine differences from LightBurn, both by this round's explicit customer
 request.
 
-"Fully contained" and "crossed by" are both evaluated against the same
-axis-aligned bounding box the Select tool already draws as that object's own
-selection indicator (`object_bounds`, `canvas-navigation-and-selection`) —
-not a true curve-intersection test against the box edges. This is the same
+"Fully contained" and "crossed by" are both evaluated against the box the
+Select tool already draws as that object's own selection indicator (the
+object's bounds, `canvas-navigation-and-selection`; since `object-transform`
+an oriented box for a rotated object, see Out of scope) — not a true
+curve-intersection test against the marquee's edges. This is the same
 simplification every reference tool's own rubber-band select makes in
 practice (testing a Bézier curve against four line segments for every
-object on every drag frame is unnecessary when the box itself is always
-axis-aligned), and it stays consistent with this product's own existing
-stance: no fill hit-testing exists yet, so "touches" already means "touches
-the outline's extent," never "touches the filled interior."
+object on every drag frame is unnecessary), and "touches" means "touches the
+object's bounding extent," never "touches the filled interior."
 
 | Modifier(s) held | Drag direction | Box color / mode | Selects | Combines with existing selection |
 |---|---|---|---|---|
@@ -250,15 +266,20 @@ behavior for drags that were already Alt-held at press).
 8. Given the Select tool is active, when the maker presses down on empty
    canvas (no object within criterion 1's tolerance) and the pointer then
    moves more than **3 screen pixels** from the press point before release
-   — the same click-vs-drag threshold this product already uses elsewhere
-   (`PEN_DRAG_THRESHOLD_PX`, `curvyo-editor-wasm`) — then a marquee drag
-   begins instead of clearing the selection outright. A press-and-release
-   within that 3px threshold is a plain click: criterion 15 of
-   `canvas-navigation-and-selection` ("clicking empty canvas clears the
-   selection") still applies — except that a Ctrl-held click-without-movement
-   leaves the current selection unchanged instead of clearing it, since
-   "clear on empty click" is a no-modifier behavior and Ctrl must not remove
-   more than the click/drag actually touches. This threshold also protects criterion 4's
+   — the click-vs-drag threshold the Select tool's other drags use
+   (`DRAG_THRESHOLD_PX`, `curvyo-ui-core/src/transform_handle_layout.rs`) —
+   then a marquee drag begins instead of clearing the selection outright. A
+   press-and-release within that 3px threshold is a plain click: criterion
+   15 of `canvas-navigation-and-selection` ("clicking empty canvas clears
+   the selection") still applies — except that a Ctrl-held
+   click-without-movement leaves the current selection unchanged instead of
+   clearing it, since "clear on empty click" is a no-modifier behavior and
+   Ctrl must not remove more than the click/drag actually touches. The
+   clear happens **at the release, not at the press**, so that Shift and
+   Ctrl are read at the moment of release, as criteria 12 and 13 need.
+   Given Esc is pressed while the button is still held after such a press,
+   then the gesture is cancelled and the selection is kept. This threshold
+   also protects criterion 4's
    Alt-click cycling: without it, a pixel or two of hand jitter during a
    stationary Alt-click would register as a (zero-length) lasso and select
    every candidate along that accidental line instead of cycling to one.
@@ -371,7 +392,7 @@ Selector has no equivalent of.
     that combination.
 20. Given an Alt-drag's line never comes within tolerance of any object
     (e.g. drawn entirely through empty canvas, or entirely through a
-    primitive's unfilled interior without crossing its outline), then
+    primitive's interior, filled or not, without crossing its outline), then
     nothing is selected on release, and the effect on the prior selection
     depends on which combine modifier was held at release: for a plain
     Alt-drag (no Shift or Ctrl), the prior selection is cleared, matching
@@ -388,25 +409,18 @@ Selector has no equivalent of.
   the drag rectangle even where the stroke itself does not — an accepted,
   standard simplification (see rationale above), not a bug to fix here.
 - **Filled-interior-based touch/contain testing**, for both the marquee and
-  the lasso. Both test against each object's outline/bounding box only,
-  the same limitation `canvas-navigation-and-selection`'s ADR already
-  accepted for a plain click ("no object has a fill yet"). Revisit
-  alongside `stroke-and-fill-styling`.
-- **Z-order-ordered (rather than distance-ordered) Alt-click cycling.**
-  Inkscape orders its cycle by z-order because its hit test is fill-based;
-  this product's candidate set is already distance-limited (criterion 1's
-  tolerance), so the cycle follows that same nearest-first order the plain
-  click already uses. Revisit if fills make z-order the more natural order
-  once `stroke-and-fill-styling` ships. **2026-10-05 (architect review):**
-  `stroke-and-fill-styling/adrs.md` separately orders its own hit-test
-  candidates topmost-in-z-order-first once fills exist (a filled shape's
-  interior becomes clickable, and z-order breaks ties between overlapping
-  filled shapes). That is a second, independent ordering rule on the same
-  shared hit-test machinery this spec's nearest-first cycling also uses.
-  Nothing conflicts today (no fills exist yet), but whichever of the two
-  slices ships second will have to reconcile the two orderings in the one
-  shared ordering function rather than silently keeping both — flagged here
-  so it is not forgotten, not decided now.
+  the lasso. Decided 2026-10-08, now that `stroke-and-fill-styling` has
+  shipped: the marquee tests the object's (oriented) bounding box and the
+  lasso tests outlines only, even over a filled shape. A lasso that passes
+  through a filled interior without crossing its outline selects nothing
+  (criterion 20). A fill-aware lasso is a separate story if wanted.
+- **A pure z-order Alt-click cycle.** Decided 2026-10-08: the cycle order
+  is the one stated under "Disambiguating overlapping candidates" (plain
+  click answer, other outlines nearest first, the filled shape(s) F under
+  the point, then the objects F hides). The two ordering rules the earlier
+  revision flagged (nearest-first here, topmost-first in
+  `stroke-and-fill-styling`) are reconciled in `hit_test_objects`, whose
+  first element always equals `hit_test_object`.
 - **Toggle semantics for Ctrl, matching LightBurn's literal behaviour**
   (LightBurn's Ctrl alone toggles objects the box catches). This spec
   implements the customer's own explicit request instead: Ctrl always
@@ -417,24 +431,21 @@ Selector has no equivalent of.
 - **Touch-screen gestures** for either the marquee or the lasso (e.g. a
   two-finger drag). Desktop mouse/trackpad only, per `CLAUDE.md`'s platform
   order, same deferral `canvas-navigation-and-selection` already made.
-- **Interaction with `object-transform`'s resize/rotate handles.**
-  `object-transform` (slice 5) is `Status: Ready` but not yet implemented.
-  If a marquee drag starts inside a future transform handle's own hit area,
-  which gesture wins is that slice's own integration concern once it
-  exists in code, not decided here.
-- **Forward-compatibility note, not a blocking criterion (architect
-  review):** `object-transform` changes `object_bounds` to return an
-  oriented (rotated) box once an object can be rotated, instead of today's
-  always-axis-aligned one. This spec's marquee "contain" (criterion 10) and
-  "touch" (criterion 9) criteria are written against today's axis-aligned
-  box and do not need to change now, since no object can be rotated yet.
-  Once `object-transform` ships, the stated default is: "contain" means
-  all four corners of the oriented box lie inside the marquee rectangle;
-  "touch" tests the *axis-aligned* bounding box around those four corners
-  (not the oriented box itself), kept simple rather than a true
-  rotated-rectangle-intersection test. Whoever implements that overlap
-  should confirm this default still reads as correct at that time rather
-  than silently inheriting it.
+- **Any other press order against `object-transform`'s handles.** Decided
+  2026-10-08, now that `object-transform` has shipped. A press on the
+  Select tool is classified in this order: Alt held starts the lasso
+  (also on a handle, no handle drag starts; `unified-object-editing`
+  criterion 35); else a drawn handle starts its drag; else a press inside
+  the sole selected object's box starts a move, unless Shift or Ctrl is
+  held; else an outline hit within criterion 1's tolerance; else the
+  marquee. Ctrl copy-move (`edit-interaction-polish` criterion 38) stays on
+  the outline and on the centre handle.
+- **Oriented box for rotated objects.** Built: since `object-transform` an
+  object's box is the oriented (rotated) box. The marquee's "contain"
+  (criterion 10) means all four corners of that box lie inside the marquee
+  rectangle; "touch" (criterion 9) tests the axis-aligned bounding box
+  around those four corners, not the oriented box itself. This is not a
+  true rotated-rectangle intersection test, by choice.
 - **Node-level disambiguation cycling** (the customer's "node, object,
   path..." phrasing also names nodes). The Node tool's own node/handle
   picking already has its own 16px tolerance and its own tie-break rule
@@ -618,8 +629,11 @@ object could not be moved otherwise). Decision for criterion 8: a plain
 marquee arms only outside that box. Shift and Ctrl held at press bypass the
 move and arm the marquee, so additive and remove modes still work over a
 large selected frame; Alt already locks a lasso at any press point
-(criterion 16). `object-transform` bypasses for Shift only today; this story
-adds Ctrl. A plain marquee that must start inside the box needs Esc first.
+(criterion 16). `object-transform` bypassed for Shift only; this story adds
+Ctrl. This is accepted behaviour (`edit-interaction-polish` criterion 37,
+`unified-object-editing` criterion 35): Ctrl inside the sole selected box
+arms the remove marquee, while Ctrl copy-move stays on the outline and on the
+centre handle. A plain marquee that must start inside the box needs Esc first.
 
 ### Modifier badge of the Ctrl marquee (2026-10-07, from the `edit-interaction-polish` UX review)
 
@@ -630,7 +644,8 @@ gets a **minus badge from the same component**, at the same place by the
 pointer, so a Ctrl press never shows the copy plus where it would remove. The
 badge shows wherever a Ctrl press would arm that marquee (the same press
 classification, `PressTarget`), so the plus and the minus never show for the
-same press.
+same press. The minus badge also shows for Ctrl+Alt, where the press arms the
+remove lasso (criteria 16 and 19).
 
 ### Status
 

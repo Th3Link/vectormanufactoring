@@ -648,13 +648,14 @@ are merged, and their statuses read Done. Technical detail is in the
   between the PRs writes a file that another build of this slice misreads.
   Files at version 5 open with every object in the default style
   (criterion 3).
-- **`advanced-selection` follows this slice.** Its criteria 3 to 5 (nearest
-  candidate, Alt-click cycling) and its flag on filled shapes are reworded
-  to criterion 27's order: the cycle starts with the winner of criterion 27,
-  then the remaining outline hits nearest first, then the remaining
-  filled-interior-only hits topmost first. `unified-object-editing`
-  criterion 35 gets the same rewording as criterion 28 states. Those edits
-  are made in those two specs, not here.
+- **`advanced-selection` follows this slice.** Its criteria 3 to 5 (plain
+  click, Alt-click cycling) are reworded to the cycle order that spec states
+  under "Disambiguating overlapping candidates": the winner of criterion 27,
+  then the other outlines within tolerance nearest first, then the filled
+  shape(s) under the point, then the objects they hide. That order, not a
+  "remaining outline hits, then interior-only hits" split, is the one that
+  applies. `unified-object-editing` criterion 35 gets the 8 px rewording.
+  Those edits are made in those two specs, not here.
 - **Live preview**: as in criterion 36. A geometry drag keeps the blue
   outline with no fill or stroke preview; a panel drag draws the object
   itself in the new style.

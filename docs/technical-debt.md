@@ -842,6 +842,21 @@ about 2,000 lines; the ADR suggested moving it to `tests/`.
 `curvyo-editor-wasm/src/session/select_view.rs` is at 497 non-test lines: the
 next addition there needs a split first (decorations, cursor and hint, readout).
 
+## Two `hostile_*` tests take minutes in a debug build
+
+*2026-10-08 (`advanced-selection` review).* `acceptance_unified_editing::
+hostile_degenerate_and_extreme_geometry_draws_and_hit_tests_without_panicking`
+and `acceptance_shape_center_tester::hostile_pointer_values_through_session_never_panic_and_keep_the_file_openable`
+are slow on `main` too (measured on a clean checkout of `744dfad`, 4 test
+threads: 191 s for the pair, the first about 190 s and the second about 100 s).
+On the `advanced-selection` branch the pair takes 275 s: the degenerate-geometry
+test presses at random points, moves past the dead zone and releases at the
+press point, which is now a zero-area touch marquee that selects the huge
+rectangles under that point, so later draws include their boxes and handles. No
+production path got slower. Neither test was changed. Proposal for a `chore/`
+PR: cut the value grids to a representative subset, or move the full sweep to a
+release-mode job.
+
 ## Notes for the next parts of `stroke-and-fill-styling` (from the PR 1 review, 2026-10-08)
 
 - **Stroke width has no upper bound** (only "finite and above zero" is checked,
