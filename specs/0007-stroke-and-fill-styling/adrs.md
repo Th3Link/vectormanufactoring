@@ -106,6 +106,11 @@ already there.
     fill_opacity   : f64 in [0, 1]                absent = 1.0      (AC 14)
     fill_stops     : movable list of stop         absent until the first
                                                   gradient          (AC 16–20)
+                     new lists are a Loro MERGEABLE child container (marker value in
+                     the slot, deterministic container id); a list written earlier is
+                     a regular child container; readers accept both (Loro >= 1.16).
+                     format_version stays 7. Goldens: styles_v7.curvyo (regular),
+                     styles_v7_mergeable_stops.curvyo (mergeable).
   stop = map:
     id       : hex string of the StopId (u128)    written once
     position : f64 in [0, 1]                      LWW register
@@ -512,6 +517,26 @@ already there.
   `Session::set_fill_mode` for linear and radial returns without writing,
   because a gradient without stops is a dead fill (no paint, no clickable
   interior). PR 4 adds the minted seed stops and removes the early return.
+- **2026-10-08 (implementer): decisions in PR 4.** (1) **The stop list is a
+  mergeable child container** (`LoroMap::ensure_mergeable_movable_list`), which
+  answers the review note on concurrent first creation. Two peers that switch the
+  same object to a gradient at once now keep both lists' stops and any edits made
+  to them, instead of one list replacing the other. The cost: the merged list holds
+  both seed pairs (four stops, two at each end, the same colours when both started
+  from one stored colour), which criteria 16 and 35 allow and which looks the same.
+  Lists that already exist are regular containers and read as before. (2) **The
+  ramp function is in `document-core`** (`gradient_ramp.rs`), shared by the
+  renderer and the add-stop rule; interpolation is on sRGB-encoded channels and on
+  opacity, not premultiplied, over 256 texels. (3) **`Vertex` is not widened**: a
+  gradient fill is recorded in `DrawList::gradients` (vertex range, ramp, box) and
+  the host derives the per-vertex coordinates. (4) **A stop is addressed by rank**
+  in the commands the panel issues, resolved to `(NodeId, StopId)` when a gesture
+  starts; a thumb dragged past a neighbour keeps editing the stop it started on.
+  (5) **Add stop on an object with no stop list** (a merged or hand-made document)
+  seeds the list through the fill-mode switch, since `add_stop` refuses without a
+  list. (6) The panel's texts for the stop editor ("No stops. Nothing is
+  painted. Add a stop.", the different-counts line, the limit tooltips) are the
+  host's, per the UI-text rule; Rust sends counts and flags.
 
 ## 2026-10-07 readiness check (architect)
 

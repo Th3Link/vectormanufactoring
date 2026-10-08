@@ -55,6 +55,9 @@ export function ToggleGroup<T extends string>({
 }: ToggleGroupProps<T>) {
   return (
     <RadioGroup.Root
+      // With nothing pressed the first item is the Tab stop (Radix would keep the
+      // one it remembers): a new group starts over.
+      key={value === null ? "none" : "set"}
       aria-label={label}
       orientation="horizontal"
       disabled={disabled}

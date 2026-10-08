@@ -1,4 +1,5 @@
-//! Minting fresh [`AnchorId`]s for one session.
+//! Minting fresh [`AnchorId`]s (and [`curvyo_document_core::StopId`]s, from the
+//! same counter) for one session.
 //!
 //! `specs/0002-path-node-editing/adrs.md`: "`AnchorId` is minted by the
 //! creating peer and is globally unique... passed into
@@ -8,7 +9,7 @@
 //! per session rather than each keeping an independent counter, which
 //! would risk two tools minting the same `(peer, counter)` pair.
 
-use curvyo_document_core::AnchorId;
+use curvyo_document_core::{AnchorId, StopId};
 
 /// Mints [`AnchorId`]s for one open session on one peer.
 ///
@@ -38,6 +39,16 @@ impl AnchorIdMinter {
         id
     }
 
+    /// Mints the next fresh [`StopId`] for this session, from the same counter
+    /// as [`AnchorIdMinter::mint`] (a stop id only has to be unique within its
+    /// object's stop list, so sharing the counter costs nothing and the two
+    /// kinds can never collide).
+    pub fn mint_stop(&mut self) -> StopId {
+        let id = StopId::new(self.peer, self.next);
+        self.next += 1;
+        id
+    }
+
     /// The [`AnchorId`] the *next* [`AnchorIdMinter::mint`] call would
     /// return, without consuming it. For a live preview (e.g.
     /// [`crate::PenTool::pending_anchor`]) that needs to show the id a
@@ -63,6 +74,17 @@ mod tests {
         let a = minter.mint();
         let b = minter.mint();
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn stop_ids_are_distinct_from_each_other_and_share_the_counter() {
+        let mut minter = AnchorIdMinter::new(1);
+        let a = minter.mint_stop();
+        let anchor = minter.mint();
+        let b = minter.mint_stop();
+        assert_ne!(a, b);
+        assert_eq!(anchor, AnchorId::new(1, 1), "one counter for both kinds");
+        assert_eq!(b, StopId::new(1, 2));
     }
 
     #[test]

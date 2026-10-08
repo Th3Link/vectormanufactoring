@@ -13,9 +13,10 @@ use curvyo_render_core::DrawList;
 use wasm_bindgen::JsValue;
 use web_sys::HtmlCanvasElement;
 
+use crate::gpu_paint::{RampTexture, create_ramp_layout};
 use crate::gpu_pipeline::{
-    DEPTH_FORMAT, DepthMode, GpuVertex, ScreenTransform, TransformResources, create_depth_view,
-    create_msaa_view, create_pipeline, create_transform_resources, to_gpu_vertex,
+    DEPTH_FORMAT, DepthMode, ScreenTransform, TransformResources, create_depth_view,
+    create_msaa_view, create_pipeline, create_transform_resources, gpu_vertices,
 };
 
 /// `--canvas-bg` (`docs/design-system.md`): cleared behind every frame's
@@ -100,6 +101,8 @@ pub struct Gpu {
     overlay_pipeline: wgpu::RenderPipeline,
     transform_buffer: wgpu::Buffer,
     transform_bind_group: wgpu::BindGroup,
+    /// The gradient ramps of the current frame (`gpu_paint.rs`).
+    ramps: RampTexture,
     /// The offscreen multisampled color target every frame actually
     /// renders into when `sample_count > 1`; [`Gpu::render`] resolves it
     /// down into the surface's own (single-sampled) texture. Recreated
@@ -257,9 +260,11 @@ impl Gpu {
             bind_group: transform_bind_group,
         } = create_transform_resources(&device);
 
+        let ramp_layout = create_ramp_layout(&device);
         let artwork_pipeline = create_pipeline(
             &device,
             &transform_bind_group_layout,
+            &ramp_layout,
             config.format,
             sample_count,
             DepthMode::SingleCoverage,
@@ -267,10 +272,12 @@ impl Gpu {
         let overlay_pipeline = create_pipeline(
             &device,
             &transform_bind_group_layout,
+            &ramp_layout,
             config.format,
             sample_count,
             DepthMode::Overlay,
         );
+        let ramps = RampTexture::new(&device, ramp_layout);
         let msaa_view = create_msaa_view(&device, &config, sample_count);
         let depth_view = create_depth_view(&device, &config, sample_count);
 
@@ -283,6 +290,7 @@ impl Gpu {
             overlay_pipeline,
             transform_buffer,
             transform_bind_group,
+            ramps,
             msaa_view,
             depth_view,
             sample_count,
@@ -351,7 +359,8 @@ impl Gpu {
         // The document point currently at screen pixel (0, 0) — every
         // vertex below is shifted by this same point in `f64`, before
         // its own `f32` cast (`to_gpu_vertex`'s own doc comment).
-        let vertices = gpu_vertices(draw_list, view.screen_to_document(0.0, 0.0));
+        let ramp_rows = self.ramps.upload(&self.device, &self.queue, draw_list);
+        let vertices = gpu_vertices(draw_list, view.screen_to_document(0.0, 0.0), ramp_rows);
 
         let frame = self.acquire_frame()?;
         let view_texture = frame
@@ -467,6 +476,7 @@ impl Gpu {
         end: u32,
     ) {
         pass.set_bind_group(0, &self.transform_bind_group, &[]);
+        pass.set_bind_group(1, self.ramps.bind_group(), &[]);
         pass.set_vertex_buffer(0, vertex_buffer.slice(..));
         if overlay_start > 0 {
             pass.set_pipeline(&self.artwork_pipeline);
@@ -477,17 +487,4 @@ impl Gpu {
             pass.draw(overlay_start..end, 0..1);
         }
     }
-}
-
-/// Every draw-list vertex in the GPU's shape, shifted by `origin` (the
-/// document point at screen pixel (0, 0)) in `f64` before its own `f32` cast
-/// ([`to_gpu_vertex`]'s doc comment) and tagged with its layer's depth.
-fn gpu_vertices(draw_list: &DrawList, origin: curvyo_document_core::Point) -> Vec<GpuVertex> {
-    draw_list
-        .triangles
-        .iter()
-        .copied()
-        .zip(draw_list.vertex_depths())
-        .map(|(vertex, depth)| to_gpu_vertex(vertex, origin, depth))
-        .collect()
 }

@@ -10,7 +10,7 @@ use curvyo_document_core::{
 };
 use curvyo_editor_wasm::{Session, Tool};
 use curvyo_render_core::DrawList;
-use curvyo_ui_core::{BarValue, DashChoice, StyleEntryError, StyleField};
+use curvyo_ui_core::{BarValue, DashChoice, StopField, StopsPanel, StyleEntryError, StyleField};
 
 /// A session with `n` 10 mm rectangles in a row, the last one selected.
 fn session_with_rectangles(n: u32) -> Session {
@@ -258,16 +258,6 @@ fn a_panel_toggle_does_not_move_the_document_on_screen() {
 }
 
 #[test]
-fn a_gradient_mode_writes_nothing_until_it_can_seed_stops() {
-    let mut session = session_with_rectangles(1);
-    let before = change_count(&session);
-    session.set_fill_mode(FillMode::Linear);
-    session.set_fill_mode(FillMode::Radial);
-    assert_eq!(change_count(&session), before, "no commit");
-    assert_eq!(stored_styles(&session)[0], Style::default(), "no dead fill");
-}
-
-#[test]
 fn a_drag_of_many_ticks_records_what_one_typed_value_records() {
     let mut dragged = session_with_rectangles(1);
     let mut typed = session_with_rectangles(1);
@@ -333,4 +323,246 @@ fn an_edit_over_three_objects_is_one_commit_of_three_writes() {
     assert!(one > 0);
     assert_eq!(written(3, false), 3 * one, "typed");
     assert_eq!(written(3, true), 3 * one, "dragged");
+}
+
+// ---- gradients (criteria 16 to 22, 34, 35) -------------------------------------
+
+fn sorted_first(stops: &[curvyo_document_core::GradientStop]) -> curvyo_document_core::StopId {
+    curvyo_document_core::sorted_stops(stops)[0].id
+}
+
+fn stops_of(session: &Session) -> Vec<curvyo_document_core::GradientStop> {
+    stored_styles(session)[0].fill.stops.clone()
+}
+
+fn editor_rows(session: &Session) -> usize {
+    match session.style_panel_state().fill.stops {
+        StopsPanel::Editor(view) => view.rows.len(),
+        _ => usize::MAX,
+    }
+}
+
+/// Criterion 17: Linear on a solid red fill makes red to white, with fresh ids,
+/// in one commit, and keeps the solid colour.
+#[test]
+fn switching_to_linear_seeds_red_to_white_in_one_commit() {
+    let mut session = session_with_rectangles(1);
+    session
+        .set_style_text(StyleField::FillColor, "#F00")
+        .unwrap();
+    session.set_fill_mode(FillMode::Solid);
+    // A commit of another label first: same-label commits can merge into one.
+    session.set_stroke_cap(LineCap::Round);
+    let (changes, ops) = (change_count(&session), op_count(&session));
+    session.set_fill_mode(FillMode::Linear);
+    assert_eq!(change_count(&session), changes + 1);
+    assert!(op_count(&session) > ops);
+    let style = &stored_styles(&session)[0];
+    assert_eq!(style.fill.kind, curvyo_document_core::FillKind::Linear);
+    let stops = stops_of(&session);
+    assert_eq!(stops.len(), 2);
+    assert_eq!(
+        (stops[0].color.r, stops[0].color.g, stops[0].position.get()),
+        (255, 0, 0.0)
+    );
+    assert_eq!((stops[1].color.g, stops[1].position.get()), (255, 1.0));
+    assert_ne!(stops[0].id, stops[1].id);
+    assert_eq!(style.fill.color.r, 255, "the solid colour is kept");
+    // Back to Solid and to Radial: neither loses the stops (criterion 13).
+    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_mode(FillMode::Radial);
+    assert_eq!(stops_of(&session), stops);
+    assert_eq!(
+        session.style_panel_state().fill.mode,
+        BarValue::Uniform(FillMode::Radial)
+    );
+}
+
+/// The drawn gradient: one fill with a ramp and the object's own box.
+#[test]
+fn a_gradient_fill_reaches_the_draw_list_with_its_box() {
+    let mut session = session_with_rectangles(1);
+    assert_eq!(session.draw_list().gradients().len(), 0);
+    session.set_fill_mode(FillMode::Linear);
+    let list = session.draw_list();
+    assert_eq!(list.gradients().len(), 1);
+    let fill = &list.gradients()[0];
+    assert!(!fill.radial);
+    assert!((fill.frame.max.x - fill.frame.min.x - 10.0).abs() < 1e-9);
+    session.set_fill_mode(FillMode::Radial);
+    assert!(session.draw_list().gradients()[0].radial);
+    session.set_fill_mode(FillMode::None);
+    assert_eq!(session.draw_list().gradients().len(), 0);
+}
+
+/// Criterion 17 again, across a selection: each object takes its own colour.
+#[test]
+fn each_object_of_a_selection_seeds_from_its_own_colour() {
+    let mut session = session_with_rectangles(2);
+    select_first(&mut session, 1);
+    session
+        .set_style_text(StyleField::FillColor, "#0000FF")
+        .unwrap();
+    select_first(&mut session, 2);
+    session.set_fill_mode(FillMode::Linear);
+    let styles = stored_styles(&session);
+    let firsts: Vec<_> = styles
+        .iter()
+        .map(|s| {
+            let sorted = curvyo_document_core::sorted_stops(&s.fill.stops);
+            (sorted[0].color.r, sorted[0].color.b)
+        })
+        .collect();
+    assert!(
+        firsts.contains(&(0, 255)) && firsts.contains(&(0, 0)),
+        "{firsts:?}"
+    );
+}
+
+#[test]
+fn stop_text_edits_one_value_of_one_stop_and_the_selection_follows_the_stop() {
+    let mut session = session_with_rectangles(1);
+    session.set_fill_mode(FillMode::Linear);
+    assert!(session.add_stop(None));
+    let before = stops_of(&session);
+    session.select_stop(0);
+    let changes = change_count(&session);
+    // Move the first stop past the middle one: the list is re-sorted, and the
+    // stop stays selected.
+    assert_eq!(
+        session.set_stop_text(0, StopField::Position, "90"),
+        Ok(true)
+    );
+    assert_eq!(change_count(&session), changes + 1);
+    let after = stops_of(&session);
+    let find = |stops: &[curvyo_document_core::GradientStop], id| {
+        *stops.iter().find(|s| s.id == id).unwrap()
+    };
+    let moved = find(&before, sorted_first(&before));
+    assert!((find(&after, moved.id).position.get() - 0.9).abs() < 1e-12);
+    for stop in before.iter().filter(|s| s.id != moved.id) {
+        assert_eq!(find(&after, stop.id), *stop, "every other stop unchanged");
+    }
+    assert_eq!(session.style_panel_view().selected_stop, 1);
+    // A refused value writes nothing.
+    assert_eq!(
+        session.set_stop_text(0, StopField::Color, "#12345678"),
+        Err(StyleEntryError::HexEightDigits)
+    );
+    assert_eq!(stops_of(&session), after);
+}
+
+/// Criterion 18, 19: add inserts in position order with the ramp's colour, up
+/// to 16; remove stops at two.
+#[test]
+fn add_and_remove_follow_the_stop_rules() {
+    let mut session = session_with_rectangles(1);
+    session.set_fill_mode(FillMode::Linear);
+    assert!(session.add_stop(None));
+    let stops = stops_of(&session);
+    assert_eq!(stops.len(), 3);
+    let added = stops.iter().find(|s| s.position.get() == 0.5).unwrap();
+    assert_eq!(
+        (added.color.r, added.color.g),
+        (128, 128),
+        "black to white, so grey at 0.5"
+    );
+    assert!(session.add_stop(Some(0.25)));
+    assert_eq!(editor_rows(&session), 4);
+    for _ in 4..16 {
+        assert!(session.add_stop(None));
+    }
+    assert_eq!(editor_rows(&session), 16);
+    assert!(!session.add_stop(None), "the 17th is refused");
+    assert_eq!(stops_of(&session).len(), 16);
+    for _ in 2..16 {
+        assert!(session.remove_stop(0));
+    }
+    assert_eq!(editor_rows(&session), 2);
+    assert!(!session.remove_stop(0), "a gradient keeps two");
+    assert_eq!(stops_of(&session).len(), 2);
+}
+
+#[test]
+fn a_stop_drag_previews_in_the_draw_list_and_commits_once() {
+    let mut session = session_with_rectangles(1);
+    session.set_fill_mode(FillMode::Linear);
+    let ops = op_count(&session);
+    session.preview_stop(0, StopField::Position, 30.0);
+    session.preview_stop(1, StopField::Position, 40.0); // the rank is the first tick's
+    session.preview_stop(0, StopField::Position, 50.0);
+    assert_eq!(op_count(&session), ops, "nothing written while dragging");
+    assert_eq!(stops_of(&session)[0].position.get(), 0.0);
+    match session.style_panel_state().fill.stops {
+        StopsPanel::Editor(view) => assert_eq!(
+            view.rows[0].position,
+            BarValue::Uniform(curvyo_document_core::StopPosition::new(0.5).unwrap()),
+            "the row follows the drag"
+        ),
+        other => panic!("{other:?}"),
+    }
+    session.commit_style_preview();
+    assert_eq!(stops_of(&session)[0].position.get(), 0.5);
+    assert_eq!(stops_of(&session)[1].position.get(), 1.0);
+    // Escape reverts.
+    session.preview_stop(0, StopField::Position, 90.0);
+    session.cancel_style_preview();
+    session.commit_style_preview();
+    assert_eq!(stops_of(&session)[0].position.get(), 0.5);
+}
+
+/// Criterion 34: several selected gradients edit by rank in one commit.
+#[test]
+fn a_stop_edit_over_a_selection_goes_to_the_stop_of_each_rank() {
+    let mut session = session_with_rectangles(2);
+    select_first(&mut session, 2);
+    session.set_fill_mode(FillMode::Linear);
+    let (changes, ops) = (change_count(&session), op_count(&session));
+    assert_eq!(
+        session.set_stop_text(1, StopField::Color, "#00FF00"),
+        Ok(true)
+    );
+    assert_eq!(change_count(&session), changes + 1);
+    assert!(op_count(&session) > ops);
+    for style in stored_styles(&session) {
+        let sorted = curvyo_document_core::sorted_stops(&style.fill.stops);
+        assert_eq!((sorted[1].color.r, sorted[1].color.g), (0, 255));
+        assert_eq!(sorted[0].color.g, 0, "rank 0 untouched");
+    }
+    // Add and Remove are not offered for several objects.
+    assert!(!session.add_stop(None));
+    assert!(!session.remove_stop(0));
+}
+
+/// Criterion 35, through the session: a document whose gradient holds no stops
+/// (as a merge can leave it) opens, shows the empty editor, paints nothing, is
+/// not clickable, and Add creates the first stop at 50 %.
+#[test]
+fn a_gradient_without_stops_is_a_state_and_add_creates_the_first_stop() {
+    let document = Document::new(1);
+    let id = document.create_rect(curvyo_document_core::RectBounds {
+        origin: Point::new(0.0, 0.0),
+        width: Length::from_mm(10.0),
+        height: Length::from_mm(10.0),
+    });
+    document
+        .set_fill_mode(
+            FillMode::Linear,
+            &[curvyo_document_core::FillModeTarget {
+                id,
+                seed_stops: Vec::new(),
+            }],
+        )
+        .unwrap();
+    let bytes = curvyo_document_core::pack(&document, "0.1.0").unwrap();
+    let mut session = Session::open(3, &bytes).unwrap();
+    assert_eq!(session.draw_list().gradients().len(), 0);
+    session.set_tool(Tool::Select);
+    session.pointer_down(Point::new(0.0, 5.0), false);
+    session.pointer_up(Point::new(0.0, 5.0), false, false);
+    assert_eq!(editor_rows(&session), 0);
+    assert!(session.add_stop(None));
+    let stops = stops_of(&session);
+    assert_eq!(stops.len(), 1);
+    assert_eq!(stops[0].position.get(), 0.5);
 }

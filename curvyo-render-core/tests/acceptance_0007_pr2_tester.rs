@@ -169,7 +169,7 @@ fn covered(list: &DrawList, p: Point) -> bool {
 }
 
 fn art(objects: &[ObjectSnapshot], scale: f64) -> DrawList {
-    build_artwork(objects, view(scale))
+    build_artwork(objects, &[], view(scale))
 }
 
 /// Both lists cover the same points of the box `(x0, x1, y0, y1)`, sampled

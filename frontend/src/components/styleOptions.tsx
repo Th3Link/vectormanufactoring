@@ -1,18 +1,37 @@
 // The buttons of the Style section's toggle groups: names, tooltips and glyphs
 // (`docs/design-system.md`, "Properties panel: Style section").
 
-import { CapIcon, JoinIcon, NoPaintIcon, SolidPaintIcon } from "@/components/StyleIcons";
+import {
+  CapIcon,
+  JoinIcon,
+  LinearGradientIcon,
+  NoPaintIcon,
+  RadialGradientIcon,
+  SolidPaintIcon,
+} from "@/components/StyleIcons";
 import type { ToggleOption } from "@/components/ui/toggle-group";
-import type { CapName, JoinName } from "@/hooks/useStylePanel";
+import type { CapName, FillModeName, JoinName } from "@/hooks/useStylePanel";
 
 export const PAINT_OPTIONS: readonly ToggleOption<"none" | "solid">[] = [
   { value: "none", label: "No stroke", tooltip: "No stroke", icon: <NoPaintIcon /> },
   { value: "solid", label: "Solid stroke", tooltip: "Solid stroke", icon: <SolidPaintIcon /> },
 ];
 
-export const FILL_OPTIONS: readonly ToggleOption<"none" | "solid">[] = [
+export const FILL_OPTIONS: readonly ToggleOption<FillModeName>[] = [
   { value: "none", label: "No fill", tooltip: "No fill", icon: <NoPaintIcon /> },
   { value: "solid", label: "Solid fill", tooltip: "Solid fill", icon: <SolidPaintIcon /> },
+  {
+    value: "linear",
+    label: "Linear gradient",
+    tooltip: "Linear gradient",
+    icon: <LinearGradientIcon />,
+  },
+  {
+    value: "radial",
+    label: "Radial gradient",
+    tooltip: "Radial gradient",
+    icon: <RadialGradientIcon />,
+  },
 ];
 
 export const JOIN_OPTIONS: readonly ToggleOption<JoinName>[] = [

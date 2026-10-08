@@ -23,6 +23,7 @@ mod corner_radii;
 mod corner_radii_codec;
 mod document;
 mod error;
+mod gradient_ramp;
 mod objects;
 mod path_codec;
 mod path_model;
@@ -43,6 +44,7 @@ pub use container::{CURRENT_LORO_SNAPSHOT_VERSION, pack, unpack};
 pub use corner_radii::{Corner, CornerRadii, SHARP_CORNER_EPSILON_MM, effective_corner_radii};
 pub use document::{CURRENT_FORMAT_VERSION, Document};
 pub use error::{OpenError, SaveError};
+pub use gradient_ramp::{ramp_at, sorted_stops};
 pub use objects::{CopySource, ObjectEditError};
 pub use path_model::{
     AnchorId, AnchorKind, AnchorSnapshot, Color, HandleSlot, NewAnchor, NodeId, PathEditError,

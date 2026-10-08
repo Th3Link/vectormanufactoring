@@ -386,17 +386,29 @@ pub(crate) fn stops_list(meta: &LoroMap) -> Option<LoroMovableList> {
 }
 
 /// The `fill_stops` list, created if the object has none yet. Only
-/// [`write_stops`] creates it (the fill-mode switch and Split); two peers that
-/// create it concurrently keep one container under the key.
+/// [`write_stops`] creates it (the fill-mode switch and Split). It is a
+/// **mergeable** child container (its id follows from the map and the key), so
+/// two peers that create it concurrently end up with one list holding both
+/// peers' stops, instead of one list replacing the other and taking its edits
+/// with it. A merge can therefore hold more than the two seed stops; that is
+/// a stored count the format accepts (acceptance criteria 16 and 35).
 fn ensure_stops_list(meta: &LoroMap) -> LoroMovableList {
     if let Some(list) = stops_list(meta) {
         return list;
     }
-    // invariant: inserting a brand-new container under a fresh key on an
-    // attached map cannot fail.
-    #[allow(clippy::unwrap_used)]
-    meta.insert_container(KEY_FILL_STOPS, LoroMovableList::new())
-        .unwrap()
+    // `ensure_mergeable_movable_list` refuses a key that holds a value that is
+    // not a mergeable list (a scalar or a map a peer left there, which only a
+    // merge can produce: open-file validation rejects it). Then the old
+    // behaviour: replace it with a regular list, which cannot fail on an
+    // attached map.
+    meta.ensure_mergeable_movable_list(KEY_FILL_STOPS)
+        .unwrap_or_else(|_| {
+            // invariant: inserting a brand-new container under a key on an
+            // attached map cannot fail.
+            #[allow(clippy::unwrap_used)]
+            meta.insert_container(KEY_FILL_STOPS, LoroMovableList::new())
+                .unwrap()
+        })
 }
 
 pub(crate) fn stop_map_at(list: &LoroMovableList, index: usize) -> Option<LoroMap> {
@@ -474,6 +486,27 @@ mod tests {
                 "{key} would be stripped by `object to path`"
             );
         }
+    }
+
+    /// A merged document is not validated: a peer may have left a scalar under
+    /// `fill_stops`. Seeding stops must still work, replacing it, and never
+    /// panic.
+    #[test]
+    fn seeding_stops_over_a_scalar_under_the_key_replaces_it() {
+        use crate::style_model::{Opacity, StopId, StopPosition};
+        let loro = loro::LoroDoc::new();
+        let meta = loro.get_map("meta");
+        meta.insert(KEY_FILL_STOPS, "not a list").unwrap();
+        assert!(stops_list(&meta).is_none());
+        let stop = GradientStop {
+            id: StopId::new(1, 1),
+            position: StopPosition::START,
+            color: Color::BLACK,
+            opacity: Opacity::OPAQUE,
+        };
+        write_stops(&meta, &[stop]);
+        let list = stops_list(&meta).expect("a list now");
+        assert_eq!(list.len(), 1);
     }
 
     #[test]

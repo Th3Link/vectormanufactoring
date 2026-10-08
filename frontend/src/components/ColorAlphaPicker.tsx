@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 import { ColourPopover } from "@/components/ColourPopover";
 import { NumberField } from "@/components/NumberField";
@@ -6,7 +7,7 @@ import { StyleRow } from "@/components/StyleRow";
 import { Swatch } from "@/components/Swatch";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip } from "@/components/ui/tooltip";
-import type { StyleFieldName, StylePanelApi } from "@/hooks/useStylePanel";
+import type { ColourPanel } from "@/lib/colourPanel";
 import { percentText, toHex } from "@/lib/styleColor";
 
 const HEX_MESSAGES = {
@@ -16,8 +17,8 @@ const HEX_MESSAGES = {
 const PERCENT_MESSAGES = { percent: "Enter a number from 0 to 100" } as const;
 
 interface PickerProps {
-  /** "Stroke" or "Fill": names the controls. */
-  name: "Stroke" | "Fill";
+  /** Names the controls: "Stroke", "Fill" or "Stop 2". */
+  name: string;
   rgb: number;
   rgbMixed: boolean;
   opacity: number;
@@ -25,12 +26,17 @@ interface PickerProps {
   /** The paint is off (a stroke with Paint = None): the swatch is slashed. */
   off?: boolean;
   disabled: boolean;
-  colorField: StyleFieldName;
-  opacityField: StyleFieldName;
-  panel: Pick<
-    StylePanelApi,
-    "setText" | "previewColor" | "previewOpacity" | "previewing" | "cancels"
-  >;
+  colorField: string;
+  opacityField: string;
+  panel: ColourPanel;
+  /** A labelled row of the Style section ("Color"), or, without a label, the
+   * compact row of a gradient stop: 24 px swatch, 12 px text, narrower fields. */
+  label?: string;
+  /** Controls before and after the colour controls in a stop row. */
+  before?: ReactNode;
+  after?: ReactNode;
+  /** The row is the selected stop's. */
+  selected?: boolean;
   /** Changes when the edited objects or the tool change: closes the popover. */
   closeKey: string;
   onReturnFocus: () => void;
@@ -54,9 +60,14 @@ export function ColorAlphaPicker({
   colorField,
   opacityField,
   panel,
+  label,
+  before,
+  after,
+  selected = false,
   closeKey,
   onReturnFocus,
 }: PickerProps) {
+  const compact = label === undefined;
   const [open, setOpen] = useState(false);
   const openedByPointer = useRef(false);
   const shownRgb = rgbMixed ? 0 : rgb;
@@ -76,7 +87,8 @@ export function ColorAlphaPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
-        <StyleRow label="Color">
+        <ColourRow label={label} selected={selected}>
+          {before}
           <Tooltip side="left" content={tooltip}>
             <PopoverTrigger asChild>
               <Swatch
@@ -84,6 +96,7 @@ export function ColorAlphaPicker({
                 opacity={shownPercent}
                 mixed={rgbMixed}
                 off={off}
+                size={compact ? 24 : 28}
                 disabled={disabled}
                 aria-label={`${name} color`}
                 aria-description={description}
@@ -119,7 +132,8 @@ export function ColorAlphaPicker({
             label={`${name} color hex`}
             shown={toHex(rgb)}
             mixed={rgbMixed}
-            width={84}
+            width={compact ? 72 : 84}
+            compact={compact}
             align="left"
             disabled={disabled}
             onSubmit={(text) => panel.setText(colorField, text)}
@@ -131,14 +145,48 @@ export function ColorAlphaPicker({
             shown={percentText(opacity)}
             mixed={opacityMixed}
             suffix="%"
-            width={56}
+            width={compact ? 48 : 56}
+            compact={compact}
             disabled={disabled}
             onSubmit={(text) => panel.setText(opacityField, text)}
             messages={PERCENT_MESSAGES}
             onReturnFocus={onReturnFocus}
           />
-        </StyleRow>
+          {after}
+        </ColourRow>
       </PopoverAnchor>
     </Popover>
+  );
+}
+
+/** The row the colour controls sit in: a labelled row of the Style section, or
+ * the compact row of a stop (the popover anchors to either). */
+function ColourRow({
+  label,
+  selected,
+  children,
+  ...props
+}: { label?: string; selected: boolean; children: ReactNode } & ComponentProps<"div">) {
+  if (label !== undefined) {
+    return (
+      <StyleRow label={label} {...props}>
+        {children}
+      </StyleRow>
+    );
+  }
+  return (
+    <div
+      className="relative flex h-7 w-[244px] items-center gap-[5px]"
+      aria-current={selected || undefined}
+      {...props}
+    >
+      {selected && (
+        <span
+          aria-hidden
+          className="absolute top-0 -left-3 h-7 w-[3px] bg-[var(--editor-accent)]"
+        />
+      )}
+      {children}
+    </div>
   );
 }

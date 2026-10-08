@@ -17,7 +17,7 @@ export interface PreviewGesture {
  * criterion 36). Ticks are coalesced to one session update per animation
  * frame (the last one wins). The first tick of a gesture installs window
  * listeners, because a colour area reports neither its release nor its key-up:
- * a pointer release, an arrow key-up or a window blur commits once (the last
+ * a pointer release, the key-up of a key that steps a slider or a window blur commits once (the last
  * tick is flushed first, so the commit never lags a frame), and Escape drops
  * the preview, after which the release writes nothing. The listeners are
  * removed when the gesture ends or the panel goes away.
@@ -68,8 +68,9 @@ export function usePreviewGesture(
     }
     setPreviewing(true);
     const onRelease = () => commit();
-    const onArrowUp = (event: KeyboardEvent) => {
-      if (event.key.startsWith("Arrow")) {
+    const onStepKeyUp = (event: KeyboardEvent) => {
+      // The keys that step a slider: a held key is one gesture, one commit.
+      if (event.key.startsWith("Arrow") || event.key === "Home" || event.key === "End") {
         commit();
       }
     };
@@ -88,13 +89,13 @@ export function usePreviewGesture(
     window.addEventListener("pointerup", onRelease, true);
     window.addEventListener("pointercancel", onRelease, true);
     window.addEventListener("blur", onRelease);
-    window.addEventListener("keyup", onArrowUp, true);
+    window.addEventListener("keyup", onStepKeyUp, true);
     window.addEventListener("keydown", onEscape, true);
     endGesture.current = () => {
       window.removeEventListener("pointerup", onRelease, true);
       window.removeEventListener("pointercancel", onRelease, true);
       window.removeEventListener("blur", onRelease);
-      window.removeEventListener("keyup", onArrowUp, true);
+      window.removeEventListener("keyup", onStepKeyUp, true);
       window.removeEventListener("keydown", onEscape, true);
     };
   }, [commit, dropPending, getSession, onChange]);

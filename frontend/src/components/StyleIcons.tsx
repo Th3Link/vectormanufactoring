@@ -77,3 +77,33 @@ export function DashSample({ name }: { name: DashName | "custom" }) {
     </svg>
   );
 }
+
+/** "Linear gradient": a square filled from dark on the left to light. */
+export function LinearGradientIcon() {
+  return (
+    <svg {...SVG_PROPS}>
+      <defs>
+        <linearGradient id="icon-linear" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0" stopColor="currentColor" />
+          <stop offset="1" stopColor="currentColor" stopOpacity="0.1" />
+        </linearGradient>
+      </defs>
+      <rect x="2.5" y="2.5" width="11" height="11" fill="url(#icon-linear)" />
+    </svg>
+  );
+}
+
+/** "Radial gradient": a square filled from a dark centre outward. */
+export function RadialGradientIcon() {
+  return (
+    <svg {...SVG_PROPS}>
+      <defs>
+        <radialGradient id="icon-radial">
+          <stop offset="0" stopColor="currentColor" />
+          <stop offset="1" stopColor="currentColor" stopOpacity="0.1" />
+        </radialGradient>
+      </defs>
+      <rect x="2.5" y="2.5" width="11" height="11" fill="url(#icon-radial)" />
+    </svg>
+  );
+}
