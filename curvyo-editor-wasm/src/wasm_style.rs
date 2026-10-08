@@ -116,4 +116,10 @@ impl WasmSession {
         self.session
             .keep_view_origin_for_width_change(width_delta_css_px);
     }
+
+    /// Whether a canvas pointer press is in flight.
+    #[must_use]
+    pub fn pointer_is_down(&self) -> bool {
+        self.session.is_pointer_down()
+    }
 }

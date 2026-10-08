@@ -57,6 +57,13 @@ impl Session {
         StylePanelView::new(&self.style_panel_state(), key)
     }
 
+    /// Whether a canvas pointer press is in flight (the button is down): the
+    /// host ignores `Shift+Ctrl+F` during one (criterion 38).
+    #[must_use]
+    pub const fn is_pointer_down(&self) -> bool {
+        self.button_down
+    }
+
     /// Commits a panel drag still pending, against the objects it started on,
     /// before anything that can change the selection or the tool (a release
     /// outside the control never fires the control's own).

@@ -187,6 +187,32 @@ fn the_node_tool_with_no_node_selected_edits_the_object_selection() {
     assert_eq!(scope.subject, "Path");
 }
 
+#[test]
+fn the_node_tool_fallback_is_the_paths_of_the_object_selection_only() {
+    let document = Document::new(1);
+    let p1 = line(&document, 1, 0.0);
+    let r = square(&document, 40.0);
+    let objects = objects(&document);
+    let scope = style_scope(
+        StyleTool::Node,
+        &objects,
+        &selected(&[r, p1]),
+        &NodeSelection::new(),
+    );
+    assert_eq!(
+        scope.ids,
+        vec![p1],
+        "a rectangle is not edited by the Node tool"
+    );
+    let none = style_scope(
+        StyleTool::Node,
+        &objects,
+        &selected(&[r]),
+        &NodeSelection::new(),
+    );
+    assert_eq!(none.subject, "Nothing selected");
+}
+
 // ---- what the panel shows (criteria 5, 13, 24) -----------------------------
 
 #[test]

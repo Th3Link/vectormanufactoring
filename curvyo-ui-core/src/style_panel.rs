@@ -59,7 +59,17 @@ pub fn style_scope(
     let wanted: Vec<NodeId> = if tool == StyleTool::Node {
         let owners = node_owners(nodes);
         if owners.is_empty() {
-            selection.ids().to_vec()
+            // The path being edited: the paths of the object selection.
+            selection
+                .ids()
+                .iter()
+                .copied()
+                .filter(|id| {
+                    objects
+                        .iter()
+                        .any(|o| o.id() == *id && matches!(o, ObjectSnapshot::Path(_)))
+                })
+                .collect()
         } else {
             owners
         }
