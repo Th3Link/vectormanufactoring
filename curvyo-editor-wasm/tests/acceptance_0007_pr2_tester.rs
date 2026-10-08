@@ -141,10 +141,6 @@ fn no_stroke(d: &Document, id: NodeId) {
         .unwrap();
 }
 
-fn px(s: &Session, pixels: f64) -> f64 {
-    pixels / s.view().scale()
-}
-
 fn click_mod(s: &mut Session, p: Point, shift: bool) {
     s.pointer_hover(p, shift, false);
     s.pointer_down(p, shift);
@@ -289,7 +285,7 @@ fn composite_at(list: &DrawList, p: Point) -> [f64; 3] {
     let mut start = 0;
     for &end in list.layers() {
         let mut found = None;
-        for t in list.triangles[start..end].chunks_exact(3) {
+        for t in list.triangles[start..end].as_chunks::<3>().0 {
             if in_triangle(p, t[0].position, t[1].position, t[2].position) {
                 found = Some(t[0].color);
             }
@@ -627,8 +623,8 @@ fn ac27_an_object_below_the_topmost_filled_one_never_wins() {
 #[test]
 fn ac27_two_filled_objects_the_topmost_wins_inside_both_and_the_lower_one_elsewhere() {
     let d = Document::new(1);
-    let _lower = rect(&d, 0.0, 0.0, 100.0, 100.0);
-    fill(&d, _lower);
+    let lower = rect(&d, 0.0, 0.0, 100.0, 100.0);
+    fill(&d, lower);
     let upper = ellipse(&d, 80.0, 80.0, 40.0, 40.0);
     fill_with(&d, upper, rgb(0, 0, 255), 0.3);
     let mut s = open(&d);
@@ -1124,7 +1120,7 @@ fn ac41_the_hover_box_is_sixty_percent_accent_over_a_white_casing_and_stays_soli
         .iter()
         .filter(|v| (v.color.r, v.color.g, v.color.b) == (0x2F, 0x6F, 0xEE))
         .collect();
-    assert!(!accent.is_empty());
+    assert_ne!(accent.len(), 0);
     assert!(
         accent.iter().all(|v| (151..=155).contains(&v.color.a)),
         "60 percent"

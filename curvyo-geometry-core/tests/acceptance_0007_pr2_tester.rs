@@ -61,7 +61,7 @@ proptest! {
 
 #[test]
 fn a_translated_outline_moves_its_interior_with_it() {
-    let sq = vec![
+    let sq = [
         corner(0.0, 0.0),
         corner(10.0, 0.0),
         corner(10.0, 10.0),
