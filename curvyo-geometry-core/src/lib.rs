@@ -17,7 +17,9 @@
 #![forbid(unsafe_code)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+mod interior;
 mod segment;
 
 pub use curvyo_document_core::Tolerance;
+pub use interior::{OutlineTriple, contains_point};
 pub use segment::{Subdivision, nearest_point_on_segment, segment_bounds, subdivide_at_parameter};
