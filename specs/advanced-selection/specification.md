@@ -471,7 +471,7 @@ new proposal superseded both. No open questions remain for this spec.
 ### Marquee box styling
 
 New semantic tokens (`docs/design-system.md`), not a reuse of `--accent`:
-`--marquee-touch` (`#2FAE57`, green) and `--marquee-contain` (`#E5484D`,
+`--marquee-touch` (`#1C9347`, green; first `#2FAE57`, darkened 2026-10-08 for 3.2:1 on the canvas) and `--marquee-contain` (`#E5484D`,
 red). Neither is a repurposed existing color — nothing in the system so far
 means "touch" or "contain," and `--accent` is reserved for actual selection
 state (§"One accent, two states"), which this is not: the box itself is

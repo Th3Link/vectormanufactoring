@@ -498,6 +498,7 @@ export function SelectToolbar({
   return (
     <div
       ref={barRef}
+      data-context-bar=""
       // Every row is 36 px (28 px controls), so the switches, always on the
       // first row, sit at the same y whether the bar has one row or two.
       className="pointer-events-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0 rounded-lg px-2 text-sm"

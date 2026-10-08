@@ -9,6 +9,7 @@ use curvyo_document_core::{Point, Vec2, ViewTransform};
 
 use crate::color::RgbaColor;
 use crate::glyphs::{DrawList, circle, thick_line};
+use crate::select_box::{effective_ratio, snap_to_device};
 use crate::theme;
 
 /// What the Select tool drags out this frame. Mirrors `curvyo-ui-core`'s
@@ -30,39 +31,54 @@ pub enum MarqueeOverlay {
 }
 
 /// The overlay as a draw list, to be drawn above everything else.
+/// `device_pixel_ratio` is `window.devicePixelRatio`: the box's border is laid
+/// on whole device pixels and a whole number of them wide, so it is crisp at
+/// any ratio (a value that is not a positive finite number reads as 1).
 #[must_use]
-pub fn build_marquee_overlay(view: ViewTransform, overlay: &MarqueeOverlay) -> DrawList {
+pub fn build_marquee_overlay(
+    view: ViewTransform,
+    overlay: &MarqueeOverlay,
+    device_pixel_ratio: f64,
+) -> DrawList {
     match overlay {
-        MarqueeOverlay::Box { from, to, contain } => marquee_box(view, *from, *to, *contain),
+        MarqueeOverlay::Box { from, to, contain } => marquee_box(
+            view,
+            *from,
+            *to,
+            *contain,
+            effective_ratio(device_pixel_ratio),
+        ),
         MarqueeOverlay::Lasso(points) => lasso_line(view, points),
     }
 }
 
-fn marquee_box(view: ViewTransform, from: Point, to: Point, contain: bool) -> DrawList {
+fn marquee_box(view: ViewTransform, from: Point, to: Point, contain: bool, ratio: f64) -> DrawList {
     let mut list = DrawList::default();
     let color = if contain {
         theme::MARQUEE_CONTAIN
     } else {
         theme::MARQUEE_TOUCH
     };
-    let (left, right) = (from.x.min(to.x), from.x.max(to.x));
-    let (top, bottom) = (from.y.min(to.y), from.y.max(to.y));
+    // Screen pixels, snapped so both edges of the border fall on device pixel
+    // boundaries.
+    let device_width = (theme::MARQUEE_STROKE_PX * ratio).round().max(1.0);
+    let (a, b) = (view.document_to_screen(from), view.document_to_screen(to));
+    let snap = |v: f64| snap_to_device(v, ratio, device_width);
+    let (left, right) = (snap(a.0.min(b.0)), snap(a.0.max(b.0)));
+    let (top, bottom) = (snap(a.1.min(b.1)), snap(a.1.max(b.1)));
+    let at = |x: f64, y: f64| view.screen_to_document(x, y);
+    let width = device_width / ratio / view.scale();
     if right - left <= f64::EPSILON || bottom - top <= f64::EPSILON {
         // A box with no width or height has no area to fill; its border is
         // the line itself.
-        list.extend(thick_line(
-            Point::new(left, top),
-            Point::new(right, bottom),
-            theme::MARQUEE_STROKE_PX / view.scale(),
-            color,
-        ));
+        list.extend(thick_line(at(left, top), at(right, bottom), width, color));
         return list;
     }
     let corners = [
-        Point::new(left, top),
-        Point::new(right, top),
-        Point::new(right, bottom),
-        Point::new(left, bottom),
+        at(left, top),
+        at(right, top),
+        at(right, bottom),
+        at(left, bottom),
     ];
     list.extend(fill_quad(
         corners,
@@ -70,7 +86,6 @@ fn marquee_box(view: ViewTransform, from: Point, to: Point, contain: bool) -> Dr
     ));
     // Each border line reaches half a width past its corners, so the corners
     // close.
-    let width = theme::MARQUEE_STROKE_PX / view.scale();
     let half = width / 2.0;
     for (a, b, along) in [
         (corners[0], corners[1], Vec2::new(half, 0.0)),
@@ -201,6 +216,7 @@ mod tests {
                     to: Point::new(50.0, 10.0),
                     contain,
                 },
+                1.0,
             );
             assert_eq!(list.triangle_count(), 10);
             assert_eq!(
@@ -211,34 +227,48 @@ mod tests {
         }
     }
 
-    /// The border is 1.5 screen pixels at any zoom and reaches the corners.
+    /// The border is a whole number of device pixels wide (`round(1.5 * ratio)`:
+    /// 2 px at ratio 1, 1.5 px at ratio 2), at any zoom, with both its edges on
+    /// device pixel boundaries and its corners closed.
     #[test]
-    fn the_border_is_one_and_a_half_pixels_whatever_the_zoom() {
-        for scale in [0.5, 1.0, 4.0] {
-            let view = ViewTransform::new(scale, Point::new(0.0, 0.0));
-            let list = build_marquee_overlay(
-                view,
-                &MarqueeOverlay::Box {
-                    from: Point::new(0.0, 0.0),
-                    to: Point::new(100.0, 60.0),
-                    contain: false,
-                },
-            );
-            let border: Vec<Point> = list
-                .triangles
-                .iter()
-                .filter(|v| v.color == theme::MARQUEE_TOUCH)
-                .map(|v| v.position)
-                .collect();
-            let top: Vec<f64> = border.iter().take(6).map(|p| p.y * scale).collect();
-            let (low, high) = top
-                .iter()
-                .fold((f64::MAX, f64::MIN), |(l, h), y| (l.min(*y), h.max(*y)));
-            assert!((high - low - 1.5).abs() < 1e-9, "scale {scale}");
-            let min_x = border.iter().map(|p| p.x).fold(f64::MAX, f64::min);
-            let max_x = border.iter().map(|p| p.x).fold(f64::MIN, f64::max);
-            assert!((min_x + 0.75 / scale).abs() < 1e-9, "left corner closes");
-            assert!((max_x - 100.0 - 0.75 / scale).abs() < 1e-9);
+    fn the_border_is_whole_device_pixels_whatever_the_zoom() {
+        for ratio in [1.0, 2.0] {
+            let want_px = (1.5_f64 * ratio).round() / ratio;
+            for scale in [0.5, 1.0, 4.0] {
+                let view = ViewTransform::new(scale, Point::new(0.0, 0.0));
+                let list = build_marquee_overlay(
+                    view,
+                    &MarqueeOverlay::Box {
+                        from: Point::new(0.0, 0.0),
+                        to: Point::new(100.0, 60.0),
+                        contain: false,
+                    },
+                    ratio,
+                );
+                let border: Vec<Point> = list
+                    .triangles
+                    .iter()
+                    .filter(|v| v.color == theme::MARQUEE_TOUCH)
+                    .map(|v| v.position)
+                    .collect();
+                let top: Vec<f64> = border.iter().take(6).map(|p| p.y * scale).collect();
+                let (low, high) = top
+                    .iter()
+                    .fold((f64::MAX, f64::MIN), |(l, h), y| (l.min(*y), h.max(*y)));
+                assert!(
+                    (high - low - want_px).abs() < 1e-9,
+                    "ratio {ratio} scale {scale}"
+                );
+                let on_grid = |v: f64| ((v * ratio).round() - v * ratio).abs() < 1e-6;
+                assert!(on_grid(low) && on_grid(high), "edges on device pixels");
+                let min_x = border.iter().map(|p| p.x).fold(f64::MAX, f64::min) * scale;
+                let max_x = border.iter().map(|p| p.x).fold(f64::MIN, f64::max) * scale;
+                assert!(on_grid(min_x) && on_grid(max_x), "corners on device pixels");
+                assert!(
+                    min_x < 0.0 && max_x > 100.0 * scale,
+                    "corners close past the box"
+                );
+            }
         }
     }
 
@@ -251,6 +281,7 @@ mod tests {
                 to: Point::new(30.0, 5.0),
                 contain: true,
             },
+            1.0,
         );
         assert_eq!(list.triangle_count(), 2);
         assert_eq!(colors(&list), vec![theme::MARQUEE_CONTAIN]);
@@ -263,6 +294,7 @@ mod tests {
         let list = build_marquee_overlay(
             ViewTransform::identity(),
             &MarqueeOverlay::Lasso(vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0)]),
+            1.0,
         );
         assert_eq!(list.triangle_count(), 2 * 15);
         assert_eq!(colors(&list), vec![theme::MARQUEE_TOUCH], "always green");
@@ -289,6 +321,7 @@ mod tests {
         let straight = build_marquee_overlay(
             ViewTransform::identity(),
             &MarqueeOverlay::Lasso(vec![Point::new(0.0, 0.0), Point::new(100.0, 0.0)]),
+            1.0,
         );
         let bent = build_marquee_overlay(
             ViewTransform::identity(),
@@ -297,6 +330,7 @@ mod tests {
                 Point::new(50.0, 0.0),
                 Point::new(100.0, 0.0),
             ]),
+            1.0,
         );
         let covered = |list: &DrawList, x: f64| {
             list.triangles.chunks(3).any(|t| {
@@ -318,11 +352,13 @@ mod tests {
         let list = build_marquee_overlay(
             ViewTransform::identity(),
             &MarqueeOverlay::Lasso(vec![Point::new(0.0, 0.0), Point::new(1e9, 0.0)]),
+            1.0,
         );
         assert_eq!(list.triangle_count(), 2);
         let near_cap = build_marquee_overlay(
             ViewTransform::identity(),
             &MarqueeOverlay::Lasso(vec![Point::new(0.0, 0.0), Point::new(49_000.0, 0.0)]),
+            1.0,
         );
         assert!(
             near_cap.triangle_count() <= 2 * 7_100,
@@ -333,8 +369,11 @@ mod tests {
     #[test]
     fn a_line_with_fewer_than_two_points_draws_nothing() {
         for points in [vec![], vec![Point::new(3.0, 3.0)]] {
-            let list =
-                build_marquee_overlay(ViewTransform::identity(), &MarqueeOverlay::Lasso(points));
+            let list = build_marquee_overlay(
+                ViewTransform::identity(),
+                &MarqueeOverlay::Lasso(points),
+                1.0,
+            );
             assert_eq!(list.triangle_count(), 0);
         }
     }
@@ -346,6 +385,7 @@ mod tests {
         let list = build_marquee_overlay(
             view,
             &MarqueeOverlay::Lasso(vec![Point::new(0.0, 0.0), Point::new(20.0, 0.0)]),
+            1.0,
         );
         let xs: Vec<f64> = list
             .triangles

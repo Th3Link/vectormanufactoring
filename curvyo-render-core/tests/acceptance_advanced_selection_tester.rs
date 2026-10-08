@@ -20,7 +20,7 @@ fn view() -> ViewTransform {
     ViewTransform::new(1.0, pt(0.0, 0.0))
 }
 
-const GREEN: (u8, u8, u8) = (0x2F, 0xAE, 0x57);
+const GREEN: (u8, u8, u8) = (0x1C, 0x93, 0x47);
 const RED: (u8, u8, u8) = (0xE5, 0x48, 0x4D);
 
 fn rgb(v: &curvyo_render_core::Vertex) -> (u8, u8, u8) {
@@ -37,6 +37,7 @@ fn box_colours_and_fill_alpha() {
                 to: pt(40.0, 30.0),
                 contain,
             },
+            1.0,
         );
         assert!(
             l.triangles.iter().all(|v| rgb(v) == want),
@@ -57,6 +58,7 @@ fn box_is_symmetric_in_corner_order_and_degenerate_boxes_do_not_panic() {
             to: pt(40.0, 30.0),
             contain: false,
         },
+        1.0,
     );
     let b = build_marquee_overlay(
         view(),
@@ -65,6 +67,7 @@ fn box_is_symmetric_in_corner_order_and_degenerate_boxes_do_not_panic() {
             to: pt(0.0, 0.0),
             contain: false,
         },
+        1.0,
     );
     assert_eq!(a.triangle_count(), b.triangle_count());
     for (f, t) in [
@@ -80,6 +83,7 @@ fn box_is_symmetric_in_corner_order_and_degenerate_boxes_do_not_panic() {
                 to: t,
                 contain: true,
             },
+            1.0,
         );
     }
 }
@@ -90,6 +94,7 @@ fn lasso_is_green_and_dashed_four_on_three_off() {
     let l = build_marquee_overlay(
         view(),
         &MarqueeOverlay::Lasso(vec![pt(0.0, 0.0), pt(70.0, 0.0)]),
+        1.0,
     );
     assert!(l.triangles.iter().all(|v| rgb(v) == GREEN));
     // Dashes cover x ranges; collect x extents of triangles and merge.
@@ -131,7 +136,7 @@ fn lasso_degenerate_inputs_do_not_panic() {
         vec![pt(1.0, 1.0), pt(1.0, 1.0)],
         vec![pt(f64::NAN, 0.0), pt(1.0, 1.0)],
     ] {
-        let _ = build_marquee_overlay(view(), &MarqueeOverlay::Lasso(line));
+        let _ = build_marquee_overlay(view(), &MarqueeOverlay::Lasso(line), 1.0);
     }
 }
 
@@ -142,6 +147,7 @@ fn a_huge_lasso_line_has_a_bounded_triangle_count() {
         build_marquee_overlay(
             view(),
             &MarqueeOverlay::Lasso(vec![pt(0.0, 0.0), pt(len, 0.0)]),
+            1.0,
         )
         .triangle_count()
     };

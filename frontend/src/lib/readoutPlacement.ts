@@ -17,11 +17,38 @@ export interface Placement {
   top: number;
 }
 
+/** A rectangle in the canvas's own coordinates, CSS pixels. */
+export interface Rect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** Clear space kept between the chip and an avoided rectangle, CSS pixels. */
+const AVOID_GAP_PX = 4;
+
+function meets(placement: Placement, chip: Size, rect: Rect): boolean {
+  return (
+    placement.left < rect.right + AVOID_GAP_PX &&
+    placement.left + chip.width > rect.left - AVOID_GAP_PX &&
+    placement.top < rect.bottom + AVOID_GAP_PX &&
+    placement.top + chip.height > rect.top - AVOID_GAP_PX
+  );
+}
+
+/**
+ * `avoid` is a floating bar the chip must not land on (the Select bar,
+ * `specs/advanced-selection/`): when the chip would meet it, it flips below
+ * the pointer like it does at the top edge, and when the pointer itself is
+ * over the bar, below the bar.
+ */
 export function placeReadout(
   anchor: { x: number; y: number },
   chip: Size,
   canvas: Size,
   offset: number,
+  avoid?: Rect,
 ): Placement {
   let left = anchor.x + offset;
   let top = anchor.y - offset - chip.height;
@@ -30,6 +57,12 @@ export function placeReadout(
   }
   if (top < 0) {
     top = anchor.y + offset;
+  }
+  if (avoid && meets({ left, top }, chip, avoid)) {
+    top = anchor.y + offset;
+    if (meets({ left, top }, chip, avoid)) {
+      top = avoid.bottom + AVOID_GAP_PX;
+    }
   }
   return {
     left: Math.max(0, Math.min(left, canvas.width - chip.width)),

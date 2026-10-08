@@ -21,9 +21,10 @@
  *   resize or move cursor, so it does not promise one.
  * - `"crosshair"`: the built-in crosshair, a marquee armed or running
  *   (`specs/advanced-selection/`).
- * - `"lasso"`: a small freehand-loop glyph, a lasso armed or running, or Alt
- *   held over the canvas (the next press arms one); `crosshair` where
- *   custom cursor images are ignored.
+ * - `"lasso"`: an arrow with a dashed squiggle trailing from its lower right,
+ *   a lasso armed or running, or Alt held over the canvas (the next press
+ *   arms one); hotspot at the arrow tip, `crosshair` where custom cursor
+ *   images are ignored.
  * - anything else: no override (the tool's normal cursor).
  */
 
@@ -53,11 +54,11 @@ const DOUBLE_ARROW = "M4 12 H20 M4 12 L8 8.5 M4 12 L8 15.5 M20 12 L16 8.5 M20 12
 const SHEAR_ARROWS =
   "M4 9 H20 M20 9 L16.5 6 M20 9 L16.5 12 M20 15 H4 M4 15 L7.5 12 M4 15 L7.5 18";
 const CIRCULAR_ARROW = "M17.5 8 A7 7 0 1 0 19 12.5 M17.5 8 L17.5 3.5 M17.5 8 L13 8";
-/** A rope loop, wider than tall and not round (so it does not read as a
- * magnifier), with a short tail curving away to the lower left, where the
- * hotspot sits. */
-const LASSO_LOOP =
-  "M4 21 C6 18 9 18 11 16 C6 14 3 9 8 6 C12 3 20 4 21 9 C22 14 16 17 11 16";
+/** The pointer arrow, tip at (3, 3). */
+const POINTER_ARROW = "M3 3 L3 17 L7 13 L10 20 L12.5 19 L9.5 12 L15 12 Z";
+/** A short wavy trail from the arrow's lower right: the dashed line the maker
+ * is about to draw. */
+const LASSO_TRAIL = "M13 18 C15 14 17 14 18 17 C19 20 21 20 22.5 16";
 
 /** The built-in resize cursor nearest to a double arrow at `degrees`. */
 export function nearestBuiltInResizeCursor(degrees: number): string {
@@ -87,11 +88,20 @@ export function cursorForHint(hint: string): string | undefined {
     return "crosshair";
   }
   if (hint === "lasso") {
+    // An arrow with a dashed squiggle trailing from its lower right: the
+    // dashes echo the 4 / 3 line a lasso draws. Hotspot at the arrow tip.
+    const trail = (stroke: string, width: number) =>
+      `<path d="${LASSO_TRAIL}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-dasharray="3 2.5" stroke-linecap="butt"/>`;
+    const arrow =
+      `<path d="${POINTER_ARROW}" fill="white" stroke="white" stroke-width="3" stroke-linejoin="round"/>` +
+      `<path d="${POINTER_ARROW}" fill="white" stroke="black" stroke-width="1.2" stroke-linejoin="round"/>`;
     return `url("data:image/svg+xml,${encodeURIComponent(
       `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">` +
-        outlined(LASSO_LOOP) +
+        trail("white", 4) +
+        trail("black", 1.5) +
+        arrow +
         `</svg>`,
-    )}") 4 21, crosshair`;
+    )}") 3 3, crosshair`;
   }
   if (hint === "pointer") {
     return "pointer";

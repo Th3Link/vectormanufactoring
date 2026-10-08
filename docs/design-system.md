@@ -166,7 +166,7 @@ values, not an implementation site, for those four rows.
 | `--preview-new` | `--accent` (`#2F6FEE`) | The "new" half of blue-new/black-old (`unified-object-editing`): the hollow outline of the geometry a release would commit. An alias, not a second blue; named so the preview can be re-coloured without touching selection. The "old" half has no token: it is the committed object in its own style |
 | `--panel-bg` | `--toolbar-bg` (`#DCDCE0`) | `PropertiesPanel` (formerly `StylePanel`) and any later section it hosts — reuses the one chrome color rather than adding a second (`stroke-and-fill-styling`) |
 | `--panel-elevation-shadow` | `0 2px 8px rgba(0,0,0,0.24)` | Drop shadow on every floating chrome surface introduced 2026-10-05: the left tool panel and the per-selection contextual mini-toolbar — what makes them read as "floating over" the canvas rather than framing it. The right Properties panel is docked, not floating, and does not use this token. |
-| `--marquee-touch` | `#2FAE57` | New semantic color (`advanced-selection`), not a reuse of `--accent`: the marquee box's border and fill, and the lasso line, whenever the active mode is "touch" (crosses or fully contains selects it) — green, matching the customer's own naming. Deliberately distinct from `--accent` because this is a transient drag-mode indicator, not a selection state; don't read it as "selected." |
+| `--marquee-touch` | `#1C9347` | New semantic color (`advanced-selection`), not a reuse of `--accent`: the marquee box's border and fill, and the lasso line, whenever the active mode is "touch" (crosses or fully contains selects it) — green, matching the customer's own naming. Deliberately distinct from `--accent` because this is a transient drag-mode indicator, not a selection state; don't read it as "selected." **2026-10-08 (UX review):** darkened from `#2FAE57` (2.35:1 on `--canvas-bg`) to `#1C9347` (3.2:1 on the canvas, 3.95:1 on white, 5.3:1 on black), the same contrast as `--marquee-contain`. |
 | `--marquee-touch-fill` | `--marquee-touch` at 12% opacity | Marquee box interior fill in touch mode — low-opacity so canvas content underneath stays legible while the box is open, matching LightBurn's own semi-transparent-fill-plus-solid-border convention |
 | `--marquee-contain` | `#E5484D` | Marquee box border/fill color whenever the active mode is "contain" (fully-inside-only selects it) — red, matching the customer's own naming |
 | `--marquee-contain-fill` | `--marquee-contain` at 12% opacity | Marquee box interior fill in contain mode, same reasoning as `--marquee-touch-fill` |
@@ -239,9 +239,9 @@ values, not an implementation site, for those four rows.
 | `PropertiesPanel` width | 280px, fixed; content 244px | Right-docked panel (`stroke-and-fill-styling`'s `StylePanel` is its first section), full height between the menu and the status bar, a sibling of the canvas region, which fills the rest. Collapsible (0px, tab stays). Rows, controls and anchoring: "Properties panel: Style section" |
 | Contextual mini-toolbar padding | 6px | Floating per-selection toolbar (`NodeToolbar`'s actions, 2026-10-05), anchored near the current canvas selection rather than docked |
 | Status bar zoom field | integer percentage, no decimals | New center segment (`canvas-navigation-and-selection`), between the existing cursor-position (left) and document-size (right) fields `project-file-foundation` already shipped; e.g. "100%", range 2%–8000% |
-| Marquee/lasso stroke weight | 1.5px screen-space | Marquee box border and lasso line (`advanced-selection`) — deliberately heavier than the 1px bounding-box selection outline so the drag-feedback shape reads as a distinct, topmost layer over any selected objects' own 1px boxes still visible underneath (e.g. during a Ctrl-add drag) |
+| Marquee/lasso stroke weight | 1.5px screen-space; the marquee border is laid on whole device pixels and a whole number of them wide, `max(1, round(1.5 * devicePixelRatio))` (2 px at ratio 1, 1.5 px at ratio 2), like the selection box, so it is crisp at 1x; the lasso line keeps 1.5px | Marquee box border and lasso line (`advanced-selection`) — deliberately heavier than the 1px bounding-box selection outline so the drag-feedback shape reads as a distinct, topmost layer over any selected objects' own 1px boxes still visible underneath (e.g. during a Ctrl-add drag) |
 | Lasso line dash pattern | 4px on / 3px off, screen-space | Distinguishes the lasso's freehand line from the marquee box's solid border at a glance, despite sharing a color family (`advanced-selection`) |
-| Marquee/lasso modifier-state legend | small on-canvas label, positioned near the live cursor position | `advanced-selection`'s drag-mode readout, same convention as `primitive-shapes`' drag-to-create numeric readout (on-canvas, not status-bar) |
+| Marquee/lasso modifier-state legend | small on-canvas label, 12px, `--toolbar-icon` on `--toolbar-bg` with a 1px border (`--toolbar-icon` at 25%) so it reads as its own surface wherever it lands. Placed 12px up and to the right of the pointer; flips to the left of the pointer at the canvas's right edge, below it at the top edge and when it would meet the Select bar (4px clear), and below the bar when the pointer is over the bar; never reaches into the last 14px of the canvas, so it cannot cover the properties panel's collapse tab when the pointer leaves the canvas | `advanced-selection`'s drag-mode readout, same convention as `primitive-shapes`' drag-to-create numeric readout (on-canvas, not status-bar) |
 
 ## Interaction conventions (apply to every later tool, not just this one)
 
@@ -555,11 +555,16 @@ values, not an implementation site, for those four rows.
 - **Marquee and lasso cursors** (`advanced-selection`): the built-in `crosshair`
   from the press of a marquee (empty canvas, Alt up) to its release, whatever
   Alt does afterwards (a box inverted by Alt is told by its colour, not by the
-  cursor). A small freehand-loop glyph (24px, the same white-halo-under-black
-  construction as the rotate and resize cursors, hotspot at the loop's tail,
+  cursor). The lasso glyph (24px, the same white-halo-under-black
+  construction as the rotate and resize cursors, hotspot at the arrow tip,
   `crosshair` where custom images are ignored) while Alt is held with no
   button down and from the press of a lasso (Alt down at the press) to its
   release, also if Alt is let go mid-drag. Shift and Ctrl change neither.
+  *(2026-10-08, UX review N4: the loop-with-tail glyph read as a magnifier.)*
+  The lasso glyph is the pointer arrow (white fill, black outline, tip at the
+  hotspot) with a short dashed squiggle trailing from its lower right, drawn
+  white-halo-under-black like the other cursors; the dashes echo the 4 / 3
+  line the drag draws.
 - **Pan cursor** (`canvas-navigation-and-selection`): standard grab/grabbing
   convention for the drag-initiated pans only — open-hand cursor from the
   moment Space is held or the middle mouse button is pressed, closed-hand/

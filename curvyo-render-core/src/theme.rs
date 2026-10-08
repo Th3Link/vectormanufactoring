@@ -254,8 +254,9 @@ pub const SELECTION_BOX_GUIDE_TOLERANCE_PX: f64 = 1.0;
 pub const SELECTION_BOX_MAX_DASHED_EDGE_PX: f64 = 50_000.0;
 
 /// `--marquee-touch`: the marquee box in touch mode and the lasso line
-/// (`advanced-selection`, `docs/design-system.md`).
-pub const MARQUEE_TOUCH: RgbaColor = RgbaColor::opaque(0x2F, 0xAE, 0x57);
+/// (`advanced-selection`, `docs/design-system.md`). 3.2:1 on `--canvas-bg`,
+/// the same as `--marquee-contain` (the first green, `#2FAE57`, had 2.35:1).
+pub const MARQUEE_TOUCH: RgbaColor = RgbaColor::opaque(0x1C, 0x93, 0x47);
 
 /// `--marquee-contain`: the marquee box in contain mode.
 pub const MARQUEE_CONTAIN: RgbaColor = RgbaColor::opaque(0xE5, 0x48, 0x4D);
@@ -264,7 +265,9 @@ pub const MARQUEE_CONTAIN: RgbaColor = RgbaColor::opaque(0xE5, 0x48, 0x4D);
 /// 255, rounded.
 pub const MARQUEE_FILL_ALPHA: u8 = 31;
 
-/// The marquee border's and the lasso line's weight, screen-space pixels.
+/// The marquee border's and the lasso line's weight, screen-space pixels. The
+/// border is drawn a whole number of device pixels wide, at least 1
+/// (`round(1.5 * devicePixelRatio)`), on the device pixel grid.
 pub const MARQUEE_STROKE_PX: f64 = 1.5;
 
 /// The lasso line's dash length, screen-space pixels (4 on, 3 off).

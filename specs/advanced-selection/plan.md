@@ -88,6 +88,17 @@ the point is listed under "Reconciliation" for the lead.
 5. **Lasso and fills.** Outline proximity only (AC 18); a line inside a filled shape that never
    crosses its outline selects nothing, as AC 20 words it.
 
+## Known limits
+
+- **Alt-drag and Alt-click may never reach the app on some Linux desktops.** KDE, xfwm and
+  older GNOME take Alt+drag to move the window; Firefox and Windows may react to a lone Alt
+  release (the page prevents that default while the pointer is on the canvas in the Select tool).
+  Inkscape has the same limit. To be checked once on the customer's desktop; if it bites, the
+  Alt gestures need another binding, which is a decision for the customer.
+- **The lasso tests outlines only**, also over filled shapes (criterion 18 and 20); a fill-aware
+  lasso is a follow-up.
+- A marquee or lasso shows no preview of what it will select; the legend names mode and combine.
+
 ## Validation
 
 - Core logic test-first in `curvyo-ui-core` (unit tests beside each module, integration tests in

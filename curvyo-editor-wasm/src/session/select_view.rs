@@ -347,6 +347,9 @@ impl Session {
             self.held,
         ) {
             PressTarget::InsideSelectedBox => "move",
+            // The 8 px band around the outline of the sole selected object:
+            // a press there selects it again and a drag moves it, as inside.
+            PressTarget::Object(id) if self.selection.ids() == [id] => "move",
             _ => "default",
         }
     }

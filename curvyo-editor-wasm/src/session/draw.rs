@@ -87,7 +87,11 @@ impl Session {
         // The marquee box or lasso line: above the boxes and handles, the
         // topmost layer of a selection drag.
         if let Some(overlay) = self.marquee_overlay() {
-            list.extend(build_marquee_overlay(view, &overlay));
+            list.extend(build_marquee_overlay(
+                view,
+                &overlay,
+                self.device_pixel_ratio,
+            ));
         }
         if let Some(preview) = self.live_preview() {
             list.extend(curvyo_render_core::build_shape_live_preview(

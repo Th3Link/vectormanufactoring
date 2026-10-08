@@ -117,6 +117,7 @@ export function ToolRail({ tool, selectionCount, onSelect, onReturnFocus }: Tool
           active={tool === "select"}
           label="Select tool"
           shortcut="S or Esc"
+          hint="Drag a box. Shift: add. Ctrl: remove. Alt: invert, lasso, cycle"
           icon={<SelectIcon size={20} />}
           onSelect={onSelect}
           onReturnFocus={onReturnFocus}

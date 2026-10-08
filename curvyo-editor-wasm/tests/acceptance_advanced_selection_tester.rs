@@ -161,7 +161,7 @@ fn count_colour(s: &Session, rgb: (u8, u8, u8), alpha: Option<u8>) -> usize {
         .count()
 }
 
-const GREEN: (u8, u8, u8) = (0x2F, 0xAE, 0x57);
+const GREEN: (u8, u8, u8) = (0x1C, 0x93, 0x47);
 const RED: (u8, u8, u8) = (0xE5, 0x48, 0x4D);
 
 // ---------------------------------------------------------------------

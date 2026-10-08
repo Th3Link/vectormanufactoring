@@ -242,7 +242,7 @@ fn the_overlay_is_drawn_during_the_drag_only() {
             .filter(|v| (v.color.r, v.color.g, v.color.b) == rgb)
             .count()
     };
-    let green = (0x2F, 0xAE, 0x57);
+    let green = (0x1C, 0x93, 0x47);
     let red = (0xE5, 0x48, 0x4D);
     let mut s = session();
     assert_eq!((count(&s, green), count(&s, red)), (0, 0));
@@ -448,4 +448,30 @@ fn shortcuts_are_gated_during_a_marquee() {
     assert_eq!(outcome, KeyOutcome::Ignored);
     assert_eq!(s.tool(), Tool::Select);
     s.pointer_up(pt(340.0, 330.0), false, false);
+}
+
+/// The 8 px band outside the sole selected object's outline shows the move
+/// cursor, as a press there moves it; further out it is the arrow.
+#[test]
+fn the_move_cursor_covers_the_hit_band_of_the_selected_object() {
+    let document = Document::new(1);
+    let _ = document.create_rect(RectBounds {
+        origin: pt(0.0, 0.0),
+        width: Length::from_mm(100.0),
+        height: Length::from_mm(100.0),
+    });
+    let mut s = Session::open(2, &pack(&document, "0.1.0").unwrap()).unwrap();
+    s.resize_viewport(1200.0, 800.0);
+    click(&mut s, pt(25.0, 0.0));
+    assert_eq!(s.selected_object_count(), 1);
+    for (px, cursor) in [
+        (0.0, "move"),
+        (6.0, "move"),
+        (7.5, "move"),
+        (12.0, "default"),
+    ] {
+        let at = pt(25.0, -px / k(&s));
+        s.pointer_hover(at, false, false);
+        assert_eq!(s.cursor_hint(), cursor, "{px} px outside the outline");
+    }
 }
