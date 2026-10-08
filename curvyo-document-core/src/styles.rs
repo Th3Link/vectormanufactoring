@@ -259,10 +259,16 @@ impl Document {
         Ok(())
     }
 
-    /// Adds `stop` to the object's gradient, in **one commit**, inserted
-    /// before the first stop whose position is greater, so a tie goes after
-    /// the existing equal stops (acceptance criterion 18). The caller chose
-    /// the position, colour and opacity (the ramp's own at that position).
+    /// Adds `stop` to the object's gradient, in **one commit**, so that in
+    /// render order (position, ties in list order) it comes after every stop
+    /// whose position is not greater and before every stop whose position is
+    /// greater: a tie goes after the existing equal stops (acceptance criterion
+    /// 18). The stored list is not sorted (a position edit does not move a stop
+    /// in it), so the place is found from the list indices of the stops at or
+    /// before the position, not from the first greater stop in list order,
+    /// which would put the new stop in front of a coincident pair and change
+    /// the ramp. The caller chose the position, colour and opacity (the ramp's
+    /// own at that position).
     ///
     /// # Errors
     /// [`StyleEditError::NoSuchObject`]; [`StyleEditError::NoStopList`] if the
@@ -278,13 +284,17 @@ impl Document {
         if stop_index(&list, stop.id).is_some() {
             return Err(StyleEditError::DuplicateStop);
         }
+        // After the last listed stop at or before the position; the front when
+        // there is none. Stops listed before that one but further along the
+        // gradient stay after the new stop in render order.
         let index = (0..list.len())
+            .rev()
             .find(|&index| {
                 stop_map_at(&list, index)
                     .and_then(|map| read_stop(&map))
-                    .is_some_and(|existing| existing.position.get() > stop.position.get())
+                    .is_some_and(|existing| existing.position.get() <= stop.position.get())
             })
-            .unwrap_or_else(|| list.len());
+            .map_or(0, |last| last + 1);
         insert_stop_at(&list, index, &stop);
         self.commit_with_label("add_stop");
         Ok(())

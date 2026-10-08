@@ -427,7 +427,6 @@ fn ac17_ac34_a_multi_selection_seeds_each_object_from_its_own_colour_then_edits_
 }
 
 #[test]
-#[ignore = "DEFECT (AC 34, low): Session::set_stop_text edits rank k of every selected object even when the stop counts differ and the editor is hidden"]
 fn ac34_different_counts_show_the_message_and_stop_edits_write_nothing() {
     let d = Document::new(1);
     let a = rect(&d, 0.0, 0.0, 10.0, 10.0);
@@ -903,7 +902,6 @@ fn a_gradient_survives_a_drag_move_of_its_object_with_the_box_following() {
 /// the panel: drag stops until two share a position (this leaves the stored
 /// list unsorted), then click the bar on that position.
 #[test]
-#[ignore = "DEFECT (AC 18): a stop added on a hard edge after position edits changes the ramp (list order vs render order)"]
 fn ac18_defect_bar_click_on_a_hard_edge_after_dragging_changes_the_ramp() {
     let (mut s, _r) = linear_rect(three());
     // red 0 -> 100, then blue 100 -> 50: list [red@1, green@.5, blue@.5],

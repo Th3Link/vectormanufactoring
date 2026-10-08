@@ -357,16 +357,16 @@ fn a_rank_names_each_objects_own_stop_in_position_order_ties_in_list_order() {
     );
     document.add_stop(b, stop(3, 0.3, red(), 1.0)).unwrap();
     let objects = objects(&document);
-    // `a` is listed [3, 1, 2] (the add went before the first greater stop), so by
-    // position: id 3 (0.5, listed first), id 2 (0.5, listed later), id 1 (0.9).
+    // `a` is listed [1, 2, 3] (the add went after the last stop at or before 0.5),
+    // so by position: id 2 (0.5), id 3 (0.5, listed later), id 1 (0.9).
     let ids = |rank| {
         stop_targets(&objects, &[a, b], rank)
             .into_iter()
             .map(|(_, stop)| stop)
             .collect::<Vec<_>>()
     };
-    assert_eq!(ids(0), vec![StopId::new(7, 3), StopId::new(7, 1)]);
-    assert_eq!(ids(1), vec![StopId::new(7, 2), StopId::new(7, 2)]);
+    assert_eq!(ids(0), vec![StopId::new(7, 2), StopId::new(7, 1)]);
+    assert_eq!(ids(1), vec![StopId::new(7, 3), StopId::new(7, 2)]);
     assert_eq!(ids(2), vec![StopId::new(7, 1), StopId::new(7, 3)]);
     assert_eq!(stop_targets(&objects, &[a, b], 3).len(), 0);
 }

@@ -671,7 +671,6 @@ fn assert_same_ramp(before: &[GradientStop], after: &[GradientStop]) {
 }
 
 #[test]
-#[ignore = "DEFECT (AC 18): add_stop inserts by list order; after a position edit the list is unsorted and a stop added on a hard edge lands before the pair"]
 fn ac18_defect_a_stop_added_on_a_hard_edge_of_an_unsorted_list_changes_the_ramp() {
     // A user dragged the white stop past the others: the list is
     // [white@1, black@0, red@.5, blue@.5] in list order.
@@ -686,7 +685,6 @@ fn ac18_defect_a_stop_added_on_a_hard_edge_of_an_unsorted_list_changes_the_ramp(
 }
 
 #[test]
-#[ignore = "DEFECT (AC 18): same cause, in the pad region"]
 fn ac18_defect_pad_region_variant_of_the_unsorted_list_insertion() {
     let list = vec![
         stop(1, 1.0, rgb(0, 0, 0), 0.0),

@@ -7,7 +7,8 @@
 
 use curvyo_document_core::{FillKind, FillMode, FillModeTarget, GradientStop, StopChange};
 use curvyo_ui_core::{
-    StopField, StyleEntryError, new_stop_values, selected_rank, stop_edits, stop_targets,
+    StopField, StopsPanel, StyleEntryError, new_stop_values, selected_rank, stop_edits,
+    stop_targets, stops_panel,
 };
 
 use super::Session;
@@ -48,7 +49,14 @@ impl Session {
 
     fn apply_stop_change(&mut self, rank: usize, change: StopChange) -> bool {
         self.flush_style_preview();
-        let targets = stop_targets(&self.objects(), &self.style_scope().ids, rank);
+        let objects = self.objects();
+        let ids = self.style_scope().ids;
+        // The editor is hidden when the stop counts differ, so no edit by rank
+        // is possible (criterion 34).
+        if !matches!(stops_panel(&objects, &ids), StopsPanel::Editor(_)) {
+            return false;
+        }
+        let targets = stop_targets(&objects, &ids, rank);
         if targets.is_empty() {
             return false;
         }

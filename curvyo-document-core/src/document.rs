@@ -80,6 +80,17 @@ use crate::units::{DocumentSize, Length};
 /// The stroke `stroke_width` and `stroke` keys keep their meaning. This is
 /// the complete format of the slice: later parts of the story add no key
 /// and need no further bump. The number is provisional by the rule above.
+///
+/// **Two stored forms of `fill_stops`, one version.** A stop list written by a
+/// build up to the gradient part is a regular movable-list container; new stop
+/// lists are written as a Loro *mergeable* child container (`LoroMap::
+/// ensure_mergeable_movable_list`: a marker value in the map slot and a
+/// container id that follows from the map and the key), so two peers that create
+/// the list at once merge their stops instead of one list replacing the other.
+/// Readers accept both forms, and no build before this one wrote `fill_stops`
+/// from the editor, so the version stays 7. Reading the mergeable form needs
+/// Loro 1.16 or later (the workspace requires it); the goldens are
+/// `styles_v7.curvyo` (regular) and `styles_v7_mergeable_stops.curvyo`.
 pub const CURRENT_FORMAT_VERSION: u32 = 7;
 
 const ROOT_MAP: &str = "root";

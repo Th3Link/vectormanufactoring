@@ -5,10 +5,14 @@
 //! containers opening with every style at its frozen default and unchanged by
 //! opening, `document.json`'s `style` object, and every open-file refusal case.
 //!
-//! The fixture is written by the `#[ignore]`d generator below
-//! (`cargo test -p curvyo-document-core --test style_format
-//! generate_style_fixtures -- --ignored`); the committed bytes are what the
-//! tests read.
+//! Two fixtures hold the same document. `styles_v7.curvyo` is the golden of the
+//! **regular** stop-list form (a `fill_stops` container created by an op) and is
+//! never regenerated: its bytes are what the first format-7 builds could write.
+//! `styles_v7_mergeable_stops.curvyo` is the golden of the form new stop lists
+//! are written in (a mergeable child container); the `#[ignore]`d generator
+//! below writes only that one (`cargo test -p curvyo-document-core --test
+//! style_format generate_style_fixtures -- --ignored`). Both are read by the
+//! tests and must read back identically.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 
@@ -26,6 +30,8 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 const V7_FIXTURE: &str = "styles_v7.curvyo";
+/// The same document with its stop list stored as a mergeable child container.
+const MERGEABLE_FIXTURE: &str = "styles_v7_mergeable_stops.curvyo";
 /// The `format_version` the build that introduced styles declared.
 const STYLES_FORMAT_VERSION: u64 = 7;
 
@@ -433,14 +439,34 @@ fn build_v7_document() -> Vec<u8> {
     pack(&document, "0.1.0").unwrap()
 }
 
-/// Writes the committed fixture. Run deliberately, then review the bytes.
+/// Writes `styles_v7_mergeable_stops.curvyo`. Run deliberately, then review the
+/// bytes. It never touches `styles_v7.curvyo`: that file is the golden of the
+/// regular stop-list form and a regenerated one would hold the mergeable form.
 #[test]
 #[ignore = "run deliberately to regenerate the fixture, not on every `cargo test`"]
 fn generate_style_fixtures() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures")
-        .join(V7_FIXTURE);
+        .join(MERGEABLE_FIXTURE);
     std::fs::write(path, build_v7_document()).unwrap();
+}
+
+/// The two stored forms of a stop list read back as one document: every style
+/// and every stop equal, with the stop ids and list order intact.
+#[test]
+fn the_mergeable_stop_list_fixture_reads_back_like_the_regular_one() {
+    let regular = unpack(2, &fixture(V7_FIXTURE)).unwrap();
+    let mergeable = unpack(2, &fixture(MERGEABLE_FIXTURE)).unwrap();
+    let (a, b) = (objects(&regular), objects(&mergeable));
+    assert_eq!(a.len(), b.len());
+    let mut stops = 0;
+    for (x, y) in a.iter().zip(&b) {
+        assert_eq!(style_of(x), style_of(y));
+        stops += style_of(y).fill.stops.len();
+    }
+    assert!(stops >= 3, "the fixture holds a gradient with stops");
+    // They are two different files (two stored forms of one document).
+    assert_ne!(fixture(V7_FIXTURE), fixture(MERGEABLE_FIXTURE));
 }
 
 #[test]

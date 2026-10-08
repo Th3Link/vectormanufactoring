@@ -20,7 +20,7 @@ thiserror = { version = "2", default-features = false, features = ["std"] }
 serde = { version = "1", default-features = false, features = ["derive", "std"] }
 serde_json = { version = "1", default-features = false, features = ["std"] }
 zip = { version = "8", default-features = false, features = ["deflate"] }
-loro = { version = "1", default-features = false }
+loro = { version = "1.16", default-features = false }
 kurbo = { version = "0.13", default-features = false, features = ["std"] }
 lyon = "1"
 

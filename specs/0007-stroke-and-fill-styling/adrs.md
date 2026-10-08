@@ -106,6 +106,11 @@ already there.
     fill_opacity   : f64 in [0, 1]                absent = 1.0      (AC 14)
     fill_stops     : movable list of stop         absent until the first
                                                   gradient          (AC 16–20)
+                     new lists are a Loro MERGEABLE child container (marker value in
+                     the slot, deterministic container id); a list written earlier is
+                     a regular child container; readers accept both (Loro >= 1.16).
+                     format_version stays 7. Goldens: styles_v7.curvyo (regular),
+                     styles_v7_mergeable_stops.curvyo (mergeable).
   stop = map:
     id       : hex string of the StopId (u128)    written once
     position : f64 in [0, 1]                      LWW register
