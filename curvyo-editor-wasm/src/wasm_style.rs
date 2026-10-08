@@ -108,4 +108,12 @@ impl WasmSession {
             self.session.set_fill_mode(mode);
         }
     }
+
+    /// The properties panel is about to open (`-280`) or close (`+280`): the
+    /// canvas resize that follows keeps the view's top-left origin, so the
+    /// document does not move on screen. Call just before the layout changes.
+    pub fn keep_view_origin_for_panel_toggle(&mut self, width_delta_css_px: f64) {
+        self.session
+            .keep_view_origin_for_width_change(width_delta_css_px);
+    }
 }

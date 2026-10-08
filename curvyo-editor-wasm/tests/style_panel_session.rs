@@ -220,3 +220,16 @@ fn the_node_tool_edits_the_selected_path() {
     let style = &stored_styles(&session)[0];
     assert_eq!((style.stroke.color.r, style.stroke.color.g), (0xFF, 0x88));
 }
+
+#[test]
+fn a_panel_toggle_does_not_move_the_document_on_screen() {
+    let mut session = session_with_rectangles(1);
+    session.resize_viewport(1000.0, 600.0);
+    let corner = session.view().screen_to_document(0.0, 0.0);
+    session.keep_view_origin_for_width_change(-280.0);
+    session.resize_viewport(720.0, 600.0);
+    assert_eq!(session.view().screen_to_document(0.0, 0.0), corner);
+    session.keep_view_origin_for_width_change(280.0);
+    session.resize_viewport(1000.0, 600.0);
+    assert_eq!(session.view().screen_to_document(0.0, 0.0), corner);
+}

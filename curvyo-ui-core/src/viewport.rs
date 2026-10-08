@@ -72,6 +72,10 @@ impl Default for Zoom {
     }
 }
 
+/// How far the real width change of a panel toggle may differ from the
+/// announced one, CSS pixels: the host rounds to whole device pixels.
+const PANEL_TOGGLE_TOLERANCE_PX: f64 = 1.5;
+
 /// A drag-pan gesture in flight (middle-mouse or Space+primary,
 /// acceptance criteria 3, 4): the document point under the cursor at
 /// press time, which [`Viewport::continue_drag_pan`] keeps fixed under
@@ -95,6 +99,10 @@ pub struct Viewport {
     /// initialized" rather than a real shrink-to-nothing.
     canvas_size: (f64, f64),
     drag_pan: Option<PanGesture>,
+    /// The width change (new minus old, CSS pixels) of one coming resize that
+    /// must keep the view's top-left origin instead of its centre: the
+    /// properties panel opening or closing.
+    keep_origin_for: Option<f64>,
 }
 
 impl Viewport {
@@ -107,6 +115,7 @@ impl Viewport {
             origin: Point::new(0.0, 0.0),
             canvas_size: (0.0, 0.0),
             drag_pan: None,
+            keep_origin_for: None,
         }
     }
 
@@ -193,6 +202,17 @@ impl Viewport {
         self.drag_pan = None;
     }
 
+    /// Announces that the next resize is the properties panel opening or
+    /// closing and changes the canvas width by `delta` CSS pixels (negative
+    /// when the canvas shrinks): that resize keeps the view's top-left origin,
+    /// so the document does not move on screen and only the right edge
+    /// reveals or hides canvas (`specs/0007-stroke-and-fill-styling`
+    /// criterion 39). A later resize that does not match it (another width
+    /// change, or a height change) is an ordinary window resize.
+    pub fn keep_origin_for_width_change(&mut self, delta: f64) {
+        self.keep_origin_for = Some(delta);
+    }
+
     /// The canvas's size in CSS pixels, `(0.0, 0.0)` before the host's first
     /// size report.
     #[must_use]
@@ -214,9 +234,17 @@ impl Viewport {
     /// default "sticky zoom off" resize behaviour. The very first call
     /// (canvas size not yet known, `(0.0, 0.0)`) only records the size,
     /// since there is no prior center to preserve.
+    ///
+    /// A resize that matches a pending
+    /// [`Viewport::keep_origin_for_width_change`] (that width change, same
+    /// height) keeps the top-left origin instead, and consumes the request.
     pub fn resize(&mut self, width: f64, height: f64) {
         let (old_width, old_height) = self.canvas_size;
-        if old_width > 0.0 || old_height > 0.0 {
+        let keep_origin = self.keep_origin_for.take().is_some_and(|expected| {
+            (width - old_width - expected).abs() <= PANEL_TOGGLE_TOLERANCE_PX
+                && (height - old_height).abs() <= PANEL_TOGGLE_TOLERANCE_PX
+        });
+        if !keep_origin && (old_width > 0.0 || old_height > 0.0) {
             let scale = self.zoom.scale();
             let delta = Vec2::new((old_width - width) / 2.0, (old_height - height) / 2.0)
                 .scaled(1.0 / scale);
@@ -387,5 +415,49 @@ mod tests {
         viewport.resize(800.0, 600.0);
         let origin_after = viewport.screen_to_document(0.0, 0.0);
         assert_eq!(origin_before, origin_after);
+    }
+
+    /// The properties panel opening or closing resizes the canvas by its own
+    /// width; the document must not move on screen (`0007` criterion 39).
+    #[test]
+    fn a_panel_toggle_keeps_the_top_left_origin() {
+        let mut viewport = Viewport::new();
+        viewport.resize(1000.0, 600.0);
+        viewport.pan_by_screen_delta(120.0, 40.0);
+        let corner = viewport.screen_to_document(0.0, 0.0);
+        let point = viewport.screen_to_document(300.0, 200.0);
+
+        viewport.keep_origin_for_width_change(-280.0);
+        viewport.resize(720.0, 600.0);
+        assert_eq!(viewport.screen_to_document(0.0, 0.0), corner);
+        assert_eq!(viewport.screen_to_document(300.0, 200.0), point);
+        assert_eq!(viewport.canvas_size(), (720.0, 600.0));
+
+        viewport.keep_origin_for_width_change(280.0);
+        viewport.resize(1000.0, 600.0);
+        assert_eq!(viewport.screen_to_document(0.0, 0.0), corner);
+    }
+
+    /// The request is for one panel-sized width change only: a window resize
+    /// that does not match it, or the next resize after it, keeps the centre.
+    #[test]
+    fn a_panel_toggle_request_does_not_outlive_its_resize() {
+        let mut viewport = Viewport::new();
+        viewport.resize(1000.0, 600.0);
+        viewport.keep_origin_for_width_change(-280.0);
+        // The window shrank in height too: a window resize, centre kept.
+        viewport.resize(720.0, 500.0);
+        let centre = viewport.screen_to_document(360.0, 250.0);
+        viewport.resize(1000.0, 500.0);
+        let after = viewport.screen_to_document(500.0, 250.0);
+        assert!((centre.x - after.x).abs() < 1e-9);
+
+        // Used once: the same width change later is an ordinary resize.
+        viewport.keep_origin_for_width_change(-280.0);
+        viewport.resize(720.0, 500.0);
+        let centre = viewport.screen_to_document(360.0, 250.0);
+        viewport.resize(440.0, 500.0);
+        let after = viewport.screen_to_document(220.0, 250.0);
+        assert!((centre.x - after.x).abs() < 1e-9);
     }
 }
