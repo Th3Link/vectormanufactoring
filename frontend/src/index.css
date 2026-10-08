@@ -255,6 +255,7 @@ input[type="range"].select-bar-slider-mixed::-moz-range-thumb {
 
 /* The panel scrolls as a whole: one thin scrollbar, no scroll chaining. */
 .properties-panel {
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -300,4 +301,11 @@ input[type="range"].select-bar-slider-mixed::-moz-range-thumb {
 }
 .colour-picker .react-colorful__interactive:focus .react-colorful__pointer {
   box-shadow: 0 0 0 1px var(--toolbar-icon), 0 0 0 3px var(--editor-accent);
+}
+
+/* A control the panel focused from its own keyboard shortcut shows the focus
+   ring even when the webview does not count script focus as keyboard focus. */
+.properties-panel [data-keyboard-focus] {
+  outline: 2px solid var(--editor-accent);
+  outline-offset: 1px;
 }

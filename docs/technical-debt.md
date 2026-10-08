@@ -896,9 +896,9 @@ box size; those tests count fans only (`white_count` in
 - **`ToolRail` and `ToolbarSwitch` keep their own inline `Tooltip`.** The
   design system says they become the one `ui/tooltip.tsx` wrapper; PR 3 adds the
   wrapper for the panel and does not touch the two older users.
-- **react-colorful steps 1 % only and labels its sliders "Color", "Hue" and
+- **react-colorful steps 5 % and labels its sliders "Color", "Hue" and
   "Alpha".** The picker renames them to the design system's names after mount
-  and handles Shift plus an arrow key itself (10 %). If a later react-colorful
+  and handles the arrow keys itself (1 %, Shift 10 %). If a later react-colorful
   upgrade changes its markup, the rename silently stops; the picker has no test
   for it (see the item above).
 - **Opening or closing the panel announces its width change to the viewport**

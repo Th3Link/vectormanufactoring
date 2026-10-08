@@ -107,6 +107,10 @@ export type TextOutcome = string;
 
 export interface StylePanelApi {
   view: StyleView;
+  /** A panel drag is running; the colour popover keeps its own state meanwhile. */
+  previewing: boolean;
+  /** Escapes that dropped a preview; a colour popover restarts on each. */
+  cancels: number;
   /** Enter or Tab in a typed field. */
   setText: (field: StyleFieldName, text: string) => TextOutcome;
   /** A colour area or hue tick: shown on the canvas, nothing written. The
@@ -141,7 +145,7 @@ export function useStylePanel(editor: EditorHandle): StylePanelApi {
   // (`syncRevision`) or this panel changed something (`local`).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const view = useMemo(() => readView(getSession()), [getSession, syncRevision, local]);
-  const preview = usePreviewGesture(getSession, refresh);
+  const { queue: preview, previewing, cancels } = usePreviewGesture(getSession, refresh);
 
   const setText = useCallback(
     (field: StyleFieldName, text: string): TextOutcome => {
@@ -169,6 +173,8 @@ export function useStylePanel(editor: EditorHandle): StylePanelApi {
 
   return {
     view,
+    previewing,
+    cancels,
     setText,
     previewColor: (field, rgb) => preview((s) => s.preview_style_color(field, rgb)),
     previewOpacity: (field, percent) => preview((s) => s.preview_style_opacity(field, percent)),

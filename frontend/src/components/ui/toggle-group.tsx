@@ -35,7 +35,10 @@ const BORDER = "border-[color-mix(in_srgb,var(--toolbar-icon)_60%,transparent)]"
 /**
  * A strip of radio buttons (`docs/design-system.md`, "`ToggleGroup` item") on
  * Radix's `RadioGroup`: one Tab stop per group, the arrow keys move focus and
- * select, Home and End jump. One 1 px bordered strip; the pressed item on
+ * select, Home and End jump and select. The tooltip trigger shares the item's
+ * element and replaces its `data-state` ("closed", "delayed-open"), so the
+ * pressed look is keyed on `aria-checked`, which nothing else touches. One 1 px
+ * bordered strip; the pressed item on
  * `--toolbar-icon-active-bg`, or, when the group is disabled, on
  * `--toolbar-icon` at 30%.
  */
@@ -57,12 +60,30 @@ export function ToggleGroup<T extends string>({
       disabled={disabled}
       value={value ?? ""}
       onValueChange={(next) => onChange(next as T)}
+      onKeyDownCapture={(event) => {
+        // Home and End select the first and last item, as the arrows select
+        // the next: Radix moves focus on them but does not select.
+        if (event.key !== "Home" && event.key !== "End") {
+          return;
+        }
+        const items = Array.from(
+          event.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]:not(:disabled)'),
+        );
+        const target = event.key === "Home" ? items[0] : items[items.length - 1];
+        if (target) {
+          event.preventDefault();
+          event.stopPropagation();
+          target.focus();
+          onChange(target.dataset.value as T);
+        }
+      }}
       className={`inline-flex w-fit shrink-0 self-start overflow-hidden rounded-[5px] border ${BORDER}`}
     >
       {options.map((option, index) => (
         <Tooltip key={option.value} side="left" content={option.tooltip}>
           <RadioGroup.Item
             value={option.value}
+            data-value={option.value}
             aria-label={option.label}
             // The one Tab stop: the pressed item, or the first when none is.
             data-first-focus={
@@ -76,7 +97,7 @@ export function ToggleGroup<T extends string>({
                 onReturnFocus();
               }
             }}
-            className={`flex items-center justify-center bg-transparent text-[var(--toolbar-icon)] outline-none enabled:hover:bg-[var(--editor-accent-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--editor-accent)] data-[state=checked]:enabled:!bg-[var(--toolbar-icon-active-bg)] data-[state=checked]:enabled:!text-[var(--toolbar-icon-active-fg)] data-[state=checked]:disabled:bg-[color-mix(in_srgb,var(--toolbar-icon)_30%,transparent)] ${
+            className={`flex items-center justify-center bg-transparent text-[var(--toolbar-icon)] outline-none enabled:hover:bg-[var(--editor-accent-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--editor-accent)] aria-checked:enabled:!bg-[var(--toolbar-icon-active-bg)] aria-checked:enabled:!text-[var(--toolbar-icon-active-fg)] aria-checked:disabled:bg-[color-mix(in_srgb,var(--toolbar-icon)_30%,transparent)] ${
               index > 0 ? `border-l ${BORDER}` : ""
             }`}
             style={{ width: itemWidth, height: itemHeight }}

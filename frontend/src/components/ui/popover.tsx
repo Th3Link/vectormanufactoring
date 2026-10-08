@@ -20,7 +20,9 @@ export function PopoverContent({
       <PopoverPrimitive.Content
         side="left"
         align="start"
-        sideOffset={8}
+        // 12 px of row padding + 32 px: clear of the panel edge and of the
+        // collapse tab (24 px hit target) that sits on it.
+        sideOffset={44}
         collisionPadding={8}
         className={`z-[70] w-[232px] rounded-lg bg-popover p-3 text-popover-foreground outline-none ${className}`}
         style={{ boxShadow: "var(--panel-elevation-shadow)" }}

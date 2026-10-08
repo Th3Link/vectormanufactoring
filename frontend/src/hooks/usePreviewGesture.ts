@@ -1,6 +1,16 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { WasmSession } from "@/lib/editorSession";
+
+export interface PreviewGesture {
+  /** Shows `tick` on the next frame; the first of a gesture starts it. */
+  queue: (tick: (session: WasmSession) => void) => void;
+  /** A gesture is running (from its first tick to its release). */
+  previewing: boolean;
+  /** Counts the Escapes that dropped a preview, so a colour picker that kept
+   * following the pointer can start over from the committed colour. */
+  cancels: number;
+}
 
 /**
  * The bookkeeping of one panel drag (`specs/0007-stroke-and-fill-styling`
@@ -18,7 +28,9 @@ import type { WasmSession } from "@/lib/editorSession";
 export function usePreviewGesture(
   getSession: () => WasmSession | null,
   onChange: () => void,
-): (tick: (session: WasmSession) => void) => void {
+): PreviewGesture {
+  const [previewing, setPreviewing] = useState(false);
+  const [cancels, setCancels] = useState(0);
   const pending = useRef<((session: WasmSession) => void) | null>(null);
   const frame = useRef(0);
   const endGesture = useRef<(() => void) | null>(null);
@@ -45,6 +57,7 @@ export function usePreviewGesture(
     flush();
     endGesture.current?.();
     endGesture.current = null;
+    setPreviewing(false);
     getSession()?.commit_style_preview();
     onChange();
   }, [flush, getSession, onChange]);
@@ -53,6 +66,7 @@ export function usePreviewGesture(
     if (endGesture.current) {
       return;
     }
+    setPreviewing(true);
     const onRelease = () => commit();
     const onArrowUp = (event: KeyboardEvent) => {
       if (event.key.startsWith("Arrow")) {
@@ -68,6 +82,7 @@ export function usePreviewGesture(
       event.stopPropagation();
       dropPending();
       getSession()?.cancel_style_preview();
+      setCancels((n) => n + 1);
       onChange();
     };
     window.addEventListener("pointerup", onRelease, true);
@@ -94,8 +109,8 @@ export function usePreviewGesture(
     [],
   );
 
-  return useCallback(
-    (tick) => {
+  const queue = useCallback(
+    (tick: (session: WasmSession) => void) => {
       begin();
       pending.current = tick;
       if (frame.current === 0) {
@@ -104,4 +119,5 @@ export function usePreviewGesture(
     },
     [begin, flush],
   );
+  return { queue, previewing, cancels };
 }

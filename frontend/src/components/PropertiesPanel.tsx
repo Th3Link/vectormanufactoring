@@ -52,7 +52,15 @@ export function PropertiesPanel({ editor }: PropertiesPanelProps) {
     const first =
       aside.querySelector<HTMLElement>("[data-first-focus]:not(:disabled)") ??
       aside.querySelector<HTMLElement>("input:not(:disabled), button:not(:disabled)");
-    (first ?? aside).focus();
+    const target = first ?? aside;
+    // A control focused by the shortcut shows the focus ring even if the
+    // webview does not count script focus as keyboard focus; the mark goes
+    // when the focus does.
+    target.focus({ focusVisible: true } as FocusOptions);
+    target.setAttribute("data-keyboard-focus", "");
+    target.addEventListener("blur", () => target.removeAttribute("data-keyboard-focus"), {
+      once: true,
+    });
   }, []);
 
   useEffect(() => {
@@ -105,10 +113,16 @@ export function PropertiesPanel({ editor }: PropertiesPanelProps) {
                 returnFocus();
               }
             }}
-            className="absolute top-1/2 left-[-16px] z-30 flex h-12 w-4 -translate-y-1/2 items-center justify-center rounded-l-md border border-r-0 border-[color-mix(in_srgb,var(--toolbar-icon)_25%,transparent)] bg-[var(--toolbar-bg)] text-[var(--toolbar-icon)] outline-none hover:bg-[var(--editor-accent-hover)] focus-visible:ring-2 focus-visible:ring-[var(--editor-accent)]"
-            style={{ boxShadow: "var(--panel-elevation-shadow)" }}
+            // The hit target is 24 px wide (WCAG 2.2 AA 2.5.8); the 16 px tab
+            // of the design system is drawn inside it, on the canvas side.
+            className="group absolute top-1/2 left-[-24px] z-30 flex h-12 w-6 -translate-y-1/2 items-center justify-end outline-none"
           >
-            {open ? <ChevronRight size={12} aria-hidden /> : <ChevronLeft size={12} aria-hidden />}
+            <span
+              className="flex h-12 w-4 items-center justify-center rounded-l-md border border-r-0 border-[color-mix(in_srgb,var(--toolbar-icon)_25%,transparent)] bg-[var(--toolbar-bg)] text-[var(--toolbar-icon)] group-hover:bg-[var(--editor-accent-hover)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--editor-accent)]"
+              style={{ boxShadow: "var(--panel-elevation-shadow)" }}
+            >
+              {open ? <ChevronRight size={12} aria-hidden /> : <ChevronLeft size={12} aria-hidden />}
+            </span>
           </button>
         </Tooltip>
         <aside
@@ -117,16 +131,22 @@ export function PropertiesPanel({ editor }: PropertiesPanelProps) {
           aria-label="Properties"
           tabIndex={-1}
           hidden={!open}
+          onMouseDown={(event) => {
+            // A press on dead space (the heading, a label) must not leave the
+            // focus on the panel, where the tool letters would do nothing: it
+            // goes back to the canvas. A control keeps the press.
+            if (!(event.target as HTMLElement).closest("input, button, [role], select")) {
+              event.preventDefault();
+              returnFocus();
+            }
+          }}
           onKeyDown={(event) => {
             // Escape in the panel: an open popover or select closes first (they
             // handle it in their own portal, outside this element); a field
-            // restores itself; otherwise focus just returns to the canvas. It
-            // never clears the selection and never reaches the canvas.
-            if (
-              event.key === "Escape" &&
-              !event.defaultPrevented &&
-              event.currentTarget.contains(event.target as Node)
-            ) {
+            // restores itself; a tooltip that took the key (it prevents the
+            // default) does not count as an overlay; then focus returns to the
+            // canvas. It never clears the selection and never reaches the canvas.
+            if (event.key === "Escape" && event.currentTarget.contains(event.target as Node)) {
               event.preventDefault();
               returnFocus();
             }

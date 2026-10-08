@@ -27,7 +27,10 @@ interface PickerProps {
   disabled: boolean;
   colorField: StyleFieldName;
   opacityField: StyleFieldName;
-  panel: Pick<StylePanelApi, "setText" | "previewColor" | "previewOpacity">;
+  panel: Pick<
+    StylePanelApi,
+    "setText" | "previewColor" | "previewOpacity" | "previewing" | "cancels"
+  >;
   /** Changes when the edited objects or the tool change: closes the popover. */
   closeKey: string;
   onReturnFocus: () => void;
@@ -104,8 +107,10 @@ export function ColorAlphaPicker({
             }}
           >
             <ColourPopover
+              key={panel.cancels}
               rgb={shownRgb}
               percent={shownPercent}
+              previewing={panel.previewing}
               onPreviewColor={(next) => panel.previewColor(colorField, next)}
               onPreviewOpacity={(next) => panel.previewOpacity(opacityField, next)}
             />

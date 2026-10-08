@@ -18,9 +18,16 @@ function renameSliders(element: HTMLDivElement | null) {
   });
 }
 
-/** Shift with an arrow key is a 10 % step; react-colorful steps 1 % only.
- * `slider` is the index in [`SLIDER_NAMES`]; `null` for a key that is not a step. */
-function shiftStep(hsva: HsvaColor, slider: number, key: string): HsvaColor | null {
+/** An arrow key on one of the picker's sliders: 1 % of its range, Shift 10 %
+ * (criterion 36; react-colorful's own step is 5 %). `slider` is the index in
+ * [`SLIDER_NAMES`]; `null` for a key that is not a step of that slider. */
+function arrowStep(
+  hsva: HsvaColor,
+  slider: number,
+  key: string,
+  shift: boolean,
+): HsvaColor | null {
+  const unit = shift ? 10 : 1;
   const clamp = (n: number, max: number) => Math.min(max, Math.max(0, n));
   const sign = key === "ArrowRight" || key === "ArrowUp" ? 1 : -1;
   const horizontal = key === "ArrowLeft" || key === "ArrowRight";
@@ -29,14 +36,14 @@ function shiftStep(hsva: HsvaColor, slider: number, key: string): HsvaColor | nu
   }
   if (slider === 0) {
     return horizontal
-      ? { ...hsva, s: clamp(hsva.s + sign * 10, 100) }
-      : { ...hsva, v: clamp(hsva.v + sign * 10, 100) };
+      ? { ...hsva, s: clamp(hsva.s + sign * unit, 100) }
+      : { ...hsva, v: clamp(hsva.v + sign * unit, 100) };
   }
   if (slider === 1 && horizontal) {
-    return { ...hsva, h: clamp(hsva.h + sign * 36, 360) };
+    return { ...hsva, h: clamp(hsva.h + sign * unit * 3.6, 360) };
   }
   if (slider === 2 && horizontal) {
-    return { ...hsva, a: clamp(hsva.a + sign * 0.1, 1) };
+    return { ...hsva, a: clamp(hsva.a + (sign * unit) / 100, 1) };
   }
   return null;
 }
@@ -46,6 +53,9 @@ interface ColourPopoverProps {
   rgb: number;
   /** The committed opacity percent, rounded (100 when mixed). */
   percent: number;
+  /** A drag is running: the committed values lag the picker by a frame, so
+   * they must not reset it (that would make the hue jump through a grey). */
+  previewing: boolean;
   onPreviewColor: (rgb: number) => void;
   onPreviewOpacity: (percent: number) => void;
 }
@@ -59,13 +69,14 @@ interface ColourPopoverProps {
 export function ColourPopover({
   rgb,
   percent,
+  previewing,
   onPreviewColor,
   onPreviewOpacity,
 }: ColourPopoverProps) {
   const fromProps = (): HsvaColor => ({ ...rgbToHsv(rgb), a: percent / 100 });
   const [hsva, setHsva] = useState<HsvaColor>(fromProps);
   const [seen, setSeen] = useState({ rgb, percent });
-  if (seen.rgb !== rgb || seen.percent !== percent) {
+  if (!previewing && (seen.rgb !== rgb || seen.percent !== percent)) {
     setSeen({ rgb, percent });
     const emitted = hsvToRgb(hsva.h, hsva.s, hsva.v);
     if (emitted !== rgb || Math.round(hsva.a * 100) !== percent) {
@@ -88,12 +99,9 @@ export function ColourPopover({
       className="colour-picker"
       ref={renameSliders}
       onKeyDownCapture={(event) => {
-        if (!event.shiftKey) {
-          return;
-        }
         const sliders = Array.from(event.currentTarget.querySelectorAll('[role="slider"]'));
         const index = sliders.indexOf(event.target as Element);
-        const next = index >= 0 ? shiftStep(hsva, index, event.key) : null;
+        const next = index >= 0 ? arrowStep(hsva, index, event.key, event.shiftKey) : null;
         if (next) {
           event.preventDefault();
           event.stopPropagation();

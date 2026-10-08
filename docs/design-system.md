@@ -724,8 +724,23 @@ differs from the rows above:
   so `side="left"` puts it beside the panel edge and it never covers the hex and
   opacity fields it updates.
 - **react-colorful's sliders are renamed** to "Saturation and value", "Hue" and
-  "Opacity" after mount, and Shift with an arrow key is a 10 % step handled by
-  the popover (the library steps 1 %).
+  "Opacity" after mount, and every arrow key on them is handled by the popover:
+  1 % of the range, Shift 10 % (the library's own step is 5 %). After Escape in a
+  drag the picker restarts from the committed colour, and the committed colour
+  never resets it during a drag (it lags the pointer by a frame, and a reset
+  would make the hue jump through a grey).
+- **Panel details found in the UX review:** the pressed look of a toggle item is
+  keyed on `aria-checked` (the tooltip trigger replaces `data-state`); an error
+  chip is right-aligned to its field and wraps at 168 px, so it never widens the
+  panel; a mixed field hides its unit so "Mixed" fits the 56 px field; the
+  collapse tab is drawn 16 px wide inside a 24 px hit target; the popover opens
+  44 px from the Color row so it clears the tab; Escape in the panel returns
+  focus to the canvas even when a tooltip took the key; a press on dead space in
+  the panel leaves the focus where it was (the canvas); a control focused by
+  `Shift+Ctrl+F` carries a ring of its own. The tooltip of the tab reads
+  "Shift+Ctrl+F" on every platform, like every other shortcut label in the app
+  (the key handler accepts Cmd as well); a platform-aware label is a change for
+  all labels at once.
 - **Window minimum 800 x 600, measured, no raise needed.** At 800 the canvas
   region is 520 px. The Select bar wraps to three rows (the two switches; Radius
   with the link switch and Remove rounding; Object to path), the Node bar is one
