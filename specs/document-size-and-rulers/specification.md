@@ -1,359 +1,201 @@
 # Document size and rulers
 
-Status: Draft
+Status: Ready
 Priority: Must
-Origin: Customer
+Origin: Customer (rulers, resize, fit to content, drawing outside the document). The display unit (Part C) is a **Proposal** and is not accepted until the customer says so.
 
 ## User value
 
-As a maker I want to see a ruler along the top and left of the canvas,
-resize my document (with old content staying centered rather than jumping to
-a corner), fit the document to what I've drawn, and keep drawing freely
-outside the document edge the way I already can in Inkscape, so that I can
-judge real size and position at a glance and prepare a sheet that actually
-matches my material or my artwork.
+As a maker I want rulers along the top and left of the canvas, to set my document to the size of my sheet, to fit it to what I have drawn, and to keep drawing freely outside the document edge the way I can in Inkscape, so that I can judge real size and position at a glance and prepare a sheet that matches my material or my artwork.
 
-**What we do differently, and what we match on purpose:**
+**Single document.** A project has one document with one size. Several pages in one project were asked for first and dropped on 2026-10-05 ("not important enough for MVP"); ADR 0012 (pages) was rejected. Nothing here prepares for pages.
 
-- **Rulers in mm, origin at the document's top-left corner, position
-  increasing right/down**: this matches Inkscape's own current default
-  (SVG's own coordinate convention, which Inkscape adopted as its default
-  origin in 1.0, after years of an optional bottom-left/Y-up mode) and this
-  product's own existing Y-down convention (ADR 0002 §4). Not a deviation —
-  confirmed before writing this spec, not assumed.
-- **Center-anchored resize is a deliberate customer choice, not Inkscape
-  parity.** Inkscape's own default anchors a page resize at a corner (with a
-  3x3 anchor picker to choose another point); this spec's acceptance
-  criteria require the *center* of our single document to stay fixed
-  instead, every time, with no picker. Call this out anywhere it looks like
-  a missed Inkscape-parity opportunity — it isn't one.
-- **Draw outside the document freely, pasteboard rendered grey**: Inkscape's
-  own "canvas" (its page) sits on a pasteboard the maker can draw on without
-  restriction; this spec matches that directly, because the customer named
-  it directly ("like in Inkscape").
-- **Fit-to-content with a 0 mm margin**: Inkscape's own "Resize page to
-  content" has a configurable margin, default non-zero. This spec ships a
-  fixed 0 mm (tight bounding box) instead, because the common laser-cutting
-  use case this product targets most — sizing a sheet to exactly the parts
-  on it — wants the smallest honest sheet, not padding the maker didn't ask
-  for; a configurable margin is a small, safe addition for later if the
-  customer wants one (see Out of scope).
+**What we match on purpose, and what we do differently:**
+
+- **Rulers in mm, origin at the document's top-left corner, position growing right and down.** This is Inkscape's default since 1.0, SVG's own convention and this product's Y-down rule (ADR 0002 §4). Checked, not assumed.
+- **Resize keeps the centre fixed. This is a customer decision, not Inkscape parity.** Inkscape resizes the page from a corner (with a 3 × 3 anchor picker). Here the centre of the document stays fixed every time, with no picker, so old content stays centred instead of jumping into a corner. Do not "fix" it toward Inkscape.
+- **Drawing outside the document is allowed, on a grey pasteboard.** Matches Inkscape and was named by the customer ("like in Inkscape").
+- **Fit to content with a 0 mm margin.** Inkscape's "Resize page to content" has a margin setting, non-zero by default. A laser maker sizing a sheet to the parts on it wants the smallest honest sheet. A margin field is a small later addition (Out of scope).
+- **Rulers show a pointer marker.** Inkscape and LightBurn both draw a tick that follows the pointer on each ruler; the customer did not ask for it, I add it because it costs little and makes the rulers useful while drawing (Part A, criterion 8).
+
+**Consequence the customer should know (decided by the customer, repeated here once):** because the origin is the document's top-left corner and a resize keeps the centre, resizing from 210 mm to 300 mm wide moves every object 45 mm to the right in document coordinates. The drawing does not move relative to itself.
 
 ## Acceptance criteria
 
-### Rulers
+Distances are in millimetres unless a criterion names the display unit. Test values assume the default display unit (mm) and the zoom definition of `0004-canvas-navigation-and-selection` criterion 7: 100 % is 1 mm = 96 / 25.4 ≈ 3.78 CSS pixels, the range is 2 % to 8000 %.
 
-1. Given a project is open, then a horizontal ruler is shown along the top
-   edge of the canvas viewport and a vertical ruler along the left edge,
-   both in millimetres, both updating live as the view pans or zooms — the
-   same `ViewTransform`/viewport state `canvas-navigation-and-selection`
-   already tracks, not a second copy of it.
-2. Given the document, then ruler position 0 mm on both axes aligns with
-   the document's top-left corner; position increases rightward on the
-   horizontal ruler and downward on the vertical ruler.
-3. Given the pasteboard area outside the document (left of or above the
-   origin, or beyond the document's width/height), then each ruler
-   continues past 0 mm (showing negative values) or past the document's own
-   dimension (showing values larger than the document size) with no visual
-   break in the ruler's track — position stays readable anywhere a maker
-   can draw, not only inside the document.
-4. Given any zoom level, then each ruler's labeled major tick marks are
-   spaced between 40 and 120 CSS pixels apart on screen, with each labeled
-   value chosen from the sequence 1, 2 or 5 x10^n mm (the "nice numbers"
-   rule standard rulers use, including Inkscape's) — e.g. at 100% zoom
-   (1 mm ≈ 3.78 CSS px) major ticks land every 20 mm; near the 8000% zoom
-   ceiling they land at 1 mm or finer; near the 2% floor they land at
-   500 mm or coarser. Minor, unlabeled ticks subdivide each major interval
-   into 5 equal parts.
+### Part A: rulers
 
-### Document resize with center-anchored content
+1. Given a project is open, then a horizontal ruler is shown along the top edge and a vertical ruler along the left edge of the canvas, and a square where they meet that shows the display unit ("mm", "cm" or "in"). Both rulers use the one viewport state (`ViewTransform`) the canvas uses, not a copy.
+2. Given any pan or zoom (wheel, drag, Space-drag, window resize, opening or closing the Properties panel), then the tick marks and labels of both rulers are updated in the same frame as the canvas. Test: after each of 20 scripted pan and zoom steps, every major tick's screen position equals the canvas projection of its document value within 0.5 px.
+3. Given the document, then ruler value 0 on both axes is at the document's top-left corner; the horizontal value grows to the right and the vertical value grows downward.
+4. Given the pasteboard (left of or above the corner, or beyond the document width or height), then the rulers continue without a break: negative values left and above, values larger than the document size right and below.
+5. Given any zoom from 2 % to 8000 %, then the major tick spacing is the smallest step of the form 1, 2 or 5 times a power of ten (in the display unit) whose on-screen length is at least 40 px and at least the width of the widest visible label plus 4 px. Without wide labels this gives a spacing of 40 px or more and less than 100 px. Each major interval is divided into 5 equal minor intervals. Examples in mm: 100 % gives a major step of 20 mm; 8000 % gives 0.2 mm; 2 % gives 1000 mm.
+6. Given a major tick, then it carries a label with its value in the display unit, without a unit suffix, with a minus sign when negative, and written as the exact decimal of the step: at every zoom the tick at 0.3 reads "0.3", never "0.30000000000000004", and no label has trailing zeros ("2", not "2.0").
+7. Given any zoom from 2 % to 8000 % and any value up to ±1,000,000 in the display unit, then no label is clipped by its ruler and no label overlaps another label or the corner square. A label that would not fit entirely inside the ruler's free span is not drawn. When labels are wider than the major spacing, labels are drawn on every second or every fifth major tick; ticks are never removed and numbers are never abbreviated.
+8. Given the pointer is inside the canvas, then each ruler shows a marker at the pointer's position: a 1 px line across the ruler in the accent colour on the horizontal ruler for the pointer's x and on the vertical ruler for its y. The marker's position equals the status bar's x and y readout, within the readout's precision. Given the pointer leaves the canvas, then both markers disappear.
+9. Given the rulers are shown, then a click at the screen position of the horizontal ruler tick "50" (vertical position anywhere in the canvas) creates or hits geometry at document x = 50 mm within 1 / scale mm. That is, the rulers shrink the canvas viewport and the screen-to-document conversion accounts for it. Test with the Rectangle tool at 100 % and at 800 %.
+10. Given a press, drag or click on a ruler or on the corner square, then nothing happens (no guide, no selection change, no tool action). Guides are Out of scope.
+10a. Given the wheel or a pinch gesture over a ruler, then it acts on the canvas as if the pointer were at the nearest point inside the canvas, so a zoom does not stop when the pointer slips onto a ruler.
+11. Given a window size of 800 × 600 (the minimum), then the canvas is still usable: it is at least 400 px wide and 400 px high after the rulers, panel and status bar are placed.
+11a. Given a project is created or opened, then the document's top-left corner is shown 72 px right of and 72 px below the canvas's top-left corner (so the edge and the 0 ticks are not hidden under the tool rail). This changes the initial view of `0004`.
 
-5. Given the Properties panel's document-size fields (width and height in
-   mm), when the maker edits either field and confirms it, then the
-   document's size changes to the new value as one operation.
-6. Given a document resize via criterion 5, when the document had one or
-   more objects immediately before the resize, then the point in the
-   document that was the document's geometric center before the resize is
-   still the document's geometric center afterward, and every object's
-   position relative to that center point is unchanged — the document grows
-   or shrinks symmetrically around its own center rather than around a
-   corner or the document origin. This is a deliberate customer-specific
-   choice (see User value); no corner or other anchor option is offered,
-   and **it governs manual resize only** — fit-to-content (criterion 10)
-   uses a separate, content-centered rule instead, stated there, because
-   the two can require different results whenever content is not already
-   centered on the old document.
-7. Given criterion 6, when the new document size is smaller than the
-   content's own bounding box, then content is only ever repositioned by
-   criterion 6's rule, never scaled or cropped to fit — it may extend into,
-   or past, the pasteboard (see "Pasteboard and drawing outside the
-   document" below, which explicitly allows this).
-8. Given any action that sets the document's size — a manual resize
-   (criterion 5) or fit-to-content (criterion 10) — when the resulting
-   width or height would be less than 1 mm, then it is clamped to 1 mm
-   instead: the document can never end up with a zero or negative
-   dimension.
-9. Given a document resize (criterion 6) or a fit-to-content (criterion 10),
-   then the viewport's pan adjusts so that the document point at the center
-   of the screen immediately before the change is still at the center of
-   the screen immediately afterward — the maker sees the document (and, for
-   fit-to-content, its content) resize in place around the view's own
-   center, rather than the content appearing to jump elsewhere in the window
-   or needing a manual re-pan to find it again.
+### Part B: document size
 
-### Fit to content
+12. Given a new project, then the document is 210 × 297 mm (A4 portrait, the size since `0001-project-file-foundation`), and the status bar shows "210.0 × 297.0 mm".
+13. Given a project file saved by any earlier build (format versions 1 to 7), then it opens with the size stored in it (210 × 297 mm so far, since no build could change it) and every object where it was. Given a file in which either size value is missing, not a finite number, below 1 mm or above 100 000 mm, then it opens as 210 × 297 mm (both axes) and is not refused. Opening writes nothing to the file.
+14. Given the Document settings (location: Question 1), then they contain a Width field and a Height field, typed text fields (not drag fields) that show the size in the display unit, and a Fit to content button. They show the current size at all times, including after a resize, a fit and a file open.
+14a. Given no object is selected and the Pen has no unfinished path, then the Properties panel shows the Document settings and nothing else. Given one or more objects are selected, then it shows Style as before and no Document settings (Escape clears the selection and so reveals them). Given the Pen has an unfinished path, then the panel is empty, because a resize would move the committed objects but not the path being drawn. The panel's width and the canvas size never change between these states. This amends `0017-style-panel-rework` criterion 1 (see Links).
+15. Given a Width or Height field, when the maker types a number and presses Enter or leaves the field, then the size is applied as one operation. Escape restores the last applied value. Enter on text the maker did not edit does nothing. A decimal point or a decimal comma is accepted; surrounding spaces are ignored.
+16. Given a typed value that is empty, not a number, infinite, or outside 1 mm to 100 000 mm (converted from the display unit; a value within 1e-9 mm of a limit is accepted), then the size is not changed and the field shows the standard validation message of the panel, written in the display unit with the limits rounded inward: mm "Enter a number from 1 to 100000", cm "Enter a number from 0.1 to 10000", in "Enter a number from 0.04 to 3937". The message is cleared by the next keystroke. No dialog opens. Text with a unit ("21cm") is not a number.
+17. Given a valid new size (w1, h1) for a document of size (w0, h0), then every object is moved by the shift ((w1 − w0) / 2, (h1 − h0) / 2) in document coordinates, so the centre of the document and every object's position relative to that centre stay as they were. Test: a rectangle at x = 10, y = 10, 50 × 50 mm in the 210 × 297 document; after setting 300 × 400, the rectangle is at x = 55, y = 61.5, still 50 × 50. This holds within 1e-9 mm for paths (all anchors; handles are relative and unchanged), rectangles, ellipses, polygons and stars, rotated or not.
+18. Given criterion 17, then no object is scaled, cropped, restyled or rotated, including when the new size is smaller than the content: objects may then lie partly or wholly on the pasteboard.
+19. Given criterion 17, then the resize is one atomic operation: one commit, whose label names the operation (stored as `resize_document`), that writes the new size and moves all objects together. No state exists in which only one of them has happened, however the operation ends. A typed value equal to the current size writes nothing.
+20. Given a resize or a fit (criterion 24), then every object appears at the same screen position (within 0.5 px) immediately before and after. The document's edges move on screen instead, around the content. The change is instant, with no animation.
+21. Given a resize or a fit, then the status bar size readout shows the new size at once. The status bar shows the cursor position followed by the display unit once, and the size with the unit, each with a fixed number of decimals so the text does not jitter: mm 1, cm 2, in 3 (all three the same 0.1 mm resolution). Example: "x: 12.3  y: 45.6 mm" and "210.0 × 297.0 mm". Stored values are not affected by the display.
 
-10. Given the document has at least one object, when the maker triggers
-    "Fit to content" (an action in the Properties panel's document
-    section), then the document's new size is set to the bounding box of
-    every object in the document with a fixed 0 mm margin (tight fit), and
-    the document's new center is set to that bounding box's own center —
-    a separate, content-centered rule from criterion 6's old-center rule,
-    deliberately: the new document's edges touch the content's bounding
-    box exactly, regardless of where the old document's center happened to
-    be. (Criterion 8 bounds the minimum size this can produce; criterion 9
-    describes the resulting on-screen effect.)
-11. Given fit-to-content (criterion 10), then a stroked object's
-    contribution to the bounding box is its geometric outline (the path's
-    own fill geometry) only, not expanded by stroke width — e.g. a straight
-    line stroked 10 mm wide contributes a zero-area outline along the
-    line's own path, not a 10 mm-wide band.
-12. Given the document has no objects, when the maker triggers "Fit to
-    content", then the action is disabled (or is a no-op with no error)
-    and the document's size is left unchanged — there is no bounding box to
-    fit to.
+### Part B: fit to content
 
-### Pasteboard and drawing outside the document
+22. Given the document has at least one object, then the Fit to content button is shown. Given it has none, then the button is removed from the panel (not greyed out), and the size cannot change by it.
+23. Given the document has objects, when the maker activates Fit to content, then the new size is the extent of the axis-aligned bounding box of all objects (including those on the pasteboard), with a fixed margin of 0 mm. The box is of the objects' outline geometry in document coordinates: curves contribute their true extremes (not control points), rotated rectangles, ellipses, polygons and stars their rotated outline, and compound paths all their outlines. Stroke width is not included.
+24. Given criterion 23, then every object is moved by −(the box's top-left corner), so that after the fit the box's top-left corner is at (0, 0) within 1e-9 mm. This rule is separate from criterion 17: the fitted document is centred on the content, not on the old document.
+25. Given the box is narrower than 1 mm on one axis, then the document size on that axis is 1 mm and the content is centred on that axis. Test: one horizontal line from (0, 0) to (100, 0), 10 mm stroke width: the fit gives 100 × 1 mm and the line lies at y = 0.5.
+26. Given Fit to content has just been applied, when it is applied again, then the size and all positions are unchanged (it is idempotent), nothing is committed, and a text notice "Already fits the content." shows under the button for 3 seconds.
+27. Given Fit to content, then it is one atomic operation, one commit, whose label names the operation (stored as `fit_document_to_content`), with the same guarantee as criterion 19.
+27a. Given the objects' bounding box is larger than 100 000 mm on an axis, when the maker activates Fit to content, then nothing changes and the panel shows a validation message that names the limit, for example "The content is larger than the largest document (100000 mm). Nothing was changed." (in the display unit, rounded inward as in criterion 16).
 
-13. Given a document of any size, then the document's own area renders with
-    the existing canvas background color (`--canvas-bg`), and every part of
-    the viewport outside the document's bounds — out to the edges of the
-    window, following pan and zoom — renders a distinct grey pasteboard
-    color, visually distinguishable at a glance from `--canvas-bg` and from
-    the existing chrome colors (`--statusbar-bg`/`--toolbar-bg`).
-14. Given any drawing or editing tool is active (Select, Pen, Node,
-    Rectangle, Ellipse, Polygon/Star), when the maker creates, places or
-    drags an object so that part or all of it lies in the pasteboard
-    (outside the document's bounds), then the object is created or edited
-    exactly as it would be inside the document — no error, no warning, no
-    clipping to the document edge.
-15. Given an object with any part in the pasteboard, then it remains
-    selectable, movable and editable exactly as an object fully inside the
-    document — no special-cased behavior for pasteboard-located geometry.
-    (What a manufacturing job does with pasteboard-located geometry is
-    explicitly not this slice's concern — `manufacturing-roles` and
-    `laser-job-preview-and-output` decide that later; this slice must not be
-    read as pre-deciding it either way.)
+### Part B: pasteboard and drawing outside the document
+
+28. Given a document of any size, then its area is painted in the canvas background colour (`--canvas-bg`) and the rest of the viewport, out to the edges of the window, in a grey pasteboard colour, `--pasteboard-bg` #B8B8BE, that is clearly distinct from `--canvas-bg` #E8E8EB and from the chrome colours (contrast ratio 1.61 to the document and 1.44 to the chrome tone, as measured by UX). Both follow pan and zoom. The edge between them is a flat colour change without shadow.
+29. Given any drawing or editing tool (Select, Pen, Node, Rectangle, Ellipse, Polygon/Star), when the maker draws, places or drags an object so that part or all of it lies on the pasteboard, then it is created or edited exactly as inside the document: no warning, no clipping, no snapping to the edge.
+30. Given an object with any part on the pasteboard, then it can be selected, moved, transformed and edited like any other object.
+31. Given the Pen tool's close-target marker (the knockout dot) is shown over the pasteboard, then its fill matches the colour behind it, not the document colour.
+32. Given any job, export or print, then this slice defines no behaviour for objects on the pasteboard and none for the document size: `manufacturing-roles` and `laser-job-preview-and-output` decide that later. The size is stored so those slices can use it.
+
+### Part C: display unit (Proposal)
+
+33. Given the Document settings, then a unit control with the choices mm, cm and in is shown (a segmented control; the panel has no dropdowns). A new project uses mm.
+34. Given a unit is chosen, then these display values change and nothing else: the ruler labels and steps (criteria 5 to 7, with "power of ten" read in the chosen unit; at 100 % the major step is 2 cm in cm and 0.5 in in inches), the Width and Height fields, and the status bar's cursor and size readouts (decimals per unit as in criterion 21). Stored values stay in mm. Nothing in the document moves or changes. A Width or Height field with edited text that is not yet committed commits in the old unit when the maker presses the unit control, and then the unit changes.
+35. Given the chosen unit is in, then 1 in is exactly 25.4 mm: typing 8.5 and 11 sets the size to 215.9 × 279.4 mm. Values are shown rounded to 3 decimals (mm) or 4 decimals (cm, in) without trailing zeros; showing a value never rewrites the stored value.
+36. Given a unit is chosen, then it is saved with the document and is the same after closing and reopening. A file from before this setting opens in mm. The setting is a document setting that belongs to the file, not to the user.
+37. Given Part C, then readouts and fields outside the three places of criterion 34 stay in mm for now: the transform and move entry chips, the Select and Node bar fields (Radius, Points, Ratio), the stroke Width in the Properties panel (`0017-style-panel-rework` criterion 48). This is a known inconsistency (Question 2), not a defect.
+
+### Persistence
+
+38. Given any of the above, then the size is stored in the project file as it has been since `0001-project-file-foundation` (width and height in mm). Part C adds one stored value, the display unit (absent or unknown reads as mm). There is no `format_version` bump: an earlier build opens a file with a display unit, shows mm (a correct view of the same document), and keeps the stored unit when it saves. If Part C is not accepted, no new stored value exists. Changing the unit is one commit, whose label names the operation (stored as `set_display_unit`), and moves nothing.
+39. Given a resize or a fit followed by Save, Close and Open, then the size and all object positions are the same as before closing.
 
 ## Out of scope
 
-- **Multiple pages or documents within one project.** The customer asked
-  for this originally; dropped for MVP (2026-10-05 — "not important enough
-  for MVP"). This slice is single-document only: no page list, no
-  per-document settings, no switching between documents. Revisit as its own
-  spec later if the customer wants it back.
-- **A resize-anchor picker** (Inkscape's 3x3 corner/edge/center choice).
-  Center-anchoring is the only behavior this spec asks for, by explicit
-  customer request; an anchor picker is a real but unrequested feature.
-- **A configurable fit-to-content margin.** Fixed at 0 mm for this slice
-  (see User value for reasoning); a numeric margin field is a small later
-  addition if asked.
-- **Ruler unit switching (mm/inch toggle), moving the ruler's zero point by
-  dragging, or a ruler right-click menu** (all things Inkscape's own ruler
-  supports). This product's canonical unit is mm everywhere (`CLAUDE.md`,
-  ADR 0002 §2); no unit switcher exists anywhere yet, and nothing here asks
-  for one.
-- **Guides** (draggable guide lines pulled off a ruler, snapping to them).
-  Inkscape's ruler doubles as a guide source; this product has no guide
-  concept yet at all. A later spec's job, not folded in here just because
-  rulers are adjacent to it.
-- **A live cursor-position marker drawn on the ruler itself** (Inkscape
-  shows a small tick following the pointer on each ruler). Not asked for;
-  the existing status-bar cursor-position readout (`project-file-foundation`)
-  already covers "where is my cursor in mm."
-- **What a manufacturing job includes from the pasteboard vs. the document**
-  (criterion 15's explicit carve-out). Decided by `manufacturing-roles` and
-  `laser-job-preview-and-output`, much later in the sequence; this spec must
-  not be read as having decided it either way already.
-- **Zoom presets** ("fit document to window", "fit selection"). Still out
-  of scope per `canvas-navigation-and-selection`; unaffected by anything
-  here.
-- **Undo for any operation in this spec** (resize, fit-to-content).
-  `undo-redo` (slice 8) is cross-cutting infrastructure built once there is
-  more than a couple of operations to cover; this spec does not special-case
-  undo ahead of that slice, same deferral pattern slice 4 used for pan/zoom.
+- **Several pages or documents in one project.** Dropped by the customer on 2026-10-05. Revisit as its own spec only if the customer asks.
+- **A resize-anchor picker** (Inkscape's 3 × 3). Centre-anchoring is the only behaviour, by customer request.
+- **A fit-to-content margin setting.** Fixed at 0 mm.
+- **Fit to content using stroke width** (visual bounds). See Question 3.
+- **Guides, snapping to guides, snapping to the document edge**, dragging the ruler zero point, a ruler right-click menu. Proposal for a follow-up slice "guides and snapping": pull a guide from a ruler, snap objects to guides, the document edge and the grid. Snapping is a feature of its own and touches every tool.
+- **Size presets** (A4, A3, Letter, the sheet sizes of common laser beds) and an orientation swap. Proposal for a small follow-up; `machine-profile` (R-MFG-001) may supply a work area to preset from. Until then document size and machine work area are independent.
+- **Unit conversion of every other length in the app** (Question 2, option C).
+- **Zoom presets** ("fit document to window", "fit selection", "reset to 100 %"). Still out of scope as in `0004`.
+- **Export, print, SVG `width`/`height`/`viewBox`, job origin.** Later slices read the stored size (`svg-import-export`, `laser-job-preview-and-output`). This slice defines no output behaviour.
+- **Undo and redo** (`0020-undo-redo`, not started). Resize, fit and unit change are each one commit, so undo can take them later.
+- **Highlighting the document span on the rulers**, ruler colours for dark mode, a ruler that shows the pasteboard differently.
+
+## Open questions
+
+Each has a default; nothing blocks.
+
+1. **Where the document settings live (criterion 14).** *A (default, recommended):* in the Properties panel, as a "Document" section that is shown whenever no object is selected and the Pen has no unfinished path (criterion 14a). With an object selected the panel shows Style as today. This changes the rule of `0017-style-panel-rework` criterion 1 that the panel is empty when nothing is selected (amended there, text only); the frame and the canvas size do not change. It follows Figma and Affinity. *B:* File > Document Properties… (Shift+Ctrl+D, as in Inkscape) opens a dialog; the panel stays empty when nothing is selected. Needs a first general dialog (only a blocking-error dialog exists). *C:* only the status bar size readout becomes clickable and edits Width and Height inline there; no unit control, no Fit button. Recommendation: A. A and B change where the controls are, not what they do.
+2. **Display unit (Part C).** *A (default):* mm, cm and in for rulers, the document size fields and the status bar only (criteria 33 to 37), with the stated inconsistency. *B:* mm only now; units become their own slice that converts every length field at once. *C:* units for every length field in this slice (touches the transform chips, bars, Style panel and four specs). Per document (default) or per user: per document is how Inkscape does it and needs one new stored value but no `format_version` bump (criterion 38); per user is how LightBurn does it and needs an app settings store that does not exist yet. With collaboration later, a per-document unit is shared: whoever switches last switches it for everyone. Recommendation: A for the slice, then C as a follow-up if inches are used a lot. If you choose B, Part C disappears.
+3. **Fit to content ignores stroke width (criterion 23).** *A (default):* geometric bounds. Right for cut lines; with a default stroke of 0.25 mm the stroke sticks out 0.125 mm past a tight sheet. *B:* include half the stroke width, right for artwork printed as drawn. Recommendation: A; B as a later switch.
+4. **Largest document size (criterion 16).** Default: 100 000 mm (100 m) per side, so the field refuses nonsense without refusing a large CNC bed or banner. Say if you want it lower.
+
+Decided by the product owner (change if you disagree): new documents stay A4 portrait (210 × 297 mm); the minimum size is 1 mm; invalid input is refused with the panel's validation message and not silently reverted; the view keeps the content still on screen when the size changes; rulers show the pointer marker; rulers do nothing when pressed (no guides); the Document section is absent while the Pen has an unfinished path (criterion 14a); a new view shows the document 72 px in from the corner (criterion 11a); Fit to content on content larger than 100 000 mm is refused (criterion 27a).
+
+## Build order
+
+From the architect's notes (`adrs.md`, decisions 15 and 16): three PRs. PR 1, the model (size, unit, resize, fit, parse and format, cargo tests only, no format bump), shares no crate with the kernel PR of `0016-boolean-operations` and can run in parallel with it. PR 2 (rulers and pasteboard) and PR 3 (Document section, unit control, Fit, status bar; after `0017-style-panel-rework` if that is built first) are staggered with the later PRs of 0016, because both features touch `document-core`, `ui-core`, `render-core`, `editor-wasm` and `frontend`. If 0016 merges first, this feature only rebases; neither order needs a version number change.
 
 ## UX notes
 
-### Rulers: docked chrome, not floating overlay — placement and coexistence with the left tool panel
+By `ux-engineer`, 2026-10-09; refreshes the notes of 2026-10-05, which predate the pages removal and `0017-style-panel-rework`. Numbers, tokens and rows are in `docs/design-system.md` ("Ruler", "Pasteboard and document edge", "Properties panel: Document section", "Status bar"). Criteria that need to change are listed at the end; until the product owner agrees, the criterion as written stands.
 
-The horizontal and vertical rulers are **docked**, the same category as the
-right `PropertiesPanel` and the status bar, not an overlay like the floating
-left tool panel or the per-selection mini-toolbar. They claim real layout
-space at the top and left edges of the canvas viewport, shrinking the
-viewport by their own thickness — this is a one-time, permanent chrome
-addition, not a per-tool layout shift, so it does not conflict with
-`docs/design-system.md`'s "no layout shift on tool switch" rule (that rule
-governs what happens when the maker switches tools; the rulers are present
-regardless of tool).
+### 1. Rulers
 
-Because the floating left tool panel's 12px inset is already defined
-relative to "the canvas's left and top edges" (`docs/design-system.md`),
-and the rulers shrink the canvas viewport rather than drawing on top of it,
-the tool panel's inset is automatically measured from the new, post-ruler
-viewport edge once this ships — it ends up sitting 12px inside the ruler's
-own edge, never overlapping it, with no change needed to the panel's own
-positioning rule. This is the deliberate choice that answers "how do the
-ruler and the floating panel coexist": the ruler owns the strip, the
-floating panel's existing relative-inset math takes care of the rest.
+- **Docked chrome, not an overlay.** The horizontal ruler runs along the top of the canvas region and the vertical ruler along its left edge, inside the region (the Properties panel is outside it). They shrink the viewport. Everything that was anchored to the canvas region (tool rail 12 px inset, the bars' overlay row `left-[72px] top-3 right-3`, the hint and entry chips' clamp, the collapse tab) is anchored to the **viewport** (the area inside the rulers), so no number in the existing rows changes. Tooltips, notices and chips may cover the rulers.
+- **Thickness and surface.** 24 px (the status bar's height). Ground `--ruler-bg` (= `--statusbar-bg`, the chrome tone). A 1 px edge line `--ruler-edge` (`--toolbar-icon` at 25 %, the panel's edge-line convention) on the canvas-facing side of each ruler and of the corner. Rulers are chrome, so no shadow.
+- **Tick hierarchy (two levels, as criterion 5 defines).** Major: 1 px `--ruler-tick` (`--toolbar-icon`, 8.3:1), full 24 px depth, growing from the canvas-facing edge. Minor: 4 ticks between two majors (5 intervals), 1 px `--ruler-tick-minor` (`--toolbar-icon` at 60 %, 3.1:1), 8 px deep. **The tick at 0 is the origin marker:** 2 px wide, so the document's corner can be found without reading labels. Ticks sit on whole device pixels.
+- **Labels.** 12 px (`text-xs`) system font, tabular figures, `--ruler-label` (= `--toolbar-icon`, 8.3:1 on the ground), real minus sign (U+2212), no unit suffix, no digit grouping. Horizontal ruler: the label starts 4 px right of its tick, top aligned 3 px from the ruler's top (the text lies above the minor ticks, so labels and minor ticks never touch). **Vertical ruler: the label is rotated 90 degrees counter-clockwise** (reads bottom to top, as on Inkscape's and Figma's side rulers), occupies the span after its tick in the direction of growing values (starting 4 px below the tick, the end of the text next to the tick), and is 12 px thick, so the 24 px strip holds "-1000000" without widening it. Criterion 7: **a label is drawn only if its whole extent lies inside the ruler's free span** (not under the corner, not past the end). When the widest label of the current view plus 8 px exceeds the major spacing (about 53 px for "-999999.8" at 7 px a digit, against a minimum spacing of 40 px), labels are drawn on every second major tick, then every fifth; ticks are never removed and a number is never abbreviated or put in an exponent.
+- **Corner square.** 24 x 24 px, `--ruler-bg`, both edge lines, shows the **display unit** ("mm", "cm", "in") in 12 px `--panel-muted-fg` (5.0:1), centred, `aria-hidden`. The unit has no other place on screen while an object is selected, and the labels carry no suffix (criterion 6), so this is the cheapest honest label. It does nothing when pressed (criterion 10).
+- **Pointer marker.** 1 device-pixel line across the full ruler thickness in `--ruler-pointer` (= `--accent`, 3.3:1 on the ground), above the ticks and below the labels. It follows the same source as the status bar readout: shown exactly while the readout is live, gone when it is. A triangle or a second line would only repeat the readout.
+- **Interaction.** Rulers and the corner are `aria-hidden`, not focusable, cursor `default`. A press on them is swallowed (no canvas action starts, no capture), criterion 10. The **wheel and pinch over a ruler act on the canvas** with the pointer position clamped to the nearest viewport point, so a zoom does not stop dead when the pointer slips onto the ruler edge (proposed criterion 10a). No hover state, no tooltip.
+- **At 800 x 600.** Viewport about 496 x 546 px (800 - 280 panel - 24; about 570 - 24, the 570 being the panel viewport measured in `0007`): above the 400 x 400 of criterion 11. The bars' overlay row has 412 px (was 436) and so wraps one row earlier in places; the Boolean group (148 px) and every other group wrap whole. To be measured at build.
+- **Default view.** On New and Open the document's top-left sits 72 px right of and below the viewport's top-left (the tool rail's 12 + 48 + 12), so the edge, the pasteboard and the 0 ticks are visible and not hidden under the rail. This is a change to the initial `ViewTransform` of `0004` (proposed criterion 11a, default accepted).
+- **Dark theme.** Only the light theme exists. The six ruler tokens are aliases of existing ones, so a dark theme is a value swap with no rename.
 
-- **Thickness: 24px**, reusing the status bar's existing `h-6` (24px)
-  chrome-strip convention (`frontend/src/components/StatusBar.tsx`) rather
-  than inventing a new strip size — one "thin chrome bar" scale used on
-  three edges (bottom: status bar, now top + left: rulers).
-- **Corner square**: a plain 24×24px square where the two rulers meet
-  (top-left of the viewport), filled with the ruler background color, no
-  ticks or labels — yes, the standard ruler convention, confirmed as
-  intended.
-- **Background**: `--statusbar-bg` (`#DCDCE0`) — reuses the existing
-  "chrome, not canvas" tone already shared by the status bar and tool rail,
-  rather than a new token. The document/pasteboard colors (next section)
-  are canvas content and stay visually distinct from this chrome strip.
-- **Tick marks**: 1px screen-space lines (matching every other 1px
-  screen-space line already in the system — handle lines, selection
-  outline), color `--toolbar-icon` (`#3A3A3F`, the existing default chrome
-  icon/text color). Major ticks run the full 24px depth; minor ticks run
-  8px from the viewport-facing edge inward (roughly a third of the strip,
-  enough to read as subdivision without crowding the label).
-- **Labels**: the status bar's existing `text-xs` (12px) convention and
-  `--toolbar-icon` color — no new font-size token needed, same reuse
-  instinct as the background. One label per major tick, placed just inside
-  the tick, oriented horizontally on both rulers (the vertical ruler's
-  labels are not rotated — faster to read, matches Inkscape's default).
-- **Major-tick spacing and "nice numbers"** (criterion 4) is a rendering
-  computation, not a new visual token — reuses the tick/label styling above
-  at whatever interval the 40–120px/1-2-5×10^n rule picks for the current
-  zoom.
-- **Rendering location, flagged for the architect/implementer**: rulers are
-  mostly numeric text at a fixed screen position — closer to the status bar
-  (ordinary DOM app chrome, per `docs/design-system.md`'s own categorization
-  of `PropertiesPanel`) than to the WebGL draw list reserved for canvas
-  editing UI. Recommend a DOM component sibling to `StatusBar.tsx`, fed by
-  the same `ViewTransform`/viewport state, not a new WebGL text-rendering
-  path. Flagging rather than mandating since rendering-location calls are
-  the architect's, not UX's.
+### 2. Pasteboard and document edge
 
-### Document resize UI: a Properties-panel section, above Style
+- The document area is `--canvas-bg` (#E8E8EB). The pasteboard is `--pasteboard-bg` #B8B8BE, flat. Measured (WCAG ratios): pasteboard against document 1.61, against the chrome tone 1.44 (document against chrome is 1.12 today, which already reads as two surfaces). Black strokes on the pasteboard 10.6; `--accent` lines on it 2.3, white casing on it 2.0, so the casing rule (better of line and casing at least 2.0) holds for every editor line drawn on the pasteboard; `--field-invalid` on it 3.3. Two darker candidates (#B0B0B6, #A8A8AE) lift the edge to 1.76 and 1.93 but drop the accent line itself to 2.1 and 1.9, so the casing (2.2, 2.4) would have to carry every editor line; #B8B8BE keeps the line readable on its own and stays.
+- **No border, no shadow** (criterion 28; the 2026-10-05 decision). The edge is a colour step. Open design question 3 below offers a 1 px edge line.
+- Painted first in the WebGL draw list (pasteboard fill, then the document rectangle), snapped to whole device pixels so the edge is never two half-tone rows.
+- Objects, handles, selection lines and the Pen's close-target knockout dot read the colour under them; no editor line needs a new token on the pasteboard (the casing rule covers it).
 
-Properties-panel section, not a dialog — the panel's whole role is
-"everything configurable, fixed in place" (`docs/design-system.md`), and a
-routine, frequent settings change like document size is exactly what that
-role covers; a dialog would need justification this spec doesn't have (the
-one existing modal, `AlertDialog`, is reserved for blocking errors, a
-different shape of interruption).
+### 3. Document section (Question 1, option A, refined)
 
-A new **"Document" section**, **always shown at full, enabled state** —
-unlike Style or Shape-tool-options, it doesn't depend on any object
-selection, only on "a project is open," which is always true — so it needs
-no disabled/placeholder state. Placed **at the top of the panel, above
-Style**: every other section goes disabled/placeholder-blank until
-something is selected, so a freshly opened project with nothing selected
-would otherwise open the panel to an almost entirely inert first
-impression. Leading with the section that is always live avoids that.
+**Placement: a section of the Properties panel that is the panel's whole content when nothing is selected, and is absent when anything is selected.** Not "always at the bottom": with a selection the Style block is 700 to 904 px and the Document block would sit below the fold at 800 x 600, and it would shift whenever Style rows come and go (a violation of the anchoring rule of `0017`). Not "always at the top": it would take 190 px from Style for a setting changed once per project. It follows Figma and Affinity.
 
-- Two numeric fields, **Width** and **Height**, mm, laid out side by side
-  (`W: [____] mm`  `H: [____] mm`), same "mm" unit framing used everywhere
-  else in this product. Commit on blur or Enter, Escape reverts to the
-  last-committed value — the exact numeric-field discipline
-  `stroke-and-fill-styling`'s UX notes already established for typed
-  numeric input (no live-preview-while-typing requirement, unlike a
-  slider).
-- **"Fit to content" button** directly below the two fields, full-width
-  button matching other full-width action buttons in the panel. Disabled
-  (not hidden) when the document has no objects (criterion 12) — same
-  "disabled, not hidden" convention as the gradient stop list's remove
-  button at the 2-stop floor.
-- The status bar's existing document-size field (`project-file-foundation`)
-  needs no new UX decision for this spec — it already reads whatever
-  `sizeMm` the document reports, the same prop `StatusBar.tsx` takes today;
-  once this spec's resize/fit actions are wired through, it stays in sync
-  automatically.
-- **Invalid input (non-finite, or below the 1mm floor `adrs.md` sets):**
-  the field reverts to the last-committed value on blur/Enter, exactly as
-  Escape already does — no error toast or dialog for this. Routine,
-  recoverable input mistakes don't earn an interruption in this product
-  (the one existing modal is reserved for blocking errors); silently
-  snapping back to the last good value, the same outcome as canceling,
-  is enough feedback for a maker who typed "0" or "-5".
+**Coexistence with `0017` criterion 1.** The rule's intent (the Style area is empty when nothing is selected; the panel width and the canvas never change) holds. What changes is the literal text "no heading, no text, no control": with nothing selected the panel shows the Document section instead of nothing. The panel is empty (frame and collapse tab only) in exactly one case: **while the Pen has an unfinished path**, because resizing then would move the committed objects and not the path being drawn (default; needs the product owner's nod, proposed 14a). Switching between Style, Document and empty is instant and changes no size.
 
-### Resize view behavior: the view follows the shift, same as fit-to-content
+**Layout** (244 px content, 28 px rows, 8 px apart, label column 60 px, control column 176 px):
 
-`adrs.md` fixes this for fit-to-content (AC8's "exactly where it was on
-screen" requires it) but leaves plain resize (criteria 5-7) open for this
-spec to decide. **Decision: the view follows the shift for resize too** —
-after typing a new width/height, the content stays visually static on
-screen and the document's own edges visibly grow or shrink around it,
-exactly the same camera behavior as fit-to-content, not a second behavior
-for a sibling operation. Reasoning: "center-anchored resize" is specified
-from the content's point of view (criterion 6: object positions relative to
-each other are unchanged, only the whole document's content shifts to stay
-centered) — the one framing consistent with that is "my artwork didn't
-move, my sheet did." The alternative (view fixed, content visibly jumps by
-the shift) would make every resize look like the maker's own drawing
-moved, for a value they didn't touch, which is the more confusing reading
-of "center-anchored" even though the underlying document math is identical
-either way. Both operations are instant, no animation — consistent with
-this product's established precedent against unneeded animation
-(`path-merge-split-and-node-types`'s "Visual feedback for Join: instant, no
-animation" — "a tween for exactly this one command would be a new animation
-vocabulary for a single interaction") — so this is a one-frame jump in both
-cases, not a tween to design.
+1. Header, 24 px: "Document" 14 px semibold. No subject line.
+2. **Width** and **Height**: two rows, each a `TextField` (typed, not dragged) with the unit as a fixed 14 px `--panel-muted-fg` suffix inside the right edge, numbers right-aligned in 14 px tabular figures. Accessible names "Document width" and "Document height". Shown in the display unit (3 decimals mm, 4 cm and in, no trailing zeros; criterion 35).
+3. **Unit** (Part C only): label "Unit", a `ToggleGroup` of three text items "mm", "cm", "in" (44 px each, 132 px), one Tab stop, arrows move and select. Without Part C the row is absent and the suffix is the fixed "mm".
+4. **Fit to content**: a full-width 244 x 28 px text button (outline 1 px `--toolbar-icon` at 60 %, hover `--editor-accent-hover`, focus ring as the panel's). Removed from the tree when the document has no objects (criterion 22 "not offered"; the panel never shows disabled controls). It is the last row, so its removal moves nothing.
 
-### Pen-preview knockout color, flagged by `adrs.md` as a UX check
+Whole section about 192 px (24 + 8 + 4 rows + 3 gaps + padding).
 
-`pen_preview.rs`'s close-target knockout currently fills with the single
-constant `CANVAS_BG`. Once the pasteboard is a distinct, darker color from
-`--canvas-bg`, a knockout drawn while the pen tool is active over the
-pasteboard (legal per criterion 11 — every tool works there identically)
-would render as a mismatched light dot instead of blending into whatever's
-actually behind it. **Decision: the knockout fill must match whichever
-background is under it** — `--canvas-bg` over the document, `--pasteboard-bg`
-over the pasteboard — not a hardcoded constant. This is a correctness fix
-riding on this spec, not a new visual element: without it, the pasteboard
-work introduces a visible regression in a tool `path-node-editing` already
-shipped.
+**Why Width and Height are not `ValueField`s.** The value field is for values the maker explores by dragging with a live preview. A size here is committed (one atomic operation that moves every object, criteria 17 and 19), its range is 1 to 100 000 mm so a fill bar would show nothing useful, and dragging would rewrite the whole document per frame. What is shared with the convention: label column, 28 px box, unit placement, typing rules (Enter commits and returns focus to the canvas, Tab commits and moves to Height, Escape or a press elsewhere restores, Enter on unedited text writes nothing), the validation chip, `aria-invalid`, the focus ring. No reset icon (there is no default), no drag, no fill bar.
 
-### Pasteboard visual: a third, darker neutral grey, flat — no shadow
+**Validation (criterion 16).** The chip of the panel with the limits in the display unit, rounded inward so a message never promises a value the field refuses: mm "Enter a number from 1 to 100000"; cm "Enter a number from 0.1 to 10000"; in "Enter a number from 0.04 to 3937". The surrounding spaces, a decimal comma and `inputmode="decimal"` as in the panel's other typed fields. No unit text is parsed ("21cm" is "not a number").
 
-- **New token, `--pasteboard-bg: #B8B8BE`.** Checked against the existing
-  neutral-grey family first (`--canvas-bg` `#E8E8EB`, `--statusbar-bg`/
-  `--toolbar-bg` `#DCDCE0`) rather than reusing one of them, because
-  criterion 10 requires the pasteboard to be "visually distinguishable at a
-  glance" from *both* — reusing `--toolbar-bg` would make the pasteboard
-  read as "more chrome" rather than "canvas surroundings," which is the
-  wrong signal (it's still canvas space the maker draws on, criteria 11-12).
-  `#B8B8BE` stays in the same low-saturation neutral family (reads as "part
-  of the same calm palette," not a jarring new hue) while sitting a clear
-  step darker than both existing tones, matching the direction (darker =
-  further from the work surface) every reference tool in this space uses.
-- **No drop shadow, no border.** Inkscape's subtle shadow under the page is
-  explicitly not matched here: the document/pasteboard boundary is canvas
-  content (WebGL draw list, not DOM), and `--panel-elevation-shadow` is
-  documented as a DOM `box-shadow` for floating chrome specifically — reusing
-  it here would both misuse a token outside its stated scope and add a
-  decorative effect this product's flat, calm visual language (no
-  unnecessary gradients/shadows on canvas content anywhere today) doesn't
-  otherwise have. The flat color-contrast step above is sufficient to read
-  the document/pasteboard boundary at a glance; add a border or shadow
-  later only if real usage shows the flat contrast isn't enough.
+**Tooltips** (text only, `side="left"`): Width/Height "Document size. A resize keeps the centre, so objects move with the document and nothing changes on screen." Unit "How lengths are shown on the rulers, here and in the status bar. Other fields stay in mm. Stored sizes are always mm." Fit to content "Resize the document to the extent of all objects, without margin. Objects move so the extent starts at 0, 0."
+
+**Feedback.** The fields, the rulers and the status bar change in the frame of the commit; the canvas content does not move (criterion 20). The one silent case is Fit to content on a fitted document (criterion 26): a text-only notice under the button for 3 s, "Already fits the content." (the "Action notice" component). No dialog, no confirmation.
+
+**Units.** A unit change is a display change and one commit (criterion 36). A field with edited, uncommitted text commits in the old unit when the maker presses the unit group (blur commits, criterion 15) before the unit changes. Rulers re-label in the same frame; the fields re-render their values; the corner shows the new unit; the status bar follows.
+
+**Keyboard.** `Shift+Ctrl+F` with nothing selected expands the panel and focuses **Width** with its text selected (DOM order is visual order: Width, Height, Unit, Fit). Escape in a field restores it and returns focus to the canvas. There is no Inkscape-style `Shift+Ctrl+D` (it would have to deselect to be of any use).
+
+**Options B and C, briefly.** B (a "Document Properties" dialog) needs the product's first general dialog, hides the canvas feedback that proves the resize kept the content, and breaks the rule that numbers live in the panel; its only gain is Inkscape familiarity. C (the status bar readout edits inline) is cramped, has no room for Unit or Fit, is invisible as a control, and would be the first interactive status bar item. Recommendation stays A. The one weakness of A is discoverability with an object selected (Escape reveals the section); open design question 2.
+
+### 4. Status bar
+
+Left: "x: 12.3  y: 45.6" followed by the unit once, "mm", fixed decimals so the text does not jitter (mm 1, cm 2, in 3 decimals, the same 0.1 mm resolution; today the readout has no unit). Centre: zoom (unchanged). Right: "210.0 × 297.0 mm" in the same decimals (criteria 12, 21, 34); the unit is the display unit. Display only, no pressing, no tooltip. Stored values are untouched by the unit.
+
+### Criteria changes requested
+
+(All applied by the product owner on 2026-10-09, in criteria 1, 7, 10a, 11a, 12, 14, 14a, 16, 21, 22, 26, 28, 34. Kept for the record.)
+
+- **1:** "a plain square" becomes "a square that shows the display unit".
+- **7:** add "a label that would not fit entirely in the ruler's free span is not drawn; when labels are wider than the major spacing, labels are drawn on every second or fifth major tick".
+- **10a (new):** wheel and pinch over a ruler act on the canvas (pointer clamped to the viewport).
+- **11a (new):** on New and Open the document's top-left is 72 px from the viewport's top-left.
+- **14, 16:** the validation message is written in the display unit with the limits rounded inward (mm "1 to 100000", cm "0.1 to 10000", in "0.04 to 3937"); Width and Height are typed fields, not drag fields.
+- **14a (new):** the Document section is shown when nothing is selected and the Pen has no unfinished path; otherwise the panel shows Style or is empty. Amends `0017` criteria 1 and 2 (text only; the empty frame rule for the Style area stays).
+- **22:** "not offered" is the removal of the button from the tree.
+- **26 (addition):** a notice "Already fits the content." for 3 s.
+- **28 (addition):** colours fixed as `--canvas-bg` document and `--pasteboard-bg` #B8B8BE; contrast 1.61 and 1.44 measured.
+- **12, 21, 34:** status bar decimals per unit as in section 4; the cursor readout gains the unit.
+
+### Open design questions (defaults taken)
+
+1. Pen with an unfinished path hides the Document section. Default: yes. Alternative: show it and let the resize move only the committed objects (surprising).
+2. Discoverability of the section with an object selected. Default: Escape reveals it; no extra route. Alternative: the status bar size readout becomes a button that deselects and focuses Width.
+3. A 1 px document edge line (`--toolbar-icon` at 35 %, under the artwork, outside the document area). Default: no (criterion 28). Alternative: yes, if the colour step proves too faint on real displays.
+4. An aspect-ratio lock between Width and Height. Default: none (a sheet size is typed both ways; the spec has no proportional resize).
+5. Initial view offset of 72 px (criterion 11a). Default: yes.
 
 ## Links
-Requirements: none yet in `docs/requirements.md` — this is a new customer
-ask explored ahead of being sequenced into `specs/index.md`; add a
-requirement id when it is formally scheduled.
-Related: `specs/0001-project-file-foundation/specification.md` (existing
-`DocumentSize` concept, status-bar document-size field),
-`specs/0004-canvas-navigation-and-selection/specification.md` +
-`adrs.md` (`ViewTransform`/viewport pan-zoom state rulers must track),
-`docs/design-system.md` (2026-10-05 chrome: right `PropertiesPanel`,
-where the document-size fields live).
+
+Requirements: R-EDIT-018 (new, added with this refresh).
+Related: `specs/0001-project-file-foundation/specification.md` (the existing `DocumentSize` and status bar size field), `specs/0004-canvas-navigation-and-selection/specification.md` and `adrs.md` (`ViewTransform`, zoom range), `specs/0017-style-panel-rework/specification.md` (panel rules: no popups, validation chip, criterion 48; its criterion 1 is amended by criterion 14a here), `docs/design-system.md` (chrome, tokens), `docs/adr/0012-pages-in-the-document-model.md` (rejected), `docs/adr/0002-document-model-units-and-svg-round-trip.md` (mm, Y-down), `adrs.md` in this folder (rewritten 2026-10-09).
+PR: none yet.
