@@ -5,15 +5,9 @@
   },
   "permissions": {
     "allow": [
-      "Bash(cargo fmt:*)",
-      "Bash(cargo clippy:*)",
-      "Bash(cargo check:*)",
-      "Bash(cargo build:*)",
-      "Bash(cargo test:*)",
-      "Bash(cargo nextest:*)",
-      "Bash(cargo doc:*)",
-      "Bash(cargo deny:*)",
-      "Bash(cargo tree:*)",
+      "Bash(cargo:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
@@ -22,14 +16,16 @@
       "Bash(git commit:*)",
       "Bash(git switch:*)",
       "Bash(git worktree:*)",
-      "Bash(gh pr view:*)",
-      "Bash(gh pr checks:*)",
-      "Bash(gh pr create:*)"
+      "Bash(git fetch:*)",
+      "Bash(git pull:*)",
+      "Bash(git branch:*)",
+      "Bash(git merge:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh run:*)"
     ],
     "ask": [
-      "Bash(git push:*)",
-      "Bash(gh pr merge:*)",
-      "Bash(cargo add:*)"
+      "Bash(gh pr merge:*)"
     ],
     "deny": [
       "Bash(git push --force:*)",
