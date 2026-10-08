@@ -878,3 +878,31 @@ box size; those tests count fans only (`white_count` in
 - **SVG import and dashes.** A zero-length "on" entry of a dash pattern is
   skipped, so a round-capped `[0, 3]` pattern draws nothing where SVG draws
   dots. The presets have `on > 0`; revisit when `svg-import-export` is planned.
+
+**2026-10-08 (`stroke-and-fill-styling` PR 3):**
+
+- **`session/mod.rs`** is under the limit again after the tolerance helpers
+  moved to `session/tolerances.rs` (a pure move). The panel's glue is
+  `session/style.rs` and `session/style_view.rs`; `useEditorSession.ts` gained
+  one counter and one accessor (`syncRevision`, `getSession`) and the wider
+  `isFormControl` list, nothing else.
+- **There is no frontend test runner.** The panel's rules are in Rust and
+  tested there (`curvyo-ui-core/tests/style_panel.rs`,
+  `curvyo-editor-wasm/tests/style_panel_session.rs`); what stays in the DOM
+  (field text and caret, focus return, the picker's HSV state, the collapse tab)
+  was checked by hand in the Browser pane. A `vitest` setup would let the
+  picker's hue-keeping and the typed-field rules be pinned; it is a new
+  dependency and a new CI step, so it is left to a story that needs it.
+- **`ToolRail` and `ToolbarSwitch` keep their own inline `Tooltip`.** The
+  design system says they become the one `ui/tooltip.tsx` wrapper; PR 3 adds the
+  wrapper for the panel and does not touch the two older users.
+- **react-colorful steps 1 % only and labels its sliders "Color", "Hue" and
+  "Alpha".** The picker renames them to the design system's names after mount
+  and handles Shift plus an arrow key itself (10 %). If a later react-colorful
+  upgrade changes its markup, the rename silently stops; the picker has no test
+  for it (see the item above).
+- **Opening or closing the panel announces its width change to the viewport**
+  (`Viewport::keep_origin_for_width_change`), because the existing resize keeps
+  the view's centre (`canvas-navigation-and-selection` criterion 10) and would
+  move the document by half the panel width. A resize that does not match the
+  announcement is an ordinary window resize.

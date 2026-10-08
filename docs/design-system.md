@@ -708,6 +708,38 @@ The colour area is `react-colorful` (MIT, no dependencies). Domain components:
 (the bars' field rules), `GradientEditor` (bar, thumbs, rows, Add), all fed by
 `useStylePanel.ts`, not `useEditorSession.ts`.
 
+**As built (PR 3 of `0007`, 2026-10-08).** `ui/tooltip.tsx`, `ui/popover.tsx`,
+`ui/select.tsx` and `ui/toggle-group.tsx` exist; `ui/slider.tsx` does not (the
+hue and opacity sliders are react-colorful's, and the stop thumbs arrive with the
+gradient editor). The panel's tokens (`--panel-bg`, `--panel-muted-fg`,
+`--field-placeholder`, `--field-disabled-bg`, `--field-disabled-fg`,
+`--swatch-border`, `--checker-a`, `--checker-b`, `--mixed-hatch`,
+`--no-paint-slash`) are in `index.css` with the values above. Where the build
+differs from the rows above:
+
+- **`ToggleGroup` is a hand-made radio strip, not Radix's `ToggleGroup`.** Radix
+  moves focus with the arrow keys but selects only on activation; this row asks
+  for arrows that move and select. Same look, one Tab stop per group.
+- **The colour popover is anchored to the whole Color row**, not to the swatch,
+  so `side="left"` puts it beside the panel edge and it never covers the hex and
+  opacity fields it updates.
+- **react-colorful's sliders are renamed** to "Saturation and value", "Hue" and
+  "Opacity" after mount, and Shift with an arrow key is a 10 % step handled by
+  the popover (the library steps 1 %).
+- **Window minimum 800 x 600, measured, no raise needed.** At 800 the canvas
+  region is 520 px. The Select bar wraps to three rows (the two switches; Radius
+  with the link switch and Remove rounding; Object to path), the Node bar is one
+  row of about 300 px and the polygon/star bar about 310 px in either mode; none
+  runs under the panel.
+- **Opening and closing keeps the document where it is on screen.** The view
+  normally keeps its centre on a resize, so a toggle announces its width change
+  to the viewport first and that one resize keeps the top-left origin.
+- **Fill type shows None and Solid only** until the gradient editor ships; a
+  stored gradient reads as no item pressed.
+- **A disabled panel keeps its pressed items** at the 30 % ground; the Node tool
+  with no node selected edits the paths of the object selection, and shows
+  "Nothing selected" when the selection holds none.
+
 **Casing over artwork.** Fills make artwork the background of every line the
 editor draws on top. Measured 2026-10-07 (WCAG ratio, 1px `--accent` against the
 fill / white against the fill): black 4.6 / 21.0, white 4.5 / 1.0, `--accent`

@@ -1,8 +1,11 @@
+import type { ReactElement } from "react";
+
 import { ColorAlphaPicker } from "@/components/ColorAlphaPicker";
 import { DashSelect } from "@/components/DashSelect";
 import { NumberField } from "@/components/NumberField";
 import { StyleRow } from "@/components/StyleRow";
 import { CapIcon, JoinIcon, NoPaintIcon, SolidPaintIcon } from "@/components/StyleIcons";
+import { Tooltip } from "@/components/ui/tooltip";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import type { ToggleOption } from "@/components/ui/toggle-group";
 import type { CapName, JoinName, StylePanelApi } from "@/hooks/useStylePanel";
@@ -52,6 +55,27 @@ const CAP_OPTIONS: readonly ToggleOption<CapName>[] = [
   },
 ];
 
+/** Says why a control is disabled. A disabled element gets no pointer events,
+ * so the hint hangs on a wrapper and the control inside stops catching them. */
+function WhyDisabled({
+  reason,
+  wide = false,
+  children,
+}: {
+  reason: string | null;
+  wide?: boolean;
+  children: ReactElement;
+}) {
+  if (!reason) {
+    return children;
+  }
+  return (
+    <Tooltip content={reason}>
+      <span className={`inline-flex [&>*]:pointer-events-none ${wide ? "w-full" : ""}`}>{children}</span>
+    </Tooltip>
+  );
+}
+
 interface StyleSectionProps {
   panel: StylePanelApi;
   /** Changes when the edited objects or the tool change: closes a popover. */
@@ -72,6 +96,8 @@ export function StyleSection({ panel, closeKey, onReturnFocus }: StyleSectionPro
   const { view } = panel;
   const off = !view.enabled;
   const strokeOff = off || view.strokeAllOff;
+  const strokeOffReason =
+    view.enabled && view.strokeAllOff ? "Stroke is off. Turn it on to change this." : null;
   const paintValue =
     view.strokePaint === "on" ? "solid" : view.strokePaint === "off" ? "none" : null;
   const fillValue = view.fillMode === "none" || view.fillMode === "solid" ? view.fillMode : null;
@@ -126,14 +152,17 @@ export function StyleSection({ panel, closeKey, onReturnFocus }: StyleSectionPro
         />
       </StyleRow>
       <StyleRow label="Dash">
-        <DashSelect
-          value={view.strokeDash}
-          disabled={strokeOff}
-          onChange={panel.setStrokeDash}
-          onReturnFocus={onReturnFocus}
-        />
+        <WhyDisabled reason={strokeOffReason} wide>
+          <DashSelect
+            value={view.strokeDash}
+            disabled={strokeOff}
+            onChange={panel.setStrokeDash}
+            onReturnFocus={onReturnFocus}
+          />
+        </WhyDisabled>
       </StyleRow>
       <StyleRow label="Join">
+        <WhyDisabled reason={strokeOffReason}>
         <ToggleGroup
           label="Stroke join"
           options={JOIN_OPTIONS}
@@ -143,8 +172,10 @@ export function StyleSection({ panel, closeKey, onReturnFocus }: StyleSectionPro
           itemWidth={40}
           onReturnFocus={onReturnFocus}
         />
+        </WhyDisabled>
       </StyleRow>
       <StyleRow label="Cap">
+        <WhyDisabled reason={strokeOffReason}>
         <ToggleGroup
           label="Stroke cap"
           options={CAP_OPTIONS}
@@ -154,6 +185,7 @@ export function StyleSection({ panel, closeKey, onReturnFocus }: StyleSectionPro
           itemWidth={40}
           onReturnFocus={onReturnFocus}
         />
+        </WhyDisabled>
       </StyleRow>
 
       <div

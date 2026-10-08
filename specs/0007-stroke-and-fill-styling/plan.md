@@ -81,21 +81,21 @@ readiness check section 10). PR 1 is invisible to the maker; PR 3 is the first d
 
 ### PR 3: panel with stroke and solid fill (first demo)
 
-- [ ] 1. `session/tolerances.rs` pure move out of `session/mod.rs`.
-- [ ] 2. `ui-core/style_panel.rs` (state, mixed values via `BarValue`, scope per tool, subject
+- [x] 1. `session/tolerances.rs` pure move out of `session/mod.rs`.
+- [x] 2. `ui-core/style_panel.rs` (state, mixed values via `BarValue`, scope per tool, subject
   line) and `style_edit.rs` (override preview, dispatch to the object selection) (AC 1, 2, 24,
   36, 37).
-- [ ] 3. `wasm_style.rs` binding; commit-on-release, coalesced previews, Escape drops the preview
+- [x] 3. `wasm_style.rs` binding; commit-on-release, coalesced previews, Escape drops the preview
   (AC 36).
-- [ ] 4. Frontend: `PropertiesPanel`, Style section (stroke, solid fill), `ColorAlphaPicker`
+- [x] 4. Frontend: `PropertiesPanel`, Style section (stroke, solid fill), `ColorAlphaPicker`
   (`react-colorful`), typed-field rules, Paint switch, dash presets (`[6,4]`, `[1,3]`,
   `[6,3,1,3]`; unknown pattern shows "Custom"), disabled and mixed states (AC 4 to 9, 13, 14,
   36, 37).
-- [ ] 5. Panel keys and focus: keys never reach the canvas, `Shift+Ctrl+F`, Escape order, focus
+- [x] 5. Panel keys and focus: keys never reach the canvas, `Shift+Ctrl+F`, Escape order, focus
   return after a pointer interaction (AC 38).
-- [ ] 6. Layout: canvas region and 280 px panel side by side, collapse tab, window minimum
+- [x] 6. Layout: canvas region and 280 px panel side by side, collapse tab, window minimum
   (measure and raise if needed), document does not move when the panel toggles (AC 39).
-- [ ] 7. `design-system.md` rows for the new tokens and components.
+- [x] 7. `design-system.md` rows for the new tokens and components.
 
 ### PR 4: gradient
 
