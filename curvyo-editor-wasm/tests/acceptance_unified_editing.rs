@@ -1026,7 +1026,9 @@ fn ac08_centre_handle_yields_when_a_parameter_handle_is_within_20_px() {
         let mut full = rect_scene(pct, s, s, s / 2.0, 0.0);
         let mid = full.fr.at(0.0, -s / 4.0);
         let (cur, h) = hint(&mut full.s, mid);
-        assert_eq!((cur.as_str(), h.as_str()), ("default", ""), "{pct}% s={s}");
+        // No handle here, and a press moves the object: the move cursor
+        // (`0007` criterion 28).
+        assert_eq!((cur.as_str(), h.as_str()), ("move", ""), "{pct}% s={s}");
         let before = rect_of(&full.s, 0);
         drag(
             &mut full.s,
@@ -1052,7 +1054,7 @@ fn ac08_body_between_the_centre_and_each_edge_is_a_move_at_every_radius() {
                 let (cur, h) = hint(&mut sc.s, p);
                 assert_eq!(
                     (cur.as_str(), h.as_str()),
-                    ("default", ""),
+                    ("move", ""),
                     "s={s} rho={rho} ({nx},{ny})"
                 );
             }
@@ -2985,7 +2987,8 @@ fn ac08_the_old_north_east_south_west_handles_of_polygon_and_star_are_gone() {
         let (cur, h) = hint(&mut sc.s, p);
         assert_eq!(
             (cur.as_str(), h.as_str()),
-            ("default", ""),
+            // Inside the polygon's square box, on no handle: a press moves it.
+            ("move", ""),
             "E point of the outer circle"
         );
     }

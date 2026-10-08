@@ -388,9 +388,12 @@ fn ac01_centre_handle_is_hover_only_and_shows_move() {
     // hover region is min(12, s/4) px: 20 mm box shorter side = 75 px => 12
     let (p11, p14) = (px(&s, 11.0), px(&s, 14.0));
     assert_eq!(hint_at(&mut s, pt(c.x + p11, c.y)), "move");
-    assert_ne!(hint_at(&mut s, pt(c.x + p14, c.y)), "move");
-    // elsewhere inside the box the cursor is the normal one
-    assert_eq!(hint_at(&mut s, pt(10.0, 10.0)), "default");
+    let _ = hint_at(&mut s, pt(c.x + p14, c.y));
+    assert_ne!(s.handle_hint(), "move", "outside the handle's hover region");
+    // elsewhere inside the box a press moves the object, so the cursor says so
+    // (`0007` criterion 28), though it is not the centre handle's hint
+    assert_eq!(hint_at(&mut s, pt(10.0, 10.0)), "move");
+    assert_eq!(s.handle_hint(), "");
 }
 
 #[test]
@@ -412,7 +415,9 @@ fn ac04_centre_handle_needs_a_shorter_side_of_48_px() {
         click(&mut s, pt(30.0, 0.0));
         let c = pt(30.0, side_mm / 2.0);
         let got = hint_at(&mut s, c);
-        assert_eq!(got == "move", shown, "side {side_mm} mm: cursor {got}");
+        // The cursor is `move` either way (a press at the centre moves the
+        // object); the centre handle's own hint is what appears at 48 px.
+        assert_eq!(got, "move", "side {side_mm} mm: cursor {got}");
         assert_eq!(s.handle_hint() == "move", shown);
     }
 }
@@ -1048,7 +1053,9 @@ fn run_hit_rule(kind: Kind, w_mm: f64, h_mm: f64, th: f64, shift: bool) {
                 let want_h = want.unwrap_or("");
                 let ok_h = got_h == want_h;
                 let ok_c = match want_h {
-                    "" => got_c == "default",
+                    // No handle: the arrow, or `move` where a press inside the
+                    // selected box moves the object (`0007` criterion 28).
+                    "" => got_c == "default" || got_c == "move",
                     "move" => got_c == "move",
                     h if h.starts_with("rotate") => got_c == "rotate",
                     "skew" | "skew-y" => got_c.starts_with("skew:"),

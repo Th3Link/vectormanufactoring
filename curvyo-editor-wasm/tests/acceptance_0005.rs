@@ -362,7 +362,9 @@ fn assert_full_handle_set(
         let hint = hint_at(session, p);
         let is_corner = name.len() == 2;
         if corners_only && !is_corner {
-            assert_eq!(hint, "default", "edge handle {name} must not exist");
+            // No handle there; the point is inside the box, so a press moves
+            // the object and the cursor says so (`0007` criterion 28).
+            assert_eq!(hint, "move", "edge handle {name} must not exist");
         } else {
             assert!(
                 hint.starts_with("resize:"),
@@ -425,7 +427,7 @@ fn ac1_polygon_and_star_have_corner_handles_only_plus_rotate_ac11() {
         select_at(&mut s, mid);
         assert_eq!(
             s.cursor_hint(),
-            "default",
+            "move", // not a handle; a press here moves the object (`0007` 28)
             "pointer on outline mid is not a handle"
         );
         assert_full_handle_set(&mut s, min.x, min.y, max.x, max.y, true);
@@ -1606,10 +1608,12 @@ fn ac18_after_deselect_and_reselect_handles_are_oriented_to_the_rotation() {
                 .iter()
                 .any(|r| (r.x - stale.x).hypot(r.y - stale.y) < limit);
             if !near {
-                assert_eq!(
-                    hint_at(&mut s, stale),
-                    "default",
-                    "{deg} deg: stale axis-aligned handle {name}"
+                // Not a handle cursor: the arrow, or `move` where a press inside
+                // the box moves the object (`0007` criterion 28).
+                let hint = hint_at(&mut s, stale);
+                assert!(
+                    hint == "default" || hint == "move",
+                    "{deg} deg: stale axis-aligned handle {name}: {hint}"
                 );
             }
         }
@@ -2076,7 +2080,7 @@ fn ac23_moving_a_rotated_and_scaled_object_is_a_pure_translation() {
     );
     assert_eq!(
         hint_at(&mut s, on_edge),
-        "default",
+        "move", // not a handle; the press moves the object (`0007` criterion 28)
         "press point is not on a handle"
     );
     drag(

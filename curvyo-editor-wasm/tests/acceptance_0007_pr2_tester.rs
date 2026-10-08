@@ -1107,7 +1107,7 @@ fn ac26_a_selection_and_the_editor_lines_are_drawn_over_a_fill_never_under_it() 
 }
 
 #[test]
-fn ac41_the_hover_box_is_sixty_percent_accent_over_a_white_casing_and_stays_solid() {
+fn ac41_the_hover_box_is_sixty_five_percent_accent_over_a_white_casing_and_stays_solid() {
     let d = Document::new(1);
     let r = rect(&d, 0.0, 0.0, 100.0, 100.0);
     fill_with(&d, r, rgb(0, 0, 0), 1.0);
@@ -1121,15 +1121,15 @@ fn ac41_the_hover_box_is_sixty_percent_accent_over_a_white_casing_and_stays_soli
         .collect();
     assert_ne!(accent.len(), 0);
     assert!(
-        accent.iter().all(|v| (151..=155).contains(&v.color.a)),
-        "60 percent"
+        accent.iter().all(|v| (164..=168).contains(&v.color.a)),
+        "65 percent"
     );
     let casing = list
         .triangles
         .iter()
         .skip(list.overlay_start())
         .filter(|v| {
-            (v.color.r, v.color.g, v.color.b) == (255, 255, 255) && (151..=155).contains(&v.color.a)
+            (v.color.r, v.color.g, v.color.b) == (255, 255, 255) && (164..=168).contains(&v.color.a)
         })
         .count();
     assert!(casing > 0, "a white casing at the same alpha");
