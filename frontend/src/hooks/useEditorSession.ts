@@ -630,6 +630,8 @@ export function useEditorSession(
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<WasmSession | null>(null);
+  /** The tail of the session queue (`enqueueSessionTask`). */
+  const sessionQueueRef = useRef<Promise<void>>(Promise.resolve());
   const lastPressRef = useRef<{ time: number; x: number; y: number } | null>(
     null,
   );
@@ -744,50 +746,62 @@ export function useEditorSession(
     syncBadges(session);
   }, [syncEntry, syncBadges]);
 
-  /** Frees whatever session is currently attached (if any), makes
-   * `session` the live one, and attaches it to the host's `<canvas>` —
-   * the mount effect's own first attach and every later New/Open swap
-   * all go through this one path.
-   *
-   * Known limitation: if a second call starts before the first's
-   * `attach_canvas` (async: it negotiates a `wgpu` adapter/device) has
-   * resolved, the first's session is freed out from under that in-
-   * flight call rather than the call being awaited or cancelled first —
-   * a pre-existing hazard (the original mount-only version of this
-   * effect had the same race against unmount), not something this
-   * swap support introduces. Rapid repeated New/Open clicks are the
-   * only way to hit it; no acceptance criterion exercises that. */
-  const attachSession = useCallback(
-    async (session: WasmSession) => {
-      sessionRef.current?.free();
-      sessionRef.current = session;
+  /** Runs `task` once every earlier queued task has settled. Everything
+   * that frees, replaces or publishes the live session goes through this
+   * one queue, so none of it can overlap an in-flight `attach_canvas`:
+   * that call is async (it negotiates a `wgpu` adapter/device) and holds
+   * the session's `Gpu` slot while it runs, so freeing the session
+   * underneath it is a use-after-free (`memory access out of bounds` in
+   * `drop_glue<Option<Gpu>>`). A task that throws does not stop later
+   * ones; its error goes to the caller of `enqueueSessionTask` only. */
+  const enqueueSessionTask = useCallback((task: () => Promise<void> | void) => {
+    const run = sessionQueueRef.current.then(task);
+    sessionQueueRef.current = run.catch(() => {});
+    return run;
+  }, []);
 
-      const canvas = canvasRef.current;
-      if (!canvas) {
-        return;
-      }
-      const { width, height, devicePixelRatio } = backingBufferSize(
-        canvas.clientWidth,
-        canvas.clientHeight,
-      );
-      canvas.width = width;
-      canvas.height = height;
-      // `attach_canvas` also records the canvas's CSS size on the new
-      // session's viewport (acceptance criterion 10's "resize keeps the
-      // center" starts from a correctly-sized viewport on attach, not
-      // just on the first later resize).
-      await session.attach_canvas(canvas, width, height, devicePixelRatio);
-      if (sessionRef.current !== session) {
-        // Superseded by another New/Open (or the hook unmounted) while
-        // `attach_canvas` was in flight; whichever call superseded this
-        // one already owns `sessionRef.current`, and this `session` has
-        // already been (or will be) freed by it — touching it further
-        // here would be a use-after-free.
-        return;
-      }
-      syncFromSession();
-    },
-    [syncFromSession],
+  /** Frees whatever session is currently live, then makes `session` the
+   * live one and attaches it to the host's `<canvas>` — the mount
+   * effect's own first attach and every later New/Open swap (including a
+   * file passed at launch, which arrives while the first attach may still
+   * be in flight) all go through this one path.
+   *
+   * Runs on the session queue: it starts only after any earlier attach
+   * has finished, so the session it frees is never mid-`attach_canvas`.
+   * `sessionRef.current` holds a session only while it is safe to use
+   * (null during the attach itself), so the render loop and input
+   * handlers never call into a session that has an `attach_canvas` in
+   * flight. The returned promise rejects if `attach_canvas` does; the
+   * session is still published then, as a session without a canvas. */
+  const attachSession = useCallback(
+    (session: WasmSession) =>
+      enqueueSessionTask(async () => {
+        sessionRef.current?.free();
+        sessionRef.current = null;
+
+        const canvas = canvasRef.current;
+        if (!canvas) {
+          sessionRef.current = session;
+          return;
+        }
+        const { width, height, devicePixelRatio } = backingBufferSize(
+          canvas.clientWidth,
+          canvas.clientHeight,
+        );
+        canvas.width = width;
+        canvas.height = height;
+        try {
+          // `attach_canvas` also records the canvas's CSS size on the new
+          // session's viewport (acceptance criterion 10's "resize keeps
+          // the center" starts from a correctly-sized viewport on attach,
+          // not just on the first later resize).
+          await session.attach_canvas(canvas, width, height, devicePixelRatio);
+        } finally {
+          sessionRef.current = session;
+        }
+        syncFromSession();
+      }),
+    [enqueueSessionTask, syncFromSession],
   );
 
   useEffect(() => {
@@ -873,10 +887,15 @@ export function useEditorSession(
       cancelAnimationFrame(frame);
       resizeObserver?.disconnect();
       canvas?.removeEventListener("wheel", onWheel);
-      sessionRef.current?.free();
-      sessionRef.current = null;
+      // Queued, not immediate: an `attach_canvas` still in flight must
+      // finish before its session is freed. StrictMode's remount queues
+      // its own attach behind this, so it never sees the freed session.
+      void enqueueSessionTask(() => {
+        sessionRef.current?.free();
+        sessionRef.current = null;
+      });
     };
-  }, [attachSession, syncEntry]);
+  }, [attachSession, enqueueSessionTask, syncEntry]);
 
   const newProject = useCallback(() => {
     void createSession().then(attachSession);
