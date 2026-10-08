@@ -906,3 +906,10 @@ box size; those tests count fans only (`white_count` in
   the view's centre (`canvas-navigation-and-selection` criterion 10) and would
   move the document by half the panel width. A resize that does not match the
   announcement is an ordinary window resize.
+- **Who writes the UI text.** Rust builds the Style panel's subject line
+  ("3 rectangles"); a refused typed value comes back as a code (`hex`, `hex8`,
+  `percent`, `width`) and the host owns the message. The rule from here on:
+  Rust sends codes and counts, the host owns all other strings, so a later
+  localisation touches one layer. PR 4's stop messages ("No stops. Nothing is
+  painted. Add a stop.") follow it; the subject line stays as the one exception
+  until a localisation story moves it.

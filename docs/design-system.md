@@ -708,8 +708,8 @@ The colour area is `react-colorful` (MIT, no dependencies). Domain components:
 (the bars' field rules), `GradientEditor` (bar, thumbs, rows, Add), all fed by
 `useStylePanel.ts`, not `useEditorSession.ts`.
 
-**As built (PR 3 of `0007`, 2026-10-08).** `ui/tooltip.tsx`, `ui/popover.tsx`,
-`ui/select.tsx` and `ui/toggle-group.tsx` exist; `ui/slider.tsx` does not (the
+**As built (PR 3 of `0007`, 2026-10-08).** `ui/tooltip.tsx` (no default side: the panel's open left, the rail's will open
+right), `ui/popover.tsx`, `ui/select.tsx` and `ui/toggle-group.tsx` exist; `ui/slider.tsx` does not (the
 hue and opacity sliders are react-colorful's, and the stop thumbs arrive with the
 gradient editor). The panel's tokens (`--panel-bg`, `--panel-muted-fg`,
 `--field-placeholder`, `--field-disabled-bg`, `--field-disabled-fg`,
@@ -717,9 +717,9 @@ gradient editor). The panel's tokens (`--panel-bg`, `--panel-muted-fg`,
 `--no-paint-slash`) are in `index.css` with the values above. Where the build
 differs from the rows above:
 
-- **`ToggleGroup` is a hand-made radio strip, not Radix's `ToggleGroup`.** Radix
-  moves focus with the arrow keys but selects only on activation; this row asks
-  for arrows that move and select. Same look, one Tab stop per group.
+- **`ToggleGroup` is built on Radix `RadioGroup`**, not Radix's `ToggleGroup`:
+  a radio group moves and selects with the arrow keys, keeps one Tab stop and
+  handles Home and End; the toggle group selects only on activation.
 - **The colour popover is anchored to the whole Color row**, not to the swatch,
   so `side="left"` puts it beside the panel edge and it never covers the hex and
   opacity fields it updates.
