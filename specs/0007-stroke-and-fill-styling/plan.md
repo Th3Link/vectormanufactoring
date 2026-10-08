@@ -15,7 +15,7 @@ readiness check section 10). PR 1 is invisible to the maker; PR 3 is the first d
 | `curvyo-render-core` (PR 2, 4) | New `artwork.rs` (one pass over `&[ObjectSnapshot]` in tree order), `dash.rs`, `fill.rs`; later `gradient.rs`. Decorations split out of `build_draw_list`. |
 | `curvyo-geometry-core` (PR 2) | One winding-number function for interior hit-testing (closed: real closing cubic; open: straight chord). |
 | `curvyo-ui-core` (PR 2, 3, 4) | New `hit_test_object` rule (criterion 27), `select_tool/press.rs`, hover and double-click; `style_panel.rs`, `style_edit.rs` (override preview and dispatch); `StopId` minting; default stops and add-stop position/colour rule. |
-| `curvyo-editor-wasm` (PR 2, 3, 4) | `gpu.rs` pure move into `gpu_pipeline.rs`, depth layers (PR 2); `wasm_style.rs`, `session/style.rs`, `session/tolerances.rs` pure move (PR 3); `Vertex` widening, ramp texture, `gpu_paint.rs` (PR 4). |
+| `curvyo-editor-wasm` (PR 2, 3, 4) | `gpu.rs` pure move into `gpu_pipeline.rs`, depth layers (PR 2); `wasm_properties_panel.rs`, `session/style.rs`, `session/tolerances.rs` pure move (PR 3); `Vertex` widening, ramp texture, `gpu_paint.rs` (PR 4). |
 | `frontend/` (PR 3, 4) | `PropertiesPanel` with the Style section, `useStylePanel.ts`, `App.tsx` re-anchoring, UI wrappers, `react-colorful`; stop editor (PR 4). |
 | `docs/` | `design-system.md` rows (PR 3), `technical-debt.md` lines (PR 1, 2, 4). |
 
@@ -81,21 +81,39 @@ readiness check section 10). PR 1 is invisible to the maker; PR 3 is the first d
 
 ### PR 3: panel with stroke and solid fill (first demo)
 
-- [ ] 1. `session/tolerances.rs` pure move out of `session/mod.rs`.
-- [ ] 2. `ui-core/style_panel.rs` (state, mixed values via `BarValue`, scope per tool, subject
+- [x] 1. `session/tolerances.rs` pure move out of `session/mod.rs`.
+- [x] 2. `ui-core/style_panel.rs` (state, mixed values via `BarValue`, scope per tool, subject
   line) and `style_edit.rs` (override preview, dispatch to the object selection) (AC 1, 2, 24,
   36, 37).
-- [ ] 3. `wasm_style.rs` binding; commit-on-release, coalesced previews, Escape drops the preview
+- [x] 3. `wasm_properties_panel.rs` binding; commit-on-release, coalesced previews, Escape drops the preview
   (AC 36).
-- [ ] 4. Frontend: `PropertiesPanel`, Style section (stroke, solid fill), `ColorAlphaPicker`
+- [x] 4. Frontend: `PropertiesPanel`, Style section (stroke, solid fill), `ColorAlphaPicker`
   (`react-colorful`), typed-field rules, Paint switch, dash presets (`[6,4]`, `[1,3]`,
   `[6,3,1,3]`; unknown pattern shows "Custom"), disabled and mixed states (AC 4 to 9, 13, 14,
   36, 37).
-- [ ] 5. Panel keys and focus: keys never reach the canvas, `Shift+Ctrl+F`, Escape order, focus
+- [x] 5. Panel keys and focus: keys never reach the canvas, `Shift+Ctrl+F`, Escape order, focus
   return after a pointer interaction (AC 38).
-- [ ] 6. Layout: canvas region and 280 px panel side by side, collapse tab, window minimum
+- [x] 6. Layout: canvas region and 280 px panel side by side, collapse tab, window minimum
   (measure and raise if needed), document does not move when the panel toggles (AC 39).
-- [ ] 7. `design-system.md` rows for the new tokens and components.
+- [x] 7. `design-system.md` rows for the new tokens and components.
+
+**As built (PR 3, 2026-10-08):**
+
+- Rust modules: `ui-core/style_scope.rs` (which objects the panel edits and the
+  subject line), `style_panel.rs` (what it shows), `style_entry.rs` (typed text
+  and host words), `style_edit.rs` (the drag preview); `editor-wasm`
+  `session/style.rs`, `session/style_view.rs`, `wasm_properties_panel.rs`.
+- **A creation tool never edits the object selection in practice.** `set_tool`
+  clears the selection when a creation tool is chosen (existing behaviour of
+  `unified-object-editing`), and a created shape hands over to the Select tool,
+  so the panel is disabled while a creation tool is active. Criterion 37's
+  "with the rectangle, ellipse and polygon/star tools, the panel edits the
+  object selection" is therefore only reachable through the hand-over. The
+  scope rule is implemented as written (`StyleTool::Other`) and unit tested;
+  the criterion needs the PO's adjustment, not a code change.
+- **UI-text layering rule** (agreed with the architect review, item 9): Rust
+  builds the subject line and sends codes and counts; the host owns error
+  messages and every other string it shows. PR 4's stop messages follow it.
 
 ### PR 4: gradient
 

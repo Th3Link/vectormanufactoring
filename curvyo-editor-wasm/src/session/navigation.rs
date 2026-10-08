@@ -120,6 +120,16 @@ impl Session {
         self.viewport.resize(width, height);
     }
 
+    /// The properties panel is about to open or close and change the canvas
+    /// width by `delta` CSS pixels: that one resize keeps the view's top-left
+    /// origin, so the document does not move on screen
+    /// (`specs/0007-stroke-and-fill-styling` criterion 39).
+    pub fn keep_view_origin_for_width_change(&mut self, delta: f64) {
+        if delta.is_finite() {
+            self.viewport.keep_origin_for_width_change(delta);
+        }
+    }
+
     /// Records the display's device pixel ratio (`window.devicePixelRatio`),
     /// which an axis-aligned selection box snaps to
     /// (`edit-interaction-polish` criterion 65). A value that is not a

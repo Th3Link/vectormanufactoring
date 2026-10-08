@@ -47,11 +47,16 @@ impl Session {
         // interleaved, each with its fill then its stroke
         // (`specs/0007-stroke-and-fill-styling` criterion 26). The Node
         // tool's live drag reshapes the paths it moves.
-        let artwork_objects = if self.tool == Tool::Node {
+        let mut artwork_objects = if self.tool == Tool::Node {
             Cow::Owned(Self::with_paths(&objects, &paths))
         } else {
             Cow::Borrowed(&objects[..])
         };
+        // A panel drag draws the objects in the style being previewed
+        // (criterion 36); nothing is written until the release.
+        if self.style.is_active() {
+            self.style.apply_to(artwork_objects.to_mut());
+        }
         let mut list = build_artwork(&artwork_objects, view);
         list.extend(build_decorations(&paths, view, &self.decoration_input()));
         // The origin axes of an axis-locked move: above the artwork, below the

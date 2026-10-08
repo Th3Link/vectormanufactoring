@@ -475,10 +475,13 @@ job — that's `manufacturing-roles` and later slices; this slice is purely
     nothing is selected (and, in the Node tool, no path either), then the
     panel shows its disabled state (every control disabled and not
     focusable, at the frozen defaults: 0.25 mm black solid stroke on, Dash
-    Solid, Miter, Butt, no fill). With the Select tool and the rectangle,
-    ellipse and polygon/star tools, the panel edits the object selection,
-    so a maker can draw a rectangle and colour it without changing tool.
-    The panel's subject line says what is being edited ("Nothing
+    Solid, Miter, Butt, no fill). With the Select tool, the panel edits the
+    object selection. Choosing the rectangle, ellipse or polygon/star tool
+    clears the selection, so while a creation tool is active the panel
+    shows its disabled state, the same as for an empty selection. A drawn
+    shape returns to the Select tool at once with the new object selected,
+    so a maker can draw a rectangle and colour it immediately, without
+    changing tool. The panel's subject line says what is being edited ("Nothing
     selected", "Pen: finish the path to style it", "Rectangle", "3
     rectangles", "4 objects", "2 paths"). The polygon/star tool keeps its
     own floating options bar; this slice adds no "Shape tool options"

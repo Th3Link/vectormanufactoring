@@ -87,7 +87,15 @@ pub enum StyleEdit {
 }
 
 impl StyleEdit {
-    fn apply(&self, style: &mut Style) -> Result<(), StyleEditError> {
+    /// Applies the change to `style` in memory, exactly as
+    /// [`Document::edit_style`] would write it: the editor's ephemeral panel
+    /// preview shows an edit through this, so the preview and the commit can
+    /// never disagree (acceptance criterion 36).
+    ///
+    /// # Errors
+    /// [`StyleEditError::InvalidWidth`] for a negative or non-finite width;
+    /// `style` is then unchanged.
+    pub fn apply_to(&self, style: &mut Style) -> Result<(), StyleEditError> {
         let stroke = &mut style.stroke;
         match self {
             Self::StrokeEnabled(on) => stroke.enabled = *on,
@@ -189,7 +197,7 @@ impl Document {
             .map(|meta| {
                 let old = read_style(&meta);
                 let mut new = old.clone();
-                edit.apply(&mut new)?;
+                edit.apply_to(&mut new)?;
                 Ok((meta, old, new))
             })
             .collect::<Result<_, StyleEditError>>()?;

@@ -485,6 +485,33 @@ already there.
   (3) The four resize commands refuse a width that is not a finite number above
   zero (`ShapeEditError::InvalidStrokeWidth`, `PathEditError::InvalidStrokeWidth`),
   as section 3 of the readiness check requires, before any write.
+- **2026-10-08 (implementer): small decisions in PR 3.** (1)
+  `StyleEdit::apply_to` is public in `document-core`: `Document::edit_style`
+  applies an edit through it, and the panel's ephemeral preview applies the
+  same edit to a copy of the snapshots for drawing, so the preview and the
+  commit follow one rule (a copy of the rules in `ui-core` would drift, a
+  dry-run on a cloned document costs a document per frame). Additive; no model
+  or format change. (2) **The panel toggle keeps the view's top-left origin.**
+  A viewport resize keeps the view's centre (`canvas-navigation-and-selection`
+  criterion 10), which would shift the document by half the panel width. The
+  panel announces its width change (`Viewport::keep_origin_for_width_change`);
+  the next resize that matches it (that width change, same height, 1.5 px
+  tolerance) keeps the top-left, and any other resize is an ordinary window
+  resize. Announcements made before one resize add up, so a panel opened and
+  closed again leaves nothing pending. Criterion 39 says what must hold, not how.
+  (3) **The width field accepts 0 to 1000 mm** (`MAX_STROKE_WIDTH_MM`). No
+  criterion sets an upper bound; the stored width is only "finite and above
+  zero" (PR 1) and the render guards cap what is drawn (PR 2). 1000 mm is a
+  limit of the field, not of the format, and gives the invalid-value message
+  something to say. (4) **`ToggleGroup` is built on Radix `RadioGroup`**, which
+  moves and selects with the arrow keys, keeps one Tab stop and handles Home and
+  End. Radix's own `ToggleGroup` selects only on activation, which is why it was
+  not used. (5) **The hex field trims surrounding whitespace** before parsing
+  (`" #f80 "` is `#FF8800`); accepted, nothing in criterion 6 forbids it.
+  (6) **A gradient mode written through the binding is ignored until PR 4**:
+  `Session::set_fill_mode` for linear and radial returns without writing,
+  because a gradient without stops is a dead fill (no paint, no clickable
+  interior). PR 4 adds the minted seed stops and removes the early return.
 
 ## 2026-10-07 readiness check (architect)
 
