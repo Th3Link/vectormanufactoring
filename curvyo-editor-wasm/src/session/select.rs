@@ -150,12 +150,24 @@ impl Session {
         self.select
             .pointer_moved(point, modifiers, &mut self.selection);
         let objects = self.objects();
-        let tolerance = self.segment_tolerance();
         // Nothing lights up while a drag runs; hover returns after release.
+        // Otherwise hover lights the object a press at this point would
+        // select, and nothing where a press would grab a handle, move the
+        // selection or start a marquee (`0007` criterion 28).
         self.hovered_object = if self.select.drag_in_flight() {
             None
         } else {
-            curvyo_ui_core::hit_test_object(&objects, point, tolerance)
+            match curvyo_ui_core::classify_press(
+                &objects,
+                &self.selection,
+                point,
+                self.segment_tolerance(),
+                self.transform_handle_tolerances(),
+                modifiers.shift,
+            ) {
+                curvyo_ui_core::PressTarget::Object(id) => Some(id),
+                _ => None,
+            }
         };
     }
 

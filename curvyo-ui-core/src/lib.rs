@@ -51,7 +51,7 @@ pub use angle_snap::{MAX_SKEW_SNAP_DEG, snap_angle, snap_skew_angle};
 pub use conversion::build_primitive_conversions;
 pub use ellipse_tool::EllipseTool;
 pub use hit_test::{Hit, hit_test};
-pub use hit_test_object::hit_test_object;
+pub use hit_test_object::{filled_interior_above, hit_test_object};
 pub use modifiers::Modifiers;
 pub use move_entry::MoveEntry;
 pub use node_tool::{
