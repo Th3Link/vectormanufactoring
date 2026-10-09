@@ -17,6 +17,30 @@ use curvyo_ui_core::{
 
 use super::{Session, Tool};
 
+/// What a double-click asks the host to show.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DoubleClickHint {
+    /// Nothing.
+    None,
+    /// The edit hint of a primitive (`unified-object-editing` criterion 32).
+    EditHint,
+    /// The sentence that a compound path's nodes cannot be edited yet
+    /// (`0016-boolean-operations` criterion 38).
+    CompoundPath,
+}
+
+impl DoubleClickHint {
+    /// The code the host keys its text on: `""`, `"edit_hint"` or `"compound_path"`.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::None => "",
+            Self::EditHint => "edit_hint",
+            Self::CompoundPath => "compound_path",
+        }
+    }
+}
+
 impl Session {
     /// The "Scale stroke width" switch (`specs/0005-object-transform/
     /// specification.md` AC 26-31): whether a Select-tool resize scales the
@@ -204,7 +228,7 @@ impl Session {
         point: Point,
         shift: bool,
         ctrl: bool,
-    ) -> super::DoubleClickHint {
+    ) -> DoubleClickHint {
         let objects = self.objects();
         let tolerance = self.object_tolerance();
         let handle_tolerances = self.transform_handle_tolerances();
@@ -221,12 +245,12 @@ impl Session {
                 self.node.cancel_drag();
                 self.node.clear_selection();
                 self.tool = Tool::Node;
-                super::DoubleClickHint::None
+                DoubleClickHint::None
             }
-            SelectDoubleClickOutcome::EditHint => super::DoubleClickHint::EditHint,
-            SelectDoubleClickOutcome::CompoundPath => super::DoubleClickHint::CompoundPath,
+            SelectDoubleClickOutcome::EditHint => DoubleClickHint::EditHint,
+            SelectDoubleClickOutcome::CompoundPath => DoubleClickHint::CompoundPath,
             SelectDoubleClickOutcome::Miss | SelectDoubleClickOutcome::EntryOpened => {
-                super::DoubleClickHint::None
+                DoubleClickHint::None
             }
         }
     }

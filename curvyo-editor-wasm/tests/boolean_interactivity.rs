@@ -2,6 +2,10 @@
 //! 46 and 47): Union of 1,000 rectangles including the document update, and the time from the
 //! press to the repainted canvas for two operands of 1,000 nodes each. Budgets are asserted in
 //! release builds only; a debug build runs a fifth of the size and prints the numbers.
+//! The 150 ms of criterion 47 are measured here from `apply_boolean` to the finished draw list on
+//! the host: they do not include the two frames the busy state is painted for (about 33 ms at
+//! 60 Hz) or the GPU upload, so this is not the full press-to-pixel time. With about 10 ms
+//! measured the headroom is ample.
 //! Run: `cargo test --release -p curvyo-editor-wasm --test boolean_interactivity -- --nocapture`.
 
 #![allow(

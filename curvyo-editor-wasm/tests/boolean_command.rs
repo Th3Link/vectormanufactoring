@@ -293,3 +293,92 @@ fn a_double_click_on_a_compound_path_asks_for_the_sentence() {
     assert_eq!(hint.code(), "compound_path");
     assert_eq!(session.tool(), Tool::Select);
 }
+
+/// The commit messages of a document, oldest first (the labels the undo slice keys on).
+fn commit_labels(session: &Session) -> Vec<String> {
+    let loro = loro::LoroDoc::new();
+    loro.import(&doc(session).export_loro_snapshot().unwrap())
+        .unwrap();
+    let ids: Vec<loro::ID> = loro.oplog_frontiers().iter().collect();
+    let mut changes: Vec<(u32, String)> = Vec::new();
+    loro.travel_change_ancestors(&ids, &mut |change| {
+        changes.push((
+            change.lamport,
+            change.message.map(|m| m.to_string()).unwrap_or_default(),
+        ));
+        std::ops::ControlFlow::Continue(())
+    })
+    .unwrap();
+    changes.sort();
+    changes.into_iter().map(|(_, label)| label).collect()
+}
+
+/// Criterion 28: each operation writes exactly one commit labelled `boolean_<op>`, and a
+/// refusal writes none. (A small result: a big one is split into several Loro changes with the
+/// same message, so the count of changes is no measure of operations there.)
+#[test]
+fn every_operation_writes_one_labelled_commit_and_a_refusal_none() {
+    for (op, label) in [
+        (BooleanOp::Union, "boolean_union"),
+        (BooleanOp::Difference, "boolean_difference"),
+        (BooleanOp::Intersection, "boolean_intersection"),
+        (BooleanOp::Exclusion, "boolean_exclusion"),
+        (BooleanOp::ReverseDifference, "boolean_reverse_difference"),
+    ] {
+        let (mut session, _, _) = two_squares();
+        let before = commit_labels(&session);
+        assert!(matches!(
+            session.apply_boolean(op),
+            BooleanOutcome::Applied { .. }
+        ));
+        let after = commit_labels(&session);
+        assert_eq!(after.len(), before.len() + 1, "{label}: one commit");
+        assert_eq!(after.last().map(String::as_str), Some(label));
+    }
+
+    // A refusal, and a call that is ignored, write nothing.
+    let document = Document::new(1);
+    let _ = rect(&document, 0.0, 0.0, 20.0);
+    let _ = document.create_path(
+        &[
+            NewAnchor::corner(AnchorId::new(1, 1), pt(100.0, 0.0)),
+            NewAnchor::corner(AnchorId::new(1, 2), pt(130.0, 20.0)),
+        ],
+        false,
+    );
+    let mut session = session_of(&document);
+    click(&mut session, pt(0.0, 10.0), false);
+    click(&mut session, pt(115.0, 10.0), true);
+    let before = commit_labels(&session);
+    assert!(matches!(
+        session.apply_boolean(BooleanOp::Union),
+        BooleanOutcome::Refused(_)
+    ));
+    session.set_tool(Tool::Node);
+    assert_eq!(
+        session.apply_boolean(BooleanOp::Union),
+        BooleanOutcome::Ignored
+    );
+    assert_eq!(commit_labels(&session), before, "no commit");
+}
+
+/// Criterion 38: in the Node tool a compound path shows no node, handle or segment overlay, so
+/// the frame is the artwork alone (the one the Select tool draws with nothing selected).
+#[test]
+fn the_node_tool_draws_no_overlay_for_a_compound_path() {
+    let document = Document::new(1);
+    let _ = rect(&document, 0.0, 0.0, 40.0);
+    let _ = rect(&document, 10.0, 10.0, 20.0);
+    let mut session = session_of(&document);
+    click(&mut session, pt(40.0, 20.0), false);
+    click(&mut session, pt(10.0, 20.0), true);
+    let _ = session.apply_boolean(BooleanOp::Difference);
+    // The artwork alone: nothing selected in the Select tool.
+    click(&mut session, pt(500.0, 500.0), false);
+    let artwork = session.draw_list().triangle_count();
+    click(&mut session, pt(0.0, 20.0), false);
+    assert_eq!(session.selected_object_count(), 1);
+    session.set_tool(Tool::Node);
+    assert!(session.node_toolbar_state().compound_only);
+    assert_eq!(session.draw_list().triangle_count(), artwork);
+}

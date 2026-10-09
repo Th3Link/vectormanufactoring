@@ -13,7 +13,8 @@ use super::{Session, Tool};
 /// What [`Session::apply_boolean`] did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BooleanOutcome {
-    /// Nothing: the Select tool is not active, a drag is in flight, or the objects went away.
+    /// Nothing: the Select tool is not active, a drag is in flight or a typed entry is open (the
+    /// entry is not discarded), or the objects went away.
     Ignored,
     /// The operands were replaced by one object.
     Applied {
@@ -57,11 +58,14 @@ impl Session {
     /// one commit labelled `boolean_<op>`, and selects the result alone. The tool stays Select.
     /// A refusal changes nothing (no commit, same selection) and outlines its offenders.
     pub fn apply_boolean(&mut self, op: BooleanOp) -> BooleanOutcome {
-        if self.tool != Tool::Select || self.select.drag_in_flight() {
+        if self.tool != Tool::Select
+            || self.select.drag_in_flight()
+            || self.move_entry().is_some()
+            || self.transform_entry().is_some()
+        {
             return BooleanOutcome::Ignored;
         }
         self.flush_select_bar_preview();
-        self.select.cancel_entry();
         let objects = self.objects();
         let selection = self.boolean_selection();
         let plan = match plan_boolean(&objects, &selection, op, &mut self.minter) {
@@ -86,9 +90,14 @@ impl Session {
             op.commit_label(),
         );
         let Ok(result) = replaced else {
+            // invariant: the plan was made from the objects just read, with a base among the
+            // operands, at least one outline and fresh anchor ids, so the write cannot fail.
+            debug_assert!(false, "a planned boolean operation could not be written");
             return BooleanOutcome::Ignored;
         };
         self.boolean_refusal = None;
+        // The operands are gone, and so are the nodes a Node-tool selection held.
+        self.node.clear_selection();
         self.selection.select_single(result);
         self.hovered_object = None;
         BooleanOutcome::Applied {

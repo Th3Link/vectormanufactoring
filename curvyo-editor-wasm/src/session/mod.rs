@@ -52,6 +52,7 @@ use curvyo_ui_core::{
 pub use boolean::BooleanOutcome;
 pub use keys::{EscapeStep, KeyHint, KeyInput, KeyOutcome};
 pub use move_indicators::MoveIndicators;
+pub use select::DoubleClickHint;
 #[cfg(target_arch = "wasm32")]
 pub use style_view::StylePanelView;
 
@@ -108,30 +109,6 @@ pub enum Tool {
     Ellipse,
     /// The polygon/star tool (acceptance criteria 10-15).
     PolygonStar,
-}
-
-/// What a double-click asks the host to show.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DoubleClickHint {
-    /// Nothing.
-    None,
-    /// The edit hint of a primitive (`unified-object-editing` criterion 32).
-    EditHint,
-    /// The sentence that a compound path's nodes cannot be edited yet
-    /// (`0016-boolean-operations` criterion 38).
-    CompoundPath,
-}
-
-impl DoubleClickHint {
-    /// The code the host keys its text on: `""`, `"edit_hint"` or `"compound_path"`.
-    #[must_use]
-    pub const fn code(self) -> &'static str {
-        match self {
-            Self::None => "",
-            Self::EditHint => "edit_hint",
-            Self::CompoundPath => "compound_path",
-        }
-    }
 }
 
 /// One open document's whole editing session.
@@ -495,7 +472,8 @@ impl Session {
     /// (`specs/0009-unified-object-editing/` criteria 31 to 34), and the
     /// creation tools ignore it (the first click of a double-click was an
     /// ordinary press with no movement, which writes nothing). Returns
-    /// whether the host should show the edit hint chip (criterion 32).
+    /// whether the host should show the edit hint chip (criterion 32). The shorthand of the
+    /// tests that predate [`Session::double_click_hint`], which the wasm facade calls.
     pub fn double_click(&mut self, point: Point, shift: bool, ctrl: bool) -> bool {
         self.double_click_hint(point, shift, ctrl) == DoubleClickHint::EditHint
     }

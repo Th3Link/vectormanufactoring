@@ -45,7 +45,7 @@ use curvyo_document_core::{
     Point, PointCount, RectBounds, StarFrame, StyleEdit, Vec2, outline_of_rotated, pack, unpack,
 };
 use curvyo_editor_wasm::{BooleanOutcome, DoubleClickHint, KeyInput, Session, Tool};
-use curvyo_ui_core::{BooleanAvailability, BooleanOp, BooleanRefusal, MoveEntryMode};
+use curvyo_ui_core::{BooleanAvailability, BooleanOp, BooleanRefusal};
 
 const ALL_OPS: [BooleanOp; 5] = [
     BooleanOp::Union,
@@ -1893,7 +1893,8 @@ fn a_typed_entry_is_not_left_dangling_by_the_command() {
     let _b = square(&d, 10.0, 10.0, 20.0);
     let mut s = session_of(&d);
     click(&mut s, pt(0.0, 10.0), false);
-    // open the typed move entry for A with the `m` key
+    // the typed move entry opens with the `m` key (it needs exactly one selected object, and
+    // a selection change closes it, so it can only be open while the command has nothing to do)
     let key = |s: &mut Session, k: &str| {
         s.key_down(KeyInput {
             key: k,
@@ -1906,27 +1907,15 @@ fn a_typed_entry_is_not_left_dangling_by_the_command() {
     };
     let _ = key(&mut s, "m");
     let had_entry = s.move_entry().is_some();
-    // a second object joins the selection while the entry is open
-    click(&mut s, pt(30.0, 20.0), true);
     let before_json = json(&s);
     let out = s.apply_boolean(BooleanOp::Union);
-    println!("entry open before: {had_entry}, outcome {out:?}");
-    assert!(
-        s.move_entry().is_none(),
-        "no typed entry survives a boolean command"
-    );
-    // a late commit of the old entry must not resurrect or move anything
-    let _ = s.commit_move_entry("5", "5", MoveEntryMode::default());
-    let ids = reread(&s).object_ids();
-    assert!(
-        !ids.contains(&a) || matches!(out, BooleanOutcome::Refused(_) | BooleanOutcome::Ignored),
-        "operand A is gone after success"
-    );
-    if matches!(out, BooleanOutcome::Applied { .. }) {
-        assert_eq!(ids.len(), 1);
-    } else {
-        assert_eq!(json(&s), before_json);
-    }
+    // While a typed entry is open the command is ignored: the entry is not discarded and
+    // nothing is written (decision of the PR 73 review).
+    assert!(had_entry);
+    assert_eq!(out, BooleanOutcome::Ignored);
+    assert!(s.move_entry().is_some(), "the typed entry is still open");
+    assert_eq!(json(&s), before_json);
+    assert!(reread(&s).object_ids().contains(&a));
 }
 
 #[test]
@@ -2293,10 +2282,9 @@ fn a_node_selection_of_a_deleted_operand_is_harmless() {
 }
 
 /// Strict form of the finding above: after the operands are gone the Node toolbar must not
-/// offer Delete for their nodes. Ignored because the same happens on `main` after a plain Delete
-/// (see the baseline test below), so it is not a regression of the boolean command.
+/// offer Delete for their nodes. (A plain Delete of an object still leaves its node selection on
+/// `main`, see the baseline test below; the boolean command clears it.)
 #[test]
-#[ignore = "pre-existing on main: the Node tool keeps a node selection of a deleted object"]
 fn stale_node_selection_is_cleared_when_the_operands_go_away() {
     let d = Document::new(1);
     d.create_path(
