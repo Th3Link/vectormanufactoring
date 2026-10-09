@@ -1,5 +1,5 @@
 //! What `Session` shows for the Select tool's marquee and lasso
-//! (`specs/advanced-selection/`): the box or line overlay, the legend text
+//! (`specs/0014-advanced-selection/`): the box or line overlay, the legend text
 //! near the pointer and the cursor. A pure read of the tool's live gesture
 //! and the cached modifiers, so a key change reaches all three in the same
 //! frame with the pointer at rest (criterion 14).

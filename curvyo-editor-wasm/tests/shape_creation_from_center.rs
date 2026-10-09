@@ -1,4 +1,4 @@
-//! `Session`-level tests of `specs/shape-creation-from-center/specification.md`
+//! `Session`-level tests of `specs/0011-shape-creation-from-center/specification.md`
 //! for the criteria that need the session: the readout text (11), a modifier
 //! change with the pointer at rest (8), the release event's modifiers (10),
 //! Escape (14), panning mid-drag (15), what is stored (13), and that a Shift

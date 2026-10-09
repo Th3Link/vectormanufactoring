@@ -1,5 +1,5 @@
 //! `curvyo-ui-core`'s share of Part B of
-//! `specs/edit-interaction-polish/specification.md`, PR 3: the double-click
+//! `specs/0010-edit-interaction-polish/specification.md`, PR 3: the double-click
 //! on the centre handle and on a skew handle, the keys M, K and Shift+K, and
 //! the entries they open. Session-level behaviour (commit counts, hints,
 //! save and reopen) is in `curvyo-editor-wasm/tests/edit_polish_typed_skew_move.rs`.

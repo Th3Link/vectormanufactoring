@@ -1,5 +1,5 @@
 //! The Select tool's numeric-entry and double-click dispatch
-//! (`specs/object-transform-refinements/specification.md`, criteria 3, 18,
+//! (`specs/0008-object-transform-refinements/specification.md`, criteria 3, 18,
 //! 22, 23, 25-32, 49): opening, committing and cancelling the typed entry,
 //! and routing a double-click to a handle, the handoff or nothing. Split
 //! out of `select_tool.rs`; a child module, so it shares `SelectTool`'s
@@ -46,7 +46,7 @@ pub struct MoveEntryMode {
     pub copy: bool,
 }
 
-/// The typed entry a key opens (`specs/edit-interaction-polish/` criteria
+/// The typed entry a key opens (`specs/0010-edit-interaction-polish/` criteria
 /// 54, 57): the same entry a double-click on the matching handle opens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntryKey {

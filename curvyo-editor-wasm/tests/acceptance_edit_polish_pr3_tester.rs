@@ -1,5 +1,5 @@
 //! Independent tester acceptance tests for PR 3 of
-//! `specs/edit-interaction-polish/specification.md`: Part B (criteria 9 to
+//! `specs/0010-edit-interaction-polish/specification.md`: Part B (criteria 9 to
 //! 22 and 24, 25: typed skew and typed move), the keys M, K and Shift+K
 //! (criteria 54, 55, 56, 58, 59), and the customer change that the key S
 //! scales about the box centre (criteria 57, 57a). Written from the

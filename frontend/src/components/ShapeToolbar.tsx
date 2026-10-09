@@ -14,7 +14,7 @@ const MIN_POINT_COUNT = 3;
 const MAX_POINT_COUNT = 1024;
 
 /**
- * The contextual bar of the creation tools (`specs/unified-object-editing/`
+ * The contextual bar of the creation tools (`specs/0009-unified-object-editing/`
  * criteria 29 and 30). The Rectangle and Ellipse tools have none: they only
  * create, and every edit of a shape (radius, "Remove rounding", "Object to
  * path") is the Select bar's. The Polygon/Star tool keeps the mode toggle and

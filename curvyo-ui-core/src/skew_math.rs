@@ -1,5 +1,5 @@
 //! The skew gesture's arithmetic in an oriented box's local frame
-//! (`specs/object-transform-refinements/specification.md`, criteria 38-40,
+//! (`specs/0008-object-transform-refinements/specification.md`, criteria 38-40,
 //! 47): the fixed line and lever of a skew, the angle a drag resolves to and
 //! the shear factor. Split out of [`crate::transform_math`], which keeps the
 //! resize and rotate arithmetic.

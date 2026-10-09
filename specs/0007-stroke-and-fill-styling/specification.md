@@ -5,7 +5,7 @@ Delivered in four PRs: #54 (model, format version 7), #55 (rendering, hit-testin
 Priority: Must
 Origin: Customer
 
-> **Superseded in part by [`style-panel-rework`](../style-panel-rework/specification.md)
+> **Superseded in part by [`style-panel-rework`](../0017-style-panel-rework/specification.md)
 > (customer decisions after trying this slice, 2026-10-08).** Gradient fills are
 > removed completely (criteria 16 to 22, 34, 35 and every gradient clause), the
 > panel is empty when nothing is selected and hides controls instead of disabling

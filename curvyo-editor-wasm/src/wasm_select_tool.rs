@@ -1,5 +1,5 @@
 //! The Select tool's `wasm-bindgen` surface (`specs/0005-object-transform`,
-//! `specs/object-transform-refinements`, `specs/unified-object-editing`):
+//! `specs/0008-object-transform-refinements`, `specs/0009-unified-object-editing`):
 //! the handle hint chip, the typed numeric entry and the Select tool's
 //! switches. A further `impl WasmSession` block (`wasm_api.rs` holds the
 //! struct); strings and scalars only (ADR 0001 §5), every method a
@@ -11,7 +11,7 @@ use wasm_bindgen::prelude::*;
 use crate::wasm_api::WasmSession;
 
 /// `wasm-bindgen`'s JS-facing mirror of [`crate::session::EntryView`]
-/// (`specs/object-transform-refinements/adrs.md`, "wasm surface": strings
+/// (`specs/0008-object-transform-refinements/adrs.md`, "wasm surface": strings
 /// and scalars only): the typed numeric entry chip's content and where it
 /// belongs. `handle_*`/`center_*` are canvas-relative CSS pixels, already
 /// converted; the host puts the chip outward of the handle, along the line

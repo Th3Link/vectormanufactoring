@@ -1,5 +1,5 @@
 //! Independent tester acceptance tests for PR 2 of
-//! `specs/edit-interaction-polish/specification.md`, Part E, through
+//! `specs/0010-edit-interaction-polish/specification.md`, Part E, through
 //! `Session`: the device pixel ratio reaches the selection box (65), the box
 //! is drawn above the artwork and below the handles (67), the hover box is
 //! solid (66), and the skew fixed-line guide is 2 on / 2 off (68). Written

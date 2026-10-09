@@ -1,5 +1,5 @@
 //! A rectangle's four corner radii and how they are evaluated against its size
-//! (`specs/rectangle-corner-radii/adrs.md`, decisions 1 and 5): pure data and
+//! (`specs/0013-rectangle-corner-radii/adrs.md`, decisions 1 and 5): pure data and
 //! one clamping rule, no Loro.
 //!
 //! Radii are stored raw, one per corner, and clamped only here, where they are
@@ -12,7 +12,7 @@ use crate::primitive_model::RectBounds;
 use crate::units::{Length, Vec2};
 
 /// An effective radius of at most this many millimetres is a sharp corner
-/// (`specs/rectangle-corner-radii/specification.md`, criterion 11).
+/// (`specs/0013-rectangle-corner-radii/specification.md`, criterion 11).
 pub const SHARP_CORNER_EPSILON_MM: f64 = 1e-9;
 
 /// The corner of a rectangle a radius belongs to, in the rectangle's own

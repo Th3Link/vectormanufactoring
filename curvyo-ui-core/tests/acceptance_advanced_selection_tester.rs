@@ -1,4 +1,4 @@
-//! Independent tester acceptance tests for `specs/advanced-selection/`
+//! Independent tester acceptance tests for `specs/0014-advanced-selection/`
 //! (criteria 1 to 20) at the `curvyo-ui-core` level. Written from the
 //! specification; the expected values come from reference models written
 //! here (rectangle distance, bounding-box overlap, the modifier table), never

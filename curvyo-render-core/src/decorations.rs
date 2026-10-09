@@ -91,7 +91,7 @@ pub fn build(paths: &[PathSnapshot], view: ViewTransform, input: &DecorationInpu
     let drawn_paths = if input.show_nodes { paths } else { &[] };
     // Unselected nodes first, then selected ones: where two nodes lie on the
     // same spot (after a Split) the selected glyph is drawn above the other
-    // and its accent fill stays visible (`specs/edit-interaction-polish/`
+    // and its accent fill stays visible (`specs/0010-edit-interaction-polish/`
     // criterion 50).
     for draw_selected in [false, true] {
         for path in drawn_paths {

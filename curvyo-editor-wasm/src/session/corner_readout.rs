@@ -1,5 +1,5 @@
 //! The text a corner radius knob shows: live readout and hint-chip lines
-//! (`specs/rectangle-corner-radii/` criteria 7 and 23).
+//! (`specs/0013-rectangle-corner-radii/` criteria 7 and 23).
 
 use curvyo_document_core::{
     Corner, ObjectSnapshot, PrimitiveSnapshot, SHARP_CORNER_EPSILON_MM, Shape,
@@ -11,7 +11,7 @@ use super::{Session, Tool};
 
 impl Session {
     /// The lines of the hint chip of a corner radius knob under the pointer
-    /// (`specs/rectangle-corner-radii/` criterion 23), empty on any other
+    /// (`specs/0013-rectangle-corner-radii/` criterion 23), empty on any other
     /// handle. Which lines show depends on the "Link corners" switch (Shift is
     /// not tracked live): linked, "Corner radius, all four" and "Shift: this
     /// corner only"; unlinked, "Corner radius, this corner" and "Shift: all four
@@ -105,7 +105,7 @@ impl Session {
 /// `r 3.5 mm` for the dragged corner's effective radius of a rectangle,
 /// `ratio 0.45` for a star's inner ratio. A corner radius readout says " max"
 /// while a limit stops the drag and, for a linked drag that overwrites unequal
-/// radii, " · all corners" after it (`specs/rectangle-corner-radii/` criterion
+/// radii, " · all corners" after it (`specs/0013-rectangle-corner-radii/` criterion
 /// 7): "r 12.0 mm max · all corners".
 pub(super) fn param_readout(
     object: &ObjectSnapshot,

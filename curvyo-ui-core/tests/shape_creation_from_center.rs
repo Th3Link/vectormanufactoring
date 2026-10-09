@@ -1,4 +1,4 @@
-//! Acceptance tests for `specs/shape-creation-from-center/specification.md`
+//! Acceptance tests for `specs/0011-shape-creation-from-center/specification.md`
 //! (criteria 1 to 7, 9, 10, 12, 13, 17), against the public API of the
 //! rectangle, ellipse and polygon/star tools. The numbers are the spec's.
 

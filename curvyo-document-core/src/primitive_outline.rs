@@ -65,7 +65,7 @@ impl OutlineAnchor {
 }
 
 /// A rectangle's outline (`specs/0003-primitive-shapes/` criteria 1-6, 18;
-/// `specs/rectangle-corner-radii/` criteria 11, 16): clockwise on screen from
+/// `specs/0013-rectangle-corner-radii/` criteria 11, 16): clockwise on screen from
 /// the end of the top-left corner's arc (or the top-left corner point if it is
 /// sharp). Each corner with a positive effective radius contributes two
 /// tangent nodes joined by one cubic arc, each sharp corner one node, so the

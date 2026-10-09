@@ -1,5 +1,5 @@
 //! `Session`-level tests of `advanced-selection`
-//! (`specs/advanced-selection/specification.md`): the 8 px Select-tool hit
+//! (`specs/0014-advanced-selection/specification.md`): the 8 px Select-tool hit
 //! area next to the Node tool's 4 px, the marquee and lasso through the
 //! session's modifiers, the legend, the overlay, the cursor, the minus badge
 //! and the Escape cascade. The gesture rules themselves are tested in

@@ -40,7 +40,7 @@ reintroduce a fourth or reuse "Smooth":
 Inkscape's node-tool "Join selected endnodes" (`Shift+J`): select two
 endpoint nodes and the tool joins them into one continuous path by moving
 them together into a single node. It is not `boolean-operations`
-(`specs/index.md`) — no union/difference/intersection, no winding rule, no
+(`specs/README.md`) — no union/difference/intersection, no winding rule, no
 requirement that either path be closed — and it is not Inkscape's "Combine"
 (`Ctrl+K`), which bundles multiple objects into one multi-subpath object
 without moving anything (compound paths are explicitly out of scope for this

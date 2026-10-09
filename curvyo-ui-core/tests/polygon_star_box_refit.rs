@@ -1,4 +1,4 @@
-//! `curvyo-ui-core`'s share of `specs/polygon-star-box-refit/`: the oriented
+//! `curvyo-ui-core`'s share of `specs/0012-polygon-star-box-refit/`: the oriented
 //! box of a polygon or star has the direction `orientation()` (criteria 1, 2,
 //! 4, 8, 13, 15), checked as a table, as an invariant over random shapes and
 //! against golden numbers computed independently of the box code. The

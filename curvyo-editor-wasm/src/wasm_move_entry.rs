@@ -1,5 +1,5 @@
 //! The typed move's `wasm-bindgen` surface
-//! (`specs/edit-interaction-polish/`, criteria 15 to 25): a second
+//! (`specs/0010-edit-interaction-polish/`, criteria 15 to 25): a second
 //! `impl WasmSession` block, so `wasm_api.rs` does not grow. Strings and
 //! scalars only (ADR 0001 §5); every method passes straight through to
 //! `Session`, which holds the orchestration, over `curvyo-ui-core`'s rules.

@@ -1,5 +1,5 @@
 //! Independent tester acceptance tests for
-//! `specs/shape-creation-from-center/specification.md` through `Session`'s
+//! `specs/0011-shape-creation-from-center/specification.md` through `Session`'s
 //! public API (the host's pointer, key and wheel paths). Written from the
 //! specification before the implementation diff was read. Expected values come
 //! from the spec's worked examples and a reference model written here.

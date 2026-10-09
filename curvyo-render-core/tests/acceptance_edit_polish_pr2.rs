@@ -1,5 +1,5 @@
 //! Independent tester acceptance tests for PR 2 of
-//! `specs/edit-interaction-polish/specification.md`, Part E (criteria 63 to
+//! `specs/0010-edit-interaction-polish/specification.md`, Part E (criteria 63 to
 //! 67: the dashed selection box, closed corners, pixel-aligned lines, solid
 //! hover box). Written from the specification before the implementation was
 //! read. The tests drive `build_select_draw_list` (the public entry point of

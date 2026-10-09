@@ -1,5 +1,5 @@
 //! Independent tester acceptance tests for
-//! `specs/polygon-star-box-refit/specification.md`. Written from the
+//! `specs/0012-polygon-star-box-refit/specification.md`. Written from the
 //! specification before the implementation diff was read (the cursor hint of
 //! `select_view.rs` was seen by accident while reading the doc comment of the
 //! hint API; nothing else of the change was read). Everything goes through

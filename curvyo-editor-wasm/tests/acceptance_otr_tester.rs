@@ -1,5 +1,5 @@
 //! Independent tester acceptance tests for
-//! `specs/object-transform-refinements/specification.md`, written from the
+//! `specs/0008-object-transform-refinements/specification.md`, written from the
 //! specification before reading the implementation diff. Everything goes
 //! through `Session`'s public API. Expected values come from the spec's own
 //! arithmetic and from reference models written here, never read back from

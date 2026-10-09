@@ -1,6 +1,6 @@
 //! What `Session` shows for the Select tool (`specs/0004-canvas-navigation-
-//! and-selection`, `specs/0005-object-transform`, `specs/object-transform-
-//! refinements`, `specs/unified-object-editing`): the selection and hover
+//! and-selection`, `specs/0005-object-transform`, `specs/0008-object-transform-
+//! refinements`, `specs/0009-unified-object-editing`): the selection and hover
 //! boxes, the transform- and parameter-handle overlay with its pivot marker,
 //! skew guide and radius guides, the cursor and hint for the handle under
 //! the pointer, and the live numeric readout of a drag. Split out of
@@ -24,7 +24,7 @@ use super::Tool;
 const SKEW_GUIDE_EXTEND_PX: f64 = 16.0;
 
 impl Session {
-    /// The Select tool's live edit (`specs/unified-object-editing`, criteria
+    /// The Select tool's live edit (`specs/0009-unified-object-editing`, criteria
     /// 10 to 14): what a release at the current pointer position and
     /// modifiers would commit, for the blue half of blue-new, black-old.
     /// `None` outside the Select tool, with nothing in flight, inside the

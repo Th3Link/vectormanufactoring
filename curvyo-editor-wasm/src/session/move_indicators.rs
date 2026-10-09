@@ -1,5 +1,5 @@
 //! What `Session` reports about a move drag in flight, for the draw list, the
-//! readout and the DOM badges (`specs/edit-interaction-polish/adrs.md`,
+//! readout and the DOM badges (`specs/0010-edit-interaction-polish/adrs.md`,
 //! decision 5; criteria 26, 27, 33, 37).
 
 use curvyo_document_core::{ObjectSnapshot, Point, Vec2};

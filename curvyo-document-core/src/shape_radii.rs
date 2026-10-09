@@ -1,6 +1,6 @@
 //! `Document`'s commands that write a rectangle's corner radii, split out of
 //! [`crate::shapes`] so that module stays under the size limit
-//! (`specs/rectangle-corner-radii/adrs.md`, decisions 1, 4 and 7).
+//! (`specs/0013-rectangle-corner-radii/adrs.md`, decisions 1, 4 and 7).
 //!
 //! Every command writes each corner register only if its value changes, so an
 //! unchanged register is never rewritten (a rewrite is a new operation that
@@ -76,7 +76,7 @@ impl Document {
     /// Sets each named rectangle's four corner radii to its own values as
     /// **one commit for the whole batch**: a drag, a typed entry or the Select
     /// bar's "Radius" field over rectangles of different sizes
-    /// (`specs/unified-object-editing/` criterion 21a). A corner whose stored
+    /// (`specs/0009-unified-object-editing/` criterion 21a). A corner whose stored
     /// radius already equals its value is not rewritten (an LWW rewrite of an
     /// unchanged value could beat a concurrent radius edit), so two peers
     /// editing different corners both survive, and nothing is committed when
@@ -118,7 +118,7 @@ impl Document {
     /// computed", the same split [`Document::set_rect_bounds`] already follows
     /// for a plain resize. With "Scale corner radius" off the caller hands the
     /// stored radii back and no corner register is written
-    /// (`specs/rectangle-corner-radii/adrs.md`, decision 7).
+    /// (`specs/0013-rectangle-corner-radii/adrs.md`, decision 7).
     ///
     /// # Errors
     /// [`ShapeEditError::InvalidRadius`] for a NaN or infinite radius (nothing

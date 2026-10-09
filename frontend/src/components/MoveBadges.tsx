@@ -25,10 +25,10 @@ interface MoveBadgesProps {
 }
 
 /**
- * The modifier badges of a move (`specs/edit-interaction-polish/` criteria
+ * The modifier badges of a move (`specs/0010-edit-interaction-polish/` criteria
  * 26, 27, 33; `docs/design-system.md`, "Modifier badge"): the plus badge for
  * a copy, the minus badge for a Ctrl marquee or lasso that removes from the
- * selection (`specs/advanced-selection/`) and the lock badge for the axis
+ * selection (`specs/0014-advanced-selection/`) and the lock badge for the axis
  * lock, by the pointer. They are pure
  * display: Rust decides whether each shows and which axis the lock is
  * (`Session::move_indicators`), and the hook re-reads it from window-level

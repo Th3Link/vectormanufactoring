@@ -1,4 +1,4 @@
-//! `Session`-level tests of Part B of `specs/edit-interaction-polish/
+//! `Session`-level tests of Part B of `specs/0010-edit-interaction-polish/
 //! specification.md` and the keys M, K and Shift+K of Part F, for PR 3: the
 //! typed skew and the typed move, by double-click and by key. Driven through
 //! `Session`'s public API only; the rules themselves are tested in

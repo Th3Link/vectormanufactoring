@@ -1,5 +1,5 @@
 //! Independent tester acceptance tests for `Document::duplicate_objects`
-//! (`specs/edit-interaction-polish/specification.md` criteria 34 to 36 and the
+//! (`specs/0010-edit-interaction-polish/specification.md` criteria 34 to 36 and the
 //! Copy of the typed move, criterion 23). Written from the specification and
 //! the public signature before the implementation was read. Expected values
 //! come from reference arithmetic written here, never from the code under

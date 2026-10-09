@@ -1,6 +1,6 @@
 //! `Session`'s Select-tool glue (`specs/0004-canvas-navigation-and-
 //! selection/specification.md`, acceptance criteria 14-23; `specs/0005-
-//! object-transform`; `specs/object-transform-refinements`): dispatching
+//! object-transform`; `specs/0008-object-transform-refinements`): dispatching
 //! pointer, modifier and double-click events to [`curvyo_ui_core::
 //! SelectTool`], its live move/transform preview, the stroke switch and the
 //! double-click handoff. What the Select tool *shows* (decoration input,
@@ -39,7 +39,7 @@ impl Session {
         });
     }
 
-    /// The "Scale corner radius" switch (`specs/unified-object-editing/`,
+    /// The "Scale corner radius" switch (`specs/0009-unified-object-editing/`,
     /// criterion 23): whether a Select-tool resize scales a rectangle's
     /// corner radius with it. Off in every new session; never written to the
     /// document.
@@ -61,7 +61,7 @@ impl Session {
         });
     }
 
-    /// The "Link corners" switch (`specs/rectangle-corner-radii/` criterion 2):
+    /// The "Link corners" switch (`specs/0013-rectangle-corner-radii/` criterion 2):
     /// whether a corner radius handle sets all four radii (the default) or
     /// only its own corner. On in every new session (`Session::new`/`open`
     /// build a fresh `SelectTool`, so New and Open reset it); never written

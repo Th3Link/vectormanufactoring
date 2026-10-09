@@ -39,7 +39,7 @@ function meets(placement: Placement, chip: Size, rect: Rect): boolean {
 
 /**
  * `avoid` is a floating bar the chip must not land on (the Select bar,
- * `specs/advanced-selection/`): when the chip would meet it, it flips below
+ * `specs/0014-advanced-selection/`): when the chip would meet it, it flips below
  * the pointer like it does at the top edge, and when the pointer itself is
  * over the bar, below the bar.
  */

@@ -24,7 +24,7 @@
 use curvyo_document_core::{NodeId, ObjectSnapshot};
 
 /// How the result of a marquee or lasso combines with the current selection
-/// (`specs/advanced-selection/specification.md`, "Modifier scheme"): Shift
+/// (`specs/0014-advanced-selection/specification.md`, "Modifier scheme"): Shift
 /// adds, Ctrl strictly removes, neither replaces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SelectionCombine {

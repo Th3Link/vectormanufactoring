@@ -1,5 +1,5 @@
 //! Independent tester tests for `PathSnapshot::sheared` and the concurrency
-//! story of a skew commit (`specs/object-transform-refinements`, criteria
+//! story of a skew commit (`specs/0008-object-transform-refinements`, criteria
 //! 38, 42, 43, 44, 46). Expected values are computed here from the spec's
 //! arithmetic, not read back from the code under test.
 

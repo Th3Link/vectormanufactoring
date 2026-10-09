@@ -61,7 +61,7 @@ pub fn object_bounds(object: &ObjectSnapshot) -> (Point, Point) {
 }
 
 /// The tight bounds of the outline `object` is drawn with, in document space
-/// (`specs/edit-interaction-polish/` criterion 21, the reference of the typed
+/// (`specs/0010-edit-interaction-polish/` criterion 21, the reference of the typed
 /// absolute move): a path's curve-accurate bounds, and for a primitive the
 /// bounds of its rotated outline, so a rotated rectangle and a star are
 /// measured on what is on screen. Not [`object_bounds`] (a primitive's

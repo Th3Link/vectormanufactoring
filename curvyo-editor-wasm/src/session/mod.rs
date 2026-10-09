@@ -158,7 +158,7 @@ pub struct Session {
     /// kept for the drag's life: a drag writes nothing until its release, so
     /// the document cannot change under it, and reading every object out of
     /// the document costs more than the rest of a frame with many objects
-    /// (`specs/unified-object-editing` criterion 15). Cleared by the first
+    /// (`specs/0009-unified-object-editing` criterion 15). Cleared by the first
     /// [`Session::objects`] after the drag ends.
     drag_objects: std::cell::RefCell<Option<Vec<ObjectSnapshot>>>,
     /// `window.devicePixelRatio` as of the last attach or resize, so the
@@ -168,11 +168,11 @@ pub struct Session {
     /// Whether the pointer button is down: set by a press, cleared by a
     /// release or [`Session::pointer_cancelled`]. Only the Escape cascade
     /// reads it, to stop at the drag while the button is held
-    /// (`specs/edit-interaction-polish/` criterion 49); the key gate reads
+    /// (`specs/0010-edit-interaction-polish/` criterion 49); the key gate reads
     /// each tool's own drag state instead.
     button_down: bool,
     /// The "r 12.0 mm max" notice shown for 1.5 s at a knob after a typed
-    /// radius was limited (`specs/rectangle-corner-radii/` criterion 6): a
+    /// radius was limited (`specs/0013-rectangle-corner-radii/` criterion 6): a
     /// limit is never silent. The host clears it after the delay
     /// ([`Session::clear_limit_notice`]); a press clears it too.
     limit_notice: Option<shapes::LiveReadout>,
@@ -454,7 +454,7 @@ impl Session {
     /// hit segment (acceptance criterion 12, via [`Session::insert_at`]),
     /// the Select tool opens a handle's typed entry, hands a path off to
     /// the Node tool or, on a primitive, changes nothing
-    /// (`specs/unified-object-editing/` criteria 31 to 34), and the
+    /// (`specs/0009-unified-object-editing/` criteria 31 to 34), and the
     /// creation tools ignore it (the first click of a double-click was an
     /// ordinary press with no movement, which writes nothing). Returns
     /// whether the host should show the edit hint chip (criterion 32).

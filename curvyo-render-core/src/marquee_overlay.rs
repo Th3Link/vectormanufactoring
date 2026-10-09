@@ -1,5 +1,5 @@
 //! Draws the marquee box and the lasso line while a selection drag runs
-//! (`specs/advanced-selection/specification.md`, "UX notes"; the marquee rows
+//! (`specs/0014-advanced-selection/specification.md`, "UX notes"; the marquee rows
 //! of `docs/design-system.md`): a box with a 12 % fill and a solid 1.5 px
 //! border in `--marquee-touch` (green) or `--marquee-contain` (red), and a
 //! dashed 4 / 3 green line for the lasso. Both are laid out in screen pixels

@@ -12,7 +12,7 @@ export interface ToolbarSwitchProps {
 
 /**
  * A Select-tool bar switch (`specs/0005-object-transform/specification.md`
- * criteria 8, 26-31 for "Scale stroke width"; `specs/unified-object-editing/`
+ * criteria 8, 26-31 for "Scale stroke width"; `specs/0009-unified-object-editing/`
  * criterion 23 for "Scale corner radius"; control spec in
  * `docs/design-system.md`, "Switch"): off, a resize keeps the property; on, it
  * scales with the object. A Radix `Switch` (`role="switch"`, `aria-checked`)

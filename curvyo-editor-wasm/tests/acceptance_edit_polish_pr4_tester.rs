@@ -1,5 +1,5 @@
 //! Independent tester acceptance tests for PR 4 of
-//! `specs/edit-interaction-polish/specification.md`: Part C (criteria 26 to
+//! `specs/0010-edit-interaction-polish/specification.md`: Part C (criteria 26 to
 //! 41, move modifiers) and the Copy check of the typed move (criteria 23 and
 //! 24). Written from the specification and the public signatures before the
 //! implementation was read. Everything goes through `Session`'s public API;

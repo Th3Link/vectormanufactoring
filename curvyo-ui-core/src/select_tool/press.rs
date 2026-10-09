@@ -1,5 +1,5 @@
 //! Classifies what a press on the canvas lands on while the Select tool is
-//! active (`specs/edit-interaction-polish/adrs.md`, decision 5): the one
+//! active (`specs/0010-edit-interaction-polish/adrs.md`, decision 5): the one
 //! function [`SelectTool::pointer_down`] acts on and the copy badge asks
 //! ("wherever a press with Ctrl would start a move"), so the badge cannot
 //! disagree with the press.

@@ -1,4 +1,4 @@
-//! `Session`-level tests of Part C of `specs/edit-interaction-polish/
+//! `Session`-level tests of Part C of `specs/0010-edit-interaction-polish/
 //! specification.md` (PR 4): the axis lock, the copy, their readout, axes and
 //! badges, and the Copy check of the typed move. Driven through `Session`'s
 //! public API; the rules themselves are tested in `curvyo-ui-core`.

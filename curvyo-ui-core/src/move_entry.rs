@@ -1,5 +1,5 @@
 //! The typed move entry of one object
-//! (`specs/edit-interaction-polish/specification.md`, criteria 15 to 22, 25,
+//! (`specs/0010-edit-interaction-polish/specification.md`, criteria 15 to 22, 25,
 //! 56): two fields X and Y, read as a relative offset or as an absolute
 //! position of the top-left corner of the object's drawn bounds. The mode is
 //! the chip's (the DOM holds it and passes it with every commit), so the rule

@@ -1,5 +1,5 @@
 //! Draws the two origin axis lines of an axis-locked move
-//! (`specs/edit-interaction-polish/specification.md`, criterion 27; the
+//! (`specs/0010-edit-interaction-polish/specification.md`, criterion 27; the
 //! "Move axis guide" row of `docs/design-system.md`).
 
 use curvyo_document_core::{Point, ViewTransform};

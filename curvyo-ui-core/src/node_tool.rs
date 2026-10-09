@@ -227,7 +227,7 @@ impl NodeTool {
         }
     }
 
-    /// Escape, step 2 of `specs/edit-interaction-polish/` criterion 42: cancels
+    /// Escape, step 2 of `specs/0010-edit-interaction-polish/` criterion 42: cancels
     /// the node or handle drag in flight, writing nothing, and keeps the
     /// selection (criterion 45: one step per key). Returns whether there was a
     /// drag.
@@ -608,7 +608,7 @@ impl NodeTool {
     /// `minter` is not advanced) when the current selection is not
     /// exactly one node, or [`Document::split_at_anchor`] itself refuses.
     /// On success, selects exactly one of the two resulting coincident
-    /// nodes (`specs/edit-interaction-polish/` criterion 50, superseding
+    /// nodes (`specs/0010-edit-interaction-polish/` criterion 50, superseding
     /// `0006` criterion 15): the new second node, the copy that keeps the
     /// original outgoing handle (the first node of the new path object for
     /// an open path, the new first node of the opened path for a closed
@@ -1324,7 +1324,7 @@ mod tests {
     // for an open conflict against a later review note that asked for
     // the opposite.
 
-    /// Escape mid-drag is one step (`specs/edit-interaction-polish/`
+    /// Escape mid-drag is one step (`specs/0010-edit-interaction-polish/`
     /// criteria 42 and 45): it cancels the drag and keeps the selection; the
     /// release that would otherwise end the drag is then a no-op and the node
     /// never moves.

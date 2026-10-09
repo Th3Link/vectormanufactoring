@@ -1,6 +1,6 @@
 //! The polygon/star tool's create-drag and its settings for the next shape
 //! (`specs/0003-primitive-shapes/specification.md`, acceptance criteria 10,
-//! 11, 12; `specs/unified-object-editing/`, criteria 25, 26, 29): see
+//! 11, 12; `specs/0009-unified-object-editing/`, criteria 25, 26, 29): see
 //! [`crate::rectangle_tool`], whose pattern this follows. Mode, point count
 //! and ratio persist across shapes and never change a selected shape; that is
 //! the Select bar's job.
@@ -114,7 +114,7 @@ impl PolygonStarTool {
     }
 
     /// The pointer moved with the drag in flight; writes nothing. Ctrl
-    /// snaps the created angle (`specs/edit-interaction-polish/` criterion
+    /// snaps the created angle (`specs/0010-edit-interaction-polish/` criterion
     /// 4); Shift has no effect on a polygon or star.
     pub fn pointer_move(&mut self, point: Point, modifiers: Modifiers) {
         if let Some(drag) = &mut self.drag {

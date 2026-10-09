@@ -1,5 +1,5 @@
 //! The rectangle tool's create-drag (`specs/0003-primitive-shapes/
-//! specification.md`, acceptance criteria 1 and 2; `specs/unified-object-
+//! specification.md`, acceptance criteria 1 and 2; `specs/0009-unified-object-
 //! editing/`, criteria 25 and 26): a press anywhere starts a new rectangle,
 //! even on an existing outline, and never selects, moves or handle-drags
 //! anything. Ephemeral drag state (ADR 0009 §2), one
@@ -43,7 +43,7 @@ impl RectangleTool {
     }
 
     /// The pointer moved, or a modifier changed with the pointer at rest
-    /// (`specs/shape-creation-from-center/` criterion 8), with the drag in
+    /// (`specs/0011-shape-creation-from-center/` criterion 8), with the drag in
     /// flight: updates [`RectangleTool::live_shape`], writes nothing. Ctrl
     /// makes a square, Shift draws around the press point. A no-op when idle.
     pub fn pointer_move(&mut self, point: Point, modifiers: Modifiers) {
@@ -69,7 +69,7 @@ impl RectangleTool {
 
     /// Acceptance criteria 1, 2: commits the create-drag, built from the
     /// release event's position and `modifiers` (criterion 10 of
-    /// `specs/shape-creation-from-center/`), the same computation as the
+    /// `specs/0011-shape-creation-from-center/`), the same computation as the
     /// preview.
     pub fn pointer_up(
         &mut self,
