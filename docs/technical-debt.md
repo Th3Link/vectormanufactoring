@@ -251,6 +251,24 @@ and its initial text copies Rust's formatting.
 **Resolution:** PR 3 adds the resize, fit and unit commands, which all go
 through `syncFromSession`; read the texts there and delete the loop.
 
+## The document's edge and the origin tick can differ by one device pixel
+
+The 2 px origin tick of the rulers and the document rectangle's left or top
+edge are each within half a device pixel of the true corner, but are rounded by
+two code paths (`rulerDraw.ts` in Canvas2D, `build_document_area` and the GPU's
+f32 rasterisation), so in about one of six zoom steps near 100 % they differ by
+one device pixel in x (`specs/0015-document-size-and-rulers/` UX review, PR 2).
+Criterion 2's 0.5 px per mark holds. **Resolution:** find out whether it is the
+rounding or the rasteriser before changing either side.
+
+## After a pan or zoom, a window resize can put the document under the tool rail
+
+The 72 px inset of the default view exists only for an untouched view
+(`Viewport::with_document_inset`). After the first pan or zoom a window resize
+keeps the view centre (`0004` criterion 10), so the document's corner can land
+under the tool rail. **Resolution:** a "fit document to window" or "reset view"
+command, a later story (zoom presets are out of scope of `0015`).
+
 ## A collaborator without the font sees substituted text
 
 Fonts are referenced from a user-managed collection, not embedded by default

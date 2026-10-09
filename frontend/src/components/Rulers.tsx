@@ -29,16 +29,21 @@ function readColours(): RulerColours {
   };
 }
 
-/** The width every label character is counted as, CSS px: the widest advance
- * of any character a label holds, so a label is never wider than counted
- * whatever the font (proportional fonts have no tabular figures in a canvas). */
-function measureDigit(): number {
+/** The two advances the label layout needs, CSS px: the widest digit (every
+ * character of a label but its minus sign is counted at it, a point being
+ * narrower) and the minus sign, which is measured on its own because the font
+ * that supplies U+2212 differs per platform and is often wider than a digit. */
+function measureGlyphs(): { digit: number; minus: number } {
   const ctx = document.createElement("canvas").getContext("2d");
   if (!ctx) {
-    return LABEL_SIZE * 0.6;
+    return { digit: LABEL_SIZE * 0.6, minus: LABEL_SIZE * 0.6 };
   }
   ctx.font = labelFont(1);
-  return Math.max(...[..."0123456789.\u2212"].map((c) => ctx.measureText(c).width));
+  const width = (c: string) => ctx.measureText(c).width;
+  return {
+    digit: Math.max(...[..."0123456789"].map(width)),
+    minus: width("\u2212"),
+  };
 }
 
 /** What the strips were last painted from; a change in any field repaints. */
@@ -103,7 +108,7 @@ export function Rulers({ editor, unit }: RulersProps) {
     }
     const strips: HTMLElement[] = [horizontal, vertical, corner];
     const colours = readColours();
-    const digit = measureDigit();
+    const { digit, minus } = measureGlyphs();
     const pointer: { x: number | null; y: number | null } = { x: null, y: null };
     let painted: Painted | null = null;
 
@@ -161,7 +166,7 @@ export function Rulers({ editor, unit }: RulersProps) {
         strip.height = height;
       }
       const length = isHorizontal ? cssWidth : cssHeight;
-      const view = session.ruler_view(isHorizontal, length, digit);
+      const view = session.ruler_view(isHorizontal, length, digit, minus);
       const data: RulerData = {
         majors: view.majors,
         minors: view.minors,

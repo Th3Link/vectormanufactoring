@@ -23,9 +23,11 @@ export function StatusBar({ cursorText, sizeText, zoomPercent }: StatusBarProps)
       className="flex h-6 shrink-0 items-center justify-between px-2 text-xs"
       style={{ background: "var(--statusbar-bg)" }}
     >
-      <span>{cursorText}</span>
+      {/* `whitespace-pre` keeps the two spaces between x and y; `tabular-nums`
+          keeps the unit at the end from moving with the digits. */}
+      <span className="whitespace-pre tabular-nums">{cursorText}</span>
       <span>{zoomPercent}%</span>
-      <span>{sizeText}</span>
+      <span className="whitespace-pre tabular-nums">{sizeText}</span>
     </div>
   );
 }
