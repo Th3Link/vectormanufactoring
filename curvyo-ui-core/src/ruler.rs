@@ -126,7 +126,7 @@ impl RulerLayout {
 /// narrower than the real text.
 ///
 /// The step is the smallest 1, 2 or 5 times a power of ten (in `unit`) whose
-/// major spacing is at least [`MIN_MAJOR_PX`] and at least the widest visible
+/// major spacing is at least 40 px and at least the widest visible
 /// label plus 4 px (criterion 5). Labels that would not lie entirely inside
 /// the strip are left out (criterion 7).
 #[must_use]
