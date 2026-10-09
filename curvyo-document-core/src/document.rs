@@ -70,11 +70,11 @@ use crate::units::{DocumentSize, Length};
 /// styling/adrs.md`, "`format_version`" and the 2026-10-07 readiness check):
 /// every object node may carry the style keys of `crate::style_codec`
 /// (`stroke_enabled`, `stroke_opacity`, `stroke_dash`, `stroke_join`,
-/// `stroke_cap`, `fill_enabled`, `fill_kind`, `fill`, `fill_opacity` and the
-/// `fill_stops` list), and `document.json` writes one `style` object per
-/// object. A version-6 reader tolerates unknown keys, so it would open a
-/// version-7 file and draw every dash, fill and gradient as a thin black
-/// outline, the silent partial read ADR 0004 §9 forbids; with the bump it
+/// `stroke_cap`, `fill_enabled`, `fill`, `fill_opacity`; a build of that
+/// version may also have written the two keys `crate::legacy_fill` reads past),
+/// and `document.json` writes one `style` object per object. A version-6
+/// reader tolerates unknown keys, so it would open a version-7 file and draw
+/// every dash and fill as a thin black outline, the silent partial read ADR 0004 §9 forbids; with the bump it
 /// says "saved by a newer version". Migration from version 6 is empty by
 /// construction: every new key is absent in an older file and an absent key
 /// reads as the frozen default, which is what older builds drew (0.25 mm
@@ -83,16 +83,10 @@ use crate::units::{DocumentSize, Length};
 /// the complete format of the slice: later parts of the story add no key
 /// and need no further bump. The number is provisional by the rule above.
 ///
-/// **Two stored forms of `fill_stops`, one version.** A stop list written by a
-/// build up to the gradient part is a regular movable-list container; new stop
-/// lists are written as a Loro *mergeable* child container (`LoroMap::
-/// ensure_mergeable_movable_list`: a marker value in the map slot and a
-/// container id that follows from the map and the key), so two peers that create
-/// the list at once merge their stops instead of one list replacing the other.
-/// Readers accept both forms, and no build before this one wrote `fill_stops`
-/// from the editor, so the version stays 7. Reading the mergeable form needs
-/// Loro 1.16 or later (the workspace requires it); the goldens are
-/// `styles_v7.curvyo` (regular) and `styles_v7_mergeable_stops.curvyo`.
+/// The fill keys `fill_kind` and `fill_stops` of a version-7 file are not part
+/// of the format any more (`specs/0017-style-panel-rework/adrs.md`, decision 1):
+/// `crate::legacy_fill` reads past them and drops them on the next fill write,
+/// which needs no bump because nothing is misread in either direction.
 ///
 /// Bumped to 8 in `boolean-operations` (`specs/0016-boolean-operations/
 /// adrs.md`, "compound path"): a path may hold several outlines, the first in

@@ -469,7 +469,7 @@ fn ac37_earlier_fixtures_open_unchanged_and_opening_writes_nothing() {
         "paths_v2.curvyo",
         "primitives_v3.curvyo",
         "rotation_v5.curvyo",
-        "styles_v7.curvyo",
+        "legacy_gradient_v7.curvyo",
         "display_unit_in_v7.curvyo",
         "legacy_corner_radius_v5.curvyo",
         "valid.curvyo",

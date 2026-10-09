@@ -394,7 +394,11 @@ fn the_committed_golden_reopens_with_the_same_outlines() {
 /// rewritten: nothing is added to its Loro state, and its paths are ordinary.
 #[test]
 fn a_file_from_the_previous_version_opens_unchanged() {
-    for name in ["styles_v7.curvyo", "paths_v2.curvyo", "rotation_v5.curvyo"] {
+    for name in [
+        "legacy_gradient_v7.curvyo",
+        "paths_v2.curvyo",
+        "rotation_v5.curvyo",
+    ] {
         let bytes = fixture(name);
         let document = unpack(2, &bytes).unwrap();
         for node in document.object_ids() {

@@ -575,7 +575,7 @@ impl Document {
     /// mutating method ends in exactly one Loro commit") rather than a
     /// second, separate one. Also takes an explicit style rather than always
     /// writing the creation default, so Split can copy the original path's
-    /// own style (stops included) instead of resetting it.
+    /// own style instead of resetting it.
     /// `pub(crate)` for `path_topology` to call.
     ///
     /// # Panics

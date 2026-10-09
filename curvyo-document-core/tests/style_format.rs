@@ -1,18 +1,14 @@
 //! File-format tests for `stroke-and-fill-styling`
-//! (`specs/0007-stroke-and-fill-styling/adrs.md`, "`format_version`" and the
-//! 2026-10-07 readiness check, section 1): the golden version-7 container with
-//! every style key and a 3-stop gradient with coincident stops, older
-//! containers opening with every style at its frozen default and unchanged by
-//! opening, `document.json`'s `style` object, and every open-file refusal case.
+//! (`specs/0007-stroke-and-fill-styling/adrs.md`, "`format_version`") and the
+//! legacy-fill rule of `specs/0017-style-panel-rework/adrs.md`, decision 1:
+//! older containers opening with every style at its frozen default and
+//! unchanged by opening, a version-7 file that holds a gradient fill reading as
+//! a fill that is off, a fill edit dropping the legacy keys, `document.json`'s
+//! `style` object, and every open-file refusal case.
 //!
-//! Two fixtures hold the same document. `styles_v7.curvyo` is the golden of the
-//! **regular** stop-list form (a `fill_stops` container created by an op) and is
-//! never regenerated: its bytes are what the first format-7 builds could write.
-//! `styles_v7_mergeable_stops.curvyo` is the golden of the form new stop lists
-//! are written in (a mergeable child container); the `#[ignore]`d generator
-//! below writes only that one (`cargo test -p curvyo-document-core --test
-//! style_format generate_style_fixtures -- --ignored`). Both are read by the
-//! tests and must read back identically.
+//! `legacy_gradient_v7.curvyo` is the golden of what the first format-7 builds
+//! wrote (a linear and a radial gradient with their stop lists). It is never
+//! regenerated: its bytes are the point.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 
@@ -20,20 +16,15 @@ use std::io::{Cursor, Read, Write};
 use std::path::PathBuf;
 
 use curvyo_document_core::{
-    AnchorId, CURRENT_FORMAT_VERSION, CURRENT_LORO_SNAPSHOT_VERSION, Color, DashPattern, Document,
-    EllipseFrame, FillKind, FillMode, FillModeTarget, GradientStop, Length, LineCap, LineJoin,
-    NewAnchor, NodeId, ObjectSnapshot, Opacity, OpenError, Point, PointCount, RectBounds,
-    StarFrame, StopChange, StopEdit, StopId, StopPosition, Style, StyleEdit, pack, unpack,
+    AnchorId, CURRENT_FORMAT_VERSION, CURRENT_LORO_SNAPSHOT_VERSION, Color, Document, Length,
+    LineCap, LineJoin, NewAnchor, ObjectSnapshot, OpenError, Point, RectBounds, Style, StyleEdit,
+    pack, unpack,
 };
 use loro::{LoroDoc, LoroMap, LoroMovableList, LoroValue};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
-const V7_FIXTURE: &str = "styles_v7.curvyo";
-/// The same document with its stop list stored as a mergeable child container.
-const MERGEABLE_FIXTURE: &str = "styles_v7_mergeable_stops.curvyo";
-/// The `format_version` the build that introduced styles declared.
-const STYLES_FORMAT_VERSION: u64 = 7;
+const LEGACY_FIXTURE: &str = "legacy_gradient_v7.curvyo";
 
 fn fixture(name: &str) -> Vec<u8> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -143,25 +134,11 @@ fn push_stop(list: &LoroMovableList, fields: &[(&str, LoroValue)]) {
 
 fn good_stop(counter: u64) -> Vec<(&'static str, LoroValue)> {
     vec![
-        ("id", LoroValue::from(StopId::new(1, counter).to_hex())),
+        ("id", LoroValue::from(format!("stop-{counter}"))),
         ("position", LoroValue::from(0.5)),
         ("color", LoroValue::from(vec![1_i64, 2, 3])),
         ("opacity", LoroValue::from(1.0)),
     ]
-}
-
-fn without(fields: Vec<(&'static str, LoroValue)>, key: &str) -> Vec<(&'static str, LoroValue)> {
-    fields.into_iter().filter(|(k, _)| *k != key).collect()
-}
-
-fn with(
-    fields: Vec<(&'static str, LoroValue)>,
-    key: &'static str,
-    value: LoroValue,
-) -> Vec<(&'static str, LoroValue)> {
-    let mut fields = without(fields, key);
-    fields.push((key, value));
-    fields
 }
 
 // ---------------------------------------------------------------------
@@ -199,7 +176,6 @@ fn a_present_style_key_with_the_wrong_type_or_range_is_refused_as_damaged() {
         ("fill", LoroValue::from(vec![0_i64, 0, 256])),
         ("fill", LoroValue::from(vec![0_i64, 0, -1])),
         ("fill_opacity", LoroValue::from(2.0)),
-        ("fill_stops", LoroValue::from(vec![1_i64, 2])),
     ];
     for (key, value) in cases {
         for on_rect in [true, false] {
@@ -217,32 +193,7 @@ fn a_present_style_key_with_the_wrong_type_or_range_is_refused_as_damaged() {
 }
 
 #[test]
-fn a_stop_missing_a_field_or_holding_a_bad_one_is_refused_as_damaged() {
-    let bad: Vec<Vec<(&str, LoroValue)>> = vec![
-        without(good_stop(1), "id"),
-        without(good_stop(1), "position"),
-        without(good_stop(1), "color"),
-        without(good_stop(1), "opacity"),
-        with(good_stop(1), "id", LoroValue::from("zz")),
-        with(good_stop(1), "position", LoroValue::from(1.5)),
-        with(good_stop(1), "position", LoroValue::from(f64::NAN)),
-        with(good_stop(1), "opacity", LoroValue::from(-1.0)),
-        with(good_stop(1), "color", LoroValue::from(vec![1_i64])),
-    ];
-    for fields in bad {
-        let result = open_with(|rect, _| {
-            let list = rect
-                .insert_container("fill_stops", LoroMovableList::new())
-                .unwrap();
-            push_stop(&list, &good_stop(2));
-            push_stop(&list, &fields);
-        });
-        assert!(matches!(result, Err(OpenError::Damaged)), "{fields:?}");
-    }
-}
-
-#[test]
-fn any_stop_count_opens_including_zero_one_and_seventeen() {
+fn a_legacy_stop_list_of_any_size_or_shape_opens_and_is_never_read() {
     for count in [0_u64, 1, 2, 17, 40] {
         let document = open_with(|rect, _| {
             let list = rect
@@ -256,7 +207,7 @@ fn any_stop_count_opens_including_zero_one_and_seventeen() {
         })
         .unwrap_or_else(|err| panic!("{count} stops: {err:?}"));
         let first = objects(&document).remove(0);
-        assert_eq!(style_of(&first).fill.stops.len() as u64, count);
+        assert!(!style_of(&first).fill.enabled, "{count} stops");
     }
 }
 
@@ -316,170 +267,27 @@ fn every_older_fixture_opens_with_every_style_at_its_default() {
 }
 
 // ---------------------------------------------------------------------
-// The golden version-7 container
+// The legacy gradient fixture (0017 adrs.md, decision 1)
 // ---------------------------------------------------------------------
-
-fn stop(counter: u64, at: f64, color: Color, alpha: f64) -> GradientStop {
-    GradientStop {
-        id: StopId::new(7, counter),
-        position: StopPosition::new(at).unwrap(),
-        color,
-        opacity: Opacity::new(alpha).unwrap(),
-    }
-}
 
 const RED: Color = Color { r: 255, g: 0, b: 0 };
 const GREEN: Color = Color { r: 0, g: 128, b: 0 };
 const BLUE: Color = Color { r: 0, g: 0, b: 255 };
 
-/// Object 0: a path with every stroke key and a linear gradient with three
-/// stops of which two coincide. Object 1: a rectangle with the stroke off,
-/// a radial gradient and a long dash list. Object 2: an ellipse with a solid
-/// translucent fill. Object 3: a star left at the defaults.
-fn build_v7_document() -> Vec<u8> {
-    let document = Document::new(1);
-    let path = document.create_path(
-        &[
-            NewAnchor::corner(AnchorId::new(1, 1), pt(0.0, 0.0)),
-            NewAnchor::corner(AnchorId::new(1, 2), pt(30.0, 0.0)),
-            NewAnchor::corner(AnchorId::new(1, 3), pt(30.0, 20.0)),
-        ],
-        false,
-    );
-    let rect = document.create_rect(RectBounds {
-        origin: pt(50.0, 0.0),
-        width: mm(40.0),
-        height: mm(20.0),
-    });
-    let ellipse = document.create_ellipse(EllipseFrame {
-        center: pt(20.0, 60.0),
-        rx: mm(12.0),
-        ry: mm(8.0),
-    });
-    let _star = document.create_star(
-        StarFrame {
-            center: pt(70.0, 60.0),
-            radius: mm(10.0),
-            angle: curvyo_document_core::Angle::from_radians(0.0),
-        },
-        PointCount::new(5).unwrap(),
-        curvyo_document_core::InnerRatio::new(0.5).unwrap(),
-    );
-
-    let edit = |id: NodeId, edit: StyleEdit| document.edit_style(&[id], &edit).unwrap();
-    edit(path, StyleEdit::StrokeWidth(mm(1.5)));
-    edit(path, StyleEdit::StrokeColor(RED));
-    edit(path, StyleEdit::StrokeOpacity(Opacity::new(0.75).unwrap()));
-    edit(
-        path,
-        StyleEdit::StrokeDash(DashPattern::new(vec![6.0, 3.0, 1.0, 3.0]).unwrap()),
-    );
-    edit(path, StyleEdit::StrokeJoin(LineJoin::Round));
-    edit(path, StyleEdit::StrokeCap(LineCap::Square));
-    edit(path, StyleEdit::FillColor(GREEN));
-    edit(path, StyleEdit::FillOpacity(Opacity::new(0.5).unwrap()));
-    let seed = [stop(1, 0.0, RED, 1.0), stop(2, 1.0, BLUE, 1.0)];
-    document
-        .set_fill_mode(
-            FillMode::Linear,
-            &[FillModeTarget {
-                id: path,
-                seed_stops: seed.to_vec(),
-            }],
-        )
-        .unwrap();
-    document.add_stop(path, stop(3, 0.5, GREEN, 0.5)).unwrap();
-    document.add_stop(path, stop(4, 0.5, BLUE, 0.25)).unwrap();
-    document
-        .edit_stops(&[StopEdit {
-            id: path,
-            stop: StopId::new(7, 3),
-            change: StopChange::Color(GREEN),
-        }])
-        .unwrap();
-    document
-        .remove_stop(path, StopId::new(7, 2))
-        .expect("a 4-stop gradient may lose one");
-    document.add_stop(path, stop(2, 1.0, BLUE, 1.0)).unwrap();
-
-    edit(rect, StyleEdit::StrokeWidth(mm(2.0)));
-    edit(rect, StyleEdit::StrokeEnabled(false));
-    edit(
-        rect,
-        StyleEdit::StrokeDash(DashPattern::new((1..=8).map(f64::from).collect()).unwrap()),
-    );
-    document
-        .set_fill_mode(
-            FillMode::Radial,
-            &[FillModeTarget {
-                id: rect,
-                seed_stops: GradientStop::default_pair(
-                    Color::BLACK,
-                    StopId::new(8, 1),
-                    StopId::new(8, 2),
-                )
-                .to_vec(),
-            }],
-        )
-        .unwrap();
-
-    document
-        .set_fill_mode(
-            FillMode::Solid,
-            &[FillModeTarget {
-                id: ellipse,
-                seed_stops: vec![],
-            }],
-        )
-        .unwrap();
-    edit(ellipse, StyleEdit::FillColor(BLUE));
-    edit(ellipse, StyleEdit::FillOpacity(Opacity::new(0.2).unwrap()));
-    edit(ellipse, StyleEdit::StrokeCap(LineCap::Round));
-
-    pack(&document, "0.1.0").unwrap()
-}
-
-/// Writes `styles_v7_mergeable_stops.curvyo`. Run deliberately, then review the
-/// bytes. It never touches `styles_v7.curvyo`: that file is the golden of the
-/// regular stop-list form and a regenerated one would hold the mergeable form.
+/// Object 0: a path with every stroke key and a linear gradient. Object 1: a
+/// rectangle with the stroke off, a radial gradient and a long dash list.
+/// Object 2: an ellipse with a solid translucent fill. Object 3: a star left
+/// at the defaults.
 #[test]
-#[ignore = "run deliberately to regenerate the fixture, not on every `cargo test`"]
-fn generate_style_fixtures() {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures")
-        .join(MERGEABLE_FIXTURE);
-    std::fs::write(path, build_v7_document()).unwrap();
-}
-
-/// The two stored forms of a stop list read back as one document: every style
-/// and every stop equal, with the stop ids and list order intact.
-#[test]
-fn the_mergeable_stop_list_fixture_reads_back_like_the_regular_one() {
-    let regular = unpack(2, &fixture(V7_FIXTURE)).unwrap();
-    let mergeable = unpack(2, &fixture(MERGEABLE_FIXTURE)).unwrap();
-    let (a, b) = (objects(&regular), objects(&mergeable));
-    assert_eq!(a.len(), b.len());
-    let mut stops = 0;
-    for (x, y) in a.iter().zip(&b) {
-        assert_eq!(style_of(x), style_of(y));
-        stops += style_of(y).fill.stops.len();
-    }
-    assert!(stops >= 3, "the fixture holds a gradient with stops");
-    // They are two different files (two stored forms of one document).
-    assert_ne!(fixture(V7_FIXTURE), fixture(MERGEABLE_FIXTURE));
-}
-
-#[test]
-fn the_golden_fixture_declares_the_version_that_introduced_styles() {
+fn the_legacy_fixture_declares_the_version_that_introduced_styles() {
     let manifest: serde_json::Value =
-        serde_json::from_slice(&member(&fixture(V7_FIXTURE), "manifest.json")).unwrap();
-    assert_eq!(manifest["format_version"], STYLES_FORMAT_VERSION);
-    assert!(u64::from(CURRENT_FORMAT_VERSION) >= STYLES_FORMAT_VERSION);
+        serde_json::from_slice(&member(&fixture(LEGACY_FIXTURE), "manifest.json")).unwrap();
+    assert_eq!(manifest["format_version"], 7);
 }
 
 #[test]
-fn the_golden_fixture_reads_back_exactly() {
-    let document = unpack(2, &fixture(V7_FIXTURE)).unwrap();
+fn the_legacy_fixture_reads_back_with_every_gradient_fill_off() {
+    let document = unpack(2, &fixture(LEGACY_FIXTURE)).unwrap();
     let all = objects(&document);
     assert_eq!(all.len(), 4);
 
@@ -491,35 +299,21 @@ fn the_golden_fixture_reads_back_exactly() {
     assert_eq!(path.stroke.dash.as_slice(), [6.0, 3.0, 1.0, 3.0]);
     assert_eq!(path.stroke.join, LineJoin::Round);
     assert_eq!(path.stroke.cap, LineCap::Square);
-    assert!(path.fill.enabled);
-    assert_eq!(path.fill.kind, FillKind::Linear);
-    assert_eq!(path.fill.color, GREEN);
-    assert_eq!(path.fill.opacity.get(), 0.5);
+    assert!(!path.fill.paints(), "a linear gradient reads as no fill");
     assert_eq!(
-        path.fill.stops,
-        [
-            stop(1, 0.0, RED, 1.0),
-            stop(3, 0.5, GREEN, 0.5),
-            stop(4, 0.5, BLUE, 0.25),
-            stop(2, 1.0, BLUE, 1.0),
-        ],
-        "two coincident stops keep their creation order"
+        path.fill.color, GREEN,
+        "the stored colour is read as stored"
     );
+    assert_eq!(path.fill.opacity.get(), 0.5);
 
     let rect = style_of(&all[1]);
     assert!(!rect.stroke.enabled);
-    assert_eq!(
-        rect.stroke.width,
-        mm(2.0),
-        "the stored width survives 'off'"
-    );
+    assert_eq!(rect.stroke.width, mm(2.0));
     assert_eq!(rect.stroke.dash.as_slice().len(), 8);
-    assert_eq!(rect.fill.kind, FillKind::Radial);
-    assert_eq!(rect.fill.stops.len(), 2);
+    assert!(!rect.fill.paints(), "a radial gradient reads as no fill");
 
     let ellipse = style_of(&all[2]);
-    assert_eq!(ellipse.fill.kind, FillKind::Solid);
-    assert!(ellipse.fill.enabled);
+    assert!(ellipse.fill.paints());
     assert_eq!(ellipse.fill.color, BLUE);
     assert_eq!(ellipse.fill.opacity.get(), 0.2);
     assert_eq!(ellipse.stroke.cap, LineCap::Round);
@@ -527,15 +321,30 @@ fn the_golden_fixture_reads_back_exactly() {
     assert_eq!(style_of(&all[3]), &Style::default());
 }
 
+/// The raw meta keys of the object at `index` in a document's Loro snapshot.
+fn stored_keys(document: &Document, index: usize) -> Vec<String> {
+    let loro = LoroDoc::new();
+    loro.import(&document.export_loro_snapshot().unwrap())
+        .unwrap();
+    let tree = loro.get_tree("paths");
+    let node = tree.roots()[index];
+    let meta = tree.get_meta(node).unwrap();
+    let mut keys = Vec::new();
+    meta.for_each(|k, _| keys.push(k.to_string()));
+    keys
+}
+
+fn changes(document: &Document) -> usize {
+    let loro = LoroDoc::new();
+    loro.import(&document.export_loro_snapshot().unwrap())
+        .unwrap();
+    loro.len_changes()
+}
+
 #[test]
-fn the_golden_fixture_round_trips_and_opening_writes_nothing() {
-    let bytes = fixture(V7_FIXTURE);
+fn opening_and_saving_the_legacy_fixture_writes_nothing_and_keeps_the_keys() {
+    let bytes = fixture(LEGACY_FIXTURE);
     let document = unpack(2, &bytes).unwrap();
-    let saved = pack(&document, "0.1.0").unwrap();
-    let again = unpack(3, &saved).unwrap();
-    for (a, b) in objects(&document).iter().zip(objects(&again).iter()) {
-        assert_eq!(style_of(a), style_of(b));
-    }
     let stored = LoroDoc::new();
     stored.import(&member(&bytes, "document.loro")).unwrap();
     let reopened = LoroDoc::new();
@@ -543,11 +352,99 @@ fn the_golden_fixture_round_trips_and_opening_writes_nothing() {
         .import(&document.export_loro_snapshot().unwrap())
         .unwrap();
     assert_eq!(reopened.oplog_vv(), stored.oplog_vv());
+
+    let saved = unpack(3, &pack(&document, "0.1.0").unwrap()).unwrap();
+    for index in [0, 1] {
+        let keys = stored_keys(&saved, index);
+        assert!(keys.contains(&"fill_kind".to_string()), "{keys:?}");
+        assert!(keys.contains(&"fill_stops".to_string()), "{keys:?}");
+    }
+    for (a, b) in objects(&document).iter().zip(objects(&saved).iter()) {
+        assert_eq!(style_of(a), style_of(b));
+    }
+}
+
+#[test]
+fn an_edit_that_leaves_the_fill_alone_keeps_the_legacy_keys() {
+    let document = unpack(2, &fixture(LEGACY_FIXTURE)).unwrap();
+    let path = document.object_ids()[0];
+    document
+        .edit_style(&[path], &StyleEdit::StrokeWidth(mm(3.0)))
+        .unwrap();
+    let keys = stored_keys(&document, 0);
+    assert!(keys.contains(&"fill_kind".to_string()));
+    assert!(keys.contains(&"fill_stops".to_string()));
+}
+
+#[test]
+fn turning_the_fill_on_makes_it_solid_in_the_stored_colour_and_drops_both_keys_in_one_commit() {
+    let document = unpack(2, &fixture(LEGACY_FIXTURE)).unwrap();
+    let path = document.object_ids()[0];
+    let before = changes(&document);
+    document
+        .edit_style(&[path], &StyleEdit::FillEnabled(true))
+        .unwrap();
+    assert_eq!(changes(&document), before + 1, "one commit");
+    let all = objects(&document);
+    let fill = &style_of(&all[0]).fill;
+    assert!(fill.paints());
+    assert_eq!(fill.color, GREEN);
+    assert_eq!(fill.opacity.get(), 0.5);
+    let keys = stored_keys(&document, 0);
+    assert!(!keys.contains(&"fill_kind".to_string()), "{keys:?}");
+    assert!(!keys.contains(&"fill_stops".to_string()), "{keys:?}");
+    // The other gradient object is untouched.
+    assert!(stored_keys(&document, 1).contains(&"fill_stops".to_string()));
+    // And it survives a save and reopen.
+    let again = unpack(4, &pack(&document, "0.1.0").unwrap()).unwrap();
+    assert_eq!(style_of(&objects(&again)[0]).fill, *fill);
+}
+
+#[test]
+fn a_colour_edit_on_a_gradient_object_drops_the_keys_but_keeps_the_fill_off() {
+    let document = unpack(2, &fixture(LEGACY_FIXTURE)).unwrap();
+    let rect = document.object_ids()[1];
+    document
+        .edit_style(&[rect], &StyleEdit::FillColor(RED))
+        .unwrap();
+    let all = objects(&document);
+    let fill = &style_of(&all[1]).fill;
+    assert!(!fill.paints(), "a fill edit never turns the fill on");
+    assert_eq!(fill.color, RED);
+    let keys = stored_keys(&document, 1);
+    assert!(!keys.contains(&"fill_kind".to_string()));
+    assert!(!keys.contains(&"fill_stops".to_string()));
+    let again = unpack(4, &pack(&document, "0.1.0").unwrap()).unwrap();
+    assert!(!style_of(&objects(&again)[1]).fill.paints());
+}
+
+#[test]
+fn turning_the_fill_off_on_a_gradient_object_is_no_change_and_writes_nothing() {
+    let document = unpack(2, &fixture(LEGACY_FIXTURE)).unwrap();
+    let path = document.object_ids()[0];
+    let before = changes(&document);
+    document
+        .edit_style(&[path], &StyleEdit::FillEnabled(false))
+        .unwrap();
+    assert_eq!(changes(&document), before, "the fill already reads as off");
+    assert!(stored_keys(&document, 0).contains(&"fill_kind".to_string()));
+}
+
+#[test]
+fn a_solid_object_of_the_legacy_fixture_is_not_changed_by_an_unrelated_edit() {
+    let document = unpack(2, &fixture(LEGACY_FIXTURE)).unwrap();
+    let ellipse = document.object_ids()[2];
+    document
+        .edit_style(&[ellipse], &StyleEdit::FillColor(RED))
+        .unwrap();
+    let all = objects(&document);
+    assert!(style_of(&all[2]).fill.paints());
+    assert_eq!(style_of(&all[2]).fill.color, RED);
 }
 
 #[test]
 fn document_json_carries_one_style_object_per_object() {
-    let document = unpack(2, &fixture(V7_FIXTURE)).unwrap();
+    let document = unpack(2, &fixture(LEGACY_FIXTURE)).unwrap();
     let json: serde_json::Value = serde_json::from_slice(&document.export_json().unwrap()).unwrap();
     assert_eq!(json["format_version"], CURRENT_FORMAT_VERSION);
     let objects = json["objects"].as_array().unwrap();
@@ -566,13 +463,10 @@ fn document_json_carries_one_style_object_per_object() {
         path["stroke"]["dash"],
         serde_json::json!([6.0, 3.0, 1.0, 3.0])
     );
-    assert_eq!(path["fill"]["kind"], "linear");
-    let stops = path["fill"]["stops"].as_array().unwrap();
-    assert_eq!(stops.len(), 4);
-    assert_eq!(stops[0]["id"], StopId::new(7, 1).to_hex());
-    assert_eq!(stops[1]["position"], 0.5);
-    assert_eq!(stops[2]["position"], 0.5);
-    assert_eq!(objects[3]["style"]["fill"]["enabled"], false);
+    assert_eq!(path["fill"]["enabled"], false);
+    assert!(path["fill"].get("kind").is_none());
+    assert!(path["fill"].get("stops").is_none());
+    assert_eq!(objects[2]["style"]["fill"]["enabled"], true);
 }
 
 #[test]
@@ -583,5 +477,5 @@ fn an_older_reader_would_refuse_this_build_so_the_bump_is_real() {
     let bytes = pack(&Document::new(1), "0.1.0").unwrap();
     let manifest: serde_json::Value =
         serde_json::from_slice(&member(&bytes, "manifest.json")).unwrap();
-    assert!(manifest["format_version"].as_u64().unwrap() >= STYLES_FORMAT_VERSION);
+    assert!(manifest["format_version"].as_u64().unwrap() >= 7);
 }

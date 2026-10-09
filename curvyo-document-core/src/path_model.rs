@@ -175,7 +175,7 @@ pub enum HandleSlot {
 
 /// An RGB color, 8 bits per channel.
 ///
-/// Alpha is not part of it: stroke, fill and each gradient stop carry their
+/// Alpha is not part of it: stroke and fill carry their
 /// own [`crate::Opacity`] (`specs/0007-stroke-and-fill-styling/adrs.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Color {

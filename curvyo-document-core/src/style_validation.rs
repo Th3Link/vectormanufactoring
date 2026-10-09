@@ -1,17 +1,16 @@
-//! Strict open-file validation of the style keys and the stop list
+//! Strict open-file validation of the style keys
 //! (`specs/0007-stroke-and-fill-styling/adrs.md`, "`format_version`").
 
-use loro::{Container, LoroMap, LoroValue, ValueOrContainer};
+use loro::{LoroMap, LoroValue};
 
+use crate::legacy_fill::{KEY_FILL_KIND, is_valid_kind};
 use crate::path_codec::as_f64;
 use crate::style_codec::{
     CAP_BUTT, CAP_ROUND, CAP_SQUARE, JOIN_BEVEL, JOIN_MITER, JOIN_ROUND, KEY_FILL,
-    KEY_FILL_ENABLED, KEY_FILL_KIND, KEY_FILL_OPACITY, KEY_FILL_STOPS, KEY_STOP_COLOR, KEY_STOP_ID,
-    KEY_STOP_OPACITY, KEY_STOP_POSITION, KEY_STROKE, KEY_STROKE_CAP, KEY_STROKE_DASH,
-    KEY_STROKE_ENABLED, KEY_STROKE_JOIN, KEY_STROKE_OPACITY, KEY_STROKE_WIDTH, KIND_LINEAR,
-    KIND_RADIAL, KIND_SOLID, read_value, stop_map_at,
+    KEY_FILL_ENABLED, KEY_FILL_OPACITY, KEY_STROKE, KEY_STROKE_CAP, KEY_STROKE_DASH,
+    KEY_STROKE_ENABLED, KEY_STROKE_JOIN, KEY_STROKE_OPACITY, KEY_STROKE_WIDTH, read_value,
 };
-use crate::style_model::{DashPattern, StopId};
+use crate::style_model::DashPattern;
 
 /// A key that is absent is valid; a present key must satisfy `ok`.
 fn key_ok(meta: &LoroMap, key: &str, ok: impl Fn(&LoroValue) -> bool) -> bool {
@@ -55,9 +54,8 @@ fn is_bool(value: &LoroValue) -> bool {
 }
 
 /// Whether every style key of this object that is present has the right type
-/// and range, and every stop in `fill_stops` is complete. The stop count is
-/// never checked: a merged document may legitimately hold 0, 1 or more than
-/// 16 stops.
+/// and range. `fill_kind` may hold any kind a version-7 build wrote, and
+/// `fill_stops` is accepted in any form and never read (`legacy_fill`).
 pub(crate) fn style_is_valid(meta: &LoroMap) -> bool {
     key_ok(meta, KEY_STROKE_ENABLED, is_bool)
         && key_ok(meta, KEY_STROKE_WIDTH, |v| number_in(v, |n| n > 0.0))
@@ -71,30 +69,7 @@ pub(crate) fn style_is_valid(meta: &LoroMap) -> bool {
             is_one_of(v, &[CAP_BUTT, CAP_ROUND, CAP_SQUARE])
         })
         && key_ok(meta, KEY_FILL_ENABLED, is_bool)
-        && key_ok(meta, KEY_FILL_KIND, |v| {
-            is_one_of(v, &[KIND_SOLID, KIND_LINEAR, KIND_RADIAL])
-        })
+        && key_ok(meta, KEY_FILL_KIND, is_valid_kind)
         && key_ok(meta, KEY_FILL, is_color)
         && key_ok(meta, KEY_FILL_OPACITY, is_unit_number)
-        && stops_are_valid(meta)
-}
-
-fn stops_are_valid(meta: &LoroMap) -> bool {
-    match meta.get(KEY_FILL_STOPS) {
-        None => true,
-        Some(ValueOrContainer::Container(Container::MovableList(list))) => (0..list.len())
-            .all(|index| stop_map_at(&list, index).is_some_and(|map| stop_is_valid(&map))),
-        Some(_) => false,
-    }
-}
-
-fn stop_is_valid(map: &LoroMap) -> bool {
-    let present =
-        |key: &str, ok: &dyn Fn(&LoroValue) -> bool| read_value(map, key).is_some_and(|v| ok(&v));
-    present(
-        KEY_STOP_ID,
-        &|v| matches!(v, LoroValue::String(s) if StopId::from_hex(s.as_str()).is_some()),
-    ) && present(KEY_STOP_POSITION, &is_unit_number)
-        && present(KEY_STOP_COLOR, &is_color)
-        && present(KEY_STOP_OPACITY, &is_unit_number)
 }

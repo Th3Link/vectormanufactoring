@@ -25,7 +25,7 @@ mod display_unit;
 mod document;
 mod document_size;
 mod error;
-mod gradient_ramp;
+mod legacy_fill;
 mod objects;
 mod path_codec;
 mod path_model;
@@ -52,7 +52,6 @@ pub use document_size::{
     DocumentSizeError, MAX_DOCUMENT_MM, MIN_DOCUMENT_MM, validated_document_side,
 };
 pub use error::{OpenError, SaveError};
-pub use gradient_ramp::{ramp_at, sorted_stops};
 pub use objects::{CopySource, ObjectEditError};
 pub use path_model::{
     AnchorId, AnchorKind, AnchorSnapshot, Color, HandleSlot, NewAnchor, NodeId, PathEditError,
@@ -69,11 +68,7 @@ pub use primitive_outline::{
 };
 pub use shapes::ShapeEditError;
 pub use style_model::{
-    DashPattern, Fill, FillKind, GradientStop, LineCap, LineJoin, Opacity, StopId, StopPosition,
-    Stroke, Style, StyleParamError,
+    DashPattern, Fill, LineCap, LineJoin, Opacity, Stroke, Style, StyleParamError,
 };
-pub use styles::{
-    FillMode, FillModeTarget, MAX_GRADIENT_STOPS, MIN_GRADIENT_STOPS, StopChange, StopEdit,
-    StyleEdit, StyleEditError,
-};
+pub use styles::{StyleEdit, StyleEditError};
 pub use units::{Angle, DocumentSize, Length, Point, Tolerance, Vec2, ViewTransform};
