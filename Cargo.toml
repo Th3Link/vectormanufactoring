@@ -23,6 +23,9 @@ zip = { version = "8", default-features = false, features = ["deflate"] }
 loro = { version = "1.16", default-features = false }
 kurbo = { version = "0.13", default-features = false, features = ["std"] }
 lyon = "1"
+# Pinned exactly: an AI-assisted port of Clipper2, so every update is a reviewed
+# PR that reruns the boolean fixtures and property tests (specs/0016-boolean-operations/adrs.md).
+clipper2-rust = { version = "=1.2.0", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
