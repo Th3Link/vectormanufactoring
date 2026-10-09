@@ -1,0 +1,25 @@
+# a contour with a duplicated node (AC 40e)
+# Inputs: anchors as `x y [in_x in_y out_x out_y]` in mm, handles relative.
+# Expected results: grid integers (0.001 mm); regenerate with CURVYO_UPDATE_GOLDEN=1.
+operand
+outline closed
+anchor 0 0
+anchor 20 0
+anchor 20 0
+anchor 20 20
+anchor 0 20
+operand
+outline closed
+anchor 10 10
+anchor 30 10
+anchor 30 30
+anchor 10 30
+expect union
+outline 0 0 20000 0 20000 10000 30000 10000 30000 30000 10000 30000 10000 20000 0 20000
+expect difference
+outline 0 0 20000 0 20000 10000 10000 10000 10000 20000 0 20000
+expect intersection
+outline 10000 10000 20000 10000 20000 20000 10000 20000
+expect exclusion
+outline 0 0 20000 0 20000 10000 10000 10000 10000 20000 0 20000
+outline 10000 20000 20000 20000 20000 10000 30000 10000 30000 30000 10000 30000
