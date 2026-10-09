@@ -12,9 +12,10 @@ const UNIT_TOOLTIP =
 
 const UNIT_OPTIONS: readonly ToggleOption<UnitSymbol>[] = (
   [
-    ["mm", "Millimetres"],
-    ["cm", "Centimetres"],
-    ["in", "Inches"],
+    // The accessible name starts with the visible text (WCAG 2.5.3).
+    ["mm", "mm, millimetres"],
+    ["cm", "cm, centimetres"],
+    ["in", "in, inches"],
   ] as const
 ).map(([value, label]) => ({
   value,
@@ -99,6 +100,7 @@ export function DocumentSection({ document: doc, onReturnFocus }: DocumentSectio
               width={176}
               disabled={false}
               commitOnBlur
+              inputMode="decimal"
               onSubmit={(text) => doc.setSide("width", text)}
               messages={messages}
               onReturnFocus={onReturnFocus}
@@ -118,6 +120,7 @@ export function DocumentSection({ document: doc, onReturnFocus }: DocumentSectio
               width={176}
               disabled={false}
               commitOnBlur
+              inputMode="decimal"
               onSubmit={(text) => doc.setSide("height", text)}
               messages={messages}
               onReturnFocus={onReturnFocus}
@@ -152,18 +155,20 @@ export function DocumentSection({ document: doc, onReturnFocus }: DocumentSectio
               Fit to content
             </button>
           </Tooltip>
-          {/* Text only, under the button, no layout shift; the live region is
-              in the tree from the start so its text change is announced. */}
-          <p
-            role="status"
-            className="pointer-events-none absolute top-full right-0 z-30 mt-1 max-w-[244px] rounded-md bg-[var(--toolbar-bg)] px-2 py-1 text-xs text-[var(--toolbar-icon)]"
-            style={{
-              boxShadow: "var(--panel-elevation-shadow)",
-              display: notice ? undefined : "none",
-            }}
-          >
+          {/* The live region is always in the tree, visually hidden, so its text
+              change is announced; the visible notice is a text-only copy. */}
+          <p role="status" className="sr-only">
             {notice}
           </p>
+          {notice && (
+            <p
+              aria-hidden
+              className="pointer-events-none absolute top-full right-0 z-30 mt-1 max-w-[244px] rounded-md bg-[var(--toolbar-bg)] px-2 py-1 text-xs text-[var(--toolbar-icon)]"
+              style={{ boxShadow: "var(--panel-elevation-shadow)" }}
+            >
+              {notice}
+            </p>
+          )}
           {refusal && (
             <div
               role="alert"

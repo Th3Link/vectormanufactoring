@@ -276,6 +276,15 @@ the tool or the style scope as a third input. **Resolution:** 0017 extends
 `panel_content`, the one place for this; no second decision is made in
 TypeScript.
 
+## Check the arrow keys of the radio groups in the real Tauri window
+
+In the browser harness, the arrow keys move focus in the Unit group (and in
+Style's Join and Cap groups) but did not select the item, which Radix's
+`RadioGroup` should do. It may be a harness artefact (synthetic keys, the
+tooltip wrapper around each item). **Resolution:** check once in the desktop
+window; if the selection does not follow focus there, fix `ToggleGroup` for all
+its users.
+
 ## A collaborator without the font sees substituted text
 
 Fonts are referenced from a user-managed collection, not embedded by default
