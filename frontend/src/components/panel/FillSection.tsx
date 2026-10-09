@@ -2,13 +2,11 @@ import { useRef } from "react";
 
 import { ColourBlock } from "@/components/panel/ColourBlock";
 import { ColourPicker } from "@/components/panel/ColourPicker";
-import { EntryField } from "@/components/panel/EntryField";
 import { PaintRow } from "@/components/panel/PaintRow";
-import { StyleRow } from "@/components/panel/StyleRow";
 import { FILL_OPTIONS } from "@/components/panel/styleOptions";
+import { ValueField } from "@/components/panel/ValueField";
 import { useRowsFocus } from "@/components/panel/useRowsFocus";
 import type { StylePanelApi } from "@/hooks/useStylePanel";
-import { percentText } from "@/lib/styleColor";
 
 const PERCENT_MESSAGES = { percent: "Enter a number from 0 to 100" } as const;
 
@@ -56,18 +54,23 @@ export function FillSection({ panel, onReturnFocus }: FillSectionProps) {
             mixed={view.fillColorMixed}
             panel={panel}
           />
-          <StyleRow label="Opacity">
-            <EntryField
-              label="Fill opacity percent"
-              shown={percentText(view.fillOpacity)}
-              mixed={view.fillOpacityMixed}
-              suffix="%"
-              width={176}
-              onSubmit={(text) => panel.setText("fill-opacity", text)}
-              messages={PERCENT_MESSAGES}
-              onReturnFocus={onReturnFocus}
-            />
-          </StyleRow>
+          <ValueField
+            label="Opacity"
+            name="Fill opacity"
+            field="fill-opacity"
+            text={view.fillOpacityText}
+            bar={view.fillOpacityBar}
+            mixed={view.fillOpacityMixed}
+            resettable={view.fillOpacityResettable}
+            unit="%"
+            valueNow={view.fillOpacity}
+            unitWords="percent"
+            typedMax={100}
+            defaultText="100 %"
+            messages={PERCENT_MESSAGES}
+            panel={panel}
+            onReturnFocus={onReturnFocus}
+          />
         </div>
       )}
     </div>

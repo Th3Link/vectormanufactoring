@@ -301,3 +301,10 @@ html[data-boolean-busy],
 html[data-boolean-busy] * {
   cursor: wait !important;
 }
+
+/* A value field drag keeps the resize cursor over the whole window until the
+   release (`0017` criterion 37). */
+html[data-value-drag],
+html[data-value-drag] * {
+  cursor: ew-resize !important;
+}

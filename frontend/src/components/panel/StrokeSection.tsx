@@ -3,14 +3,13 @@ import { useRef } from "react";
 import { ColourBlock } from "@/components/panel/ColourBlock";
 import { ColourPicker } from "@/components/panel/ColourPicker";
 import { DashRows } from "@/components/panel/DashRows";
-import { EntryField } from "@/components/panel/EntryField";
 import { PaintRow } from "@/components/panel/PaintRow";
 import { StyleRow } from "@/components/panel/StyleRow";
 import { CAP_OPTIONS, JOIN_OPTIONS, PAINT_OPTIONS } from "@/components/panel/styleOptions";
+import { ValueField } from "@/components/panel/ValueField";
 import { useRowsFocus } from "@/components/panel/useRowsFocus";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import type { StylePanelApi } from "@/hooks/useStylePanel";
-import { percentText, widthText } from "@/lib/styleColor";
 
 const WIDTH_MESSAGES = { width: "Enter a number from 0 to 1000" } as const;
 const PERCENT_MESSAGES = { percent: "Enter a number from 0 to 100" } as const;
@@ -61,30 +60,40 @@ export function StrokeSection({ panel, onReturnFocus }: StrokeSectionProps) {
             mixed={view.strokeColorMixed}
             panel={panel}
           />
-          <StyleRow label="Opacity">
-            <EntryField
-              label="Stroke opacity percent"
-              shown={percentText(view.strokeOpacity)}
-              mixed={view.strokeOpacityMixed}
-              suffix="%"
-              width={176}
-              onSubmit={(text) => panel.setText("stroke-opacity", text)}
-              messages={PERCENT_MESSAGES}
-              onReturnFocus={onReturnFocus}
-            />
-          </StyleRow>
-          <StyleRow label="Width">
-            <EntryField
-              label="Stroke width, millimetres"
-              shown={widthText(view.strokeWidth)}
-              mixed={view.strokeWidthMixed}
-              suffix="mm"
-              width={176}
-              onSubmit={(text) => panel.setText("stroke-width", text)}
-              messages={WIDTH_MESSAGES}
-              onReturnFocus={onReturnFocus}
-            />
-          </StyleRow>
+          <ValueField
+            label="Opacity"
+            name="Stroke opacity"
+            field="stroke-opacity"
+            text={view.strokeOpacityText}
+            bar={view.strokeOpacityBar}
+            mixed={view.strokeOpacityMixed}
+            resettable={view.strokeOpacityResettable}
+            unit="%"
+            valueNow={view.strokeOpacity}
+            unitWords="percent"
+            typedMax={100}
+            defaultText="100 %"
+            messages={PERCENT_MESSAGES}
+            panel={panel}
+            onReturnFocus={onReturnFocus}
+          />
+          <ValueField
+            label="Width"
+            name="Stroke width"
+            field="stroke-width"
+            text={view.strokeWidthText}
+            bar={view.strokeWidthBar}
+            mixed={view.strokeWidthMixed}
+            resettable={view.strokeWidthResettable}
+            unit="mm"
+            valueNow={view.strokeWidth}
+            unitWords="millimetres"
+            typedMax={1000}
+            defaultText="0.25 mm"
+            messages={WIDTH_MESSAGES}
+            panel={panel}
+            onReturnFocus={onReturnFocus}
+          />
           <DashRows panel={panel} onReturnFocus={onReturnFocus} />
           <StyleRow label="Join">
             <ToggleGroup

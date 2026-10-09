@@ -17,6 +17,16 @@ export interface EntryFieldProps {
   /** Room kept free at the right for the suffix, px. Default 32 for a suffix of
    * two or more characters, 24 for one. */
   gutter?: number;
+  /** Distance of the suffix from the right edge, px (6 by default). */
+  suffixRight?: number;
+  /** Takes focus when it mounts: the value field in its typing state. */
+  autoFocus?: boolean;
+  /** Replaces the shown text on mount and counts as an edit: the digit that
+   * started typing. The caret goes to the end instead of selecting all. */
+  initialText?: string;
+  /** The field lost focus (Enter, Escape, a press elsewhere, a refused value
+   * excepted): the value field leaves its typing state. */
+  onClose?: () => void;
   /** The suffix is a 12 px word ("x width") instead of a 14 px unit. */
   smallSuffix?: boolean;
   /** Hex fields are left-aligned, the number fields right-aligned. */
@@ -60,6 +70,10 @@ export function EntryField({
   placeholder,
   gutter,
   smallSuffix = false,
+  suffixRight = 6,
+  autoFocus = false,
+  initialText,
+  onClose,
   align = "right",
   onSubmit,
   messages,
@@ -70,10 +84,19 @@ export function EntryField({
 }: EntryFieldProps) {
   const messageId = useId();
   const display = mixed ? "" : shown;
-  const [text, setText] = useState(display);
+  const [text, setText] = useState(initialText ?? display);
   const [invalid, setInvalid] = useState<string | null>(null);
-  const editing = useRef(false);
-  const touched = useRef(false);
+  const editing = useRef(autoFocus);
+  const touched = useRef(initialText !== undefined);
+  const input = useRef<HTMLInputElement>(null);
+  const skipSelect = useRef(initialText !== undefined);
+
+  useEffect(() => {
+    if (autoFocus) {
+      input.current?.focus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Follow the document while the maker is not typing.
   useEffect(() => {
@@ -111,6 +134,7 @@ export function EntryField({
   return (
     <div className="relative" style={{ width }}>
       <input
+        ref={input}
         type="text"
         inputMode={inputMode}
         autoComplete="off"
@@ -123,7 +147,13 @@ export function EntryField({
         data-first-focus={firstFocus ? "" : undefined}
         onFocus={(event) => {
           editing.current = true;
-          event.currentTarget.select();
+          if (skipSelect.current) {
+            skipSelect.current = false;
+            const end = event.currentTarget.value.length;
+            event.currentTarget.setSelectionRange(end, end);
+          } else {
+            event.currentTarget.select();
+          }
         }}
         onChange={(event) => {
           touched.current = true;
@@ -133,6 +163,7 @@ export function EntryField({
         onBlur={() => {
           if (!(commitOnBlur && touched.current)) {
             restore();
+            onClose?.();
             return;
           }
           const outcome = onSubmit(text);
@@ -145,6 +176,7 @@ export function EntryField({
             // again (" 300 " on 300 mm becomes "300"), also when nothing
             // changed and so no new text arrives.
             restore();
+            onClose?.();
           }
         }}
         onKeyDown={(event) => {
@@ -178,7 +210,8 @@ export function EntryField({
       {suffix && !mixed && (
         <span
           aria-hidden
-          className={`pointer-events-none absolute top-1/2 right-1.5 -translate-y-1/2 text-[var(--panel-muted-fg)] ${smallSuffix ? "text-xs" : "text-sm"}`}
+          className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-[var(--panel-muted-fg)] ${smallSuffix ? "text-xs" : "text-sm"}`}
+          style={{ right: suffixRight }}
         >
           {suffix}
         </span>

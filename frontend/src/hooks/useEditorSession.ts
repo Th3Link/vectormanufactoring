@@ -253,7 +253,7 @@ function isFormControl(target: EventTarget): boolean {
   return (
     target instanceof HTMLElement &&
     target.closest(
-      'input, textarea, select, button, [role="switch"], [role="slider"], [role="radio"], [role="combobox"], [role="option"], [role="dialog"], [contenteditable]:not([contenteditable="false"])',
+      'input, textarea, select, button, [role="switch"], [role="slider"], [role="spinbutton"], [role="radio"], [role="combobox"], [role="option"], [role="dialog"], [contenteditable]:not([contenteditable="false"])',
     ) !== null
   );
 }

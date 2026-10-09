@@ -12,6 +12,11 @@ export type StyleFieldName =
   | "fill-color"
   | "fill-opacity";
 
+/** A property edited by a value field (`curvyo-ui-core::ValueField`). */
+export type ValueFieldName = "stroke-width" | "stroke-opacity" | "fill-opacity";
+/** The rounding grid of a value field: Shift is coarse, Ctrl (Cmd) is fine. */
+export type GridName = "normal" | "coarse" | "fine";
+
 export type DashName = "solid" | "dash" | "dot" | "dash-dot";
 export type JoinName = "miter" | "round" | "bevel";
 export type CapName = "butt" | "round" | "square";
@@ -36,6 +41,15 @@ export interface StyleView {
   strokeOpacity: number;
   strokeWidthMixed: boolean;
   strokeWidth: number;
+  /** The width as the field shows it. */
+  strokeWidthText: string;
+  /** The share of the field's width its bar fills, 0 to 1. */
+  strokeWidthBar: number;
+  /** The value is mixed or not the default: the reset icon shows. */
+  strokeWidthResettable: boolean;
+  strokeOpacityText: string;
+  strokeOpacityBar: number;
+  strokeOpacityResettable: boolean;
   /** The pressed preset button, `"none"` for a list that is no preset. */
   strokeDash: DashName | "none" | "mixed";
   /** The numbers of the pattern line, one space apart. */
@@ -50,6 +64,9 @@ export interface StyleView {
   fillHexMixed: boolean;
   fillOpacityMixed: boolean;
   fillOpacity: number;
+  fillOpacityText: string;
+  fillOpacityBar: number;
+  fillOpacityResettable: boolean;
 }
 
 const DISABLED_VIEW: StyleView = {
@@ -65,6 +82,12 @@ const DISABLED_VIEW: StyleView = {
   strokeOpacity: 100,
   strokeWidthMixed: false,
   strokeWidth: 0.25,
+  strokeWidthText: "0.25",
+  strokeWidthBar: 0.18,
+  strokeWidthResettable: false,
+  strokeOpacityText: "100",
+  strokeOpacityBar: 1,
+  strokeOpacityResettable: false,
   strokeDash: "solid",
   strokeDashText: "",
   strokeJoin: "miter",
@@ -77,6 +100,9 @@ const DISABLED_VIEW: StyleView = {
   fillHexMixed: false,
   fillOpacityMixed: false,
   fillOpacity: 100,
+  fillOpacityText: "100",
+  fillOpacityBar: 1,
+  fillOpacityResettable: false,
 };
 
 /** Reads the wasm-bindgen `StylePanelView` once, immediately, so the instance
@@ -99,6 +125,12 @@ function readView(session: WasmSession | null): StyleView {
     strokeOpacity: raw.stroke_opacity,
     strokeWidthMixed: raw.stroke_width_mixed,
     strokeWidth: raw.stroke_width,
+    strokeWidthText: raw.stroke_width_text,
+    strokeWidthBar: raw.stroke_width_bar,
+    strokeWidthResettable: raw.stroke_width_resettable,
+    strokeOpacityText: raw.stroke_opacity_text,
+    strokeOpacityBar: raw.stroke_opacity_bar,
+    strokeOpacityResettable: raw.stroke_opacity_resettable,
     strokeDash: raw.stroke_dash as StyleView["strokeDash"],
     strokeDashText: raw.stroke_dash_text,
     strokeJoin: raw.stroke_join as StyleView["strokeJoin"],
@@ -111,6 +143,9 @@ function readView(session: WasmSession | null): StyleView {
     fillHexMixed: raw.fill_hex_mixed,
     fillOpacityMixed: raw.fill_opacity_mixed,
     fillOpacity: raw.fill_opacity,
+    fillOpacityText: raw.fill_opacity_text,
+    fillOpacityBar: raw.fill_opacity_bar,
+    fillOpacityResettable: raw.fill_opacity_resettable,
   };
   raw.free();
   return view;
@@ -140,8 +175,13 @@ export interface StylePanelApi {
   hsvOf: (rgb: number) => HsvTriple;
   /** The packed colour of a hue, saturation and value (Rust's rounding). */
   rgbOf: (hue: number, saturation: number, value: number) => number;
-  /** An opacity slider tick (percent), same gesture rules. */
-  previewOpacity: (field: StyleFieldName, percent: number) => void;
+  /** A tick of a value field drag: position `p` (0 to 1) on the field's scale,
+   * rounded to `grid`. Same gesture rules: one commit at the release. */
+  previewValue: (field: ValueFieldName, p: number, grid: GridName) => void;
+  /** An arrow key: `steps` steps from the shown value; the key-up commits. */
+  stepValue: (field: ValueFieldName, steps: number, grid: GridName) => void;
+  /** The reset icon or Ctrl+Backspace: the default, one commit. */
+  resetValue: (field: ValueFieldName) => void;
   setStrokePaint: (on: boolean) => void;
   setFillPaint: (on: boolean) => void;
   setStrokeDash: (name: DashName) => void;
@@ -218,7 +258,9 @@ export function useStylePanel(editor: EditorHandle): StylePanelApi {
       preview((s) => s.preview_style_hsv(field, hue, saturation, value)),
     hsvOf,
     rgbOf,
-    previewOpacity: (field, percent) => preview((s) => s.preview_style_opacity(field, percent)),
+    previewValue: (field, p, grid) => preview((s) => s.preview_value_field(field, p, grid)),
+    stepValue: (field, steps, grid) => preview((s) => s.step_value_field(field, steps, grid)),
+    resetValue: (field) => act((s) => void s.reset_value_field(field)),
     setStrokePaint: (on) => act((s) => s.set_stroke_paint(on)),
     setFillPaint: (on) => act((s) => s.set_fill_paint(on)),
     setStrokeDash: (name) => act((s) => s.set_stroke_dash(name)),
