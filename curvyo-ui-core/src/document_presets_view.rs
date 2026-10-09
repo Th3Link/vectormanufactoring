@@ -266,7 +266,7 @@ mod tests {
         assert_eq!(pressed(mm(210.0, 297.0)), ["A4"]);
         assert_eq!(pressed(mm(297.0, 210.0)), ["A4"]);
         assert_eq!(pressed(mm(210.004, 297.0)), ["A4"]);
-        assert!(pressed(mm(211.0, 297.0)).is_empty());
+        assert_eq!(pressed(mm(211.0, 297.0)).len(), 0);
         assert_eq!(pressed(mm(508.0, 285.75)), ["16:9"]);
         assert_eq!(pressed(mm(285.75, 508.0)), ["16:9"]);
         let subject = |size| presets_view(&list(), size, unit).subject;
@@ -373,7 +373,7 @@ mod tests {
     #[test]
     fn an_empty_list_has_no_groups_and_a_custom_subject() {
         let view = presets_view(&PresetList::default(), mm(210.0, 297.0), DisplayUnit::Mm);
-        assert!(view.groups.is_empty());
+        assert_eq!(view.groups.len(), 0);
         assert_eq!(view.subject, "Custom");
         assert_eq!(view.orientation, Some(Orientation::Portrait));
     }

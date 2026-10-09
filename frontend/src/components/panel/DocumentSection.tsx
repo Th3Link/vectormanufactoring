@@ -1,6 +1,7 @@
 import { CircleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { DocumentPresets } from "@/components/panel/DocumentPresets";
 import { EntryField } from "@/components/panel/EntryField";
 import { StyleRow } from "@/components/panel/StyleRow";
 import { ToggleGroup, type ToggleOption } from "@/components/ui/toggle-group";
@@ -86,9 +87,18 @@ export function DocumentSection({ document: doc, onReturnFocus }: DocumentSectio
 
   return (
     <section aria-labelledby="document-heading" className="flex flex-col gap-2">
-      <h2 id="document-heading" className="h-6 text-sm leading-6 font-semibold text-[var(--toolbar-icon)]">
-        Document
-      </h2>
+      <div className="flex h-6 items-center justify-between gap-2">
+        <h2 id="document-heading" className="text-sm font-semibold text-[var(--toolbar-icon)]">
+          Document
+        </h2>
+        <p className="truncate text-xs text-[var(--panel-muted-fg)]">{view.presets.subject}</p>
+      </div>
+      <DocumentPresets document={doc} onReturnFocus={onReturnFocus} />
+      <div
+        aria-hidden
+        className="my-1 h-px"
+        style={{ background: "color-mix(in srgb, var(--toolbar-icon) 25%, transparent)" }}
+      />
       <StyleRow label="Width">
         <Tooltip side="left" content={SIZE_TOOLTIP}>
           <div>

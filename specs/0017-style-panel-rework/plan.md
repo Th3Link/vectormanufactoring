@@ -4,7 +4,7 @@ One branch (`story/style-panel-rework`), one PR. The customer widened the PR
 (2026-10-09): it carries `0017-style-panel-rework` (milestones 1 to 4), then
 `0018-stroke-markers` (milestones 5 to 7, criteria numbered as in
 `specs/0018-stroke-markers/specification.md`), then `0030-document-size-presets`
-once its spec is Ready (milestone 8, added then). Both features share ONE
+(milestones 8 to 10). Both features share ONE
 `format_version`: `CURRENT_FORMAT_VERSION` is 9, taken by the odd dash lists of
 0017 and by the marker keys of 0018, so the constant moves once. Each milestone
 is a set of commits that leaves the tree green (`CLAUDE.md` §7 on the touched
@@ -102,6 +102,23 @@ crates); the full gate runs before the PR is opened. Criteria are numbered as in
 - [x] 7.2 Frontend: Markers rows under Cap, Place group, Count value field,
   muted closed-path line.
 
+### Milestone 8: preset data file and loader (0030 criteria 1 to 8)
+
+- [x] 8.1 `document-core`: `data/document-presets.toml`, `document_presets.rs`
+  (`PresetList::parse`, `matching`, `Orientation::of`), the `toml` dependency
+  (default features off), a failing fixture per rule of criterion 6.
+
+### Milestone 9: pick rule, view and session (0030 criteria 10 to 14, 18 to 21)
+
+- [x] 9.1 `ui-core`: `document_presets_view.rs` (`preset_pick_size`,
+  `orientation_swap`, `presets_view`). `editor-wasm`: `resize_document_to`
+  shared by typed sides, presets and orientation; the flat record and three
+  facade calls.
+
+### Milestone 10: Document section presets (0030 criteria 9, 15 to 17)
+
+- [x] 10.1 Frontend: `DocumentPresets.tsx`, `PresetStrip.tsx`, the subject line.
+
 ## Validation
 
 - Rust: unit and integration tests per task, written first for the core logic;
@@ -125,3 +142,10 @@ crates); the full gate runs before the PR is opened. Criteria are numbered as in
   example's number is off.
 - **A system `pointercancel` during a value drag** drops the preview and writes
   nothing (criterion 40), the same path as Escape.
+- **Browser check of the DOM rules (2026-10-10, production build, Browser pane):**
+  no text selection after a value drag; no `dialog`, `listbox` or `menu` role in
+  the page; the panel is 280 px in the Document, Style and collapsed-row states;
+  the Stroke heading stays at the same y when its rows leave and return; the
+  spinbutton exposes `aria-valuemin/max/now/text` and `aria-keyshortcuts`; the Tab
+  order is Paint, eyedropper, hex, area, hue, Opacity, Width, Dash group, Pattern,
+  Join, Cap, Fill Paint; a right press ends picking. The UX review repeats this.
