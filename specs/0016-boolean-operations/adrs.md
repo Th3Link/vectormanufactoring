@@ -325,8 +325,8 @@ assumptions are found by audit, not by the compiler", with this table.
   without an anchor) or `AnchorIds` (an id twice). It takes the base's whole style by `read_style` /
   `write_path_style`, so a rectangle base works as well as a path base.
 - **Measured write cost** (release, this machine): 20,000 anchors in four outlines are written in
-  178 ms, read back in 21 ms, saved in 186 ms (1.6 MB) and reopened in 50 ms; replacing 1,000
-  objects by a result of 4,000 anchors takes 33 ms. That meets criteria 46 and 47 with room, so the
+  199 ms, read back in 23 ms, saved in 203 ms (1.6 MB) and reopened in 55 ms; replacing 1,000
+  objects by a result of 4,000 anchors takes 37 ms. That meets criteria 46 and 47 with room, so the
   packed-coordinate encoding stays rejected.
 - **`contains_point_in_outlines`** is new next to `contains_point`, which now calls it with one
   outline; the old signature is unchanged.

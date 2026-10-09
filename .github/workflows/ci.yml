@@ -329,7 +329,7 @@ jobs:
 
   # The boolean kernel's performance budgets (specs/0016-boolean-operations criteria 44, 45) are
   # defined for a release build; the host gate above builds debug, where the tests only print.
-  # Only this crate's test, ubuntu only, so it stays cheap.
+  # The kernel's budgets and the document write of a big result; ubuntu only, so it stays cheap.
   boolean-budgets:
     name: boolean budgets (release)
     runs-on: ubuntu-latest
@@ -342,7 +342,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Run the boolean performance tests in release
-        run: cargo test --release -p curvyo-geometry-core --test boolean_performance -- --nocapture
+        run: |
+          cargo test --release -p curvyo-geometry-core --test boolean_performance -- --nocapture
+          cargo test --release -p curvyo-document-core --test compound_write_cost -- --nocapture
 
   # Dependency-graph/license check, not compiled code — one run sees every
   # target deny.toml's [graph] lists (including wasm32-unknown-unknown),
