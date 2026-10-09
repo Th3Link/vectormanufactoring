@@ -753,6 +753,23 @@ A `getrandom`/`js-sys`/`wasm-bindgen` presence check, with its own recorded
 allow-list, is still to be written — part of the plugin-host story, not
 before it.
 
+## Windows and macOS tests run nightly only (customer decision 2026-10-09)
+
+The host gate (fmt, clippy, nextest) runs on Windows and macOS only in the
+nightly run of `.github/workflows/ci.yml` (`schedule`, or `workflow_dispatch`
+by hand), never on pull requests or pushes to main. Both platforms are not in
+focus yet, so a break there is found the next morning, not at merge time, and
+may sit red until someone fixes it. Every PR runs the ubuntu host gate, all
+wasm32 jobs, frontend, deny, doc and the boolean budgets.
+
+GitHub branch protection must not list `rust-host-gate (windows-latest)` or
+`rust-host-gate (macos-latest)` as required checks: they never report on a PR,
+so a required check would block every merge.
+
+**Resolution:** move them back to the PR matrix the day Windows or macOS
+matter for a release (change the `os` expression of `rust-host-gate` in
+`ci.yml`), after fixing whatever the nightly run has collected by then.
+
 ## The build needs a local workaround on at least one machine
 
 `.cargo/config.toml` carries `RUST_MIN_STACK = "134217728"` because `rustc`
