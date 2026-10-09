@@ -1,0 +1,19 @@
+format = 1
+
+[[group]]
+id = "paper"
+name = "Paper"
+default_orientation = "portrait"
+  [[group.preset]]
+  id = "a4"
+  name = "A4"
+  short_side = 215.9
+  long_side = 279.4
+  unit = "mm"
+
+  [[group.preset]]
+  id = "letter"
+  name = "Letter"
+  short_side = 8.5
+  long_side = 11
+  unit = "in"
