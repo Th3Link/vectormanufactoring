@@ -111,23 +111,4 @@ impl WasmSession {
     pub fn view_origin_y(&self) -> f64 {
         self.session.screen_to_document(0.0, 0.0).y
     }
-
-    /// The display unit's symbol: `"mm"`, `"cm"` or `"in"`.
-    #[must_use]
-    pub fn display_unit(&self) -> String {
-        self.session.display_unit().symbol().to_string()
-    }
-
-    /// The status bar's cursor readout for a document point in millimetres,
-    /// for example `"x: 12.3  y: 45.6 mm"`.
-    #[must_use]
-    pub fn cursor_text(&self, x_mm: f64, y_mm: f64) -> String {
-        self.session.cursor_text(x_mm, y_mm)
-    }
-
-    /// The status bar's size readout, for example `"210.0 × 297.0 mm"`.
-    #[must_use]
-    pub fn size_text(&self) -> String {
-        self.session.size_text()
-    }
 }

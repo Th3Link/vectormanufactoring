@@ -28,6 +28,8 @@ mod gpu_pipeline;
 #[cfg(target_arch = "wasm32")]
 mod wasm_api;
 #[cfg(target_arch = "wasm32")]
+mod wasm_document;
+#[cfg(target_arch = "wasm32")]
 mod wasm_keys;
 #[cfg(target_arch = "wasm32")]
 mod wasm_move;

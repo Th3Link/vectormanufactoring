@@ -23,6 +23,7 @@
 #[cfg(test)]
 mod box_refit_tests;
 mod corner_readout;
+mod document;
 mod draw;
 mod frame;
 mod keys;
@@ -50,6 +51,8 @@ use curvyo_ui_core::{
     PolygonStarTool, RectangleTool, SelectTool, StyleEditor, Viewport, hit_test,
 };
 
+#[cfg(target_arch = "wasm32")]
+pub use document::{DocumentSide, FitOutcome, SizeOutcome};
 pub use keys::{EscapeStep, KeyHint, KeyInput, KeyOutcome};
 pub use move_indicators::MoveIndicators;
 #[cfg(target_arch = "wasm32")]
