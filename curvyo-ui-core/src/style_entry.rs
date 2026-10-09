@@ -129,12 +129,15 @@ pub fn parse_opacity_percent(text: &str) -> Result<Opacity, StyleEntryError> {
 }
 
 /// Parses the stroke width field, millimetres, with `.` or `,` as the decimal
-/// mark. Zero is allowed: it switches the stroke off.
+/// mark and an optional trailing `mm`. Zero is allowed: it switches the stroke off.
 ///
 /// # Errors
 /// [`StyleEntryError::Width`] for text that is not a number from 0 to 1000.
 pub fn parse_stroke_width(text: &str) -> Result<Length, StyleEntryError> {
-    match parse_entry_number(text, false) {
+    // A trailing unit and the spaces around it are ignored (`0017` criterion 42).
+    let trimmed = text.trim();
+    let number = trimmed.strip_suffix("mm").unwrap_or(trimmed);
+    match parse_entry_number(number, false) {
         Some(mm) if (0.0..=MAX_STROKE_WIDTH_MM).contains(&mm) => Ok(Length::from_mm(mm)),
         _ => Err(StyleEntryError::Width),
     }
