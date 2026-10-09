@@ -100,19 +100,25 @@ out). No frontend change: the Node-bar sentence, the hint chip and the Propertie
 - [x] 16a. Docs: `docs/technical-debt.md` entry "one-outline assumptions are found by audit"; the
   `format_version` paragraph in `document.rs`.
 
-### PR 3: command and UI (later; after PR 2)
+### PR 3: command and UI (after PR 2)
 
-- [ ] 17. Texts of the compound path (decided in PR 2 review): the subject line "Compound path" in
+- [x] 17. Texts of the compound path (decided in PR 2 review): the subject line "Compound path" in
   Rust (`style_scope::kind_name`); `NodeToolbarState.compound_only` and the double-click code
-  `"compound_path"` from Rust, the sentence of criterion 38 as one frontend constant (AC 38).
-- [ ] 17a. `ui-core` `boolean` module: operands in z-order, outlines from snapshots (primitives
-  through `outline_of_rotated`), base operand, kernel call, refusals with counts, selection after
-  (AC 4, 5, 6, 9, 15 to 17, 19, 23).
-- [ ] 18. Session glue and Select bar Boolean group: one Tab stop, roving focus, tooltips, notices,
-  busy state, red outline of offenders, focus to the canvas (AC 1, 2, 3, 18, 22a, 29, 47a).
-- [ ] 19. Exclusion and Reverse difference buttons (question 2 default A) (AC 13).
-- [ ] 20. Performance with the document write: 1,000 rectangles, button press to repaint
-  (AC 46, 47).
+  `"compound_path"` from Rust, the sentence of criterion 38 as one frontend constant
+  (`COMPOUND_NODES_TEXT`), shown in the Node bar slot and the hint chip (AC 38).
+- [x] 17a. `ui-core` `boolean` module: `boolean_availability`, `plan_boolean` (operands in
+  z-order, outlines from snapshots, base operand), refusals with counts (AC 1, 4, 5, 6, 9, 15 to
+  17, 19, 23).
+- [x] 18. Session glue and the Boolean section of the tool rail: `Session::apply_boolean`,
+  `wasm_boolean.rs`, `BooleanCommands.tsx` (one Tab stop, roving focus, tooltips), notice beside the
+  rail, busy state, red outline of offenders (`render-core` `refusal_outline`), focus to the canvas
+  on a mouse press (AC 1, 2, 3, 15 to 18, 22a, 29, 47a). Tests: `ui-core` unit tests,
+  `curvyo-editor-wasm/tests/boolean_command.rs`, `frontend/tests/booleanText.test.ts`.
+- [x] 19. All five buttons, Exclusion and Reverse difference included (question 2 default A)
+  (AC 13).
+- [x] 20. Performance with the document write: 1,000 rectangles Union and two operands of 1,000
+  nodes to the repainted draw list (`curvyo-editor-wasm/tests/boolean_interactivity.rs`, in the
+  `boolean-budgets` CI job) (AC 46, 47).
 
 ### PR 4: preview (later, optional; question 6 default A)
 

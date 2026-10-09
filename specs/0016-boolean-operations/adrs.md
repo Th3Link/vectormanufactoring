@@ -339,6 +339,41 @@ assumptions are found by audit, not by the compiler", with this table.
 - **Four older tests pinned the literal version 7** (the `0015` and `0007` slices' "no bump"
   checks); they now name the build's current version or the constant of this story.
 
+### 2026-10-09: what PR 3 settled (implementer)
+
+- **The command is `Session::apply_boolean(op)`**, only with the Select tool active and no drag in
+  flight (`Ignored` otherwise). It plans in `curvyo-ui-core::boolean::plan_boolean` (operands in
+  stacking order, base = lowest, or the top one for Reverse difference, outlines from snapshots),
+  calls the geometry kernel, and writes with `Document::replace_with_path` in one commit labelled
+  `boolean_<op>`. The result is the only selected object. Refusals carry codes and counts only
+  (`NeedsTwo`, `OpenPaths`, `NoArea`, `OutOfRange`, `Empty`); the sentences are in
+  `frontend/src/lib/booleanText.ts`.
+- **Criterion 1 over the design system's "any active tool".** The spec enables the buttons only
+  with the Select tool; the design-system row says "any active tool". The spec wins (it is the
+  accepted text and the object selection is not drawn in the other tools). The tooltip adds "Use the
+  Select tool." in that case, as criterion 1 says. The design-system row should be corrected.
+  The Pen note "Finish the path first." therefore never shows: with the Pen active the buttons are
+  dimmed for the tool reason.
+- **No "working..." notice.** The kernel runs on the UI thread (no off-thread decision exists), so
+  there is nothing to show after 150 ms that could be painted. The busy state (criterion 47a) is
+  set, two frames are painted, then the call runs: wait cursor on `<html>`, `aria-busy` on the
+  toolbar, and a capture-phase listener that swallows presses and keys until the call returns.
+- **Refusal outline** is a draw-list layer built from the objects the session remembers as
+  offenders; it is valid only while the Select tool is active and the selection is the one the
+  refusal was made for, so a selection or tool change removes it without a call from the host. The
+  host also calls `clear_boolean_refusal` when the notice ends. Not stored, not selectable.
+- **Out of range** (coordinates the 0.001 mm grid cannot hold) has no text in the specification.
+  Written: "<Operation> cannot handle objects this large or this far from the page. Nothing was
+  changed." The customer or UX reviewer may reword it.
+- **Compound path texts.** "Compound path" is the Rust subject line (`style_scope::kind_name`).
+  `NodeToolbarState.compound_only` and the double-click code `"compound_path"` come from Rust; the
+  sentence of criterion 38 is the one constant `COMPOUND_NODES_TEXT`. The Markers block rule of the
+  design system needs no change: there is no Markers UI yet.
+- **Frontend shape.** `BooleanCommands.tsx` (section, tooltips, notice) and `BooleanGlyphs.tsx`
+  are hosted by `ToolRail`; `useBooleanCommands` holds availability, busy and the notice. The
+  `Tool` enum does not grow. `useEditorSession` gained only `applyBoolean`, the `compoundOnly`
+  field and the compound flag of the edit hint.
+
 ### 2026-10-09: where the code lives
 
 - **`curvyo-geometry-core`:** `boolean` (operations, normalization, fold),
