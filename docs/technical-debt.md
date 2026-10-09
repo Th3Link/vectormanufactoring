@@ -74,6 +74,15 @@ the outlines, which no story needs yet (`CLAUDE.md` §5, YAGNI).
 passing the operands' outlines; the write (`Document::replace_with_path`) and the selection stay
 on the UI thread, so the session does not change owner. Then the "working..." notice of 47a applies.
 
+## An out-of-range operand cannot be outlined on the canvas
+
+A boolean refusal for an object beyond 10 km of the point 0, 0 names it only in the count of the
+notice ("1 of 3 selected objects reaches further"): its red outline is drawn at its own
+coordinates, which are off screen by definition. Rare (a file from elsewhere or a far-dragged
+handle). **Trigger:** a maker reports not finding the object. **Resolution:** pan or zoom the
+view to the offending object when the refusal is shown (a view change, which the session does
+not make for any command today).
+
 ## A boolean operation is one commit, but one commit is not one Loro change
 
 `Session::apply_boolean` writes one commit per operation with the label `boolean_<op>`
