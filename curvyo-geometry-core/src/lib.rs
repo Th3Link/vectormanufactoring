@@ -18,6 +18,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 mod boolean;
+mod boolean_cleanup;
 mod boolean_grid;
 mod flatten;
 mod interior;

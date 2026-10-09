@@ -1,5 +1,5 @@
-//! The 0.001 mm integer grid the boolean kernel works on: snapping to it, the overlay calls on it,
-//! the cleanup of a result and its canonical output form.
+//! The 0.001 mm integer grid the boolean kernel works on: snapping to it, the overlay calls on it
+//! and the canonical output form.
 //!
 //! Everything between the snap and the final conversion back to millimetres is integer
 //! arithmetic, which is what makes the kernel's output identical on every target
@@ -29,10 +29,6 @@ pub(crate) const GRID_MM: f64 = 0.001;
 /// The largest absolute coordinate the kernel accepts, in millimetres. 10⁷ mm is 10¹⁰ grid units,
 /// far inside the 64-bit engine's range of ±2⁶² units.
 pub(crate) const MAX_COORDINATE_MM: f64 = 1.0e7;
-
-/// Distance, in grid units, within which a vertex counts as lying on the line between its
-/// neighbours and is dropped (criterion 24).
-const SIMPLIFY_DISTANCE_UNITS: f64 = 1.0;
 
 /// Snaps a point inside `MAX_COORDINATE_MM` to the nearest grid point.
 pub(crate) fn snap(point: Point) -> Point64 {
@@ -97,116 +93,6 @@ pub(crate) fn run(rule: OverlayRule, subjects: &Paths64, clips: &Paths64) -> Pat
 /// nothing. Outer outlines come back with positive area, holes with negative.
 pub(crate) fn normalize(paths: &Paths64) -> Paths64 {
     run(OverlayRule::Subject, paths, &Paths64::new())
-}
-
-/// Whether `b` may be dropped from the run `a`, `b`, `c`: it lies within `SIMPLIFY_DISTANCE_UNITS`
-/// of the line through `a` and `c`. That covers a vertex on a straight run and the tip of a spike
-/// thinner than the grid (a spike where `c` equals `a` has no width at all). The products are
-/// exact in 128-bit integers; the final comparison uses IEEE `sqrt`, the same on every target.
-fn is_removable(a: Point64, b: Point64, c: Point64) -> bool {
-    let (abx, aby) = (
-        i128::from(b.x) - i128::from(a.x),
-        i128::from(b.y) - i128::from(a.y),
-    );
-    let (acx, acy) = (
-        i128::from(c.x) - i128::from(a.x),
-        i128::from(c.y) - i128::from(a.y),
-    );
-    let length_squared = acx * acx + acy * acy;
-    if length_squared == 0 {
-        return true;
-    }
-    let cross = abx * acy - aby * acx;
-    // The distance from `b` to the line is |cross| / |ac|. Precision loss above 2^53 only moves
-    // the threshold by far less than a grid unit.
-    #[allow(clippy::cast_precision_loss)]
-    let within = (cross as f64).abs() <= SIMPLIFY_DISTANCE_UNITS * (length_squared as f64).sqrt();
-    within
-}
-
-/// Drops the vertices of a closed polygon that are within one grid unit of the line between
-/// their neighbours, in one pass with a stack, then around the wrap. Each drop is judged against
-/// the neighbours that remain, so a long gentle run collapses to its end points only if the run
-/// stays within about a unit of them.
-///
-fn remove_near_collinear(path: &Path64) -> Path64 {
-    let mut kept: Path64 = Vec::with_capacity(path.len());
-    for &point in path {
-        while kept.len() >= 2 && is_removable(kept[kept.len() - 2], kept[kept.len() - 1], point) {
-            kept.pop();
-        }
-        if kept.last() != Some(&point) {
-            kept.push(point);
-        }
-    }
-    // The wrap-around: the end and the start are neighbours too.
-    loop {
-        let n = kept.len();
-        if n >= 3 && is_removable(kept[n - 2], kept[n - 1], kept[0]) {
-            kept.pop();
-        } else if n >= 3 && is_removable(kept[n - 1], kept[0], kept[1]) {
-            kept.remove(0);
-        } else {
-            return kept;
-        }
-    }
-}
-
-/// Outlines whose average width is below one grid pitch are dropped (see `is_sliver`).
-const SLIVER_WIDTH_UNITS: f64 = 1.0;
-
-/// Most simplify-and-repair rounds `cleanup` runs. A round removes vertices and a second union
-/// repairs what that crossed, which can leave a new rounded crossing near a line; two rounds
-/// settle every case seen so far, and the bound keeps the cost fixed for any input.
-const MAX_CLEANUP_ROUNDS: usize = 4;
-
-/// Drops the near-collinear vertices of every polygon (see `remove_near_collinear`).
-fn simplify(paths: &Paths64) -> Paths64 {
-    paths.iter().map(remove_near_collinear).collect()
-}
-
-/// Cleans a raw result: removes vertices within one grid unit of the line between their
-/// neighbours, repairs the crossings that may cause with a nonzero union, drops outlines of fewer
-/// than three vertices, of no area, or thinner than one grid pitch on average, and repeats while
-/// something is removed, at most `MAX_CLEANUP_ROUNDS` times (criteria 24 and 41).
-pub(crate) fn cleanup(paths: &Paths64) -> Paths64 {
-    // Always at least one round: removing a vertex can make an outline cross another, and only
-    // the repairing union makes the result simple again. Slivers go inside the loop because
-    // dropping one can turn a touching vertex of its neighbour into a plain collinear one.
-    let mut current = without_slivers(normalize(&simplify(paths)));
-    for _ in 1..MAX_CLEANUP_ROUNDS {
-        let simplified = simplify(&current);
-        if simplified == current {
-            break;
-        }
-        current = without_slivers(normalize(&simplified));
-    }
-    current
-}
-
-/// `paths` without outlines of fewer than three vertices or thinner than a grid pitch.
-fn without_slivers(mut paths: Paths64) -> Paths64 {
-    paths.retain(|path| path.len() >= 3 && !is_sliver(path));
-    paths
-}
-
-/// Whether an outline is thinner than one grid pitch on average, which is rounding noise: its
-/// width, estimated as twice the area over the perimeter (exact for a long strip, half the side
-/// for a square), is below what the grid can place.
-fn is_sliver(path: &[Point64]) -> bool {
-    let mut perimeter = 0.0_f64;
-    let mut previous = path[path.len() - 1];
-    for point in path {
-        // IEEE `sqrt` of a sum of squares, not `hypot`, which platform libraries may round
-        // differently (criterion 43). Precision loss above 2^53 only moves a threshold.
-        #[allow(clippy::cast_precision_loss)]
-        let (dx, dy) = ((point.x - previous.x) as f64, (point.y - previous.y) as f64);
-        perimeter += (dx * dx + dy * dy).sqrt();
-        previous = *point;
-    }
-    #[allow(clippy::cast_precision_loss)]
-    let double_area = double_area(path).unsigned_abs() as f64;
-    double_area < SLIVER_WIDTH_UNITS * perimeter
 }
 
 /// An outline rotated to its canonical start, with the area that orders it.
@@ -344,65 +230,6 @@ mod tests {
         let normalized = normalize(&clockwise);
         assert_eq!(normalized.len(), 1);
         assert_eq!(double_area(&normalized[0]), 200);
-    }
-
-    #[test]
-    fn cleanup_removes_a_vertex_on_the_line_between_its_neighbours() {
-        let square = vec![path(&[
-            (0, 0),
-            (5_000, 0),
-            (10_000, 0),
-            (10_000, 10_000),
-            (0, 10_000),
-        ])];
-        let cleaned = cleanup(&square);
-        assert_eq!(cleaned.len(), 1);
-        assert_eq!(cleaned[0].len(), 4);
-    }
-
-    #[test]
-    fn simplify_drops_run_vertices_spike_tips_and_the_wrap_around_vertex() {
-        // A square with a vertex on every edge, a spike of no width, and the start vertex lying
-        // on the closing edge.
-        let square = path(&[
-            (0, 5_000),
-            (0, 0),
-            (5_000, 0),
-            (10_000, 0),
-            (10_000, 10_000),
-            (5_000, 10_000),
-            (5_000, 20_000),
-            (5_000, 10_000),
-            (0, 10_000),
-        ]);
-        let simplified = remove_near_collinear(&square);
-        assert_eq!(
-            simplified,
-            path(&[(0, 0), (10_000, 0), (10_000, 10_000), (0, 10_000)])
-        );
-    }
-
-    #[test]
-    fn simplify_keeps_a_corner() {
-        let corner = path(&[(0, 0), (1_000, 0), (1_000, 1_000), (0, 1_000)]);
-        assert_eq!(remove_near_collinear(&corner), corner);
-    }
-
-    #[test]
-    fn slivers_thinner_than_a_grid_unit_are_recognised() {
-        assert!(is_sliver(&path(&[
-            (0, 0),
-            (100_000, 0),
-            (100_000, 1),
-            (0, 1)
-        ])));
-        assert!(!is_sliver(&path(&[
-            (0, 0),
-            (100_000, 0),
-            (100_000, 5),
-            (0, 5)
-        ])));
-        assert!(!is_sliver(&path(&[(0, 0), (3, 0), (3, 3), (0, 3)])));
     }
 
     #[test]

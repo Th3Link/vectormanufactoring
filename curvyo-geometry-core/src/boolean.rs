@@ -25,9 +25,9 @@
 use curvyo_document_core::{Point, Tolerance};
 
 use crate::OutlineTriple;
+use crate::boolean_cleanup::cleanup;
 use crate::boolean_grid::{
-    GRID_MM, MAX_COORDINATE_MM, Paths64, canonical_millimetres, cleanup, normalize, run,
-    snap_polygon,
+    GRID_MM, MAX_COORDINATE_MM, Paths64, canonical_millimetres, normalize, run, snap_polygon,
 };
 use crate::flatten::flatten_closed;
 use i_overlay::core::overlay_rule::OverlayRule;

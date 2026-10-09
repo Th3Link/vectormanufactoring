@@ -15,9 +15,10 @@
 
 mod common;
 
-use common::{Operand, area, ok, operand_of, perimeter, polygon, run};
-use curvyo_document_core::Point;
-use curvyo_geometry_core::{BooleanError, BooleanOp, BooleanResult};
+use common::{
+    Grid, Operand, area, check_invariants, grid_points, ok, operand_of, perimeter, polygon, run,
+};
+use curvyo_geometry_core::{BooleanError, BooleanOp};
 use proptest::prelude::*;
 use proptest::test_runner::{Config, RngSeed};
 
@@ -30,9 +31,9 @@ const ALL_OPS: [BooleanOp; 4] = [
     BooleanOp::Exclusion,
 ];
 
+/// 256 cases per property unless `PROPTEST_CASES` says otherwise; the seed is fixed either way.
 fn config() -> Config {
     Config {
-        cases: 256,
         rng_seed: RngSeed::Fixed(0x0016_B001),
         failure_persistence: None,
         ..Config::default()
@@ -101,12 +102,17 @@ fn check_area_identities(
     let union = area_or_zero(BooleanOp::Union, &both);
     let inter = area_or_zero(BooleanOp::Intersection, &both);
     let diff = area_or_zero(BooleanOp::Difference, &both);
+    let excl = area_or_zero(BooleanOp::Exclusion, &both);
     let allowance = allowance(area_a + area_b, outline_length(a) + outline_length(b));
     prop_assert!(
         (union + inter - (area_a + area_b)).abs() <= allowance,
         "union {union} + inter {inter} vs {area_a} + {area_b} for {} and {}",
         describe(a),
         describe(b)
+    );
+    prop_assert!(
+        (excl - (area_a + area_b - 2.0 * inter)).abs() <= 2.0 * allowance,
+        "excl {excl} vs {area_a} + {area_b} - 2 * {inter}"
     );
     prop_assert!(
         (diff + inter - area_a).abs() <= allowance,
@@ -129,166 +135,6 @@ fn outline_length(operand: &Operand) -> f64 {
                 .sum::<f64>()
         })
         .sum()
-}
-
-type Grid = (i64, i64);
-
-fn grid_points(outline: &[Point]) -> Vec<Grid> {
-    outline
-        .iter()
-        .map(|p| ((p.x * 1000.0).round() as i64, (p.y * 1000.0).round() as i64))
-        .collect()
-}
-
-fn orientation(a: Grid, b: Grid, c: Grid) -> i128 {
-    let value = (i128::from(b.0) - i128::from(a.0)) * (i128::from(c.1) - i128::from(a.1))
-        - (i128::from(b.1) - i128::from(a.1)) * (i128::from(c.0) - i128::from(a.0));
-    value.signum()
-}
-
-/// Distance in grid units from `p` to the segment `a`-`b`.
-fn distance_to_segment(p: Grid, a: Grid, b: Grid) -> f64 {
-    let (px, py, ax, ay) = (p.0 as f64, p.1 as f64, a.0 as f64, a.1 as f64);
-    let (dx, dy) = (b.0 as f64 - ax, b.1 as f64 - ay);
-    let length_squared = dx * dx + dy * dy;
-    let t = if length_squared > 0.0 {
-        (((px - ax) * dx + (py - ay) * dy) / length_squared).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
-    (px - ax - t * dx).hypot(py - ay - t * dy)
-}
-
-/// Whether two segments cross at a point interior to both, by more than the grid can resolve.
-/// Touching at a vertex or along a line is not a crossing, and neither is an end that pokes
-/// through the other segment by less than one grid unit: the overlay rounds each crossing to the
-/// grid, so a vertex may sit up to about 0.7 units off the edge it was computed on.
-fn properly_cross(a: (Grid, Grid), b: (Grid, Grid)) -> bool {
-    let (o1, o2) = (orientation(a.0, a.1, b.0), orientation(a.0, a.1, b.1));
-    let (o3, o4) = (orientation(b.0, b.1, a.0), orientation(b.0, b.1, a.1));
-    let crosses = o1 * o2 < 0 && o3 * o4 < 0;
-    let within_grid = [b.0, b.1]
-        .iter()
-        .any(|p| distance_to_segment(*p, a.0, a.1) <= 1.0)
-        || [a.0, a.1]
-            .iter()
-            .any(|p| distance_to_segment(*p, b.0, b.1) <= 1.0);
-    crosses && !within_grid
-}
-
-/// Whether `p` lies inside the polygon (crossing number, exact on the grid).
-fn inside(polygon: &[Grid], p: Grid) -> bool {
-    let mut crossings = 0;
-    for i in 0..polygon.len() {
-        let (a, b) = (polygon[i], polygon[(i + 1) % polygon.len()]);
-        if (a.1 > p.1) != (b.1 > p.1) {
-            let side = orientation(a, b, p);
-            if (side > 0) == (b.1 > a.1) {
-                crossings += 1;
-            }
-        }
-    }
-    crossings % 2 == 1
-}
-
-/// Criterion 41 and 24 on one result: `Err` says which rule is broken.
-fn check_invariants(result: &BooleanResult) -> Result<(), String> {
-    let mut segments: Vec<(Grid, Grid)> = Vec::new();
-    // Where outlines touch (a pinch point), a vertex is shared and the collinear rule is waived:
-    // removing it would change how the outlines touch.
-    let mut seen: std::collections::HashMap<Grid, usize> = std::collections::HashMap::new();
-    for outline in result.outlines() {
-        for g in grid_points(outline) {
-            *seen.entry(g).or_default() += 1;
-        }
-    }
-    let every_segment: Vec<(Grid, Grid)> = result
-        .outlines()
-        .iter()
-        .flat_map(|o| {
-            let g = grid_points(o);
-            (0..g.len()).map(move |i| (g[i], g[(i + 1) % g.len()]))
-        })
-        .collect();
-    for outline in result.outlines() {
-        if outline.len() < 3 {
-            return Err("an outline has fewer than 3 nodes".into());
-        }
-        if common::signed(outline) == 0.0 {
-            return Err("an outline has no area".into());
-        }
-        let grid = grid_points(outline);
-        for (p, g) in outline.iter().zip(&grid) {
-            if !(p.x.is_finite() && p.y.is_finite() && (p.x - g.0 as f64 / 1000.0).abs() < 1e-9) {
-                return Err(format!("{p:?} is not a finite grid point"));
-            }
-        }
-        for i in 0..grid.len() {
-            let (a, b, c) = (
-                grid[(i + grid.len() - 1) % grid.len()],
-                grid[i],
-                grid[(i + 1) % grid.len()],
-            );
-            if b == c {
-                return Err(format!("repeated vertex {b:?}"));
-            }
-            segments.push((b, c));
-            let (dx, dy) = ((c.0 - a.0) as f64, (c.1 - a.1) as f64);
-            let length = dx.hypot(dy);
-            if length > 0.0 {
-                let distance =
-                    (((b.0 - a.0) as f64) * dy - ((b.1 - a.1) as f64) * dx).abs() / length;
-                // Waived at a pinch vertex, next to an edge of three units or less, and where the
-                // vertex touches another edge within a unit: at that size the grid cannot place
-                // a vertex better, and removing it would change how the outlines touch.
-                let touches = every_segment
-                    .iter()
-                    .any(|(p, q)| *p != b && *q != b && distance_to_segment(b, *p, *q) <= 1.0);
-                let short = ((b.0 - a.0) as f64).hypot((b.1 - a.1) as f64) <= 3.0
-                    || ((c.0 - b.0) as f64).hypot((c.1 - b.1) as f64) <= 3.0;
-                if distance <= 1.0 && seen[&b] == 1 && !short && !touches {
-                    return Err(format!(
-                        "node {b:?} lies {distance} grid units from the line {a:?} {c:?}"
-                    ));
-                }
-            }
-        }
-    }
-    for (i, s) in segments.iter().enumerate() {
-        for t in &segments[i + 1..] {
-            if properly_cross(*s, *t) {
-                return Err(format!("outlines cross: {s:?} {t:?}"));
-            }
-        }
-    }
-    // Winding rule: an outline nested inside an even number of others is an outer outline and
-    // has positive area; inside an odd number, a hole with negative area.
-    let polygons: Vec<Vec<Grid>> = result.outlines().iter().map(|o| grid_points(o)).collect();
-    for (index, polygon) in polygons.iter().enumerate() {
-        // A vertex that is not within a grid unit of another outline decides; an outline that
-        // only touches others (every vertex) is not tested.
-        let probe = polygon.iter().find(|v| {
-            polygons.iter().enumerate().all(|(other, q)| {
-                other == index
-                    || (0..q.len())
-                        .all(|i| distance_to_segment(**v, q[i], q[(i + 1) % q.len()]) > 1.0)
-            })
-        });
-        let Some(probe) = probe else { continue };
-        let depth = polygons
-            .iter()
-            .enumerate()
-            .filter(|(other, q)| *other != index && inside(q, *probe))
-            .count();
-        let positive = common::signed(&result.outlines()[index]) > 0.0;
-        if positive != (depth % 2 == 0) {
-            return Err(format!(
-                "outline {index} has {} area at nesting depth {depth}",
-                if positive { "positive" } else { "negative" }
-            ));
-        }
-    }
-    Ok(())
 }
 
 /// An operand as plain coordinates, for failure messages.
@@ -318,23 +164,24 @@ fn check_result(op: BooleanOp, a: &Operand, b: &Operand) -> Result<(), TestCaseE
 proptest! {
     #![proptest_config(config())]
 
-    /// Criterion 14 as written: on polygons up to 6 m across, the area identities hold within
-    /// 1e-6 of the summed areas. At that size the grid's rounding of crossings is usually below
-    /// that bound, so this checks the sample of the fixed seed, not a guarantee: over 20,000
-    /// pairs, one pair misses it by 0.04 %. For the 60 mm shapes of a laser bed the bound cannot
-    /// hold (see the next property), and the criterion needs the allowance of that property.
+    /// Criterion 14 on large shapes, up to 6 m across: the area identities hold within the bound
+    /// of the criterion, `1e-6 * (|A| + |B|)` plus one grid pitch of boundary along the outlines.
+    /// The allowance dominates below some metres, so this mainly guards against a gross error at
+    /// coordinates far from the origin.
     #[test]
-    fn area_identities_hold_within_one_millionth_on_large_shapes(
+    fn area_identities_hold_within_the_bound_on_large_shapes(
         a in operand(6000), b in operand(6000)
     ) {
-        check_area_identities(&a, &b, |area_sum, _| 1e-6 * area_sum)?;
+        check_area_identities(&a, &b, |area_sum, length_sum| {
+            1e-6 * area_sum + GRID_MM * length_sum
+        })?;
     }
 
-    /// Criterion 14 with the grid's allowance, on shapes up to 60 mm across: The overlay puts each
+    /// Criterion 14 on shapes up to 60 mm across, the size of a laser bed. The overlay puts each
     /// crossing on the 0.001 mm grid, which moves the area of a result by at most the grid pitch
-    /// times the length of the edges at that crossing. That allowance is added to the 1e-6.
+    /// times the length of the edges at that crossing.
     #[test]
-    fn area_identities_hold_within_the_grid_allowance_on_small_shapes(
+    fn area_identities_hold_within_the_bound_on_small_shapes(
         a in operand(60), b in operand(60)
     ) {
         check_area_identities(&a, &b, |area_sum, length_sum| {

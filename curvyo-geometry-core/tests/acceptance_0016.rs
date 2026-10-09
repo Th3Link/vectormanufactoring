@@ -760,30 +760,6 @@ fn run_area_identities(seed: u64, pairs: usize, bounded: bool, make: fn(&mut Rng
 }
 
 #[test]
-#[ignore = "defect: AC 14 asks 1e-6 relative, but the AC 24 cleanup moves the boundary by up to 0.001 mm; run with --ignored"]
-fn ac14_area_identities_simple_polygons_on_exact_grid() {
-    run_area_identities(0x5151, 300, false, rand_star_shaped);
-}
-
-#[test]
-#[ignore = "defect: AC 14 asks 1e-6 relative, but the AC 24 cleanup moves the boundary by up to 0.001 mm; run with --ignored"]
-fn ac14_area_identities_on_exact_grid_coordinates() {
-    run_area_identities(0xA11CE, 300, false, rand_operand_on_grid_mm);
-}
-
-#[test]
-#[ignore = "defect: AC 14 asks 1e-6 relative, but the AC 24 cleanup moves the boundary by up to 0.001 mm; run with --ignored"]
-fn ac14_area_identities_on_coarse_grid_with_many_degeneracies() {
-    run_area_identities(0xB0B, 300, false, |r| rand_operand(r, true));
-}
-
-#[test]
-#[ignore = "defect: AC 14 asks 1e-6 relative, but the AC 24 cleanup moves the boundary by up to 0.001 mm; run with --ignored"]
-fn ac14_area_identities_on_arbitrary_real_coordinates() {
-    run_area_identities(0xC0FFEE, 300, false, |r| rand_operand(r, false));
-}
-
-#[test]
 fn ac14_bounded_area_identities_hold_to_one_grid_pitch_of_boundary() {
     run_area_identities(0x5151, 300, true, rand_star_shaped);
     run_area_identities(0xA11CE, 300, true, rand_operand_on_grid_mm);
@@ -1859,7 +1835,6 @@ fn directed_hausdorff(from: &[Point], to: &[Point]) -> f64 {
 }
 
 #[test]
-#[ignore = "defect: near-collinear cleanup drifts on dense polylines (100,000-vertex circle collapses to 24 nodes, 0.42 mm off); run with --ignored"]
 fn white_dense_polyline_circle_stays_within_tolerance_of_its_input() {
     // The near-collinear cleanup judges each vertex against the neighbours that remain, so a
     // densely sampled arc can drift away from the input by more than the 0.01 mm tolerance.

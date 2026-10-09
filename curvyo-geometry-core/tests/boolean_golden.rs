@@ -23,7 +23,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use common::{Anchors, Operand, area, node_count, run};
+use common::{Anchors, Operand, area, check_invariants, node_count, run};
 use curvyo_document_core::{Point, Vec2};
 use curvyo_geometry_core::{BooleanError, BooleanOp, BooleanResult};
 
@@ -148,6 +148,14 @@ fn every_fixture_matches_its_golden_result() {
                 file.display(),
                 started.elapsed()
             );
+            if let Ok(valid) = &result {
+                let rules = check_invariants(valid);
+                assert!(
+                    rules.is_ok(),
+                    "{} {name} breaks the output rules: {rules:?}",
+                    file.display()
+                );
+            }
             write!(expected, "expect {name}\n{}", render(&result)).unwrap();
         }
         if update_requested() {
@@ -220,6 +228,9 @@ fn five_thousand_tiny_squares() {
             "{name} {:?}",
             started.elapsed()
         );
+        if let Ok(valid) = &result {
+            assert_eq!(check_invariants(valid), Ok(()), "{name}");
+        }
         let hash = result.as_ref().map_or(0, |r| {
             r.outlines()
                 .iter()

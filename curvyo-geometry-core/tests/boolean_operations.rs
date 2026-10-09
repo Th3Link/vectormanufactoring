@@ -433,3 +433,141 @@ fn union_does_not_depend_on_operand_order() {
     let backward = run(BooleanOp::Union, &[c, b, a]);
     assert_eq!(forward, backward);
 }
+
+fn distance_to_polyline(p: Point, polyline: &[Point]) -> f64 {
+    (0..polyline.len())
+        .map(|i| {
+            let (a, b) = (polyline[i], polyline[(i + 1) % polyline.len()]);
+            let (dx, dy) = (b.x - a.x, b.y - a.y);
+            let length_squared = dx * dx + dy * dy;
+            let t = if length_squared == 0.0 {
+                0.0
+            } else {
+                (((p.x - a.x) * dx + (p.y - a.y) * dy) / length_squared).clamp(0.0, 1.0)
+            };
+            (p.x - a.x - t * dx).hypot(p.y - a.y - t * dy)
+        })
+        .fold(f64::INFINITY, f64::min)
+}
+
+/// Criterion 25 on random curved operands, which also bounds the drift of the cleanup: the
+/// result of a union with a far-away rectangle stays within 0.01 mm of an independent, dense
+/// flattening of the cubics, in both directions.
+#[test]
+fn random_curved_operands_stay_within_the_kernel_tolerance() {
+    use curvyo_document_core::Vec2;
+    let mut state = 0x2545_F491_4F6C_DD1D_u64;
+    let mut next = move || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        (state >> 11) as f64 / (1_u64 << 53) as f64
+    };
+    for case in 0..30 {
+        let count = 4 + (next() * 6.0) as usize;
+        let radius = 5.0 + next() * 40.0;
+        let anchors: Vec<_> = (0..count)
+            .map(|i| {
+                let angle = std::f64::consts::TAU
+                    * (f64::from(i32::try_from(i).unwrap()) + 0.3 * next())
+                    / f64::from(i32::try_from(count).unwrap());
+                let r = radius * (0.6 + 0.4 * next());
+                let handle = |scale: f64| Vec2::new(-angle.sin() * scale, angle.cos() * scale);
+                let reach = r * (0.1 + 0.4 * next());
+                (
+                    Point::new(r * angle.cos(), r * angle.sin()),
+                    handle(-reach),
+                    handle(reach),
+                )
+            })
+            .collect();
+        let mut dense = Vec::new();
+        for i in 0..anchors.len() {
+            let (from, to) = (anchors[i], anchors[(i + 1) % anchors.len()]);
+            let control = [
+                from.0,
+                from.0.translated(from.2),
+                to.0.translated(to.1),
+                to.0,
+            ];
+            for step in 0..400 {
+                let t = f64::from(step) / 400.0;
+                let m = 1.0 - t;
+                let w = [m * m * m, 3.0 * m * m * t, 3.0 * m * t * t, t * t * t];
+                dense.push(Point::new(
+                    w.iter().zip(&control).map(|(w, p)| w * p.x).sum(),
+                    w.iter().zip(&control).map(|(w, p)| w * p.y).sum(),
+                ));
+            }
+        }
+        let result = ok(
+            BooleanOp::Union,
+            &[single(anchors), single(rect(500.0, 0.0, 510.0, 10.0))],
+        );
+        let curve = result
+            .outlines()
+            .iter()
+            .find(|outline| outline.len() != 4)
+            .unwrap();
+        let outward = curve
+            .iter()
+            .map(|p| distance_to_polyline(*p, &dense))
+            .fold(0.0, f64::max);
+        let inward = dense
+            .iter()
+            .map(|p| distance_to_polyline(*p, curve))
+            .fold(0.0, f64::max);
+        assert!(
+            outward <= 0.01 && inward <= 0.01,
+            "case {case}: {outward} / {inward}"
+        );
+    }
+}
+
+/// Criterion 24b: a polyline circle of 100,000 vertices united with a far-away square keeps its
+/// shape. The cleanup judges runs of near-collinear vertices against their end points, so nothing
+/// drifts: the result is within a grid unit of the input polyline plus the snapping (0.0007 mm),
+/// in both directions, and the area is that of the input within 0.001 mm times the outline length.
+#[test]
+fn a_dense_polyline_circle_keeps_its_shape() {
+    let count = 100_000_u32;
+    let radius = 10.0;
+    let input: Vec<Point> = (0..count)
+        .map(|i| {
+            let angle = std::f64::consts::TAU * f64::from(i) / f64::from(count);
+            Point::new(radius * angle.cos(), radius * angle.sin())
+        })
+        .collect();
+    let pairs: Vec<(f64, f64)> = input.iter().map(|p| (p.x, p.y)).collect();
+    let result = ok(
+        BooleanOp::Union,
+        &[
+            single(polygon(&pairs)),
+            single(rect(100.0, 0.0, 110.0, 10.0)),
+        ],
+    );
+    let circle = result
+        .outlines()
+        .iter()
+        .find(|outline| outline.len() > 4)
+        .unwrap();
+    let limit = 0.0017 + 1e-9;
+    // Every 50th input vertex keeps the test fast; the cleanup itself saw all of them.
+    let outward = input
+        .iter()
+        .step_by(50)
+        .map(|p| distance_to_polyline(*p, circle))
+        .fold(0.0, f64::max);
+    let inward = circle
+        .iter()
+        .map(|p| distance_to_polyline(*p, &input))
+        .fold(0.0, f64::max);
+    assert!(outward <= limit && inward <= limit, "{outward} / {inward}");
+    let input_area = curvyo_geometry_core::signed_area_mm2(&input);
+    let circle_area = curvyo_geometry_core::signed_area_mm2(circle);
+    let length = std::f64::consts::TAU * radius;
+    assert!(
+        (circle_area - input_area).abs() <= 0.001 * length,
+        "{circle_area} vs {input_area}"
+    );
+}
