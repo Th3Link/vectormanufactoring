@@ -72,6 +72,12 @@ impl Default for Zoom {
     }
 }
 
+/// How far the document's top-left corner sits from the canvas's top-left
+/// corner in a new view, CSS pixels on both axes: the tool rail's 12 + 48 + 12,
+/// so the document edge and the 0 ticks of the rulers are not hidden under it
+/// (`specs/0015-document-size-and-rulers/` criterion 11a).
+pub const DOCUMENT_INSET_PX: f64 = 72.0;
+
 /// How far the real width change of a panel toggle may differ from the
 /// announced one, CSS pixels: the host rounds to whole device pixels.
 const PANEL_TOGGLE_TOLERANCE_PX: f64 = 1.5;
@@ -103,6 +109,12 @@ pub struct Viewport {
     /// must keep the view's top-left origin instead of its centre: the
     /// properties panel opening or closing.
     keep_origin_for: Option<f64>,
+    /// Whether the view is still the untouched [`Viewport::with_document_inset`]
+    /// one: resizes keep its origin, so the 72 px inset survives the host's
+    /// first size reports (the canvas is laid out after the session is
+    /// created) and a window resize before the maker pans or zooms. The first
+    /// pan, zoom or drag-pan ends it.
+    inset_view: bool,
 }
 
 impl Viewport {
@@ -116,7 +128,22 @@ impl Viewport {
             canvas_size: (0.0, 0.0),
             drag_pan: None,
             keep_origin_for: None,
+            inset_view: false,
         }
+    }
+
+    /// The view of a project that was just created or opened: 100 % zoom with
+    /// the document's top-left corner [`DOCUMENT_INSET_PX`] right of and below
+    /// the canvas's top-left corner.
+    #[must_use]
+    pub fn with_document_inset() -> Self {
+        let mut viewport = Self::new();
+        viewport.inset_view = true;
+        viewport.origin = Point::new(
+            -DOCUMENT_INSET_PX / viewport.zoom.scale(),
+            -DOCUMENT_INSET_PX / viewport.zoom.scale(),
+        );
+        viewport
     }
 
     /// The plain [`ViewTransform`] `curvyo-render-core` and every
@@ -147,6 +174,7 @@ impl Viewport {
     /// caller's job (`Session::wheel`); this function only ever applies
     /// the delta it is given, on whichever axis.
     pub fn pan_by_screen_delta(&mut self, delta_x: f64, delta_y: f64) {
+        self.inset_view = false;
         let scale = self.zoom.scale();
         self.origin = self
             .origin
@@ -166,6 +194,7 @@ impl Viewport {
     /// instead would place the wrong document point under the cursor
     /// whenever the clamp actually bites.
     pub fn zoom_about(&mut self, screen_x: f64, screen_y: f64, factor: f64) {
+        self.inset_view = false;
         let anchor = self.screen_to_document(screen_x, screen_y);
         self.zoom = Zoom::new(self.zoom.factor() * factor);
         let scale = self.zoom.scale();
@@ -177,6 +206,7 @@ impl Viewport {
     /// anchor [`Viewport::continue_drag_pan`] keeps fixed under the
     /// cursor.
     pub fn begin_drag_pan(&mut self, screen_x: f64, screen_y: f64) {
+        self.inset_view = false;
         self.drag_pan = Some(PanGesture {
             anchor_document_point: self.screen_to_document(screen_x, screen_y),
         });
@@ -248,7 +278,7 @@ impl Viewport {
             (width - old_width - expected).abs() <= PANEL_TOGGLE_TOLERANCE_PX
                 && (height - old_height).abs() <= PANEL_TOGGLE_TOLERANCE_PX
         });
-        if !keep_origin && (old_width > 0.0 || old_height > 0.0) {
+        if !keep_origin && !self.inset_view && (old_width > 0.0 || old_height > 0.0) {
             let scale = self.zoom.scale();
             let delta = Vec2::new((old_width - width) / 2.0, (old_height - height) / 2.0)
                 .scaled(1.0 / scale);
@@ -286,6 +316,40 @@ mod tests {
         let viewport = Viewport::new();
         assert_eq!(viewport.zoom_percent(), 100);
         assert_eq!(viewport.screen_to_document(0.0, 0.0), Point::new(0.0, 0.0));
+    }
+
+    /// Criterion 11a: the document's corner is 72 px in from the canvas's
+    /// corner on both axes, at 100 %.
+    #[test]
+    fn a_new_view_puts_the_document_corner_72_px_in() {
+        let viewport = Viewport::with_document_inset();
+        assert_eq!(viewport.zoom_percent(), 100);
+        let (x, y) = viewport.view().document_to_screen(Point::new(0.0, 0.0));
+        assert!(
+            (x - 72.0).abs() < 1e-9 && (y - 72.0).abs() < 1e-9,
+            "{x} {y}"
+        );
+    }
+
+    /// The inset survives the first size reports (the host reports a
+    /// placeholder size before the layout settles) and a window resize, until
+    /// the maker pans or zooms; then a resize keeps the centre again.
+    #[test]
+    fn the_inset_survives_resizes_until_the_first_pan_or_zoom() {
+        let mut viewport = Viewport::with_document_inset();
+        viewport.resize(1.0, 1.0);
+        viewport.resize(700.0, 500.0);
+        viewport.resize(650.0, 480.0);
+        let (x, y) = viewport.view().document_to_screen(Point::new(0.0, 0.0));
+        assert!(
+            (x - 72.0).abs() < 1e-9 && (y - 72.0).abs() < 1e-9,
+            "{x} {y}"
+        );
+
+        viewport.pan_by_screen_delta(0.0, 0.0);
+        viewport.resize(850.0, 480.0);
+        let (x, _) = viewport.view().document_to_screen(Point::new(0.0, 0.0));
+        assert!((x - 172.0).abs() < 1e-9, "centre kept after a pan: {x}");
     }
 
     #[test]
