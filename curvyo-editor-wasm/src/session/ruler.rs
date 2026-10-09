@@ -1,23 +1,16 @@
-//! `Session`'s view of the rulers and the status bar's unit-aware text
-//! (`specs/0015-document-size-and-rulers/` criteria 1 to 9, 11a, 12 and 21):
-//! the ruler tick layout for the live view, the display unit and size, and the
-//! default view of a new or opened project.
-//!
-//! The frontend draws; every number and every label comes from here.
+//! `Session`'s read-only numbers and texts for the host's chrome in the display
+//! unit: the ruler layout of the live view, the unit, and the status bar texts
+//! (`specs/0015-document-size-and-rulers/` criteria 1 to 9, 12 and 21). The
+//! frontend draws; every number and every label comes from here. PR 3 moves
+//! the unit and the status texts to `session/document.rs` with the document
+//! commands.
 
 use curvyo_document_core::{DisplayUnit, Length};
-use curvyo_ui_core::{RulerAxis, RulerLayout, Viewport, format_cursor, format_size, ruler_layout};
+use curvyo_ui_core::{RulerAxis, RulerLayout, format_cursor, format_size, ruler_layout};
 
 use super::Session;
 
 impl Session {
-    /// Puts the document's top-left corner 72 px in from the canvas's
-    /// top-left corner at 100 % zoom (criterion 11a). The host calls it once
-    /// for a project that was just created or opened.
-    pub fn show_default_view(&mut self) {
-        self.viewport = Viewport::with_document_inset();
-    }
-
     /// The unit lengths are shown in.
     #[must_use]
     pub fn display_unit(&self) -> DisplayUnit {

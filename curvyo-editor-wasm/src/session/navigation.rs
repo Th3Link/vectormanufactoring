@@ -11,6 +11,7 @@
 //! `session/mod.rs` itself defines.
 
 use curvyo_document_core::{Point, ViewTransform};
+use curvyo_ui_core::Viewport;
 
 use super::Session;
 
@@ -33,6 +34,16 @@ fn zoom_factor_from_wheel_delta(delta_y: f64) -> f64 {
 }
 
 impl Session {
+    /// Puts the document's top-left corner 72 px in from the canvas's
+    /// top-left corner at 100 % zoom (criterion 11a). The host calls it once
+    /// for a project that was just created or opened (`WasmSession::new` and
+    /// `open`), not `Session::new`: headless sessions keep the plain view of
+    /// `0004`, which tests rely on. The view keeps that origin through
+    /// window resizes until the first pan or zoom.
+    pub fn show_default_view(&mut self) {
+        self.viewport = Viewport::with_document_inset();
+    }
+
     /// The current view transform, for the host's GPU layer to build
     /// this frame's screen transform from.
     #[must_use]

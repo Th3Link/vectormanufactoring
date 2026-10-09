@@ -704,7 +704,6 @@ fn unusable_scales_give_an_empty_layout() {
 /// major tick whose position is NaN; the layout of an unusable scale is
 /// empty, and this should be too. Remove the `ignore` once fixed.
 #[test]
-#[ignore = "defect 1: ruler_layout returns a major tick with a non-finite px for a NaN/inf origin"]
 fn nonfinite_origin_gives_no_nonfinite_positions() {
     for ox in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
         for s in [
