@@ -23,6 +23,7 @@
 mod boolean;
 #[cfg(test)]
 mod box_refit_tests;
+mod colour_pick;
 mod corner_readout;
 mod document;
 mod draw;
@@ -134,6 +135,8 @@ pub struct Session {
     /// of the stored style, committed once on release
     /// (`specs/0007-stroke-and-fill-styling` criterion 36).
     style: StyleEditor,
+    /// The eyedropper (`colour_pick.rs`).
+    colour_pick: colour_pick::ColourPick,
     /// Pan/zoom view state (ADR 0009 §2: ephemeral — never written to
     /// the document, resets on `New`/`Open`).
     viewport: Viewport,
@@ -207,6 +210,7 @@ impl Session {
             // selection tool exists").
             tool: Tool::Select,
             style: StyleEditor::default(),
+            colour_pick: colour_pick::ColourPick::default(),
             viewport: Viewport::new(),
             hovered: None,
             hovered_object: None,
@@ -239,6 +243,7 @@ impl Session {
             selection: ObjectSelection::new(),
             tool: Tool::Select,
             style: StyleEditor::default(),
+            colour_pick: colour_pick::ColourPick::default(),
             viewport: Viewport::new(),
             hovered: None,
             hovered_object: None,
@@ -287,6 +292,7 @@ impl Session {
         // commits it against whatever is selected *then* instead).
         self.flush_select_bar_preview();
         self.flush_style_preview();
+        self.end_colour_pick();
         self.select.cancel_entry();
         self.select.forget_press();
         self.select.cancel_gesture();
@@ -359,6 +365,9 @@ impl Session {
         // against, if the mouse was released outside the slider itself.
         self.flush_select_bar_preview();
         self.flush_style_preview();
+        if self.colour_pick_press(point) {
+            return;
+        }
         self.button_down = true;
         match self.tool {
             Tool::Select => {
@@ -404,6 +413,9 @@ impl Session {
         self.hovered_object = None;
         self.held.shift = shift;
         self.held.ctrl = constrain;
+        if self.colour_pick_move(point) {
+            return;
+        }
         match self.tool {
             Tool::Select => {
                 self.select_hover(point, self.held);
@@ -442,6 +454,9 @@ impl Session {
     /// alongside `shift` (acceptance criteria 5, 7, 16, 17).
     pub fn pointer_up(&mut self, point: Point, shift: bool, constrain: bool) {
         self.button_down = false;
+        if self.colour_pick_release() {
+            return;
+        }
         let Some(point) = sanitized_point(point) else {
             // A release at a non-finite position cannot be committed to
             // anything; cancel the gesture rather than write NaN.

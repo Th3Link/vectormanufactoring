@@ -8,7 +8,8 @@
 
 use curvyo_document_core::Color;
 use curvyo_ui_core::{
-    DashChoice, Grid, StyleField, ValueField, cap_from_name, hsv_to_rgb, join_from_name, rgb_to_hsv,
+    DashChoice, Grid, PaintTarget, StyleField, ValueField, cap_from_name, hsv_to_rgb,
+    join_from_name, rgb_to_hsv,
 };
 use wasm_bindgen::prelude::*;
 
@@ -161,6 +162,31 @@ impl WasmSession {
     /// The fill Paint switch: one commit.
     pub fn set_fill_paint(&mut self, on: bool) {
         self.session.set_fill_paint(on);
+    }
+
+    /// The eyedropper button: starts picking a colour from the drawing for
+    /// `"stroke"` or `"fill"`; pressing it again ends picking.
+    pub fn begin_colour_pick(&mut self, target_name: &str) {
+        if let Some(target) = PaintTarget::from_name(target_name) {
+            self.session.begin_colour_pick(target);
+        }
+    }
+
+    /// Ends picking and writes nothing (Escape, a press in the panel, a right
+    /// press on the canvas).
+    pub fn end_colour_pick(&mut self) {
+        self.session.end_colour_pick();
+    }
+
+    /// What a click at the pointer would take while picking: empty, or the
+    /// colour as `#RRGGBBAA` and the paint it comes from (`"stroke"` or
+    /// `"fill"`). Call after `pointer_hover`.
+    #[must_use]
+    pub fn colour_pick_hover(&self) -> Vec<String> {
+        self.session
+            .colour_pick_hover()
+            .map(|(hex, paint)| vec![hex, paint.name().to_string()])
+            .unwrap_or_default()
     }
 
     /// The properties panel is about to open (`-280`) or close (`+280`): the

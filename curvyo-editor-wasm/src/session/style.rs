@@ -66,6 +66,9 @@ impl Session {
             });
         // A width dragged to 0 previews as a stroke that is off with its last
         // width kept; the field shows the 0 the drag is at (criterion 8).
+        view.pick_target = self
+            .colour_pick_target()
+            .map_or_else(String::new, |target| target.name().to_string());
         if let Some(StyleEdit::StrokeWidth(width)) = self.style.pending_edit() {
             view.show_width(width.as_mm());
         }
@@ -228,7 +231,7 @@ impl Session {
 
     /// Writes `edit` to every edited object in one commit. `false` when there
     /// is nothing to edit or the document refused it.
-    fn apply_style_edit(&mut self, edit: &StyleEdit) -> bool {
+    pub(super) fn apply_style_edit(&mut self, edit: &StyleEdit) -> bool {
         self.flush_style_preview();
         let ids = self.style_scope().ids;
         !ids.is_empty() && self.document.edit_style(&ids, edit).is_ok()

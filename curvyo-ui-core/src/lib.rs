@@ -17,6 +17,7 @@ mod anchor_id_minter;
 mod angle_snap;
 mod boolean;
 mod colour_hsv;
+mod colour_pick;
 mod conversion;
 mod dash_text;
 mod display_unit_text;
@@ -65,6 +66,7 @@ pub use boolean::{
     BooleanAvailability, BooleanOp, BooleanPlan, BooleanRefusal, boolean_availability, plan_boolean,
 };
 pub use colour_hsv::{Hsv, hsv_to_rgb, rgb_to_hsv};
+pub use colour_pick::{PaintTarget, PickedColour, pick_colour};
 pub use conversion::build_primitive_conversions;
 pub use dash_text::{MAX_DASH_NUMBER, MAX_DASH_NUMBERS, dash_text, parse_dash_text};
 pub use display_unit_text::{

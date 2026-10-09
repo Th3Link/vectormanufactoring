@@ -91,6 +91,10 @@ pub struct StylePanelView {
     pub fill_opacity_mixed: bool,
     /// The fill opacity, percent.
     pub fill_opacity: f64,
+    /// The paint the eyedropper is picking for: `"stroke"`, `"fill"`, or empty
+    /// while picking is off.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub pick_target: String,
     /// The fill opacity as the field shows it.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
     pub fill_opacity_text: String,
@@ -238,6 +242,7 @@ impl StylePanelView {
             fill_opacity_text,
             fill_opacity_bar,
             fill_opacity_resettable,
+            pick_target: String::new(),
         }
     }
 
@@ -290,6 +295,7 @@ impl StylePanelView {
             fill_opacity_text: "100".to_string(),
             fill_opacity_bar: 1.0,
             fill_opacity_resettable: false,
+            pick_target: String::new(),
         }
     }
 }

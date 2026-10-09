@@ -96,7 +96,11 @@ fn certainly_farther_than(object: &ObjectSnapshot, point: Point, margin: f64) ->
     }
 }
 
-fn distance_to_object(object: &ObjectSnapshot, point: Point, tolerance: Tolerance) -> Option<f64> {
+pub(crate) fn distance_to_object(
+    object: &ObjectSnapshot,
+    point: Point,
+    tolerance: Tolerance,
+) -> Option<f64> {
     if certainly_farther_than(object, point, tolerance.as_mm()) {
         return None;
     }
@@ -163,7 +167,7 @@ fn outlines_of(object: &ObjectSnapshot) -> Vec<(Vec<OutlineTriple>, bool)> {
 /// one's is bounded by its real closing segment (acceptance criterion 23). A
 /// compound path's interior is the nonzero winding over all its outlines, so
 /// a hole is not inside it (`specs/0016-boolean-operations` criterion 33).
-fn fills_point(object: &ObjectSnapshot, point: Point) -> bool {
+pub(crate) fn fills_point(object: &ObjectSnapshot, point: Point) -> bool {
     if !object.style().fill.paints() || certainly_farther_than(object, point, 0.0) {
         return false;
     }
