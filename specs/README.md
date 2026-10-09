@@ -1,8 +1,9 @@
 # Feature specs
 
 The list of all features comes first, then the convention for writing them.
-State of this list: 2026-10-09 (the customer renumbered every folder that day;
-see "Numbering" below).
+State of this list: 2026-10-10 (the customer renumbered every folder on
+2026-10-09, see "Numbering" below; the customer requests of 2026-10-09 added
+0030 to 0039 and gave the groups half of 0023 its spec).
 
 Spec-driven development, adapted from
 [spec-driven-dev-kit](https://github.com/trojava/spec-driven-dev-kit) for
@@ -15,7 +16,11 @@ One numbered list. The number is the folder's position in this list:
 without gaps from top to bottom: first what is built (in the order it was
 merged), then what is specified and waiting (in the order the lead starts it),
 then drafts, then MVP slices nobody has specified yet. Rows without a link
-have no folder yet; their number is reserved.
+have no folder yet; their number is reserved. **From 0030 on, numbers are
+assigned in the order the folders are created** and a row sits in the group of
+its state, so inside a group the numbers can be out of order (0023 and 0030 to
+0038 sit in the "specified and waiting" group; the order the lead starts them
+is in "Proposed build order" below).
 
 Columns: **No.** = folder number. **MVP slice** = the label the same feature
 had in the old MVP sequence (slices 1 to 16), `-` for features that came from
@@ -45,16 +50,28 @@ agree for 0001 to 0007 only; see "Spec number versus slice label" below.
 
 0015 and 0016 start first and run in parallel. 0017 follows. 0018 builds on
 0017. 0019 runs after 0017 too: both change `ui-core` and `editor-wasm`, so
-they do not run side by side.
+they do not run side by side. 0023 and 0030 to 0038 were added on 2026-10-10
+from the customer's requests of 2026-10-09; their criteria are complete. 0030,
+0031, 0034 and 0035 are `Ready` (`adrs.md` and UX notes exist); the others are
+`Draft` until `adrs.md` and the UX notes come. Their
+order, dependencies and conflicts are in "Proposed build order" below.
 
 | No. | Slug | What it delivers | Status | Priority | Requirements | MVP slice |
 |---|---|---|---|---|---|---|
-| [0015](0015-document-size-and-rulers/) | `document-size-and-rulers` | Rulers in mm along the top and left, document resize with the content staying centred, fit the document to the drawing, drawing outside the document edge. | Draft, being refined | Must | none yet | - |
-| [0016](0016-boolean-operations/) | `boolean-operations` | Union, difference, intersection, exclusion and reverse difference on closed paths, as a command section in the left tool rail; compound-path results. One PR (#73), built as milestones on one branch. The hover preview of the result is not part of it (see "Specified but not built" below). | In progress | Must | R-EDIT-003 | 9 |
+| [0015](0015-document-size-and-rulers/) | `document-size-and-rulers` | Rulers in mm along the top and left, document resize with the content staying centred, fit the document to the drawing, drawing outside the document edge. | Done (#67, #72) | Must | none yet | - |
+| [0016](0016-boolean-operations/) | `boolean-operations` | Union, difference, intersection, exclusion and reverse difference on closed paths, as a command section in the left tool rail; compound-path results. One PR (#73), built as milestones on one branch. The hover preview of the result is not part of it (see "Specified but not built" below). Amended 2026-10-10: the Boolean operations become their own toolbox card (small `fix/` PR). | Done (#69, #73) | Must | R-EDIT-003 | 9 |
 | [0017](0017-style-panel-rework/) | `style-panel-rework` | Empty panel when nothing is selected, controls hidden instead of disabled, 8-digit RGBA hex, inline colour picker, eyedropper, custom dash text line, GIMP-style value fields, gradients removed. Replaces parts of 0007. | Ready | Must | R-EDIT-005, R-EDIT-006 | - |
 | [0018](0018-stroke-markers/) | `stroke-markers` | Arrow or dot at the start, the end, N places along and on every node of a path. Builds on 0017. | Ready | Should | R-EDIT-005, R-EDIT-016 | - |
 | [0019](0019-multi-object-transform/) | `multi-object-transform` | One group box with the same handles as a single object, for a selection of several objects. Runs after 0017; 0014 is merged. | Ready | Should | R-EDIT-012 | - |
 | 0020 | `undo-redo` | Ctrl+Z and Ctrl+Y undo and redo every editing operation, one interaction = one undo step. **Number reserved, no folder: the customer has ideas that come first.** | Not started | Must | R-EDIT-008 | 8 |
+| [0023](0023-groups/) | `groups` | Group and ungroup, nested groups, enter a group to edit inside it (everything else dimmed, a visible way out), a group moves and transforms as one with the box of 0019; no group style or transform. The grouping half of the old slice `layers-and-grouping`; layers are 0039. Needs a document-model decision by the customer. | Draft (criteria complete; ADR needs-customer, UX notes pending) | Must | R-EDIT-009 | 10 |
+| [0030](0030-document-size-presets/) | `document-size-presets` | Paper sizes A0 to A6 and slide formats 16:9, 16:10, 4:3 as inline buttons in the Document section, a portrait/landscape switch, the selected format derived from the size; the list comes from one validated data file. Delivered inside the 0017 branch as its last milestone (one PR). | Ready | Should | R-EDIT-019 | - |
+| [0031](0031-segment-drag-bending/) | `segment-drag-bending` | In the Node tool, drag a line or curve segment to bend it; the two handles move by a written rule, node types are honoured, blue/black preview, one commit, Escape cancels. | Ready | Should | R-EDIT-020, R-EDIT-001 | - |
+| [0034](0034-pen-path-extension/) | `pen-path-extension` | With the Pen: continue an open path from either end, connect two paths by drawing onto the other's end, close with a sharp or smooth closing node (Shift flips, chip and preview show which), and a Close path command in the Node bar. Milestone M3 of the path-tools slice (one PR with 0016's toolbox fix, 0031 and 0035). | Ready | Should | R-EDIT-022 | - |
+| [0035](0035-combine-and-break-apart/) | `combine-and-break-apart` | Combine closed shapes into one compound path (shapes inside shapes become holes, curves kept, crossing outlines refused); Break apart a compound path into pieces that keep their holes. Brings the second rail column (Path card). Milestone M4 of the path-tools slice (one PR with 0016's toolbox fix, 0031 and 0034). | Ready | Should | R-EDIT-023 | - |
+| [0036](0036-split-at-crossings/) | `split-at-crossings` | Cut the selected paths into separate open pieces wherever they cross or touch each other or themselves, on the exact curves. The customer's word "Split" is interpreted; see its Question 1. | Draft (criteria complete; ADRs and UX notes pending) | Should | R-EDIT-023 | - |
+| [0037](0037-fracture-and-flatten/) | `fracture-and-flatten` | Fracture: cut overlapping shapes into the pieces the overlaps make. Flatten: trim every shape to its visible part and remove hidden shapes. | Draft (criteria complete; ADRs and UX notes pending) | Should | R-EDIT-023 | - |
+| [0038](0038-path-offset/) | `path-offset` | Outset and Inset by a typed distance in mm with Round, Miter or Bevel corners, open paths grow into a closed outline, live blue/black preview, the original kept. Needs a kernel decision (ADR 0003 §4). | Draft (criteria complete; ADRs and UX notes pending) | Should | R-EDIT-007 | - |
 
 ### Specified but not built
 
@@ -72,25 +89,57 @@ own entry when the customer schedules it.
 |---|---|---|---|---|---|---|
 | [0021](0021-ellipse-arcs-and-shaping/) | `ellipse-arcs-and-shaping` | Ellipse arcs, and a Curve handle on ellipse, polygon and star. | Draft | Should | R-EDIT-002 | - |
 | [0022](0022-color-management/) | `color-management` | Palettes, thread palettes for embroidery, colour history, other colour models. A sketch for the customer, after the MVP. | Draft | Could | R-EDIT-017 | - |
+| [0032](0032-pen-tablet-input/) | `pen-tablet-input` | Pen pressure (and tilt, eraser end) from a drawing tablet changes the width of freehand strokes; needs a freehand tool first, a per-platform feasibility check (Linux webview) and a document-model decision. "Later, not now" (customer). | Draft | Could | R-INP-001 | - |
+| [0033](0033-stroke-brushes/) | `stroke-brushes` | Brushes for the stroke (width profile, stamp, pattern along path), a picker in the Stroke section, brushes as data files the maker can add, plugin brushes later; expanded to paths for jobs. After the MVP, 0017, 0018 and the plugin host. | Draft | Could | R-EDIT-021 | - |
 
 ### MVP slices not yet specified (no folder, number reserved)
 
 | No. | Slug | What it delivers | Status | Priority | Requirements | MVP slice |
 |---|---|---|---|---|---|---|
-| 0023 | `layers-and-grouping` | Group and ungroup objects; layers with per-layer visibility and lock, to separate cut, engrave and reference geometry. | Not started | Must | R-EDIT-009 | 10 |
 | 0024 | `svg-import-export` | Open a plain SVG from Inkscape and export it again without hand-fixing geometry; a named, listed loss report for anything outside our supported subset. | Not started | Must | R-SYS-006 | 11 |
 | 0025 | `raster-trace` | Trace a raster image to vector paths with adjustable threshold and colour count, on par with Inkscape's "Trace Bitmap". | Not started | Must | R-VEC-001 | 12 |
 | 0026 | `machine-profile` | Define and reuse a machine profile (work area, connection, limits) for a laser cutter; select it for a project. | Not started | Must | R-MFG-001 | 13 |
 | 0027 | `manufacturing-roles` | Assign a cut or engrave role to geometry (by layer) within one file. | Not started | Must | R-MFG-002 | 14 |
 | 0028 | `material-test-library` | Generate a power/speed test-cut grid for the selected machine, record which cell worked, store it as a reusable material record. | Not started | Must | R-MAT-001, R-MAT-002, R-MAT-003 | 15 |
 | 0029 | `laser-job-preview-and-output` | Toolpath and time preview, an explicit machine and material gate before export, GRBL G-code export for cut and engrave geometry. The MVP's capstone: a maker's own design goes from drawing to a file their laser runs. | Not started | Must | R-MFG-003, R-MFG-LASER-001, R-SYS-008 | 16 |
+| 0039 | `layers` | Layers with per-layer visibility and lock, to separate cut, engrave and reference geometry; the second half of the old slice `layers-and-grouping` (the first half is `0023-groups`). Number assigned 2026-10-10 when 0023 was given to groups. | Not started | Must | R-EDIT-009 | 10 |
 
 Not in this list: Should and Could requirements, and every Must the customer
 deferred past the laser MVP on 2026-10-02 (multi-OS parity and sync, fonts,
 asset management, collaboration, the asset connector, plugins, other machine
 families). They are tracked in `docs/requirements.md` ("MVP (confirmed)" and
 "Explicitly deferred past MVP") and get a number here once the customer
-prioritises them. The next free number is 0030.
+prioritises them. The next free number is 0040.
+
+## Proposed build order (product owner, 2026-10-10)
+
+For 0023 and 0030 to 0038, with the fixed points 0016 (done), 0017, 0018, 0019 and the reserved 0020. The lead decides; this is my reading of dependencies and of which slices can run side by side (at most two implementers, `CLAUDE.md` §4). Almost every slice touches `curvyo-editor-wasm` and `frontend`, so "same crate" cannot be the test; the table names the files and modules that actually collide.
+
+| Spec | Main footprint | Needs first | Collides with |
+|---|---|---|---|
+| 0030 `document-size-presets` | `document-core` (new module and data file), `editor-wasm` `session/document.rs`, the Document section of `PropertiesPanel.tsx` | 0015 (merged) | 0017 (same panel file): after 0017 |
+| 0031 `segment-drag-bending` | `ui-core` `node_tool.rs`, `render-core` preview, `editor-wasm` `session/node.rs`, `document-core` (one commit) | none | 0034 (both amend `0002`; separate modules) |
+| 0034 `pen-path-extension` | `ui-core` `pen_tool.rs` and hit test, `render-core` pen preview, `editor-wasm` `session/pen.rs` and `draw.rs`, hint chip, Node and Select bars | none | 0031 (see above); the bars with 0035 to 0038 |
+| 0023 `groups` | `document-core` (tree, format), `storage-io`, `ui-core` selection, hit test and boxes, `render-core` dimming, `editor-wasm`, `frontend` | 0019 (group box), 0016; customer's model decision | 0019, and every spec that selects objects |
+| 0035 `combine-and-break-apart` | `document-core` compound ops, `geometry-core` nesting and crossing test, rail buttons | 0016 merged; the rail layout decision | 0036, 0037, 0038 only through the rail |
+| 0036 `split-at-crossings` | `geometry-core` (new curve-intersection module), rail button | 0016 merged; the rail layout decision | 0037, 0038 (same crate) |
+| 0037 `fracture-and-flatten` | `geometry-core` (kernel use), rail buttons | 0016 merged; the rail layout decision | 0036, 0038 (same crate) |
+| 0038 `path-offset` | `geometry-core` (offset, maybe a new dependency), an entry widget, `render-core` preview | 0016 merged; the kernel check of ADR 0003 §4 | 0036, 0037 (same crate) |
+| 0032 `pen-tablet-input` | pointer input in `frontend` and `editor-wasm`, possibly the Tauri host; the stroke width model | a freehand tool (no spec yet), the platform spike | 0033 (width model) |
+| 0033 `stroke-brushes` | style model, `render-core`, `geometry-core` generators, panel row, plugin host | 0017, 0018, the plugin host | 0018, 0032 (style and width model) |
+
+**Waves, two slices at a time after 0017** (a slice from a wave may start as soon as its own "needs first" is merged):
+
+1. 0017 (0016 is done; its toolbox amendment is a small `fix/` PR).
+2. 0019 and 0030. (0030 after 0017 merges.)
+3. 0031 and 0018. Disjoint: node tool against style model and panel.
+4. 0020 `undo-redo`, alone: it touches every commit path, and every new command above would otherwise ship with "No undo yet." If the customer's undo ideas are not ready, skip to 5 and let 0034 to 0038 ship with the notices as written.
+5. 0034 and 0035. Disjoint: Pen against compound outlines. 0035 needs the rail layout decision (below).
+6. 0023 and 0038. Disjoint: document model and selection against the kernel. 0038 needs the ADR 0003 §4 check first, 0023 the customer's model decision.
+7. 0036, then 0037, one after the other (both extend `geometry-core`), each next to a slice that does not (0039 `layers` after 0023, or an MVP slice such as 0024).
+8. After the MVP: the freehand tool and 0032 (after a spike with a real tablet), then 0033 (after the plugin host).
+
+**One decision that blocks the UI of five slices: the left rail is full.** With the Boolean section it is 501 px high and the 800 x 600 viewport has 546 px (`0016` Question 1). Group and Ungroup (0023), Combine and Break apart (0035), Split (0036), Fracture and Flatten (0037) are nine more command buttons, and Offset (0038) a tenth. The ux-engineer decides once, before 0035 starts: two columns, a scrolling rail, collapsible command sections, or moving some commands to the Select bar. The specs say "where they sit is the ux-engineer's decision" and define behaviour only.
 
 ## The MVP and its sequence
 
@@ -116,8 +165,9 @@ The old MVP list numbered the slices 1 to 16 and gave folders the same
 number. Since the customer asked for one consecutive numbering of all specs,
 the folder number now follows the list above, and the slice label lives in the
 "MVP slice" column. The two agree for 0001 to 0007. After that they differ:
-slice 8 `undo-redo` is 0020, slice 9 `boolean-operations` is 0016, and slices
-10 to 16 are 0023 to 0029. Existing text that says "slice 5" or "slice 8"
+slice 8 `undo-redo` is 0020, slice 9 `boolean-operations` is 0016, slice 10
+`layers-and-grouping` is split into 0023 `groups` and 0039 `layers`, and slices
+11 to 16 are 0024 to 0029. Existing text that says "slice 5" or "slice 8"
 means the old label. Text that says `0005` or `specs/0005-object-transform/`
 means the folder.
 
@@ -163,9 +213,12 @@ a reader refuses a file with a higher number ("saved by a newer version").
 | Version | Taken by | State |
 |---|---|---|
 | 7 | 0007 `stroke-and-fill-styling` | On `main` |
-| 8 | 0016 `boolean-operations` (compound path, PR #73) | On `main` |
+| 8 | 0016 `boolean-operations` (compound path, PR #73) | Done, merged |
 | 9 | 0017 `style-panel-rework` (odd dash lists) and 0018 `stroke-markers`, one PR | In progress (`story/style-panel-rework`) |
 | none | 0015 `document-size-and-rulers` | No bump (its `adrs.md`, decision 1) |
+| next free at merge | 0023 `groups` (a group node with children) | Planned; a document-model change that needs the customer |
+| next free at merge | 0033 `stroke-brushes` (brush reference and embedded definition) | Draft, after the MVP |
+| none | 0030, 0031, 0034, 0035, 0036, 0037, 0038 | No bump: they write existing object kinds (0035 to 0037 use the compound path of 0016) |
 
 A spec does not hard-code a version number it does not own; it says "next free
 at merge". Only 0016 names a number (8), because it is the one that merges
