@@ -7,8 +7,8 @@
 
 use curvyo_document_core::{Color, LineCap, LineJoin, StyleEdit};
 use curvyo_ui_core::{
-    DashChoice, StyleEntryError, StyleField, StylePanelState, StyleScope, StyleTool, hsv_to_rgb,
-    parse_dash_text, style_panel_state, style_scope,
+    BarValue, DashChoice, Grid, StyleEntryError, StyleField, StylePanelState, StyleScope,
+    StyleTool, ValueField, hsv_to_rgb, parse_dash_text, style_panel_state, style_scope,
 };
 
 use super::style_view::StylePanelView;
@@ -59,10 +59,17 @@ impl Session {
     #[must_use]
     pub fn style_panel_view(&self) -> StylePanelView {
         let key = format!("{:?}", self.style_scope().ids);
-        self.style_panel_state()
+        let mut view = self
+            .style_panel_state()
             .map_or_else(StylePanelView::empty, |state| {
                 StylePanelView::new(&state, key)
-            })
+            });
+        // A width dragged to 0 previews as a stroke that is off with its last
+        // width kept; the field shows the 0 the drag is at (criterion 8).
+        if let Some(StyleEdit::StrokeWidth(width)) = self.style.pending_edit() {
+            view.show_width(width.as_mm());
+        }
+        view
     }
 
     /// Whether a canvas pointer press is in flight (the button is down): the
@@ -139,6 +146,47 @@ impl Session {
     /// style and the release then writes nothing.
     pub fn cancel_style_preview(&mut self) {
         self.style.cancel();
+    }
+
+    /// A tick of a value field drag (`specs/0017-style-panel-rework` criteria
+    /// 36 to 47): the field's scale maps position `p` (`0` to `1`) to a value,
+    /// rounded to `grid`; it is shown without writing. The gesture ends with
+    /// [`Session::commit_style_preview`] or [`Session::cancel_style_preview`].
+    pub fn preview_value_field(&mut self, field: ValueField, p: f64, grid: Grid) {
+        let scale = field.scale();
+        let value = scale.round(scale.value_at(p), grid);
+        self.preview_style_edit(field.edit(value));
+    }
+
+    /// An arrow key on a value field (criterion 43): `steps` steps from the
+    /// shown value on `grid`, previewed; the key-up commits. Does nothing while
+    /// the edited objects differ (criterion 44) or when there is nothing to edit.
+    pub fn step_value_field(&mut self, field: ValueField, steps: i32, grid: Grid) {
+        let Some(state) = self.style_panel_state() else {
+            return;
+        };
+        let shown = match field {
+            ValueField::StrokeWidth => match state.stroke.width {
+                BarValue::Uniform(width) => width.as_mm(),
+                BarValue::Mixed => return,
+            },
+            ValueField::StrokeOpacity => match state.stroke.opacity {
+                BarValue::Uniform(opacity) => opacity.get() * 100.0,
+                BarValue::Mixed => return,
+            },
+            ValueField::FillOpacity => match state.fill.opacity {
+                BarValue::Uniform(opacity) => opacity.get() * 100.0,
+                BarValue::Mixed => return,
+            },
+        };
+        self.preview_style_edit(field.edit(field.scale().step(shown, steps, grid)));
+    }
+
+    /// The reset icon or `Ctrl+Backspace` (criterion 61): every edited object
+    /// takes the field's default, one commit. Writes nothing when the value
+    /// already is the default; `false` when there is nothing to edit.
+    pub fn reset_value_field(&mut self, field: ValueField) -> bool {
+        self.apply_style_edit(&field.reset_edit())
     }
 
     /// The stroke Paint switch (criterion 5): one commit.

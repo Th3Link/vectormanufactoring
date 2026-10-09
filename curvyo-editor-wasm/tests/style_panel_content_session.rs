@@ -377,3 +377,174 @@ fn a_list_of_more_than_sixteen_numbers_from_a_file_is_shown_in_full_and_not_rewr
     let text = session.style_panel_view().stroke_dash_text;
     assert_eq!(text.split(' ').count(), 20);
 }
+
+// ---- value fields (criteria 36 to 47, 61) ----------------------------------
+
+use curvyo_ui_core::{Grid, ValueField, ValueScale};
+
+/// How many operations the document has recorded: a gesture that wrote once per
+/// tick would record more than one that wrote once on release.
+fn op_count(session: &Session) -> i32 {
+    let document = unpack(9, &session.pack("0.1.0").unwrap()).unwrap();
+    let loro = loro::LoroDoc::new();
+    loro.import(&document.export_loro_snapshot().unwrap())
+        .unwrap();
+    loro.oplog_vv().values().copied().sum()
+}
+
+#[test]
+fn a_width_drag_previews_per_tick_and_commits_once_on_release() {
+    let mut session = session_with_rectangles(1);
+    let ops = op_count(&session);
+    for p in [0.2, 0.4, 0.3] {
+        session.preview_value_field(ValueField::StrokeWidth, p, Grid::Normal);
+    }
+    assert_eq!(op_count(&session), ops, "nothing written while dragging");
+    let shown = session.style_panel_view();
+    let want = ValueScale::StrokeWidth.round(ValueScale::StrokeWidth.value_at(0.3), Grid::Normal);
+    assert_eq!(shown.stroke_width, want, "the field follows the drag");
+    assert_eq!(shown.stroke_width_text, ValueScale::StrokeWidth.text(want));
+    session.commit_style_preview();
+    assert_eq!(
+        stored_styles(&session)[0].stroke.width,
+        Length::from_mm(want)
+    );
+}
+
+#[test]
+fn a_drag_that_ends_where_it_began_commits_nothing() {
+    let mut session = session_with_rectangles(1);
+    let ops = op_count(&session);
+    session.preview_value_field(ValueField::StrokeOpacity, 0.5, Grid::Normal);
+    session.preview_value_field(ValueField::StrokeOpacity, 1.0, Grid::Normal);
+    session.commit_style_preview();
+    assert_eq!(op_count(&session), ops);
+}
+
+#[test]
+fn escape_during_a_drag_restores_the_value_and_the_release_writes_nothing() {
+    let mut session = session_with_rectangles(1);
+    let ops = op_count(&session);
+    session.preview_value_field(ValueField::StrokeOpacity, 0.3, Grid::Normal);
+    session.cancel_style_preview();
+    assert_eq!(session.style_panel_view().stroke_opacity, 100.0);
+    // Further ticks after Escape are ignored until the release.
+    session.preview_value_field(ValueField::StrokeOpacity, 0.2, Grid::Normal);
+    assert_eq!(session.style_panel_view().stroke_opacity, 100.0);
+    session.commit_style_preview();
+    assert_eq!(op_count(&session), ops);
+}
+
+#[test]
+fn dragging_the_width_to_zero_keeps_the_row_until_the_release() {
+    let mut session = session_with_rectangles(1);
+    session.preview_value_field(ValueField::StrokeWidth, 0.0, Grid::Normal);
+    let state = session.style_panel_state().unwrap();
+    assert!(
+        state.stroke.rows_shown,
+        "criterion 8: the row stays mid-drag"
+    );
+    assert_eq!(session.style_panel_view().stroke_width_text, "0");
+    session.commit_style_preview();
+    let stroke = stored_styles(&session)[0].stroke.clone();
+    assert!(!stroke.enabled);
+    assert_eq!(
+        stroke.width,
+        Length::from_mm(0.25),
+        "the last width is kept"
+    );
+    assert!(!session.style_panel_state().unwrap().stroke.rows_shown);
+}
+
+#[test]
+fn the_arrow_keys_step_on_the_grid_and_a_held_key_is_one_commit() {
+    let mut session = session_with_rectangles(1);
+    let ops = op_count(&session);
+    for _ in 0..3 {
+        session.step_value_field(ValueField::StrokeWidth, 1, Grid::Normal);
+    }
+    assert_eq!(op_count(&session), ops);
+    assert_eq!(session.style_panel_view().stroke_width_text, "0.28");
+    session.commit_style_preview();
+    assert_eq!(
+        stored_styles(&session)[0].stroke.width,
+        Length::from_mm(0.28)
+    );
+    session.step_value_field(ValueField::StrokeOpacity, -1, Grid::Coarse);
+    session.commit_style_preview();
+    assert_eq!(stored_styles(&session)[0].stroke.opacity, percent(90));
+}
+
+#[test]
+fn arrow_keys_do_nothing_while_the_values_differ() {
+    let mut session = session_with_rectangles(2);
+    select_first(&mut session, 1);
+    session
+        .set_style_text(StyleField::StrokeWidth, "2")
+        .unwrap();
+    select_first(&mut session, 2);
+    assert!(session.style_panel_view().stroke_width_mixed);
+    session.step_value_field(ValueField::StrokeWidth, 1, Grid::Normal);
+    session.commit_style_preview();
+    let widths: Vec<Length> = stored_styles(&session)
+        .iter()
+        .map(|s| s.stroke.width)
+        .collect();
+    assert_eq!(widths, [Length::from_mm(2.0), Length::from_mm(0.25)]);
+    // A drag then sets all of them to the value under the pointer.
+    session.preview_value_field(ValueField::StrokeWidth, 0.5, Grid::Normal);
+    session.commit_style_preview();
+    let widths: Vec<Length> = stored_styles(&session)
+        .iter()
+        .map(|s| s.stroke.width)
+        .collect();
+    assert_eq!(widths[0], widths[1]);
+    assert_eq!(widths[0], Length::from_mm(1.82));
+}
+
+#[test]
+fn reset_sets_every_object_to_the_default_in_one_commit_and_does_nothing_at_the_default() {
+    let mut session = session_with_rectangles(2);
+    select_first(&mut session, 1);
+    session
+        .set_style_text(StyleField::StrokeWidth, "3")
+        .unwrap();
+    select_first(&mut session, 2);
+    let view = session.style_panel_view();
+    assert!(view.stroke_width_resettable, "mixed shows the icon");
+    assert!(!view.stroke_opacity_resettable, "at the default: hidden");
+    assert!(session.reset_value_field(ValueField::StrokeWidth));
+    assert!(
+        stored_styles(&session)
+            .iter()
+            .all(|s| s.stroke.width == Length::from_mm(0.25))
+    );
+    assert!(!session.style_panel_view().stroke_width_resettable);
+    let ops = op_count(&session);
+    session.reset_value_field(ValueField::StrokeWidth);
+    assert_eq!(op_count(&session), ops, "nothing written at the default");
+}
+
+#[test]
+fn a_reset_of_the_width_is_an_edit_that_turns_an_off_stroke_on() {
+    let mut session = session_with_rectangles(1);
+    session.set_stroke_paint(false);
+    // An off stroke keeps its width 0.25: nothing differs, so nothing is written.
+    assert!(session.reset_value_field(ValueField::StrokeWidth));
+    assert!(stored_styles(&session)[0].stroke.enabled);
+}
+
+#[test]
+fn the_view_carries_bar_text_and_a_full_bar_above_the_drag_range() {
+    let mut session = session_with_rectangles(1);
+    let view = session.style_panel_view();
+    assert_eq!(view.stroke_width_text, "0.25");
+    assert!((view.stroke_width_bar * 244.0 - 43.0).abs() < 0.6);
+    assert_eq!(view.stroke_opacity_bar, 1.0);
+    session
+        .set_style_text(StyleField::StrokeWidth, "500")
+        .unwrap();
+    let view = session.style_panel_view();
+    assert_eq!(view.stroke_width_bar, 1.0);
+    assert_eq!(view.stroke_width_text, "500");
+}

@@ -8,7 +8,7 @@
 
 use curvyo_document_core::Color;
 use curvyo_ui_core::{
-    DashChoice, StyleField, cap_from_name, hsv_to_rgb, join_from_name, rgb_to_hsv,
+    DashChoice, Grid, StyleField, ValueField, cap_from_name, hsv_to_rgb, join_from_name, rgb_to_hsv,
 };
 use wasm_bindgen::prelude::*;
 
@@ -76,6 +76,37 @@ impl WasmSession {
         if let Some(field) = field(field_name) {
             self.session.preview_style_opacity(field, percent);
         }
+    }
+
+    /// A tick of a value field drag: position `p` (`0` to `1`) on the field's
+    /// scale, rounded to `grid` (`"normal"`, `"coarse"` or `"fine"`), shown
+    /// without writing. `field_name` is `"stroke-width"`, `"stroke-opacity"` or
+    /// `"fill-opacity"`.
+    pub fn preview_value_field(&mut self, field_name: &str, p: f64, grid_name: &str) {
+        if let (Some(field), Some(grid)) = (
+            ValueField::from_name(field_name),
+            Grid::from_name(grid_name),
+        ) {
+            self.session.preview_value_field(field, p, grid);
+        }
+    }
+
+    /// An arrow key on a value field: `steps` steps from the shown value,
+    /// previewed; the key-up commits.
+    pub fn step_value_field(&mut self, field_name: &str, steps: i32, grid_name: &str) {
+        if let (Some(field), Some(grid)) = (
+            ValueField::from_name(field_name),
+            Grid::from_name(grid_name),
+        ) {
+            self.session.step_value_field(field, steps, grid);
+        }
+    }
+
+    /// The reset icon or `Ctrl+Backspace`: the field's default for every edited
+    /// object, one commit (none when the value already is the default). `false`
+    /// when there is nothing to edit.
+    pub fn reset_value_field(&mut self, field_name: &str) -> bool {
+        ValueField::from_name(field_name).is_some_and(|field| self.session.reset_value_field(field))
     }
 
     /// The release, key-up or blur of a panel drag: one commit to the objects

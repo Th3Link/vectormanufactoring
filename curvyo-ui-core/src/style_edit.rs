@@ -42,6 +42,12 @@ impl StyleEditor {
         }
     }
 
+    /// The edit being previewed, if any.
+    #[must_use]
+    pub fn pending_edit(&self) -> Option<&StyleEdit> {
+        self.pending.as_ref().map(|pending| &pending.edit)
+    }
+
     /// Whether a preview is showing.
     #[must_use]
     pub const fn is_active(&self) -> bool {

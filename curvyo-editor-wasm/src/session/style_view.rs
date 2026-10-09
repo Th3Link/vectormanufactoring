@@ -2,8 +2,10 @@
 //! reads (ADR 0001 §5): one read after every change, no editing logic. Kept
 //! apart from `style.rs` so the conversion is plain Rust a host test can pin.
 
-use curvyo_document_core::{Color, LineCap, LineJoin, Style};
-use curvyo_ui_core::{BarValue, DashChoice, DashShown, Rgba, StylePanelState, hex_text};
+use curvyo_document_core::{Color, Length, LineCap, LineJoin, Style};
+use curvyo_ui_core::{
+    BarValue, DashChoice, DashShown, Rgba, StylePanelState, ValueScale, hex_text,
+};
 
 /// What the Style panel shows. A `*_mixed` flag means the edited objects
 /// differ (the field is empty with the placeholder "Mixed"); the value beside
@@ -44,6 +46,20 @@ pub struct StylePanelView {
     pub stroke_width_mixed: bool,
     /// The stroke width, millimetres.
     pub stroke_width: f64,
+    /// The width as the field shows it (up to three decimals).
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub stroke_width_text: String,
+    /// The share of the field's width the bar is filled to (`0` to `1`).
+    pub stroke_width_bar: f64,
+    /// The value differs from the default or is mixed: the reset icon shows.
+    pub stroke_width_resettable: bool,
+    /// The stroke opacity as the field shows it.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub stroke_opacity_text: String,
+    /// The bar position of the stroke opacity.
+    pub stroke_opacity_bar: f64,
+    /// The reset icon of the stroke opacity shows.
+    pub stroke_opacity_resettable: bool,
     /// The pressed preset: `"solid"`, `"dash"`, `"dot"`, `"dash-dot"`,
     /// `"none"` (a list that is no preset) or `"mixed"`.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
@@ -75,6 +91,13 @@ pub struct StylePanelView {
     pub fill_opacity_mixed: bool,
     /// The fill opacity, percent.
     pub fill_opacity: f64,
+    /// The fill opacity as the field shows it.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub fill_opacity_text: String,
+    /// The bar position of the fill opacity.
+    pub fill_opacity_bar: f64,
+    /// The reset icon of the fill opacity shows.
+    pub fill_opacity_resettable: bool,
 }
 
 fn word<T: Copy>(value: BarValue<T>, name: impl Fn(T) -> &'static str) -> String {
@@ -86,6 +109,13 @@ fn word<T: Copy>(value: BarValue<T>, name: impl Fn(T) -> &'static str) -> String
 
 fn pack_rgb(color: Color) -> u32 {
     u32::from(color.r) << 16 | u32::from(color.g) << 8 | u32::from(color.b)
+}
+
+fn map_value<T: Copy>(value: BarValue<T>, convert: impl Fn(T) -> f64) -> BarValue<f64> {
+    match value {
+        BarValue::Uniform(v) => BarValue::Uniform(convert(v)),
+        BarValue::Mixed => BarValue::Mixed,
+    }
 }
 
 /// `(mixed, value)` of a colour, `0` when mixed.
@@ -112,6 +142,20 @@ fn hex(value: BarValue<Rgba>) -> (bool, String) {
     }
 }
 
+/// `(text, bar, resettable)` of a value field: the text it shows, the share of
+/// its width the bar fills, and whether the reset icon shows (the value is
+/// mixed or not the default).
+fn value_field(scale: ValueScale, value: BarValue<f64>) -> (String, f64, bool) {
+    match value {
+        BarValue::Uniform(v) => (
+            scale.text(v),
+            scale.position_of(v),
+            (v - scale.default_value()).abs() > 1e-9,
+        ),
+        BarValue::Mixed => (String::new(), 0.0, true),
+    }
+}
+
 impl StylePanelView {
     /// The record for `state`, tagged with the key of the edited objects.
     #[must_use]
@@ -122,6 +166,18 @@ impl StylePanelView {
         let (fill_color_mixed, fill_color) = colour(state.fill.color);
         let (fill_hex_mixed, fill_hex) = hex(state.fill.rgba);
         let (fill_opacity_mixed, fill_opacity) = percent(state.fill.opacity);
+        let (stroke_width_text, stroke_width_bar, stroke_width_resettable) = value_field(
+            ValueScale::StrokeWidth,
+            map_value(state.stroke.width, Length::as_mm),
+        );
+        let (stroke_opacity_text, stroke_opacity_bar, stroke_opacity_resettable) = value_field(
+            ValueScale::Opacity,
+            map_value(state.stroke.opacity, |o| o.get() * 100.0),
+        );
+        let (fill_opacity_text, fill_opacity_bar, fill_opacity_resettable) = value_field(
+            ValueScale::Opacity,
+            map_value(state.fill.opacity, |o| o.get() * 100.0),
+        );
         let (stroke_width_mixed, stroke_width) = match state.stroke.width {
             BarValue::Uniform(width) => (false, width.as_mm()),
             BarValue::Mixed => (true, 0.0),
@@ -153,6 +209,12 @@ impl StylePanelView {
             stroke_opacity,
             stroke_width_mixed,
             stroke_width,
+            stroke_width_text,
+            stroke_width_bar,
+            stroke_width_resettable,
+            stroke_opacity_text,
+            stroke_opacity_bar,
+            stroke_opacity_resettable,
             stroke_dash,
             stroke_dash_text,
             stroke_join: word(state.stroke.join, |join| match join {
@@ -173,7 +235,20 @@ impl StylePanelView {
             fill_hex_mixed,
             fill_opacity_mixed,
             fill_opacity,
+            fill_opacity_text,
+            fill_opacity_bar,
+            fill_opacity_resettable,
         }
+    }
+
+    /// Shows `width` (millimetres) in the Width field, for a drag in flight.
+    pub fn show_width(&mut self, width: f64) {
+        self.stroke_width = width;
+        self.stroke_width_mixed = false;
+        self.stroke_width_text = ValueScale::StrokeWidth.text(width);
+        self.stroke_width_bar = ValueScale::StrokeWidth.position_of(width);
+        self.stroke_width_resettable =
+            (width - ValueScale::StrokeWidth.default_value()).abs() > 1e-9;
     }
 
     /// The record while there is nothing to edit: the host renders no Style
@@ -194,6 +269,12 @@ impl StylePanelView {
             stroke_opacity: defaults.stroke.opacity.get() * 100.0,
             stroke_width_mixed: false,
             stroke_width: defaults.stroke.width.as_mm(),
+            stroke_width_text: ValueScale::StrokeWidth.text(defaults.stroke.width.as_mm()),
+            stroke_width_bar: ValueScale::StrokeWidth.position_of(defaults.stroke.width.as_mm()),
+            stroke_width_resettable: false,
+            stroke_opacity_text: "100".to_string(),
+            stroke_opacity_bar: 1.0,
+            stroke_opacity_resettable: false,
             stroke_dash: "solid".to_string(),
             stroke_dash_text: String::new(),
             stroke_join: "miter".to_string(),
@@ -206,6 +287,9 @@ impl StylePanelView {
             fill_hex_mixed: false,
             fill_opacity_mixed: false,
             fill_opacity: defaults.fill.opacity.get() * 100.0,
+            fill_opacity_text: "100".to_string(),
+            fill_opacity_bar: 1.0,
+            fill_opacity_resettable: false,
         }
     }
 }
