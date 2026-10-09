@@ -1,5 +1,5 @@
 import { Tooltip } from "radix-ui";
-import { forwardRef } from "react";
+import { forwardRef, useRef, useState } from "react";
 
 import { BooleanGlyph } from "@/components/BooleanGlyphs";
 import {
@@ -36,8 +36,21 @@ export const BooleanButton = forwardRef<HTMLButtonElement, BooleanButtonProps>(
     ref,
   ) {
     const dimmed = availability.needsTwo;
+    // A press on a dimmed button leaves its tooltip open: it is the explanation. Radix closes a
+    // tooltip on a press by itself, so the open state is ours and ignores that one close.
+    const [open, setOpen] = useState(false);
+    const holdOpen = useRef(false);
     return (
-      <Tooltip.Root delayDuration={400}>
+      <Tooltip.Root
+        delayDuration={400}
+        open={open}
+        onOpenChange={(next) => {
+          if (!next && holdOpen.current) {
+            return;
+          }
+          setOpen(next);
+        }}
+      >
         <Tooltip.Trigger asChild>
           <button
             ref={ref}
@@ -47,16 +60,17 @@ export const BooleanButton = forwardRef<HTMLButtonElement, BooleanButtonProps>(
             tabIndex={tabIndex}
             onFocus={onFocus}
             onKeyDown={onKeyDown}
-            onPointerDown={(event) => {
-              // Radix closes a tooltip on a press; a press on a dimmed button leaves it
-              // open, the tooltip says why.
-              if (dimmed) {
-                event.preventDefault();
-              }
+            onPointerDown={() => {
+              holdOpen.current = dimmed;
+            }}
+            onPointerLeave={() => {
+              holdOpen.current = false;
+            }}
+            onBlur={() => {
+              holdOpen.current = false;
             }}
             onClick={(event) => {
               if (dimmed) {
-                event.preventDefault();
                 return;
               }
               // `detail` is 0 for keyboard activation, 1 or more for a mouse click.
@@ -65,12 +79,16 @@ export const BooleanButton = forwardRef<HTMLButtonElement, BooleanButtonProps>(
             data-pressed={pressed ? "true" : undefined}
             className={`flex size-10 items-center justify-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--editor-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--toolbar-bg)] data-[pressed=true]:bg-[var(--editor-accent-hover)] ${
               dimmed
-                ? "opacity-40"
+                ? ""
                 : "hover:bg-[var(--editor-accent-hover)] active:bg-[var(--editor-accent-hover)]"
             }`}
             style={{ color: "var(--toolbar-icon)" }}
           >
-            <BooleanGlyph op={op} />
+            {/* The 40 % of a dimmed button is on the glyph only: the focus ring and the
+                grounds keep their full strength (3:1 needs the full ring). */}
+            <span className={dimmed ? "flex opacity-40" : "flex"}>
+              <BooleanGlyph op={op} />
+            </span>
           </button>
         </Tooltip.Trigger>
         <Tooltip.Portal>
