@@ -63,14 +63,25 @@ impl Length {
     /// millimetres.
     #[must_use]
     pub fn from_unit(value: f64, unit: DisplayUnit) -> Self {
-        Self::from_mm(value * unit.mm_per_unit())
+        // An inch is 254 / 10 mm: multiplying by the integer 254 first and
+        // dividing once rounds the result once, so 8.5 in is the double
+        // nearest to 215.9 mm and not a neighbour of it.
+        Self::from_mm(match unit {
+            DisplayUnit::Mm => value,
+            DisplayUnit::Cm => value * 10.0,
+            DisplayUnit::In => value * 254.0 / 10.0,
+        })
     }
 
     /// This length as a plain number in `unit`. The one conversion out of
     /// millimetres, for text and for nothing else.
     #[must_use]
     pub fn in_unit(self, unit: DisplayUnit) -> f64 {
-        self.as_mm() / unit.mm_per_unit()
+        match unit {
+            DisplayUnit::Mm => self.as_mm(),
+            DisplayUnit::Cm => self.as_mm() / 10.0,
+            DisplayUnit::In => self.as_mm() * 10.0 / 254.0,
+        }
     }
 }
 
@@ -119,6 +130,16 @@ mod tests {
         assert!((Length::from_unit(1.0, DisplayUnit::In).as_mm() - 25.4).abs() < f64::EPSILON);
         assert!((Length::from_unit(8.5, DisplayUnit::In).as_mm() - 215.9).abs() < 1e-9);
         assert!((Length::from_unit(11.0, DisplayUnit::In).as_mm() - 279.4).abs() < 1e-9);
+    }
+
+    /// Typing 8.5 and 11 inches stores exactly the doubles of 215.9 and 279.4
+    /// mm (criterion 35), not neighbours of them.
+    #[test]
+    fn typed_inches_are_the_nearest_double_of_the_decimal_millimetres() {
+        assert_eq!(Length::from_unit(8.5, DisplayUnit::In).as_mm(), 215.9);
+        assert_eq!(Length::from_unit(11.0, DisplayUnit::In).as_mm(), 279.4);
+        assert_eq!(Length::from_unit(1.0, DisplayUnit::In).as_mm(), 25.4);
+        assert_eq!(Length::from_mm(215.9).in_unit(DisplayUnit::In), 8.5);
     }
 
     #[test]
