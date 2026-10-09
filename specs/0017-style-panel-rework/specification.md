@@ -84,7 +84,12 @@ holds for every later section of the panel, not only Style.
    (the scope rules of `0007` criterion 37 otherwise unchanged), when the panel
    is open, then its body shows no heading, no subject line, no text and no
    control. Only the panel frame (280 px wide) and the collapse tab remain.
-   Test: the panel element holds no focusable element except the collapse tab
+   **Amended 2026-10-09 (`document-size-and-rulers` criterion 14a, text only):**
+   the Style area is empty in these cases; when nothing is selected and the
+   Pen has no unfinished path, the panel body shows the Document section of
+   `0015-document-size-and-rulers` instead of nothing. In every other case
+   above the body stays empty as written. If that spec's Question 1 is
+   answered B or C, this amendment is dropped. Test: the panel element holds no focusable element except the collapse tab
    and no visible text. Given a control that has keyboard focus leaves the tree
    (rows are hidden by criterion 5, 6 or 8, or the selection becomes empty), then
    focus moves to the Paint group of that control's section (Stroke or Fill; the
