@@ -79,7 +79,7 @@ impl WasmSession {
             return Ok(());
         };
         gpu.resize(width, height, device_pixel_ratio);
-        let draw_list = self.session.draw_list();
+        let draw_list = self.session.frame_draw_list();
         gpu.render(&draw_list, self.session.view())
     }
 
@@ -93,7 +93,7 @@ impl WasmSession {
         let Some(gpu) = &mut self.gpu else {
             return Ok(());
         };
-        let draw_list = self.session.draw_list();
+        let draw_list = self.session.frame_draw_list();
         gpu.render(&draw_list, self.session.view())
     }
 }

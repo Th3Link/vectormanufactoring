@@ -73,12 +73,10 @@ pub enum PendingOpen {
 /// The pending buffer exists for one reason: when the app is launched by
 /// double-clicking a `.curvyo` (the OS file-association path), the open
 /// attempt runs synchronously in Tauri's `.setup()`, before the
-/// frontend's event listeners have attached. A `project-state` update
-/// surviving that race has a fallback (`get_project_state`, polled once on
-/// mount); a live "open-bytes"/"open-error" event did not, so a file
-/// opened this way could be silently dropped — exactly what acceptance
-/// criterion 7 forbids. The frontend polls `take_pending_open` once on
-/// mount, mirroring `get_project_state`.
+/// frontend's event listeners have attached. A live "open-bytes"/"open-error"
+/// event does not survive that race, so a file opened this way could be
+/// silently dropped — exactly what acceptance criterion 7 forbids. The
+/// frontend polls `take_pending_open` once on mount.
 #[derive(Default)]
 pub struct AppState {
     project: Mutex<ProjectState>,

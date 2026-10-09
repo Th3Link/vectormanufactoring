@@ -26,6 +26,13 @@ export interface NumberFieldProps {
   firstFocus?: boolean;
   /** 12 px text and a narrower unit gutter, for the rows of the stop list. */
   compact?: boolean;
+  /** Leaving the field with edited text commits it, as Enter does (the
+   * Document section's size fields, criterion 15); a refused value stays in
+   * the field with its message. Otherwise leaving restores. */
+  commitOnBlur?: boolean;
+  /** The virtual keyboard a touch device shows: `decimal` for a plain number
+   * (the Document size), `text` (the default) for hex and anything with text. */
+  inputMode?: "text" | "decimal";
 }
 
 /**
@@ -51,6 +58,8 @@ export function NumberField({
   onReturnFocus,
   firstFocus = false,
   compact = false,
+  commitOnBlur = false,
+  inputMode = "text",
 }: NumberFieldProps) {
   const messageId = useId();
   const display = mixed ? "" : shown;
@@ -96,7 +105,7 @@ export function NumberField({
     <div className="relative" style={{ width }}>
       <input
         type="text"
-        inputMode="text"
+        inputMode={inputMode}
         autoComplete="off"
         spellCheck={false}
         aria-label={label}
@@ -115,7 +124,23 @@ export function NumberField({
           setText(event.target.value);
           setInvalid(null);
         }}
-        onBlur={restore}
+        onBlur={() => {
+          if (!(commitOnBlur && touched.current)) {
+            restore();
+            return;
+          }
+          const outcome = onSubmit(text);
+          editing.current = false;
+          if (outcome.startsWith("invalid:")) {
+            // The text stays, with its message, until the next keystroke.
+            setInvalid(outcome.slice("invalid:".length));
+          } else {
+            // Committed or unchanged: the field shows the document's text
+            // again (" 300 " on 300 mm becomes "300"), also when nothing
+            // changed and so no new text arrives.
+            restore();
+          }
+        }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
@@ -137,7 +162,7 @@ export function NumberField({
         }}
         className={`style-field h-7 w-full rounded-[5px] border bg-white pl-1.5 ${compact ? "text-xs" : "text-sm"} tabular-nums outline-none disabled:border-transparent disabled:bg-[var(--field-disabled-bg)] disabled:text-[var(--field-disabled-fg)] ${
           align === "right" ? "text-right" : "text-left"
-        } ${suffix && !mixed ? (suffix === "mm" ? "pr-8" : compact ? "pr-[18px]" : "pr-6") : "pr-1.5"} ${
+        } ${suffix && !mixed ? (suffix === "mm" || suffix === "cm" || suffix === "in" ? "pr-8" : compact ? "pr-[18px]" : "pr-6") : "pr-1.5"} ${
           invalid
             ? "border-[var(--field-invalid)] shadow-[inset_0_0_0_2px_var(--field-invalid)]"
             : "border-[color-mix(in_srgb,var(--toolbar-icon)_60%,transparent)] focus:border-[var(--editor-accent)] focus:shadow-[inset_0_0_0_1px_var(--editor-accent)]"
@@ -147,7 +172,7 @@ export function NumberField({
         <span
           aria-hidden
           className={`pointer-events-none absolute top-1/2 right-1.5 -translate-y-1/2 ${compact ? "text-xs" : "text-sm"} ${
-            disabled ? "text-[var(--field-disabled-fg)]" : "text-[var(--toolbar-icon)]"
+            disabled ? "text-[var(--field-disabled-fg)]" : "text-[var(--panel-muted-fg)]"
           }`}
         >
           {suffix}
@@ -157,7 +182,7 @@ export function NumberField({
         <div
           id={messageId}
           role="alert"
-          className="pointer-events-none absolute top-full right-0 z-30 mt-1 flex w-max max-w-[168px] items-start gap-1 rounded-md bg-popover px-2 py-1 text-xs text-[var(--field-invalid)] ring-1 ring-[var(--field-invalid)]"
+          className="pointer-events-none absolute top-full right-0 z-30 mt-1 flex w-max max-w-[220px] items-start gap-1 rounded-md bg-popover px-2 py-1 text-xs text-[var(--field-invalid)] ring-1 ring-[var(--field-invalid)]"
         >
           <CircleAlert size={12} aria-hidden className="mt-0.5 shrink-0" />
           {message}

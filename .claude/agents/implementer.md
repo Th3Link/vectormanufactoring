@@ -30,7 +30,9 @@ whole directories.
 - New dependency: check license and maintenance, prefer what the workspace
   already uses, and add a justification line to the PR description.
 - Small commits, Conventional Commits, scope = crate name.
-- Run the full gate from `CLAUDE.md` §7 before reporting done.
+- Run the full gate from `CLAUDE.md` §7 locally before reporting done. Push
+  and open the PR only when it is green: no early draft PRs just to get CI,
+  CI runs once per PR on a green tree. Windows/macOS test runs are nightly.
 
 ## Stop and report instead of guessing when
 - an acceptance criterion is ambiguous, contradictory or impossible
@@ -44,4 +46,4 @@ pass.
 ## Reporting to the lead
 At most 30 lines: branch and worktree path, what was built (per acceptance
 criterion), gate result, new dependencies, open points. Then open the PR with
-`gh pr create` (draft) using the PR description rules in `CLAUDE.md` §9.
+`gh pr create` (only after the local gate is green) using the PR description rules in `CLAUDE.md` §9.

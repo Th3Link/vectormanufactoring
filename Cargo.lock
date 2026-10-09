@@ -614,7 +614,6 @@ checksum = "914a755b7c2d4af2bdcff7ce1739e2db9a1b81a9b07123d8015786ae03c0980d"
 name = "curvyo-app"
 version = "0.1.0"
 dependencies = [
- "curvyo-document-core",
  "curvyo-storage-io",
  "serde",
  "serde_json",

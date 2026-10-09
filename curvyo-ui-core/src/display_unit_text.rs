@@ -126,9 +126,18 @@ fn floor_hundredths(value: f64) -> f64 {
     (value * 100.0 + 1e-9).floor() / 100.0
 }
 
-/// `value` with exactly `decimals` decimals, and no "-0".
+/// The largest magnitude printed, in the display unit: 1e12, so a wild value
+/// is a short readout and not hundreds of digits.
+const MAX_SHOWN: f64 = 1e12;
+
+/// `value` with exactly `decimals` decimals, and no "-0". A value that is not
+/// a number or infinite is an en dash, and a very large one is shown as the
+/// largest printed.
 fn fixed_text(value: f64, decimals: usize) -> String {
-    let text = format!("{value:.decimals$}");
+    if !value.is_finite() {
+        return "\u{2013}".to_string();
+    }
+    let text = format!("{:.decimals$}", value.clamp(-MAX_SHOWN, MAX_SHOWN));
     match text.strip_prefix('-') {
         Some(rest) if rest.chars().all(|c| matches!(c, '0' | '.')) => rest.to_string(),
         _ => text,
@@ -313,6 +322,21 @@ mod tests {
             ),
             "x: 1.000  y: -2.000 in"
         );
+    }
+
+    #[test]
+    fn a_wild_value_prints_short_and_never_as_nan_or_inf() {
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let text = format_cursor(
+                Length::from_mm(value),
+                Length::from_mm(1.0),
+                DisplayUnit::Mm,
+            );
+            assert_eq!(text, "x: \u{2013}  y: 1.0 mm");
+        }
+        let huge = format_status_length(Length::from_mm(1e300), DisplayUnit::Mm);
+        assert!(huge.len() < 20, "{huge}");
+        assert_eq!(huge, "1000000000000.0");
     }
 
     #[test]

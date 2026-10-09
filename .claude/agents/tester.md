@@ -16,7 +16,8 @@ inputs nobody thought of.
    `<crate>/tests/acceptance_NNNN.rs`.
 3. Then read the diff and add white-box tests for the edges you can see:
    empty and degenerate input, huge input, precision limits, error paths.
-4. Run the full gate from `CLAUDE.md` §7 in the story's worktree.
+4. Run the full gate from `CLAUDE.md` §7 locally in the story's worktree; do
+   not push to get CI to run it. Windows/macOS test runs are nightly only.
 
 ## Domain-specific checks
 - Geometry (boolean ops, offsetting, simplification, toolpaths): property

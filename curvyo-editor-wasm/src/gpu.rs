@@ -19,12 +19,16 @@ use crate::gpu_pipeline::{
     create_msaa_view, create_pipeline, create_transform_resources, gpu_vertices,
 };
 
-/// `--canvas-bg` (`docs/design-system.md`): cleared behind every frame's
-/// geometry.
-const CANVAS_BACKGROUND: wgpu::Color = wgpu::Color {
-    r: 0xE8 as f64 / 255.0,
-    g: 0xE8 as f64 / 255.0,
-    b: 0xEB as f64 / 255.0,
+/// `--pasteboard-bg` (`docs/design-system.md`): cleared behind every frame's
+/// geometry. The document rectangle in `--canvas-bg` is the bottom artwork
+/// layer of the draw list (`curvyo_render_core::build_document_area`), so the
+/// clear colour is what shows outside the document edge. One value, owned by
+/// `curvyo-render-core`'s theme.
+#[allow(clippy::cast_lossless)]
+const CLEAR_COLOUR: wgpu::Color = wgpu::Color {
+    r: curvyo_render_core::PASTEBOARD_BG.r as f64 / 255.0,
+    g: curvyo_render_core::PASTEBOARD_BG.g as f64 / 255.0,
+    b: curvyo_render_core::PASTEBOARD_BG.b as f64 / 255.0,
     a: 1.0,
 };
 
@@ -450,7 +454,7 @@ impl Gpu {
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(CANVAS_BACKGROUND),
+                    load: wgpu::LoadOp::Clear(CLEAR_COLOUR),
                     store: wgpu::StoreOp::Store,
                 },
             },
@@ -459,7 +463,7 @@ impl Gpu {
                 depth_slice: None,
                 resolve_target: Some(view_texture),
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(CANVAS_BACKGROUND),
+                    load: wgpu::LoadOp::Clear(CLEAR_COLOUR),
                     store: wgpu::StoreOp::Discard,
                 },
             },

@@ -87,6 +87,18 @@
     --canvas-bg: #E8E8EB;
     --statusbar-bg: #DCDCE0;
 
+    /* 0015 document-size-and-rulers (docs/design-system.md, "Color tokens"):
+       everything outside the document rectangle, and the rulers' tokens.
+       The ruler tokens are aliases of existing ones, so a dark theme is a
+       value swap. */
+    --pasteboard-bg: #B8B8BE;
+    --ruler-bg: var(--statusbar-bg);
+    --ruler-tick: var(--toolbar-icon);
+    --ruler-tick-minor: #7B7B7F;
+    --ruler-label: var(--toolbar-icon);
+    --ruler-edge: #B4B4B8;
+    --ruler-pointer: var(--editor-accent);
+
     /* path-node-editing (docs/design-system.md). Named --editor-* rather
        than the design doc's literal --accent/--accent-hover: this
        project's shadcn setup already reserves --accent/--accent-foreground

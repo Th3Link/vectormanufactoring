@@ -24,7 +24,9 @@ mod boolean;
 #[cfg(test)]
 mod box_refit_tests;
 mod corner_readout;
+mod document;
 mod draw;
+mod frame;
 mod keys;
 mod move_entry;
 mod move_indicators;
@@ -32,6 +34,7 @@ mod navigation;
 mod node;
 mod open_error;
 mod pen;
+mod ruler;
 mod select;
 mod select_bar;
 mod select_gesture;
@@ -50,6 +53,7 @@ use curvyo_ui_core::{
 };
 
 pub use boolean::BooleanOutcome;
+pub use document::{DocumentSide, FitOutcome, SizeOutcome};
 pub use keys::{EscapeStep, KeyHint, KeyInput, KeyOutcome};
 pub use move_indicators::MoveIndicators;
 pub use select::DoubleClickHint;
@@ -292,6 +296,13 @@ impl Session {
         self.select.cancel_entry();
         self.select.forget_press();
         self.select.cancel_gesture();
+        // Leaving the Pen ends its path as drawn (a lone node is dropped): no
+        // unfinished path stays behind that the Document section's resize would
+        // not move (`specs/0015-document-size-and-rulers/` criterion 14a).
+        if self.tool == Tool::Pen && tool != Tool::Pen {
+            self.pen.finish(&self.document);
+            self.pen.escape();
+        }
         // A creation tool starts from an empty selection: no selection box
         // stays behind from the Select tool. Creating a shape then selects
         // the new one (`shape_pointer_up`).

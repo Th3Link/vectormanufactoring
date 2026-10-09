@@ -10,17 +10,6 @@
 // (`WasmSession.pack`, then the `save_project_bytes` command) — it never
 // builds or reads a document itself.
 
-/** The document's page size in millimetres (ADR 0002 §2). */
-export interface SizeMm {
-  width: number;
-  height: number;
-}
-
-/** What `get_project_state` returns and what a `project-state` event carries. */
-export interface ProjectStatePayload {
-  size_mm: SizeMm;
-}
-
 /**
  * A host-level failure to even read a file's bytes (missing, permissions,
  * not a file) — what an `open-error` event carries. Distinct from a

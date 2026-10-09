@@ -94,6 +94,23 @@ full convention in `specs/README.md`:
 docs updated where behaviour changed, no new `TODO` without an issue link,
 customer accepted.
 
+**One PR per slice (customer rule, 2026-10-09).** A feature is built on one
+branch `story/<feature-slug>` and delivered as **one** pull request, opened
+only when the whole slice can be tried by the customer end to end. Work that
+the customer cannot see (model, kernel, format, plumbing without UI) never gets
+its own PR: it is milestone commits on the same branch. The plan's PR split
+becomes a milestone list; reviews of risky milestones (document model, file
+format, public API) may run on the branch diff, the UX review and the full
+tester pass run once on the finished slice. No stop for the customer between
+milestones. Only `chore/` and `fix/` PRs (small, self-contained) stand alone.
+
+**The customer reviews selectively:** the central `.rs` files, `Cargo.toml`
+and `Cargo.lock` changes, and docs/spec/ADR changes; not the TypeScript. Every
+story PR description therefore starts with a "Review guide": the 3-8 central
+Rust files and what to look for in each, every dependency change with licence
+and reason, every docs/spec/ADR change, the format version change (if any),
+and how to try the slice.
+
 Parallel work: at most two implementers at once, each in its own worktree,
 on features that do not touch the same crates.
 
@@ -183,7 +200,9 @@ product code:
 ## 7. Quality gate
 
 Run before reporting a story as done. Quiet flags keep output (and tokens)
-small; show only failures to the lead.
+small; show only failures to the lead. **The full gate runs locally first.**
+Push and open the PR only when it is green: no early draft PRs just to get CI,
+so CI runs once per PR on a green tree.
 
 ```text
 cargo fmt --all --check
@@ -211,8 +230,9 @@ and CI structure. Adaptations for this project:
   SDK crate (e.g. `curvyo-plugin`, ADR 0005) takes no suffix. There is no
   `-hardware` suffix and no embedded toolchain. Full layout in
   [ADR 0011](docs/adr/0011-workspace-and-crate-layout.md).
-- CI runs the app crates on an OS matrix (ubuntu, windows, macos) and adds
-  the wasm32 build of core crates.
+- CI on pull requests and pushes to main runs the host gate on ubuntu and adds
+  the wasm32 build of core crates. Windows and macOS test runs happen nightly
+  only (customer decision 2026-10-09, `docs/technical-debt.md`).
 - `specs/` holds feature specs (§4); `docs/design-system.md` holds the UI
   design system.
 
@@ -225,7 +245,7 @@ Use the ProjectAtlas MCP for code navigation before broad grep/read passes.
 - Branches: `story/<feature-slug>`, `fix/slug`, `chore/slug`.
 - Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`,
   `chore:`), scope = crate name where it applies.
-- One PR per feature. PR description: link to `specs/<NNNN-feature-slug>/`, what
+- One PR per feature (see §4: one PR per slice, opened when the slice is testable). PR description: starts with the Review guide (§4), then link to `specs/<NNNN-feature-slug>/`, what
   changed, ADRs touched, new dependencies with license and reason, how to
   try it.
 - Squash-merge after green CI and customer acceptance. **Standing permission

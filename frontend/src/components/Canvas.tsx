@@ -116,7 +116,7 @@ export function Canvas({ editor }: CanvasProps) {
               event.preventDefault();
             }
           }}
-          style={{ background: "var(--canvas-bg)" }}
+          style={{ background: "var(--pasteboard-bg)" }}
         />
       </NodeContextMenu>
       {editor.transformEntry && (

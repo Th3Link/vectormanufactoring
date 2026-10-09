@@ -206,6 +206,51 @@ root register that older builds read correctly by ignoring it (decision 1).
     and the fit test (AC 23). If booleans goes first, this feature only
     rebases. No version number has to change in either order.
 
+**Dated note (2026-10-09):** PR 1 shipped as #67; PRs 2 and 3 shipped together
+as #72 (one PR per slice). The order above is the order of the milestones.
+
+## Dated notes from PR 2 (2026-10-09, implementer; the architect confirms)
+
+- **Decision 7 (view):** the default view of a new or opened project is
+  `Viewport::with_document_inset` (72 px, AC 11a), applied in
+  `WasmSession::new` and `open`, not in `Session::new`, so headless tests keep
+  the `0004` view. A flag keeps its origin through window resizes until the
+  first pan, zoom or drag-pan; it ends there, and `0004` criterion 10 applies
+  again. Browser check: without the flag a window resize of a fresh view moves
+  the corner; the early size reports at attach do not. PR 3's
+  `pan_by_document_offset` must say in a test whether it ends the flag
+  (recommendation: it does not).
+- **Decision 9 (ruler):** the step follows AC 5 (label plus 4 px); labels thin
+  below label plus 8 px (UX notes), so the end of a label never touches the
+  next major tick. The PO rewords AC 7 accordingly. The layout returns an empty
+  layout for a non-finite view or strip and for a view that would hold more
+  than 4096 majors.
+- **Decision 11 (draw list):** the document area is prepended in
+  `Session::frame_draw_list`; `Session::draw_list` stays the artwork and
+  overlay for headless tests. A future raster, thumbnail or export path must
+  use `frame_draw_list`.
+
+## Dated notes from PR 3 (2026-10-09, implementer; the architect confirms)
+
+- **Decision 13 (panel):** `panel_content(&ObjectSelection, pen_path_unfinished)
+  -> PanelContent { Document, Style, Empty }` in `ui-core`, an enum with no
+  trait. The signature takes the selection and the Pen's state, not the tool,
+  because the Pen's unfinished path is the only tool state that matters.
+  `Style` is any non-empty selection, also while the Pen has a path (the
+  Style area says "finish the path to style it", as before 0017).
+- **Decision 7 (view follows):** `Viewport::pan_by_document_offset` does not
+  end the untouched default view (see the PR 2 note), tested. The shifts are
+  published by `document-core` as `Document::resize_shift` and
+  `Document::fit_shift`, the same functions the commands use, so the session
+  moves the view by exactly what moved the objects.
+- **Decision 3 (units):** `Length::from_unit` and `in_unit` compute inches as
+  `* 254 / 10` and `* 10 / 254`, one rounding, so 8.5 in is exactly the double
+  of 215.9 mm.
+- **Decision 12 (status texts):** the status bar's size text, the unit and the
+  panel's fields are read from the session whenever its UI state is re-read
+  (`syncRevision`) or a panel command ran (`useDocumentPanel`); the
+  per-frame poll is gone. The cursor text is read on render.
+
 ## Flagged to the lead and the PO
 
 1. **AC 38:** the display unit needs no `format_version` bump (decision 1).

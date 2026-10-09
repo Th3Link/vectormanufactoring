@@ -198,9 +198,20 @@ Left: "x: 12.3  y: 45.6" followed by the unit once, "mm", fixed decimals so the 
 
 - **PR 1 (model), 2026-10-09.** Resize and fit are atomic for one editor. Between collaborating peers they merge field by field (width, height and each object position are separate registers), so two concurrent resizes of different axes can leave the objects centred on neither peer's intent. Accepted as a collaboration limit while sync is not built; tracked in `docs/technical-debt.md` ("Resize and fit merge per field across peers").
 - **Retyping shown text (criteria 16 and 35).** The text a field shows for a limit is accepted when typed back and clamped onto the limit. This matters in inches only: the largest size shows as "3937.0079" in, 0.0007 mm over 100 000 mm. Any other value past a limit is refused as criterion 16 says (1e-9 mm tolerance).
+- **PR 2 (rulers and pasteboard), 2026-10-09.**
+  - **11a:** a window resize keeps the document's top-left corner until the first pan or zoom; this amends `0004` criterion 10 for an untouched view. Measured in the browser: without it, a resize of a fresh view moves the corner to wherever keeping the centre puts it (a window shown, maximised or resized after the project was created does this). The size reports at attach do not drift: `attach_canvas` records the laid-out size.
+  - **7:** the major step leaves the widest label plus 4 px (criterion 5); labels thin to every 2nd or 5th major tick when the spacing is below the widest label plus 8 px, so a label never touches the next major tick. The wording "labels wider than the major spacing" reads as "label plus 8 px wider".
+  - **2:** the rulers repaint in the same task as the canvas on a window resize and on a Properties panel toggle (the editor session's view-resized hook), and in the animation frame for pan, zoom, pointer and unit changes.
+- **PR 3 (panel), 2026-10-09.**
+  - **14, 14a:** the Document section is the panel's content while no object is selected and the Pen has no unfinished path. Until `0017-style-panel-rework` is built, the Style area with nothing selected (all controls disabled) is replaced by it; with a selection the panel is Style as before; with an unfinished Pen path and nothing selected it is empty.
+  - **15:** leaving a size field with edited text commits it (the field keeps a refused value and its message); Escape restores. `NumberField` has a `commitOnBlur` option for this; the Style fields still restore on leaving.
+  - **33 to 37 (Part C):** built as option A of Question 2 (mm, cm, in for rulers, size fields and status bar). It stays a proposal until the customer accepts it; removing it means deleting the Unit row and `set_display_unit` calls.
+  - **35:** typed inches are converted as `value * 254 / 10`, so 8.5 in is the double nearest to 215.9 mm.
+  - **14a, 15:** the Pen's unfinished path ends as drawn when the Pen is left (a lone node is dropped), and no resize or fit runs while a path exists. A press on the canvas first blurs a focused panel field, so a size typed there is applied before the tool sees the press.
+  - **20:** after a resize or fit the view moves by the same shift as the objects (`Viewport::pan_by_document_offset`); the untouched default view keeps its 72 px inset.
 
 ## Links
 
 Requirements: R-EDIT-018 (new, added with this refresh).
 Related: `specs/0001-project-file-foundation/specification.md` (the existing `DocumentSize` and status bar size field), `specs/0004-canvas-navigation-and-selection/specification.md` and `adrs.md` (`ViewTransform`, zoom range), `specs/0017-style-panel-rework/specification.md` (panel rules: no popups, validation chip, criterion 48; its criterion 1 is amended by criterion 14a here), `docs/design-system.md` (chrome, tokens), `docs/adr/0012-pages-in-the-document-model.md` (rejected), `docs/adr/0002-document-model-units-and-svg-round-trip.md` (mm, Y-down), `adrs.md` in this folder (rewritten 2026-10-09).
-PR: none yet.
+PR: #67 (model), #72 (rulers, pasteboard and the Document panel).

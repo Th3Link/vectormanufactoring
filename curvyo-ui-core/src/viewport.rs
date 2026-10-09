@@ -72,6 +72,12 @@ impl Default for Zoom {
     }
 }
 
+/// How far the document's top-left corner sits from the canvas's top-left
+/// corner in a new view, CSS pixels on both axes: the tool rail's 12 + 48 + 12,
+/// so the document edge and the 0 ticks of the rulers are not hidden under it
+/// (`specs/0015-document-size-and-rulers/` criterion 11a).
+pub const DOCUMENT_INSET_PX: f64 = 72.0;
+
 /// How far the real width change of a panel toggle may differ from the
 /// announced one, CSS pixels: the host rounds to whole device pixels.
 const PANEL_TOGGLE_TOLERANCE_PX: f64 = 1.5;
@@ -103,6 +109,14 @@ pub struct Viewport {
     /// must keep the view's top-left origin instead of its centre: the
     /// properties panel opening or closing.
     keep_origin_for: Option<f64>,
+    /// Whether the view is still the untouched [`Viewport::with_document_inset`]
+    /// one: resizes keep its origin, so the 72 px inset survives a window that
+    /// is shown, maximised or resized after the session was created (measured
+    /// in the browser: without the flag such a resize moves the document
+    /// corner to wherever keeping the centre puts it) until the maker pans or
+    /// zooms. The first pan, zoom or drag-pan ends it. This amends `0004`
+    /// criterion 10 for an untouched view only.
+    inset_view: bool,
 }
 
 impl Viewport {
@@ -116,7 +130,22 @@ impl Viewport {
             canvas_size: (0.0, 0.0),
             drag_pan: None,
             keep_origin_for: None,
+            inset_view: false,
         }
+    }
+
+    /// The view of a project that was just created or opened: 100 % zoom with
+    /// the document's top-left corner [`DOCUMENT_INSET_PX`] right of and below
+    /// the canvas's top-left corner.
+    #[must_use]
+    pub fn with_document_inset() -> Self {
+        let mut viewport = Self::new();
+        viewport.inset_view = true;
+        viewport.origin = Point::new(
+            -DOCUMENT_INSET_PX / viewport.zoom.scale(),
+            -DOCUMENT_INSET_PX / viewport.zoom.scale(),
+        );
+        viewport
     }
 
     /// The plain [`ViewTransform`] `curvyo-render-core` and every
@@ -147,6 +176,7 @@ impl Viewport {
     /// caller's job (`Session::wheel`); this function only ever applies
     /// the delta it is given, on whichever axis.
     pub fn pan_by_screen_delta(&mut self, delta_x: f64, delta_y: f64) {
+        self.inset_view = false;
         let scale = self.zoom.scale();
         self.origin = self
             .origin
@@ -166,10 +196,22 @@ impl Viewport {
     /// instead would place the wrong document point under the cursor
     /// whenever the clamp actually bites.
     pub fn zoom_about(&mut self, screen_x: f64, screen_y: f64, factor: f64) {
+        self.inset_view = false;
         let anchor = self.screen_to_document(screen_x, screen_y);
         self.zoom = Zoom::new(self.zoom.factor() * factor);
         let scale = self.zoom.scale();
         self.origin = Point::new(anchor.x - screen_x / scale, anchor.y - screen_y / scale);
+    }
+
+    /// Moves the view's origin by `offset` document millimetres, without
+    /// ending the untouched default view: after a resize or a fit moved every
+    /// object by `offset` (`Document::resize_shift`, `fit_shift`), the objects
+    /// stay where they were on screen and the document's edges move instead
+    /// (`specs/0015-document-size-and-rulers/` criterion 20). A command, not a
+    /// navigation gesture, so a window resize of a still-untouched view keeps
+    /// its origin, the 72 px inset, afterwards too.
+    pub fn pan_by_document_offset(&mut self, offset: Vec2) {
+        self.origin = self.origin.translated(offset);
     }
 
     /// Starts a drag-pan gesture (acceptance criteria 3, 4): records the
@@ -177,6 +219,7 @@ impl Viewport {
     /// anchor [`Viewport::continue_drag_pan`] keeps fixed under the
     /// cursor.
     pub fn begin_drag_pan(&mut self, screen_x: f64, screen_y: f64) {
+        self.inset_view = false;
         self.drag_pan = Some(PanGesture {
             anchor_document_point: self.screen_to_document(screen_x, screen_y),
         });
@@ -248,7 +291,7 @@ impl Viewport {
             (width - old_width - expected).abs() <= PANEL_TOGGLE_TOLERANCE_PX
                 && (height - old_height).abs() <= PANEL_TOGGLE_TOLERANCE_PX
         });
-        if !keep_origin && (old_width > 0.0 || old_height > 0.0) {
+        if !keep_origin && !self.inset_view && (old_width > 0.0 || old_height > 0.0) {
             let scale = self.zoom.scale();
             let delta = Vec2::new((old_width - width) / 2.0, (old_height - height) / 2.0)
                 .scaled(1.0 / scale);
@@ -265,217 +308,4 @@ impl Default for Viewport {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn zoom_clamps_to_the_documented_range() {
-        assert!((Zoom::new(1000.0).factor() - Zoom::MAX).abs() < f64::EPSILON);
-        assert!((Zoom::new(0.0).factor() - Zoom::MIN).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    fn zoom_percent_reads_exactly_at_the_limits() {
-        assert_eq!(Zoom::new(Zoom::MIN).percent(), 2);
-        assert_eq!(Zoom::new(Zoom::MAX).percent(), 8000);
-        assert_eq!(Zoom::default().percent(), 100);
-    }
-
-    #[test]
-    fn default_viewport_is_100_percent_at_the_document_origin() {
-        let viewport = Viewport::new();
-        assert_eq!(viewport.zoom_percent(), 100);
-        assert_eq!(viewport.screen_to_document(0.0, 0.0), Point::new(0.0, 0.0));
-    }
-
-    #[test]
-    fn pan_by_screen_delta_moves_the_origin_proportionally() {
-        let mut viewport = Viewport::new();
-        let before = viewport.screen_to_document(0.0, 0.0);
-        viewport.pan_by_screen_delta(10.0, 20.0);
-        let after = viewport.screen_to_document(0.0, 0.0);
-        let moved = before.vector_to(after);
-        assert!(moved.x > 0.0 && moved.y > 0.0, "content moved: {moved:?}");
-        // Double the delta, double the pan (proportional, AC 1/2).
-        let mut doubled = Viewport::new();
-        doubled.pan_by_screen_delta(20.0, 40.0);
-        let doubled_after = doubled.screen_to_document(0.0, 0.0);
-        let doubled_moved = before.vector_to(doubled_after);
-        assert!((doubled_moved.x - 2.0 * moved.x).abs() < 1e-9);
-        assert!((doubled_moved.y - 2.0 * moved.y).abs() < 1e-9);
-    }
-
-    #[test]
-    fn pan_never_changes_the_zoom() {
-        let mut viewport = Viewport::new();
-        viewport.pan_by_screen_delta(500.0, -300.0);
-        assert_eq!(viewport.zoom_percent(), 100);
-    }
-
-    #[test]
-    fn zoom_about_a_point_keeps_that_point_under_the_cursor() {
-        let mut viewport = Viewport::new();
-        // Pan somewhere away from the origin first, so this isn't a
-        // trivially-true identity-view case.
-        viewport.pan_by_screen_delta(137.0, -42.0);
-
-        let cursor = (300.0, 150.0);
-        let anchor_before = viewport.screen_to_document(cursor.0, cursor.1);
-        viewport.zoom_about(cursor.0, cursor.1, 2.0);
-        let anchor_after = viewport.screen_to_document(cursor.0, cursor.1);
-
-        assert!((anchor_before.x - anchor_after.x).abs() < 1e-9);
-        assert!((anchor_before.y - anchor_after.y).abs() < 1e-9);
-        assert_eq!(viewport.zoom_percent(), 200);
-    }
-
-    #[test]
-    fn zoom_about_a_point_keeps_it_fixed_even_when_clamped_at_the_maximum() {
-        let mut viewport = Viewport::new();
-        let cursor = (412.0, 88.0);
-        let anchor_before = viewport.screen_to_document(cursor.0, cursor.1);
-
-        // A factor huge enough that the pre-clamp target scale would far
-        // exceed 8000% — the clamp must bite, and the point under the
-        // cursor must still be exactly where it was, computed from the
-        // *clamped* scale, not the pre-clamp target.
-        viewport.zoom_about(cursor.0, cursor.1, 1_000_000.0);
-        assert_eq!(viewport.zoom_percent(), 8000, "the clamp must have bitten");
-
-        let anchor_after = viewport.screen_to_document(cursor.0, cursor.1);
-        assert!(
-            (anchor_before.x - anchor_after.x).abs() < 1e-9,
-            "x drifted: {anchor_before:?} -> {anchor_after:?}"
-        );
-        assert!(
-            (anchor_before.y - anchor_after.y).abs() < 1e-9,
-            "y drifted: {anchor_before:?} -> {anchor_after:?}"
-        );
-    }
-
-    #[test]
-    fn zoom_about_a_point_keeps_it_fixed_even_when_clamped_at_the_minimum() {
-        let mut viewport = Viewport::new();
-        let cursor = (60.0, 500.0);
-        let anchor_before = viewport.screen_to_document(cursor.0, cursor.1);
-
-        viewport.zoom_about(cursor.0, cursor.1, 1e-9);
-        assert_eq!(viewport.zoom_percent(), 2, "the clamp must have bitten");
-
-        let anchor_after = viewport.screen_to_document(cursor.0, cursor.1);
-        assert!((anchor_before.x - anchor_after.x).abs() < 1e-9);
-        assert!((anchor_before.y - anchor_after.y).abs() < 1e-9);
-    }
-
-    #[test]
-    fn drag_pan_keeps_the_anchor_point_under_a_moving_cursor() {
-        let mut viewport = Viewport::new();
-        let press_at = (100.0, 100.0);
-        let anchor = viewport.screen_to_document(press_at.0, press_at.1);
-        viewport.begin_drag_pan(press_at.0, press_at.1);
-        assert!(viewport.is_drag_panning());
-
-        for cursor in [(150.0, 100.0), (150.0, 220.0), (40.0, 300.0)] {
-            viewport.continue_drag_pan(cursor.0, cursor.1);
-            let now_under_cursor = viewport.screen_to_document(cursor.0, cursor.1);
-            assert!((now_under_cursor.x - anchor.x).abs() < 1e-9);
-            assert!((now_under_cursor.y - anchor.y).abs() < 1e-9);
-        }
-
-        viewport.end_drag_pan();
-        assert!(!viewport.is_drag_panning());
-    }
-
-    #[test]
-    fn continue_drag_pan_without_a_gesture_in_flight_is_a_no_op() {
-        let mut viewport = Viewport::new();
-        let before = viewport;
-        viewport.continue_drag_pan(999.0, 999.0);
-        assert_eq!(viewport, before);
-    }
-
-    #[test]
-    fn resize_keeps_the_center_point_and_the_zoom() {
-        let mut viewport = Viewport::new();
-        viewport.resize(800.0, 600.0);
-        let center_before = viewport.screen_to_document(400.0, 300.0);
-
-        viewport.resize(1000.0, 400.0);
-        let center_after = viewport.screen_to_document(500.0, 200.0);
-
-        assert!((center_before.x - center_after.x).abs() < 1e-9);
-        assert!((center_before.y - center_after.y).abs() < 1e-9);
-        assert_eq!(
-            viewport.zoom_percent(),
-            100,
-            "resize never changes the zoom"
-        );
-    }
-
-    #[test]
-    fn the_first_resize_only_records_the_size_with_no_center_to_preserve() {
-        let mut viewport = Viewport::new();
-        let origin_before = viewport.screen_to_document(0.0, 0.0);
-        viewport.resize(800.0, 600.0);
-        let origin_after = viewport.screen_to_document(0.0, 0.0);
-        assert_eq!(origin_before, origin_after);
-    }
-
-    /// The properties panel opening or closing resizes the canvas by its own
-    /// width; the document must not move on screen (`0007` criterion 39).
-    #[test]
-    fn a_panel_toggle_keeps_the_top_left_origin() {
-        let mut viewport = Viewport::new();
-        viewport.resize(1000.0, 600.0);
-        viewport.pan_by_screen_delta(120.0, 40.0);
-        let corner = viewport.screen_to_document(0.0, 0.0);
-        let point = viewport.screen_to_document(300.0, 200.0);
-
-        viewport.keep_origin_for_width_change(-280.0);
-        viewport.resize(720.0, 600.0);
-        assert_eq!(viewport.screen_to_document(0.0, 0.0), corner);
-        assert_eq!(viewport.screen_to_document(300.0, 200.0), point);
-        assert_eq!(viewport.canvas_size(), (720.0, 600.0));
-
-        viewport.keep_origin_for_width_change(280.0);
-        viewport.resize(1000.0, 600.0);
-        assert_eq!(viewport.screen_to_document(0.0, 0.0), corner);
-    }
-
-    /// The request is for one panel-sized width change only: a window resize
-    /// that does not match it, or the next resize after it, keeps the centre.
-    #[test]
-    fn a_panel_toggle_request_does_not_outlive_its_resize() {
-        let mut viewport = Viewport::new();
-        viewport.resize(1000.0, 600.0);
-        viewport.keep_origin_for_width_change(-280.0);
-        // The window shrank in height too: a window resize, centre kept.
-        viewport.resize(720.0, 500.0);
-        let centre = viewport.screen_to_document(360.0, 250.0);
-        viewport.resize(1000.0, 500.0);
-        let after = viewport.screen_to_document(500.0, 250.0);
-        assert!((centre.x - after.x).abs() < 1e-9);
-
-        // Used once: the same width change later is an ordinary resize.
-        viewport.keep_origin_for_width_change(-280.0);
-        viewport.resize(720.0, 500.0);
-        let centre = viewport.screen_to_document(360.0, 250.0);
-        viewport.resize(440.0, 500.0);
-        let after = viewport.screen_to_document(220.0, 250.0);
-        assert!((centre.x - after.x).abs() < 1e-9);
-    }
-
-    /// A panel opened and closed again before any resize reported leaves no
-    /// request behind: a later window resize of the same width keeps the centre.
-    #[test]
-    fn two_toggles_before_a_resize_leave_nothing_pending() {
-        let mut viewport = Viewport::new();
-        viewport.resize(1000.0, 600.0);
-        viewport.keep_origin_for_width_change(-280.0);
-        viewport.keep_origin_for_width_change(280.0);
-        let centre = viewport.screen_to_document(500.0, 300.0);
-        viewport.resize(1280.0, 600.0);
-        let after = viewport.screen_to_document(640.0, 300.0);
-        assert!((centre.x - after.x).abs() < 1e-9, "an ordinary resize");
-    }
-}
+mod tests;

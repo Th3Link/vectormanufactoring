@@ -29,6 +29,7 @@ mod node_tool;
 mod object_bounds;
 mod object_selection;
 mod oriented_box;
+mod panel_content;
 mod param_edit;
 mod param_entry;
 mod param_handles;
@@ -36,6 +37,7 @@ mod pen_tool;
 mod poly_star_tool;
 mod rectangle_tool;
 mod resize_direction;
+mod ruler;
 mod select_bar;
 mod select_tool;
 mod selection;
@@ -79,6 +81,7 @@ pub use node_tool::{
 pub use object_bounds::{content_bounds, object_bounds, object_outline_bounds};
 pub use object_selection::{ObjectSelection, SelectionCombine};
 pub use oriented_box::{OrientedBox, oriented_bounds};
+pub use panel_content::{PanelContent, panel_content};
 pub use param_edit::{
     MAX_INNER_RATIO, MIN_INNER_RATIO, ParamValue, apply_param, clamped_ratio, commit_param_batch,
     value_from_pointer,
@@ -93,6 +96,7 @@ pub use pen_tool::{PenTool, PointerUpOutcome as PenPointerUpOutcome};
 pub use poly_star_tool::{PolyStarMode, PolygonStarTool};
 pub use rectangle_tool::RectangleTool;
 pub use resize_direction::ResizeDirection;
+pub use ruler::{RulerAxis, RulerLabel, RulerLayout, RulerMajor, ruler_layout};
 pub use select_bar::{
     BarPreview, BarValue, ObjectKind, SelectBarState, ids_of_kind, select_bar_state,
 };
@@ -134,4 +138,4 @@ pub use transform_math::{
     resize_local_box, rotate_delta_angle, rotate_delta_for, rotate_pivot, scaled_and_floored,
     stroke_or_radius_factor,
 };
-pub use viewport::{PX_PER_MM_AT_100, Viewport, Zoom};
+pub use viewport::{DOCUMENT_INSET_PX, PX_PER_MM_AT_100, Viewport, Zoom};
