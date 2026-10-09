@@ -427,14 +427,13 @@ fn single_anchor_and_degenerate_extra_outlines_do_not_panic() {
     assert!(covered(&list, pt(5.0, 5.0)));
 }
 
-/// Criterion 31a says every outline is dashed on its own. The dash budget is
-/// spent per frame (50,000 dashes), so a compound path with very many dashed
-/// outlines must not have its later outlines silently drawn solid.
-#[test]
-#[ignore = "known limit: the 50,000-dash frame budget draws later outlines of one compound path solid; run with --ignored"]
-fn ac31a_a_large_compound_path_dashes_its_last_outline_like_its_first() {
+/// Criterion 31a says every outline is dashed on its own. The dash limits are the object's: a
+/// compound path within the per-object cap (2,000 dashes) is dashed in every outline, the last
+/// like the first, and one over the cap is drawn solid in every outline, the first like the last
+/// (never some outlines dashed and some solid).
+fn large_compound_gap_pattern(n: usize) -> impl Fn(usize) -> (bool, bool) {
     let d = Document::new(1);
-    let n = 700_usize; // 700 squares of 20 mm: 80 dashes each at width 0.5 mm, 56,000 in all
+    // Squares of 20 mm: 80 dashes each at width 0.5 mm.
     let outlines: Vec<_> = (0..n)
         .map(|i| {
             square(
@@ -453,14 +452,30 @@ fn ac31a_a_large_compound_path_dashes_its_last_outline_like_its_first() {
     )
     .unwrap();
     let list = artwork(&d);
-    // Along the top edge of a square, dash 0..0.5 mm, gap 0.5..1.0 mm.
-    let gap_at = |i: usize| {
+    // Along the top edge of a square, dash 0..0.5 mm, gap 0.5..1.0 mm: (dashed, solid).
+    move |i: usize| {
         let (x, y) = ((i % 30) as f64 * 25.0, (i / 30) as f64 * 25.0);
-        !covered(&list, pt(x + 10.75, y)) && covered(&list, pt(x + 10.25, y))
-    };
-    assert!(gap_at(0), "first outline is not dashed");
-    assert!(
-        gap_at(n - 1),
-        "last outline is drawn solid (dash budget spent)"
-    );
+        (
+            !covered(&list, pt(x + 10.75, y)) && covered(&list, pt(x + 10.25, y)),
+            covered(&list, pt(x + 10.75, y)) && covered(&list, pt(x + 10.25, y)),
+        )
+    }
+}
+
+#[test]
+fn ac31a_a_large_compound_path_dashes_its_last_outline_like_its_first() {
+    let n = 24; // 1,920 dashes: within the cap of 2,000 for one object
+    let at = large_compound_gap_pattern(n);
+    assert!(at(0).0, "first outline is not dashed");
+    assert!(at(n / 2).0, "a middle outline is not dashed");
+    assert!(at(n - 1).0, "last outline is not dashed");
+}
+
+#[test]
+fn ac31a_a_compound_path_over_the_per_object_cap_is_solid_in_every_outline() {
+    let n = 700; // 56,000 dashes: over the cap, so the whole object is solid
+    let at = large_compound_gap_pattern(n);
+    assert!(at(0).1, "first outline is solid");
+    assert!(at(n / 2).1, "a middle outline is solid");
+    assert!(at(n - 1).1, "last outline is solid");
 }

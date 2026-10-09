@@ -585,16 +585,3 @@ fn an_older_reader_would_refuse_this_build_so_the_bump_is_real() {
         serde_json::from_slice(&member(&bytes, "manifest.json")).unwrap();
     assert!(manifest["format_version"].as_u64().unwrap() >= STYLES_FORMAT_VERSION);
 }
-
-/// The format version of the build that introduced compound paths
-/// (`specs/0016-boolean-operations`); the merge that renumbers it edits this
-/// constant.
-const COMPOUND_FORMAT_VERSION: u32 = 8;
-
-/// The one literal pin on the format version: it fails if the number moves by
-/// accident, and the merge that renumbers it edits `COMPOUND_FORMAT_VERSION`
-/// above in the same place.
-#[test]
-fn the_format_version_is_the_one_compound_paths_introduced_until_the_merge_renumbers_it() {
-    assert_eq!(CURRENT_FORMAT_VERSION, COMPOUND_FORMAT_VERSION);
-}

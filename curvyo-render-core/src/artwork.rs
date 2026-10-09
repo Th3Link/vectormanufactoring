@@ -205,21 +205,21 @@ fn draw_stroke(
         join: stroke_style.join,
         cap: stroke_style.cap,
     };
-    let mut parts: Vec<Path> = outlines
+    let solid: Vec<Path> = outlines
         .iter()
         .filter_map(|outline| stroke::build_path(outline.anchors, outline.closed))
-        .map(|path| {
-            dash::dashed(
-                &path,
-                &stroke_style.dash,
-                document_width_mm,
-                view.scale(),
-                tolerance_mm,
-                budget,
-            )
-            .unwrap_or(path)
-        })
         .collect();
+    // The dash limits are the object's: either every outline is dashed or the
+    // whole object is solid.
+    let mut parts = dash::dashed_object(
+        &solid,
+        &stroke_style.dash,
+        document_width_mm,
+        view.scale(),
+        tolerance_mm,
+        budget,
+    )
+    .unwrap_or(solid);
     let combined = match parts.len() {
         0 => return,
         1 => parts.remove(0),

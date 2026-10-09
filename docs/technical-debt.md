@@ -67,11 +67,29 @@ A new reader of `PathSnapshot::anchors` is still a place where a compound path c
 | `translate_objects`, `duplicate_objects` (ids over all outlines), `rotate_object`, `resize_path` | write every outline; the stroke width once |
 | `contains_point_in_outlines`, `hit_test_object`, `object_bounds`, `object_outline_bounds`, `oriented_bounds` | all outlines, winding summed |
 | `build_artwork`, `build_live_edit_preview` | one fill path; each outline dashed alone, one stroke layer |
+| `objects_in_marquee` (via `oriented_bounds`), `hit_test_objects_along` (lasso), `ClickCycle` (via `distance_to_object`, `fills_point`) | all outlines |
+| `Document::resize`, `fit_to_content`, `content_bounds` (via `translate_meta`, `object_outline_bounds`) | all outlines |
+| `copy_map` (deep copy of a duplicate) | recurses into the nested outline lists |
+| `decorations::build` (node overlay) | reached only through `Session::paths()`, which leaves compound paths out |
 | `Session::paths()`, `check_join`, `check_split`, the double-click | a compound path is not node-editable yet (customer question 7, option A) |
+| future exporters (SVG, DXF, G-code) and copy / paste | must iterate `PathSnapshot::subpaths()`; none exists yet |
 
 **Not covered yet:** node editing of a compound path (question 7, option B), Break Apart and
 Combine. They can address a node as `(NodeId, AnchorId)` without an outline index, because anchor
 ids are unique over the whole path. Markers on compound paths wait for `0018-stroke-markers`.
+
+**Document-level node commands see only the first outline.** `move_anchors`, `set_handle`,
+`convert_anchor_kind`, `insert_anchor`, `delete_anchors`, `set_segment_line` and `set_segment_curve`
+act on the first outline of a compound path, and `delete_anchors` that leaves fewer than two anchors
+of the first outline deletes the whole compound object. Unreachable today: `Session::paths()` leaves
+compound paths out, and an object never turns compound (`replace_with_path` always creates a new
+node). The node-editing slice (customer question 7, option B) moves them to `anchor_positions`.
+
+**Open-file validation of anchors is lenient, for the first outline and the others alike.**
+`validate_anchor` checks that an anchor is a map with a valid id; a missing or odd `point`,
+`handle_in`, `handle_out` or `kind` degrades to a default on read (slice 1's forward-compatible
+stance), so a file with a non-finite point in either kind of outline opens. The extra outlines follow
+the rule of the first one; tightening both is one change in `validate_anchor` and a format decision.
 
 **Resolution:** none planned; the audit table above is the checklist for the next reader of paths.
 

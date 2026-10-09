@@ -1273,7 +1273,6 @@ fn twenty_thousand_anchors_in_four_outlines_round_trip_exactly() {
 /// anchor must not grow with the number of outlines. Measured on 100 and 400
 /// outlines of 4 anchors (debug build, so only the ratio is asserted).
 #[test]
-#[ignore = "known defect: rotate_object and resize_path are quadratic in the anchor count (also for ordinary paths); run with --ignored"]
 fn rotate_commit_cost_grows_roughly_linearly_with_the_number_of_outlines() {
     let time = |n: usize| {
         let d = Document::new(1);

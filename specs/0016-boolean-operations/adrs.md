@@ -328,8 +328,8 @@ assumptions are found by audit, not by the compiler", with this table.
   199 ms, read back in 23 ms, saved in 203 ms (1.6 MB) and reopened in 55 ms; replacing 1,000
   objects by a result of 4,000 anchors takes 37 ms. That meets criteria 46 and 47 with room, so the
   packed-coordinate encoding stays rejected.
-- **`contains_point_in_outlines`** is new next to `contains_point`, which now calls it with one
-  outline; the old signature is unchanged.
+- **`contains_point_in_outlines`** replaces `contains_point` (one function, any number of outlines; the
+  0007 tests call it with one).
 - **Compound paths leave the Node tool at one place**, `Session::paths()`; `check_join`,
   `check_split` and the commands refuse independently. A double-click on one in the Select tool is
   the new `SelectDoubleClickOutcome::CompoundPath` (no handoff, nothing changes); the session maps it

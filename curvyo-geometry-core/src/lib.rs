@@ -26,5 +26,5 @@ mod segment;
 
 pub use boolean::{BooleanError, BooleanOp, BooleanResult, Outline, boolean, signed_area_mm2};
 pub use curvyo_document_core::Tolerance;
-pub use interior::{OutlineTriple, contains_point, contains_point_in_outlines};
+pub use interior::{OutlineTriple, contains_point_in_outlines};
 pub use segment::{Subdivision, nearest_point_on_segment, segment_bounds, subdivide_at_parameter};

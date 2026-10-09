@@ -9,11 +9,11 @@ use loro::TreeParentId;
 
 use crate::document::{Document, OBJECTS_TREE};
 use crate::objects::ObjectEditError;
-use crate::path_codec::{self, insert_anchors_container, node_exists, push_anchor};
+use crate::path_codec::{self, anchor_map_at, insert_anchors_container, node_exists, push_anchor};
 use crate::path_model::{AnchorId, NewAnchor, NodeId};
 use crate::paths::tree_id_of;
 use crate::style_codec;
-use crate::subpath_codec::write_extra_subpaths;
+use crate::subpath_codec::{all_anchor_lists, write_extra_subpaths};
 
 impl Document {
     /// Replaces `operands` by one new path made of `outlines`, in **one
@@ -43,7 +43,7 @@ impl Document {
     /// [`ObjectEditError::BaseNotAnOperand`] if `base` is not one of
     /// `operands`; [`ObjectEditError::NoOutlines`] if there is no outline or an
     /// outline has no anchor; [`ObjectEditError::AnchorIds`] if two anchors
-    /// share an id.
+    /// share an id or an id already belongs to an object that is not replaced.
     ///
     /// # Panics
     /// Does not panic in practice: every write below goes to a tree node and
@@ -78,6 +78,27 @@ impl Document {
             }
             if !doomed.contains(&tree_id) {
                 doomed.push(tree_id);
+            }
+        }
+        // An anchor id names a node across the whole document: none of the new ids may belong to
+        // an object that stays.
+        for root in tree.roots() {
+            if doomed.contains(&root) {
+                continue;
+            }
+            // invariant: a root of the tree has a meta map.
+            #[allow(clippy::unwrap_used)]
+            let meta = tree.get_meta(root).unwrap();
+            if crate::shape_codec::read_shape_tag(&meta).is_some() {
+                continue;
+            }
+            for list in all_anchor_lists(&meta) {
+                for index in 0..list.len() {
+                    let existing = path_codec::read_anchor_id(&anchor_map_at(&list, index));
+                    if existing.is_some_and(|id| seen.contains(&id)) {
+                        return Err(ObjectEditError::AnchorIds);
+                    }
+                }
             }
         }
         let base_meta = tree

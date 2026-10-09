@@ -19,7 +19,7 @@ use crate::path_codec::{
 use crate::path_model::{AnchorId, NodeId};
 use crate::primitive_model::{ObjectSnapshot, translate_shape};
 use crate::shape_codec;
-use crate::subpath_codec::{all_anchor_lists, find_anchor, total_anchor_count};
+use crate::subpath_codec::{all_anchor_lists, anchor_positions, total_anchor_count};
 use crate::units::Vec2;
 
 /// Why an any-object [`Document`] method refused to apply — mirrors
@@ -235,10 +235,12 @@ impl Document {
                 }
             }
             (ObjectSnapshot::Path(path), None) => {
+                let positions = anchor_positions(&meta);
                 let resolved: Vec<_> = path
                     .all_anchors()
                     .map(|a| {
-                        find_anchor(&meta, a.id)
+                        positions
+                            .get(a.id)
                             .map(|(list, index)| (list, index, a))
                             .ok_or(ObjectEditError::NoSuchObject)
                     })

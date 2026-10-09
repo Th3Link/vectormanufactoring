@@ -36,6 +36,10 @@ fn outlines(count: usize, per_outline: usize) -> Vec<(Vec<NewAnchor>, bool)> {
         .collect()
 }
 
+fn path_object(document: &Document, node: NodeId) -> curvyo_document_core::ObjectSnapshot {
+    document.object(node).unwrap()
+}
+
 fn operands(document: &Document, count: usize) -> Vec<NodeId> {
     (0..count)
         .map(|i| {
@@ -86,6 +90,40 @@ fn a_compound_path_of_twenty_thousand_anchors() {
     );
     assert_eq!(path.all_anchors().count(), 4 * PER_OUTLINE);
 
+    // Edits of the result: rotate and resize write every anchor, once. They
+    // look each anchor up by id, which must not cost a scan per anchor.
+    let rotated = path_object(&document, node).rotated(
+        Point::new(0.0, 0.0),
+        curvyo_document_core::Angle::from_radians(0.4),
+    );
+    let started = Instant::now();
+    document.rotate_object(&rotated).unwrap();
+    check(
+        "rotate the result",
+        started.elapsed(),
+        Duration::from_millis(300),
+    );
+
+    let scaled = document
+        .path(node)
+        .unwrap()
+        .scaled(Point::new(0.0, 0.0), 1.5, 0.5);
+    let anchors: Vec<_> = scaled
+        .all_anchors()
+        .map(|a| (a.id, a.point, a.handle_in, a.handle_out))
+        .collect();
+    let started = Instant::now();
+    document.resize_path(node, &anchors, None).unwrap();
+    check(
+        "resize the result",
+        started.elapsed(),
+        Duration::from_millis(300),
+    );
+    assert_eq!(
+        document.path(node).unwrap().all_anchors().count(),
+        4 * PER_OUTLINE
+    );
+
     let started = Instant::now();
     let bytes = pack(&document, "0.1.0").unwrap();
     check("save", started.elapsed(), Duration::from_secs(2));
@@ -94,7 +132,11 @@ fn a_compound_path_of_twenty_thousand_anchors() {
     let started = Instant::now();
     let reopened = unpack(2, &bytes).unwrap();
     check("reopen", started.elapsed(), Duration::from_secs(2));
-    assert_eq!(reopened.path(node).unwrap(), path);
+    assert_eq!(
+        reopened.path(node).unwrap(),
+        document.path(node).unwrap(),
+        "the edits survive a save"
+    );
 }
 
 /// Criterion 46: 1,000 operands replaced by one result in one commit; the

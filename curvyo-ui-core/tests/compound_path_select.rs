@@ -19,7 +19,8 @@ use curvyo_document_core::{
 use curvyo_ui_core::{
     AnchorIdMinter, EditHandle, EntryOutcome, Modifiers, ObjectSelection, ResizeDirection,
     SelectDoubleClickOutcome, SelectTool, Side, StrokeScaling, TransformHandleTolerances,
-    hit_test_object, object_bounds, object_outline_bounds, oriented_bounds,
+    fit_document_to_content, hit_test_object, hit_test_objects_along, object_bounds,
+    object_outline_bounds, oriented_bounds,
 };
 
 const SEGMENT_TOLERANCE: Tolerance = Tolerance::from_mm(0.5);
@@ -515,4 +516,63 @@ fn a_double_click_on_a_compound_path_does_not_hand_off_to_the_node_tool() {
         (false, false),
     );
     assert_eq!(outcome, SelectDoubleClickOutcome::CompoundPath);
+}
+
+// ------------------------------------------------------------ document fit
+
+/// Rulers criterion 23 with a compound path: the document fits the box of
+/// every outline, so a piece far from the first outline is not left out, and
+/// the objects move so the box starts at (0, 0).
+#[test]
+fn fit_to_content_covers_every_outline_of_a_compound_path() {
+    let document = Document::new(1);
+    let id = add_compound(
+        &document,
+        &[
+            square(100, 20.0, 30.0, 10.0, false),
+            square(200, 120.0, 80.0, 30.0, false),
+        ],
+    );
+    assert_eq!(fit_document_to_content(&document), Ok(true));
+    let size = document.size();
+    // The box runs from (20, 30) to (150, 110): 130 x 80 mm.
+    assert!((size.width.as_mm() - 130.0).abs() < 1e-9, "{size:?}");
+    assert!((size.height.as_mm() - 80.0).abs() < 1e-9, "{size:?}");
+    let path = path_of(&document, id);
+    assert_eq!(
+        path.anchors[0].point,
+        pt(0.0, 0.0),
+        "the first piece moved by (-20, -30)"
+    );
+    assert_eq!(path.extra_subpaths[0].anchors[2].point, pt(130.0, 80.0));
+    assert_eq!(
+        fit_document_to_content(&document),
+        Ok(false),
+        "already fits"
+    );
+}
+
+/// The lasso picks a compound path by the outline of any of its outlines, and a line that stays
+/// in the hole (touching no outline) picks nothing.
+#[test]
+fn a_lasso_picks_a_compound_path_by_any_of_its_outlines() {
+    let document = Document::new(1);
+    let id = add_compound(&document, &ring_outlines());
+    let objects = objects(&document);
+    let tolerance = Tolerance::from_mm(0.5);
+    let in_the_hole = [pt(14.0, 20.0), pt(26.0, 20.0)];
+    assert_eq!(
+        hit_test_objects_along(&objects, &in_the_hole, tolerance),
+        Vec::new()
+    );
+    let across_the_hole_wall = [pt(5.0, 20.0), pt(14.0, 20.0)];
+    assert_eq!(
+        hit_test_objects_along(&objects, &across_the_hole_wall, tolerance),
+        vec![id]
+    );
+    let outside_touching_outer = [pt(-5.0, 20.0), pt(2.0, 20.0)];
+    assert_eq!(
+        hit_test_objects_along(&objects, &outside_touching_outer, tolerance),
+        vec![id]
+    );
 }

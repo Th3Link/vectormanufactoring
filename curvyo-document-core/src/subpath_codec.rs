@@ -17,11 +17,13 @@
 //! absent one. Every anchor of every outline has its own unique id, so a node
 //! can be named by `(NodeId, AnchorId)` without an outline index.
 
+use std::collections::HashMap;
+
 use loro::{Container, LoroMap, LoroMovableList, ValueOrContainer};
 
 use crate::path_codec::{
-    KEY_ANCHORS, anchor_index, anchor_map_at, anchors_container, push_anchor, read_anchor_snapshot,
-    read_closed, validate_anchor, write_closed,
+    KEY_ANCHORS, anchor_map_at, anchors_container, push_anchor, read_anchor_id,
+    read_anchor_snapshot, read_closed, validate_anchor, write_closed,
 };
 use crate::path_model::{AnchorId, NewAnchor, SubpathSnapshot};
 
@@ -65,11 +67,35 @@ pub(crate) fn all_anchor_lists(meta: &LoroMap) -> Vec<LoroMovableList> {
     lists
 }
 
-/// The list and index of the anchor `id`, in whichever outline it is.
-pub(crate) fn find_anchor(meta: &LoroMap, id: AnchorId) -> Option<(LoroMovableList, usize)> {
-    all_anchor_lists(meta)
-        .into_iter()
-        .find_map(|list| anchor_index(&list, id).ok().map(|index| (list, index)))
+/// Where every anchor of a path is: the outline lists, and for each anchor id its outline and its
+/// index in it. Built once per command with one pass over the anchors, so a command that resolves
+/// thousands of anchor ids stays linear (scanning for each id would be quadratic, and a boolean
+/// result has thousands of anchors). Lookup only: no iteration order is ever used.
+pub(crate) struct AnchorPositions {
+    lists: Vec<LoroMovableList>,
+    positions: HashMap<AnchorId, (usize, usize)>,
+}
+
+impl AnchorPositions {
+    /// The list and index of the anchor `id`, in whichever outline it is.
+    pub(crate) fn get(&self, id: AnchorId) -> Option<(LoroMovableList, usize)> {
+        let &(outline, index) = self.positions.get(&id)?;
+        Some((self.lists[outline].clone(), index))
+    }
+}
+
+/// Reads the id of every anchor of every outline of `meta` once.
+pub(crate) fn anchor_positions(meta: &LoroMap) -> AnchorPositions {
+    let lists = all_anchor_lists(meta);
+    let mut positions = HashMap::with_capacity(lists.iter().map(LoroMovableList::len).sum());
+    for (outline, list) in lists.iter().enumerate() {
+        for index in 0..list.len() {
+            if let Some(id) = read_anchor_id(&anchor_map_at(list, index)) {
+                positions.entry(id).or_insert((outline, index));
+            }
+        }
+    }
+    AnchorPositions { lists, positions }
 }
 
 /// The number of anchors over all outlines.
@@ -127,7 +153,7 @@ pub(crate) fn read_extra_subpaths(meta: &LoroMap) -> Vec<SubpathSnapshot> {
 
 /// Whether a present `extra_subpaths` has the shape this module writes: a
 /// movable list of maps, each with an `anchors` movable list whose elements
-/// are anchor maps with a valid id. Absent is valid. Anything else is damage
+/// are anchor maps with a valid id; an outline has at least one anchor. Absent is valid. Anything else is damage
 /// (`OpenError::Damaged`), checked at open so the readers above can trust the
 /// shape.
 pub(crate) fn validate_extra_subpaths(meta: &LoroMap) -> bool {
@@ -137,8 +163,10 @@ pub(crate) fn validate_extra_subpaths(meta: &LoroMap) -> bool {
             (0..list.len()).all(|i| match list.get(i) {
                 Some(ValueOrContainer::Container(Container::Map(map))) => {
                     match map.get(KEY_ANCHORS) {
+                        // An outline without an anchor is damage: a writer never writes one.
                         Some(ValueOrContainer::Container(Container::MovableList(anchors))) => {
-                            (0..anchors.len()).all(|k| validate_anchor(&anchors, k))
+                            !anchors.is_empty()
+                                && (0..anchors.len()).all(|k| validate_anchor(&anchors, k))
                         }
                         _ => false,
                     }

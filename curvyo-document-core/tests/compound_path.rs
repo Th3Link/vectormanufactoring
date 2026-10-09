@@ -16,8 +16,8 @@ use std::path::PathBuf;
 
 use curvyo_document_core::{
     AnchorId, Angle, CURRENT_FORMAT_VERSION, CURRENT_LORO_SNAPSHOT_VERSION, CopySource, Document,
-    Length, NewAnchor, NodeId, ObjectEditError, ObjectSnapshot, OpenError, PathEditError,
-    PathSnapshot, Point, RectBounds, StyleEdit, Vec2, pack, unpack,
+    DocumentSize, Length, NewAnchor, NodeId, ObjectEditError, ObjectSnapshot, OpenError,
+    PathEditError, PathSnapshot, Point, RectBounds, StyleEdit, Vec2, pack, unpack,
 };
 use loro::{LoroDoc, LoroMap, LoroMovableList};
 use zip::write::SimpleFileOptions;
@@ -270,8 +270,19 @@ fn a_compound_path_survives_save_and_reopen() {
     assert_eq!(objects[0]["extra_subpaths"].as_array().unwrap().len(), 1);
 }
 
+/// The format version of the build that introduced compound paths. A later bump renumbers this one
+/// constant, regenerates the golden (`CURVYO_WRITE_FIXTURES=1`) and edits the doc comment on
+/// `CURRENT_FORMAT_VERSION`.
+const COMPOUND_FORMAT_VERSION: u32 = 8;
+
 /// The version before this build, which no longer opens a compound path.
-const PREVIOUS_FORMAT_VERSION: u32 = 7;
+const PREVIOUS_FORMAT_VERSION: u32 = COMPOUND_FORMAT_VERSION - 1;
+
+/// The one literal pin on the format version: it fails if the number moves by accident.
+#[test]
+fn the_current_format_version_is_the_one_compound_paths_introduced() {
+    assert_eq!(CURRENT_FORMAT_VERSION, COMPOUND_FORMAT_VERSION);
+}
 
 /// Criterion 37a: an ordinary path is written without the key, and exports
 /// without it.
@@ -355,7 +366,14 @@ fn the_committed_golden_reopens_with_the_same_outlines() {
         )
         .unwrap();
     }
-    let reopened = unpack(2, &fixture(GOLDEN)).unwrap();
+    let golden = fixture(GOLDEN);
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&member(&golden, "manifest.json")).unwrap();
+    assert_eq!(
+        manifest["format_version"], COMPOUND_FORMAT_VERSION,
+        "the golden declares the version that introduced compound paths"
+    );
+    let reopened = unpack(2, &golden).unwrap();
     let ids = reopened.object_ids();
     assert_eq!(ids.len(), 2);
     assert!(!path_of(&reopened, ids[0]).is_compound());
@@ -446,6 +464,15 @@ fn damaged_extra_outlines_are_refused_as_damaged() {
             Box::new(|meta| {
                 let list = extras(meta);
                 let _ = list.push_container(LoroMap::new()).unwrap();
+            }),
+        ),
+        (
+            "an outline with an empty anchor list",
+            Box::new(|meta| {
+                let map = extras(meta).push_container(LoroMap::new()).unwrap();
+                let _ = map
+                    .insert_container("anchors", LoroMovableList::new())
+                    .unwrap();
             }),
         ),
         (
@@ -718,4 +745,58 @@ fn join_and_split_refuse_a_compound_path() {
     // A kind of sanity check that an ordinary closed path can still split.
     let plain = path_with_three(&document, 40);
     assert!(document.check_split(plain, id(41)));
+}
+
+/// Rulers criterion 17 with a compound path: resizing the document keeps the
+/// content centred, which moves every outline by the same half-change.
+#[test]
+fn resizing_the_document_moves_every_outline_by_the_half_change() {
+    let document = Document::new(1);
+    let node = ring(&document);
+    let before = path_of(&document, node);
+    let old = document.size();
+    document
+        .resize(DocumentSize::from_mm(
+            old.width.as_mm() + 90.0,
+            old.height.as_mm() + 103.0,
+        ))
+        .unwrap();
+    let after = path_of(&document, node);
+    assert_eq!(after.all_anchors().count(), before.all_anchors().count());
+    for (new, old) in after.all_anchors().zip(before.all_anchors()) {
+        assert_eq!(new.point, old.point.translated(Vec2::new(45.0, 51.5)));
+        assert_eq!(new.id, old.id);
+    }
+    assert_eq!(
+        after.extra_subpaths.len(),
+        1,
+        "the hole moved with the rest"
+    );
+}
+
+/// Tester D4: an anchor id names a node across the whole document, so a result may not reuse the id
+/// of an object that stays. The ids of the replaced operands are free again.
+#[test]
+fn replace_with_path_refuses_an_anchor_id_of_an_object_that_stays() {
+    let document = Document::new(1);
+    let stays = path_with_three(&document, 500);
+    let operand = path_with_three(&document, 600);
+    let before = (document.object(stays), document.object(operand));
+    let changes = labels(&document).len();
+
+    let clash = [square(501, 0.0, 0.0, 5.0, false)];
+    assert_eq!(
+        document.replace_with_path(&[operand], operand, &clash, "boolean_union"),
+        Err(ObjectEditError::AnchorIds)
+    );
+    assert_eq!(labels(&document).len(), changes, "no commit");
+    assert_eq!((document.object(stays), document.object(operand)), before);
+
+    // Reusing an id of the operand that is replaced is fine.
+    let reuse = [square(600, 0.0, 0.0, 5.0, false)];
+    assert!(
+        document
+            .replace_with_path(&[operand], operand, &reuse, "boolean_union")
+            .is_ok()
+    );
 }

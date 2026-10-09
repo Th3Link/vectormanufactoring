@@ -102,7 +102,10 @@ out). No frontend change: the Node-bar sentence, the hint chip and the Propertie
 
 ### PR 3: command and UI (later; after PR 2)
 
-- [ ] 17. `ui-core` `boolean` module: operands in z-order, outlines from snapshots (primitives
+- [ ] 17. Texts of the compound path (decided in PR 2 review): the subject line "Compound path" in
+  Rust (`style_scope::kind_name`); `NodeToolbarState.compound_only` and the double-click code
+  `"compound_path"` from Rust, the sentence of criterion 38 as one frontend constant (AC 38).
+- [ ] 17a. `ui-core` `boolean` module: operands in z-order, outlines from snapshots (primitives
   through `outline_of_rotated`), base operand, kernel call, refusals with counts, selection after
   (AC 4, 5, 6, 9, 15 to 17, 19, 23).
 - [ ] 18. Session glue and Select bar Boolean group: one Tab stop, roving focus, tooltips, notices,

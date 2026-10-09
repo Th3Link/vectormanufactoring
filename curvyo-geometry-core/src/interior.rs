@@ -23,25 +23,19 @@ fn cubic_to(path: &mut BezPath, from: OutlineTriple, to: OutlineTriple) {
     ));
 }
 
-/// Whether `query` lies in the interior of the outline through `anchors`,
-/// by the non-zero winding rule, the same rule the fill is painted with.
+/// Whether `query` lies in the area a compound path's fill paints: the
+/// non-zero winding number of all `outlines` together, so an outline wound
+/// against its surrounding one is a hole
+/// (`specs/0016-boolean-operations` criterion 33). With one outline this is
+/// the test for an ordinary path.
 ///
 /// A `closed` outline is bounded by its real closing segment, the cubic
 /// through its own handles; an open one is closed with a straight chord from
 /// its last anchor back to its first, as the fill is (acceptance criteria 15
-/// and 23). Fewer than two anchors have no interior. The test is exact on
-/// cubics, so it takes no tolerance: points near the edge are outline hits at
-/// the caller's hit tolerance before this test runs.
-#[must_use]
-pub fn contains_point(anchors: &[OutlineTriple], closed: bool, query: Point) -> bool {
-    contains_point_in_outlines(&[Outline::new(anchors, closed)], query)
-}
-
-/// Whether `query` lies in the area a compound path's fill paints: the
-/// non-zero winding number of all `outlines` together, so an outline wound
-/// against its surrounding one is a hole
-/// (`specs/0016-boolean-operations` criterion 33). Each outline is bounded as
-/// in [`contains_point`]; one with fewer than two anchors adds nothing.
+/// and 23). An outline with fewer than two anchors has no interior and adds
+/// nothing. The test is exact on cubics, so it takes no tolerance: points near
+/// the edge are outline hits at the caller's hit tolerance before this test
+/// runs.
 #[must_use]
 pub fn contains_point_in_outlines(outlines: &[Outline<'_>], query: Point) -> bool {
     let mut path = BezPath::new();
@@ -68,6 +62,11 @@ pub fn contains_point_in_outlines(outlines: &[Outline<'_>], query: Point) -> boo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One outline's interior test, the way an ordinary path is tested.
+    fn contains_point(anchors: &[OutlineTriple], closed: bool, query: Point) -> bool {
+        contains_point_in_outlines(&[Outline::new(anchors, closed)], query)
+    }
 
     fn corner(_id: u64, x: f64, y: f64) -> OutlineTriple {
         (Point::new(x, y), Vec2::ZERO, Vec2::ZERO)

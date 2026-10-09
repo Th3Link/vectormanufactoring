@@ -235,11 +235,11 @@ impl Document {
             return Err(PathEditError::InvalidStrokeWidth);
         }
         let (meta, _) = self.path_parts(path)?;
+        let positions = crate::subpath_codec::anchor_positions(&meta);
         let resolved: Vec<_> = anchors
             .iter()
             .map(|&(id, point, handle_in, handle_out)| {
-                let (list, index) = crate::subpath_codec::find_anchor(&meta, id)
-                    .ok_or(PathEditError::NoSuchAnchor)?;
+                let (list, index) = positions.get(id).ok_or(PathEditError::NoSuchAnchor)?;
                 Ok((list, index, point, handle_in, handle_out))
             })
             .collect::<Result<_, PathEditError>>()?;

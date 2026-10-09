@@ -315,7 +315,7 @@ impl PathSnapshot {
     }
 
     /// Every anchor of every outline, mutably, in the same order.
-    pub fn all_anchors_mut(&mut self) -> impl Iterator<Item = &mut AnchorSnapshot> {
+    pub(crate) fn all_anchors_mut(&mut self) -> impl Iterator<Item = &mut AnchorSnapshot> {
         self.anchors.iter_mut().chain(
             self.extra_subpaths
                 .iter_mut()
