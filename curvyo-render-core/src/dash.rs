@@ -111,30 +111,59 @@ pub(crate) fn dashed_object(
             if *length <= 0.0 {
                 return path.clone();
             }
-            let length = *length as f32;
-            let outline_estimate = (f64::from(length) / period_mm).ceil() * on_intervals as f64;
-            let mut sampler = measurements.create_sampler(path, SampleType::Distance);
-            let mut builder = Path::builder();
-            let mut distance = 0.0_f32;
-            // The estimate bounds the loop; the explicit cap also stops it if
-            // float rounding ever failed to advance `distance`.
-            let max_steps = ratios.len() * (outline_estimate as usize + 2);
-            for step in 0..max_steps {
-                if distance >= length {
-                    break;
-                }
-                let run = ratios[step % ratios.len()] as f32 * width;
-                if step % 2 == 0 && run > 0.0 {
-                    sampler.split_range(distance..distance + run, &mut builder);
-                    drawn += 1;
-                }
-                distance += run;
-            }
-            builder.build()
+            let (dashes, count) = dash_outline(
+                path,
+                measurements,
+                *length,
+                ratios,
+                width,
+                period_mm,
+                on_intervals,
+            );
+            drawn += count;
+            dashes
         })
         .collect();
     budget.remaining = budget.remaining.saturating_sub(drawn);
     Some(dashed)
+}
+
+/// The dashes of one outline of positive `length`, and how many there are. The estimate of the
+/// dash count bounds the loop; the explicit step cap also stops it if float rounding ever failed
+/// to advance the distance.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+fn dash_outline(
+    path: &Path,
+    measurements: &PathMeasurements,
+    length: f64,
+    ratios: &[f64],
+    width: f32,
+    period_mm: f64,
+    on_intervals: usize,
+) -> (Path, usize) {
+    let length = length as f32;
+    let outline_estimate = (f64::from(length) / period_mm).ceil() * on_intervals as f64;
+    let mut sampler = measurements.create_sampler(path, SampleType::Distance);
+    let mut builder = Path::builder();
+    let mut distance = 0.0_f32;
+    let mut drawn = 0_usize;
+    let max_steps = ratios.len() * (outline_estimate as usize + 2);
+    for step in 0..max_steps {
+        if distance >= length {
+            break;
+        }
+        let run = ratios[step % ratios.len()] as f32 * width;
+        if step % 2 == 0 && run > 0.0 {
+            sampler.split_range(distance..distance + run, &mut builder);
+            drawn += 1;
+        }
+        distance += run;
+    }
+    (builder.build(), drawn)
 }
 
 #[cfg(test)]
