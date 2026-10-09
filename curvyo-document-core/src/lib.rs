@@ -34,6 +34,7 @@ mod paths;
 mod primitive_model;
 mod primitive_outline;
 mod replace;
+mod segment_bend;
 mod shape_codec;
 mod shape_radii;
 mod shapes;
