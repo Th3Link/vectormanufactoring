@@ -3,7 +3,9 @@
 //! with the guards that keep a crafted pattern or width from exhausting memory
 //! or time (`adrs.md`, readiness check section 5).
 
-use curvyo_document_core::DashPattern;
+use std::borrow::Cow;
+
+use curvyo_document_core::{DashPattern, LineCap};
 use lyon::algorithms::measure::{PathMeasurements, SampleType};
 use lyon::path::Path;
 
@@ -35,12 +37,25 @@ impl DashBudget {
     }
 }
 
+/// The pattern as the renderer walks it: an odd list repeats once, so `1 2 4`
+/// draws as `1 2 4 1 2 4` and the second round starts with an off gap, as SVG
+/// defines it (`specs/0017-style-panel-rework`, criterion 32).
+fn walked(pattern: &DashPattern) -> Cow<'_, [f64]> {
+    let ratios = pattern.as_slice();
+    if ratios.len() % 2 == 1 {
+        Cow::Owned([ratios, ratios].concat())
+    } else {
+        Cow::Borrowed(ratios)
+    }
+}
+
 /// The dashed version of each outline of **one object**: one open sub-path per on-interval,
 /// so each dash is stroked with its own caps (acceptance criterion 12). `None` means "draw it
 /// solid": a solid pattern, a period under [`MIN_DASH_PERIOD_PX`] on screen, outlines of no
 /// length, or a pattern that would pass the per-object or per-frame dash limit. `width_mm` is the
 /// **document** stroke width, which the pattern is a multiple of; `scale` is screen pixels per
-/// millimetre.
+/// millimetre. A zero-length "on" entry makes a dot when `cap` is round or square (and nothing with
+/// a butt cap), as SVG draws it.
 ///
 /// Each outline is dashed on
 /// its own so the pattern starts afresh at its first node (criterion 31a of
@@ -59,12 +74,14 @@ impl DashBudget {
 pub(crate) fn dashed_object(
     outlines: &[Path],
     pattern: &DashPattern,
+    cap: LineCap,
     width_mm: f64,
     scale: f64,
     tolerance_mm: f64,
     budget: &mut DashBudget,
 ) -> Option<Vec<Path>> {
-    let ratios = pattern.as_slice();
+    let ratios = walked(pattern);
+    let ratios = ratios.as_ref();
     // A width past the display cap draws solid, like the stroke it belongs to:
     // `ratio * width` would overflow `f32` in the tessellator.
     if ratios.is_empty()
@@ -78,7 +95,11 @@ pub(crate) fn dashed_object(
     if !period_mm.is_finite() || period_mm * scale < MIN_DASH_PERIOD_PX {
         return None;
     }
-    let on_intervals = ratios.chunks(2).filter(|pair| pair[0] > 0.0).count();
+    let dots = cap != LineCap::Butt;
+    let on_intervals = ratios
+        .chunks(2)
+        .filter(|pair| pair[0] > 0.0 || dots)
+        .count();
     let measured: Vec<(PathMeasurements, f64)> = outlines
         .iter()
         .map(|path| {
@@ -102,7 +123,13 @@ pub(crate) fn dashed_object(
     if estimate > MAX_DASHES_PER_OBJECT as f64 || estimate > budget.remaining as f64 {
         return None;
     }
-    let width = width_mm as f32;
+    let walk = Walk {
+        ratios,
+        width: width_mm as f32,
+        period_mm,
+        on_intervals,
+        dots,
+    };
     let mut drawn = 0_usize;
     let dashed: Vec<Path> = outlines
         .iter()
@@ -111,21 +138,27 @@ pub(crate) fn dashed_object(
             if *length <= 0.0 {
                 return path.clone();
             }
-            let (dashes, count) = dash_outline(
-                path,
-                measurements,
-                *length,
-                ratios,
-                width,
-                period_mm,
-                on_intervals,
-            );
+            let (dashes, count) = dash_outline(path, measurements, *length, &walk);
             drawn += count;
             dashes
         })
         .collect();
     budget.remaining = budget.remaining.saturating_sub(drawn);
     Some(dashed)
+}
+
+/// What walking one object's pattern needs, the same for each of its outlines.
+struct Walk<'a> {
+    /// The pattern as walked (an odd list already doubled).
+    ratios: &'a [f64],
+    /// The document stroke width, millimetres, as `lyon` takes it.
+    width: f32,
+    /// The length of one round of the pattern, millimetres.
+    period_mm: f64,
+    /// How many "on" entries a round has that draw something.
+    on_intervals: usize,
+    /// A zero-length "on" entry draws a dot (a round or square cap).
+    dots: bool,
 }
 
 /// The dashes of one outline of positive `length`, and how many there are. The estimate of the
@@ -140,11 +173,15 @@ fn dash_outline(
     path: &Path,
     measurements: &PathMeasurements,
     length: f64,
-    ratios: &[f64],
-    width: f32,
-    period_mm: f64,
-    on_intervals: usize,
+    walk: &Walk<'_>,
 ) -> (Path, usize) {
+    let Walk {
+        ratios,
+        width,
+        period_mm,
+        on_intervals,
+        dots,
+    } = *walk;
     let length = length as f32;
     let outline_estimate = (f64::from(length) / period_mm).ceil() * on_intervals as f64;
     let mut sampler = measurements.create_sampler(path, SampleType::Distance);
@@ -157,9 +194,31 @@ fn dash_outline(
             break;
         }
         let run = ratios[step % ratios.len()] as f32 * width;
-        if step % 2 == 0 && run > 0.0 {
-            sampler.split_range(distance..distance + run, &mut builder);
-            drawn += 1;
+        if step % 2 == 0 {
+            if run > 0.0 {
+                sampler.split_range(distance..distance + run, &mut builder);
+                drawn += 1;
+            } else if dots {
+                // A zero-length dash: a segment of a thousandth of the stroke width along
+                // the outline's direction there, so a round or square cap draws the dot and
+                // the square follows the line. (`lyon` draws no cap on a sub-path of no
+                // length at all.)
+                let at = sampler.sample(distance).position();
+                // The direction from two points on the outline, not the sampler's tangent,
+                // which is not a number at the end of a degenerate curve (a corner anchor's
+                // zero handles).
+                let step = (width * 0.01).max(f32::EPSILON * length).min(length);
+                let ahead = sampler.sample((distance + step).min(length)).position();
+                let behind = sampler.sample((distance - step).max(0.0)).position();
+                let along = (ahead - behind).normalize();
+                if along.x.is_finite() && along.y.is_finite() {
+                    let half = along * (width * 0.001);
+                    builder.begin(at - half);
+                    builder.line_to(at + half);
+                    builder.end(false);
+                    drawn += 1;
+                }
+            }
         }
         distance += run;
     }
@@ -184,6 +243,7 @@ mod tests {
         dashed_object(
             std::slice::from_ref(path),
             pattern,
+            LineCap::Butt,
             width_mm,
             scale,
             tolerance_mm,
@@ -202,6 +262,18 @@ mod tests {
 
     fn pattern(lengths: &[f64]) -> DashPattern {
         DashPattern::new(lengths.to_vec()).unwrap()
+    }
+
+    /// Every point of every event, in order: two paths with the same points
+    /// were dashed the same way.
+    fn points(path: &Path) -> Vec<[f32; 2]> {
+        path.iter()
+            .flat_map(|event| match event {
+                lyon::path::Event::Begin { at } => vec![[at.x, at.y]],
+                lyon::path::Event::Line { to, .. } => vec![[to.x, to.y]],
+                _ => Vec::new(),
+            })
+            .collect()
     }
 
     fn subpaths(path: &Path) -> usize {
@@ -341,7 +413,7 @@ mod tests {
     }
 
     #[test]
-    fn a_zero_on_entry_is_skipped() {
+    fn a_zero_on_entry_is_skipped_with_a_butt_cap() {
         let mut budget = DashBudget::per_frame();
         let path = dashed(
             &line(40.0),
@@ -353,6 +425,75 @@ mod tests {
         )
         .expect("dashed");
         assert_eq!(subpaths(&path), 5);
+    }
+
+    fn dashed_with_cap(lengths: &[f64], cap: LineCap, length: f32, width: f64) -> Option<Path> {
+        dashed_object(
+            &[line(length)],
+            &pattern(lengths),
+            cap,
+            width,
+            10.0,
+            0.01,
+            &mut DashBudget::per_frame(),
+        )?
+        .pop()
+    }
+
+    #[test]
+    fn a_zero_on_entry_makes_a_dot_with_a_round_or_square_cap() {
+        for cap in [LineCap::Round, LineCap::Square] {
+            // `0 3` at width 1: a dot every 3 mm, on a 30 mm line.
+            let path = dashed_with_cap(&[0.0, 3.0], cap, 30.0, 1.0).expect("dashed");
+            assert_eq!(subpaths(&path), 10, "{cap:?}");
+        }
+        let butt = dashed_with_cap(&[0.0, 3.0], LineCap::Butt, 30.0, 1.0).expect("dashed");
+        assert_eq!(
+            subpaths(&butt),
+            0,
+            "a butt cap draws nothing for a zero dash"
+        );
+    }
+
+    #[test]
+    fn a_dot_sits_on_the_outline_at_its_distance() {
+        let path = dashed_with_cap(&[0.0, 5.0], LineCap::Round, 12.0, 1.0).expect("dashed");
+        let xs: Vec<f32> = path
+            .iter()
+            .filter_map(|event| match event {
+                lyon::path::Event::Begin { at } => Some(at.x),
+                _ => None,
+            })
+            .collect();
+        // Dots at 0, 5 and 10 mm (each starts a thousandth of a width before its point).
+        assert_eq!(xs.len(), 3);
+        for (x, want) in xs.iter().zip([0.0_f32, 5.0, 10.0]) {
+            assert!((x - want).abs() < 0.01, "{x} vs {want}");
+        }
+    }
+
+    #[test]
+    fn an_odd_list_is_walked_twice() {
+        // `1 2 4` at width 1 walks as `1 2 4 1 2 4`: on 1, off 2, on 4, off 1, on 2, off 4:
+        // period 14 mm, 3 dashes per period, a 28 mm line has 6 dashes.
+        let odd = dashed_with_cap(&[1.0, 2.0, 4.0], LineCap::Butt, 28.0, 1.0).expect("dashed");
+        let even = dashed_with_cap(&[1.0, 2.0, 4.0, 1.0, 2.0, 4.0], LineCap::Butt, 28.0, 1.0)
+            .expect("dashed");
+        assert_eq!(subpaths(&odd), 6);
+        assert_eq!(
+            points(&odd),
+            points(&even),
+            "an odd list draws exactly as its doubling"
+        );
+    }
+
+    #[test]
+    fn a_single_number_is_on_then_the_same_off() {
+        // `4` walks as `4 4`.
+        let one = dashed_with_cap(&[4.0], LineCap::Butt, 32.0, 1.0).expect("dashed");
+        let two = dashed_with_cap(&[4.0, 4.0], LineCap::Butt, 32.0, 1.0).expect("dashed");
+        assert_eq!(points(&one), points(&two));
+        assert_eq!(subpaths(&one), 4);
     }
 
     #[test]

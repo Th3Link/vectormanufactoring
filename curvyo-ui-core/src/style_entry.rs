@@ -13,15 +13,15 @@ pub const MAX_STROKE_WIDTH_MM: f64 = 1000.0;
 /// its text and shows the matching message; nothing is written.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StyleEntryError {
-    /// Not 3 or 6 hex digits ("Enter 3 or 6 hex digits").
+    /// Not 3, 4, 6 or 8 hex digits ("Enter 3, 4, 6 or 8 hex digits").
     Hex,
-    /// 8 hex digits: colour and opacity are independent ("Use 6 digits; set
-    /// opacity separately").
-    HexEightDigits,
     /// Not a number from 0 to 100 ("Enter a number from 0 to 100").
     Percent,
     /// Not a number from 0 to 1000 ("Enter a number from 0 to 1000").
     Width,
+    /// Not 1 to 16 numbers from 0 to 1000 with a sum above 0, separated by
+    /// spaces ("Enter 1 to 16 numbers from 0 to 1000, for example 1 2 4 2").
+    Dash,
 }
 
 impl StyleEntryError {
@@ -30,43 +30,65 @@ impl StyleEntryError {
     pub const fn code(self) -> &'static str {
         match self {
             Self::Hex => "hex",
-            Self::HexEightDigits => "hex8",
             Self::Percent => "percent",
             Self::Width => "width",
+            Self::Dash => "dash",
         }
     }
 }
 
-/// Parses a hex colour: 3 or 6 digits, with or without a leading `#`, in any
-/// case (`#F80` is `#FF8800`).
+/// A colour typed as hex: the RGB, and the alpha when the form carried one.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HexColour {
+    /// The red, green and blue.
+    pub color: Color,
+    /// The alpha as `AA / 255` for the 4 and 8 digit forms, `None` for the 3
+    /// and 6 digit forms, which leave the alpha as it is.
+    pub opacity: Option<Opacity>,
+}
+
+/// Parses a hex colour: 3 (`F80`), 4 (`F80C`), 6 (`FF8800`) or 8 (`FF8800CC`)
+/// digits, with or without a leading `#`, in any case, surrounding spaces
+/// ignored. A 3 or 4 digit form doubles each digit.
 ///
 /// # Errors
-/// [`StyleEntryError::HexEightDigits`] for 8 digits, [`StyleEntryError::Hex`]
-/// for anything else that is not 3 or 6 hex digits.
-pub fn parse_hex(text: &str) -> Result<Color, StyleEntryError> {
+/// [`StyleEntryError::Hex`] for any other length or a character that is not a
+/// hex digit.
+pub fn parse_hex(text: &str) -> Result<HexColour, StyleEntryError> {
     let trimmed = text.trim();
     let digits = trimmed.strip_prefix('#').unwrap_or(trimmed);
     if !digits.chars().all(|c| c.is_ascii_hexdigit()) {
         return Err(StyleEntryError::Hex);
     }
     let value = |hex: &str| u8::from_str_radix(hex, 16).map_err(|_| StyleEntryError::Hex);
-    match digits.len() {
-        3 => {
-            let channel = |n: usize| value(&digits[n..=n].repeat(2));
-            Ok(Color {
-                r: channel(0)?,
-                g: channel(1)?,
-                b: channel(2)?,
-            })
-        }
-        6 => Ok(Color {
-            r: value(&digits[0..2])?,
-            g: value(&digits[2..4])?,
-            b: value(&digits[4..6])?,
-        }),
-        8 => Err(StyleEntryError::HexEightDigits),
-        _ => Err(StyleEntryError::Hex),
-    }
+    let doubled = |n: usize| value(&digits[n..=n].repeat(2));
+    let pair = |n: usize| value(&digits[n..n + 2]);
+    let (r, g, b, alpha) = match digits.len() {
+        3 => (doubled(0)?, doubled(1)?, doubled(2)?, None),
+        4 => (doubled(0)?, doubled(1)?, doubled(2)?, Some(doubled(3)?)),
+        6 => (pair(0)?, pair(2)?, pair(4)?, None),
+        8 => (pair(0)?, pair(2)?, pair(4)?, Some(pair(6)?)),
+        _ => return Err(StyleEntryError::Hex),
+    };
+    Ok(HexColour {
+        color: Color { r, g, b },
+        opacity: alpha.map(opacity_from_byte),
+    })
+}
+
+/// The alpha byte `AA` as the fraction `AA / 255` it is stored as.
+fn opacity_from_byte(alpha: u8) -> Opacity {
+    // `alpha / 255` is within 0..=1, a valid opacity.
+    Opacity::new(f64::from(alpha) / 255.0).unwrap_or(Opacity::OPAQUE)
+}
+
+/// A colour with its alpha as the field shows it: `#RRGGBBAA`, upper case,
+/// `AA = round(255 x alpha)` with .5 rounded up.
+#[must_use]
+pub fn hex_text(color: Color, opacity: Opacity) -> String {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let alpha = (opacity.get() * 255.0).round() as u8;
+    format!("#{:02X}{:02X}{:02X}{alpha:02X}", color.r, color.g, color.b)
 }
 
 /// An opacity from a whole percent `n` (0 to 100), stored as exactly `n / 100`
@@ -149,9 +171,15 @@ impl StyleField {
     pub fn parse_text(self, text: &str) -> Result<StyleEdit, StyleEntryError> {
         Ok(match self {
             Self::StrokeWidth => StyleEdit::StrokeWidth(parse_stroke_width(text)?),
-            Self::StrokeColor => StyleEdit::StrokeColor(parse_hex(text)?),
+            Self::StrokeColor => hex_edit(
+                parse_hex(text)?,
+                StyleEdit::StrokeColor,
+                StyleEdit::StrokeRgba,
+            ),
             Self::StrokeOpacity => StyleEdit::StrokeOpacity(parse_opacity_percent(text)?),
-            Self::FillColor => StyleEdit::FillColor(parse_hex(text)?),
+            Self::FillColor => {
+                hex_edit(parse_hex(text)?, StyleEdit::FillColor, StyleEdit::FillRgba)
+            }
             Self::FillOpacity => StyleEdit::FillOpacity(parse_opacity_percent(text)?),
         })
     }
@@ -176,6 +204,19 @@ impl StyleField {
             Self::FillOpacity => Some(StyleEdit::FillOpacity(opacity_from_percent(percent))),
             _ => None,
         }
+    }
+}
+
+/// The edit a typed hex makes: the colour alone for the 3 and 6 digit forms,
+/// the colour and the alpha for the 4 and 8 digit forms.
+fn hex_edit(
+    typed: HexColour,
+    colour: fn(Color) -> StyleEdit,
+    rgba: fn(Color, Opacity) -> StyleEdit,
+) -> StyleEdit {
+    match typed.opacity {
+        None => colour(typed.color),
+        Some(opacity) => rgba(typed.color, opacity),
     }
 }
 

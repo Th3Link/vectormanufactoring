@@ -7,7 +7,7 @@
 //! orchestration, over `curvyo-ui-core`'s rules.
 
 use curvyo_document_core::Color;
-use curvyo_ui_core::{DashChoice, StyleField, cap_from_name, join_from_name};
+use curvyo_ui_core::{DashChoice, StyleField, cap_from_name, join_from_name, rgb_to_hsv};
 use wasm_bindgen::prelude::*;
 
 use crate::session::StylePanelView;
@@ -30,7 +30,7 @@ impl WasmSession {
     /// `"stroke-color"`, `"stroke-opacity"`, `"fill-color"` or
     /// `"fill-opacity"`. Returns `"committed"` (one commit for every edited
     /// object), `"unchanged"` (nothing to edit), or `"invalid:<code>"` with
-    /// the code `hex`, `hex8`, `percent` or `width`: the field stays open and
+    /// the code `hex`, `percent`, `width` or `dash`: the field stays open and
     /// nothing is written.
     pub fn set_style_text(&mut self, field_name: &str, text: &str) -> String {
         let Some(field) = field(field_name) else {
@@ -54,6 +54,17 @@ impl WasmSession {
                 b: (rgb & 0xFF) as u8,
             };
             self.session.preview_style_color(field, color);
+        }
+    }
+
+    /// A tick of a drag in the colour area or the hue slider: shows the colour
+    /// of hue `hue` (degrees), saturation and value (`0` to `1`) on the edited
+    /// objects without writing. `field_name` is `"stroke-color"` or
+    /// `"fill-color"`.
+    pub fn preview_style_hsv(&mut self, field_name: &str, hue: f64, saturation: f64, value: f64) {
+        if let Some(field) = field(field_name) {
+            self.session
+                .preview_style_hsv(field, hue, saturation, value);
         }
     }
 
@@ -82,11 +93,21 @@ impl WasmSession {
         self.session.set_stroke_paint(on);
     }
 
-    /// The Dash select: `"solid"`, `"dash"`, `"dot"` or `"dash-dot"`; any
+    /// A Dash preset button: `"solid"`, `"dash"`, `"dot"` or `"dash-dot"`; any
     /// other word writes nothing.
     pub fn set_stroke_dash(&mut self, name: &str) {
         if let Some(choice) = DashChoice::from_name(name) {
             self.session.set_stroke_dash(choice);
+        }
+    }
+
+    /// Enter or Tab in the pattern line: `"committed"`, `"unchanged"` (nothing
+    /// to edit) or `"invalid:dash"`.
+    pub fn set_stroke_dash_text(&mut self, text: &str) -> String {
+        match self.session.set_stroke_dash_text(text) {
+            Ok(true) => "committed".to_string(),
+            Ok(false) => "unchanged".to_string(),
+            Err(error) => format!("invalid:{}", error.code()),
         }
     }
 
@@ -122,4 +143,18 @@ impl WasmSession {
     pub fn pointer_is_down(&self) -> bool {
         self.session.is_pointer_down()
     }
+}
+
+/// The hue (degrees, `-1` for a grey or black, which has none), saturation and
+/// value (`0` to `1`) of the colour `rgb` (`0xRRGGBB`), for the picker to
+/// re-derive its state when the colour changed from outside it.
+#[wasm_bindgen]
+#[must_use]
+pub fn colour_to_hsv(rgb: u32) -> Vec<f64> {
+    let hsv = rgb_to_hsv(Color {
+        r: ((rgb >> 16) & 0xFF) as u8,
+        g: ((rgb >> 8) & 0xFF) as u8,
+        b: (rgb & 0xFF) as u8,
+    });
+    vec![hsv.hue.unwrap_or(-1.0), hsv.saturation, hsv.value]
 }

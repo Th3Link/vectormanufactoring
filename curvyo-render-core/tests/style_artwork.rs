@@ -277,6 +277,59 @@ fn ac7_ac8_a_dashed_stroke_has_gaps_and_the_pattern_scales_with_the_width() {
 }
 
 #[test]
+fn an_odd_dash_list_repeats_as_svg_defines_it() {
+    // `1 2 4` at width 1 walks as `1 2 4 1 2 4`: on 1, off 2, on 4, off 1,
+    // on 2, off 4. On a 28 mm line that is two rounds of three dashes.
+    let document = Document::new(1);
+    let id = polyline(&document, &[(0.0, 0.0), (28.0, 0.0)], false);
+    edit(&document, id, StyleEdit::StrokeWidth(mm(1.0)));
+    edit(
+        &document,
+        id,
+        StyleEdit::StrokeDash(DashPattern::new(vec![1.0, 2.0, 4.0]).unwrap()),
+    );
+    let dashes = covered_intervals(&artwork(&document), 0);
+    let lengths: Vec<f64> = dashes.iter().map(|(lo, hi)| (hi - lo).round()).collect();
+    let starts: Vec<f64> = dashes.iter().map(|(lo, _)| lo.round()).collect();
+    assert_eq!(starts, [0.0, 3.0, 8.0, 14.0, 17.0, 22.0], "{dashes:?}");
+    assert_eq!(lengths, [1.0, 4.0, 2.0, 1.0, 4.0, 2.0], "{dashes:?}");
+}
+
+#[test]
+fn a_zero_on_entry_draws_a_dot_with_a_round_cap_and_nothing_with_a_butt_cap() {
+    // `0 3` at width 2: a dot every 6 mm on a 30 mm line.
+    let document = Document::new(1);
+    let id = polyline(&document, &[(0.0, 0.0), (30.0, 0.0)], false);
+    edit(&document, id, StyleEdit::StrokeWidth(mm(2.0)));
+    edit(
+        &document,
+        id,
+        StyleEdit::StrokeDash(DashPattern::new(vec![0.0, 3.0]).unwrap()),
+    );
+    edit(&document, id, StyleEdit::StrokeCap(LineCap::Butt));
+    assert_eq!(
+        artwork(&document).triangle_count(),
+        0,
+        "a butt cap shows nothing"
+    );
+
+    for cap in [LineCap::Round, LineCap::Square] {
+        edit(&document, id, StyleEdit::StrokeCap(cap));
+        let dots = covered_intervals(&artwork(&document), 0);
+        assert_eq!(dots.len(), 5, "{cap:?}: {dots:?}");
+        for (n, (lo, hi)) in dots.iter().enumerate() {
+            // Each dot is one stroke width across, centred on 6 mm steps.
+            assert!((hi - lo - 2.0).abs() < 0.1, "{cap:?} dot {n}: {lo}..{hi}");
+            let centre = (lo + hi) / 2.0;
+            assert!(
+                (centre - 6.0 * n as f64).abs() < 0.1,
+                "{cap:?} dot {n} at {centre}"
+            );
+        }
+    }
+}
+
+#[test]
 fn ac8_a_pattern_too_fine_to_see_draws_solid() {
     let document = Document::new(1);
     let id = polyline(&document, &[(0.0, 0.0), (100.0, 0.0)], false);

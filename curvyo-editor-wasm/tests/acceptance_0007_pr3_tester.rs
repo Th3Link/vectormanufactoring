@@ -140,8 +140,8 @@ fn width_zero_is_no_stroke_and_keeps_every_stored_value() {
     assert_eq!(off.stroke.dash.as_slice(), &[1.0, 3.0]);
     assert_eq!(off.stroke.join, LineJoin::Round);
     assert_eq!(off.stroke.cap, LineCap::Square);
-    let state = session.style_panel_state();
-    assert!(state.stroke.all_off);
+    let state = session.style_panel_state().unwrap();
+    assert!(!state.stroke.rows_shown);
     assert_eq!(state.stroke.paint, BarValue::Uniform(false));
 
     // Typing 0 again changes nothing.
@@ -181,7 +181,7 @@ fn a_non_zero_width_or_a_colour_or_opacity_edit_turns_an_off_stroke_back_on() {
         if edit != 0 {
             assert_eq!(s.stroke.width, Length::from_mm(2.0), "other values kept");
         }
-        assert!(!session.style_panel_state().stroke.all_off);
+        assert!(session.style_panel_state().unwrap().stroke.rows_shown);
     }
 }
 
@@ -210,10 +210,10 @@ fn some_on_some_off_keeps_the_rows_enabled_and_paint_on_turns_all_on() {
         .unwrap();
     session.set_stroke_paint(false);
     select_all(&mut session, 2);
-    let state = session.style_panel_state();
+    let state = session.style_panel_state().unwrap();
     assert_eq!(state.subject, "2 rectangles");
     assert_eq!(state.stroke.paint, BarValue::Mixed);
-    assert!(!state.stroke.all_off);
+    assert!(state.stroke.rows_shown);
     assert_eq!(state.stroke.width, BarValue::Mixed);
 
     session.set_stroke_paint(true);
@@ -286,11 +286,7 @@ fn refused_text_writes_nothing_for_every_field_and_selection_size() {
         (StyleField::StrokeWidth, "", StyleEntryError::Width),
         (StyleField::StrokeColor, "#12", StyleEntryError::Hex),
         (StyleField::FillColor, "zzz", StyleEntryError::Hex),
-        (
-            StyleField::StrokeColor,
-            "#11223344",
-            StyleEntryError::HexEightDigits,
-        ),
+        (StyleField::StrokeColor, "#1122334", StyleEntryError::Hex),
         (StyleField::StrokeOpacity, "-1", StyleEntryError::Percent),
         (StyleField::FillOpacity, "101", StyleEntryError::Percent),
         (StyleField::FillOpacity, "x", StyleEntryError::Percent),
@@ -371,15 +367,21 @@ fn the_fill_paint_over_a_mixed_selection_changes_only_the_paint() {
         .set_style_text(StyleField::FillColor, "#F00")
         .unwrap();
     select_all(&mut session, 2);
-    assert_eq!(session.style_panel_state().fill.paint, BarValue::Mixed);
-    assert_eq!(session.style_panel_state().fill.color, BarValue::Mixed);
+    assert_eq!(
+        session.style_panel_state().unwrap().fill.paint,
+        BarValue::Mixed
+    );
+    assert_eq!(
+        session.style_panel_state().unwrap().fill.color,
+        BarValue::Mixed
+    );
     session.set_fill_paint(true);
     let all = styles(&session);
     assert!(all.iter().all(|s| s.fill.enabled));
     assert_eq!(all[0].fill.color, red(), "keeps its own colour");
     assert_eq!(all[1].fill.color, Color::BLACK);
     assert_eq!(
-        session.style_panel_state().fill.paint,
+        session.style_panel_state().unwrap().fill.paint,
         BarValue::Uniform(true)
     );
 }
@@ -417,7 +419,7 @@ fn a_path_and_a_rectangle_take_the_identical_edits() {
     session.pointer_hover(Point::new(125.0, 100.0), true, false);
     session.pointer_down(Point::new(125.0, 100.0), true);
     session.pointer_up(Point::new(125.0, 100.0), true, false);
-    let state = session.style_panel_state();
+    let state = session.style_panel_state().unwrap();
     assert_eq!(state.subject, "2 objects");
 
     session
@@ -468,7 +470,7 @@ fn a_multi_selection_edit_changes_one_property_and_keeps_each_objects_others() {
     select_only(&mut session, 2);
     session.set_stroke_cap(LineCap::Round);
     select_all(&mut session, 3);
-    let state = session.style_panel_state();
+    let state = session.style_panel_state().unwrap();
     assert_eq!(state.stroke.width, BarValue::Mixed);
     assert_eq!(state.stroke.color, BarValue::Mixed);
     assert_eq!(state.stroke.cap, BarValue::Mixed);
@@ -490,7 +492,7 @@ fn a_multi_selection_edit_changes_one_property_and_keeps_each_objects_others() {
         assert_eq!(s.stroke.join, LineJoin::Round);
         assert_eq!(s.stroke.opacity, pct(20));
     }
-    let state = session.style_panel_state();
+    let state = session.style_panel_state().unwrap();
     assert_eq!(state.stroke.opacity, BarValue::Uniform(pct(20)));
     assert_eq!(state.stroke.width, BarValue::Mixed, "still mixed");
 }
@@ -506,13 +508,12 @@ fn an_empty_selection_and_the_pen_ignore_every_panel_control() {
     // Escape clears the object selection in the Select tool.
     session.escape();
     let before = session.draw_list();
-    assert_eq!(session.style_panel_state().subject, "Nothing selected");
-    assert!(!session.style_panel_state().enabled);
+    assert_eq!(session.style_panel_state(), None);
     for round in 0..2 {
         if round == 1 {
             select_only(&mut session, 0);
             session.set_tool(Tool::Pen);
-            assert!(!session.style_panel_state().enabled);
+            assert_eq!(session.style_panel_state(), None);
         }
         assert_eq!(
             session.set_style_text(StyleField::StrokeWidth, "9"),
@@ -535,10 +536,8 @@ fn an_empty_selection_and_the_pen_ignore_every_panel_control() {
     }
     assert_eq!(version(&session), v, "nothing recorded");
     assert!(styles(&session).iter().all(|s| *s == Style::default()));
-    // The disabled panel still reports the frozen defaults.
-    let state = session.style_panel_state();
-    assert_eq!(state.stroke.width, BarValue::Uniform(Length::from_mm(0.25)));
-    assert_eq!(state.fill.paint, BarValue::Uniform(false));
+    // With nothing to edit the panel has no Style state at all.
+    assert_eq!(session.style_panel_state(), None);
 }
 
 #[test]
@@ -550,14 +549,14 @@ fn subjects_name_the_kind_the_count_or_objects() {
         session.pointer_down(Point::new(x, 0.0), false);
         session.pointer_up(Point::new(x + 10.0, 10.0), false, false);
     }
-    assert_eq!(session.style_panel_state().subject, "Ellipse");
+    assert_eq!(session.style_panel_state().unwrap().subject, "Ellipse");
     session.set_tool(Tool::Select);
     session.pointer_down(Point::new(0.0, 5.0), false);
     session.pointer_up(Point::new(0.0, 5.0), false, false);
     session.pointer_hover(Point::new(30.0, 5.0), true, false);
     session.pointer_down(Point::new(30.0, 5.0), true);
     session.pointer_up(Point::new(30.0, 5.0), true, false);
-    assert_eq!(session.style_panel_state().subject, "2 ellipses");
+    assert_eq!(session.style_panel_state().unwrap().subject, "2 ellipses");
 }
 
 #[test]
@@ -567,9 +566,8 @@ fn a_shape_just_drawn_with_any_creation_tool_is_editable_at_once() {
         session.set_tool(tool);
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(20.0, 20.0), false, false);
-        let state = session.style_panel_state();
-        assert!(state.enabled, "{tool:?}");
-        assert_ne!(state.subject, "Nothing selected", "{tool:?}");
+        let state = session.style_panel_state().unwrap();
+        assert_ne!(state.subject, "", "{tool:?}");
         session
             .set_style_text(StyleField::StrokeColor, "#F00")
             .unwrap();
@@ -584,8 +582,7 @@ fn a_shape_just_drawn_with_any_creation_tool_is_editable_at_once() {
 fn switching_to_the_select_tool_keeps_the_panel_on_the_selection() {
     let mut session = rectangles(1);
     session.set_tool(Tool::Select);
-    let state = session.style_panel_state();
-    assert!(state.enabled);
+    let state = session.style_panel_state().unwrap();
     assert_eq!(state.subject, "Rectangle");
 }
 
@@ -602,9 +599,9 @@ fn the_node_tool_edits_paths_only_and_follows_the_node_selection() {
         session.pointer_down(Point::new(125.0, y), true);
         session.pointer_up(Point::new(125.0, y), true, false);
     }
-    assert_eq!(session.style_panel_state().subject, "3 objects");
+    assert_eq!(session.style_panel_state().unwrap().subject, "3 objects");
     session.set_tool(Tool::Node);
-    let state = session.style_panel_state();
+    let state = session.style_panel_state().unwrap();
     assert_eq!(
         state.subject, "2 paths",
         "the Node tool without a node selected edits the paths of the object selection only"
@@ -632,11 +629,11 @@ fn selecting_a_node_narrows_the_node_tool_to_the_path_that_owns_it() {
         session.pointer_up(Point::new(25.0, y), y > 0.0, false);
     }
     session.set_tool(Tool::Node);
-    assert_eq!(session.style_panel_state().subject, "2 paths");
+    assert_eq!(session.style_panel_state().unwrap().subject, "2 paths");
     // Click the first node of the second path.
     session.pointer_down(Point::new(0.0, 40.0), false);
     session.pointer_up(Point::new(0.0, 40.0), false, false);
-    let subject = session.style_panel_state().subject;
+    let subject = session.style_panel_state().unwrap().subject;
     assert_eq!(subject, "Path", "only the owner of the selected node");
     session
         .set_style_text(StyleField::StrokeColor, "#F00")
@@ -674,7 +671,7 @@ fn a_canvas_press_that_changes_the_selection_does_not_retarget_a_pending_drag() 
         "no ghost"
     );
     assert_eq!(
-        session.style_panel_state().stroke.opacity,
+        session.style_panel_state().unwrap().stroke.opacity,
         BarValue::Uniform(Opacity::OPAQUE),
         "the panel now reads the new selection"
     );
@@ -844,7 +841,7 @@ fn a_panel_edit_after_the_selection_was_deleted_is_a_no_op() {
     let mut session = rectangles(1);
     session.delete_selected();
     let v = version(&session);
-    assert_eq!(session.style_panel_state().subject, "Nothing selected");
+    assert_eq!(session.style_panel_state(), None, "nothing to edit");
     assert_eq!(
         session.set_style_text(StyleField::StrokeWidth, "3"),
         Ok(false)
@@ -969,5 +966,5 @@ fn a_press_on_empty_canvas_with_a_pending_drag_commits_it_to_the_started_objects
         styles(&session).iter().all(|s| s.stroke.opacity == pct(40)),
         "both objects the drag started on, once"
     );
-    assert_eq!(session.style_panel_state().subject, "Nothing selected");
+    assert_eq!(session.style_panel_state(), None, "nothing to edit");
 }

@@ -85,8 +85,7 @@ fn percent(n: u32) -> Opacity {
 #[test]
 fn a_drawn_rectangle_is_selected_and_editable() {
     let session = session_with_rectangles(1);
-    let state = session.style_panel_state();
-    assert!(state.enabled);
+    let state = session.style_panel_state().unwrap();
     assert_eq!(state.subject, "Rectangle");
 }
 
@@ -94,9 +93,11 @@ fn a_drawn_rectangle_is_selected_and_editable() {
 fn the_pen_and_an_empty_selection_disable_the_panel() {
     let mut session = session_with_rectangles(1);
     session.set_tool(Tool::Pen);
-    let state = session.style_panel_state();
-    assert!(!state.enabled);
-    assert_eq!(state.subject, "Pen: finish the path to style it");
+    assert_eq!(
+        session.style_panel_state(),
+        None,
+        "the Pen leaves nothing to edit (criterion 1)"
+    );
     assert_eq!(
         session.set_style_text(StyleField::StrokeWidth, "2"),
         Ok(false)
@@ -111,7 +112,7 @@ fn the_pen_and_an_empty_selection_disable_the_panel() {
 fn a_typed_value_is_one_commit_for_the_whole_selection() {
     let mut session = session_with_rectangles(3);
     select_first(&mut session, 3);
-    assert_eq!(session.style_panel_state().subject, "3 rectangles");
+    assert_eq!(session.style_panel_state().unwrap().subject, "3 rectangles");
     assert_eq!(
         session.set_style_text(StyleField::StrokeWidth, "2,5"),
         Ok(true)
@@ -120,7 +121,7 @@ fn a_typed_value_is_one_commit_for_the_whole_selection() {
         assert_eq!(style.stroke.width, Length::from_mm(2.5));
     }
     assert_eq!(
-        session.style_panel_state().stroke.width,
+        session.style_panel_state().unwrap().stroke.width,
         BarValue::Uniform(Length::from_mm(2.5))
     );
 }
@@ -129,8 +130,8 @@ fn a_typed_value_is_one_commit_for_the_whole_selection() {
 fn an_invalid_value_writes_nothing_and_says_why() {
     let mut session = session_with_rectangles(1);
     assert_eq!(
-        session.set_style_text(StyleField::StrokeColor, "#12345678"),
-        Err(StyleEntryError::HexEightDigits)
+        session.set_style_text(StyleField::StrokeColor, "#1234567"),
+        Err(StyleEntryError::Hex)
     );
     assert_eq!(
         session.set_style_text(StyleField::FillOpacity, "101"),
@@ -154,23 +155,21 @@ fn a_style_change_keeps_the_primitive_a_primitive() {
 fn the_stroke_switch_dash_join_and_fill_row_commit_discretely() {
     let mut session = session_with_rectangles(1);
     session.set_stroke_paint(false);
-    assert!(session.style_panel_state().stroke.all_off);
+    assert!(!session.style_panel_state().unwrap().stroke.rows_shown);
     assert!(!stored_styles(&session)[0].stroke.enabled);
     session.set_stroke_dash(DashChoice::Dash);
-    session.set_stroke_dash(DashChoice::Custom);
     assert_eq!(
         stored_styles(&session)[0].stroke.dash.as_slice(),
-        &[6.0, 4.0],
-        "Custom is not a choice and writes nothing"
+        &[6.0, 4.0]
     );
     session.set_fill_paint(true);
     assert_eq!(
-        session.style_panel_state().fill.paint,
+        session.style_panel_state().unwrap().fill.paint,
         BarValue::Uniform(true)
     );
     session.set_fill_paint(false);
     assert_eq!(
-        session.style_panel_state().fill.paint,
+        session.style_panel_state().unwrap().fill.paint,
         BarValue::Uniform(false)
     );
 }
@@ -190,7 +189,7 @@ fn a_drag_previews_in_the_draw_list_and_writes_once_on_release() {
         "nothing stored while dragging"
     );
     assert_eq!(
-        session.style_panel_state().stroke.opacity,
+        session.style_panel_state().unwrap().stroke.opacity,
         BarValue::Uniform(percent(60)),
         "the field follows the drag"
     );
@@ -235,7 +234,7 @@ fn the_node_tool_edits_the_selected_path() {
     session.set_tool(Tool::Node);
     session.pointer_down(Point::new(0.0, 0.0), false);
     session.pointer_up(Point::new(0.0, 0.0), false, false);
-    assert_eq!(session.style_panel_state().subject, "Path");
+    assert_eq!(session.style_panel_state().unwrap().subject, "Path");
     assert_eq!(
         session.set_style_text(StyleField::StrokeColor, "#F80"),
         Ok(true)

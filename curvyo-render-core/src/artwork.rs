@@ -162,6 +162,7 @@ fn draw_stroke(
     let mut parts = dash::dashed_object(
         &solid,
         &stroke_style.dash,
+        stroke_style.cap,
         document_width_mm,
         view.scale(),
         tolerance_mm,

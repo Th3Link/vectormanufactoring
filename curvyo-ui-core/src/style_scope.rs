@@ -21,10 +21,10 @@ pub enum StyleTool {
 /// The objects the panel edits and the line that says so.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StyleScope {
-    /// The objects an edit goes to; empty when the panel is disabled.
+    /// The objects an edit goes to; empty when the panel has nothing to edit.
     pub ids: Vec<NodeId>,
-    /// "Nothing selected", "Pen: finish the path to style it", a kind
-    /// ("Rectangle") or a count ("3 rectangles", "4 objects", "2 paths").
+    /// A kind ("Rectangle") or a count ("3 rectangles", "4 objects", "2
+    /// paths"); empty when there is nothing to edit.
     pub subject: String,
 }
 
@@ -40,7 +40,7 @@ pub fn style_scope(
     if tool == StyleTool::Pen {
         return StyleScope {
             ids: Vec::new(),
-            subject: "Pen: finish the path to style it".to_string(),
+            subject: String::new(),
         };
     }
     let wanted: Vec<NodeId> = if tool == StyleTool::Node {
@@ -102,7 +102,7 @@ fn kind_name(object: &ObjectSnapshot) -> (&'static str, &'static str) {
 
 fn subject_line(objects: &[&ObjectSnapshot]) -> String {
     let Some(first) = objects.first() else {
-        return "Nothing selected".to_string();
+        return String::new();
     };
     let (singular, plural) = kind_name(first);
     let same_kind = objects.iter().all(|object| kind_name(object).0 == singular);

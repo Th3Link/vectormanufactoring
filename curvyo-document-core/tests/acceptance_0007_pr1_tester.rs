@@ -485,10 +485,12 @@ fn dash_pattern_validation_edges() {
     assert!(DashPattern::new(vec![6.0, 4.0]).is_ok());
     assert!(DashPattern::new(vec![0.0, 1.0]).is_ok());
     assert!(DashPattern::new(vec![1.0, 0.0]).is_ok());
+    // An odd count is kept as stored (format version 9, `0017` criterion 30).
+    assert!(DashPattern::new(vec![1.0]).is_ok());
+    assert!(DashPattern::new(vec![1.0, 2.0, 3.0]).is_ok());
     for bad in [
-        vec![1.0],
-        vec![1.0, 2.0, 3.0],
         vec![0.0, 0.0],
+        vec![0.0],
         vec![-1.0, 2.0],
         vec![1.0, -0.5],
         vec![f64::NAN, 1.0],
@@ -784,10 +786,6 @@ fn colour_keys_must_be_three_integers_between_0_and_255() {
 
 #[test]
 fn dash_lists_that_break_the_rules_are_damaged() {
-    assert_damaged("odd", |m| m.insert("stroke_dash", floats(&[1.0])).unwrap());
-    assert_damaged("odd 3", |m| {
-        m.insert("stroke_dash", floats(&[1.0, 2.0, 3.0])).unwrap()
-    });
     assert_damaged("negative", |m| {
         m.insert("stroke_dash", floats(&[-1.0, 2.0])).unwrap()
     });

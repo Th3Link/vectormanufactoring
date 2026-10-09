@@ -19,9 +19,9 @@ pub enum StyleParamError {
     /// An opacity must be a finite number in `[0, 1]`.
     #[error("opacity must be between 0 and 1")]
     OpacityOutOfRange,
-    /// A dash pattern needs an even number of finite, non-negative entries
-    /// that do not sum to zero (or be empty, which is solid).
-    #[error("a dash pattern needs an even number of non-negative lengths with a positive sum")]
+    /// A dash pattern needs finite, non-negative entries that do not sum to
+    /// zero (or be empty, which is solid).
+    #[error("a dash pattern needs non-negative lengths with a positive sum")]
     InvalidDashPattern,
 }
 
@@ -84,8 +84,9 @@ impl DashPattern {
         Self(Vec::new())
     }
 
-    /// Validates `lengths`: empty (solid), or an even number of finite,
-    /// non-negative entries whose sum is greater than zero.
+    /// Validates `lengths`: empty (solid), or finite, non-negative entries
+    /// whose sum is greater than zero. An odd count is kept as stored; the
+    /// renderer repeats the list to make it even, as SVG does.
     ///
     /// # Errors
     /// [`StyleParamError::InvalidDashPattern`] otherwise.
@@ -94,7 +95,7 @@ impl DashPattern {
             return Ok(Self(lengths));
         }
         let entries_ok = lengths.iter().all(|n| n.is_finite() && *n >= 0.0);
-        if lengths.len().is_multiple_of(2) && entries_ok && lengths.iter().sum::<f64>() > 0.0 {
+        if entries_ok && lengths.iter().sum::<f64>() > 0.0 {
             Ok(Self(lengths))
         } else {
             Err(StyleParamError::InvalidDashPattern)
@@ -259,9 +260,11 @@ mod tests {
             "a zero on is legal"
         );
         assert!(DashPattern::new(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]).is_ok());
+        // Odd lists are valid (format version 9).
+        assert!(DashPattern::new(vec![6.0]).is_ok());
+        assert!(DashPattern::new(vec![6.0, 4.0, 1.0]).is_ok());
         for bad in [
-            vec![6.0],
-            vec![6.0, 4.0, 1.0],
+            vec![0.0],
             vec![-1.0, 4.0],
             vec![0.0, 0.0],
             vec![f64::NAN, 1.0],
@@ -303,7 +306,8 @@ mod tests {
     #[test]
     fn deserializing_a_style_value_validates_it() {
         assert!(serde_json::from_str::<Opacity>("1.5").is_err());
-        assert!(serde_json::from_str::<DashPattern>("[1.0]").is_err());
+        assert!(serde_json::from_str::<DashPattern>("[0.0]").is_err());
+        assert!(serde_json::from_str::<DashPattern>("[1.0]").is_ok(), "odd lists are valid");
         let style = Style::default();
         let json = serde_json::to_string(&style).unwrap();
         assert_eq!(serde_json::from_str::<Style>(&json).unwrap(), style);

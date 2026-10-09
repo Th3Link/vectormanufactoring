@@ -7,8 +7,8 @@
 
 use curvyo_document_core::{Color, LineCap, LineJoin, StyleEdit};
 use curvyo_ui_core::{
-    DashChoice, StyleEntryError, StyleField, StylePanelState, StyleScope, StyleTool,
-    style_panel_state, style_scope,
+    DashChoice, StyleEntryError, StyleField, StylePanelState, StyleScope, StyleTool, hsv_to_rgb,
+    parse_dash_text, style_panel_state, style_scope,
 };
 
 use super::style_view::StylePanelView;
@@ -35,26 +35,34 @@ impl Session {
         )
     }
 
-    /// What the Style panel shows. A drag preview shows as if it were
-    /// committed, so the fields follow the drag.
+    /// What the Style panel shows, or `None` when there is nothing to edit. A
+    /// drag preview shows as if it were committed, so the fields follow the
+    /// drag; which rows are shown follows the committed document.
     #[must_use]
-    pub fn style_panel_state(&self) -> StylePanelState {
-        let mut objects = self.objects();
+    pub fn style_panel_state(&self) -> Option<StylePanelState> {
+        let committed = self.objects();
         let scope = style_scope(
             self.style_tool(),
-            &objects,
+            &committed,
             &self.selection,
             self.node.selection(),
         );
-        self.style.apply_to(&mut objects);
-        style_panel_state(&objects, &scope)
+        if !self.style.is_active() {
+            return style_panel_state(&committed, &committed, &scope);
+        }
+        let mut shown = committed.clone();
+        self.style.apply_to(&mut shown);
+        style_panel_state(&committed, &shown, &scope)
     }
 
     /// [`Session::style_panel_state`] as the flat record the host reads.
     #[must_use]
     pub fn style_panel_view(&self) -> StylePanelView {
         let key = format!("{:?}", self.style_scope().ids);
-        StylePanelView::new(&self.style_panel_state(), key)
+        self.style_panel_state()
+            .map_or_else(StylePanelView::empty, |state| {
+                StylePanelView::new(&state, key)
+            })
     }
 
     /// Whether a canvas pointer press is in flight (the button is down): the
@@ -94,6 +102,13 @@ impl Session {
         }
     }
 
+    /// A tick of a drag in the colour area or the hue slider: shows the colour
+    /// of hue `hue` (degrees), saturation and value (`0` to `1`) without
+    /// writing. Only the colour changes; each object keeps its alpha.
+    pub fn preview_style_hsv(&mut self, field: StyleField, hue: f64, saturation: f64, value: f64) {
+        self.preview_style_color(field, hsv_to_rgb(hue, saturation, value));
+    }
+
     /// An opacity slider's drag tick (a percent): shows it without writing.
     pub fn preview_style_opacity(&mut self, field: StyleField, percent: f64) {
         if let Some(edit) = field.opacity_edit(percent) {
@@ -131,12 +146,20 @@ impl Session {
         self.apply_style_edit(&StyleEdit::StrokeEnabled(on));
     }
 
-    /// The Dash select: one commit. `Custom` is not a choice and writes
-    /// nothing.
+    /// A Dash preset button: one commit.
     pub fn set_stroke_dash(&mut self, choice: DashChoice) {
-        if let Some(pattern) = choice.pattern() {
-            self.apply_style_edit(&StyleEdit::StrokeDash(pattern));
-        }
+        self.apply_style_edit(&StyleEdit::StrokeDash(choice.pattern()));
+    }
+
+    /// Enter or Tab in the pattern line: one commit, `Ok(false)` when there is
+    /// nothing to edit.
+    ///
+    /// # Errors
+    /// [`StyleEntryError::Dash`] for text that is no pattern; nothing is
+    /// written and the line stays open.
+    pub fn set_stroke_dash_text(&mut self, text: &str) -> Result<bool, StyleEntryError> {
+        let pattern = parse_dash_text(text)?;
+        Ok(self.apply_style_edit(&StyleEdit::StrokeDash(pattern)))
     }
 
     /// The Join toggle group: one commit.

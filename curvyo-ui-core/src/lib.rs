@@ -16,7 +16,9 @@
 mod anchor_id_minter;
 mod angle_snap;
 mod boolean;
+mod colour_hsv;
 mod conversion;
+mod dash_text;
 mod display_unit_text;
 mod document_fit;
 mod ellipse_tool;
@@ -61,7 +63,9 @@ pub use angle_snap::{MAX_SKEW_SNAP_DEG, snap_angle, snap_skew_angle};
 pub use boolean::{
     BooleanAvailability, BooleanOp, BooleanPlan, BooleanRefusal, boolean_availability, plan_boolean,
 };
+pub use colour_hsv::{Hsv, hsv_to_rgb, rgb_to_hsv};
 pub use conversion::build_primitive_conversions;
+pub use dash_text::{MAX_DASH_NUMBER, MAX_DASH_NUMBERS, dash_text, parse_dash_text};
 pub use display_unit_text::{
     content_too_large_message, document_side_message, format_cursor, format_field_length,
     format_size, format_status_length, parse_document_side,
@@ -110,10 +114,12 @@ pub use skew_entry::SkewEntry;
 pub use skew_math::{SkewFrame, skew_angle, skew_factor, skew_frame};
 pub use style_edit::StyleEditor;
 pub use style_entry::{
-    MAX_STROKE_WIDTH_MM, StyleEntryError, StyleField, cap_from_name, join_from_name,
-    opacity_from_percent, parse_hex, parse_opacity_percent, parse_stroke_width,
+    HexColour, MAX_STROKE_WIDTH_MM, StyleEntryError, StyleField, cap_from_name, hex_text,
+    join_from_name, opacity_from_percent, parse_hex, parse_opacity_percent, parse_stroke_width,
 };
-pub use style_panel::{DashChoice, FillPanel, StrokePanel, StylePanelState, style_panel_state};
+pub use style_panel::{
+    DashChoice, DashShown, FillPanel, Rgba, StrokePanel, StylePanelState, style_panel_state,
+};
 pub use style_scope::{StyleScope, StyleTool, style_scope};
 pub use transform_drag::{
     CornerLinking, CornerRadiusScaling, ParamDragInfo, ScaleModes, StrokeScaling,

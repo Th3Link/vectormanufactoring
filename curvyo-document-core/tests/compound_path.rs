@@ -257,9 +257,8 @@ fn a_compound_path_survives_save_and_reopen() {
     let manifest: serde_json::Value =
         serde_json::from_slice(&member(&bytes, "manifest.json")).unwrap();
     assert_eq!(manifest["format_version"], CURRENT_FORMAT_VERSION);
-    assert_eq!(
-        CURRENT_FORMAT_VERSION,
-        PREVIOUS_FORMAT_VERSION + 1,
+    assert!(
+        manifest["format_version"].as_u64().unwrap() > u64::from(PREVIOUS_FORMAT_VERSION),
         "an earlier build must refuse the file as too new"
     );
 
@@ -270,19 +269,13 @@ fn a_compound_path_survives_save_and_reopen() {
     assert_eq!(objects[0]["extra_subpaths"].as_array().unwrap().len(), 1);
 }
 
-/// The format version of the build that introduced compound paths. A later bump renumbers this one
-/// constant, regenerates the golden (`CURVYO_WRITE_FIXTURES=1`) and edits the doc comment on
-/// `CURRENT_FORMAT_VERSION`.
+/// The format version of the build that introduced compound paths. The golden declares it and
+/// stays as that build wrote it: a later build has to open it, so a later bump leaves this number
+/// and the golden alone (the literal pin on `CURRENT_FORMAT_VERSION` lives in `dash_format.rs`).
 const COMPOUND_FORMAT_VERSION: u32 = 8;
 
 /// The version before this build, which no longer opens a compound path.
 const PREVIOUS_FORMAT_VERSION: u32 = COMPOUND_FORMAT_VERSION - 1;
-
-/// The one literal pin on the format version: it fails if the number moves by accident.
-#[test]
-fn the_current_format_version_is_the_one_compound_paths_introduced() {
-    assert_eq!(CURRENT_FORMAT_VERSION, COMPOUND_FORMAT_VERSION);
-}
 
 /// Criterion 37a: an ordinary path is written without the key, and exports
 /// without it.

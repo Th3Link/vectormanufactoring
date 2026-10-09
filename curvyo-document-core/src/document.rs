@@ -97,7 +97,15 @@ use crate::units::{DocumentSize, Length};
 /// it must refuse the file as too new. Migration from version 7 is none: the
 /// key is simply absent, and a file from an earlier build opens unchanged and
 /// is not rewritten. Golden: `compound_v8.curvyo`.
-pub const CURRENT_FORMAT_VERSION: u32 = 8;
+///
+/// Bumped to 9 in `style-panel-rework` (`specs/0017-style-panel-rework/
+/// adrs.md`, decision 2): a stroke dash list may have an odd count (`1 2 4`),
+/// stored as typed. A build that stops at version 8 refuses an odd list as a
+/// damaged file, the wrong message, so it must refuse the file as too new.
+/// Migration from version 8 is none: every stored even list stays valid, and
+/// a file from an earlier build opens unchanged and is not rewritten. Golden:
+/// `dash_v9.curvyo`.
+pub const CURRENT_FORMAT_VERSION: u32 = 9;
 
 pub(crate) const ROOT_MAP: &str = "root";
 const KEY_FORMAT_VERSION: &str = "format_version";
