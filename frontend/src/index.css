@@ -213,6 +213,17 @@
 .canvas-cursor-pen-close {
   cursor: url("/cursors/pen-close.svg") 2 2, crosshair;
 }
+
+/* 0034-pen-path-extension: the Pen over an end node it would continue, and over another path's end
+   it would join (docs/design-system.md, "Pen cursors"). Hotspot at the nib tip like the others;
+   the plain nib returns while Shift asks for the alternative. */
+.canvas-cursor-pen-continue {
+  cursor: url("/cursors/pen-continue.svg") 2 2, crosshair;
+}
+
+.canvas-cursor-pen-join {
+  cursor: url("/cursors/pen-join.svg") 2 2, crosshair;
+}
 /* unified-object-editing (docs/design-system.md, "Select bar"): the Ratio
    slider of a selection whose stars differ shows no thumb and a neutral track
    (not filled to 0.5) until touched. Touching it previews a value, the stars

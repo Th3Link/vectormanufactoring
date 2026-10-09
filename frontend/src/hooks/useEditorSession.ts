@@ -5,6 +5,7 @@ import { createSession, openSession } from "@/lib/editorSession";
 import type { WasmSession } from "@/lib/editorSession";
 import type { EditHint } from "@/components/EditHintChip";
 import type { BooleanOp, BooleanResult } from "@/lib/booleanText";
+import type { ClosePathResult } from "@/lib/penText";
 
 /** The canvas's backing-buffer (physical pixel) size for a given CSS
  * (layout) size, plus the `devicePixelRatio` that relates the two —
@@ -609,6 +610,9 @@ export interface EditorSession {
   /** A boolean operation on the selection, in one commit (`0016-boolean-operations`);
    * `"ignored"` when no session is live or the Select tool is not active. */
   applyBoolean: (op: BooleanOp) => BooleanResult;
+  /** The Node bar's Close path buttons (`0034-pen-path-extension`): closes the open paths of
+   * the editing set with `join` (`"sharp"` or `"smooth"`) in one commit. */
+  closePath: (join: "sharp" | "smooth") => ClosePathResult;
   onPointerDown: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerMove: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerUp: (event: React.PointerEvent<HTMLCanvasElement>) => void;
@@ -1129,6 +1133,20 @@ export function useEditorSession(
     syncFromSession();
   }, [syncFromSession]);
 
+  const closePath = useCallback(
+    (join: "sharp" | "smooth"): ClosePathResult => {
+      const raw = sessionRef.current?.close_path(join);
+      syncFromSession();
+      if (!raw) {
+        return { closed: 0, skipped: 0 };
+      }
+      const result = { closed: raw.closed, skipped: raw.skipped };
+      raw.free();
+      return result;
+    },
+    [syncFromSession],
+  );
+
   const applyBoolean = useCallback(
     (op: BooleanOp): BooleanResult => {
       const raw = sessionRef.current?.apply_boolean(op);
@@ -1637,6 +1655,7 @@ export function useEditorSession(
     setPolyStarRatio,
     convertSelectedToPaths,
     applyBoolean,
+    closePath,
     onPointerDown,
     onPointerMove,
     onPointerUp,

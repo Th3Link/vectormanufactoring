@@ -8,6 +8,8 @@ import { NodeContextMenu } from "@/components/NodeToolbar";
 import { MoveEntryChip } from "@/components/MoveEntryChip";
 import { TransformEntryChip } from "@/components/TransformEntryChip";
 import type { EditorSession } from "@/hooks/useEditorSession";
+import { PenHintChip } from "@/components/PenHintChip";
+import { usePenCue } from "@/hooks/usePenCue";
 import { cursorForHint } from "@/lib/cursors";
 import { type Rect, placeReadout } from "@/lib/readoutPlacement";
 
@@ -42,6 +44,7 @@ interface CanvasProps {
  * precedent, reaffirmed by `docs/design-system.md`).
  */
 export function Canvas({ editor }: CanvasProps) {
+  const penCue = usePenCue(editor);
   return (
     <div
       ref={editor.containerRef}
@@ -68,9 +71,13 @@ export function Canvas({ editor }: CanvasProps) {
           : editor.isSpaceHeld
             ? "cursor-grab"
             : editor.tool === "pen"
-              ? editor.isHoveringPenCloseTarget
+              ? editor.isHoveringPenCloseTarget || penCue.kind === "close"
                 ? "canvas-cursor-pen-close"
-                : "canvas-cursor-pen"
+                : penCue.kind === "continue"
+                  ? "canvas-cursor-pen-continue"
+                  : penCue.kind === "join"
+                    ? "canvas-cursor-pen-join"
+                    : "canvas-cursor-pen"
               : editor.tool === "rectangle" ||
                   editor.tool === "ellipse" ||
                   editor.tool === "polygon-star"
@@ -153,6 +160,7 @@ export function Canvas({ editor }: CanvasProps) {
         containerRef={editor.containerRef}
         onDismiss={editor.dismissEditHint}
       />
+      <PenHintChip cue={penCue} containerRef={editor.containerRef} />
       <MoveBadges badges={editor.moveBadges} containerRef={editor.containerRef} />
       {editor.liveReadout && (
         <ReadoutChip

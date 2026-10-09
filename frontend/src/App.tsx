@@ -12,6 +12,7 @@ import { ToolRail } from "@/components/ToolRail";
 import type { EditorSession } from "@/hooks/useEditorSession";
 import { useBooleanCommands } from "@/hooks/useBooleanCommands";
 import { useEditorSession } from "@/hooks/useEditorSession";
+import { useClosePathState } from "@/hooks/usePenCue";
 import { useDocumentPanel } from "@/hooks/useDocumentPanel";
 import type {
   OpenBytesPayload,
@@ -51,6 +52,7 @@ function App() {
   const [cursorMm, setCursorMm] = useState({ x: 0, y: 0 });
   const editor = useEditorSession(setCursorMm);
   const booleans = useBooleanCommands(editor);
+  const closePathState = useClosePathState(editor);
   const documentPanel = useDocumentPanel(editor);
   const [openErrorMessage, setOpenErrorMessage] = useState<string | null>(
     null,
@@ -200,6 +202,13 @@ function App() {
           ) : null}
           {editor.tool === "node" ? (
             <NodeToolbar
+              closePath={{
+                state: closePathState,
+                onClose: editor.closePath,
+                onReturnFocus: () => editor.containerRef.current?.focus(),
+                tool: editor.tool,
+                selectionCount: editor.selectionCount,
+              }}
               state={editor.nodeToolbarState}
               actions={{
                 insertSelected: editor.insertSelected,
