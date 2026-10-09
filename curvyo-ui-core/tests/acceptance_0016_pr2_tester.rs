@@ -196,7 +196,8 @@ fn ac33_hole_hit_parity_with_an_ordinary_path_when_fill_is_off() {
     // An ordinary closed path with Fill None is picked on its outline only;
     // the compound path must behave identically for the ring body.
     let d = Document::new(1);
-    let ordinary = d.create_path(&square(0, 0.0, 0.0, 40.0, true).0, true);
+    // Anchor ids are unique over the document: the ring below uses the low ones.
+    let ordinary = d.create_path(&square(5000, 0.0, 0.0, 40.0, true).0, true);
     solid_fill(&d, ordinary, false);
     let ring = compound(&d, &ring_outlines(), false);
     let objs = objects(&d);
