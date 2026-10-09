@@ -136,7 +136,11 @@
     --checker-a: #FFFFFF;
     --checker-b: #C9C9CE;
     --mixed-hatch: #8E8E93;
-    --no-paint-slash: var(--field-invalid);
+    /* 0017 style-panel-rework: the value field's bar and the picker's thumbs. */
+    --value-fill: color-mix(in srgb, var(--editor-accent) 28%, white);
+    --value-edge: var(--editor-accent);
+    --picker-thumb-ring: #FFFFFF;
+    --picker-thumb-casing: rgb(0 0 0 / 0.4);
 }
 
 .dark {
@@ -273,46 +277,15 @@ input[type="range"].select-bar-slider-mixed::-moz-range-thumb {
   scrollbar-width: thin;
 }
 
-/* react-colorful, restyled to the design system (docs/design-system.md,
-   "Colour popover"): the saturation/value area 208 x 128, the hue and opacity
-   sliders 12 px high with a 16 px thumb, the opacity ramp over a checkerboard. */
-.colour-picker .react-colorful {
-  width: 208px;
-  height: auto;
-  gap: 10px;
-  display: flex;
-  flex-direction: column;
+/* 0017 criterion 35: nothing in the panel selects or drags as text except a
+   text input. */
+.properties-panel,
+.properties-panel * {
+  user-select: none;
+  -webkit-user-drag: none;
 }
-.colour-picker .react-colorful__saturation {
-  height: 128px;
-  border-radius: 5px;
-  border-bottom: 0;
-}
-.colour-picker .react-colorful__hue,
-.colour-picker .react-colorful__alpha {
-  height: 12px;
-  border-radius: 6px;
-}
-.colour-picker .react-colorful__alpha {
-  background-image:
-    linear-gradient(45deg, var(--checker-b) 25%, transparent 25%, transparent 75%, var(--checker-b) 75%),
-    linear-gradient(45deg, var(--checker-b) 25%, transparent 25%, transparent 75%, var(--checker-b) 75%);
-  background-color: var(--checker-a);
-  background-size: 12px 12px;
-  background-position: 0 0, 6px 6px;
-}
-.colour-picker .react-colorful__alpha-gradient {
-  border-radius: 6px;
-  box-shadow: none;
-}
-.colour-picker .react-colorful__pointer {
-  width: 16px;
-  height: 16px;
-  border: 2px solid #fff;
-  box-shadow: 0 0 0 1px var(--toolbar-icon);
-}
-.colour-picker .react-colorful__interactive:focus .react-colorful__pointer {
-  box-shadow: 0 0 0 1px var(--toolbar-icon), 0 0 0 3px var(--editor-accent);
+.properties-panel input {
+  user-select: text;
 }
 
 /* A control the panel focused from its own keyboard shortcut shows the focus

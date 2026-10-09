@@ -1,8 +1,67 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
+  "plugins": [
+    "react",
+    "typescript",
+    "oxc"
+  ],
   "rules": {
     "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+    "react/only-export-components": [
+      "warn",
+      {
+        "allowConstantExport": true
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/components/panel/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@/components/ui/alert-dialog",
+                "message": "The properties panel opens no dialog, popover, menu or other layer (specs/0017-style-panel-rework, panel rule)."
+              },
+              {
+                "name": "radix-ui",
+                "importNames": [
+                  "Popover",
+                  "Select",
+                  "DropdownMenu",
+                  "ContextMenu",
+                  "Dialog",
+                  "AlertDialog",
+                  "HoverCard",
+                  "Menubar",
+                  "NavigationMenu"
+                ],
+                "message": "The properties panel opens no popover, menu or other layer (specs/0017-style-panel-rework, panel rule)."
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "@/components/ui/popover",
+                  "@/components/ui/select",
+                  "@/components/ui/dropdown-menu",
+                  "@/components/ui/context-menu",
+                  "@/components/ui/dialog",
+                  "@/components/ui/hover-card",
+                  "@/components/ui/menubar",
+                  "@/components/ui/navigation-menu"
+                ],
+                "message": "The properties panel opens no popover, menu or other layer (specs/0017-style-panel-rework, panel rule)."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

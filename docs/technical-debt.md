@@ -1087,9 +1087,6 @@ box size; those tests count fans only (`white_count` in
   outline twice. Fine at today's object counts. When
   `advanced-selection` adds the cycle list, compute each object's outline once
   per call, and reject by a cached bounding box first.
-- **SVG import and dashes.** A zero-length "on" entry of a dash pattern is
-  skipped, so a round-capped `[0, 3]` pattern draws nothing where SVG draws
-  dots. The presets have `on > 0`; revisit when `svg-import-export` is planned.
 
 **2026-10-08 (`stroke-and-fill-styling` PR 3):**
 
@@ -1108,11 +1105,6 @@ box size; those tests count fans only (`white_count` in
 - **`ToolRail` and `ToolbarSwitch` keep their own inline `Tooltip`.** The
   design system says they become the one `ui/tooltip.tsx` wrapper; PR 3 adds the
   wrapper for the panel and does not touch the two older users.
-- **react-colorful steps 5 % and labels its sliders "Color", "Hue" and
-  "Alpha".** The picker renames them to the design system's names after mount
-  and handles the arrow keys itself (1 %, Shift 10 %). If a later react-colorful
-  upgrade changes its markup, the rename silently stops; the picker has no test
-  for it (see the item above).
 - **Opening or closing the panel announces its width change to the viewport**
   (`Viewport::keep_origin_for_width_change`), because the existing resize keeps
   the view's centre (`canvas-navigation-and-selection` criterion 10) and would

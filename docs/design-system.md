@@ -857,8 +857,8 @@ every colour. No alpha slider. The picker keeps its own HSV state and re-derives
 it from the stored colour only when the colour changed from outside it, so the
 hue does not jump through greys; mixed colours show no thumb. A press on the area
 moves the thumb to the press point. Arrow keys 1 % (Shift 10 %), preview on
-key-down, commit on key-up. Built on `react-colorful`'s saturation and hue parts
-(MIT, as chosen for `0007`); its alpha part is not used.
+key-down, commit on key-up. Our own component (no colour-picker dependency): the area
+and the hue ramp are drawn from Rust's HSV conversion; there is no alpha part.
 
 **`ToggleGroup` item.** 40px wide (Join, Cap, marker choices), 44px (Paint, Dash
 presets), 28px high; icon 16px, 1.5px absolute stroke; the group is one 1px

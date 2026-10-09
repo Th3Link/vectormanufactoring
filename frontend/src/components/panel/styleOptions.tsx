@@ -3,12 +3,13 @@
 
 import {
   CapIcon,
+  DashSample,
   JoinIcon,
   NoPaintIcon,
   SolidPaintIcon,
-} from "@/components/StyleIcons";
+} from "@/components/panel/StyleIcons";
 import type { ToggleOption } from "@/components/ui/toggle-group";
-import type { CapName, JoinName } from "@/hooks/useStylePanel";
+import type { CapName, DashName, JoinName } from "@/hooks/useStylePanel";
 
 export const PAINT_OPTIONS: readonly ToggleOption<"none" | "solid">[] = [
   { value: "none", label: "No stroke", tooltip: "No stroke", icon: <NoPaintIcon /> },
@@ -49,5 +50,17 @@ export const CAP_OPTIONS: readonly ToggleOption<CapName>[] = [
     label: "Square cap",
     tooltip: "Square cap: extends half the width past the endpoint",
     icon: <CapIcon cap="square" />,
+  },
+];
+
+export const DASH_OPTIONS: readonly ToggleOption<DashName>[] = [
+  { value: "solid", label: "Solid", tooltip: "Solid", icon: <DashSample name="solid" /> },
+  { value: "dash", label: "Dash", tooltip: "Dash: 6 4", icon: <DashSample name="dash" /> },
+  { value: "dot", label: "Dot", tooltip: "Dot: 1 3", icon: <DashSample name="dot" /> },
+  {
+    value: "dash-dot",
+    label: "Dash-dot",
+    tooltip: "Dash-dot: 6 3 1 3",
+    icon: <DashSample name="dash-dot" />,
   },
 ];

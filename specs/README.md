@@ -163,9 +163,8 @@ a reader refuses a file with a higher number ("saved by a newer version").
 | Version | Taken by | State |
 |---|---|---|
 | 7 | 0007 `stroke-and-fill-styling` | On `main` |
-| 8 | 0016 `boolean-operations` (compound path, PR #73) | In progress, first to merge |
-| next free at merge | 0017 `style-panel-rework`, PR 2 (odd dash patterns) | Planned |
-| next free at merge | 0018 `stroke-markers` | Planned, after 0017 |
+| 8 | 0016 `boolean-operations` (compound path, PR #73) | On `main` |
+| 9 | 0017 `style-panel-rework` (odd dash lists) and 0018 `stroke-markers`, one PR | In progress (`story/style-panel-rework`) |
 | none | 0015 `document-size-and-rulers` | No bump (its `adrs.md`, decision 1) |
 
 A spec does not hard-code a version number it does not own; it says "next free

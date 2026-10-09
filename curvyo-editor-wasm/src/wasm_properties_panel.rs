@@ -7,7 +7,9 @@
 //! orchestration, over `curvyo-ui-core`'s rules.
 
 use curvyo_document_core::Color;
-use curvyo_ui_core::{DashChoice, StyleField, cap_from_name, join_from_name, rgb_to_hsv};
+use curvyo_ui_core::{
+    DashChoice, StyleField, cap_from_name, hsv_to_rgb, join_from_name, rgb_to_hsv,
+};
 use wasm_bindgen::prelude::*;
 
 use crate::session::StylePanelView;
@@ -143,18 +145,25 @@ impl WasmSession {
     pub fn pointer_is_down(&self) -> bool {
         self.session.is_pointer_down()
     }
-}
 
-/// The hue (degrees, `-1` for a grey or black, which has none), saturation and
-/// value (`0` to `1`) of the colour `rgb` (`0xRRGGBB`), for the picker to
-/// re-derive its state when the colour changed from outside it.
-#[wasm_bindgen]
-#[must_use]
-pub fn colour_to_hsv(rgb: u32) -> Vec<f64> {
-    let hsv = rgb_to_hsv(Color {
-        r: ((rgb >> 16) & 0xFF) as u8,
-        g: ((rgb >> 8) & 0xFF) as u8,
-        b: (rgb & 0xFF) as u8,
-    });
-    vec![hsv.hue.unwrap_or(-1.0), hsv.saturation, hsv.value]
+    /// The hue (degrees, `-1` for a grey or black, which has none), saturation
+    /// and value (`0` to `1`) of the colour `rgb` (`0xRRGGBB`): the picker
+    /// re-derives its state with this when the colour changed from outside it.
+    #[must_use]
+    pub fn colour_hsv(&self, rgb: u32) -> Vec<f64> {
+        let hsv = rgb_to_hsv(Color {
+            r: ((rgb >> 16) & 0xFF) as u8,
+            g: ((rgb >> 8) & 0xFF) as u8,
+            b: (rgb & 0xFF) as u8,
+        });
+        vec![hsv.hue.unwrap_or(-1.0), hsv.saturation, hsv.value]
+    }
+
+    /// The colour `0xRRGGBB` of hue `hue` (degrees), saturation and value
+    /// (`0` to `1`), rounded to the stored 8 bits.
+    #[must_use]
+    pub fn hsv_colour(&self, hue: f64, saturation: f64, value: f64) -> u32 {
+        let color = hsv_to_rgb(hue, saturation, value);
+        u32::from(color.r) << 16 | u32::from(color.g) << 8 | u32::from(color.b)
+    }
 }

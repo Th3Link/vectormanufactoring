@@ -1,8 +1,8 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
-import { DocumentSection } from "@/components/DocumentSection";
-import { StyleSection } from "@/components/StyleSection";
+import { DocumentSection } from "@/components/panel/DocumentSection";
+import { StyleSection } from "@/components/panel/StyleSection";
 import { Tooltip, TooltipProvider } from "@/components/ui/tooltip";
 import type { DocumentPanelApi } from "@/hooks/useDocumentPanel";
 import type { EditorSession } from "@/hooks/useEditorSession";
@@ -23,8 +23,8 @@ interface PropertiesPanelProps {
  * edge collapses it (state per session, default open). Collapsed, the content
  * is hidden and out of the tab order and the canvas region takes the width; the document does not move
  * on screen because the resize keeps the view's top-left origin.
- * `Shift+Ctrl+F` expands the panel and moves focus to its first enabled
- * control; it never collapses it and is ignored during a canvas drag.
+ * `Shift+Ctrl+F` expands the panel and moves focus to its first control; it
+ * never collapses it and is ignored during a canvas drag.
  */
 export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps) {
   const [open, setOpen] = useState(true);
@@ -45,16 +45,16 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
     [getSession],
   );
 
-  /** Focus lands on the first enabled control, or on the panel itself when
-   * every control is disabled (it reads the subject line). */
+  /** Focus lands on the first control (Stroke Paint), or on the panel itself
+   * when it is empty. */
   const focusFirstControl = useCallback(() => {
     const aside = asideRef.current;
     if (!aside) {
       return;
     }
     const first =
-      aside.querySelector<HTMLElement>("[data-first-focus]:not(:disabled)") ??
-      aside.querySelector<HTMLElement>("input:not(:disabled), button:not(:disabled)");
+      aside.querySelector<HTMLElement>("[data-first-focus]") ??
+      aside.querySelector<HTMLElement>("input, button");
     const target = first ?? aside;
     // A control focused by the shortcut shows the focus ring even if the
     // webview does not count script focus as keyboard focus; the mark goes
@@ -96,6 +96,20 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
     }
   }, [open, focusFirstControl]);
 
+  // A control that had keyboard focus can leave the tree when the selection or
+  // the tool changes (the panel becomes empty or shows the Document section):
+  // focus goes to the canvas, not to the page body (`0017` criterion 1).
+  const focusInside = useRef(false);
+  const content = doc.view.content;
+  useEffect(() => {
+    const aside = asideRef.current;
+    if (focusInside.current && aside && !aside.contains(window.document.activeElement)) {
+      focusInside.current = false;
+      returnFocus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content, panel.view.scopeKey]);
+
   const label = open ? "Hide properties panel" : "Show properties panel";
   return (
     <TooltipProvider>
@@ -134,6 +148,14 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
           aria-label="Properties"
           tabIndex={-1}
           hidden={!open}
+          onFocus={() => {
+            focusInside.current = true;
+          }}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              focusInside.current = false;
+            }
+          }}
           onMouseDown={(event) => {
             // A press on dead space (the heading, a label) must not leave the
             // focus on the panel, where the tool letters would do nothing: it
@@ -144,11 +166,11 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
             }
           }}
           onKeyDown={(event) => {
-            // Escape in the panel: an open popover or select closes first (they
-            // handle it in their own portal, outside this element); a field
-            // restores itself; a tooltip that took the key (it prevents the
-            // default) does not count as an overlay; then focus returns to the
-            // canvas. It never clears the selection and never reaches the canvas.
+            // Escape in the panel (`0017` criterion 60): a running drag is
+            // reverted first (`usePreviewGesture` takes the key before it gets
+            // here); a field restores itself and returns focus; otherwise focus
+            // returns to the canvas. It never clears the selection and never
+            // reaches the canvas.
             if (event.key === "Escape" && event.currentTarget.contains(event.target as Node)) {
               event.preventDefault();
               returnFocus();
@@ -159,11 +181,7 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
           {doc.view.content === "document" ? (
             <DocumentSection document={doc} onReturnFocus={returnFocus} />
           ) : doc.view.content === "style" ? (
-            <StyleSection
-              panel={panel}
-              closeKey={`${panel.view.scopeKey}|${editor.tool}`}
-              onReturnFocus={returnFocus}
-            />
+            <StyleSection panel={panel} onReturnFocus={returnFocus} />
           ) : null}
         </aside>
       </div>

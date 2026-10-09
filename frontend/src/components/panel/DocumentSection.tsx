@@ -1,8 +1,8 @@
 import { CircleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { NumberField } from "@/components/NumberField";
-import { StyleRow } from "@/components/StyleRow";
+import { EntryField } from "@/components/panel/EntryField";
+import { StyleRow } from "@/components/panel/StyleRow";
 import { ToggleGroup, type ToggleOption } from "@/components/ui/toggle-group";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { DocumentPanelApi, UnitSymbol } from "@/hooks/useDocumentPanel";
@@ -92,13 +92,12 @@ export function DocumentSection({ document: doc, onReturnFocus }: DocumentSectio
       <StyleRow label="Width">
         <Tooltip side="left" content={SIZE_TOOLTIP}>
           <div>
-            <NumberField
+            <EntryField
               label="Document width"
               shown={view.widthText}
               mixed={false}
               suffix={view.unit}
               width={176}
-              disabled={false}
               commitOnBlur
               inputMode="decimal"
               onSubmit={(text) => doc.setSide("width", text)}
@@ -112,13 +111,12 @@ export function DocumentSection({ document: doc, onReturnFocus }: DocumentSectio
       <StyleRow label="Height">
         <Tooltip side="left" content={SIZE_TOOLTIP}>
           <div>
-            <NumberField
+            <EntryField
               label="Document height"
               shown={view.heightText}
               mixed={false}
               suffix={view.unit}
               width={176}
-              disabled={false}
               commitOnBlur
               inputMode="decimal"
               onSubmit={(text) => doc.setSide("height", text)}

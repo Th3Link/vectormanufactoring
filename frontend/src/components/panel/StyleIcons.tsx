@@ -51,28 +51,30 @@ export function CapIcon({ cap }: { cap: CapName }) {
   );
 }
 
-/** The dash arrays of the line samples, in px at 2 px thickness
- * (`docs/design-system.md`, "Select (dash)"). */
+/** The dash arrays of the preset buttons' line samples, in px at 2 px
+ * thickness over 34 px (`specs/0017-style-panel-rework` UX notes, section 6):
+ * Dash 8 on / 5 off (three dashes), Dot 2 / 6 (five dots), Dash-dot 9 / 4 / 2 / 4
+ * (two dashes, two dots). */
 const SAMPLE_DASHES: Record<DashName, string | undefined> = {
   solid: undefined,
-  dash: "12 8",
+  dash: "8 5",
   dot: "2 6",
-  "dash-dot": "12 6 2 6",
+  "dash-dot": "9 4 2 4",
 };
 
-/** The 64 x 8 px line sample of a dash choice. */
-export function DashSample({ name }: { name: DashName | "custom" }) {
-  const dash = name === "custom" ? "6 3 2 3" : SAMPLE_DASHES[name];
+/** The 34 x 8 px line sample of a dash preset, in the colour of the text, so a
+ * pressed button shows it in the pressed colour. */
+export function DashSample({ name }: { name: DashName }) {
   return (
-    <svg width="64" height="8" viewBox="0 0 64 8" aria-hidden className="shrink-0">
+    <svg width="34" height="8" viewBox="0 0 34 8" aria-hidden className="shrink-0">
       <line
         x1="0"
         y1="4"
-        x2="64"
+        x2="34"
         y2="4"
-        stroke="var(--toolbar-icon)"
+        stroke="currentColor"
         strokeWidth="2"
-        strokeDasharray={dash}
+        strokeDasharray={SAMPLE_DASHES[name]}
       />
     </svg>
   );

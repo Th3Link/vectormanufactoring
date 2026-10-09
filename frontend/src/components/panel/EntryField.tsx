@@ -1,7 +1,7 @@
 import { CircleAlert } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
-export interface NumberFieldProps {
+export interface EntryFieldProps {
   /** The accessible name ("Stroke width, millimetres"). */
   label: string;
   /** The committed value as text ("0.25", "#2F6FEE", "50"); ignored when mixed. */
@@ -10,11 +10,17 @@ export interface NumberFieldProps {
   mixed: boolean;
   /** The fixed unit inside the right edge ("mm", "%"), or none. */
   suffix?: string;
-  /** Width in px: 96 for a width, 84 for hex, 56 for an opacity. */
+  /** Width in px. */
   width: number;
+  /** The text shown while the field is empty and not mixed ("Solid. Example: 6 4"). */
+  placeholder?: string;
+  /** Room kept free at the right for the suffix, px. Default 32 for a suffix of
+   * two or more characters, 24 for one. */
+  gutter?: number;
+  /** The suffix is a 12 px word ("x width") instead of a 14 px unit. */
+  smallSuffix?: boolean;
   /** Hex fields are left-aligned, the number fields right-aligned. */
   align?: "left" | "right";
-  disabled: boolean;
   /** Enter or Tab: `"committed"`, `"unchanged"` or `"invalid:<code>"`. */
   onSubmit: (text: string) => string;
   /** The message of each `invalid:<code>`. */
@@ -22,7 +28,7 @@ export interface NumberFieldProps {
   /** After Enter or Escape: the keyboard goes back to the canvas. */
   onReturnFocus: () => void;
   /** Marks the field as the panel's first focus target when it is the first
-   * enabled control. */
+   * control. */
   firstFocus?: boolean;
   /** Leaving the field with edited text commits it, as Enter does (the
    * Document section's size fields, criterion 15); a refused value stays in
@@ -34,8 +40,10 @@ export interface NumberFieldProps {
 }
 
 /**
- * A typed field of the Style panel (`specs/0007-stroke-and-fill-styling`
- * criterion 36, `docs/design-system.md`, "Number field"). Nothing previews
+ * A typed field of the properties panel (`specs/0007-stroke-and-fill-styling`
+ * criterion 36, `specs/0017-style-panel-rework` criteria 12, 30 and 42,
+ * `docs/design-system.md`, "Number field"): the hex field, the dash pattern line,
+ * the Document size fields. Nothing previews
  * while typing. Enter commits and returns focus to the canvas; Tab commits and
  * moves on; Escape or a press elsewhere restores the shown value and writes
  * nothing. Enter on text the maker did not touch writes nothing. A refused
@@ -43,21 +51,23 @@ export interface NumberFieldProps {
  * (an overlay, so no row shifts) until the next keystroke. The rules are
  * Rust's; this holds the text, the caret and the invalid mark.
  */
-export function NumberField({
+export function EntryField({
   label,
   shown,
   mixed,
   suffix,
   width,
+  placeholder,
+  gutter,
+  smallSuffix = false,
   align = "right",
-  disabled,
   onSubmit,
   messages,
   onReturnFocus,
   firstFocus = false,
   commitOnBlur = false,
   inputMode = "text",
-}: NumberFieldProps) {
+}: EntryFieldProps) {
   const messageId = useId();
   const display = mixed ? "" : shown;
   const [text, setText] = useState(display);
@@ -108,8 +118,7 @@ export function NumberField({
         aria-label={label}
         aria-invalid={invalid ? true : undefined}
         aria-describedby={invalid ? messageId : undefined}
-        placeholder={mixed ? "Mixed" : undefined}
-        disabled={disabled}
+        placeholder={mixed ? "Mixed" : placeholder}
         value={text}
         data-first-focus={firstFocus ? "" : undefined}
         onFocus={(event) => {
@@ -157,20 +166,19 @@ export function NumberField({
             onReturnFocus();
           }
         }}
-        className={`style-field h-7 w-full rounded-[5px] border bg-white pl-1.5 text-sm tabular-nums outline-none disabled:border-transparent disabled:bg-[var(--field-disabled-bg)] disabled:text-[var(--field-disabled-fg)] ${
+        className={`style-field h-7 w-full rounded-[5px] border bg-white pl-1.5 text-sm tabular-nums outline-none ${
           align === "right" ? "text-right" : "text-left"
-        } ${suffix && !mixed ? (suffix === "mm" || suffix === "cm" || suffix === "in" ? "pr-8" : "pr-6") : "pr-1.5"} ${
+        } ${
           invalid
             ? "border-[var(--field-invalid)] shadow-[inset_0_0_0_2px_var(--field-invalid)]"
             : "border-[color-mix(in_srgb,var(--toolbar-icon)_60%,transparent)] focus:border-[var(--editor-accent)] focus:shadow-[inset_0_0_0_1px_var(--editor-accent)]"
         }`}
+        style={{ paddingRight: suffix && !mixed ? (gutter ?? (suffix.length > 1 ? 32 : 24)) : 6 }}
       />
       {suffix && !mixed && (
         <span
           aria-hidden
-          className={`pointer-events-none absolute top-1/2 right-1.5 -translate-y-1/2 text-sm ${
-            disabled ? "text-[var(--field-disabled-fg)]" : "text-[var(--panel-muted-fg)]"
-          }`}
+          className={`pointer-events-none absolute top-1/2 right-1.5 -translate-y-1/2 text-[var(--panel-muted-fg)] ${smallSuffix ? "text-xs" : "text-sm"}`}
         >
           {suffix}
         </span>
@@ -179,7 +187,7 @@ export function NumberField({
         <div
           id={messageId}
           role="alert"
-          className="pointer-events-none absolute top-full right-0 z-30 mt-1 flex w-max max-w-[220px] items-start gap-1 rounded-md bg-popover px-2 py-1 text-xs text-[var(--field-invalid)] ring-1 ring-[var(--field-invalid)]"
+          className="pointer-events-none absolute top-full right-0 z-30 mt-1 flex w-max max-w-[244px] items-start gap-1 rounded-md bg-popover px-2 py-1 text-xs text-[var(--field-invalid)] ring-1 ring-[var(--field-invalid)]"
         >
           <CircleAlert size={12} aria-hidden className="mt-0.5 shrink-0" />
           {message}

@@ -16,54 +16,65 @@ export type DashName = "solid" | "dash" | "dot" | "dash-dot";
 export type JoinName = "miter" | "round" | "bevel";
 export type CapName = "butt" | "round" | "square";
 
-/** A plain-JS copy of the Rust `StylePanelView` (`specs/0007-stroke-and-fill-
- * styling` criteria 5, 13, 24, 37): what the Style panel shows. A `*Mixed`
- * flag means the edited objects differ (the field is empty with the
- * placeholder "Mixed"). Colours are packed `0xRRGGBB`; opacities are
- * percents, shown rounded. */
+/** A plain-JS copy of the Rust `StylePanelView` (`specs/0017-style-panel-
+ * rework`): what the Style panel shows. A `*Mixed` flag means the edited
+ * objects differ (the field is empty with the placeholder "Mixed"). Colours
+ * are packed `0xRRGGBB`; opacities are percents, shown rounded; the hex fields
+ * are `#RRGGBBAA`. `*Rows` says whether the rows under a Paint switch exist at
+ * all (they are removed while every edited paint is off). */
 export interface StyleView {
   subject: string;
   /** Changes when the edited objects change. */
   scopeKey: string;
-  /** There is something to edit; otherwise every control is disabled. */
-  enabled: boolean;
   strokePaint: "on" | "off" | "mixed";
-  /** Every edited stroke is off: Dash, Join and Cap are disabled. */
-  strokeAllOff: boolean;
+  strokeRows: boolean;
   strokeColorMixed: boolean;
   strokeColor: number;
+  strokeHex: string;
+  strokeHexMixed: boolean;
   strokeOpacityMixed: boolean;
   strokeOpacity: number;
   strokeWidthMixed: boolean;
   strokeWidth: number;
-  strokeDash: DashName | "custom" | "mixed";
+  /** The pressed preset button, `"none"` for a list that is no preset. */
+  strokeDash: DashName | "none" | "mixed";
+  /** The numbers of the pattern line, one space apart. */
+  strokeDashText: string;
   strokeJoin: JoinName | "mixed";
   strokeCap: CapName | "mixed";
   fillPaint: "on" | "off" | "mixed";
+  fillRows: boolean;
   fillColorMixed: boolean;
   fillColor: number;
+  fillHex: string;
+  fillHexMixed: boolean;
   fillOpacityMixed: boolean;
   fillOpacity: number;
 }
 
 const DISABLED_VIEW: StyleView = {
-  subject: "Nothing selected",
+  subject: "",
   scopeKey: "",
-  enabled: false,
   strokePaint: "on",
-  strokeAllOff: false,
+  strokeRows: true,
   strokeColorMixed: false,
   strokeColor: 0,
+  strokeHex: "#000000FF",
+  strokeHexMixed: false,
   strokeOpacityMixed: false,
   strokeOpacity: 100,
   strokeWidthMixed: false,
   strokeWidth: 0.25,
   strokeDash: "solid",
+  strokeDashText: "",
   strokeJoin: "miter",
   strokeCap: "butt",
   fillPaint: "off",
+  fillRows: false,
   fillColorMixed: false,
   fillColor: 0,
+  fillHex: "#000000FF",
+  fillHexMixed: false,
   fillOpacityMixed: false,
   fillOpacity: 100,
 };
@@ -78,21 +89,26 @@ function readView(session: WasmSession | null): StyleView {
   const view: StyleView = {
     subject: raw.subject,
     scopeKey: raw.scope_key,
-    enabled: raw.enabled,
     strokePaint: raw.stroke_paint as StyleView["strokePaint"],
-    strokeAllOff: raw.stroke_all_off,
+    strokeRows: raw.stroke_rows,
     strokeColorMixed: raw.stroke_color_mixed,
     strokeColor: raw.stroke_color,
+    strokeHex: raw.stroke_hex,
+    strokeHexMixed: raw.stroke_hex_mixed,
     strokeOpacityMixed: raw.stroke_opacity_mixed,
     strokeOpacity: raw.stroke_opacity,
     strokeWidthMixed: raw.stroke_width_mixed,
     strokeWidth: raw.stroke_width,
     strokeDash: raw.stroke_dash as StyleView["strokeDash"],
+    strokeDashText: raw.stroke_dash_text,
     strokeJoin: raw.stroke_join as StyleView["strokeJoin"],
     strokeCap: raw.stroke_cap as StyleView["strokeCap"],
     fillPaint: raw.fill_paint as StyleView["fillPaint"],
+    fillRows: raw.fill_rows,
     fillColorMixed: raw.fill_color_mixed,
     fillColor: raw.fill_color,
+    fillHex: raw.fill_hex,
+    fillHexMixed: raw.fill_hex_mixed,
     fillOpacityMixed: raw.fill_opacity_mixed,
     fillOpacity: raw.fill_opacity,
   };
@@ -101,28 +117,38 @@ function readView(session: WasmSession | null): StyleView {
 }
 
 /** What `setText` answers: `"committed"`, `"unchanged"`, or
- * `"invalid:<code>"` with the code `hex`, `hex8`, `percent` or `width`. */
+ * `"invalid:<code>"` with the code `hex`, `percent`, `width` or `dash`. */
 export type TextOutcome = string;
+
+/** The hue (degrees, `-1` for none), saturation and value (0 to 1) of a colour. */
+export type HsvTriple = readonly [hue: number, saturation: number, value: number];
 
 export interface StylePanelApi {
   view: StyleView;
-  /** A panel drag is running; the colour popover keeps its own state meanwhile. */
+  /** A panel drag is running. */
   previewing: boolean;
-  /** Escapes that dropped a preview; a colour popover restarts on each. */
+  /** Escapes that dropped a preview; a picker that kept following the pointer
+   * starts over from the committed colour on each. */
   cancels: number;
   /** Enter or Tab in a typed field. */
   setText: (field: StyleFieldName, text: string) => TextOutcome;
-  /** A colour area or hue tick: shown on the canvas, nothing written. The
-   * gesture ends, with one commit, at the next pointer release or arrow
-   * key-up anywhere (react-colorful reports neither). */
-  previewColor: (field: StyleFieldName, rgb: number) => void;
+  /** A tick of a drag in the colour area or the hue slider: shown on the
+   * canvas, nothing written. The gesture ends, with one commit, at the next
+   * pointer release or arrow key-up anywhere. */
+  previewHsv: (field: StyleFieldName, hue: number, saturation: number, value: number) => void;
+  /** The hue, saturation and value of a packed colour (Rust's rounding). */
+  hsvOf: (rgb: number) => HsvTriple;
+  /** The packed colour of a hue, saturation and value (Rust's rounding). */
+  rgbOf: (hue: number, saturation: number, value: number) => number;
   /** An opacity slider tick (percent), same gesture rules. */
   previewOpacity: (field: StyleFieldName, percent: number) => void;
   setStrokePaint: (on: boolean) => void;
+  setFillPaint: (on: boolean) => void;
   setStrokeDash: (name: DashName) => void;
+  /** Enter or Tab in the pattern line. */
+  setStrokeDashText: (text: string) => TextOutcome;
   setStrokeJoin: (name: JoinName) => void;
   setStrokeCap: (name: CapName) => void;
-  setFillPaint: (on: boolean) => void;
 }
 
 interface EditorHandle {
@@ -170,17 +196,42 @@ export function useStylePanel(editor: EditorHandle): StylePanelApi {
     [getSession, refresh],
   );
 
+  const hsvOf = useCallback(
+    (rgb: number): HsvTriple => {
+      const [hue, saturation, value] = getSession()?.colour_hsv(rgb) ?? [-1, 0, 0];
+      return [hue, saturation, value];
+    },
+    [getSession],
+  );
+  const rgbOf = useCallback(
+    (hue: number, saturation: number, value: number) =>
+      getSession()?.hsv_colour(hue, saturation, value) ?? 0,
+    [getSession],
+  );
+
   return {
     view,
     previewing,
     cancels,
     setText,
-    previewColor: (field, rgb) => preview((s) => s.preview_style_color(field, rgb)),
+    previewHsv: (field, hue, saturation, value) =>
+      preview((s) => s.preview_style_hsv(field, hue, saturation, value)),
+    hsvOf,
+    rgbOf,
     previewOpacity: (field, percent) => preview((s) => s.preview_style_opacity(field, percent)),
     setStrokePaint: (on) => act((s) => s.set_stroke_paint(on)),
+    setFillPaint: (on) => act((s) => s.set_fill_paint(on)),
     setStrokeDash: (name) => act((s) => s.set_stroke_dash(name)),
+    setStrokeDashText: (text) => {
+      const session = getSession();
+      if (!session) {
+        return "unchanged";
+      }
+      const outcome = session.set_stroke_dash_text(text);
+      refresh();
+      return outcome;
+    },
     setStrokeJoin: (name) => act((s) => s.set_stroke_join(name)),
     setStrokeCap: (name) => act((s) => s.set_stroke_cap(name)),
-    setFillPaint: (on) => act((s) => s.set_fill_paint(on)),
   };
 }
