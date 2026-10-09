@@ -18,7 +18,7 @@ use crate::object_selection::ObjectSelection;
 
 /// The kernel tolerance: curves are flattened to straight segments that stay within 0.01 mm of
 /// the true curve. Fixed, not a setting, and not the display tolerance (ADR 0003 §7).
-pub const BOOLEAN_TOLERANCE: Tolerance = Tolerance::from_mm(0.01);
+const BOOLEAN_TOLERANCE: Tolerance = Tolerance::from_mm(0.01);
 
 /// The five operations a maker can start.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -195,6 +195,60 @@ fn outlines_of(object: &ObjectSnapshot) -> Vec<(Vec<OutlineTriple>, bool)> {
     }
 }
 
+/// The operands in the order the kernel takes them, the kernel's operation, and the base operand
+/// (its style and its place in the stacking order). The first operand is the base of a
+/// difference; a reverse difference puts the top-most first, the rest keeping their stacking
+/// order.
+///
+/// `operands` holds two or more objects, bottom first ([`plan_boolean`] checked).
+fn kernel_order<'a>(
+    op: BooleanOp,
+    operands: &[&'a ObjectSnapshot],
+) -> (Vec<&'a ObjectSnapshot>, KernelOp, &'a ObjectSnapshot) {
+    let mut order = operands.to_vec();
+    let bottom = operands[0];
+    match op {
+        BooleanOp::Union => (order, KernelOp::Union, bottom),
+        BooleanOp::Difference => (order, KernelOp::Difference, bottom),
+        BooleanOp::Intersection => (order, KernelOp::Intersection, bottom),
+        BooleanOp::Exclusion => (order, KernelOp::Exclusion, bottom),
+        BooleanOp::ReverseDifference => {
+            let top = order.pop().unwrap_or(bottom);
+            order.insert(0, top);
+            (order, KernelOp::Difference, top)
+        }
+    }
+}
+
+/// The refusal the kernel's `error` stands for. `order` is the operand order the kernel was
+/// given (its indices name operands in it); `of` is how many objects are selected.
+fn refusal_of(error: BooleanError, order: &[&ObjectSnapshot], of: usize) -> BooleanRefusal {
+    let ids_at =
+        |indices: &[usize]| -> Vec<NodeId> { indices.iter().map(|&i| order[i].id()).collect() };
+    match error {
+        BooleanError::OpenOperands(indices) => BooleanRefusal::OpenPaths {
+            offenders: ids_at(&indices),
+            of,
+        },
+        BooleanError::EmptyOperands(indices) => BooleanRefusal::NoArea {
+            offenders: ids_at(&indices),
+            of,
+        },
+        BooleanError::OutOfRange(indices) => BooleanRefusal::OutOfRange {
+            offenders: ids_at(&indices),
+            of,
+        },
+        BooleanError::EmptyResult => BooleanRefusal::Empty,
+        BooleanError::NoOperands | BooleanError::ToleranceTooSmall => {
+            // invariant: `plan_boolean` passes two or more operands and a constant tolerance
+            // above two grid pitches. Shown as "empty" if a change ever makes them reachable,
+            // after failing every test that gets here.
+            debug_assert!(false, "unreachable kernel refusal: {error:?}");
+            BooleanRefusal::Empty
+        }
+    }
+}
+
 /// Plans `op` over the selected objects.
 ///
 /// The stacking order decides which operand is which, never the order of the selection
@@ -225,20 +279,7 @@ pub fn plan_boolean(
         }
         BooleanAvailability::Ready => {}
     }
-    // The kernel's order: the first operand is the base of a difference. A reverse difference
-    // puts the top-most first, the rest keeping their stacking order.
-    let mut order: Vec<&ObjectSnapshot> = operands.clone();
-    let (kernel_op, base) = match op {
-        BooleanOp::Union => (KernelOp::Union, operands[0]),
-        BooleanOp::Difference => (KernelOp::Difference, operands[0]),
-        BooleanOp::Intersection => (KernelOp::Intersection, operands[0]),
-        BooleanOp::Exclusion => (KernelOp::Exclusion, operands[0]),
-        BooleanOp::ReverseDifference => {
-            let top = order.pop().unwrap_or(operands[0]);
-            order.insert(0, top);
-            (KernelOp::Difference, top)
-        }
-    };
+    let (order, kernel_op, base) = kernel_order(op, &operands);
     let owned: Vec<Vec<(Vec<OutlineTriple>, bool)>> =
         order.iter().map(|object| outlines_of(object)).collect();
     let borrowed: Vec<Vec<Outline<'_>>> = owned
@@ -251,26 +292,8 @@ pub fn plan_boolean(
         })
         .collect();
     let slices: Vec<&[Outline<'_>]> = borrowed.iter().map(Vec::as_slice).collect();
-    let ids_at =
-        |indices: &[usize]| -> Vec<NodeId> { indices.iter().map(|&i| order[i].id()).collect() };
-    let result =
-        run_kernel(kernel_op, &slices, BOOLEAN_TOLERANCE).map_err(|error| match error {
-            BooleanError::OpenOperands(indices) => BooleanRefusal::OpenPaths {
-                offenders: ids_at(&indices),
-                of,
-            },
-            BooleanError::EmptyOperands(indices) => BooleanRefusal::NoArea {
-                offenders: ids_at(&indices),
-                of,
-            },
-            BooleanError::OutOfRange(indices) => BooleanRefusal::OutOfRange {
-                offenders: ids_at(&indices),
-                of,
-            },
-            BooleanError::EmptyResult
-            | BooleanError::NoOperands
-            | BooleanError::ToleranceTooSmall => BooleanRefusal::Empty,
-        })?;
+    let result = run_kernel(kernel_op, &slices, BOOLEAN_TOLERANCE)
+        .map_err(|error| refusal_of(error, &order, of))?;
     let outlines: Vec<(Vec<NewAnchor>, bool)> = result
         .into_outlines()
         .into_iter()

@@ -14,12 +14,12 @@ use crate::param_edit::commit_param;
 use crate::transform_drag::{ScaleModes, StrokeScaling};
 use crate::transform_handle_layout::EditHandle;
 
-/// The largest coordinate or size (millimetres, 10 km) a drag may write.
-/// A pointer value beyond it — or NaN/infinite — is hostile or broken
-/// input; the drag then resolves to "no change" instead of writing
-/// geometry a later open would refuse (`adrs.md`: "a file must never
+/// The largest coordinate or size (millimetres, 10 km) a drag may write: the bound of the boolean
+/// kernel, so that a file never becomes one the kernel refuses because of a drag. A pointer value
+/// beyond it, or NaN or infinite, is hostile or broken input; the drag then resolves to "no
+/// change" instead of writing geometry a later open would refuse (`adrs.md`: "a file must never
 /// become unopenable from a drag").
-pub(crate) const MAX_COORDINATE_MM: f64 = 1e7;
+pub(crate) use curvyo_geometry_core::MAX_COORDINATE_MM;
 
 /// A move offset within this (millimetres) of zero is no move.
 pub(crate) const MOVE_EQUAL_EPSILON_MM: f64 = 1e-9;

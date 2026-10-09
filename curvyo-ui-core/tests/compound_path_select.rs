@@ -604,4 +604,30 @@ fn the_subject_line_names_compound_paths() {
     selection.set(&[first, rect]);
     let mixed = style_scope(StyleTool::Other, &all, &selection, &NodeSelection::new());
     assert_eq!(mixed.subject, "2 objects");
+
+    // Compound paths are paths: with ordinary paths they are "N paths", among themselves
+    // "N compound paths".
+    let plain = document.create_path(
+        &[
+            NewAnchor::corner(AnchorId::new(8, 1), pt(700.0, 0.0)),
+            NewAnchor::corner(AnchorId::new(8, 2), pt(710.0, 0.0)),
+            NewAnchor::corner(AnchorId::new(8, 3), pt(710.0, 10.0)),
+        ],
+        true,
+    );
+    let second = add_compound(
+        &document,
+        &[
+            square(300, 0.0, 100.0, 40.0, false),
+            square(400, 10.0, 110.0, 20.0, true),
+        ],
+    );
+    let all = objects(&document);
+    let mut subject = |ids: &[NodeId]| {
+        selection.set(ids);
+        style_scope(StyleTool::Other, &all, &selection, &NodeSelection::new()).subject
+    };
+    assert_eq!(subject(&[first, plain]), "2 paths");
+    assert_eq!(subject(&[first, second]), "2 compound paths");
+    assert_eq!(subject(&[first, plain, rect]), "3 objects");
 }

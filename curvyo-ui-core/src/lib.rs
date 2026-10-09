@@ -58,8 +58,7 @@ mod viewport;
 pub use anchor_id_minter::AnchorIdMinter;
 pub use angle_snap::{MAX_SKEW_SNAP_DEG, snap_angle, snap_skew_angle};
 pub use boolean::{
-    BOOLEAN_TOLERANCE, BooleanAvailability, BooleanOp, BooleanPlan, BooleanRefusal,
-    boolean_availability, plan_boolean,
+    BooleanAvailability, BooleanOp, BooleanPlan, BooleanRefusal, boolean_availability, plan_boolean,
 };
 pub use conversion::build_primitive_conversions;
 pub use display_unit_text::{
