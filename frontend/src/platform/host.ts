@@ -39,8 +39,6 @@ const browserCommands: Record<string, (args?: Record<string, unknown>) => unknow
   take_pending_open: () => null,
   confirm_project_opened: () => undefined,
   save_project_bytes: (args) => download(args?.bytes as number[]),
-  // `get_project_state` is deliberately absent: it rejects and the caller
-  // keeps its A4 default.
 };
 
 /** Same contract as Tauri's `invoke`. */

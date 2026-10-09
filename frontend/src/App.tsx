@@ -4,24 +4,24 @@ import { Canvas } from "@/components/Canvas";
 import { ErrorDialog } from "@/components/ErrorDialog";
 import { NodeToolbar } from "@/components/NodeToolbar";
 import { PropertiesPanel } from "@/components/PropertiesPanel";
+import { Rulers } from "@/components/Rulers";
 import { SelectToolbar } from "@/components/SelectToolbar";
 import { ShapeToolbar } from "@/components/ShapeToolbar";
 import { StatusBar } from "@/components/StatusBar";
 import { ToolRail } from "@/components/ToolRail";
 import type { EditorSession } from "@/hooks/useEditorSession";
 import { useEditorSession } from "@/hooks/useEditorSession";
+import { useSessionStatus } from "@/hooks/useSessionStatus";
 import type {
   OpenBytesPayload,
   OpenErrorPayload,
   PendingOpenPayload,
-  ProjectStatePayload,
   RequestPackPayload,
   SaveErrorPayload,
 } from "@/lib/projectState";
+import { RULER_THICKNESS_PX } from "@/lib/rulerDraw";
 import { BrowserBar } from "@/platform/BrowserBar";
 import { invoke, isTauri, listen } from "@/platform/host";
-
-const DEFAULT_SIZE_MM = { width: 210, height: 297 };
 
 /** Asks `editor` to parse `bytes` as the new live session and, only on
  * success, tells the host to start treating `path` as the open
@@ -48,8 +48,8 @@ async function openBytes(
 
 function App() {
   const [cursorMm, setCursorMm] = useState({ x: 0, y: 0 });
-  const [sizeMm, setSizeMm] = useState(DEFAULT_SIZE_MM);
   const editor = useEditorSession(setCursorMm);
+  const status = useSessionStatus(editor);
   const [openErrorMessage, setOpenErrorMessage] = useState<string | null>(
     null,
   );
@@ -58,19 +58,11 @@ function App() {
   );
 
   useEffect(() => {
-    // Seed the initial state once on mount rather than relying on an
-    // event that may have fired before this listener was attached.
-    invoke<ProjectStatePayload>("get_project_state")
-      .then((state) => setSizeMm(state.size_mm))
-      .catch(() => {
-        /* Keep the A4 default if the host is somehow unreachable. */
-      });
-
     // The file-association launch path runs its open attempt in Tauri's
     // `.setup()`, before this effect's listeners below can possibly have
     // attached yet. A payload from that path has nowhere live to go, so
     // the host buffers it and this is the one-time poll that picks it
-    // up — mirroring the `get_project_state` call just above.
+    // up.
     invoke<PendingOpenPayload | null>("take_pending_open")
       .then((pending) => {
         if (!pending) {
@@ -91,10 +83,6 @@ function App() {
         /* Nothing pending is indistinguishable from an unreachable host. */
       });
 
-    const unlistenState = listen<ProjectStatePayload>(
-      "project-state",
-      (event) => setSizeMm(event.payload.size_mm),
-    );
     const unlistenOpenBytes = listen<OpenBytesPayload>(
       "open-bytes",
       (event) =>
@@ -137,7 +125,6 @@ function App() {
     );
 
     return () => {
-      unlistenState.then((unlisten) => unlisten());
       unlistenOpenBytes.then((unlisten) => unlisten());
       unlistenOpenError.then((unlisten) => unlisten());
       unlistenNewProject.then((unlisten) => unlisten());
@@ -156,10 +143,22 @@ function App() {
     <div className="flex h-screen w-screen flex-col overflow-hidden">
       {isTauri ? null : <BrowserBar />}
       <div className="flex min-h-0 flex-1">
-        {/* The canvas region: the rail and the bars' overlay row are anchored
-         * to it, not to the window, so no bar is ever drawn under the
-         * properties panel on its right (`0007` criterion 39). */}
-        <div className="relative flex min-h-0 min-w-0 flex-1">
+        {/* The canvas region, a grid of the rulers' corner square, the two
+         * ruler strips and the viewport (`specs/0015-document-size-and-rulers`):
+         * the rulers shrink the viewport and are not drawn over it. */}
+        <div
+          className="grid min-h-0 min-w-0 flex-1"
+          style={{
+            gridTemplateColumns: `${RULER_THICKNESS_PX}px minmax(0, 1fr)`,
+            gridTemplateRows: `${RULER_THICKNESS_PX}px minmax(0, 1fr)`,
+          }}
+        >
+        <Rulers editor={editor} unit={status.unit} />
+        {/* The viewport: the rail and the bars' overlay row are anchored to
+         * it, not to the window, so no bar is ever drawn under the
+         * properties panel on its right (`0007` criterion 39) or over a
+         * ruler. */}
+        <div className="relative flex min-h-0 min-w-0">
         <ToolRail
           tool={editor.tool}
           selectionCount={editor.selectionCount}
@@ -223,9 +222,14 @@ function App() {
           ) : null}
         </div>
         </div>
+        </div>
         <PropertiesPanel editor={editor} />
       </div>
-      <StatusBar cursorMm={cursorMm} sizeMm={sizeMm} zoomPercent={editor.zoomPercent} />
+      <StatusBar
+        cursorText={status.cursorText(cursorMm.x, cursorMm.y)}
+        sizeText={status.sizeText}
+        zoomPercent={editor.zoomPercent}
+      />
       <ErrorDialog
         title="Can't open project"
         message={openErrorMessage}

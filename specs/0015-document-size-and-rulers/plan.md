@@ -1,12 +1,11 @@
 # Plan for Document size and rulers
 
-Three PRs, in the architect's order (`adrs.md`, decision 15). PR 1 is
-branch `story/document-size-and-rulers`; PRs 2 and 3 get their own
-branches from the then-current `main`. PR 1 is built first and has no UI.
-PRs 2 and 3 are later and are staggered with the later PRs of
+Three PRs, in the architect's order (`adrs.md`, decision 15). PR 1 (model, no
+UI) is merged (#67). PR 2 (rulers and pasteboard) is branch
+`story/rulers-and-pasteboard`. PR 3 (panel) gets its own branch from the
+then-current `main`. PRs 2 and 3 are staggered with the later PRs of
 `0016-boolean-operations` (both touch `ui-core`, `render-core`, `editor-wasm`
-and `frontend`). Tasks of PRs 2 and 3 are planned here and refined when they
-start.
+and `frontend`).
 
 ## Affected crates/modules
 
@@ -24,7 +23,7 @@ PR 1 (model, cargo tests only, no format bump, no UI):
 - Not touched: `curvyo-geometry-core`, `render-core`, `editor-wasm`,
   `curvyo-app`, `frontend`.
 
-PR 2 (rulers and pasteboard, later): `ui-core` `ruler.rs`; `render-core`
+PR 2 (rulers and pasteboard): `ui-core` `ruler.rs`; `render-core`
 document area and knockout colour; `editor-wasm` view data and clear colour;
 `curvyo-app` removes `size_mm`; `frontend` ruler strips, layout, status bar
 size readout.
@@ -69,24 +68,27 @@ PR 3 (panel, later): `ui-core` `panel_content`, `Viewport::pan_by_document_offse
   objects of a document (curve extremes, rotated outlines, no stroke width)
   (AC 23).
 
-### PR 2: rulers and pasteboard (later)
+### PR 2: rulers and pasteboard
 
-- [ ] 10. `ui-core::ruler`: tick algorithm (1-2-5 step, 40 px and widest label
+- [x] 10. `ui-core::ruler`: tick algorithm (1-2-5 step, 40 px and widest label
   plus 4 px, 5 minors, integer-built labels, label thinning, free-span
   clipping rule) (AC 3, 4, 5, 6, 7).
-- [ ] 11. Document area and pasteboard colours in the draw list, knockout
+- [x] 11. Document area and pasteboard colours in the draw list, knockout
   colour by position (AC 28, 31).
-- [ ] 12. Frontend ruler strips (Canvas2D, same frame as the canvas), corner,
+- [x] 12. Frontend ruler strips (Canvas2D, same frame as the canvas), corner,
   pointer marker, viewport shrink, press swallowing, wheel forwarding, 72 px
-  initial offset, 800 x 600 layout (AC 1, 2, 8, 9, 10, 10a, 11, 11a).
-- [ ] 13. Status bar size readout from the session; remove `size_mm` from the
+  initial offset, 800 x 600 layout (AC 1, 2, 8, 9, 10, 10a, 11, 11a). The
+  initial offset lives in `Viewport::with_document_inset` and survives the
+  host's first size reports until the first pan or zoom.
+- [x] 13. Status bar size readout from the session; remove `size_mm` from the
   host (AC 12, 21).
-- [ ] 14. Drawing and editing on the pasteboard with all tools (AC 29, 30
+- [x] 14. Drawing and editing on the pasteboard with all tools (AC 29, 30
   verified; no tool reads the size).
 
 ### PR 3: panel (later)
 
-- [ ] 15. `panel_content` and `Viewport::pan_by_document_offset`; the view
+- [ ] 15. `panel_content` and `Viewport::pan_by_document_offset` (decision 7
+  puts the latter in PR 3, not PR 2); the view
   follows a resize or fit (AC 14a, 20).
 - [ ] 16. Session and wasm commands for resize, fit, unit; frontend Document
   section with Width, Height, Unit, Fit, notice and validation chip (AC 14,
