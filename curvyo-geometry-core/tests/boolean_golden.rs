@@ -38,6 +38,12 @@ fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/boolean")
 }
 
+/// A fixture's text with line endings normalised: git may check the files out with CRLF on
+/// Windows, and the comparison is about content.
+fn read_fixture(path: &Path) -> String {
+    std::fs::read_to_string(path).unwrap().replace("\r\n", "\n")
+}
+
 fn parse_operands(text: &str) -> Vec<Operand> {
     let mut operands: Vec<Operand> = Vec::new();
     for line in text.lines().map(str::trim) {
@@ -130,7 +136,7 @@ fn every_fixture_matches_its_golden_result() {
     let files = fixtures();
     assert!(files.len() >= 9, "fixtures are missing");
     for file in files {
-        let text = std::fs::read_to_string(&file).unwrap();
+        let text = read_fixture(&file);
         let operands = parse_operands(input_part(&text));
         let mut expected = String::from(input_part(&text));
         for (name, op) in OPS {
@@ -149,7 +155,7 @@ fn every_fixture_matches_its_golden_result() {
         }
         assert_eq!(
             expected,
-            std::fs::read_to_string(&file).unwrap(),
+            read_fixture(&file),
             "{} differs from the golden file",
             file.display()
         );
@@ -157,7 +163,7 @@ fn every_fixture_matches_its_golden_result() {
 }
 
 fn result_of(file: &str, op: BooleanOp) -> Result<BooleanResult, BooleanError> {
-    let text = std::fs::read_to_string(fixture_dir().join(file)).unwrap();
+    let text = read_fixture(&fixture_dir().join(file));
     run(op, &parse_operands(input_part(&text)))
 }
 
@@ -242,5 +248,5 @@ fn five_thousand_tiny_squares() {
     if update_requested() {
         std::fs::write(&path, &summary).unwrap();
     }
-    assert_eq!(summary, std::fs::read_to_string(&path).unwrap());
+    assert_eq!(summary, read_fixture(&path));
 }
