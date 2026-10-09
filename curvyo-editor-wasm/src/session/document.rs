@@ -1,17 +1,15 @@
-//! `Session`'s document-level commands and texts for the Properties panel and
-//! the status bar (`specs/0015-document-size-and-rulers/` criteria 12, 14 to
-//! 27a, 33 to 36): the panel's content, the size fields, the display unit, Fit
-//! to content, and the unit-aware status texts.
+//! The document's own settings (size and display unit) as the Properties panel
+//! and the status bar show and change them (`specs/0015-document-size-and-
+//! rulers/` criteria 12, 14 to 27a, 33 to 36).
 //!
 //! A resize or a fit moves every object; the view moves by the same shift, so
 //! nothing moves on screen and the document's edges move instead
 //! (criterion 20).
 
-use curvyo_document_core::{DisplayUnit, Document, DocumentSize, Length};
+use curvyo_document_core::{DisplayUnit, Document, DocumentSize, DocumentSizeError, Length};
 use curvyo_ui_core::{
-    PanelContent, content_bounds, content_too_large_message, document_side_message,
-    fit_document_to_content, format_cursor, format_field_length, format_size, panel_content,
-    parse_document_side,
+    PanelContent, content_bounds, content_too_large_message, document_side_message, format_cursor,
+    format_field_length, format_size, panel_content, parse_document_side,
 };
 
 use super::Session;
@@ -43,18 +41,29 @@ pub enum FitOutcome {
     Fitted,
     /// The document already fits: nothing was written.
     AlreadyFits,
-    /// The document has no objects: nothing was written.
+    /// The document has no objects, or none with usable geometry: nothing was
+    /// written.
     Empty,
     /// The content is larger than the largest document: nothing was written.
     /// Carries the message, with the limit in the display unit.
     TooLarge(String),
+    /// The Pen has an unfinished path, which a fit would not move: nothing was
+    /// written (criterion 14a).
+    Blocked,
 }
 
 impl Session {
     /// What the Properties panel shows (criterion 14a).
     #[must_use]
     pub fn panel_content(&self) -> PanelContent {
-        panel_content(&self.selection, self.pen_in_progress().is_some())
+        panel_content(&self.selection, self.pen_path_unfinished())
+    }
+
+    /// Whether the Pen holds an unfinished path, whichever tool is active. A
+    /// resize or a fit moves the committed objects and would leave that path
+    /// behind, so neither runs while it exists (criterion 14a).
+    fn pen_path_unfinished(&self) -> bool {
+        self.pen.in_progress_nodes().is_some()
     }
 
     /// The unit lengths are shown in.
@@ -98,6 +107,9 @@ impl Session {
     /// the display unit, the other side kept, one commit that moves every
     /// object by half the change. The view follows by the same shift.
     pub fn set_document_side(&mut self, side: DocumentSide, text: &str) -> SizeOutcome {
+        if self.pen_path_unfinished() {
+            return SizeOutcome::Unchanged;
+        }
         let Some(typed) = parse_document_side(text, self.display_unit()) else {
             return SizeOutcome::Invalid;
         };
@@ -118,17 +130,24 @@ impl Session {
 
     /// Fits the document to the extent of all objects (criteria 22 to 27a).
     pub fn fit_document(&mut self) -> FitOutcome {
+        if self.pen_path_unfinished() {
+            return FitOutcome::Blocked;
+        }
         let Some(bounds) = content_bounds(&self.document) else {
             return FitOutcome::Empty;
         };
         let shift = Document::fit_shift(bounds);
-        match fit_document_to_content(&self.document) {
+        match self.document.fit_to_content(bounds) {
             Ok(true) => {
                 self.follow_document_shift(shift);
                 FitOutcome::Fitted
             }
             Ok(false) => FitOutcome::AlreadyFits,
-            Err(_) => FitOutcome::TooLarge(content_too_large_message(self.display_unit())),
+            Err(DocumentSizeError::OutOfRange) => {
+                FitOutcome::TooLarge(content_too_large_message(self.display_unit()))
+            }
+            // A box that is not finite (a damaged file) is not "too large".
+            Err(_) => FitOutcome::Empty,
         }
     }
 
@@ -344,5 +363,47 @@ mod tests {
         assert_eq!(reopened.document.size(), session.document.size());
         assert_eq!(reopened.document.object(id), session.document.object(id));
         assert_eq!(reopened.size_text(), session.size_text());
+    }
+
+    /// Criterion 14a: no resize and no fit while the Pen holds a path, and
+    /// leaving the Pen ends the path as drawn, so none stays behind.
+    #[test]
+    fn nothing_resizes_while_the_pen_holds_a_path_and_leaving_the_pen_ends_it() {
+        let mut session = Session::new(1);
+        let rect_id = with_rect(&session, 10.0, 10.0, 50.0, 50.0);
+        let before = session.document.object(rect_id);
+        session.set_tool(super::super::Tool::Pen);
+        for point in [Point::new(100.0, 100.0), Point::new(150.0, 120.0)] {
+            session.pointer_down(point, false);
+            session.pointer_up(point, false, false);
+        }
+        assert_eq!(
+            session.set_document_side(DocumentSide::Width, "300"),
+            SizeOutcome::Unchanged
+        );
+        assert_eq!(session.fit_document(), FitOutcome::Blocked);
+        assert_eq!(session.document.size(), DocumentSize::default());
+        assert_eq!(session.document.object(rect_id), before);
+
+        // Switching away ends the path as drawn: one more object, no hidden
+        // path, and the panel offers the Document section.
+        session.set_tool(super::super::Tool::Select);
+        assert_eq!(session.document.object_ids().len(), 2);
+        assert_eq!(session.panel_content(), PanelContent::Document);
+        session.set_tool(super::super::Tool::Pen);
+        assert_eq!(session.panel_content(), PanelContent::Document);
+        assert_eq!(
+            session.set_document_side(DocumentSide::Width, "300"),
+            SizeOutcome::Committed
+        );
+
+        // A lone node is dropped, not committed.
+        let mut lone = Session::new(2);
+        lone.set_tool(super::super::Tool::Pen);
+        lone.pointer_down(Point::new(5.0, 5.0), false);
+        lone.pointer_up(Point::new(5.0, 5.0), false, false);
+        lone.set_tool(super::super::Tool::Select);
+        assert_eq!(lone.document.object_ids().len(), 0);
+        assert_eq!(lone.panel_content(), PanelContent::Document);
     }
 }

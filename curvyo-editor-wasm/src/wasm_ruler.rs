@@ -1,7 +1,6 @@
-//! The rulers' and the status bar's `wasm-bindgen` surface
-//! (`specs/0015-document-size-and-rulers/`): the tick layout of one ruler strip
-//! for the live view, the numbers that tell the host the view changed, and the
-//! unit-aware status texts. A further `impl WasmSession` block; scalars,
+//! The rulers' `wasm-bindgen` surface (`specs/0015-document-size-and-rulers/`):
+//! the tick layout of one ruler strip for the live view and the numbers that
+//! tell the host the view changed. A further `impl WasmSession` block; scalars,
 //! number arrays and strings only (ADR 0001 §5), every method a pass-through
 //! to `Session`.
 

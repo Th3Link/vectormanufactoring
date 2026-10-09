@@ -79,13 +79,14 @@ impl WasmSession {
         .to_string()
     }
 
-    /// The Fit to content button: `"fitted"`, `"already-fits"`, `"empty"` or
-    /// `"too-large:<message>"`.
+    /// The Fit to content button: `"fitted"`, `"already-fits"`, `"empty"`,
+    /// `"blocked"` (the Pen has an unfinished path) or `"too-large:<message>"`.
     pub fn fit_document(&mut self) -> String {
         match self.session.fit_document() {
             FitOutcome::Fitted => "fitted".to_string(),
             FitOutcome::AlreadyFits => "already-fits".to_string(),
             FitOutcome::Empty => "empty".to_string(),
+            FitOutcome::Blocked => "blocked".to_string(),
             FitOutcome::TooLarge(message) => format!("too-large:{message}"),
         }
     }

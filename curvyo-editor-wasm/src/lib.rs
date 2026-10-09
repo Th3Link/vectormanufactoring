@@ -52,7 +52,10 @@ mod wasm_select_tool;
 #[cfg(target_arch = "wasm32")]
 mod wasm_shape_tools;
 
-pub use session::{EscapeStep, KeyHint, KeyInput, KeyOutcome, MoveIndicators, Session, Tool};
+pub use session::{
+    DocumentSide, EscapeStep, FitOutcome, KeyHint, KeyInput, KeyOutcome, MoveIndicators, Session,
+    SizeOutcome, Tool,
+};
 
 #[cfg(target_arch = "wasm32")]
 pub use wasm_api::{WasmSession, init_panic_hook};

@@ -30,7 +30,9 @@ impl DisplayUnit {
     /// Every unit, in the order the maker is offered them.
     pub const ALL: [Self; 3] = [Self::Mm, Self::Cm, Self::In];
 
-    /// How many millimetres one of this unit is: 1, 10 or exactly 25.4.
+    /// How many millimetres one of this unit is: 1, 10 or 25.4. A scale factor
+    /// (the rulers' px per unit); lengths convert with [`Length::from_unit`]
+    /// and [`Length::in_unit`], which round inches once more carefully.
     #[must_use]
     pub const fn mm_per_unit(self) -> f64 {
         match self {
@@ -63,9 +65,10 @@ impl Length {
     /// millimetres.
     #[must_use]
     pub fn from_unit(value: f64, unit: DisplayUnit) -> Self {
-        // An inch is 254 / 10 mm: multiplying by the integer 254 first and
-        // dividing once rounds the result once, so 8.5 in is the double
-        // nearest to 215.9 mm and not a neighbour of it.
+        // An inch is 254 / 10 mm. Multiplying by the integer 254 first and
+        // dividing once is exact where `value * 254` is (8.5 and 11 in give
+        // the doubles nearest to 215.9 and 279.4 mm, not their neighbours);
+        // for other values it is within an ulp or two, like any decimal.
         Self::from_mm(match unit {
             DisplayUnit::Mm => value,
             DisplayUnit::Cm => value * 10.0,
