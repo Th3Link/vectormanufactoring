@@ -578,6 +578,9 @@ export interface EditorSession {
    * from the view repaints there instead of one frame late. Returns the
    * function that removes it. */
   addViewResizedListener: (listener: () => void) => () => void;
+  /** Re-reads the cursor readout at the last pointer position: a resize or a
+   * fit moves the document under a still pointer. */
+  refreshCursor: () => void;
   /** Enter in the bar's "Radius" field: `"committed"`, `"unchanged"`,
    * `"invalid:number"` or `"invalid:negative"`. */
   setSelectedRadius: (text: string) => string;
@@ -786,6 +789,14 @@ export function useEditorSession(
   }, [syncEntry, syncBadges]);
 
   const getSession = useCallback(() => sessionRef.current, []);
+
+  const refreshCursor = useCallback(() => {
+    const session = sessionRef.current;
+    const at = lastPointerRef.current;
+    if (session && at) {
+      onCursorMove(readDocumentPoint(session.screen_to_document(at.x, at.y)));
+    }
+  }, [onCursorMove]);
 
   const addViewResizedListener = useCallback((listener: () => void) => {
     viewResizedListenersRef.current.add(listener);
@@ -1127,6 +1138,17 @@ export function useEditorSession(
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
       syncTrackedModifiers(event);
+      // A press on the canvas takes the focus from a field of the panel, and a
+      // field that commits when it is left (the Document size) must do so
+      // before the tool sees the press: a resize moves every object and the
+      // view, so a press handled first would be stored in the old coordinates.
+      const focused = document.activeElement;
+      if (
+        focused instanceof HTMLInputElement &&
+        !containerRef.current?.contains(focused)
+      ) {
+        focused.blur();
+      }
       const session = sessionRef.current;
       if (!session) {
         return;
@@ -1574,6 +1596,7 @@ export function useEditorSession(
     syncRevision,
     getSession,
     addViewResizedListener,
+    refreshCursor,
     setSelectedRadius,
     setSelectedPointCount,
     previewSelectedRatio,

@@ -131,7 +131,10 @@ export function NumberField({
             // The text stays, with its message, until the next keystroke.
             setInvalid(outcome.slice("invalid:".length));
           } else {
-            touched.current = false;
+            // Committed or unchanged: the field shows the document's text
+            // again (" 300 " on 300 mm becomes "300"), also when nothing
+            // changed and so no new text arrives.
+            restore();
           }
         }}
         onKeyDown={(event) => {

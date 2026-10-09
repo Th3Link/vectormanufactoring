@@ -13,6 +13,7 @@ export type FitResult =
   | { kind: "fitted" }
   | { kind: "already-fits" }
   | { kind: "empty" }
+  | { kind: "blocked" }
   | { kind: "too-large"; message: string };
 
 /** A plain-JS copy of what the session says about the document: the panel's
@@ -30,14 +31,16 @@ export interface DocumentView {
   sizeText: string;
 }
 
+/** Before a session exists: nothing is shown, no text is formatted here (the
+ * formats live in Rust). */
 const INITIAL: DocumentView = {
   content: "document",
   unit: "mm",
-  widthText: "210",
-  heightText: "297",
-  sideMessage: "Enter a number from 1 to 100000",
+  widthText: "",
+  heightText: "",
+  sideMessage: "",
   hasObjects: false,
-  sizeText: "210.0 × 297.0 mm",
+  sizeText: "",
 };
 
 function readView(session: WasmSession | null): DocumentView {
@@ -69,6 +72,8 @@ export interface DocumentPanelApi {
 interface EditorHandle {
   getSession: () => WasmSession | null;
   syncRevision: number;
+  /** Re-reads the cursor readout after a command moved the document. */
+  refreshCursor: () => void;
 }
 
 /**
@@ -79,7 +84,7 @@ interface EditorHandle {
  * rule is the session's; this forwards each control's command.
  */
 export function useDocumentPanel(editor: EditorHandle): DocumentPanelApi {
-  const { getSession, syncRevision } = editor;
+  const { getSession, syncRevision, refreshCursor } = editor;
   const [local, setLocal] = useState(0);
   const refresh = useCallback(() => setLocal((n) => n + 1), []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -93,9 +98,12 @@ export function useDocumentPanel(editor: EditorHandle): DocumentPanelApi {
       }
       const outcome = session.set_document_side(side, text);
       refresh();
+      if (outcome === "committed") {
+        refreshCursor();
+      }
       return outcome;
     },
-    [getSession, refresh],
+    [getSession, refresh, refreshCursor],
   );
 
   const setUnit = useCallback(
@@ -113,15 +121,17 @@ export function useDocumentPanel(editor: EditorHandle): DocumentPanelApi {
     }
     const outcome = session.fit_document();
     refresh();
+    if (outcome === "fitted") {
+      refreshCursor();
+    }
     if (outcome.startsWith("too-large:")) {
       return { kind: "too-large", message: outcome.slice("too-large:".length) };
     }
-    return { kind: outcome as "fitted" | "already-fits" | "empty" };
-  }, [getSession, refresh]);
+    return { kind: outcome as "fitted" | "already-fits" | "empty" | "blocked" };
+  }, [getSession, refresh, refreshCursor]);
 
   const cursorText = useCallback(
-    (xMm: number, yMm: number) =>
-      getSession()?.cursor_text(xMm, yMm) ?? `x: ${xMm.toFixed(1)}  y: ${yMm.toFixed(1)} mm`,
+    (xMm: number, yMm: number) => getSession()?.cursor_text(xMm, yMm) ?? "",
     [getSession],
   );
 
