@@ -47,7 +47,7 @@ impl Session {
         }
     }
 
-    /// What the Boolean section of the tool rail shows now. Read it after every pointer release
+    /// What the Boolean toolbox of the tool rail shows now. Read it after every pointer release
     /// and tool or selection change.
     #[must_use]
     pub fn boolean_availability(&self) -> BooleanAvailability {

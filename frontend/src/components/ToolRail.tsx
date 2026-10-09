@@ -9,6 +9,8 @@ import {
 import { Tooltip } from "radix-ui";
 
 import { BooleanCommands } from "@/components/BooleanCommands";
+import { BooleanNotice } from "@/components/BooleanNotice";
+import { RAIL_CARD_CLASS, RAIL_CARD_STYLE } from "@/components/railCard";
 import type { BooleanCommands as BooleanCommandsState } from "@/hooks/useBooleanCommands";
 import type { Tool } from "@/hooks/useEditorSession";
 
@@ -23,7 +25,7 @@ interface ToolRailProps {
   /** Called after a mouse click on a button, so the tool letters keep working
    * (keyboard activation keeps focus on the rail for Tab navigation). */
   onReturnFocus: () => void;
-  /** The Boolean section under the tools (`specs/0016-boolean-operations/`). */
+  /** The Boolean toolbox below the tools card (`specs/0016-boolean-operations/`). */
   booleans: BooleanCommandsState;
 }
 
@@ -94,15 +96,16 @@ function ToolButton({
 }
 
 /**
- * The tool rail (`docs/design-system.md`'s 2026-10-05 "Left tool panel":
- * floats *over* the canvas, inset 12px from the left and top edges,
- * elevated with `--panel-elevation-shadow`, fixed 48px icon-column
- * width — the canvas is never resized or repositioned to make room for
- * it). Select is first — a deliberate, one-time exception to "new tools
- * append in ship order" (acceptance criterion 12; `docs/design-system.md`:
- * "the rail's new default/master tool"), then Pen, Node, Rectangle,
- * Ellipse, Polygon-star, each shifted down one slot but otherwise in
- * their own established order.
+ * The tool rail (`docs/design-system.md`, rows "Tool rail architecture", "Toolbox card" and
+ * "Boolean toolbox"): one column of cards that floats over the canvas, inset 12px from the left
+ * and top edges (`--rail-inset`), 48px wide (`--rail-right` is its right edge): the tools card,
+ * then 8px below it the Boolean card. Select is first, a deliberate, one-time exception to "new
+ * tools append in ship order" (acceptance criterion 12), then Pen, Node, Rectangle, Ellipse,
+ * Polygon-star. The canvas is never resized or repositioned to make room for it.
+ *
+ * The root keeps 4px clear under the column. In a viewport too short for it the tools card stays
+ * fixed and the cards below scroll (`0016` criterion 1b); the root passes no pointer event
+ * through to itself, so the canvas around the cards stays usable.
  */
 export function ToolRail({
   tool,
@@ -115,13 +118,8 @@ export function ToolRail({
   const letterActsOnSelection = tool === "select" && selectionCount > 0;
   return (
     <Tooltip.Provider>
-      <div
-        className="absolute top-3 left-3 z-30 flex w-12 flex-col items-center gap-1 rounded-lg py-1"
-        style={{
-          background: "var(--toolbar-bg)",
-          boxShadow: "var(--panel-elevation-shadow)",
-        }}
-      >
+      <div className="pointer-events-none absolute top-3 bottom-1 left-3 z-30 flex w-12 flex-col gap-2">
+        <div className={RAIL_CARD_CLASS} style={RAIL_CARD_STYLE}>
         <ToolButton
           tool="select"
           active={tool === "select"}
@@ -179,11 +177,20 @@ export function ToolRail({
           onSelect={onSelect}
           onReturnFocus={onReturnFocus}
         />
-        <BooleanCommands
-          commands={booleans}
-          selectTool={tool === "select"}
-          onReturnFocus={onReturnFocus}
-        />
+        </div>
+        {/* The cards below the tools card scroll in a viewport too short for them; the wider
+         * box leaves room for their shadows. */}
+        <div
+          className="pointer-events-none -mx-3 min-h-0 overflow-y-auto px-3"
+          style={{ scrollbarWidth: "thin" }}
+        >
+          <BooleanCommands
+            commands={booleans}
+            selectTool={tool === "select"}
+            onReturnFocus={onReturnFocus}
+          />
+        </div>
+        <BooleanNotice notice={booleans.notice} />
       </div>
     </Tooltip.Provider>
   );

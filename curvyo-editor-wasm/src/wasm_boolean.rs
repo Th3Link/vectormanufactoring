@@ -99,7 +99,7 @@ impl From<BooleanOutcome> for BooleanResultView {
 
 #[wasm_bindgen]
 impl WasmSession {
-    /// What the Boolean section of the tool rail shows. Call it with every other state read.
+    /// What the Boolean toolbox of the tool rail shows. Call it with every other state read.
     #[must_use]
     pub fn boolean_availability(&self) -> BooleanAvailabilityView {
         self.session.boolean_availability().into()

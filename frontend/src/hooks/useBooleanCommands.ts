@@ -75,7 +75,7 @@ function useBusyWindow(busy: boolean) {
 }
 
 /**
- * What the Boolean section of the tool rail shows and does (`specs/0016-boolean-operations/`):
+ * What the Boolean toolbox of the tool rail shows and does (`specs/0016-boolean-operations/`):
  * the availability the session reports, the busy state around a kernel call, and the notice of
  * the last operation. The decisions (what is enabled, what an operation does, why it was
  * refused) are the session's; this hook only displays them.

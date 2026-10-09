@@ -107,6 +107,11 @@
        redefining --accent here to design-system.md's blue would silently
        recolor every future shadcn menu/dropdown hover too. Same values,
        collision-free name — see docs/design-system.md's own note. */
+    /* The tool rail (docs/design-system.md, rows "Tool rail architecture" and "Toolbox card"):
+       inset from the viewport edge and the rail's right edge (one 48px column). Bars start at
+       --rail-right + 12; notices and tooltips open from it. 116px once a second column exists. */
+    --rail-inset: 12px;
+    --rail-right: 60px;
     --toolbar-bg: #DCDCE0;
     --toolbar-icon: #3A3A3F;
     --toolbar-icon-active-bg: #2F6FEE;

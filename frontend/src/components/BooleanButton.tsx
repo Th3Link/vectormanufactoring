@@ -26,7 +26,7 @@ interface BooleanButtonProps {
 }
 
 /**
- * One button of the Boolean section (`docs/design-system.md`, rows "Boolean tool section" and
+ * One button of the Boolean toolbox (`docs/design-system.md`, rows "Boolean toolbox" and
  * "Boolean tooltip"): icon only, a command and not a tool, dimmed with `aria-disabled` while the
  * session says there is nothing to do, with a three-line tooltip (also on keyboard focus).
  */

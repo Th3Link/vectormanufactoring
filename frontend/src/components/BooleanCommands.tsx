@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { BooleanButton } from "@/components/BooleanButton";
-import { BooleanNotice } from "@/components/BooleanNotice";
+import { RAIL_CARD_CLASS, RAIL_CARD_STYLE } from "@/components/railCard";
 import type { BooleanCommands as BooleanCommandsState } from "@/hooks/useBooleanCommands";
 import { BOOLEAN_OPS, type BooleanOp } from "@/lib/booleanText";
 
@@ -33,66 +33,58 @@ function targetIndex(key: string, index: number): number | null {
 }
 
 /**
- * The Boolean section of the tool rail (`docs/design-system.md`, row "Boolean tool section"):
- * five commands, not tools, behind a divider. One Tab stop with roving focus; the notice of the
- * last operation sits beside the rail. It shows what the session says is available and decides
- * nothing.
+ * The Boolean toolbox of the tool rail (`docs/design-system.md`, rows "Boolean toolbox" and
+ * "Toolbox card"): a card of its own below the tools card, five commands, not tools, one
+ * column. One Tab stop with roving focus. It shows what the session says is available and
+ * decides nothing. Its notice is drawn by the rail (`BooleanNotice`), outside the card's
+ * scrolling column.
  */
 export function BooleanCommands({ commands, selectTool, onReturnFocus }: BooleanCommandsProps) {
-  const { availability, busy, notice, apply } = commands;
+  const { availability, busy, apply } = commands;
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const [stop, setStop] = useState(0);
   const [pressed, setPressed] = useState<BooleanOp | null>(null);
 
   return (
-    <>
-      <div
-        aria-hidden="true"
-        className="my-1 h-px w-6"
-        style={{ background: "color-mix(in srgb, var(--toolbar-icon) 25%, transparent)" }}
-      />
-      <div className="relative flex w-full flex-col items-center">
-        <div
-          role="toolbar"
-          aria-label="Boolean operations"
-          aria-orientation="vertical"
-          aria-busy={busy}
-          className="flex flex-col items-center gap-1"
-        >
-          {BOOLEAN_OPS.map((op, index) => (
-            <BooleanButton
-              key={op}
-              ref={(element) => {
-                buttons.current[index] = element;
-              }}
-              op={op}
-              availability={availability}
-              selectTool={selectTool}
-              tabIndex={index === stop ? 0 : -1}
-              pressed={busy && pressed === op}
-              onFocus={() => setStop(index)}
-              onKeyDown={(event) => {
-                const target = targetIndex(event.key, index);
-                if (target !== null) {
-                  event.preventDefault();
-                  buttons.current[target]?.focus();
-                }
-              }}
-              onActivate={(byMouse) => {
-                if (busy) {
-                  return;
-                }
-                setPressed(op);
-                apply(op);
-                if (byMouse) {
-                  onReturnFocus();
-                }
-              }}
-            />
-          ))}
-        </div>
-        <BooleanNotice notice={notice} />
-      </div>
-    </>
+    <div
+      role="toolbar"
+      aria-label="Boolean operations"
+      aria-orientation="vertical"
+      aria-busy={busy}
+      className={RAIL_CARD_CLASS}
+      style={RAIL_CARD_STYLE}
+    >
+      {BOOLEAN_OPS.map((op, index) => (
+        <BooleanButton
+          key={op}
+          ref={(element) => {
+            buttons.current[index] = element;
+          }}
+          op={op}
+          availability={availability}
+          selectTool={selectTool}
+          tabIndex={index === stop ? 0 : -1}
+          pressed={busy && pressed === op}
+          onFocus={() => setStop(index)}
+          onKeyDown={(event) => {
+            const target = targetIndex(event.key, index);
+            if (target !== null) {
+              event.preventDefault();
+              buttons.current[target]?.focus();
+            }
+          }}
+          onActivate={(byMouse) => {
+            if (busy) {
+              return;
+            }
+            setPressed(op);
+            apply(op);
+            if (byMouse) {
+              onReturnFocus();
+            }
+          }}
+        />
+      ))}
+    </div>
   );
 }
