@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import type { ComponentProps, ReactNode } from "react";
 
 import { ColourPopover } from "@/components/ColourPopover";
 import { NumberField } from "@/components/NumberField";
@@ -29,14 +28,8 @@ interface PickerProps {
   colorField: string;
   opacityField: string;
   panel: ColourPanel;
-  /** A labelled row of the Style section ("Color"), or, without a label, the
-   * compact row of a gradient stop: 24 px swatch, 12 px text, narrower fields. */
-  label?: string;
-  /** Controls before and after the colour controls in a stop row. */
-  before?: ReactNode;
-  after?: ReactNode;
-  /** The row is the selected stop's. */
-  selected?: boolean;
+  /** The label of the row ("Color"). */
+  label: string;
   /** Changes when the edited objects or the tool change: closes the popover. */
   closeKey: string;
   onReturnFocus: () => void;
@@ -61,13 +54,9 @@ export function ColorAlphaPicker({
   opacityField,
   panel,
   label,
-  before,
-  after,
-  selected = false,
   closeKey,
   onReturnFocus,
 }: PickerProps) {
-  const compact = label === undefined;
   const [open, setOpen] = useState(false);
   const openedByPointer = useRef(false);
   const shownRgb = rgbMixed ? 0 : rgb;
@@ -87,8 +76,7 @@ export function ColorAlphaPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
-        <ColourRow label={label} selected={selected}>
-          {before}
+        <StyleRow label={label}>
           <Tooltip side="left" content={tooltip}>
             <PopoverTrigger asChild>
               <Swatch
@@ -96,7 +84,7 @@ export function ColorAlphaPicker({
                 opacity={shownPercent}
                 mixed={rgbMixed}
                 off={off}
-                size={compact ? 24 : 28}
+                size={28}
                 disabled={disabled}
                 aria-label={`${name} color`}
                 aria-description={description}
@@ -132,8 +120,7 @@ export function ColorAlphaPicker({
             label={`${name} color hex`}
             shown={toHex(rgb)}
             mixed={rgbMixed}
-            width={compact ? 72 : 84}
-            compact={compact}
+            width={84}
             align="left"
             disabled={disabled}
             onSubmit={(text) => panel.setText(colorField, text)}
@@ -145,48 +132,14 @@ export function ColorAlphaPicker({
             shown={percentText(opacity)}
             mixed={opacityMixed}
             suffix="%"
-            width={compact ? 48 : 56}
-            compact={compact}
+            width={56}
             disabled={disabled}
             onSubmit={(text) => panel.setText(opacityField, text)}
             messages={PERCENT_MESSAGES}
             onReturnFocus={onReturnFocus}
           />
-          {after}
-        </ColourRow>
+        </StyleRow>
       </PopoverAnchor>
     </Popover>
-  );
-}
-
-/** The row the colour controls sit in: a labelled row of the Style section, or
- * the compact row of a stop (the popover anchors to either). */
-function ColourRow({
-  label,
-  selected,
-  children,
-  ...props
-}: { label?: string; selected: boolean; children: ReactNode } & ComponentProps<"div">) {
-  if (label !== undefined) {
-    return (
-      <StyleRow label={label} {...props}>
-        {children}
-      </StyleRow>
-    );
-  }
-  return (
-    <div
-      className="relative flex h-7 w-[244px] items-center gap-[5px]"
-      aria-current={selected || undefined}
-      {...props}
-    >
-      {selected && (
-        <span
-          aria-hidden
-          className="absolute top-0 -left-3 h-7 w-[3px] bg-[var(--editor-accent)]"
-        />
-      )}
-      {children}
-    </div>
   );
 }

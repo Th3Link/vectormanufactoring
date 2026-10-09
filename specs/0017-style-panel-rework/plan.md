@@ -1,0 +1,87 @@
+# Plan for Style panel rework
+
+One branch (`story/style-panel-rework`), one PR, four milestones. Each milestone
+is a set of commits that leaves the tree green (`CLAUDE.md` §7 on the touched
+crates); the full gate runs before the PR is opened. Criteria are numbered as in
+`specification.md`; decisions as in `adrs.md`.
+
+## Affected crates/modules
+
+- `curvyo-document-core`: `style_model` (Fill loses kind and stops, `DashPattern`
+  accepts odd lists), `legacy_fill` (new, the read-past rule for old gradient
+  keys), `style_codec`, `style_validation`, `styles` (`StyleEdit::StrokeRgba`,
+  `FillEnabled`, `FillRgba`), format version bump, fixtures
+  `legacy_gradient_v7.curvyo` and `dash_v<N>.curvyo`.
+- `curvyo-render-core`: gradient code deleted, `build_artwork(objects, view)`,
+  `dash.rs` (odd lists, zero-length "on" draws a dot).
+- `curvyo-ui-core`: `style_stops` deleted, `style_panel` / `style_entry` /
+  `style_edit` reshaped, new `colour_hsv`, `value_scale`, `colour_pick`,
+  `parse_dash_text`, eyedropper hit test (`hit_test_object` internals).
+- `curvyo-editor-wasm`: GPU gradient parts and stops session deleted, style view
+  and panel calls reshaped, `preview_value_field` / `step_value_field`, the
+  session's pick mode (`begin_colour_pick` / `end_colour_pick`).
+- `frontend`: gradient components deleted; new `components/panel/` folder (rows,
+  inline picker, value field, dash group and line, eyedropper), `useValueDrag`,
+  oxlint override for `components/panel/`; `react-colorful`, `ui/popover`,
+  `ui/select`, `ColourPopover`, `ColorAlphaPicker`, `DashSelect` removed.
+- Docs: `docs/technical-debt.md`, ADR 0002 section 10 note (already amended by
+  the architect), this folder.
+
+## Milestones and tasks
+
+### Milestone 1: gradients removed (criteria 49 to 54)
+
+- [x] 1.1 `document-core`: Fill is `enabled` / colour / opacity; `legacy_fill`
+  reads an old gradient fill as off and drops `fill_kind` / `fill_stops` on the
+  next fill write; fixture renamed with its bytes unchanged, tests for open,
+  no-write-on-open, Paint Solid, colour edit, save without edit (53, 54).
+- [x] 1.2 `render-core`: gradient ramp, frames, draw-list ranges deleted (51).
+- [x] 1.3 `ui-core`: stop editor, `StopField`, fill modes deleted; the fill row
+  reads paint on/off/mixed (49).
+- [x] 1.4 `editor-wasm`: GPU ramp texture and vertex attribute, stops session,
+  `gradient_frames` deleted; `set_fill_mode` becomes `set_fill_paint(on)` (49,
+  51).
+- [x] 1.5 `frontend`: `GradientEditor`, `GradientBar`, `RampTrack`, `StopRows`,
+  `StopThumb`, `useThumbDrag`, gradient icons and options deleted (49).
+- [x] 1.6 Docs: `technical-debt.md` loses its gradient entries and gets the
+  `legacy_fill` item (52).
+
+### Milestone 2: panel content (criteria 1 to 21, 28 to 33, 49, 55 to 60)
+
+- [ ] 2.1 Empty and hidden rules in `style_panel` / `style_view` and the panel
+  components: no `disabled` anywhere, Paint None hides the rows, heading and
+  switch are one row, mixed Paint shows the rows (1 to 10).
+- [ ] 2.2 8-digit RGBA hex: `StyleEdit::StrokeRgba` / `FillRgba`, `parse_hex`
+  for 3/4/6/8 digits, alpha stored as AA/255 (11 to 16).
+- [ ] 2.3 `colour_hsv.rs` and the inline picker (area, hue slider) in TSX; remove
+  `react-colorful`, `ColourPopover`, `ColorAlphaPicker`, `ui/popover` (17 to 21,
+  55, 56).
+- [ ] 2.4 Dash: preset group, text line, `parse_dash_text`, odd lists in
+  `DashPattern`, renderer expansion and zero-on dot, format version bump and
+  fixture, `DashSelect` and `ui/select` removed (28 to 33).
+- [ ] 2.5 `.oxlintrc.json` override for `components/panel/`, Escape order, focus
+  rules (1, 57, 59, 60).
+
+### Milestone 3: value fields (criteria 34 to 48, 61)
+
+- [ ] 3.1 `value_scale.rs` with the check values of criteria 46 and 47.
+- [ ] 3.2 wasm `preview_value_field` / `step_value_field`; `ValueField.tsx`,
+  `useValueDrag.ts`; `NumberField` becomes `EntryField` without `disabled`.
+- [ ] 3.3 Reset slot and Ctrl+Backspace; spinbutton semantics; user-select rules
+  (34 to 45, 61).
+
+### Milestone 4: eyedropper (criteria 22 to 27)
+
+- [ ] 4.1 `colour_pick.rs` and the session pick mode (`begin_colour_pick` /
+  `end_colour_pick`, view fields `pick_target` / `pick_hover_hex`).
+- [ ] 4.2 Frontend eyedropper button, cursor, hover chip, cancel rules (22 to 27).
+
+## Validation
+
+- Rust: unit and integration tests per task, written first for the core logic;
+  the check values of criteria 46 and 47; golden fixtures for the legacy gradient
+  file and the odd dash list.
+- Frontend: `tsc`, `oxlint`, `npm test`; the DOM rules (selection, focus, no
+  popup roles) are checked by hand in the Browser pane against a production
+  wasm build, because no component test runner exists (`technical-debt.md`).
+- Full gate of `CLAUDE.md` §7 before the PR is opened.

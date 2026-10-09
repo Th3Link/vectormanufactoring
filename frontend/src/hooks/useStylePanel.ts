@@ -15,7 +15,6 @@ export type StyleFieldName =
 export type DashName = "solid" | "dash" | "dot" | "dash-dot";
 export type JoinName = "miter" | "round" | "bevel";
 export type CapName = "butt" | "round" | "square";
-export type FillModeName = "none" | "solid" | "linear" | "radial";
 
 /** A plain-JS copy of the Rust `StylePanelView` (`specs/0007-stroke-and-fill-
  * styling` criteria 5, 13, 24, 37): what the Style panel shows. A `*Mixed`
@@ -40,51 +39,12 @@ export interface StyleView {
   strokeDash: DashName | "custom" | "mixed";
   strokeJoin: JoinName | "mixed";
   strokeCap: CapName | "mixed";
-  fillMode: FillModeName | "mixed";
+  fillPaint: "on" | "off" | "mixed";
   fillColorMixed: boolean;
   fillColor: number;
   fillOpacityMixed: boolean;
   fillOpacity: number;
-  /** The gradient stop editor: nothing, a message, or the editor. */
-  stopsState: "hidden" | "different-counts" | "editor";
-  /** How many objects the editor edits; Add and Remove are for one. */
-  stopsObjects: number;
-  stopsCanAdd: boolean;
-  stopsCanRemove: boolean;
-  /** The selection holds a polygon or star (the gradient box note). */
-  stopsBoxNote: boolean;
-  /** The bar shows its ramp and thumbs; otherwise a neutral hatched track. */
-  stopsBarShown: boolean;
-  /** One row per stop, in position order. */
-  stopRows: StopRow[];
-  /** The bar's stops in position order (only when `stopsBarShown`). */
-  stopBar: BarStop[];
-  /** The selected stop's rank, or -1. */
-  selectedStop: number;
 }
-
-/** A row of the stop list: the stop of one rank in every edited object. */
-export interface StopRow {
-  /** Percent. */
-  position: number;
-  positionMixed: boolean;
-  color: number;
-  colorMixed: boolean;
-  /** Percent. */
-  opacity: number;
-  opacityMixed: boolean;
-}
-
-/** A stop of the gradient bar. */
-export interface BarStop {
-  /** Percent. */
-  position: number;
-  color: number;
-  /** Percent. */
-  opacity: number;
-}
-
-export type StopFieldName = "position" | "color" | "opacity";
 
 const DISABLED_VIEW: StyleView = {
   subject: "Nothing selected",
@@ -101,30 +61,12 @@ const DISABLED_VIEW: StyleView = {
   strokeDash: "solid",
   strokeJoin: "miter",
   strokeCap: "butt",
-  fillMode: "none",
+  fillPaint: "off",
   fillColorMixed: false,
   fillColor: 0,
   fillOpacityMixed: false,
   fillOpacity: 100,
-  stopsState: "hidden",
-  stopsObjects: 0,
-  stopsCanAdd: false,
-  stopsCanRemove: false,
-  stopsBoxNote: false,
-  stopsBarShown: false,
-  stopRows: [],
-  stopBar: [],
-  selectedStop: -1,
 };
-
-/** Splits a flat list of numbers into records of `width`. */
-function chunks(flat: ArrayLike<number>, width: number): number[][] {
-  const out: number[][] = [];
-  for (let i = 0; i + width <= flat.length; i += width) {
-    out.push(Array.from({ length: width }, (_, k) => flat[i + k]));
-  }
-  return out;
-}
 
 /** Reads the wasm-bindgen `StylePanelView` once, immediately, so the instance
  * can be `free()`d rather than held onto. */
@@ -148,27 +90,11 @@ function readView(session: WasmSession | null): StyleView {
     strokeDash: raw.stroke_dash as StyleView["strokeDash"],
     strokeJoin: raw.stroke_join as StyleView["strokeJoin"],
     strokeCap: raw.stroke_cap as StyleView["strokeCap"],
-    fillMode: raw.fill_mode as StyleView["fillMode"],
+    fillPaint: raw.fill_paint as StyleView["fillPaint"],
     fillColorMixed: raw.fill_color_mixed,
     fillColor: raw.fill_color,
     fillOpacityMixed: raw.fill_opacity_mixed,
     fillOpacity: raw.fill_opacity,
-    stopsState: raw.stops_state as StyleView["stopsState"],
-    stopsObjects: raw.stops_objects,
-    stopsCanAdd: raw.stops_can_add,
-    stopsCanRemove: raw.stops_can_remove,
-    stopsBoxNote: raw.stops_box_note,
-    stopsBarShown: raw.stops_bar_shown,
-    stopRows: chunks(raw.stop_rows, 6).map(([p, pm, c, cm, o, om]) => ({
-      position: p,
-      positionMixed: pm === 1,
-      color: c,
-      colorMixed: cm === 1,
-      opacity: o,
-      opacityMixed: om === 1,
-    })),
-    stopBar: chunks(raw.stop_bar, 3).map(([p, c, o]) => ({ position: p, color: c, opacity: o })),
-    selectedStop: raw.selected_stop,
   };
   raw.free();
   return view;
@@ -196,20 +122,7 @@ export interface StylePanelApi {
   setStrokeDash: (name: DashName) => void;
   setStrokeJoin: (name: JoinName) => void;
   setStrokeCap: (name: CapName) => void;
-  setFillMode: (name: FillModeName) => void;
-  /** A row got focus or a thumb was pressed. */
-  selectStop: (rank: number) => void;
-  /** Enter or Tab in a stop field. */
-  setStopText: (rank: number, field: StopFieldName, text: string) => TextOutcome;
-  /** A tick of a drag on the stop of `rank` (see `usePreviewGesture`): a
-   * percent for a position and an opacity, `0xRRGGBB` for a colour. The stop is
-   * fixed by the first tick. */
-  previewStop: (rank: number, field: StopFieldName, value: number) => void;
-  /** The Add stop button; `false` when refused. */
-  addStop: () => boolean;
-  /** A click on the bar at a fraction 0 to 1. */
-  addStopAt: (fraction: number) => boolean;
-  removeStop: (rank: number) => boolean;
+  setFillPaint: (on: boolean) => void;
 }
 
 interface EditorHandle {
@@ -257,17 +170,6 @@ export function useStylePanel(editor: EditorHandle): StylePanelApi {
     [getSession, refresh],
   );
 
-  /** Runs a command that answers whether it was accepted. */
-  const ask = (run: (session: WasmSession) => boolean): boolean => {
-    const session = getSession();
-    if (!session) {
-      return false;
-    }
-    const accepted = run(session);
-    refresh();
-    return accepted;
-  };
-
   return {
     view,
     previewing,
@@ -279,20 +181,6 @@ export function useStylePanel(editor: EditorHandle): StylePanelApi {
     setStrokeDash: (name) => act((s) => s.set_stroke_dash(name)),
     setStrokeJoin: (name) => act((s) => s.set_stroke_join(name)),
     setStrokeCap: (name) => act((s) => s.set_stroke_cap(name)),
-    setFillMode: (name) => act((s) => s.set_fill_mode(name)),
-    selectStop: (rank) => act((s) => s.select_stop(rank)),
-    setStopText: (rank, field, text) => {
-      const session = getSession();
-      if (!session) {
-        return "unchanged";
-      }
-      const outcome = session.set_stop_text(rank, field, text);
-      refresh();
-      return outcome;
-    },
-    previewStop: (rank, field, value) => preview((s) => s.preview_stop(rank, field, value)),
-    addStop: () => ask((s) => s.add_stop()),
-    addStopAt: (fraction) => ask((s) => s.add_stop_at(fraction)),
-    removeStop: (rank) => ask((s) => s.remove_stop(rank)),
+    setFillPaint: (on) => act((s) => s.set_fill_paint(on)),
   };
 }

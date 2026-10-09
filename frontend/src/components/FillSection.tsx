@@ -1,5 +1,4 @@
 import { ColorAlphaPicker } from "@/components/ColorAlphaPicker";
-import { GradientEditor } from "@/components/GradientEditor";
 import { FILL_OPTIONS } from "@/components/styleOptions";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { colourPanelOf } from "@/lib/colourPanel";
@@ -12,27 +11,26 @@ interface FillSectionProps {
 }
 
 /**
- * The fill rows: the Fill type group (None, Solid, Linear, Radial; several
- * objects in different modes press no item), for a solid fill the colour and
- * opacity, and for a gradient the stop editor.
+ * The fill rows: the Paint group (No fill, Solid fill; several objects in
+ * different states press no item) and, for a solid fill, the colour and opacity.
  */
 export function FillSection({ panel, closeKey, onReturnFocus }: FillSectionProps) {
   const { view } = panel;
-  const mode = view.fillMode === "mixed" ? null : view.fillMode;
+  const paint = view.fillPaint === "on" ? "solid" : view.fillPaint === "off" ? "none" : null;
   return (
     <>
       <h3 className="mt-2 text-xs font-semibold text-[var(--toolbar-icon)]">Fill</h3>
       <ToggleGroup
-        label="Fill type"
+        label="Fill paint"
         options={FILL_OPTIONS}
-        value={mode}
-        onChange={panel.setFillMode}
+        value={paint}
+        onChange={(value) => panel.setFillPaint(value === "solid")}
         disabled={!view.enabled}
         itemWidth={44}
         itemHeight={32}
         onReturnFocus={onReturnFocus}
       />
-      {view.fillMode === "solid" && (
+      {view.fillPaint === "on" && (
         <ColorAlphaPicker
           label="Color"
           name="Fill"
@@ -48,7 +46,6 @@ export function FillSection({ panel, closeKey, onReturnFocus }: FillSectionProps
           onReturnFocus={onReturnFocus}
         />
       )}
-      <GradientEditor panel={panel} closeKey={closeKey} onReturnFocus={onReturnFocus} />
     </>
   );
 }
