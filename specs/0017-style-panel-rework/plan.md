@@ -1,6 +1,12 @@
-# Plan for Style panel rework
+# Plan for Style panel rework (and, on the same branch, stroke markers)
 
-One branch (`story/style-panel-rework`), one PR, four milestones. Each milestone
+One branch (`story/style-panel-rework`), one PR. The customer widened the PR
+(2026-10-09): it carries `0017-style-panel-rework` (milestones 1 to 4), then
+`0018-stroke-markers` (milestones 5 to 7, criteria numbered as in
+`specs/0018-stroke-markers/specification.md`), then `0030-document-size-presets`
+once its spec is Ready (milestone 8, added then). Both features share ONE
+`format_version`: `CURRENT_FORMAT_VERSION` is 9, taken by the odd dash lists of
+0017 and by the marker keys of 0018, so the constant moves once. Each milestone
 is a set of commits that leaves the tree green (`CLAUDE.md` §7 on the touched
 crates); the full gate runs before the PR is opened. Criteria are numbered as in
 `specification.md`; decisions as in `adrs.md`.
@@ -75,6 +81,26 @@ crates); the full gate runs before the PR is opened. Criteria are numbered as in
 - [x] 4.1 `colour_pick.rs` and the session pick mode (`begin_colour_pick` /
   `end_colour_pick`, view fields `pick_target` / `pick_hover_hex`).
 - [x] 4.2 Frontend eyedropper button, cursor, hover chip, cancel rules (22 to 27).
+
+### Milestone 5: marker model and format (0018 criteria 3, 4, 6, 10, 22, 23, 25 to 29)
+
+- [ ] 5.1 `document-core`: `MarkerShape`, `MarkerPlace`, `MarkerCount`, `Markers`
+  in `Stroke`; five registers in the codec; strict open validation; `StyleEdit`
+  marker variants with `StyleEditError::NotAPath`; no new format version (9 is
+  shared); fixture `markers_v9.curvyo`; older fixtures open with every slot None.
+
+### Milestone 6: marker placement and drawing (0018 criteria 4 to 5, 7 to 17, 19)
+
+- [ ] 6.1 `render-core`: `marker_place.rs` (anchors, tangents, spaced fractions),
+  `markers.rs` (arrow, dot, tessellation), the stroke layer rule, `MarkerBudget`,
+  the benchmark extension, debt note.
+
+### Milestone 7: marker panel (0018 criteria 1 to 3, 18 to 20, 22, 24, 30 to 32)
+
+- [ ] 7.1 `ui-core`: `ValueScale::MarkerCount`, panel state (Markers group, Place,
+  Count, mixed over paths, the closed-path line flag); `editor-wasm` calls.
+- [ ] 7.2 Frontend: Markers rows under Cap, Place group, Count value field,
+  muted closed-path line.
 
 ## Validation
 

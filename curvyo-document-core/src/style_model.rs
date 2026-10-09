@@ -307,7 +307,10 @@ mod tests {
     fn deserializing_a_style_value_validates_it() {
         assert!(serde_json::from_str::<Opacity>("1.5").is_err());
         assert!(serde_json::from_str::<DashPattern>("[0.0]").is_err());
-        assert!(serde_json::from_str::<DashPattern>("[1.0]").is_ok(), "odd lists are valid");
+        assert!(
+            serde_json::from_str::<DashPattern>("[1.0]").is_ok(),
+            "odd lists are valid"
+        );
         let style = Style::default();
         let json = serde_json::to_string(&style).unwrap();
         assert_eq!(serde_json::from_str::<Style>(&json).unwrap(), style);
