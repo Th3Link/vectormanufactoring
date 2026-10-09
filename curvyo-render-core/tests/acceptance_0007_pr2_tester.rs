@@ -22,9 +22,8 @@
 )]
 
 use curvyo_document_core::{
-    AnchorId, AnchorKind, Color, DashPattern, Document, EllipseFrame, FillMode, FillModeTarget,
-    GradientStop, Length, LineCap, LineJoin, NewAnchor, NodeId, ObjectSnapshot, Opacity, Point,
-    RectBounds, StopId, StopPosition, StyleEdit, Vec2, ViewTransform,
+    AnchorId, AnchorKind, Color, DashPattern, Document, EllipseFrame, Length, LineCap, LineJoin,
+    NewAnchor, NodeId, ObjectSnapshot, Opacity, Point, RectBounds, StyleEdit, Vec2, ViewTransform,
 };
 use curvyo_render_core::{DrawList, build_artwork};
 
@@ -90,14 +89,8 @@ fn fill_solid(doc: &Document, id: NodeId, color: Color, opacity: f64) {
             StyleEdit::FillOpacity(op(opacity)),
         ],
     );
-    doc.set_fill_mode(
-        FillMode::Solid,
-        &[FillModeTarget {
-            id,
-            seed_stops: vec![],
-        }],
-    )
-    .unwrap();
+    doc.edit_style(&[id], &StyleEdit::FillEnabled(true))
+        .unwrap();
 }
 
 fn dash(list: &[f64]) -> StyleEdit {
@@ -169,7 +162,7 @@ fn covered(list: &DrawList, p: Point) -> bool {
 }
 
 fn art(objects: &[ObjectSnapshot], scale: f64) -> DrawList {
-    build_artwork(objects, &[], view(scale))
+    build_artwork(objects, view(scale))
 }
 
 /// Both lists cover the same points of the box `(x0, x1, y0, y1)`, sampled
@@ -580,25 +573,12 @@ fn ac13_fill_none_paints_nothing_and_solid_restores_the_stored_colour() {
     fill_solid(&doc, r, rgb(0, 200, 0), 1.0);
     let filled = art(&[obj(&doc, r)], 4.0);
     assert!(near(composite_at(&filled, pt(10.0, 10.0)), 0.0, 200.0, 0.0));
-    doc.set_fill_mode(
-        FillMode::None,
-        &[FillModeTarget {
-            id: r,
-            seed_stops: vec![],
-        }],
-    )
-    .unwrap();
+    doc.edit_style(&[r], &StyleEdit::FillEnabled(false))
+        .unwrap();
     let none = art(&[obj(&doc, r)], 4.0);
     assert!(is_white(composite_at(&none, pt(10.0, 10.0))));
     assert_eq!(none.layers().len(), 1, "stroke only");
-    doc.set_fill_mode(
-        FillMode::Solid,
-        &[FillModeTarget {
-            id: r,
-            seed_stops: vec![],
-        }],
-    )
-    .unwrap();
+    doc.edit_style(&[r], &StyleEdit::FillEnabled(true)).unwrap();
     assert_eq!(art(&[obj(&doc, r)], 4.0), filled);
 }
 
@@ -708,36 +688,6 @@ fn ac15_an_open_path_filled_with_a_curve_is_closed_by_a_straight_chord() {
     // Above the arc top (about y = 22.5) and below the chord: outside.
     assert!(is_white(composite_at(&list, pt(20.0, 30.0))));
     assert!(is_white(composite_at(&list, pt(20.0, -3.0))));
-}
-
-#[test]
-fn ac28_gradient_fills_are_not_painted_yet_but_do_not_break_the_stroke() {
-    let doc = Document::new(1);
-    let r = rect(&doc, 0.0, 0.0, 20.0, 20.0);
-    doc.set_fill_mode(
-        FillMode::Linear,
-        &[FillModeTarget {
-            id: r,
-            seed_stops: vec![
-                GradientStop {
-                    id: StopId::new(9, 1),
-                    position: StopPosition::new(0.0).unwrap(),
-                    color: rgb(255, 0, 0),
-                    opacity: op(1.0),
-                },
-                GradientStop {
-                    id: StopId::new(9, 2),
-                    position: StopPosition::new(1.0).unwrap(),
-                    color: rgb(0, 0, 255),
-                    opacity: op(1.0),
-                },
-            ],
-        }],
-    )
-    .unwrap();
-    let list = art(&[obj(&doc, r)], 4.0);
-    assert!(all_finite(&list));
-    assert!(covered(&list, pt(0.0, 10.0)), "the stroke still draws");
 }
 
 // --------------------------------------------------- AC 7 to 9: dashes

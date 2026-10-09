@@ -12,11 +12,10 @@
 )]
 
 use curvyo_document_core::{
-    AnchorId, Angle, Color, CornerRadii, DashPattern, Document, FillMode, FillModeTarget,
-    GradientStop, Length, LineCap, LineJoin, NewAnchor, NodeId, ObjectSnapshot, Opacity, Point,
-    RectBounds, StopId, StyleEdit, ViewTransform,
+    AnchorId, Color, CornerRadii, DashPattern, Document, Length, LineCap, LineJoin, NewAnchor,
+    NodeId, ObjectSnapshot, Opacity, Point, RectBounds, StyleEdit, ViewTransform,
 };
-use curvyo_render_core::{DrawList, GradientFrame, build_artwork};
+use curvyo_render_core::{DrawList, build_artwork};
 
 const SCALE: f64 = 4.0;
 
@@ -60,13 +59,7 @@ fn edit(document: &Document, id: NodeId, edit: StyleEdit) {
 fn fill_solid(document: &Document, id: NodeId, color: Color) {
     edit(document, id, StyleEdit::FillColor(color));
     document
-        .set_fill_mode(
-            FillMode::Solid,
-            &[FillModeTarget {
-                id,
-                seed_stops: vec![],
-            }],
-        )
+        .edit_style(&[id], &StyleEdit::FillEnabled(true))
         .unwrap();
 }
 
@@ -76,7 +69,7 @@ fn artwork(document: &Document) -> DrawList {
         .into_iter()
         .map(|id| document.object(id).unwrap())
         .collect();
-    build_artwork(&objects, &[], view())
+    build_artwork(&objects, view())
 }
 
 /// The bounding box of the vertices of `layer` of `list`.
@@ -144,9 +137,9 @@ fn ac3_a_default_styled_object_is_one_opaque_black_stroke_layer_as_before() {
     let document = Document::new(1);
     let path = polyline(&document, &[(0.0, 0.0), (20.0, 0.0), (20.0, 10.0)], false);
     let snapshot = document.path(path).unwrap();
-    let list = build_artwork(&[ObjectSnapshot::Path(snapshot.clone())], &[], view());
+    let list = build_artwork(&[ObjectSnapshot::Path(snapshot.clone())], view());
     assert_eq!(list.layers().len(), 1, "no fill: only a stroke layer");
-    let old = build_artwork(&[ObjectSnapshot::Path(snapshot)], &[], view());
+    let old = build_artwork(&[ObjectSnapshot::Path(snapshot)], view());
     let (a, b) = (&list.triangles, &old.triangles);
     assert!(b.len() >= a.len());
     assert_eq!(
@@ -474,164 +467,4 @@ fn ac15_an_open_paths_fill_is_closed_by_a_chord_and_its_stroke_is_not() {
         list.triangles[list.layers()[0]..],
         without_fill.triangles[..]
     );
-}
-
-fn gradient(document: &Document, id: NodeId, mode: FillMode, stops: &[GradientStop]) {
-    edit(document, id, StyleEdit::StrokeEnabled(false));
-    document
-        .set_fill_mode(
-            mode,
-            &[FillModeTarget {
-                id,
-                seed_stops: stops.to_vec(),
-            }],
-        )
-        .unwrap();
-}
-
-fn frame() -> GradientFrame {
-    GradientFrame {
-        min: pt(0.0, 0.0),
-        max: pt(10.0, 10.0),
-        angle: Angle::from_radians(0.0),
-        pivot: pt(5.0, 5.0),
-    }
-}
-
-fn objects_of(document: &Document) -> Vec<ObjectSnapshot> {
-    document
-        .object_ids()
-        .into_iter()
-        .map(|id| document.object(id).unwrap())
-        .collect()
-}
-
-fn red_to_white() -> Vec<GradientStop> {
-    GradientStop::default_pair(red(), StopId::new(1, 1), StopId::new(1, 2)).to_vec()
-}
-
-/// Criteria 17, 21: a two-stop gradient is one fill layer carrying its ramp and
-/// its frame; its vertices hold the ramp's first colour.
-#[test]
-fn a_gradient_fill_is_a_layer_with_a_ramp_and_a_frame() {
-    let document = Document::new(1);
-    let id = rect(&document, 0.0, 0.0, 10.0, 10.0);
-    gradient(&document, id, FillMode::Linear, &red_to_white());
-    let list = build_artwork(&objects_of(&document), &[Some(frame())], view());
-    assert_eq!(list.layers().len(), 1);
-    assert_eq!(list.gradients().len(), 1);
-    let fill = &list.gradients()[0];
-    assert_eq!((fill.start, fill.end), (0, list.triangles.len()));
-    assert!(!fill.radial);
-    assert_eq!(fill.ramp.first(), [255, 0, 0, 255]);
-    assert_eq!(fill.ramp.0[255], [255, 255, 255, 255]);
-    assert!(
-        list.triangles
-            .iter()
-            .all(|v| (v.color.r, v.color.g, v.color.b, v.color.a) == (255, 0, 0, 255))
-    );
-    // Radial is the same layer with the flag.
-    gradient(&document, id, FillMode::Radial, &[]);
-    let radial = build_artwork(&objects_of(&document), &[Some(frame())], view());
-    assert!(radial.gradients()[0].radial);
-}
-
-/// Without a frame to span a gradient paints flat in its first stop's colour.
-#[test]
-fn a_gradient_without_a_frame_is_flat_in_the_first_colour() {
-    let document = Document::new(1);
-    let id = rect(&document, 0.0, 0.0, 10.0, 10.0);
-    gradient(&document, id, FillMode::Linear, &red_to_white());
-    let list = build_artwork(&objects_of(&document), &[None], view());
-    assert_eq!(list.gradients().len(), 0);
-    assert_eq!(list.layers().len(), 1);
-}
-
-/// Criterion 35: no stops paint nothing; one stop paints uniformly at its own
-/// colour and opacity.
-#[test]
-fn zero_and_one_stop_gradients_follow_the_svg_rules() {
-    let document = Document::new(1);
-    let id = rect(&document, 0.0, 0.0, 10.0, 10.0);
-    gradient(&document, id, FillMode::Linear, &[]);
-    assert_eq!(
-        build_artwork(&objects_of(&document), &[Some(frame())], view())
-            .triangles
-            .len(),
-        0
-    );
-    let one = GradientStop {
-        id: StopId::new(1, 1),
-        position: curvyo_document_core::StopPosition::new(0.3).unwrap(),
-        color: Color { r: 0, g: 128, b: 0 },
-        opacity: Opacity::new(0.5).unwrap(),
-    };
-    gradient(&document, id, FillMode::Linear, &[one]);
-    let list = build_artwork(&objects_of(&document), &[Some(frame())], view());
-    assert_eq!(list.gradients().len(), 0, "uniform, no ramp lookup");
-    assert!(
-        list.triangles
-            .iter()
-            .all(|v| (v.color.r, v.color.g, v.color.b, v.color.a) == (0, 128, 0, 128))
-    );
-}
-
-/// Several gradient fills in one list keep their own vertex ranges, in tree
-/// order, with the other objects' layers between them.
-#[test]
-fn gradient_ranges_follow_the_tree_order() {
-    let document = Document::new(1);
-    let a = rect(&document, 0.0, 0.0, 10.0, 10.0);
-    let b = rect(&document, 20.0, 0.0, 10.0, 10.0);
-    let c = rect(&document, 40.0, 0.0, 10.0, 10.0);
-    gradient(&document, a, FillMode::Linear, &red_to_white());
-    fill_solid(&document, b, red());
-    gradient(&document, c, FillMode::Radial, &red_to_white());
-    let list = build_artwork(
-        &objects_of(&document),
-        &[Some(frame()), None, Some(frame())],
-        view(),
-    );
-    assert_eq!(list.gradients().len(), 2);
-    let (first, second) = (&list.gradients()[0], &list.gradients()[1]);
-    assert!(first.end <= second.start, "ordered and disjoint");
-    assert_eq!(second.end, list.triangles.len());
-    assert!(second.radial && !first.radial);
-}
-
-/// The per-vertex attributes a host uploads: flat vertices are mode 0, a
-/// gradient's carry its coordinate, its ramp row and its kind.
-#[test]
-fn gradient_attributes_tag_only_the_gradient_vertices() {
-    let document = Document::new(1);
-    let a = rect(&document, 0.0, 0.0, 10.0, 10.0);
-    let b = rect(&document, 20.0, 0.0, 10.0, 10.0);
-    let c = rect(&document, 40.0, 0.0, 10.0, 10.0);
-    gradient(&document, a, FillMode::Linear, &red_to_white());
-    fill_solid(&document, b, red());
-    gradient(&document, c, FillMode::Radial, &red_to_white());
-    let list = build_artwork(
-        &objects_of(&document),
-        &[Some(frame()), None, Some(frame())],
-        view(),
-    );
-    let attributes = list.gradient_attributes(2);
-    assert_eq!(attributes.len(), list.triangles.len());
-    let (first, second) = (&list.gradients()[0], &list.gradients()[1]);
-    for (index, attribute) in attributes.iter().enumerate() {
-        if (first.start..first.end).contains(&index) {
-            assert_eq!(attribute[2..], [0.25, 1.0], "row 0 of 2, linear");
-        } else if (second.start..second.end).contains(&index) {
-            assert_eq!(attribute[2..], [0.75, 2.0], "row 1 of 2, radial");
-        } else {
-            assert_eq!(*attribute, [0.0; 4], "flat");
-        }
-    }
-    // The linear coordinate of a vertex at the box's right edge is 1.
-    let right = list.triangles[first.start..first.end]
-        .iter()
-        .zip(&attributes[first.start..first.end])
-        .filter(|(v, _)| (v.position.x - 10.0).abs() < 1e-6)
-        .all(|(_, a)| (a[0] - 1.0).abs() < 1e-6);
-    assert!(right);
 }
