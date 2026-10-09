@@ -11,8 +11,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 
 use curvyo_document_core::{
-    Color, Document, FillMode, Length, LineCap, LineJoin, ObjectSnapshot, Opacity, Point, Style,
-    unpack,
+    Color, Document, Length, LineCap, LineJoin, ObjectSnapshot, Opacity, Point, Style, unpack,
 };
 use curvyo_editor_wasm::{Session, Tool};
 use curvyo_render_core::DrawList;
@@ -244,7 +243,7 @@ fn typed_values_survive_save_and_reopen_unchanged() {
     session
         .set_style_text(StyleField::StrokeOpacity, "37")
         .unwrap();
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     session
         .set_style_text(StyleField::FillColor, "12ab34")
         .unwrap();
@@ -325,7 +324,7 @@ fn an_edit_that_changes_nothing_records_no_operation() {
     session.set_stroke_dash(DashChoice::Solid);
     session.set_stroke_join(LineJoin::Miter);
     session.set_stroke_cap(LineCap::Butt);
-    session.set_fill_mode(FillMode::None);
+    session.set_fill_paint(false);
     assert_eq!(version(&session), v);
     // A drag that ends where it began writes nothing either.
     session.preview_style_opacity(StyleField::StrokeOpacity, 100.0);
@@ -338,9 +337,9 @@ fn an_edit_that_changes_nothing_records_no_operation() {
 // ---------------------------------------------------------------------
 
 #[test]
-fn fill_none_solid_and_gradient_modes_keep_the_stored_colour() {
+fn fill_on_and_off_keep_the_stored_colour() {
     let mut session = rectangles(1);
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     let first = styles(&session)[0].clone();
     assert!(first.fill.enabled);
     assert_eq!(first.fill.color, Color::BLACK, "black the first time");
@@ -350,55 +349,45 @@ fn fill_none_solid_and_gradient_modes_keep_the_stored_colour() {
     session
         .set_style_text(StyleField::FillOpacity, "40")
         .unwrap();
-    session.set_fill_mode(FillMode::None);
+    session.set_fill_paint(false);
     let none = styles(&session)[0].clone();
     assert!(!none.fill.enabled);
     assert_eq!(none.fill.color, Color { r: 0, g: 0, b: 255 }, "kept");
     assert_eq!(none.fill.opacity, pct(40));
 
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     let back = styles(&session)[0].clone();
     assert!(back.fill.enabled);
     assert_eq!(back.fill.color, Color { r: 0, g: 0, b: 255 });
     assert_eq!(back.fill.opacity, pct(40));
-
-    session.set_fill_mode(FillMode::Linear);
-    session.set_fill_mode(FillMode::Solid);
-    let round_trip = styles(&session)[0].clone();
-    assert_eq!(round_trip.fill.color, Color { r: 0, g: 0, b: 255 });
-    assert_eq!(round_trip.fill.opacity, pct(40));
-
-    session.set_fill_mode(FillMode::Radial);
-    session.set_fill_mode(FillMode::Solid);
-    assert_eq!(styles(&session)[0].fill.color, Color { r: 0, g: 0, b: 255 });
 }
 
 #[test]
-fn fill_mode_over_a_mixed_selection_changes_only_the_mode() {
+fn the_fill_paint_over_a_mixed_selection_changes_only_the_paint() {
     let mut session = rectangles(2);
     select_only(&mut session, 0);
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     session
         .set_style_text(StyleField::FillColor, "#F00")
         .unwrap();
     select_all(&mut session, 2);
-    assert_eq!(session.style_panel_state().fill.mode, BarValue::Mixed);
+    assert_eq!(session.style_panel_state().fill.paint, BarValue::Mixed);
     assert_eq!(session.style_panel_state().fill.color, BarValue::Mixed);
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     let all = styles(&session);
     assert!(all.iter().all(|s| s.fill.enabled));
     assert_eq!(all[0].fill.color, red(), "keeps its own colour");
     assert_eq!(all[1].fill.color, Color::BLACK);
     assert_eq!(
-        session.style_panel_state().fill.mode,
-        BarValue::Uniform(FillMode::Solid)
+        session.style_panel_state().fill.paint,
+        BarValue::Uniform(true)
     );
 }
 
 #[test]
 fn a_panel_fill_edit_never_changes_the_stroke_and_vice_versa() {
     let mut session = rectangles(1);
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     let before = styles(&session)[0].clone();
     session
         .set_style_text(StyleField::FillColor, "#123")
@@ -443,7 +432,7 @@ fn a_path_and_a_rectangle_take_the_identical_edits() {
     session.set_stroke_dash(DashChoice::DashDot);
     session.set_stroke_join(LineJoin::Bevel);
     session.set_stroke_cap(LineCap::Round);
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     session
         .set_style_text(StyleField::FillColor, "#0F0")
         .unwrap();
@@ -537,7 +526,7 @@ fn an_empty_selection_and_the_pen_ignore_every_panel_control() {
         session.set_stroke_dash(DashChoice::Dash);
         session.set_stroke_join(LineJoin::Round);
         session.set_stroke_cap(LineCap::Round);
-        session.set_fill_mode(FillMode::Solid);
+        session.set_fill_paint(true);
         session.preview_style_color(StyleField::StrokeColor, red());
         session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
         assert_eq!(session.draw_list().triangles.len(), before.triangles.len());
@@ -549,7 +538,7 @@ fn an_empty_selection_and_the_pen_ignore_every_panel_control() {
     // The disabled panel still reports the frozen defaults.
     let state = session.style_panel_state();
     assert_eq!(state.stroke.width, BarValue::Uniform(Length::from_mm(0.25)));
-    assert_eq!(state.fill.mode, BarValue::Uniform(FillMode::None));
+    assert_eq!(state.fill.paint, BarValue::Uniform(false));
 }
 
 #[test]
@@ -584,7 +573,7 @@ fn a_shape_just_drawn_with_any_creation_tool_is_editable_at_once() {
         session
             .set_style_text(StyleField::StrokeColor, "#F00")
             .unwrap();
-        session.set_fill_mode(FillMode::Solid);
+        session.set_fill_paint(true);
         let s = &styles(&session)[0];
         assert_eq!(s.stroke.color, red(), "{tool:?}");
         assert!(s.fill.enabled, "{tool:?}");
@@ -952,14 +941,14 @@ fn the_pointer_is_down_between_press_and_release_only() {
 #[test]
 fn choosing_the_pressed_fill_stroke_join_or_dash_again_records_no_operation() {
     let mut session = rectangles(1);
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     session.set_stroke_dash(DashChoice::Dash);
     session.set_stroke_join(LineJoin::Bevel);
     session.set_stroke_cap(LineCap::Square);
     session.set_stroke_paint(false);
     let v = version(&session);
     // A click on the item that is already pressed (the toggle strips send it).
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     session.set_stroke_dash(DashChoice::Dash);
     session.set_stroke_join(LineJoin::Bevel);
     session.set_stroke_cap(LineCap::Square);

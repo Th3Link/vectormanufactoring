@@ -56,7 +56,11 @@ impl Session {
     /// What the Properties panel shows (criterion 14a).
     #[must_use]
     pub fn panel_content(&self) -> PanelContent {
-        panel_content(&self.selection, self.pen_path_unfinished())
+        panel_content(
+            &self.selection,
+            self.pen_path_unfinished(),
+            !self.style_scope().ids.is_empty(),
+        )
     }
 
     /// Whether the Pen holds an unfinished path, whichever tool is active. A

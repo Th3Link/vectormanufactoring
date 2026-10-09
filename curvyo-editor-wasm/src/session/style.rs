@@ -5,9 +5,9 @@
 //! `curvyo_ui_core` (`style_scope`, `style_panel_state`, `StyleEditor`); the DOM
 //! holds only the open text, the invalid state and "Escape restores".
 
-use curvyo_document_core::{Color, FillMode, FillModeTarget, LineCap, LineJoin, StyleEdit};
+use curvyo_document_core::{Color, LineCap, LineJoin, StyleEdit};
 use curvyo_ui_core::{
-    DashChoice, StyleEntryError, StyleField, StylePanelState, StyleScope, StyleTool, fill_targets,
+    DashChoice, StyleEntryError, StyleField, StylePanelState, StyleScope, StyleTool,
     style_panel_state, style_scope,
 };
 
@@ -54,7 +54,7 @@ impl Session {
     #[must_use]
     pub fn style_panel_view(&self) -> StylePanelView {
         let key = format!("{:?}", self.style_scope().ids);
-        StylePanelView::new(&self.style_panel_state(), key, self.selected_stop_rank())
+        StylePanelView::new(&self.style_panel_state(), key)
     }
 
     /// Whether a canvas pointer press is in flight (the button is down): the
@@ -149,26 +149,10 @@ impl Session {
         self.apply_style_edit(&StyleEdit::StrokeCap(cap));
     }
 
-    /// The Fill type row (criteria 13, 17): one commit. Every stored colour,
-    /// opacity and stop stays; a gradient mode seeds the two default stops of
-    /// every object that holds none, from its own fill colour.
-    pub fn set_fill_mode(&mut self, mode: FillMode) {
-        self.flush_style_preview();
-        let ids = self.style_scope().ids;
-        let targets = if matches!(mode, FillMode::Linear | FillMode::Radial) {
-            let objects = self.objects();
-            fill_targets(&mut self.minter, &objects, &ids)
-        } else {
-            ids.into_iter()
-                .map(|id| FillModeTarget {
-                    id,
-                    seed_stops: Vec::new(),
-                })
-                .collect()
-        };
-        if !targets.is_empty() {
-            let _ = self.document.set_fill_mode(mode, &targets);
-        }
+    /// The fill Paint switch (criterion 13): one commit. The stored colour and
+    /// opacity stay.
+    pub fn set_fill_paint(&mut self, on: bool) {
+        self.apply_style_edit(&StyleEdit::FillEnabled(on));
     }
 
     /// Writes `edit` to every edited object in one commit. `false` when there

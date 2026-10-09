@@ -7,9 +7,7 @@
 //! orchestration, over `curvyo-ui-core`'s rules.
 
 use curvyo_document_core::Color;
-use curvyo_ui_core::{
-    DashChoice, StopField, StyleField, cap_from_name, fill_mode_from_name, join_from_name,
-};
+use curvyo_ui_core::{DashChoice, StyleField, cap_from_name, join_from_name};
 use wasm_bindgen::prelude::*;
 
 use crate::session::StylePanelView;
@@ -106,11 +104,9 @@ impl WasmSession {
         }
     }
 
-    /// The Fill type row: `"none"`, `"solid"`, `"linear"` or `"radial"`.
-    pub fn set_fill_mode(&mut self, name: &str) {
-        if let Some(mode) = fill_mode_from_name(name) {
-            self.session.set_fill_mode(mode);
-        }
+    /// The fill Paint switch: one commit.
+    pub fn set_fill_paint(&mut self, on: bool) {
+        self.session.set_fill_paint(on);
     }
 
     /// The properties panel is about to open (`-280`) or close (`+280`): the
@@ -125,52 +121,5 @@ impl WasmSession {
     #[must_use]
     pub fn pointer_is_down(&self) -> bool {
         self.session.is_pointer_down()
-    }
-
-    /// A row got focus or a thumb was pressed: selects the stop of `rank`.
-    pub fn select_stop(&mut self, rank: u32) {
-        self.session.select_stop(rank as usize);
-    }
-
-    /// Enter or Tab in a stop field (`field_name` is `"position"`, `"color"` or
-    /// `"opacity"`): `"committed"`, `"unchanged"` (no such stop) or
-    /// `"invalid:<code>"` (`hex`, `hex8` or `percent`), as
-    /// [`WasmSession::set_style_text`].
-    pub fn set_stop_text(&mut self, rank: u32, field_name: &str, text: &str) -> String {
-        let Some(field) = StopField::from_name(field_name) else {
-            return "unchanged".to_string();
-        };
-        match self.session.set_stop_text(rank as usize, field, text) {
-            Ok(true) => "committed".to_string(),
-            Ok(false) => "unchanged".to_string(),
-            Err(error) => format!("invalid:{}", error.code()),
-        }
-    }
-
-    /// A tick of a drag on the stop of `rank`: `value` is a percent for
-    /// `"position"` and `"opacity"` and `0xRRGGBB` for `"color"`. Nothing is
-    /// written until [`WasmSession::commit_style_preview`]; the stop is fixed
-    /// by the first tick.
-    pub fn preview_stop(&mut self, rank: u32, field_name: &str, value: f64) {
-        if let Some(field) = StopField::from_name(field_name) {
-            self.session.preview_stop(rank as usize, field, value);
-        }
-    }
-
-    /// The Add stop button: the middle of the widest gap. `false` when refused
-    /// (several objects, 16 stops).
-    pub fn add_stop(&mut self) -> bool {
-        self.session.add_stop(None)
-    }
-
-    /// A click on the gradient bar at `fraction` (0 to 1).
-    pub fn add_stop_at(&mut self, fraction: f64) -> bool {
-        self.session.add_stop(Some(fraction))
-    }
-
-    /// Remove the stop of `rank`. `false` when refused (several objects, two
-    /// stops).
-    pub fn remove_stop(&mut self, rank: u32) -> bool {
-        self.session.remove_stop(rank as usize)
     }
 }

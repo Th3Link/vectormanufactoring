@@ -134,7 +134,7 @@ fn ac65_ac67_the_session_draws_strokes_then_the_dashed_box_then_the_handles() {
             .into_iter()
             .map(ObjectSnapshot::Primitive)
             .collect();
-        let strokes = build_artwork(&objects, &[], view);
+        let strokes = build_artwork(&objects, view);
         assert_ne!(strokes.triangles.len(), 0);
         let stroke_at =
             find_slice(&list.triangles, &strokes.triangles).expect("strokes in the list");

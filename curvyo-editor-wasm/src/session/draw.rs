@@ -6,12 +6,11 @@
 use std::borrow::Cow;
 
 use curvyo_render_core::{
-    DrawList, GradientFrame, TransformDecorationInput, build_artwork, build_decorations,
-    build_marquee_overlay, build_pen_preview, build_select_draw_list, build_transform_draw_list,
+    DrawList, TransformDecorationInput, build_artwork, build_decorations, build_marquee_overlay,
+    build_pen_preview, build_select_draw_list, build_transform_draw_list,
 };
 
-use curvyo_document_core::{FillKind, ObjectSnapshot, PathSnapshot};
-use curvyo_ui_core::oriented_bounds;
+use curvyo_document_core::{ObjectSnapshot, PathSnapshot};
 
 use super::{Session, Tool};
 
@@ -58,8 +57,7 @@ impl Session {
         if self.style.is_active() {
             self.style.apply_to(artwork_objects.to_mut());
         }
-        let frames = Self::gradient_frames(&artwork_objects);
-        let mut list = build_artwork(&artwork_objects, &frames, view);
+        let mut list = build_artwork(&artwork_objects, view);
         // A compound path shows no node, handle or segment (`0016-boolean-operations` criterion 38).
         let editable: Vec<_> = paths
             .iter()
@@ -145,28 +143,6 @@ impl Session {
             ));
         }
         list
-    }
-
-    /// The box each gradient-filled object's gradient spans: its oriented
-    /// selection box (`specs/0007-stroke-and-fill-styling` criteria 21, 22).
-    /// Objects without a gradient fill get `None`, so nothing is computed for
-    /// them.
-    fn gradient_frames(objects: &[ObjectSnapshot]) -> Vec<Option<GradientFrame>> {
-        objects
-            .iter()
-            .map(|object| {
-                let fill = &object.style().fill;
-                (fill.paints() && fill.kind != FillKind::Solid).then(|| {
-                    let oriented = oriented_bounds(object);
-                    GradientFrame {
-                        min: oriented.min,
-                        max: oriented.max,
-                        angle: oriented.angle,
-                        pivot: oriented.pivot,
-                    }
-                })
-            })
-            .collect()
     }
 
     /// `objects` with each path replaced by the path of the same id in `paths`

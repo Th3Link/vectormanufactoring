@@ -9,8 +9,8 @@
 #![allow(clippy::unwrap_used)]
 
 use curvyo_document_core::{
-    AnchorId, Color, DashPattern, Document, FillMode, FillModeTarget, GradientStop, Length,
-    LineCap, LineJoin, NewAnchor, NodeId, Point, RectBounds, StopId, StyleEdit, pack,
+    AnchorId, Color, DashPattern, Document, Length, LineCap, LineJoin, NewAnchor, NodeId, Point,
+    RectBounds, StyleEdit, pack,
 };
 use curvyo_editor_wasm::{Session, Tool};
 
@@ -50,7 +50,7 @@ fn document_with_200_objects() -> (Document, Vec<NodeId>) {
 
 fn style_everything(document: &Document, ids: &[NodeId]) {
     let red = Color { r: 255, g: 0, b: 0 };
-    for (n, id) in ids.iter().enumerate() {
+    for id in ids {
         let edit = |edit: StyleEdit| document.edit_style(&[*id], &edit).unwrap();
         edit(StyleEdit::StrokeWidth(Length::from_mm(0.5)));
         edit(StyleEdit::StrokeColor(red));
@@ -59,21 +59,8 @@ fn style_everything(document: &Document, ids: &[NodeId]) {
         ));
         edit(StyleEdit::StrokeJoin(LineJoin::Round));
         edit(StyleEdit::StrokeCap(LineCap::Round));
-        let counter = n as u64 * 2;
-        document
-            .set_fill_mode(
-                FillMode::Linear,
-                &[FillModeTarget {
-                    id: *id,
-                    seed_stops: GradientStop::default_pair(
-                        red,
-                        StopId::new(5, counter),
-                        StopId::new(5, counter + 1),
-                    )
-                    .to_vec(),
-                }],
-            )
-            .unwrap();
+        edit(StyleEdit::FillEnabled(true));
+        edit(StyleEdit::FillColor(red));
     }
 }
 

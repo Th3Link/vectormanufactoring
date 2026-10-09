@@ -40,13 +40,12 @@ mod select_bar;
 mod select_gesture;
 mod select_view;
 mod shapes;
-mod stops;
 mod style;
 mod style_view;
 mod tolerances;
 mod transform_entry;
 
-use curvyo_document_core::{Document, NodeId, ObjectSnapshot, OpenError, Point, SaveError, StopId};
+use curvyo_document_core::{Document, NodeId, ObjectSnapshot, OpenError, Point, SaveError};
 use curvyo_ui_core::{
     AnchorIdMinter, EllipseTool, Hit, Modifiers, NodeTool, ObjectSelection, PenTool,
     PolygonStarTool, RectangleTool, SelectTool, StyleEditor, Viewport, hit_test,
@@ -135,9 +134,6 @@ pub struct Session {
     /// of the stored style, committed once on release
     /// (`specs/0007-stroke-and-fill-styling` criterion 36).
     style: StyleEditor,
-    /// The selected gradient stop of each edited object (ephemeral; the panel
-    /// highlights its row and thumb).
-    selected_stops: Vec<(NodeId, StopId)>,
     /// Pan/zoom view state (ADR 0009 §2: ephemeral — never written to
     /// the document, resets on `New`/`Open`).
     viewport: Viewport,
@@ -211,7 +207,6 @@ impl Session {
             // selection tool exists").
             tool: Tool::Select,
             style: StyleEditor::default(),
-            selected_stops: Vec::new(),
             viewport: Viewport::new(),
             hovered: None,
             hovered_object: None,
@@ -244,7 +239,6 @@ impl Session {
             selection: ObjectSelection::new(),
             tool: Tool::Select,
             style: StyleEditor::default(),
-            selected_stops: Vec::new(),
             viewport: Viewport::new(),
             hovered: None,
             hovered_object: None,

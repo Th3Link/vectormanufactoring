@@ -40,9 +40,9 @@ use std::ops::ControlFlow;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use curvyo_document_core::{
-    AnchorId, AnchorKind, Angle, Color, CornerRadii, Document, EllipseFrame, FillMode,
-    FillModeTarget, InnerRatio, Length, NewAnchor, NodeId, ObjectSnapshot, Opacity, PathSnapshot,
-    Point, PointCount, RectBounds, StarFrame, StyleEdit, Vec2, outline_of_rotated, pack, unpack,
+    AnchorId, AnchorKind, Angle, Color, CornerRadii, Document, EllipseFrame, InnerRatio, Length,
+    NewAnchor, NodeId, ObjectSnapshot, Opacity, PathSnapshot, Point, PointCount, RectBounds,
+    StarFrame, StyleEdit, Vec2, outline_of_rotated, pack, unpack,
 };
 use curvyo_editor_wasm::{BooleanOutcome, DoubleClickHint, KeyInput, Session, Tool};
 use curvyo_ui_core::{BooleanAvailability, BooleanOp, BooleanRefusal};
@@ -410,14 +410,7 @@ fn stylize(d: &Document, id: NodeId, n: u8) {
         }),
     )
     .unwrap();
-    d.set_fill_mode(
-        FillMode::Solid,
-        &[FillModeTarget {
-            id,
-            seed_stops: vec![],
-        }],
-    )
-    .unwrap();
+    d.edit_style(&[id], &StyleEdit::FillEnabled(true)).unwrap();
     d.edit_style(
         &[id],
         &StyleEdit::StrokeWidth(Length::from_mm(0.5 + f64::from(n))),
@@ -1017,27 +1010,13 @@ fn ac5_paint_does_not_change_the_result() {
             }
             1 => {
                 // stroke-only A, wide stroke B
-                d.set_fill_mode(
-                    FillMode::None,
-                    &[FillModeTarget {
-                        id: a,
-                        seed_stops: vec![],
-                    }],
-                )
-                .unwrap();
+                d.edit_style(&[a], &StyleEdit::FillEnabled(false)).unwrap();
                 d.edit_style(&[b], &StyleEdit::StrokeWidth(Length::from_mm(10.0)))
                     .unwrap();
             }
             2 => {
                 // fill solid at opacity 0 for A, stroke off for B
-                d.set_fill_mode(
-                    FillMode::Solid,
-                    &[FillModeTarget {
-                        id: a,
-                        seed_stops: vec![],
-                    }],
-                )
-                .unwrap();
+                d.edit_style(&[a], &StyleEdit::FillEnabled(true)).unwrap();
                 d.edit_style(&[a], &StyleEdit::FillOpacity(Opacity::new(0.0).unwrap()))
                     .unwrap();
                 d.edit_style(&[b], &StyleEdit::StrokeEnabled(false))
@@ -1803,14 +1782,8 @@ fn click_inside_the_hole_of_a_result_picks_what_is_behind() {
     square(&d, 0.0, 0.0, 40.0);
     square(&d, 10.0, 10.0, 20.0);
     let behind = square(&d, 12.0, 12.0, 16.0);
-    d.set_fill_mode(
-        FillMode::Solid,
-        &[FillModeTarget {
-            id: behind,
-            seed_stops: vec![],
-        }],
-    )
-    .unwrap();
+    d.edit_style(&[behind], &StyleEdit::FillEnabled(true))
+        .unwrap();
     let mut s = session_of(&d);
     click(&mut s, pt(0.0, 20.0), false);
     click(&mut s, pt(10.0, 25.0), true);

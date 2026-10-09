@@ -16,7 +16,7 @@
 use std::time::{Duration, Instant};
 
 use curvyo_document_core::{
-    AnchorId, Document, FillMode, FillModeTarget, Length, NewAnchor, Point, RectBounds, pack,
+    AnchorId, Document, Length, NewAnchor, Point, RectBounds, StyleEdit, pack,
 };
 use curvyo_editor_wasm::{Session, Tool};
 
@@ -57,13 +57,7 @@ fn session() -> Session {
         .replace_with_path(&[seed], seed, &outlines, "boolean_union")
         .unwrap();
     document
-        .set_fill_mode(
-            FillMode::Solid,
-            &[FillModeTarget {
-                id,
-                seed_stops: vec![],
-            }],
-        )
+        .edit_style(&[id], &StyleEdit::FillEnabled(true))
         .unwrap();
     let mut session = Session::open(2, &pack(&document, "0.1.0").unwrap()).unwrap();
     session.set_tool(Tool::Select);
