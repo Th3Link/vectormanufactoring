@@ -364,6 +364,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # The engine that runs the wasm test decides criterion 43: pin it, as the frontend job does.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Install wasm-bindgen CLI matching Cargo.lock
         run: |
           set -euo pipefail

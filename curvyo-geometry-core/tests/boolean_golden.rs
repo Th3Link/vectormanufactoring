@@ -8,6 +8,8 @@
 //! To regenerate the expected results after an intended change, run the tests with
 //! `CURVYO_UPDATE_GOLDEN=1` and review the diff.
 
+// Native only: `proptest` or the file system is needed (the wasm build runs `boolean_golden_wasm`).
+#![cfg(not(target_arch = "wasm32"))]
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,

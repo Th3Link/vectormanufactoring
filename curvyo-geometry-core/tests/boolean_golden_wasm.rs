@@ -85,3 +85,28 @@ fn every_fixture_matches_its_golden_result() {
 fn five_thousand_tiny_squares() {
     assert_eq!(tiny_squares_summary(), normalise(TINY_SQUARES));
 }
+
+/// The list above is written by hand because the wasm build cannot read a directory: this test
+/// (native only) fails if a fixture file is missing from it, or listed but gone.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn the_fixture_list_matches_the_fixture_directory() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/boolean");
+    let mut on_disk: Vec<String> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .filter(|name| name.ends_with(".fixture"))
+        .collect();
+    on_disk.sort();
+    let mut listed: Vec<String> = FIXTURES
+        .iter()
+        .map(|(name, _)| (*name).to_string())
+        .collect();
+    listed.sort();
+    assert_eq!(listed, on_disk);
+    assert!(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/boolean/ac40i_tiny_squares.summary")
+            .exists()
+    );
+}

@@ -3,6 +3,8 @@
 //! area a non-zero fill paints; an open outline is closed by a chord), with
 //! expectations computed here.
 
+// Native only: `proptest` or the file system is needed (the wasm build runs `boolean_golden_wasm`).
+#![cfg(not(target_arch = "wasm32"))]
 #![allow(clippy::unwrap_used, clippy::expect_used, missing_docs)]
 
 use curvyo_document_core::{Point, Vec2};
