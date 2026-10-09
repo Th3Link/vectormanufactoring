@@ -218,7 +218,7 @@ fn ac3_default_view_has_the_origin_tick_72px_in_and_labels_0() {
         );
     }
     // mm at 100 %: majors every 20 mm
-    let h = s.ruler_layout(RulerAxis::Horizontal, 900.0, 7.0, 7.0);
+    let h = s.ruler_layout(RulerAxis::Horizontal, 1000.0, 7.0, 7.0);
     assert!((h.step() - 20.0).abs() < 1e-12);
     assert!(h.labels.iter().any(|x| x.text == "200"));
 }

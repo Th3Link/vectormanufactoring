@@ -2,12 +2,13 @@
 
 One branch, `story/path-tools`, one PR (customer rule of 2026-10-09: one PR per slice, opened
 when the slice can be tried end to end and the full local gate is green). The slice is built in
-milestones, in this order; M3 and M4 are added when their specs (`0034-pen-path-extension`,
-`0035-combine-and-break-apart`) are Ready.
+milestones, in this order.
 
 - **M1: the Boolean toolbox** (amendment of `0016-boolean-operations`, 2026-10-10).
 - **M2: segment drag bending** (this story, `specification.md`, `adrs.md`).
-- M3, M4: not planned yet.
+- **M3: pen path extension** (`specs/0034-pen-path-extension/`, plan in its folder).
+- **M4: combine and break apart** (`specs/0035-combine-and-break-apart/`, plan in its folder; it
+  ships the second rail column).
 
 `origin/main` is merged into the branch at every milestone; another implementer works on the
 style panel (`0017`, `0018`, `0030`) and touches `session/draw.rs`, `session/mod.rs`, the `lib.rs`
