@@ -53,10 +53,11 @@ fn count(n: usize) -> u32 {
 /// `compound` says whether it is a compound path) or a refusal: `"needs_two"`, `"open_paths"`,
 /// `"no_area"`, `"out_of_range"` (`count` of the `of` selected objects are to blame) or
 /// `"empty"`. Nothing was changed by anything but `"applied"`.
-#[wasm_bindgen(getter_with_clone)]
+#[wasm_bindgen]
 #[derive(Debug, Clone)]
 pub struct BooleanResultView {
     /// The outcome code.
+    #[wasm_bindgen(getter_with_clone)]
     pub kind: String,
     /// Objects replaced, or objects to blame.
     pub count: u32,
