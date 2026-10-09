@@ -102,10 +102,7 @@ impl Document {
             .collect::<Result<_, _>>()?;
 
         for meta in &metas {
-            match shape_codec::read_shape_tag(meta) {
-                Some(tag) => translate_primitive_meta(meta, &tag, offset),
-                None => translate_path_meta(meta, offset),
-            }
+            translate_meta(meta, offset);
         }
         self.commit_with_label("translate_objects");
         Ok(())
@@ -175,12 +172,10 @@ impl Document {
             #[allow(clippy::unwrap_used)]
             let meta = tree.get_meta(new_tree_id).unwrap();
             copy_map(source_meta, &meta);
-            if let Some(tag) = shape_codec::read_shape_tag(&meta) {
-                translate_primitive_meta(&meta, &tag, offset);
-            } else {
+            if shape_codec::read_shape_tag(&meta).is_none() {
                 renumber_anchors(&meta, &source.anchor_ids);
-                translate_path_meta(&meta, offset);
             }
+            translate_meta(&meta, offset);
             // invariant: the source was resolved above and the new node was
             // just created: both are live root siblings.
             #[allow(clippy::unwrap_used)]
@@ -362,6 +357,18 @@ fn renumber_anchors(meta: &loro::LoroMap, anchor_ids: &[AnchorId]) {
         #[allow(clippy::unwrap_used)]
         map.insert(KEY_ID, path_codec::anchor_id_to_value(*id))
             .unwrap();
+    }
+}
+
+/// Shifts one object by `offset`, whichever kind it is: the one place that
+/// knows how each kind stores its position. [`Document::translate_objects`],
+/// [`Document::duplicate_objects`], [`Document::resize`] and
+/// [`Document::fit_to_content`] all move objects through it. Writes nothing
+/// to the commit log by itself; the caller commits.
+pub(crate) fn translate_meta(meta: &loro::LoroMap, offset: Vec2) {
+    match shape_codec::read_shape_tag(meta) {
+        Some(tag) => translate_primitive_meta(meta, &tag, offset),
+        None => translate_path_meta(meta, offset),
     }
 }
 

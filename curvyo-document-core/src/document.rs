@@ -7,6 +7,8 @@
 use loro::{CommitOptions, ExportMode, LoroDoc, LoroMap, LoroValue};
 use serde::Serialize;
 
+use crate::display_unit::DisplayUnit;
+use crate::document_size::{MAX_DOCUMENT_MM, MIN_DOCUMENT_MM};
 use crate::error::{OpenError, SaveError};
 use crate::units::{DocumentSize, Length};
 
@@ -93,10 +95,15 @@ use crate::units::{DocumentSize, Length};
 /// `styles_v7.curvyo` (regular) and `styles_v7_mergeable_stops.curvyo`.
 pub const CURRENT_FORMAT_VERSION: u32 = 7;
 
-const ROOT_MAP: &str = "root";
+pub(crate) const ROOT_MAP: &str = "root";
 const KEY_FORMAT_VERSION: &str = "format_version";
-const KEY_WIDTH_MM: &str = "size_width_mm";
-const KEY_HEIGHT_MM: &str = "size_height_mm";
+pub(crate) const KEY_WIDTH_MM: &str = "size_width_mm";
+pub(crate) const KEY_HEIGHT_MM: &str = "size_height_mm";
+/// The root register holding the display unit's symbol. Added without a
+/// `format_version` bump: an older build ignores the key, shows mm, and keeps
+/// the key when it saves (`specs/0015-document-size-and-rulers/adrs.md`,
+/// decision 1).
+pub(crate) const KEY_DISPLAY_UNIT: &str = "display_unit";
 
 /// The top-level Loro tree container holding every object — path or
 /// primitive alike (ADR 0002 §5: sibling order among tree nodes is
@@ -196,20 +203,44 @@ impl Document {
         Ok(Self { loro })
     }
 
-    /// The document's page size in millimetres.
+    /// The document's size in millimetres.
     ///
-    /// Falls back to the A4 default if the root map is missing a field
-    /// this crate always writes itself. This is a defensive read, not a
-    /// panic path: a `.curvyo` written by a future, compatible version of
-    /// this crate could add fields this build does not know about without
-    /// that file being "damaged".
+    /// Both axes fall back to the A4 default if either stored value is
+    /// missing, not a finite number, or outside
+    /// [`MIN_DOCUMENT_MM`]`..=`[`MAX_DOCUMENT_MM`]
+    /// (`specs/0015-document-size-and-rulers/` criterion 13). The read is
+    /// defensive and writes nothing: a file written by a build that stored
+    /// no size, or damaged by hand, opens at A4 instead of being refused,
+    /// and stays as it is until the maker resizes.
     #[must_use]
     pub fn size(&self) -> DocumentSize {
         let default = DocumentSize::default();
         let root = self.loro.get_map(ROOT_MAP);
-        let width = Self::read_mm(&root, KEY_WIDTH_MM).unwrap_or(default.width.as_mm());
-        let height = Self::read_mm(&root, KEY_HEIGHT_MM).unwrap_or(default.height.as_mm());
-        DocumentSize::new(Length::from_mm(width), Length::from_mm(height))
+        let valid = |value: Option<f64>| {
+            value.filter(|mm| (MIN_DOCUMENT_MM..=MAX_DOCUMENT_MM).contains(mm))
+        };
+        match (
+            valid(Self::read_mm(&root, KEY_WIDTH_MM)),
+            valid(Self::read_mm(&root, KEY_HEIGHT_MM)),
+        ) {
+            (Some(width), Some(height)) => {
+                DocumentSize::new(Length::from_mm(width), Length::from_mm(height))
+            }
+            _ => default,
+        }
+    }
+
+    /// The unit lengths are shown in. Absent or unknown reads as mm
+    /// (`specs/0015-document-size-and-rulers/` criteria 36 and 38).
+    #[must_use]
+    pub fn display_unit(&self) -> DisplayUnit {
+        let root = self.loro.get_map(ROOT_MAP);
+        match root.get(KEY_DISPLAY_UNIT).map(|v| v.get_deep_value()) {
+            Some(LoroValue::String(symbol)) => {
+                DisplayUnit::from_symbol(&symbol).unwrap_or_default()
+            }
+            _ => DisplayUnit::default(),
+        }
     }
 
     /// This document's underlying Loro replica, for [`crate::paths`]'s
@@ -271,6 +302,7 @@ impl Document {
         let view = DocumentJsonView {
             format_version: CURRENT_FORMAT_VERSION,
             size: self.size(),
+            display_unit: self.display_unit(),
             objects,
         };
         serde_json::to_vec_pretty(&view).map_err(|_| SaveError::Encode)
@@ -288,6 +320,7 @@ impl Document {
 struct DocumentJsonView {
     format_version: u32,
     size: DocumentSize,
+    display_unit: DisplayUnit,
     objects: Vec<ObjectJson>,
 }
 
