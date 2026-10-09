@@ -476,6 +476,34 @@ pub enum PathEditError {
     /// or less would make the file refuse to open.
     #[error("a stroke width must be a finite number greater than zero")]
     InvalidStrokeWidth,
+    /// `Document::extend_path`, `connect_paths` or `close_paths` refused: the path to grow is
+    /// closed, compound, the same object as the one to absorb, or the absorbed one is closed or
+    /// compound (`specs/0034-pen-path-extension`).
+    #[error("this path cannot be extended or connected")]
+    NotExtendable,
+    /// `Document::close_paths` refused: the closed result would have fewer than three anchors.
+    #[error("a closed path needs at least three nodes")]
+    TooFewToClose,
+    /// A path command carried an anchor id that is used twice, or already used by an object of the
+    /// document: anchor ids are unique across the whole document.
+    #[error("an anchor id is used twice")]
+    DuplicateAnchorId,
+}
+
+/// `anchors` in the opposite order, each anchor's incoming and outgoing handle swapped: the same
+/// outline walked the other way (`specs/0006-path-merge-split-and-node-types` criterion 9, the
+/// rule of Join; `0034-pen-path-extension` criteria 4 and 8).
+#[must_use]
+pub fn reversed_anchors(anchors: &[NewAnchor]) -> Vec<NewAnchor> {
+    anchors
+        .iter()
+        .rev()
+        .map(|anchor| NewAnchor {
+            handle_in: anchor.handle_out,
+            handle_out: anchor.handle_in,
+            ..*anchor
+        })
+        .collect()
 }
 
 #[cfg(test)]
