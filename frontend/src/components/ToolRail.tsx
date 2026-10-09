@@ -144,6 +144,7 @@ export function ToolRail({
           active={tool === "node"}
           label="Node tool"
           shortcut="N"
+          hint="Drag a segment to bend it. Shift: one axis"
           icon={<MousePointer2 size={20} />}
           onSelect={onSelect}
           onReturnFocus={onReturnFocus}

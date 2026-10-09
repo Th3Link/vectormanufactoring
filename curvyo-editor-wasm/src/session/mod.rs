@@ -49,7 +49,7 @@ mod transform_entry;
 use curvyo_document_core::{Document, NodeId, ObjectSnapshot, OpenError, Point, SaveError, StopId};
 use curvyo_ui_core::{
     AnchorIdMinter, EllipseTool, Hit, Modifiers, NodeTool, ObjectSelection, PenTool,
-    PolygonStarTool, RectangleTool, SelectTool, StyleEditor, Viewport, hit_test,
+    PolygonStarTool, RectangleTool, SelectTool, StyleEditor, Viewport,
 };
 
 pub use boolean::BooleanOutcome;
@@ -333,7 +333,11 @@ impl Session {
     /// primitives`]: both a path and a primitive are "any object" to
     /// `hit_test_object`/`object_bounds`.
     fn objects(&self) -> Vec<ObjectSnapshot> {
-        if self.tool == Tool::Select && self.select.drag_in_flight() {
+        // A Select or Node-tool drag reuses one read of the document for all its frames: nothing
+        // changes the document while it runs (`0031` criterion 17).
+        if (self.tool == Tool::Select && self.select.drag_in_flight())
+            || (self.tool == Tool::Node && self.node.drag_in_flight())
+        {
             return self
                 .drag_objects
                 .borrow_mut()
@@ -415,15 +419,13 @@ impl Session {
                 self.select_hover(point, self.held);
             }
             Tool::Node => {
-                let paths = self.paths();
-                self.hovered = hit_test(
-                    &paths,
-                    self.node.selection(),
-                    point,
-                    self.point_tolerance(),
-                    self.handle_tolerance(),
-                    self.segment_tolerance(),
-                );
+                // A bend in flight follows the pointer; no hover test runs during any drag
+                // (`0031` criterion 17).
+                self.node.pointer_moved(point, shift);
+                if !self.node.drag_in_flight() {
+                    let paths = self.paths();
+                    self.hovered = self.hovered_segment_hit(&paths, point);
+                }
             }
             Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
                 self.shape_pointer_move(point, Modifiers::new(shift, constrain));
@@ -464,6 +466,7 @@ impl Session {
                     .pointer_up(&mut self.minter, &self.document, point, threshold);
             }
             Tool::Node => {
+                self.node.pointer_moved(point, shift);
                 self.node.pointer_up(&self.document, point);
             }
             Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {

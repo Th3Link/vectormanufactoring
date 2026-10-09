@@ -6,9 +6,9 @@
 //! are (`docs/technical-debt.md`, "`Session` is one module past the size
 //! limit").
 
-use curvyo_document_core::{AnchorKind, ObjectSnapshot, Point};
+use curvyo_document_core::{AnchorKind, ObjectSnapshot, PathSnapshot, Point};
 use curvyo_render_core::{DecorationInput, Hovered as RenderHovered};
-use curvyo_ui_core::{Hit, NodeToolbarState};
+use curvyo_ui_core::{BendResolution, Hit, LiveNodeDrag, NodeToolbarState, segment_is_bendable};
 
 use super::{Session, Tool};
 
@@ -44,11 +44,23 @@ impl Session {
         let Some(cursor) = self.pointer_position else {
             return;
         };
-        let Some(live) = self.node.live_drag(cursor) else {
+        let Some(live) = self.node.live_drag(cursor, self.held.shift) else {
             return;
         };
         match live {
-            curvyo_ui_core::LiveNodeDrag::Nodes { positions } => {
+            LiveNodeDrag::Bend(bend) => {
+                // Only the two end anchors' handles move, and only the decorations read this
+                // path: the artwork stays as committed (black old, `0031` criterion 16).
+                for end in bend.ends {
+                    if let Some(snapshot) = paths.iter_mut().find(|p| p.id == bend.path)
+                        && let Some(anchor) = snapshot.anchors.iter_mut().find(|a| a.id == end.id)
+                    {
+                        anchor.handle_in = end.handle_in;
+                        anchor.handle_out = end.handle_out;
+                    }
+                }
+            }
+            LiveNodeDrag::Nodes { positions } => {
                 for (path, id, point) in positions {
                     if let Some(snapshot) = paths.iter_mut().find(|p| p.id == path)
                         && let Some(anchor) = snapshot.anchors.iter_mut().find(|a| a.id == id)
@@ -57,7 +69,7 @@ impl Session {
                     }
                 }
             }
-            curvyo_ui_core::LiveNodeDrag::Handle {
+            LiveNodeDrag::Handle {
                 path,
                 anchor,
                 handle_in,
@@ -155,10 +167,77 @@ impl Session {
         state
     }
 
+    /// The segment bend in flight past the drag threshold, as the pointer now would resolve it.
+    pub(super) fn live_bend(&self) -> Option<BendResolution> {
+        if self.tool != Tool::Node {
+            return None;
+        }
+        let cursor = self.pointer_position?;
+        match self.node.live_drag(cursor, self.held.shift)? {
+            LiveNodeDrag::Bend(bend) => Some(bend),
+            LiveNodeDrag::Nodes { .. } | LiveNodeDrag::Handle { .. } => None,
+        }
+    }
+
+    /// The blue half of a bend (`0031` criterion 16): every segment the bend changes as a
+    /// two-anchor open path with the bent path's own style, for the live preview outline. Empty
+    /// when no bend runs. The cost is the number of changed segments (at most three), not the
+    /// path's node count.
+    pub(super) fn bend_preview_objects(&self, objects: &[ObjectSnapshot]) -> Vec<ObjectSnapshot> {
+        let Some(bend) = self.live_bend() else {
+            return Vec::new();
+        };
+        let Some(ObjectSnapshot::Path(path)) = objects.iter().find(|o| o.id() == bend.path) else {
+            return Vec::new();
+        };
+        bend.changed_segments
+            .iter()
+            .map(|segment| {
+                ObjectSnapshot::Path(PathSnapshot {
+                    id: path.id,
+                    closed: false,
+                    style: path.style.clone(),
+                    anchors: segment.to_vec(),
+                    extra_subpaths: Vec::new(),
+                    rotation: path.rotation,
+                })
+            })
+            .collect()
+    }
+
+    /// The segment under the pointer if a press there would bend it: the Node tool's hit test
+    /// found a segment (so the pointer is outside every node and handle radius) and it has a
+    /// grab point. `None` during any drag.
+    pub(super) fn hovered_segment_hit(&self, paths: &[PathSnapshot], point: Point) -> Option<Hit> {
+        if self.node.drag_in_flight() {
+            return None;
+        }
+        let hit = curvyo_ui_core::hit_test(
+            paths,
+            self.node.selection(),
+            point,
+            self.point_tolerance(),
+            self.handle_tolerance(),
+            self.segment_tolerance(),
+        );
+        match hit {
+            Some(Hit::Segment { path, start, end })
+                if !paths
+                    .iter()
+                    .find(|p| p.id == path)
+                    .is_some_and(|p| segment_is_bendable(p, start, end)) =>
+            {
+                None
+            }
+            other => other,
+        }
+    }
+
     pub(super) fn decoration_input(&self) -> DecorationInput {
         if self.tool != Tool::Node {
             return DecorationInput::default();
         }
+        let bend = self.live_bend();
         let selection = self.node.selection();
         // `node_pairs` directly, not `nodes()` zipped with `path()`: the
         // selection can now genuinely span several path objects
@@ -167,17 +246,28 @@ impl Session {
         // that case — zipping against it would silently render none of
         // the selected nodes as selected instead of all of them.
         let selected_nodes = selection.node_pairs().to_vec();
-        let selected_segment = selection.segment_with_path();
-        let hovered = self.hovered.and_then(|hit| match hit {
-            Hit::Node { path, anchor } => Some(RenderHovered::Node(path, anchor)),
-            Hit::Handle { path, anchor, slot } => Some(RenderHovered::Handle(path, anchor, slot)),
-            Hit::Segment { .. } => None,
+        // The selected-segment overlay of the dragged segment is not drawn while the bend runs
+        // (`0031` criterion 16); it returns on release and on cancel.
+        let selected_segment = if bend.is_some() {
+            None
+        } else {
+            selection.segment_with_path()
+        };
+        let hovered = self.hovered.map(|hit| match hit {
+            Hit::Node { path, anchor } => RenderHovered::Node(path, anchor),
+            Hit::Handle { path, anchor, slot } => RenderHovered::Handle(path, anchor, slot),
+            Hit::Segment { path, start, end } => RenderHovered::Segment(path, start, end),
         });
+        let handle_nodes = bend
+            .iter()
+            .flat_map(|bend| bend.ends.iter().map(|end| (bend.path, end.id)))
+            .collect();
         DecorationInput {
             show_nodes: true,
             selected_nodes,
             selected_segment,
             hovered,
+            handle_nodes,
         }
     }
 }
