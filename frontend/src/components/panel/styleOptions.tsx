@@ -5,11 +5,19 @@ import {
   CapIcon,
   DashSample,
   JoinIcon,
+  MarkerIcon,
   NoPaintIcon,
   SolidPaintIcon,
 } from "@/components/panel/StyleIcons";
 import type { ToggleOption } from "@/components/ui/toggle-group";
-import type { CapName, DashName, JoinName } from "@/hooks/useStylePanel";
+import type {
+  CapName,
+  DashName,
+  JoinName,
+  MarkerPlaceName,
+  MarkerShapeName,
+  MarkerSlotName,
+} from "@/hooks/useStylePanel";
 
 export const PAINT_OPTIONS: readonly ToggleOption<"none" | "solid">[] = [
   { value: "none", label: "No stroke", tooltip: "No stroke", icon: <NoPaintIcon /> },
@@ -62,5 +70,45 @@ export const DASH_OPTIONS: readonly ToggleOption<DashName>[] = [
     label: "Dash-dot",
     tooltip: "Dash-dot: 6 3 1 3",
     icon: <DashSample name="dash-dot" />,
+  },
+];
+
+/** The None / Arrow / Dot choices of one marker slot. */
+export function markerOptions(slot: MarkerSlotName): readonly ToggleOption<MarkerShapeName>[] {
+  const side = slot === "start" ? "Points away from the path. " : "";
+  return [
+    {
+      value: "none",
+      label: "None",
+      tooltip: "No marker",
+      icon: <MarkerIcon slot={slot} shape="none" />,
+    },
+    {
+      value: "arrow",
+      label: "Arrow",
+      tooltip: `Arrow: a filled triangle, 4 x the stroke width long. ${side}`.trim(),
+      icon: <MarkerIcon slot={slot} shape="arrow" />,
+    },
+    {
+      value: "dot",
+      label: "Dot",
+      tooltip: "Dot: a filled circle, 3 x the stroke width across",
+      icon: <MarkerIcon slot={slot} shape="dot" />,
+    },
+  ];
+}
+
+export const PLACE_OPTIONS: readonly ToggleOption<MarkerPlaceName>[] = [
+  {
+    value: "spaced",
+    label: "Spaced",
+    tooltip: "Evenly spaced along the whole path",
+    icon: <span className="text-sm">Spaced</span>,
+  },
+  {
+    value: "nodes",
+    label: "At nodes",
+    tooltip: "On every node between the ends. Count is not used",
+    icon: <span className="text-sm">At nodes</span>,
   },
 ];

@@ -10,10 +10,19 @@ export type StyleFieldName =
   | "stroke-color"
   | "stroke-opacity"
   | "fill-color"
-  | "fill-opacity";
+  | "fill-opacity"
+  | "marker-count";
 
 /** A property edited by a value field (`curvyo-ui-core::ValueField`). */
-export type ValueFieldName = "stroke-width" | "stroke-opacity" | "fill-opacity";
+export type ValueFieldName =
+  | "stroke-width"
+  | "stroke-opacity"
+  | "fill-opacity"
+  | "marker-count";
+/** A marker slot and the shape it holds (`curvyo-ui-core::MarkerSlot`). */
+export type MarkerSlotName = "start" | "mid" | "end";
+export type MarkerShapeName = "none" | "arrow" | "dot";
+export type MarkerPlaceName = "spaced" | "nodes";
 /** The rounding grid of a value field: Shift is coarse, Ctrl (Cmd) is fine. */
 export type GridName = "normal" | "coarse" | "fine";
 
@@ -29,6 +38,21 @@ export type CapName = "butt" | "round" | "square";
  * all (they are removed while every edited paint is off). */
 export interface StyleView {
   subject: string;
+  /** The Markers group is shown (stroke on, a path in the selection). */
+  markersShown: boolean;
+  markerStart: MarkerShapeName | "mixed";
+  markerMid: MarkerShapeName | "mixed";
+  markerEnd: MarkerShapeName | "mixed";
+  markerPlaceShown: boolean;
+  markerPlace: MarkerPlaceName | "mixed";
+  markerCountShown: boolean;
+  markerCountText: string;
+  markerCount: number;
+  markerCountMixed: boolean;
+  markerCountBar: number;
+  markerCountResettable: boolean;
+  /** Start or End is set and every selected path is closed. */
+  markerClosedNote: boolean;
   /** The paint the eyedropper is picking for, or empty. */
   pickTarget: "stroke" | "fill" | "";
   /** Changes when the edited objects change. */
@@ -74,6 +98,19 @@ export interface StyleView {
 const DISABLED_VIEW: StyleView = {
   subject: "",
   pickTarget: "",
+  markersShown: false,
+  markerStart: "none",
+  markerMid: "none",
+  markerEnd: "none",
+  markerPlaceShown: false,
+  markerPlace: "spaced",
+  markerCountShown: false,
+  markerCountText: "1",
+  markerCount: 1,
+  markerCountMixed: false,
+  markerCountBar: 0,
+  markerCountResettable: false,
+  markerClosedNote: false,
   scopeKey: "",
   strokePaint: "on",
   strokeRows: true,
@@ -118,6 +155,19 @@ function readView(session: WasmSession | null): StyleView {
   const view: StyleView = {
     subject: raw.subject,
     pickTarget: raw.pick_target as StyleView["pickTarget"],
+    markersShown: raw.markers_shown,
+    markerStart: raw.marker_start as StyleView["markerStart"],
+    markerMid: raw.marker_mid as StyleView["markerMid"],
+    markerEnd: raw.marker_end as StyleView["markerEnd"],
+    markerPlaceShown: raw.marker_place_shown,
+    markerPlace: raw.marker_place as StyleView["markerPlace"],
+    markerCountShown: raw.marker_count_shown,
+    markerCountText: raw.marker_count_text,
+    markerCount: raw.marker_count,
+    markerCountMixed: raw.marker_count_mixed,
+    markerCountBar: raw.marker_count_bar,
+    markerCountResettable: raw.marker_count_resettable,
+    markerClosedNote: raw.marker_closed_note,
     scopeKey: raw.scope_key,
     strokePaint: raw.stroke_paint as StyleView["strokePaint"],
     strokeRows: raw.stroke_rows,
@@ -196,6 +246,9 @@ export interface StylePanelApi {
   beginPick: (target: "stroke" | "fill") => void;
   /** Ends picking and writes nothing. */
   endPick: () => void;
+  /** A marker slot choice; one commit to the paths of the selection. */
+  setMarkerShape: (slot: MarkerSlotName, shape: MarkerShapeName) => void;
+  setMarkerPlace: (place: MarkerPlaceName) => void;
   setStrokeJoin: (name: JoinName) => void;
   setStrokeCap: (name: CapName) => void;
 }
@@ -284,6 +337,8 @@ export function useStylePanel(editor: EditorHandle): StylePanelApi {
     },
     beginPick: (target) => act((s) => s.begin_colour_pick(target)),
     endPick: () => act((s) => s.end_colour_pick()),
+    setMarkerShape: (slot, shape) => act((s) => s.set_marker_shape(slot, shape)),
+    setMarkerPlace: (place) => act((s) => s.set_marker_place(place)),
     setStrokeJoin: (name) => act((s) => s.set_stroke_join(name)),
     setStrokeCap: (name) => act((s) => s.set_stroke_cap(name)),
   };

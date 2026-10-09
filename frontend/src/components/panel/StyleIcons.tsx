@@ -1,4 +1,4 @@
-import type { CapName, DashName, JoinName } from "@/hooks/useStylePanel";
+import type { CapName, DashName, JoinName, MarkerShapeName, MarkerSlotName } from "@/hooks/useStylePanel";
 
 const SVG_PROPS = {
   width: 16,
@@ -76,6 +76,26 @@ export function DashSample({ name }: { name: DashName }) {
         strokeWidth="2"
         strokeDasharray={SAMPLE_DASHES[name]}
       />
+    </svg>
+  );
+}
+
+/** The glyph of a marker choice (`specs/0018-stroke-markers` UX notes, section
+ * 2): a line with the shape where the slot puts it. A drawing in a fixed
+ * proportion, not scaled by the stroke width. The Start arrow points outward. */
+export function MarkerIcon({ slot, shape }: { slot: MarkerSlotName; shape: MarkerShapeName }) {
+  const centre = slot === "start" ? 3.5 : slot === "mid" ? 8 : 12.5;
+  const arrow =
+    slot === "start"
+      ? "M1 8 L7 5.5 L7 10.5 Z"
+      : slot === "mid"
+        ? "M11 8 L5 5.5 L5 10.5 Z"
+        : "M15 8 L9 5.5 L9 10.5 Z";
+  return (
+    <svg {...SVG_PROPS}>
+      <line x1="1" y1="8" x2="15" y2="8" />
+      {shape === "arrow" && <path d={arrow} fill="currentColor" strokeWidth={1} />}
+      {shape === "dot" && <circle cx={centre} cy="8" r="2.5" fill="currentColor" strokeWidth={1} />}
     </svg>
   );
 }

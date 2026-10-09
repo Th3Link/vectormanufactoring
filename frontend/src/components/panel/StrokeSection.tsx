@@ -3,6 +3,7 @@ import { useRef } from "react";
 import { ColourBlock } from "@/components/panel/ColourBlock";
 import { ColourPicker } from "@/components/panel/ColourPicker";
 import { DashRows } from "@/components/panel/DashRows";
+import { MarkerRows } from "@/components/panel/MarkerRows";
 import { PaintRow } from "@/components/panel/PaintRow";
 import { StyleRow } from "@/components/panel/StyleRow";
 import { CAP_OPTIONS, JOIN_OPTIONS, PAINT_OPTIONS } from "@/components/panel/styleOptions";
@@ -30,6 +31,7 @@ export function StrokeSection({ panel, onReturnFocus }: StrokeSectionProps) {
   const { view } = panel;
   const section = useRef<HTMLDivElement>(null);
   const rowsFocus = useRowsFocus(view.strokeRows, section);
+  const markersFocus = useRowsFocus(view.markersShown, section);
   return (
     <div ref={section} className="flex flex-col gap-2">
       <PaintRow
@@ -115,6 +117,11 @@ export function StrokeSection({ panel, onReturnFocus }: StrokeSectionProps) {
               onReturnFocus={onReturnFocus}
             />
           </StyleRow>
+          {view.markersShown && (
+            <div className="contents" {...markersFocus}>
+              <MarkerRows panel={panel} onReturnFocus={onReturnFocus} />
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -84,22 +84,22 @@ crates); the full gate runs before the PR is opened. Criteria are numbered as in
 
 ### Milestone 5: marker model and format (0018 criteria 3, 4, 6, 10, 22, 23, 25 to 29)
 
-- [ ] 5.1 `document-core`: `MarkerShape`, `MarkerPlace`, `MarkerCount`, `Markers`
+- [x] 5.1 `document-core`: `MarkerShape`, `MarkerPlace`, `MarkerCount`, `Markers`
   in `Stroke`; five registers in the codec; strict open validation; `StyleEdit`
   marker variants with `StyleEditError::NotAPath`; no new format version (9 is
   shared); fixture `markers_v9.curvyo`; older fixtures open with every slot None.
 
 ### Milestone 6: marker placement and drawing (0018 criteria 4 to 5, 7 to 17, 19)
 
-- [ ] 6.1 `render-core`: `marker_place.rs` (anchors, tangents, spaced fractions),
+- [x] 6.1 `render-core`: `marker_place.rs` (anchors, tangents, spaced fractions),
   `markers.rs` (arrow, dot, tessellation), the stroke layer rule, `MarkerBudget`,
   the benchmark extension, debt note.
 
 ### Milestone 7: marker panel (0018 criteria 1 to 3, 18 to 20, 22, 24, 30 to 32)
 
-- [ ] 7.1 `ui-core`: `ValueScale::MarkerCount`, panel state (Markers group, Place,
+- [x] 7.1 `ui-core`: `ValueScale::MarkerCount`, panel state (Markers group, Place,
   Count, mixed over paths, the closed-path line flag); `editor-wasm` calls.
-- [ ] 7.2 Frontend: Markers rows under Cap, Place group, Count value field,
+- [x] 7.2 Frontend: Markers rows under Cap, Place group, Count value field,
   muted closed-path line.
 
 ## Validation

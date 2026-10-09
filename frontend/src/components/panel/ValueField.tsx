@@ -29,6 +29,8 @@ interface ValueFieldProps {
   valueNow: number;
   /** The unit spelled out for `aria-valuetext` ("millimetres", "percent"). */
   unitWords: string;
+  /** The smallest value, for `aria-valuemin` (0 unless the scale starts higher). */
+  valueMin?: number;
   /** The largest value that may be typed, for `aria-valuemax`. */
   typedMax: number;
   /** The reset target as text ("0.25 mm", "100 %"). */
@@ -62,6 +64,7 @@ export function ValueField({
   unit,
   valueNow,
   unitWords,
+  valueMin = 0,
   typedMax,
   defaultText,
   messages,
@@ -140,7 +143,7 @@ export function ValueField({
             role="spinbutton"
             tabIndex={0}
             aria-label={name}
-            aria-valuemin={0}
+            aria-valuemin={valueMin}
             aria-valuemax={typedMax}
             aria-valuenow={mixed ? undefined : valueNow}
             aria-valuetext={mixed ? "Mixed" : `${text} ${unitWords}`}
