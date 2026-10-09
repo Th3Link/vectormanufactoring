@@ -362,17 +362,34 @@ assumptions are found by audit, not by the compiler", with this table.
   offenders; it is valid only while the Select tool is active and the selection is the one the
   refusal was made for, so a selection or tool change removes it without a call from the host. The
   host also calls `clear_boolean_refusal` when the notice ends. Not stored, not selectable.
-- **Out of range** (coordinates the 0.001 mm grid cannot hold) has no text in the specification.
-  Written: "<Operation> cannot handle objects this large or this far from the page. Nothing was
-  changed." The customer or UX reviewer may reword it.
+- **Out of range** (a coordinate or handle end that is not finite or beyond 10 km from the point
+  0, 0): refused with "<Operation> works only within 10 km of the point 0, 0. 1 of 3 selected
+  objects reaches further. Nothing was changed." (architect's wording, lead decision; the PO aligns
+  criteria 15 to 17). Only position triggers it, and a size cannot: the check is on every
+  coordinate of the outline, so an object that is too large has a corner beyond the bound. The
+  bound is one constant, `curvyo_geometry_core::MAX_COORDINATE_MM`, which `ui-core`'s transform
+  commit also uses: what the editor may write is what the kernel can read.
+- **Typed entry, Node selection.** `apply_boolean` returns `Ignored` while a typed entry or a drag
+  is open (the entry is not discarded); an entry can only be open with one object selected, so in
+  practice the command is dimmed then. A successful command clears the Node tool's node selection,
+  whose operands are gone (a plain Delete still leaves it on `main`; not this story's).
+- **Commit labels.** `boolean_<op>` is persisted in project files; `boolean_command.rs` pins the
+  five strings and that a refusal writes nothing. A big result is split by Loro into several
+  changes with the same message and consecutive commits with one label can merge, so the undo slice
+  must not count `len_changes()` (`docs/technical-debt.md`).
+- **Criterion 43 in the wasm build.** `curvyo-geometry-core/tests/boolean_golden_wasm.rs` compares
+  every golden fixture natively and, in the CI job `boolean-wasm-golden`, on `wasm32-unknown-unknown`
+  in Node through `wasm-bindgen-test-runner` (`wasm-bindgen-test`, a wasm32-only dev-dependency of
+  `curvyo-geometry-core`, MIT OR Apache-2.0). `proptest` became a native-only dev-dependency.
 - **Compound path texts.** "Compound path" is the Rust subject line (`style_scope::kind_name`).
   `NodeToolbarState.compound_only` and the double-click code `"compound_path"` come from Rust; the
   sentence of criterion 38 is the one constant `COMPOUND_NODES_TEXT`. The Markers block rule of the
   design system needs no change: there is no Markers UI yet.
-- **Frontend shape.** `BooleanCommands.tsx` (section, tooltips, notice) and `BooleanGlyphs.tsx`
-  are hosted by `ToolRail`; `useBooleanCommands` holds availability, busy and the notice. The
-  `Tool` enum does not grow. `useEditorSession` gained only `applyBoolean`, the `compoundOnly`
-  field and the compound flag of the edit hint.
+- **Frontend shape.** `BooleanCommands.tsx` (the section), `BooleanButton.tsx`, `BooleanNotice.tsx`
+  and `BooleanGlyphs.tsx` are hosted by `ToolRail`; `useBooleanCommands` holds availability and the
+  busy state, `useActionNotice` the lifetime of a notice. The `Tool` enum does not grow.
+  `useEditorSession` gained only `applyBoolean`, the `compoundOnly` field and the compound flag of
+  the edit hint.
 
 ### 2026-10-09: where the code lives
 

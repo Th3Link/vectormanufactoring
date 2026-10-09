@@ -268,7 +268,7 @@ What the interface says: before the press, the note line, "No undo yet." and the
 
 ### 9. Long operations
 
-The budgets (criteria 44 to 47) are the control; no progress bar, no cancel (out of scope). From the press until the repainted result: cursor `wait` over the whole window, `aria-busy` on the toolbar, the pressed button keeps its pressed ground, all other presses, keys and activations are ignored (including a second press on the same button and Escape). The busy state is painted before the kernel call starts (yield one frame). If a call runs longer than 150 ms off the UI thread, the notice slot shows "Union: working..." (`role="status"`), replaced by the result notice. Other buttons are not dimmed while busy: dimming means "not enough selected or not the Select tool" and nothing else.
+The budgets (criteria 44 to 47) are the control; no progress bar, no cancel (out of scope). From the press until the repainted result: cursor `wait` over the whole window, `aria-busy` on the toolbar, the pressed button keeps its pressed ground, all other presses, keys and activations are ignored (including a second press on the same button and Escape). The busy state is painted before the kernel call starts (yield two frames: one `requestAnimationFrame` runs before the paint, not after it). If a call runs longer than 150 ms off the UI thread, the notice slot shows "Union: working..." (`role="status"`), replaced by the result notice. Other buttons are not dimmed while busy: dimming means "not enough selected or not the Select tool" and nothing else.
 
 ### 10. Keyboard map and accessibility
 

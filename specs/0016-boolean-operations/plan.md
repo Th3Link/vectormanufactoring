@@ -120,6 +120,12 @@ out). No frontend change: the Node-bar sentence, the hint chip and the Propertie
   nodes to the repainted draw list (`curvyo-editor-wasm/tests/boolean_interactivity.rs`, in the
   `boolean-budgets` CI job) (AC 46, 47).
 
+- [x] 20a. Review of PR 73: criterion 43 test in the wasm build (`boolean_golden_wasm.rs`, CI job
+  `boolean-wasm-golden`), commit-label test (criterion 28), technical-debt entries (UI thread,
+  `len_changes`), design-system corrections, out-of-range wording, typed-entry gate, node selection
+  cleared, subject line "N paths", `plan_boolean` split, shared `MAX_COORDINATE_MM`, frontend split
+  (`useActionNotice`, `BooleanButton`, `BooleanNotice`).
+
 ### PR 4: preview (later, optional; question 6 default A)
 
 - [ ] 21. Hover-intent and keyboard-focus preview, 2,000-node cap, "Would be empty" tooltip note

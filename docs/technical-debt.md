@@ -36,19 +36,53 @@ fixtures, the fixed-seed property tests and the regression tests in
 
 **Resolution:** none planned. Revisit if a defect shows up in real files.
 
-## The boolean kernel's wasm32 results are argued equal, not tested
+## The boolean kernel's wasm32 results are compared by a Node test, not in a browser
 
-Criterion 43 of `specs/0016-boolean-operations` asks for the same result in the
-browser build as on the desktop. CI compares the golden files on Linux, macOS
-(aarch64) and Windows (`curvyo-geometry-core/tests/fixtures/boolean/`); the
-`core-wasm32` jobs only build and lint. The argument that wasm32 agrees is
-sound: after the snap everything is integer arithmetic, and the flattening and
-the cleanup use only IEEE `+ - * /`, `sqrt` and `round`, which Rust does not
-fuse into multiply-adds.
+Criterion 43 of `specs/0016-boolean-operations` asks for the same result in the browser build as on
+the desktop. `curvyo-geometry-core/tests/boolean_golden_wasm.rs` embeds the golden fixtures
+(`tests/fixtures/boolean/`) and compares every result exactly, as grid integers. `cargo test`
+runs it natively on Linux, macOS (aarch64) and Windows; the CI job `boolean-wasm-golden` runs the
+same file on `wasm32-unknown-unknown` in Node through `wasm-bindgen-test-runner`. Both compare
+against the same files, so a result that differs by one grid step on wasm32 fails the job.
 
-**Resolution:** PR 3 of the boolean slice (command and UI) runs the golden inputs
-through the wasm build in `curvyo-editor-wasm` and compares them with the
-fixtures, for example in the frontend test run.
+What is not covered: a real browser engine (V8 in Node and the browsers' wasm engines agree on IEEE
+arithmetic, and the kernel uses only `+ - * /`, `sqrt` and `round` after the integer snap, so none is
+expected to differ), and the other targets of the wasm facade (`curvyo-editor-wasm` has no wasm
+test runner; its logic is tested natively).
+
+**Resolution:** none planned. Revisit if a browser-only difference shows up in real use; then add
+a Playwright or `wasm-bindgen-test` browser run of the same file.
+
+## The boolean command runs on the UI thread
+
+The kernel call of a boolean operation blocks the browser's UI thread (and the desktop's webview
+thread). Criterion 47a of `specs/0016-boolean-operations` asks for a "working..." notice for a call
+that runs over 150 ms off the UI thread; there is no such call, and on the UI thread no text could
+be painted anyway. What the command does instead: it sets the busy state (wait cursor, `aria-busy`,
+presses and keys swallowed), lets the browser paint two frames, then runs the call.
+
+Why accepted: the measured cost is small. Two operands of 1,000 nodes take about 9.5 ms natively
+from press to the repainted draw list, 1,000 rectangles about 9 ms, two operands of 10,000 nodes
+about 70 to 100 ms natively (up to about twice that in the browser); criteria 44 to 46 bound it,
+and progress and cancel are out of scope. A worker needs a second wasm instance and a transfer of
+the outlines, which no story needs yet (`CLAUDE.md` §5, YAGNI).
+
+**Trigger:** a CI-measured operation over 150 ms in the browser build, or the PR 4 preview
+(`specs/0016-boolean-operations/` P1 to P3) at 2,000 operand nodes taking longer than one frame.
+**Resolution:** run the kernel call of `plan_boolean` in a Web Worker with its own wasm instance,
+passing the operands' outlines; the write (`Document::replace_with_path`) and the selection stay
+on the UI thread, so the session does not change owner. Then the "working..." notice of 47a applies.
+
+## A boolean operation is one commit, but one commit is not one Loro change
+
+`Session::apply_boolean` writes one commit per operation with the label `boolean_<op>`
+(`curvyo-editor-wasm/tests/boolean_command.rs` pins the label and the count). The Loro oplog is not
+one change per commit: a large result (about 1,290 operations and more) is split into several
+changes carrying the same message, and consecutive commits with the same label can merge into one
+change. The undo slice must therefore find an operation by its commit boundaries and message, and
+must not count `len_changes()` to see how many operations were made.
+
+**Resolution:** `undo-redo` decides how it groups changes (its own ADR); this entry is the warning.
 
 ## One-outline assumptions are found by audit, not by the compiler
 
