@@ -197,7 +197,7 @@ Left: "x: 12.3  y: 45.6" followed by the unit once, "mm", fixed decimals so the 
 ## As-built notes
 
 - **PR 1 (model), 2026-10-09.** Resize and fit are atomic for one editor. Between collaborating peers they merge field by field (width, height and each object position are separate registers), so two concurrent resizes of different axes can leave the objects centred on neither peer's intent. Accepted as a collaboration limit while sync is not built; tracked in `docs/technical-debt.md` ("Resize and fit merge per field across peers").
-- **Retyping shown text (criteria 16 and 35).** A typed side within half a unit of the last shown decimal of a limit (mm 0.0005, cm and in 0.00005 of their unit) is clamped onto the limit, so the text the field shows for the largest size ("3937.0079" in) is accepted when typed back. The 1e-9 mm tolerance of criterion 16 applies in the model (`Document::resize`); the parser is more generous by this display rounding only.
+- **Retyping shown text (criteria 16 and 35).** The text a field shows for a limit is accepted when typed back and clamped onto the limit. This matters in inches only: the largest size shows as "3937.0079" in, 0.0007 mm over 100 000 mm. Any other value past a limit is refused as criterion 16 says (1e-9 mm tolerance).
 
 ## Links
 

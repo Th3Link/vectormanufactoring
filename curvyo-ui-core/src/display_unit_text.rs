@@ -16,21 +16,23 @@ use crate::transform_entry::parse_entry_number;
 /// (criteria 15, 16 and 35). The text is trimmed, may use a decimal point or
 /// a decimal comma, and carries no unit: "21cm" is not a number. A value
 /// outside 1 mm to 100 000 mm (converted from `unit`) is refused, except
-/// within half a unit of the last decimal the field shows
-/// ([`format_field_length`]) of a limit, where it is clamped onto it. That
-/// makes the text the app shows for the largest size, "3937.0079" in, accept
-/// when it is typed back, although it is 0.0007 mm over the limit. `None` is
-/// the "Enter a number from ..." case of [`document_side_message`].
+/// within 1e-9 mm of a limit, where it is clamped onto it, and except the text
+/// the field itself shows for a limit ([`format_field_length`]), which is
+/// clamped onto that limit too. The second case matters in inches only: the
+/// largest size shows as "3937.0079" in, 0.0007 mm over the limit, and must be
+/// accepted when typed back. `None` is the "Enter a number from ..." case of
+/// [`document_side_message`].
 #[must_use]
 pub fn parse_document_side(text: &str, unit: DisplayUnit) -> Option<Length> {
     let value = parse_entry_number(text, false)?;
-    let tolerance = field_precision(unit).1 * unit.mm_per_unit();
-    let mm = Length::from_unit(value, unit).as_mm();
-    let snapped = [MIN_DOCUMENT_MM, MAX_DOCUMENT_MM]
+    let shown_limit = |limit_mm: f64| {
+        parse_entry_number(&format_field_length(Length::from_mm(limit_mm), unit), false)
+    };
+    let limit = [MIN_DOCUMENT_MM, MAX_DOCUMENT_MM]
         .into_iter()
-        .find(|limit| (mm - limit).abs() <= tolerance)
-        .unwrap_or(mm);
-    validated_document_side(Length::from_mm(snapped)).ok()
+        .find(|&limit| shown_limit(limit).is_some_and(|shown| (value - shown).abs() <= 1e-9));
+    let side = limit.map_or_else(|| Length::from_unit(value, unit), Length::from_mm);
+    validated_document_side(side).ok()
 }
 
 /// The validation message for a refused Width or Height, with the limits in
@@ -64,16 +66,14 @@ pub fn content_too_large_message(unit: DisplayUnit) -> String {
 /// without trailing zeros (criterion 35). Display only.
 #[must_use]
 pub fn format_field_length(length: Length, unit: DisplayUnit) -> String {
-    decimal_text(length.in_unit(unit), field_precision(unit).0)
+    decimal_text(length.in_unit(unit), field_decimals(unit))
 }
 
-/// What a Width or Height field shows in `unit`: the number of decimals, and
-/// half a unit of the last one (the most a shown value can differ from the
-/// stored one).
-fn field_precision(unit: DisplayUnit) -> (usize, f64) {
+/// How many decimals a Width or Height field shows in `unit`.
+fn field_decimals(unit: DisplayUnit) -> usize {
     match unit {
-        DisplayUnit::Mm => (3, 0.0005),
-        DisplayUnit::Cm | DisplayUnit::In => (4, 0.00005),
+        DisplayUnit::Mm => 3,
+        DisplayUnit::Cm | DisplayUnit::In => 4,
     }
 }
 
@@ -347,7 +347,9 @@ mod tests {
                 let shown = format_field_length(Length::from_mm(mm), unit);
                 let back = parse_document_side(&shown, unit)
                     .unwrap_or_else(|| panic!("{unit:?} {mm}: shown {shown:?} is refused"));
-                let half_step = field_precision(unit).1 * unit.mm_per_unit();
+                let half_step = 0.5
+                    * 10f64.powi(-i32::try_from(field_decimals(unit)).unwrap())
+                    * unit.mm_per_unit();
                 assert!(
                     (back.as_mm() - mm).abs() <= half_step + 1e-9,
                     "{unit:?} {mm}"
@@ -357,14 +359,14 @@ mod tests {
         assert_eq!(parsed_mm("3937.0079", DisplayUnit::In), Some(100_000.0));
     }
 
-    /// The display tolerance is half a displayed decimal, not more.
+    /// Only the text the field shows for a limit is accepted past it.
     #[test]
-    fn a_value_beyond_the_display_tolerance_of_a_limit_is_still_refused() {
+    fn a_value_past_a_limit_is_refused_unless_it_is_the_text_shown_for_it() {
         assert_eq!(parsed_mm("3937.01", DisplayUnit::In), None);
         assert_eq!(parsed_mm("10000.0001", DisplayUnit::Cm), None);
         assert_eq!(parsed_mm("100000.001", DisplayUnit::Mm), None);
         assert_eq!(parsed_mm("0.9994", DisplayUnit::Mm), None);
         assert_eq!(parsed_mm("0.0393", DisplayUnit::In), None);
-        assert_eq!(parsed_mm("0.9996", DisplayUnit::Mm), Some(1.0));
+        assert_eq!(parsed_mm("0.9996", DisplayUnit::Mm), None);
     }
 }
