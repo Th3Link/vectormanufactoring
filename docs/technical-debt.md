@@ -5,8 +5,9 @@ caused it and the ADR or story that would resolve it. An entry here is a
 tracked decision, not a complaint — adding one is how an accepted shortcut
 stays visible.
 
-Nothing in this file is a defect in shipped code yet; the project has no
-product code. These are the costs the accepted ADRs 0001–0010 choose to pay.
+Most entries are costs an accepted ADR chose to pay; some are shortcuts a feature slice took
+(each names its slice). An entry is removed when its resolution lands, or stays with the note that
+it is accepted for good.
 
 ## Boolean results are polylines, not curves
 
