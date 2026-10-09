@@ -1,6 +1,6 @@
 # ADR 0003: Geometry kernel, boolean operations, offsetting and V-carving
 
-**Status:** Accepted (customer sign-off, 2026-10-02)
+**Status:** Accepted (customer sign-off, 2026-10-02); §3 kernel library amendment of 2026-10-09 proposed (`clipper2-rust` replaced by `i_overlay`; the lead's default, the customer may veto; takes effect when PR #69 merges)
 
 ## Context
 
@@ -123,6 +123,60 @@ foundation.
    > (`boolean-operations`) exists as a story; this note is the dated
    > feature-local record the ADR's own text asks for, written here because
    > no `specs/<NNNN-feature-slug>/adrs.md` exists yet for that slice.
+   >
+   > **Amendment 2026-10-09 (kernel library: `i_overlay` replaces
+   > `clipper2-rust`). Proposed by the lead as a default the customer may
+   > veto; takes effect when PR #69 (`story/boolean-operations`) merges.**
+   > The provenance risk above materialised. The kernel's property tests
+   > (5,877 random pairs of 1 to 3 outlines on a 6 mm lattice, many shared and
+   > collinear edges, area identities of AC 14) gave 12 to 16 violations with
+   > `clipper2-rust` 1.2.0 and none with `i_overlay` 9.0.0; on unconstrained
+   > random input (18,000 pairs) both had none. One reproducing case: a union
+   > fills 0.4 to 0.5 mm² that no operand covers. Clipper's `SimplifyPaths`
+   > also turned a valid outline into a self-crossing one. Evidence and
+   > fixtures: PR #69, `docs/technical-debt.md` entry of that PR.
+   >
+   > - **Decision:** `i_overlay` **`=9.0.0`**, exact pin, workspace dependency
+   >   with default features (none; `allow_multithreading` pulls `rayon` and
+   >   stays off), used only by `curvyo-geometry-core`. MIT OR Apache-2.0;
+   >   its own dependencies `i_float` 5.0.0, `i_shape` 5.0.0, `i_tree` 0.19.0
+   >   and `i_key_sort` 0.11.0 are MIT. Rust 1.88 minimum, below the
+   >   workspace's 1.90. The spike built it for `wasm32-unknown-unknown`;
+   >   nothing on ADR 0011 §6's ban list. An update is a reviewed PR that
+   >   reruns the fixtures and property tests, not a Renovate auto-bump.
+   > - **Determinism (AC 43):** `i_overlay` computes on an `i32` integer grid
+   >   with integer predicates, no platform math. The kernel snaps to its own
+   >   fixed 0.001 mm grid and calls the integer API; it does **not** use the
+   >   float adapter, which picks its scale from the input bounds and would
+   >   make the grid depend on the input. Consequence: the `OutOfRange` bound
+   >   shrinks to fit `i32` with headroom (2³¹ units is about 2,147 m; AC 42's
+   >   100,000 mm is 10⁸ units). PR #69 sets the exact bound and its fixture.
+   >   The golden files and the cross-target check of AC 43 are the evidence.
+   > - **Why `clipper2-rust` lost:** a wrong area is a wrong cut; no other
+   >   criterion outweighs it. The spike's tie-breaker (`forbid(unsafe_code)`
+   >   in the dependency, versus about 49 internal `unsafe` sites in
+   >   `i_overlay`) was only ever a tie-breaker: `CLAUDE.md` §5 forbids
+   >   `unsafe` in our crates, and `curvyo-geometry-core` keeps
+   >   `#![forbid(unsafe_code)]`. `geo` stays rejected (wrapper over an older
+   >   `i_overlay`, see above).
+   > - **Hard delete:** `clipper2-rust` leaves `Cargo.toml` and `Cargo.lock`
+   >   in PR #69. No fallback path, no feature flag, no backend trait (§8). It
+   >   can come back only by a new dated decision here that passes the same
+   >   property tests. BSL-1.0 stays in `deny.toml` for `xxhash-rust`.
+   > - **Consequences:** the library is local to `boolean_grid::run`; the
+   >   kernel API, the pipeline of `specs/0016-boolean-operations/adrs.md`
+   >   (normalize, fold pairwise, own cleanup, canonical form), the fixtures
+   >   and the property tests are unchanged. The §4 open question about
+   >   Clipper2's offsetter loses its premise: §4 stands as written. Whether
+   >   `i_overlay` itself offers outline offsetting with the joins §4 lists is
+   >   **to be checked** when the offsetting story is specified (crates.io
+   >   metadata shows `i_shape` is a data-structure crate, not an offsetter).
+   >   Offsetting and V-carving may still need other libraries; that is
+   >   decided with those stories, not here.
+   >
+   > This stays inside the accepted decision ("flattened polygons, a pure-Rust
+   > crate, chosen among the named candidates"), so it is an amendment note,
+   > not a superseding ADR.
 4. **Offsetting** is built on the same two pieces: expand each contour and
    union the pieces (`kurbo` stroke expansion for the geometry, the boolean
    crate for the union), with a dedicated module and golden-file tests.
