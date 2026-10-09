@@ -26,6 +26,7 @@ mod box_refit_tests;
 mod colour_pick;
 mod corner_readout;
 mod document;
+mod document_presets;
 mod draw;
 mod frame;
 mod keys;
@@ -54,6 +55,7 @@ use curvyo_ui_core::{
 
 pub use boolean::BooleanOutcome;
 pub use document::{DocumentSide, FitOutcome, SizeOutcome};
+pub use document_presets::DocumentPresetsRecord;
 pub use keys::{EscapeStep, KeyHint, KeyInput, KeyOutcome};
 pub use move_indicators::MoveIndicators;
 pub use select::DoubleClickHint;
@@ -137,6 +139,8 @@ pub struct Session {
     style: StyleEditor,
     /// The eyedropper (`colour_pick.rs`).
     colour_pick: colour_pick::ColourPick,
+    /// The document size presets (`document_presets.rs`).
+    presets: curvyo_document_core::PresetList,
     /// Pan/zoom view state (ADR 0009 §2: ephemeral — never written to
     /// the document, resets on `New`/`Open`).
     viewport: Viewport,
@@ -210,6 +214,9 @@ impl Session {
             // selection tool exists").
             tool: Tool::Select,
             style: StyleEditor::default(),
+            // The tests load the shipped file, so the error branch is
+            // unreachable; an empty list would only hide the buttons.
+            presets: curvyo_document_core::PresetList::shipped().unwrap_or_default(),
             colour_pick: colour_pick::ColourPick::default(),
             viewport: Viewport::new(),
             hovered: None,
@@ -243,6 +250,9 @@ impl Session {
             selection: ObjectSelection::new(),
             tool: Tool::Select,
             style: StyleEditor::default(),
+            // The tests load the shipped file, so the error branch is
+            // unreachable; an empty list would only hide the buttons.
+            presets: curvyo_document_core::PresetList::shipped().unwrap_or_default(),
             colour_pick: colour_pick::ColourPick::default(),
             viewport: Viewport::new(),
             hovered: None,

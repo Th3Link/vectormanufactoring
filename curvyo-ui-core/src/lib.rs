@@ -22,6 +22,7 @@ mod conversion;
 mod dash_text;
 mod display_unit_text;
 mod document_fit;
+mod document_presets_view;
 mod ellipse_tool;
 mod hit_test;
 mod hit_test_object;
@@ -74,6 +75,9 @@ pub use display_unit_text::{
     format_size, format_status_length, parse_document_side,
 };
 pub use document_fit::fit_document_to_content;
+pub use document_presets_view::{
+    PresetEntry, PresetGroupView, PresetsView, orientation_swap, preset_pick_size, presets_view,
+};
 pub use ellipse_tool::EllipseTool;
 pub use hit_test::{Hit, hit_test};
 pub use hit_test_object::{hit_test_object, hit_test_objects, hit_test_objects_along};

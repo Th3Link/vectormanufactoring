@@ -53,8 +53,8 @@ mod wasm_select_tool;
 mod wasm_shape_tools;
 
 pub use session::{
-    BooleanOutcome, DocumentSide, DoubleClickHint, EscapeStep, FitOutcome, KeyHint, KeyInput,
-    KeyOutcome, MoveIndicators, Session, SizeOutcome, Tool,
+    BooleanOutcome, DocumentPresetsRecord, DocumentSide, DoubleClickHint, EscapeStep, FitOutcome,
+    KeyHint, KeyInput, KeyOutcome, MoveIndicators, Session, SizeOutcome, Tool,
 };
 
 #[cfg(target_arch = "wasm32")]
