@@ -149,7 +149,10 @@ impl Session {
         if self.tool != Tool::Node {
             return NodeToolbarState::default();
         }
-        self.node.toolbar_state(&self.document)
+        let mut state = self.node.toolbar_state(&self.document);
+        state.compound_only = matches!(self.selection.ids(), [only]
+            if self.document.path(*only).is_some_and(|path| path.is_compound()));
+        state
     }
 
     pub(super) fn decoration_input(&self) -> DecorationInput {

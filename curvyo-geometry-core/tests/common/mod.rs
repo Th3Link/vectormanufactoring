@@ -3,6 +3,8 @@
 
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used, missing_docs)]
 
+pub mod golden;
+
 use curvyo_document_core::{Point, Tolerance, Vec2};
 use curvyo_geometry_core::{
     BooleanError, BooleanOp, BooleanResult, Outline, OutlineTriple, boolean, signed_area_mm2,

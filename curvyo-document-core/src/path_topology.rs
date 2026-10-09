@@ -128,6 +128,11 @@ impl Document {
         b_anchor: AnchorId,
     ) -> Result<JoinPlan, PathEditError> {
         let a_snapshot = self.path(a_path).ok_or(PathEditError::NoSuchPath)?;
+        if a_snapshot.is_compound() {
+            // A compound path has no editable nodes yet (specs/0016-boolean-
+            // operations criterion 38a).
+            return Err(PathEditError::NotJoinable);
+        }
         let a_index = index_of(&a_snapshot, a_anchor)?;
         if a_snapshot.closed || !is_endpoint(&a_snapshot, a_index) {
             return Err(PathEditError::NotJoinable);
@@ -151,6 +156,9 @@ impl Document {
         }
 
         let b_snapshot = self.path(b_path).ok_or(PathEditError::NoSuchPath)?;
+        if b_snapshot.is_compound() {
+            return Err(PathEditError::NotJoinable);
+        }
         let b_index = index_of(&b_snapshot, b_anchor)?;
         if b_snapshot.closed || !is_endpoint(&b_snapshot, b_index) {
             return Err(PathEditError::NotJoinable);
@@ -336,6 +344,9 @@ impl Document {
         anchor: AnchorId,
     ) -> Result<(PathSnapshot, usize), PathEditError> {
         let snapshot = self.path(path).ok_or(PathEditError::NoSuchPath)?;
+        if snapshot.is_compound() {
+            return Err(PathEditError::NotSplittable);
+        }
         let index = index_of(&snapshot, anchor)?;
         if !snapshot.closed && is_endpoint(&snapshot, index) {
             return Err(PathEditError::NotSplittable);

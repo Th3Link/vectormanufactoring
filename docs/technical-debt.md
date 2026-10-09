@@ -5,8 +5,9 @@ caused it and the ADR or story that would resolve it. An entry here is a
 tracked decision, not a complaint — adding one is how an accepted shortcut
 stays visible.
 
-Nothing in this file is a defect in shipped code yet; the project has no
-product code. These are the costs the accepted ADRs 0001–0010 choose to pay.
+Most entries are costs an accepted ADR chose to pay; some are shortcuts a feature slice took
+(each names its slice). An entry is removed when its resolution lands, or stays with the note that
+it is accepted for good.
 
 ## Boolean results are polylines, not curves
 
@@ -36,19 +37,105 @@ fixtures, the fixed-seed property tests and the regression tests in
 
 **Resolution:** none planned. Revisit if a defect shows up in real files.
 
-## The boolean kernel's wasm32 results are argued equal, not tested
+## The boolean kernel's wasm32 results are compared by a Node test, not in a browser
 
-Criterion 43 of `specs/0016-boolean-operations` asks for the same result in the
-browser build as on the desktop. CI compares the golden files on Linux, macOS
-(aarch64) and Windows (`curvyo-geometry-core/tests/fixtures/boolean/`); the
-`core-wasm32` jobs only build and lint. The argument that wasm32 agrees is
-sound: after the snap everything is integer arithmetic, and the flattening and
-the cleanup use only IEEE `+ - * /`, `sqrt` and `round`, which Rust does not
-fuse into multiply-adds.
+Criterion 43 of `specs/0016-boolean-operations` asks for the same result in the browser build as on
+the desktop. `curvyo-geometry-core/tests/boolean_golden_wasm.rs` embeds the golden fixtures
+(`tests/fixtures/boolean/`) and compares every result exactly, as grid integers. `cargo test`
+runs it natively on Linux, macOS (aarch64) and Windows; the CI job `boolean-wasm-golden` runs the
+same file on `wasm32-unknown-unknown` in Node through `wasm-bindgen-test-runner`. Both compare
+against the same files, so a result that differs by one grid step on wasm32 fails the job.
 
-**Resolution:** PR 3 of the boolean slice (command and UI) runs the golden inputs
-through the wasm build in `curvyo-editor-wasm` and compares them with the
-fixtures, for example in the frontend test run.
+What is not covered: a real browser engine (V8 in Node and the browsers' wasm engines agree on IEEE
+arithmetic, and the kernel uses only `+ - * /`, `sqrt` and `round` after the integer snap, so none is
+expected to differ), and the other targets of the wasm facade (`curvyo-editor-wasm` has no wasm
+test runner; its logic is tested natively).
+
+**Resolution:** none planned. Revisit if a browser-only difference shows up in real use; then add
+a Playwright or `wasm-bindgen-test` browser run of the same file.
+
+## The boolean command runs on the UI thread
+
+The kernel call of a boolean operation blocks the browser's UI thread (and the desktop's webview
+thread). Criterion 47a of `specs/0016-boolean-operations` asks for a "working..." notice for a call
+that runs over 150 ms off the UI thread; there is no such call, and on the UI thread no text could
+be painted anyway. What the command does instead: it sets the busy state (wait cursor, `aria-busy`,
+presses and keys swallowed), lets the browser paint two frames, then runs the call.
+
+Why accepted: the measured cost is small. Two operands of 1,000 nodes take about 9.5 ms natively
+from press to the repainted draw list, 1,000 rectangles about 9 ms, two operands of 10,000 nodes
+about 70 to 100 ms natively (up to about twice that in the browser); criteria 44 to 46 bound it,
+and progress and cancel are out of scope. A worker needs a second wasm instance and a transfer of
+the outlines, which no story needs yet (`CLAUDE.md` §5, YAGNI).
+
+**Trigger:** a CI-measured operation over 150 ms in the browser build, or the PR 4 preview
+(`specs/0016-boolean-operations/` P1 to P3) at 2,000 operand nodes taking longer than one frame.
+**Resolution:** run the kernel call of `plan_boolean` in a Web Worker with its own wasm instance,
+passing the operands' outlines; the write (`Document::replace_with_path`) and the selection stay
+on the UI thread, so the session does not change owner. Then the "working..." notice of 47a applies.
+
+## An out-of-range operand cannot be outlined on the canvas
+
+A boolean refusal for an object beyond 10 km of the point 0, 0 names it only in the count of the
+notice ("1 of 3 selected objects reaches further"): its red outline is drawn at its own
+coordinates, which are off screen by definition. Rare (a file from elsewhere or a far-dragged
+handle). **Trigger:** a maker reports not finding the object. **Resolution:** pan or zoom the
+view to the offending object when the refusal is shown (a view change, which the session does
+not make for any command today).
+
+## A boolean operation is one commit, but one commit is not one Loro change
+
+`Session::apply_boolean` writes one commit per operation with the label `boolean_<op>`
+(`curvyo-editor-wasm/tests/boolean_command.rs` pins the label and the count). The Loro oplog is not
+one change per commit: a large result (about 1,290 operations and more) is split into several
+changes carrying the same message, and consecutive commits with the same label can merge into one
+change. The undo slice must therefore find an operation by its commit boundaries and message, and
+must not count `len_changes()` to see how many operations were made.
+
+**Resolution:** `undo-redo` decides how it groups changes (its own ADR); this entry is the warning.
+
+## One-outline assumptions are found by audit, not by the compiler
+
+A path object may hold several outlines since `0016-boolean-operations` (the first in the
+`closed` / `anchors` keys, the others in `extra_subpaths`; `PathSnapshot::subpaths()` lists
+them all). Adding a field does not make the compiler find a reader that ignores it, so the places
+below were found by an audit of every `.anchors` use and each has a test
+(`curvyo-document-core/tests/compound_path.rs`, `curvyo-ui-core/tests/compound_path_select.rs`,
+`curvyo-render-core/tests/compound_artwork.rs`, `curvyo-editor-wasm/tests/compound_path_session.rs`).
+A new reader of `PathSnapshot::anchors` is still a place where a compound path can be forgotten.
+
+| Where | What it does with several outlines |
+|---|---|
+| `path_codec` + `subpath_codec` | reads, writes and validates `extra_subpaths` |
+| `PathSnapshot::rotated`, `scaled`, `sheared`; `ObjectSnapshot::translated` | map every outline |
+| `translate_objects`, `duplicate_objects` (ids over all outlines), `rotate_object`, `resize_path` | write every outline; the stroke width once |
+| `contains_point_in_outlines`, `hit_test_object`, `object_bounds`, `object_outline_bounds`, `oriented_bounds` | all outlines, winding summed |
+| `build_artwork`, `build_live_edit_preview` | one fill path; each outline dashed alone, one stroke layer |
+| `objects_in_marquee` (via `oriented_bounds`), `hit_test_objects_along` (lasso), `ClickCycle` (via `distance_to_object`, `fills_point`) | all outlines |
+| `Document::resize`, `fit_to_content`, `content_bounds` (via `translate_meta`, `object_outline_bounds`) | all outlines |
+| `copy_map` (deep copy of a duplicate) | recurses into the nested outline lists |
+| `decorations::build` (node overlay) | reached only through `Session::paths()`, which leaves compound paths out |
+| `Session::paths()`, `check_join`, `check_split`, the double-click | a compound path is not node-editable yet (customer question 7, option A) |
+| future exporters (SVG, DXF, G-code) and copy / paste | must iterate `PathSnapshot::subpaths()`; none exists yet |
+
+**Not covered yet:** node editing of a compound path (question 7, option B), Break Apart and
+Combine. They can address a node as `(NodeId, AnchorId)` without an outline index, because anchor
+ids are unique over the whole path. Markers on compound paths wait for `0018-stroke-markers`.
+
+**Document-level node commands see only the first outline.** `move_anchors`, `set_handle`,
+`convert_anchor_kind`, `insert_anchor`, `delete_anchors`, `set_segment_line` and `set_segment_curve`
+act on the first outline of a compound path, and `delete_anchors` that leaves fewer than two anchors
+of the first outline deletes the whole compound object. Unreachable today: `Session::paths()` leaves
+compound paths out, and an object never turns compound (`replace_with_path` always creates a new
+node). The node-editing slice (customer question 7, option B) moves them to `anchor_positions`.
+
+**Open-file validation of anchors is lenient, for the first outline and the others alike.**
+`validate_anchor` checks that an anchor is a map with a valid id; a missing or odd `point`,
+`handle_in`, `handle_out` or `kind` degrades to a default on read (slice 1's forward-compatible
+stance), so a file with a non-finite point in either kind of outline opens. The extra outlines follow
+the rule of the first one; tightening both is one change in `validate_anchor` and a format decision.
+
+**Resolution:** none planned; the audit table above is the checklist for the next reader of paths.
 
 ## V-carve depth comes from an approximate medial axis
 

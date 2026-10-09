@@ -15,6 +15,7 @@
 
 mod anchor_id_minter;
 mod angle_snap;
+mod boolean;
 mod conversion;
 mod display_unit_text;
 mod document_fit;
@@ -58,6 +59,9 @@ mod viewport;
 
 pub use anchor_id_minter::AnchorIdMinter;
 pub use angle_snap::{MAX_SKEW_SNAP_DEG, snap_angle, snap_skew_angle};
+pub use boolean::{
+    BooleanAvailability, BooleanOp, BooleanPlan, BooleanRefusal, boolean_availability, plan_boolean,
+};
 pub use conversion::build_primitive_conversions;
 pub use display_unit_text::{
     content_too_large_message, document_side_message, format_cursor, format_field_length,

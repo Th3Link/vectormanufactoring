@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { COMPOUND_NODES_TEXT } from "@/lib/booleanText";
 import { placeReadout } from "@/lib/readoutPlacement";
 
 /** How long the hint stays, unless a press, a key or the pointer leaving
@@ -29,6 +30,9 @@ export interface EditHint {
   y: number;
   /** Changes on every double-click, so the 3 s life restarts. */
   id: number;
+  /** The double-click was on a compound path: the chip gives the one line of
+   * `0016-boolean-operations` criterion 38 instead of the shape hint. */
+  compound?: boolean;
 }
 
 interface EditHintChipProps {
@@ -107,7 +111,7 @@ export function EditHintChip({ hint, containerRef, polygon, onDismiss }: EditHin
         color: "var(--toolbar-icon)",
       }}
     >
-      {(polygon ? POLYGON_LINES : LINES).map((line, index) => (
+      {(hint.compound ? [COMPOUND_NODES_TEXT] : polygon ? POLYGON_LINES : LINES).map((line, index) => (
         <div key={line} className={index === 0 ? "font-medium" : undefined}>
           {line}
         </div>

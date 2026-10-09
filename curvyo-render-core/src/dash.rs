@@ -35,30 +35,35 @@ impl DashBudget {
     }
 }
 
-/// The dashed version of `path`: one open sub-path per on-interval, so each
-/// dash is stroked with its own caps (acceptance criterion 12). `None` means
-/// "draw it solid": a solid pattern, a period under [`MIN_DASH_PERIOD_PX`] on
-/// screen, a path of no length, or a pattern that would pass the per-object or
-/// per-frame dash limit.
+/// The dashed version of each outline of **one object**: one open sub-path per on-interval,
+/// so each dash is stroked with its own caps (acceptance criterion 12). `None` means "draw it
+/// solid": a solid pattern, a period under [`MIN_DASH_PERIOD_PX`] on screen, outlines of no
+/// length, or a pattern that would pass the per-object or per-frame dash limit. `width_mm` is the
+/// **document** stroke width, which the pattern is a multiple of; `scale` is screen pixels per
+/// millimetre.
 ///
-/// `width_mm` is the **document** stroke width, which the pattern is a
-/// multiple of; the drawn width may be floored for display and does not enter
-/// here. `scale` is screen pixels per millimetre.
-// The counts are small (bounded by the dash limits just above the casts) and
-// the geometry is `f32` in `lyon`; the casts are the unit changes between them.
+/// Each outline is dashed on
+/// its own so the pattern starts afresh at its first node (criterion 31a of
+/// `specs/0016-boolean-operations`). The limits are the object's, not each
+/// outline's: the dashes of all outlines together must stay within
+/// [`MAX_DASHES_PER_OBJECT`] and the frame's remaining budget, otherwise `None`
+/// and the whole object is drawn solid, so no outline of it is dashed while
+/// another is not. An outline of no length is returned as it is.
+// The counts are small (bounded by the dash limits) and the geometry is `f32`
+// in `lyon`; the casts are the unit changes between them.
 #[allow(
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss
 )]
-pub(crate) fn dashed(
-    path: &Path,
+pub(crate) fn dashed_object(
+    outlines: &[Path],
     pattern: &DashPattern,
     width_mm: f64,
     scale: f64,
     tolerance_mm: f64,
     budget: &mut DashBudget,
-) -> Option<Path> {
+) -> Option<Vec<Path>> {
     let ratios = pattern.as_slice();
     // A width past the display cap draws solid, like the stroke it belongs to:
     // `ratio * width` would overflow `f32` in the tessellator.
@@ -73,24 +78,80 @@ pub(crate) fn dashed(
     if !period_mm.is_finite() || period_mm * scale < MIN_DASH_PERIOD_PX {
         return None;
     }
-    let measurements = PathMeasurements::from_path(path, tolerance_mm as f32);
-    let length = f64::from(measurements.length());
-    if !length.is_finite() || length <= 0.0 {
+    let on_intervals = ratios.chunks(2).filter(|pair| pair[0] > 0.0).count();
+    let measured: Vec<(PathMeasurements, f64)> = outlines
+        .iter()
+        .map(|path| {
+            let measurements = PathMeasurements::from_path(path, tolerance_mm as f32);
+            let length = f64::from(measurements.length());
+            (measurements, length)
+        })
+        .collect();
+    if measured
+        .iter()
+        .any(|(_, length)| !length.is_finite() || *length < 0.0)
+        || measured.iter().all(|(_, length)| *length <= 0.0)
+    {
         return None;
     }
-    let on_intervals = ratios.chunks(2).filter(|pair| pair[0] > 0.0).count();
-    let estimate = (length / period_mm).ceil() * on_intervals as f64;
+    let estimate: f64 = measured
+        .iter()
+        .filter(|(_, length)| *length > 0.0)
+        .map(|(_, length)| (length / period_mm).ceil() * on_intervals as f64)
+        .sum();
     if estimate > MAX_DASHES_PER_OBJECT as f64 || estimate > budget.remaining as f64 {
         return None;
     }
-    let (length, width) = (length as f32, width_mm as f32);
+    let width = width_mm as f32;
+    let mut drawn = 0_usize;
+    let dashed: Vec<Path> = outlines
+        .iter()
+        .zip(&measured)
+        .map(|(path, (measurements, length))| {
+            if *length <= 0.0 {
+                return path.clone();
+            }
+            let (dashes, count) = dash_outline(
+                path,
+                measurements,
+                *length,
+                ratios,
+                width,
+                period_mm,
+                on_intervals,
+            );
+            drawn += count;
+            dashes
+        })
+        .collect();
+    budget.remaining = budget.remaining.saturating_sub(drawn);
+    Some(dashed)
+}
+
+/// The dashes of one outline of positive `length`, and how many there are. The estimate of the
+/// dash count bounds the loop; the explicit step cap also stops it if float rounding ever failed
+/// to advance the distance.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
+fn dash_outline(
+    path: &Path,
+    measurements: &PathMeasurements,
+    length: f64,
+    ratios: &[f64],
+    width: f32,
+    period_mm: f64,
+    on_intervals: usize,
+) -> (Path, usize) {
+    let length = length as f32;
+    let outline_estimate = (f64::from(length) / period_mm).ceil() * on_intervals as f64;
     let mut sampler = measurements.create_sampler(path, SampleType::Distance);
     let mut builder = Path::builder();
     let mut distance = 0.0_f32;
     let mut drawn = 0_usize;
-    // The estimate bounds the loop; the explicit cap also stops it if float
-    // rounding ever failed to advance `distance`.
-    let max_steps = ratios.len() * (estimate as usize + 2);
+    let max_steps = ratios.len() * (outline_estimate as usize + 2);
     for step in 0..max_steps {
         if distance >= length {
             break;
@@ -102,8 +163,7 @@ pub(crate) fn dashed(
         }
         distance += run;
     }
-    budget.remaining = budget.remaining.saturating_sub(drawn);
-    Some(builder.build())
+    (builder.build(), drawn)
 }
 
 #[cfg(test)]
@@ -111,6 +171,26 @@ mod tests {
     use lyon::math::point;
 
     use super::*;
+
+    /// One path dashed alone: `dashed_object` of a single outline.
+    fn dashed(
+        path: &Path,
+        pattern: &DashPattern,
+        width_mm: f64,
+        scale: f64,
+        tolerance_mm: f64,
+        budget: &mut DashBudget,
+    ) -> Option<Path> {
+        dashed_object(
+            std::slice::from_ref(path),
+            pattern,
+            width_mm,
+            scale,
+            tolerance_mm,
+            budget,
+        )?
+        .pop()
+    }
 
     fn line(length: f32) -> Path {
         let mut builder = Path::builder();

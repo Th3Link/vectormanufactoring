@@ -234,16 +234,17 @@ impl Document {
         if !crate::style_codec::stroke_width_is_writable(stroke_width) {
             return Err(PathEditError::InvalidStrokeWidth);
         }
-        let (meta, anchor_list) = self.path_parts(path)?;
-        let resolved: Vec<(usize, Point, Vec2, Vec2)> = anchors
+        let (meta, _) = self.path_parts(path)?;
+        let positions = crate::subpath_codec::anchor_positions(&meta);
+        let resolved: Vec<_> = anchors
             .iter()
             .map(|&(id, point, handle_in, handle_out)| {
-                let index = anchor_index(&anchor_list, id)?;
-                Ok((index, point, handle_in, handle_out))
+                let (list, index) = positions.get(id).ok_or(PathEditError::NoSuchAnchor)?;
+                Ok((list, index, point, handle_in, handle_out))
             })
             .collect::<Result<_, PathEditError>>()?;
-        for (index, point, handle_in, handle_out) in resolved {
-            let map = anchor_map_at(&anchor_list, index);
+        for (list, index, point, handle_in, handle_out) in resolved {
+            let map = anchor_map_at(&list, index);
             write_point(&map, KEY_POINT, point);
             write_vec2(&map, KEY_HANDLE_IN, handle_in);
             write_vec2(&map, KEY_HANDLE_OUT, handle_out);

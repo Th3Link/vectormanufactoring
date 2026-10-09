@@ -111,8 +111,8 @@ gradient frame and the mergeable stop list are void.
   the line would show `1 2 4 1 2 4` after typing `1 2 4`, against criterion 30).
   A version-7 reader refuses an odd list as `Damaged`, the wrong message, so the
   PR that first writes an odd list takes `CURRENT_FORMAT_VERSION + 1`
-  (**8 expected**, provisional by the standing merge rule). Migration from 7 is
-  empty: every stored v7 list is even and stays valid. Fixture `dash_v8.curvyo`:
+  (**next free at merge, after 0016's 8**, by the standing merge rule). Migration from 7 is
+  empty: every stored v7 list is even and stays valid. Fixture `dash_vNEXT.curvyo` (named after the version it takes at merge):
   an odd list, a 17-entry list and a zero "on" entry. The parser
   (`ui-core::style_entry::parse_dash_text`) splits on **runs of spaces only**;
   the decimal mark is the point. A comma is an error, neither separator nor
@@ -237,7 +237,7 @@ gradient frame and the mergeable stop list are void.
      the panel keeps its current look with Fill None/Solid. Criteria 49 to 54.
   2. **Panel content, colour and dash** (decisions 2, 5, 6): empty and hidden
      rules, 8-digit hex, inline picker, preset group plus dash line, the format
-     bump (8 expected), `react-colorful` and the popup wrappers deleted, the lint
+     bump (next free at merge, after 0016's 8), `react-colorful` and the popup wrappers deleted, the lint
      rule, Escape order. Criteria 1 to 21, 28 to 33, 55 to 58, 60.
   3. **Value fields** (decision 4). Criteria 34 to 48, 59, 61 (reset slot: the
      defaults live beside the scales in `ui-core::value_scale`; a reset is one

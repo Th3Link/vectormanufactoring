@@ -26,9 +26,10 @@ const UNITS_PER_MM: f64 = 1000.0;
 /// two pitches or more apart stay separate (criterion 39).
 pub(crate) const GRID_MM: f64 = 0.001;
 
-/// The largest absolute coordinate the kernel accepts, in millimetres. 10⁷ mm is 10¹⁰ grid units,
-/// far inside the 64-bit engine's range of ±2⁶² units.
-pub(crate) const MAX_COORDINATE_MM: f64 = 1.0e7;
+/// The largest absolute coordinate the kernel accepts, in millimetres (10 km). 10⁷ mm is 10¹⁰ grid
+/// units, far inside the 64-bit engine's range of ±2⁶² units. The editor writes no coordinate
+/// beyond it either, so what it may write is what the kernel can read.
+pub const MAX_COORDINATE_MM: f64 = 1.0e7;
 
 /// Snaps a point inside `MAX_COORDINATE_MM` to the nearest grid point.
 pub(crate) fn snap(point: Point) -> Point64 {

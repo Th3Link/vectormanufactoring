@@ -3,6 +3,8 @@
 //! winding test on the exact cubic outline, built on `kurbo`.
 
 use curvyo_document_core::{Point, Vec2};
+
+use crate::Outline;
 use kurbo::{BezPath, PathEl, Point as KurboPoint, Shape};
 
 fn to_kurbo(point: Point) -> KurboPoint {
@@ -21,38 +23,50 @@ fn cubic_to(path: &mut BezPath, from: OutlineTriple, to: OutlineTriple) {
     ));
 }
 
-/// Whether `query` lies in the interior of the outline through `anchors`,
-/// by the non-zero winding rule, the same rule the fill is painted with.
+/// Whether `query` lies in the area a compound path's fill paints: the
+/// non-zero winding number of all `outlines` together, so an outline wound
+/// against its surrounding one is a hole
+/// (`specs/0016-boolean-operations` criterion 33). With one outline this is
+/// the test for an ordinary path.
 ///
 /// A `closed` outline is bounded by its real closing segment, the cubic
 /// through its own handles; an open one is closed with a straight chord from
 /// its last anchor back to its first, as the fill is (acceptance criteria 15
-/// and 23). Fewer than two anchors have no interior. The test is exact on
-/// cubics, so it takes no tolerance: points near the edge are outline hits at
-/// the caller's hit tolerance before this test runs.
+/// and 23). An outline with fewer than two anchors has no interior and adds
+/// nothing. The test is exact on cubics, so it takes no tolerance: points near
+/// the edge are outline hits at the caller's hit tolerance before this test
+/// runs.
 #[must_use]
-pub fn contains_point(anchors: &[OutlineTriple], closed: bool, query: Point) -> bool {
-    let (Some(first), Some(last)) = (anchors.first(), anchors.last()) else {
-        return false;
-    };
-    if anchors.len() < 2 {
-        return false;
-    }
+pub fn contains_point_in_outlines(outlines: &[Outline<'_>], query: Point) -> bool {
     let mut path = BezPath::new();
-    path.move_to(to_kurbo(first.0));
-    for pair in anchors.windows(2) {
-        cubic_to(&mut path, pair[0], pair[1]);
+    for outline in outlines {
+        let anchors = outline.anchors;
+        let (Some(first), Some(last)) = (anchors.first(), anchors.last()) else {
+            continue;
+        };
+        if anchors.len() < 2 {
+            continue;
+        }
+        path.move_to(to_kurbo(first.0));
+        for pair in anchors.windows(2) {
+            cubic_to(&mut path, pair[0], pair[1]);
+        }
+        if outline.closed {
+            cubic_to(&mut path, *last, *first);
+        }
+        path.close_path();
     }
-    if closed {
-        cubic_to(&mut path, *last, *first);
-    }
-    path.close_path();
     path.winding(to_kurbo(query)) != 0
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One outline's interior test, the way an ordinary path is tested.
+    fn contains_point(anchors: &[OutlineTriple], closed: bool, query: Point) -> bool {
+        contains_point_in_outlines(&[Outline::new(anchors, closed)], query)
+    }
 
     fn corner(_id: u64, x: f64, y: f64) -> OutlineTriple {
         (Point::new(x, y), Vec2::ZERO, Vec2::ZERO)
@@ -112,6 +126,31 @@ mod tests {
             !contains_point(&anchors, false, above_chord),
             "open: the chord closes it, nothing lies above the chord"
         );
+    }
+
+    /// Criterion 33: a ring (an outer square and a reversed inner one) holds
+    /// the area between the outlines and not the hole; two same-wound squares
+    /// both count.
+    #[test]
+    fn a_hole_wound_against_its_outline_is_not_inside() {
+        let outer = square();
+        let mut hole = vec![
+            corner(5, 3.0, 3.0),
+            corner(6, 3.0, 7.0),
+            corner(7, 7.0, 7.0),
+            corner(8, 7.0, 3.0),
+        ];
+        let ring = [Outline::new(&outer, true), Outline::new(&hole, true)];
+        assert!(contains_point_in_outlines(&ring, Point::new(1.0, 1.0)));
+        assert!(!contains_point_in_outlines(&ring, Point::new(5.0, 5.0)));
+        assert!(!contains_point_in_outlines(&ring, Point::new(11.0, 5.0)));
+        hole.reverse();
+        let island = [Outline::new(&outer, true), Outline::new(&hole, true)];
+        assert!(
+            contains_point_in_outlines(&island, Point::new(5.0, 5.0)),
+            "wound the same way the inner square is a second layer, not a hole"
+        );
+        assert!(!contains_point_in_outlines(&[], Point::new(5.0, 5.0)));
     }
 
     #[test]

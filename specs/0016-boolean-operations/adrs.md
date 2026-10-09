@@ -121,9 +121,10 @@ meta map of a path (unchanged keys):
   `extra_subpaths` must be a movable list of maps, each with an `anchors`
   movable list whose elements pass `validate_anchor`. Anything else is
   `OpenError::Damaged`.
-- **`format_version`:** `main`'s current value + 1 at merge (7 today; other
-  drafts claim 8 and 9 provisionally; `document-size-and-rulers` takes none,
-  its `adrs.md` decision 1). Migration from older versions: none, the key is
+- **`format_version`:** this slice takes **8** (`main` is at 7).
+  `document-size-and-rulers` takes none (its `adrs.md` decision 1);
+  `style-panel-rework` (0017) and `stroke-markers` (0018) take "next free at
+  merge", each after the version already on `main`. Migration from older versions: none, the key is
   simply absent. Golden fixtures: a compound path saved and reopened (AC 30,
   37) and a pre-bump file opened unchanged and not rewritten.
 
@@ -315,6 +316,85 @@ assumptions are found by audit, not by the compiler", with this table.
   2 s). The tests assert them in release builds only; the CI job
   `boolean-budgets` runs them there.
 
+### 2026-10-09: what PR 2 settled (implementer)
+
+- **The encoding is as decided above**, in a new `subpath_codec.rs`; `path_codec.rs` only calls it.
+  `extra_subpaths` is created with `insert_container` like `anchors` (a boolean result is written once
+  by one peer, so the mergeable form of the style stops is not needed). `format_version` is 8.
+- **`replace_with_path`** lives in `replace.rs`, takes the label as a `&str`, returns the new
+  `NodeId`, and refuses with `NoSuchObject`, `BaseNotAnOperand`, `NoOutlines` (none, or an outline
+  without an anchor) or `AnchorIds` (an id twice). It takes the base's whole style by `read_style` /
+  `write_path_style`, so a rectangle base works as well as a path base.
+- **Measured write cost** (release, this machine): 20,000 anchors in four outlines are written in
+  199 ms, read back in 23 ms, saved in 203 ms (1.6 MB) and reopened in 55 ms; replacing 1,000
+  objects by a result of 4,000 anchors takes 37 ms. That meets criteria 46 and 47 with room, so the
+  packed-coordinate encoding stays rejected.
+- **`contains_point_in_outlines`** replaces `contains_point` (one function, any number of outlines; the
+  0007 tests call it with one).
+- **Compound paths leave the Node tool at one place**, `Session::paths()`; `check_join`,
+  `check_split` and the commands refuse independently. A double-click on one in the Select tool is
+  the new `SelectDoubleClickOutcome::CompoundPath` (no handoff, nothing changes); the session maps it
+  to "no edit hint" until PR 3 shows the sentence of criterion 38.
+- **Stroke of a compound path** is one lyon path per outline after dashing, concatenated and
+  tessellated as one layer, so a translucent stroke has no dark spot where two outlines meet.
+- **Four older tests pinned the literal version 7** (the `0015` and `0007` slices' "no bump"
+  checks); they now name the build's current version or the constant of this story.
+
+### 2026-10-09: what PR 3 settled (implementer)
+
+- **The command is `Session::apply_boolean(op)`**, only with the Select tool active and no drag in
+  flight (`Ignored` otherwise). It plans in `curvyo-ui-core::boolean::plan_boolean` (operands in
+  stacking order, base = lowest, or the top one for Reverse difference, outlines from snapshots),
+  calls the geometry kernel, and writes with `Document::replace_with_path` in one commit labelled
+  `boolean_<op>`. The result is the only selected object. Refusals carry codes and counts only
+  (`NeedsTwo`, `OpenPaths`, `NoArea`, `OutOfRange`, `Empty`); the sentences are in
+  `frontend/src/lib/booleanText.ts`.
+- **Criterion 1 over the design system's "any active tool".** The spec enables the buttons only
+  with the Select tool; the design-system row says "any active tool". The spec wins (it is the
+  accepted text and the object selection is not drawn in the other tools). The tooltip adds "Use the
+  Select tool." in that case, as criterion 1 says. The design-system row should be corrected.
+  The Pen note "Finish the path first." therefore never shows: with the Pen active the buttons are
+  dimmed for the tool reason.
+- **No "working..." notice.** The kernel runs on the UI thread (no off-thread decision exists), so
+  there is nothing to show after 150 ms that could be painted. The busy state (criterion 47a) is
+  set, two frames are painted, then the call runs: wait cursor on `<html>`, `aria-busy` on the
+  toolbar, and a capture-phase listener that swallows presses and keys until the call returns.
+- **Refusal outline** is a draw-list layer built from the objects the session remembers as
+  offenders; it is valid only while the Select tool is active and the selection is the one the
+  refusal was made for, so a selection or tool change removes it without a call from the host. The
+  host also calls `clear_boolean_refusal` when the notice ends. Not stored, not selectable.
+- **Out of range** (a coordinate or handle end that is not finite or beyond 10 km from the point
+  0, 0): refused with "<Operation> works only within 10 km of the point 0, 0. 1 of 3 selected
+  objects reaches further. Nothing was changed." (architect's wording, lead decision; the PO aligns
+  criteria 15 to 17). Only position triggers it, and a size cannot: the check is on every
+  coordinate of the outline, so an object that is too large has a corner beyond the bound. The
+  bound is one constant, `curvyo_geometry_core::MAX_COORDINATE_MM`, which `ui-core`'s transform
+  commit also uses: what the editor may write is what the kernel can read.
+- **Typed entry, Node selection.** `apply_boolean` returns `Ignored` while a typed entry or a drag
+  is open (the entry is not discarded); an entry can only be open with one object selected, so in
+  practice the command is dimmed then. A successful command clears the Node tool's node selection,
+  whose operands are gone (a plain Delete still leaves it on `main`; not this story's).
+- **Commit labels.** `boolean_<op>` is persisted in project files; `boolean_command.rs` pins the
+  five strings and that a refusal writes nothing. A big result is split by Loro into several
+  changes with the same message and consecutive commits with one label can merge, so the undo slice
+  must not count `len_changes()` (`docs/technical-debt.md`).
+- **Criterion 43 in the wasm build.** `curvyo-geometry-core/tests/boolean_golden_wasm.rs` compares
+  every golden fixture natively and, in the CI job `boolean-wasm-golden`, on `wasm32-unknown-unknown`
+  in Node through `wasm-bindgen-test-runner` (`wasm-bindgen-test`, a wasm32-only dev-dependency of
+  `curvyo-geometry-core`, MIT OR Apache-2.0). `proptest` became a native-only dev-dependency.
+  This does not break ADR 0001 §3 ("only `curvyo-editor-wasm` may depend on `wasm-bindgen`"): the
+  rule guards the shipped dependency graph, and a wasm32-only dev-dependency is built only for that
+  test binary, so no product artifact of `curvyo-geometry-core` links `wasm-bindgen`.
+- **Compound path texts.** "Compound path" is the Rust subject line (`style_scope::kind_name`).
+  `NodeToolbarState.compound_only` and the double-click code `"compound_path"` come from Rust; the
+  sentence of criterion 38 is the one constant `COMPOUND_NODES_TEXT`. The Markers block rule of the
+  design system needs no change: there is no Markers UI yet.
+- **Frontend shape.** `BooleanCommands.tsx` (the section), `BooleanButton.tsx`, `BooleanNotice.tsx`
+  and `BooleanGlyphs.tsx` are hosted by `ToolRail`; `useBooleanCommands` holds availability and the
+  busy state, `useActionNotice` the lifetime of a notice. The `Tool` enum does not grow.
+  `useEditorSession` gained only `applyBoolean`, the `compoundOnly` field and the compound flag of
+  the edit hint.
+
 ### 2026-10-09: where the code lives
 
 - **`curvyo-geometry-core`:** `boolean` (operations, normalization, fold),
@@ -451,44 +531,49 @@ viewport at an 800 × 600 window is about 546 px high, so the rail fits with
 about 40 px to spare at its 12 px inset. No overflow rule now (no seventh
 tool exists); flagged to the ux-engineer to measure.
 
-## PR split and order
+## Milestones on one branch
 
-Updated 2026-10-09 for the customer decisions.
+Updated 2026-10-09 for the customer rule of one PR per slice: the four steps
+below are milestones on the branch `story/boolean-operations`, in this order,
+each leaving the quality gate green, and not separate PRs. (Earlier sections
+and the review notes still say "PR 1" to "PR 3"; read them as milestones 1 to
+3.)
 
 1. **Kernel.** `geometry-core` only, plus the workspace dependency. AC 7, 8,
    10 to 14, 17, 24 to 26, 39 to 45 at kernel level, fixtures in
    `tests/fixtures/`. Four kernel operations cover all five commands.
-   Unchanged; in progress (`story/boolean-operations`).
 2. **Compound path, format and document command.** Encoding, read model,
-   the audit table, format bump (`main` + 1 at merge, 8 if nothing else
-   bumps first), the `document-core` command `replace_with_path`, fixtures.
-   AC 19 to 22, 27, 28, 30 to 38 and the write-cost measurement. No UI.
+   the audit table, the format bump to **8**, the `document-core` command
+   `replace_with_path`, fixtures. AC 19 to 22, 27, 28, 30 to 38 and the
+   write-cost measurement. No UI.
 3. **Command and rail UI.** `ui-core`: `BooleanOp` (five), `plan_boolean`,
    refusals, `boolean_availability`, selection after; `editor-wasm`:
    `session/boolean.rs`, `wasm_boolean.rs`; frontend: the rail command group.
-   AC 1 to 6, 9, 15 to 18, 23, 29, 46, 47 as the PO rewrites them for the
+   AC 1 to 6, 9, 15 to 18, 23, 29, 46, 47 as the PO rewrote them for the
    rail. No Select bar change.
-4. **Preview** (P1 to P3), only if question 6 is A. Kernel output drawn with
-   the existing `--preview-new` live-preview path; no document write.
+4. **Hover preview (P1 to P3): decided B, not in this slice.** The customer
+   chose "not now" on Question 6; the preview becomes a separate later entry
+   (its own spec or a follow-up to this one) once the maker has tried the
+   buttons. Nothing in milestones 1 to 3 depends on it.
 
-**Parallel plan with `document-size-and-rulers` (re-confirmed 2026-10-09).**
-Rulers takes no `format_version`, so the version number no longer orders
-the two features. `CLAUDE.md` §4 forbids parallel work on shared crates:
+**Order with `document-size-and-rulers` (re-confirmed 2026-10-09).**
+Rulers takes no `format_version`, so the version number does not order the two
+features. `CLAUDE.md` §4 forbids parallel work on shared crates:
 
 | Step | Booleans | Rulers | Shared crates |
 |---|---|---|---|
-| now | PR 1 (`geometry-core`) | PR 1 (`document-core`, `ui-core`) | none: in parallel |
-| next | PR 2 | waits | `document-core` (`objects.rs` move helper), `ui-core` (`object_bounds.rs`), `render-core`, `editor-wasm` |
+| now | milestone 1 (`geometry-core`) | PR 1 (`document-core`, `ui-core`) | none: in parallel |
+| next | milestone 2 | waits | `document-core` (`objects.rs` move helper), `ui-core` (`object_bounds.rs`), `render-core`, `editor-wasm` |
 | then | waits | PR 2 (rulers, pasteboard, viewport) | `ui-core`, `render-core`, `editor-wasm`, `frontend` |
-| then | PR 3 | waits | `ui-core`, `editor-wasm`, `frontend` (`App.tsx`) |
+| then | milestone 3 | waits | `ui-core`, `editor-wasm`, `frontend` (`App.tsx`) |
 | last | | PR 3 (panel; after 0017 if 0017 goes first) | |
 
-Booleans PR 2 starts only after rulers PR 1 merges, because both edit the
+Milestone 2 starts only after rulers PR 1 merges, because both edit the
 move helper and `object_bounds`. It goes before rulers PR 2 because it
 carries the write-cost measurement that could still reopen the encoding.
-Booleans PR 3 goes after rulers PR 2, because PR 2 moves the rail into the
+Milestone 3 goes after rulers PR 2, because that PR moves the rail into the
 ruler viewport (`App.tsx`) and the rail height above is measured there.
-Swapping booleans PR 2 and rulers PR 2 costs nothing but that risk. Whichever
+Swapping milestone 2 and rulers PR 2 costs nothing but that risk. Whichever
 merges second adds the compound-path case to the rulers resize and fit tests
 (rulers AC 17, 23).
 

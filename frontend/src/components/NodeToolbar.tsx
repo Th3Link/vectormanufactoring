@@ -13,6 +13,7 @@ import { ContextMenu } from "radix-ui";
 import type { ReactNode } from "react";
 
 import type { NodeToolbarState } from "@/hooks/useEditorSession";
+import { COMPOUND_NODES_TEXT } from "@/lib/booleanText";
 
 export interface NodeActions {
   insertSelected: () => void;
@@ -150,6 +151,22 @@ interface NodeToolbarProps {
  * specification.md`'s UX notes).
  */
 export function NodeToolbar({ state, actions }: NodeToolbarProps) {
+  if (state.compoundOnly) {
+    // Text only, no controls (`0016-boolean-operations` criterion 38).
+    return (
+      <div
+        role="status"
+        className="pointer-events-auto flex h-9 min-w-0 items-center rounded-lg px-3 text-sm"
+        style={{
+          background: "var(--toolbar-bg)",
+          boxShadow: "var(--panel-elevation-shadow)",
+          color: "var(--toolbar-icon)",
+        }}
+      >
+        {COMPOUND_NODES_TEXT}
+      </div>
+    );
+  }
   return (
     <div
       className="flex pointer-events-auto h-9 min-w-0 items-center gap-1 rounded-lg px-2"

@@ -17,6 +17,30 @@ use curvyo_ui_core::{
 
 use super::{Session, Tool};
 
+/// What a double-click asks the host to show.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DoubleClickHint {
+    /// Nothing.
+    None,
+    /// The edit hint of a primitive (`unified-object-editing` criterion 32).
+    EditHint,
+    /// The sentence that a compound path's nodes cannot be edited yet
+    /// (`0016-boolean-operations` criterion 38).
+    CompoundPath,
+}
+
+impl DoubleClickHint {
+    /// The code the host keys its text on: `""`, `"edit_hint"` or `"compound_path"`.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::None => "",
+            Self::EditHint => "edit_hint",
+            Self::CompoundPath => "compound_path",
+        }
+    }
+}
+
 impl Session {
     /// The "Scale stroke width" switch (`specs/0005-object-transform/
     /// specification.md` AC 26-31): whether a Select-tool resize scales the
@@ -196,8 +220,15 @@ impl Session {
     /// activated with the path selected, "ready for node editing with no
     /// nodes selected" (`adrs.md`); on a primitive nothing changes and the
     /// host is asked to show the edit hint (the returned `true`). No
-    /// double-click switches to a primitive's own tool: there is none.
-    pub(super) fn select_double_click(&mut self, point: Point, shift: bool, ctrl: bool) -> bool {
+    /// double-click switches to a primitive's own tool: there is none. On a compound path
+    /// the tool does not change either, and the host is told to show the sentence of criterion
+    /// 38 of `0016-boolean-operations`.
+    pub(super) fn select_double_click(
+        &mut self,
+        point: Point,
+        shift: bool,
+        ctrl: bool,
+    ) -> DoubleClickHint {
         let objects = self.objects();
         let tolerance = self.object_tolerance();
         let handle_tolerances = self.transform_handle_tolerances();
@@ -214,10 +245,13 @@ impl Session {
                 self.node.cancel_drag();
                 self.node.clear_selection();
                 self.tool = Tool::Node;
-                false
+                DoubleClickHint::None
             }
-            SelectDoubleClickOutcome::EditHint => true,
-            SelectDoubleClickOutcome::Miss | SelectDoubleClickOutcome::EntryOpened => false,
+            SelectDoubleClickOutcome::EditHint => DoubleClickHint::EditHint,
+            SelectDoubleClickOutcome::CompoundPath => DoubleClickHint::CompoundPath,
+            SelectDoubleClickOutcome::Miss | SelectDoubleClickOutcome::EntryOpened => {
+                DoubleClickHint::None
+            }
         }
     }
 }

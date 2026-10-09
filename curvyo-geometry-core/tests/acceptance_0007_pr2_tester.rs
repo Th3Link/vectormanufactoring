@@ -3,10 +3,17 @@
 //! area a non-zero fill paints; an open outline is closed by a chord), with
 //! expectations computed here.
 
+// Native only: `proptest` or the file system is needed (the wasm build runs `boolean_golden_wasm`).
+#![cfg(not(target_arch = "wasm32"))]
 #![allow(clippy::unwrap_used, clippy::expect_used, missing_docs)]
 
 use curvyo_document_core::{Point, Vec2};
-use curvyo_geometry_core::{OutlineTriple, contains_point};
+use curvyo_geometry_core::{Outline, OutlineTriple, contains_point_in_outlines};
+
+/// One outline's interior test, the way an ordinary path is tested.
+fn contains_point(anchors: &[OutlineTriple], closed: bool, query: Point) -> bool {
+    contains_point_in_outlines(&[Outline::new(anchors, closed)], query)
+}
 use proptest::prelude::*;
 
 fn corner(x: f64, y: f64) -> OutlineTriple {

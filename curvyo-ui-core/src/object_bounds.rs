@@ -41,13 +41,25 @@ fn anchors_bounds(anchors: &[(Point, Vec2, Vec2)], closed: bool) -> (Point, Poin
     (min, max)
 }
 
+/// The bounds of all of a path's outlines (criterion 34: a compound path's
+/// selection box is the box of every outline).
 fn path_bounds(path: &PathSnapshot) -> (Point, Point) {
-    let anchors: Vec<_> = path
-        .anchors
-        .iter()
-        .map(|a| (a.point, a.handle_in, a.handle_out))
-        .collect();
-    anchors_bounds(&anchors, path.closed)
+    path.subpaths()
+        .map(|subpath| {
+            let anchors: Vec<_> = subpath
+                .anchors
+                .iter()
+                .map(|a| (a.point, a.handle_in, a.handle_out))
+                .collect();
+            anchors_bounds(&anchors, subpath.closed)
+        })
+        .reduce(|(min_a, max_a), (min_b, max_b)| {
+            (
+                Point::new(min_a.x.min(min_b.x), min_a.y.min(min_b.y)),
+                Point::new(max_a.x.max(max_b.x), max_a.y.max(max_b.y)),
+            )
+        })
+        .unwrap_or((Point::new(0.0, 0.0), Point::new(0.0, 0.0)))
 }
 
 /// The selection-box bounds of `object`, whichever kind it is (acceptance

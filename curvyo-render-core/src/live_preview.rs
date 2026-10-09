@@ -31,21 +31,27 @@ pub fn build_live_edit_preview(objects: &[ObjectSnapshot], view: ViewTransform) 
                 ObjectSnapshot::Primitive(primitive) => {
                     shape_live_outline(&primitive.shape, primitive.rotation, view, casing)
                 }
-                ObjectSnapshot::Path(path) => stroke::path_stroke(
-                    &path.anchors,
-                    path.closed,
-                    if casing {
-                        width_mm * theme::CASING_WIDTH_FACTOR
-                    } else {
-                        width_mm
-                    },
-                    if casing {
-                        theme::SELECTION_CASING
-                    } else {
-                        theme::PREVIEW_NEW
-                    },
-                    tolerance_mm,
-                ),
+                ObjectSnapshot::Path(path) => {
+                    let mut outlines = DrawList::default();
+                    for subpath in path.subpaths() {
+                        outlines.extend(stroke::path_stroke(
+                            subpath.anchors,
+                            subpath.closed,
+                            if casing {
+                                width_mm * theme::CASING_WIDTH_FACTOR
+                            } else {
+                                width_mm
+                            },
+                            if casing {
+                                theme::SELECTION_CASING
+                            } else {
+                                theme::PREVIEW_NEW
+                            },
+                            tolerance_mm,
+                        ));
+                    }
+                    outlines
+                }
             });
         }
     }

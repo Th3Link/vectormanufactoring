@@ -89,6 +89,7 @@ fn node_owners(nodes: &NodeSelection) -> Vec<NodeId> {
 
 fn kind_name(object: &ObjectSnapshot) -> (&'static str, &'static str) {
     match object {
+        ObjectSnapshot::Path(path) if path.is_compound() => ("Compound path", "compound paths"),
         ObjectSnapshot::Path(_) => ("Path", "paths"),
         ObjectSnapshot::Primitive(PrimitiveSnapshot { shape, .. }) => match shape {
             Shape::Rect { .. } => ("Rectangle", "rectangles"),
@@ -105,9 +106,14 @@ fn subject_line(objects: &[&ObjectSnapshot]) -> String {
     };
     let (singular, plural) = kind_name(first);
     let same_kind = objects.iter().all(|object| kind_name(object).0 == singular);
+    // Compound paths are paths: a mix of them and ordinary paths is "N paths".
+    let all_paths = objects
+        .iter()
+        .all(|object| matches!(object, ObjectSnapshot::Path(_)));
     match (objects.len(), same_kind) {
         (1, _) => singular.to_string(),
         (count, true) => format!("{count} {plural}"),
+        (count, false) if all_paths => format!("{count} paths"),
         (count, false) => format!("{count} objects"),
     }
 }

@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import { Tooltip } from "radix-ui";
 
+import { BooleanCommands } from "@/components/BooleanCommands";
+import type { BooleanCommands as BooleanCommandsState } from "@/hooks/useBooleanCommands";
 import type { Tool } from "@/hooks/useEditorSession";
 
 interface ToolRailProps {
@@ -21,6 +23,8 @@ interface ToolRailProps {
   /** Called after a mouse click on a button, so the tool letters keep working
    * (keyboard activation keeps focus on the rail for Tab navigation). */
   onReturnFocus: () => void;
+  /** The Boolean section under the tools (`specs/0016-boolean-operations/`). */
+  booleans: BooleanCommandsState;
 }
 
 interface ToolButtonProps {
@@ -64,7 +68,7 @@ function ToolButton({
               onReturnFocus();
             }
           }}
-          className="flex size-10 items-center justify-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex size-10 items-center justify-center rounded-md outline-none hover:bg-[var(--editor-accent-hover)] focus-visible:ring-2 focus-visible:ring-[var(--editor-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--toolbar-bg)]"
           style={{
             background: active ? "var(--toolbar-icon-active-bg)" : "transparent",
             color: active ? "var(--toolbar-icon-active-fg)" : "var(--toolbar-icon)",
@@ -100,13 +104,19 @@ function ToolButton({
  * Ellipse, Polygon-star, each shifted down one slot but otherwise in
  * their own established order.
  */
-export function ToolRail({ tool, selectionCount, onSelect, onReturnFocus }: ToolRailProps) {
+export function ToolRail({
+  tool,
+  selectionCount,
+  onSelect,
+  onReturnFocus,
+  booleans,
+}: ToolRailProps) {
   // The one state that changes a letter: the Select tool with a selection.
   const letterActsOnSelection = tool === "select" && selectionCount > 0;
   return (
     <Tooltip.Provider>
       <div
-        className="absolute top-3 left-3 z-20 flex w-12 flex-col items-center gap-1 rounded-lg py-1"
+        className="absolute top-3 left-3 z-30 flex w-12 flex-col items-center gap-1 rounded-lg py-1"
         style={{
           background: "var(--toolbar-bg)",
           boxShadow: "var(--panel-elevation-shadow)",
@@ -167,6 +177,11 @@ export function ToolRail({ tool, selectionCount, onSelect, onReturnFocus }: Tool
           shortcut="*"
           icon={<Star size={20} />}
           onSelect={onSelect}
+          onReturnFocus={onReturnFocus}
+        />
+        <BooleanCommands
+          commands={booleans}
+          selectTool={tool === "select"}
           onReturnFocus={onReturnFocus}
         />
       </div>

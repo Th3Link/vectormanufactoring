@@ -17,6 +17,8 @@
 //! instead), so its tests below were removed along with it
 //! (`CLAUDE.md` §5, "delete dead code").
 
+// Native only: `proptest` or the file system is needed (the wasm build runs `boolean_golden_wasm`).
+#![cfg(not(target_arch = "wasm32"))]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use curvyo_document_core::{Length, Point, Tolerance, Vec2};

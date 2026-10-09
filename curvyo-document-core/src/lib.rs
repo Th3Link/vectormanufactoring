@@ -33,6 +33,7 @@ mod path_topology;
 mod paths;
 mod primitive_model;
 mod primitive_outline;
+mod replace;
 mod shape_codec;
 mod shape_radii;
 mod shapes;
@@ -40,6 +41,7 @@ mod style_codec;
 mod style_model;
 mod style_validation;
 mod styles;
+mod subpath_codec;
 mod units;
 
 pub use container::{CURRENT_LORO_SNAPSHOT_VERSION, pack, unpack};
@@ -54,7 +56,7 @@ pub use gradient_ramp::{ramp_at, sorted_stops};
 pub use objects::{CopySource, ObjectEditError};
 pub use path_model::{
     AnchorId, AnchorKind, AnchorSnapshot, Color, HandleSlot, NewAnchor, NodeId, PathEditError,
-    PathSnapshot,
+    PathSnapshot, SubpathRef, SubpathSnapshot,
 };
 pub use paths::resolve_handle_pair;
 pub use primitive_model::{

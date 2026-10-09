@@ -585,11 +585,3 @@ fn an_older_reader_would_refuse_this_build_so_the_bump_is_real() {
         serde_json::from_slice(&member(&bytes, "manifest.json")).unwrap();
     assert!(manifest["format_version"].as_u64().unwrap() >= STYLES_FORMAT_VERSION);
 }
-
-/// The one literal pin on the format version: it fails if the number moves by
-/// accident, and the merge that renumbers it edits `STYLES_FORMAT_VERSION`
-/// above in the same place.
-#[test]
-fn the_format_version_is_the_one_styles_introduced_until_the_merge_renumbers_it() {
-    assert_eq!(u64::from(CURRENT_FORMAT_VERSION), STYLES_FORMAT_VERSION);
-}

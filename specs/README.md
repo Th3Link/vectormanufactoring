@@ -50,11 +50,21 @@ they do not run side by side.
 | No. | Slug | What it delivers | Status | Priority | Requirements | MVP slice |
 |---|---|---|---|---|---|---|
 | [0015](0015-document-size-and-rulers/) | `document-size-and-rulers` | Rulers in mm along the top and left, document resize with the content staying centred, fit the document to the drawing, drawing outside the document edge. | Draft, being refined | Must | none yet | - |
-| [0016](0016-boolean-operations/) | `boolean-operations` | Union, difference, intersection, exclusion and reverse difference on closed paths, as a command section in the left tool rail; compound-path results. | Ready | Must | R-EDIT-003 | 9 |
+| [0016](0016-boolean-operations/) | `boolean-operations` | Union, difference, intersection, exclusion and reverse difference on closed paths, as a command section in the left tool rail; compound-path results. One PR (#73), built as milestones on one branch. The hover preview of the result is not part of it (see "Specified but not built" below). | In progress | Must | R-EDIT-003 | 9 |
 | [0017](0017-style-panel-rework/) | `style-panel-rework` | Empty panel when nothing is selected, controls hidden instead of disabled, 8-digit RGBA hex, inline colour picker, eyedropper, custom dash text line, GIMP-style value fields, gradients removed. Replaces parts of 0007. | Ready | Must | R-EDIT-005, R-EDIT-006 | - |
 | [0018](0018-stroke-markers/) | `stroke-markers` | Arrow or dot at the start, the end, N places along and on every node of a path. Builds on 0017. | Ready | Should | R-EDIT-005, R-EDIT-016 | - |
 | [0019](0019-multi-object-transform/) | `multi-object-transform` | One group box with the same handles as a single object, for a selection of several objects. Runs after 0017; 0014 is merged. | Ready | Should | R-EDIT-012 | - |
 | 0020 | `undo-redo` | Ctrl+Z and Ctrl+Y undo and redo every editing operation, one interaction = one undo step. **Number reserved, no folder: the customer has ideas that come first.** | Not started | Must | R-EDIT-008 | 8 |
+
+### Specified but not built
+
+Written as criteria in a feature's spec, then taken out of that feature's
+slice (lead decision 2026-10-09). No folder and no number yet; each becomes its
+own entry when the customer schedules it.
+
+| Part of | What it would deliver | Status | Priority |
+|---|---|---|---|
+| 0016 `boolean-operations` | Hover preview of the result: the outline of the result drawn over the canvas while the pointer rests on a Boolean button (criteria P1 to P3 in the 0016 spec). A Proposal, never accepted; no numbered criterion of 0016 depends on it. | Not started | Should |
 
 ### Draft (waiting for the customer to schedule)
 
@@ -153,13 +163,16 @@ a reader refuses a file with a higher number ("saved by a newer version").
 | Version | Taken by | State |
 |---|---|---|
 | 7 | 0007 `stroke-and-fill-styling` | On `main` |
-| 8 | 0017 `style-panel-rework`, PR 2 (odd dash patterns) | Planned |
-| 9 | 0018 `stroke-markers` | Planned |
-| to be assigned at merge | 0015 `document-size-and-rulers` | Needs one bump; the number depends on merge order |
+| 8 | 0016 `boolean-operations` (compound path, PR #73) | In progress, first to merge |
+| next free at merge | 0017 `style-panel-rework`, PR 2 (odd dash patterns) | Planned |
+| next free at merge | 0018 `stroke-markers` | Planned, after 0017 |
+| none | 0015 `document-size-and-rulers` | No bump (its `adrs.md`, decision 1) |
 
-Whether 0016 `boolean-operations` needs a bump is not known yet; its
-`adrs.md` will say. A spec does not hard-code a version number it does not
-own; it says "next free at merge".
+A spec does not hard-code a version number it does not own; it says "next free
+at merge". Only 0016 names a number (8), because it is the one that merges
+first. If a third feature merges before 0016, 0016's tests compare against its
+own named constant and the rebase renumbers it; this table is then corrected
+in the same PR.
 
 ## Numbering
 
@@ -263,6 +276,12 @@ Same stages as `CLAUDE.md` §4:
    and `architect` review per `CLAUDE.md` §4.
 4. **Demo** / **Done** — as in `CLAUDE.md` §4; `specification.md` gets
    `Status: Done` and the PR link.
+
+**One PR per slice (customer rule, 2026-10-09).** A slice is one story and
+one PR on one branch. A large slice is built as milestones (commits on that
+branch, each green), not as several PRs; the customer accepts the slice once,
+against its review guide. A part the customer does not need for the slice moves
+out as its own entry (see "Specified but not built").
 
 A feature folder's `specification.md` is the single source of truth for
 what "done" means. `plan.md` tracks progress; it is not a second backlog.

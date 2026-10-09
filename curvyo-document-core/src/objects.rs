@@ -13,12 +13,13 @@ use loro::{Container, TreeID, ValueOrContainer};
 
 use crate::document::{Document, OBJECTS_TREE};
 use crate::path_codec::{
-    self, KEY_HANDLE_IN, KEY_HANDLE_OUT, KEY_ID, KEY_POINT, anchor_map_at, anchors_container,
-    node_exists, write_point, write_vec2,
+    self, KEY_HANDLE_IN, KEY_HANDLE_OUT, KEY_ID, KEY_POINT, anchor_map_at, node_exists,
+    write_point, write_vec2,
 };
 use crate::path_model::{AnchorId, NodeId};
 use crate::primitive_model::{ObjectSnapshot, translate_shape};
 use crate::shape_codec;
+use crate::subpath_codec::{all_anchor_lists, anchor_positions, total_anchor_count};
 use crate::units::Vec2;
 
 /// Why an any-object [`Document`] method refused to apply — mirrors
@@ -36,11 +37,19 @@ pub enum ObjectEditError {
     /// takes none).
     #[error("the fresh anchor ids do not match the source's anchor count")]
     AnchorIds,
+    /// The base object of [`Document::replace_with_path`] is not among the
+    /// objects it replaces.
+    #[error("the base object is not one of the replaced objects")]
+    BaseNotAnOperand,
+    /// [`Document::replace_with_path`] was given no outline, or an outline
+    /// without an anchor.
+    #[error("a replacement path needs at least one outline, each with an anchor")]
+    NoOutlines,
 }
 
 /// One object to duplicate with [`Document::duplicate_objects`], and the
-/// fresh anchor ids its copy takes: a path needs exactly one per anchor, in
-/// anchor order; a primitive needs none. The caller mints them (this crate
+/// fresh anchor ids its copy takes: a path needs exactly one per anchor of all its
+/// outlines, in anchor order (the first outline first); a primitive needs none. The caller mints them (this crate
 /// never does): an anchor id names a node across the whole document, so a copy
 /// that shared its original's ids would put two equal ids into one path the
 /// first time a maker joined one to the other.
@@ -226,18 +235,18 @@ impl Document {
                 }
             }
             (ObjectSnapshot::Path(path), None) => {
-                let anchors = anchors_container(&meta);
+                let positions = anchor_positions(&meta);
                 let resolved: Vec<_> = path
-                    .anchors
-                    .iter()
+                    .all_anchors()
                     .map(|a| {
-                        path_codec::anchor_index(&anchors, a.id)
-                            .map(|index| (index, a))
-                            .map_err(|_| ObjectEditError::NoSuchObject)
+                        positions
+                            .get(a.id)
+                            .map(|(list, index)| (list, index, a))
+                            .ok_or(ObjectEditError::NoSuchObject)
                     })
                     .collect::<Result<_, _>>()?;
-                for (index, anchor) in resolved {
-                    let map = anchor_map_at(&anchors, index);
+                for (list, index, anchor) in resolved {
+                    let map = anchor_map_at(&list, index);
                     write_point(&map, KEY_POINT, anchor.point);
                     write_vec2(&map, KEY_HANDLE_IN, anchor.handle_in);
                     write_vec2(&map, KEY_HANDLE_OUT, anchor.handle_out);
@@ -297,7 +306,7 @@ fn check_anchor_ids(meta: &loro::LoroMap, anchor_ids: &[AnchorId]) -> Result<(),
     let expected = if shape_codec::read_shape_tag(meta).is_some() {
         0
     } else {
-        anchors_container(meta).len()
+        total_anchor_count(meta)
     };
     let distinct = anchor_ids.iter().collect::<HashSet<_>>().len();
     if anchor_ids.len() == expected && distinct == expected {
@@ -348,15 +357,21 @@ fn copy_map(from: &loro::LoroMap, into: &loro::LoroMap) {
     }
 }
 
-/// Gives a freshly copied path its own anchor ids, one per anchor in order.
+/// Gives a freshly copied path its own anchor ids, one per anchor in order,
+/// over all its outlines (the first outline first).
 fn renumber_anchors(meta: &loro::LoroMap, anchor_ids: &[AnchorId]) {
-    let anchors = anchors_container(meta);
-    for (index, id) in anchor_ids.iter().enumerate() {
-        let map = anchor_map_at(&anchors, index);
-        // invariant: the anchor map is attached and `id` is a plain string.
-        #[allow(clippy::unwrap_used)]
-        map.insert(KEY_ID, path_codec::anchor_id_to_value(*id))
-            .unwrap();
+    let mut ids = anchor_ids.iter();
+    for list in all_anchor_lists(meta) {
+        for index in 0..list.len() {
+            let Some(id) = ids.next() else {
+                return;
+            };
+            let map = anchor_map_at(&list, index);
+            // invariant: the anchor map is attached and `id` is a plain string.
+            #[allow(clippy::unwrap_used)]
+            map.insert(KEY_ID, path_codec::anchor_id_to_value(*id))
+                .unwrap();
+        }
     }
 }
 
@@ -372,14 +387,15 @@ pub(crate) fn translate_meta(meta: &loro::LoroMap, offset: Vec2) {
     }
 }
 
-/// Shifts every one of a path's anchor `point`s by `offset`, leaving
-/// handles (relative to their own anchor) untouched.
+/// Shifts every one of a path's anchor `point`s, in every outline, by
+/// `offset`, leaving handles (relative to their own anchor) untouched.
 fn translate_path_meta(meta: &loro::LoroMap, offset: Vec2) {
-    let anchors = anchors_container(meta);
-    for index in 0..anchors.len() {
-        let map = path_codec::anchor_map_at(&anchors, index);
-        let point = path_codec::read_point(&map, KEY_POINT);
-        path_codec::write_point(&map, KEY_POINT, point.translated(offset));
+    for anchors in all_anchor_lists(meta) {
+        for index in 0..anchors.len() {
+            let map = path_codec::anchor_map_at(&anchors, index);
+            let point = path_codec::read_point(&map, KEY_POINT);
+            path_codec::write_point(&map, KEY_POINT, point.translated(offset));
+        }
     }
 }
 

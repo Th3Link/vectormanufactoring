@@ -93,7 +93,17 @@ use crate::units::{DocumentSize, Length};
 /// from the editor, so the version stays 7. Reading the mergeable form needs
 /// Loro 1.16 or later (the workspace requires it); the goldens are
 /// `styles_v7.curvyo` (regular) and `styles_v7_mergeable_stops.curvyo`.
-pub const CURRENT_FORMAT_VERSION: u32 = 7;
+///
+/// Bumped to 8 in `boolean-operations` (`specs/0016-boolean-operations/
+/// adrs.md`, "compound path"): a path may hold several outlines, the first in
+/// the ordinary `closed`/`anchors` keys and the others in one new optional
+/// movable list, `extra_subpaths` (`crate::subpath_codec`). A build that stops
+/// at version 7 would read such a path as its first outline alone and drop
+/// the rest without a word, the silent partial read ADR 0004 §9 forbids, so
+/// it must refuse the file as too new. Migration from version 7 is none: the
+/// key is simply absent, and a file from an earlier build opens unchanged and
+/// is not rewritten. Golden: `compound_v8.curvyo`.
+pub const CURRENT_FORMAT_VERSION: u32 = 8;
 
 pub(crate) const ROOT_MAP: &str = "root";
 const KEY_FORMAT_VERSION: &str = "format_version";
@@ -323,6 +333,10 @@ enum ObjectJson {
         closed: bool,
         style: crate::style_model::Style,
         anchors: Vec<crate::path_model::AnchorSnapshot>,
+        /// A compound path's further outlines; left out when there are none,
+        /// so an ordinary path exports as before.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        extra_subpaths: Vec<crate::path_model::SubpathSnapshot>,
         /// The path's own `rotation` register (`specs/0005-object-
         /// transform/adrs.md`): orientation only, never consulted to
         /// reconstruct geometry — see [`crate::path_model::PathSnapshot::rotation`].
@@ -367,6 +381,7 @@ impl From<crate::primitive_model::ObjectSnapshot> for ObjectJson {
                 closed: path.closed,
                 style: path.style,
                 anchors: path.anchors,
+                extra_subpaths: path.extra_subpaths,
                 rotation: path.rotation,
             },
             ObjectSnapshot::Primitive(primitive) => {

@@ -4,6 +4,8 @@
 //! at random: they cross themselves and each other and nest, so holes and self-intersections
 //! are in the sample.
 
+// Native only: `proptest` or the file system is needed (the wasm build runs `boolean_golden_wasm`).
+#![cfg(not(target_arch = "wasm32"))]
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,

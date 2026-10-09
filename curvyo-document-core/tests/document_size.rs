@@ -99,15 +99,18 @@ fn a_file_with_a_stored_display_unit_opens_and_round_trips() {
 }
 
 /// The unit is stored next to the size in the non-authoritative JSON view,
-/// and `format_version` stays 7 (criterion 38: no bump).
+/// and needs no `format_version` of its own (criterion 38: no bump; the view
+/// names the build's current version).
 #[test]
-fn document_json_carries_the_display_unit_and_the_format_stays_7() {
+fn document_json_carries_the_display_unit_and_the_current_format_version() {
     let document = Document::new(1);
     assert!(document.set_display_unit(DisplayUnit::Cm));
     let json: serde_json::Value = serde_json::from_slice(&document.export_json().unwrap()).unwrap();
     assert_eq!(json["display_unit"], "cm");
-    assert_eq!(json["format_version"], 7);
-    assert_eq!(curvyo_document_core::CURRENT_FORMAT_VERSION, 7);
+    assert_eq!(
+        json["format_version"],
+        curvyo_document_core::CURRENT_FORMAT_VERSION
+    );
 }
 
 /// Criterion 39: resize and fit followed by save, close and open keep the

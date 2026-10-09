@@ -10,7 +10,9 @@
 use curvyo_document_core::{
     NodeId, ObjectSnapshot, Point, Tolerance, Vec2, outline_of_rotated, shape_frame_bounds,
 };
-use curvyo_geometry_core::{OutlineTriple, contains_point, nearest_point_on_segment};
+use curvyo_geometry_core::{
+    Outline, OutlineTriple, contains_point_in_outlines, nearest_point_on_segment,
+};
 
 use crate::hit_test::segment_pairs;
 use crate::object_bounds::object_outline_bounds;
@@ -66,7 +68,7 @@ fn certainly_farther_than(object: &ObjectSnapshot, point: Point, margin: f64) ->
                 f64::NEG_INFINITY,
                 f64::NEG_INFINITY,
             );
-            for a in &path.anchors {
+            for a in path.all_anchors() {
                 for q in [
                     a.point,
                     a.point.translated(a.handle_in),
@@ -99,12 +101,23 @@ fn distance_to_object(object: &ObjectSnapshot, point: Point, tolerance: Toleranc
         return None;
     }
     match object {
-        ObjectSnapshot::Path(path) => {
-            nearest_distance_on_run(path.anchors.len(), path.closed, point, tolerance, |i| {
-                let anchor = &path.anchors[i];
-                (anchor.point, anchor.handle_in, anchor.handle_out)
+        // Every outline of a compound path counts: the stroke of any of them
+        // picks the object (criterion 33).
+        ObjectSnapshot::Path(path) => path
+            .subpaths()
+            .filter_map(|subpath| {
+                nearest_distance_on_run(
+                    subpath.anchors.len(),
+                    subpath.closed,
+                    point,
+                    tolerance,
+                    |i| {
+                        let anchor = &subpath.anchors[i];
+                        (anchor.point, anchor.handle_in, anchor.handle_out)
+                    },
+                )
             })
-        }
+            .min_by(f64::total_cmp),
         ObjectSnapshot::Primitive(primitive) => {
             let outline = outline_of_rotated(&primitive.shape, primitive.rotation);
             nearest_distance_on_run(outline.len(), true, point, tolerance, |i| {
@@ -115,25 +128,31 @@ fn distance_to_object(object: &ObjectSnapshot, point: Point, tolerance: Toleranc
     }
 }
 
-/// An object's outline as `(point, handle_in, handle_out)` triples and
-/// whether it is closed: a path's own anchors, a primitive's rotation-aware
-/// outline.
-fn outline_of(object: &ObjectSnapshot) -> (Vec<OutlineTriple>, bool) {
+/// An object's outlines as `(point, handle_in, handle_out)` triples, each with
+/// whether it is closed: a path's own outlines (one, or several for a compound
+/// path), a primitive's rotation-aware outline.
+fn outlines_of(object: &ObjectSnapshot) -> Vec<(Vec<OutlineTriple>, bool)> {
     match object {
-        ObjectSnapshot::Path(path) => (
-            path.anchors
-                .iter()
-                .map(|a| (a.point, a.handle_in, a.handle_out))
-                .collect(),
-            path.closed,
-        ),
-        ObjectSnapshot::Primitive(primitive) => (
+        ObjectSnapshot::Path(path) => path
+            .subpaths()
+            .map(|subpath| {
+                (
+                    subpath
+                        .anchors
+                        .iter()
+                        .map(|a| (a.point, a.handle_in, a.handle_out))
+                        .collect(),
+                    subpath.closed,
+                )
+            })
+            .collect(),
+        ObjectSnapshot::Primitive(primitive) => vec![(
             outline_of_rotated(&primitive.shape, primitive.rotation)
                 .iter()
                 .map(|a| (a.point, a.handle_in, a.handle_out))
                 .collect(),
             true,
-        ),
+        )],
     }
 }
 
@@ -141,12 +160,14 @@ fn outline_of(object: &ObjectSnapshot) -> (Vec<OutlineTriple>, bool) {
 /// object takes part exactly when the renderer would paint a fill for it
 /// (`Fill::paints`; opacity 0 still counts), and the point lies in the area
 /// that fill covers. An open path's interior is closed with a chord, a closed
-/// one's is bounded by its real closing segment (acceptance criterion 23).
+/// one's is bounded by its real closing segment (acceptance criterion 23). A
+/// compound path's interior is the nonzero winding over all its outlines, so
+/// a hole is not inside it (`specs/0016-boolean-operations` criterion 33).
 fn fills_point(object: &ObjectSnapshot, point: Point) -> bool {
     if !object.style().fill.paints() || certainly_farther_than(object, point, 0.0) {
         return false;
     }
-    let (outline, closed) = outline_of(object);
+    let outlines = outlines_of(object);
     // Cheap reject first: a point outside the control hull's box is outside
     // the shape, so a hover over thousands of objects does not run the
     // winding test on every one.
@@ -156,7 +177,7 @@ fn fills_point(object: &ObjectSnapshot, point: Point) -> bool {
         f64::NEG_INFINITY,
         f64::NEG_INFINITY,
     );
-    for (p, handle_in, handle_out) in &outline {
+    for (p, handle_in, handle_out) in outlines.iter().flat_map(|(outline, _)| outline) {
         for q in [*p, p.translated(*handle_in), p.translated(*handle_out)] {
             hull = (
                 hull.0.min(q.x),
@@ -169,7 +190,11 @@ fn fills_point(object: &ObjectSnapshot, point: Point) -> bool {
     if point.x < hull.0 || point.x > hull.2 || point.y < hull.1 || point.y > hull.3 {
         return false;
     }
-    contains_point(&outline, closed, point)
+    let borrowed: Vec<Outline<'_>> = outlines
+        .iter()
+        .map(|(anchors, closed)| Outline::new(anchors, *closed))
+        .collect();
+    contains_point_in_outlines(&borrowed, point)
 }
 
 /// Hit-tests `point` against every object in `objects` — a path through

@@ -313,6 +313,13 @@ pub const MIN_DISPLAY_STROKE_WIDTH_PX: f64 = 1.0;
 /// weight (acceptance criterion 16), since nothing has committed yet.
 pub const LIVE_PREVIEW_STROKE_PX: f64 = 1.5;
 
+/// The hollow outline of an operand a boolean operation was refused for: `--field-invalid`
+/// (`docs/design-system.md`, "Action notice"; `0016-boolean-operations` criteria 15 and 16).
+pub const REFUSAL_OUTLINE: RgbaColor = RgbaColor::opaque(0xB3, 0x26, 0x1E);
+
+/// Its width on screen, whatever the object's own stroke width.
+pub const REFUSAL_OUTLINE_STROKE_PX: f64 = 2.0;
+
 /// `--preview-new` (`docs/design-system.md`): the "new" half of blue-new,
 /// black-old, the hollow outline of the geometry a release would commit. An
 /// alias of [`ACCENT`], named so the preview can be re-coloured without

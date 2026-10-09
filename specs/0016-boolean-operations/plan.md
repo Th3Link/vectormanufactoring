@@ -1,28 +1,33 @@
 # Plan for Boolean operations
 
-Branch `story/boolean-operations`, worktree `/home/marc/workbench/vecmanf-claude/boolean-kernel`, from
-`main` at `2a83559`. This plan covers all four PRs of the architect's split (`adrs.md`, "PR split and
-order"). Only PR 1 is written now; PRs 2 to 4 are listed so the kernel API fits what they need and
-are marked **later**. PR 2 waits for the customer's answer to question 1 (default: option A) and,
-per `CLAUDE.md` §4, for `0015-document-size-and-rulers` to merge, because it shares crates with it.
-PR 3 and PR 4 start after PR 2. Each later PR gets its own branch and re-derives its task list from
-this one when it starts.
+One slice, one branch (`story/boolean-ui`), one PR (#73, customer rule of 2026-10-09: one PR per
+slice, opened ready only when the customer can test it end to end). The work was built in
+milestones, which the numbered tasks below still follow:
+
+- **Milestone 1, the kernel: done** (merged earlier as #69; the library choice is in the ADR 0003
+  amendment, #70).
+- **Milestone 2, the compound path in the document model: done** (built as PR 71, closed into #73).
+  The customer approved option A (one object, several outlines) on 2026-10-09.
+- **Milestone 3, the command and the rail UI: done** (in #73), including the fix rounds of the
+  architect and tester reviews (task 20a).
+- **Not in this slice: the hover preview (P1 to P3, task 21).** Decision B (architect's
+  recommendation): it moves to the Draft list of `specs/README.md` as a separate later entry. No
+  numbered criterion needs it.
 
 ## Affected crates/modules
 
-| PR | Crate | New or changed |
+| Milestone | Crate | New or changed |
 |---|---|---|
 | 1 | `curvyo-geometry-core` | New `flatten.rs` (cubic outline to polyline, deterministic), `boolean_grid.rs` (grid snap, cleanup, canonical form), `boolean.rs` (operations, normalization, pairwise fold, errors, result type). `lib.rs` re-exports. `tests/fixtures/` (golden files), `tests/boolean_*.rs`. |
 | 1 | workspace and CI | `Cargo.toml` + `Cargo.lock`: `i_overlay` pinned exactly (it replaced `clipper2-rust` during PR 1, see `adrs.md`), `thiserror` for the kernel's error type (already a workspace dependency). `deny.toml` needs no change (`i_overlay` and its helper crates are MIT or MIT OR Apache-2.0). `.github/workflows/ci.yml` gets a `boolean-budgets` job that runs the performance tests in release. |
-| 2 (later) | `curvyo-document-core` | `extra_subpaths` encoding, `PathSnapshot::subpaths()`, `subpath_codec`, the audit table of `adrs.md`, `Document::replace_with_path`, format bump, fixtures. |
-| 2 (later) | `curvyo-geometry-core` | `contains_point` over several outlines. |
-| 2 (later) | `curvyo-ui-core`, `curvyo-render-core` | Hit-testing, bounds, oriented box, fill, stroke and dash over all outlines; Node tool skips compound paths. |
-| 3 (later) | `curvyo-ui-core`, `curvyo-editor-wasm`, `frontend/` | `boolean` module (operands in z-order, base operand, outlines per snapshot, `BOOLEAN_TOLERANCE`, refusals), `session/boolean.rs`, Boolean group in the Select bar, notices, red outline of offenders. |
-| 4 (later, optional) | `curvyo-ui-core`, `curvyo-editor-wasm`, `frontend/` | Preview (P1 to P3) on the existing `--preview-new` path; no document write. |
+| 2 | `curvyo-document-core` | `extra_subpaths` encoding, `PathSnapshot::subpaths()`, `subpath_codec`, the audit table of `adrs.md`, `Document::replace_with_path`, format bump, fixtures. |
+| 2 | `curvyo-geometry-core` | `contains_point` over several outlines. |
+| 2 | `curvyo-ui-core`, `curvyo-render-core` | Hit-testing, bounds, oriented box, fill, stroke and dash over all outlines; Node tool skips compound paths. |
+| 3 | `curvyo-ui-core`, `curvyo-render-core`, `curvyo-editor-wasm`, `frontend/` | `boolean` module (operands in z-order, base operand, outlines per snapshot, private `BOOLEAN_TOLERANCE`, refusals), `session/boolean.rs`, the Boolean section of the tool rail (customer decision: not a Select bar group), notices, red outline of offenders, `boolean-wasm-golden` CI job. |
 
 ## Tasks
 
-### PR 1: kernel (`curvyo-geometry-core` only)
+### Milestone 1: kernel (`curvyo-geometry-core` only)
 
 - [x] 1. Add `i_overlay` (exact pin, `default-features = false`) and `thiserror` to
   `curvyo-geometry-core`; verify `cargo deny check`, the wasm32 build and the banned-dependency
@@ -67,36 +72,72 @@ this one when it starts.
   cleanup; the library change and why). Run the
   full gate of `CLAUDE.md` §7 and every step of `.github/workflows/ci.yml` on the head sha.
 
-### PR 2: compound path (later; needs customer answer to question 1 and `0015` merged)
+### Milestone 2: compound path
 
-- [ ] 11. `extra_subpaths` encoding, read model (`SubpathSnapshot`, `subpaths()`), open-file
-  validation, `format_version` bump (`main` plus one at merge), golden files for a compound path
-  and an unchanged older file (AC 30, 37, 37a).
-- [ ] 12. The audit table, one test per line: `rotated`/`scaled`/`sheared`, `translate_objects`,
-  `duplicate_objects`, resize, rotate and skew commits (AC 35, 35a, 36, 36a).
-- [ ] 13. `contains_point` over several outlines; `ui-core` hit-test, bounds, oriented box
-  (AC 33, 34).
-- [ ] 14. `render-core`: fill, stroke, dash over all outlines (AC 31, 31a, 32).
-- [ ] 15. Node tool skips compound paths, hint chip, Join and Split refuse, Markers block hidden
-  (AC 38, 38a, 38b).
-- [ ] 16. `Document::replace_with_path` (one commit, label, base operand's place and style,
-  rotation 0) and the write-cost measurement of a 20,000-anchor compound path (AC 19 to 22, 27, 28,
-  46, 47).
+Crates: `curvyo-document-core` (model, codec, commands), `curvyo-geometry-core` (`contains_point_in_outlines`),
+`curvyo-ui-core` (hit test, bounds, oriented box, commits, double-click outcome), `curvyo-render-core`
+(fill, stroke, dash, live preview), `curvyo-editor-wasm` (`Session::paths()` leaves compound paths
+out). No frontend change: the Node-bar sentence, the hint chip and the Properties panel are PR 3.
 
-### PR 3: command and UI (later; after PR 2)
+- [x] 11. `extra_subpaths` encoding in a new `subpath_codec.rs`, read model (`SubpathSnapshot`,
+  `SubpathRef`, `PathSnapshot::subpaths()` / `all_anchors()` / `is_compound()`), open-file
+  validation, `CURRENT_FORMAT_VERSION` 7 to 8, golden `compound_v8.curvyo`, older fixtures
+  re-read and compared with their stored Loro state (AC 30, 37, 37a).
+- [x] 12. The audit table, one test per line (`curvyo-document-core/tests/compound_path.rs`):
+  `rotated` / `scaled` / `sheared`, `translate_objects`, `ObjectSnapshot::translated`,
+  `duplicate_objects` (`check_anchor_ids`, `renumber_anchors`), `rotate_object`, `resize_path`
+  (AC 35, 35a, 36, 36a). In `ui-core`: `commit_move`, `commit_resize`, `numbers_of`.
+- [x] 13. `contains_point_in_outlines` (one `BezPath`, winding summed); `ui-core` `hit_test_object`
+  (`distance_to_object`, `fills_point`, `certainly_farther_than`), `object_bounds`,
+  `object_outline_bounds`, `oriented_bounds` (AC 33, 34; `tests/compound_path_select.rs`).
+- [x] 14. `render-core`: the fill is one path with a sub-path per outline; the stroke dashes each
+  outline on its own and tessellates them as one layer; the live preview outlines every outline
+  (AC 31, 31a, 32; `tests/compound_artwork.rs`).
+- [x] 15. Node tool: `Session::paths()` leaves compound paths out, so they show no node, handle or
+  segment and cannot be selected, joined, split or deleted; `check_join` / `check_split` and the
+  commands refuse; a double-click on a compound path in the Select tool is the new outcome
+  `SelectDoubleClickOutcome::CompoundPath` (AC 38, 38a). The sentence and the hint chip are PR 3;
+  38b has nothing to hide yet (no markers exist; `0018` decides).
+- [x] 16. `Document::replace_with_path` in a new `replace.rs` (one commit with the caller's label,
+  the base's place and style, rotation 0, every id resolved first) and the write-cost measurement
+  (`tests/compound_write_cost.rs`; numbers in the PR) (AC 19 to 22, 27, 28, 46, 47).
+- [x] 16a. Docs: `docs/technical-debt.md` entry "one-outline assumptions are found by audit"; the
+  `format_version` paragraph in `document.rs`.
 
-- [ ] 17. `ui-core` `boolean` module: operands in z-order, outlines from snapshots (primitives
-  through `outline_of_rotated`), base operand, kernel call, refusals with counts, selection after
-  (AC 4, 5, 6, 9, 15 to 17, 19, 23).
-- [ ] 18. Session glue and Select bar Boolean group: one Tab stop, roving focus, tooltips, notices,
-  busy state, red outline of offenders, focus to the canvas (AC 1, 2, 3, 18, 22a, 29, 47a).
-- [ ] 19. Exclusion and Reverse difference buttons (question 2 default A) (AC 13).
-- [ ] 20. Performance with the document write: 1,000 rectangles, button press to repaint
-  (AC 46, 47).
+### Milestone 3: command and rail UI
 
-### PR 4: preview (later, optional; question 6 default A)
+- [x] 17. Texts of the compound path (decided in PR 2 review): the subject line "Compound path" in
+  Rust (`style_scope::kind_name`); `NodeToolbarState.compound_only` and the double-click code
+  `"compound_path"` from Rust, the sentence of criterion 38 as one frontend constant
+  (`COMPOUND_NODES_TEXT`), shown in the Node bar slot and the hint chip (AC 38).
+- [x] 17a. `ui-core` `boolean` module: `boolean_availability`, `plan_boolean` (operands in
+  z-order, outlines from snapshots, base operand), refusals with counts (AC 1, 4, 5, 6, 9, 15 to
+  17, 19, 23).
+- [x] 18. Session glue and the Boolean section of the tool rail: `Session::apply_boolean`,
+  `wasm_boolean.rs`, `BooleanCommands.tsx` (one Tab stop, roving focus, tooltips), notice beside the
+  rail, busy state, red outline of offenders (`render-core` `refusal_outline`), focus to the canvas
+  on a mouse press (AC 1, 2, 3, 15 to 18, 22a, 29, 47a). Tests: `ui-core` unit tests,
+  `curvyo-editor-wasm/tests/boolean_command.rs`, `frontend/tests/booleanText.test.ts`.
+- [x] 19. All five buttons, Exclusion and Reverse difference included (question 2 default A)
+  (AC 13).
+- [x] 20. Performance with the document write: 1,000 rectangles Union and two operands of 1,000
+  nodes to the repainted draw list (`curvyo-editor-wasm/tests/boolean_interactivity.rs`, in the
+  `boolean-budgets` CI job) (AC 46, 47).
 
-- [ ] 21. Hover-intent and keyboard-focus preview, 2,000-node cap, "Would be empty" tooltip note
+- [x] 20a. Review of PR 73: criterion 43 test in the wasm build (`boolean_golden_wasm.rs`, CI job
+  `boolean-wasm-golden`), commit-label test (criterion 28), technical-debt entries (UI thread,
+  `len_changes`), design-system corrections, out-of-range wording, typed-entry gate, node selection
+  cleared, subject line "N paths", `plan_boolean` split, shared `MAX_COORDINATE_MM`, frontend split
+  (`useActionNotice`, `BooleanButton`, `BooleanNotice`).
+
+- [x] 20b. Final architect check: Node 22 pinned in `boolean-wasm-golden`; a native test that the
+  hand-written fixture list matches the fixture directory; the four native-only geometry-core test
+  files excluded from wasm32 builds; `dashed_object` split (`dash_outline`); intro of
+  `docs/technical-debt.md` refreshed; this plan rewritten as milestones; PR text with the review guide.
+
+### Not in this slice: preview (separate later entry, decision B)
+
+- [ ] 21. (Moved out of the slice.) Hover-intent and keyboard-focus preview, 2,000-node cap, "Would be empty" tooltip note
   (P1 to P3).
 
 ## Validation
