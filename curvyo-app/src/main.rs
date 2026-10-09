@@ -35,43 +35,6 @@ const PROJECT_EXTENSION: &str = "curvyo";
 const PROJECT_FILTER_NAME: &str = "Curvyo project";
 const DEFAULT_FILE_NAME: &str = "Untitled.curvyo";
 
-/// The project state pushed to the frontend after New, Open, Save or Save
-/// As succeeds — just enough for the status bar (ADR 0002 §2's mm size).
-/// Title bar text is owned entirely by this host, not the frontend
-/// (native window title, ADR 0001 §1).
-///
-/// `size_mm` is always the default A4-portrait page: no slice has yet
-/// given a document any other size (`curvyo_document_core::Document`
-/// has no resize command), so this host does not need to ask the
-/// frontend's `WasmSession` for it. Whichever slice adds page-size
-/// editing will need to move this to a real query against the live
-/// session, the same way `path-node-editing` moved Open/Save there.
-#[derive(Clone, serde::Serialize)]
-struct ProjectStatePayload {
-    size_mm: SizeMmPayload,
-}
-
-#[derive(Clone, serde::Serialize)]
-struct SizeMmPayload {
-    width: f64,
-    height: f64,
-}
-
-impl From<curvyo_document_core::DocumentSize> for SizeMmPayload {
-    fn from(size: curvyo_document_core::DocumentSize) -> Self {
-        Self {
-            width: size.width.as_mm(),
-            height: size.height.as_mm(),
-        }
-    }
-}
-
-fn default_project_state_payload() -> ProjectStatePayload {
-    ProjectStatePayload {
-        size_mm: curvyo_document_core::DocumentSize::default().into(),
-    }
-}
-
 /// A host-level failure to even read a path's bytes (missing file,
 /// permissions, not a file) — distinct from a `.curvyo` whose *content* is
 /// invalid, which is the frontend's own refusal once it tries
@@ -134,18 +97,9 @@ struct RequestPackPayload {
     app_version: String,
 }
 
-/// Returns the current project's state, for the frontend to read once on
-/// mount (avoids a race with an event emitted before any listener is
-/// attached).
-#[tauri::command]
-fn get_project_state() -> ProjectStatePayload {
-    default_project_state_payload()
-}
-
 /// Returns and clears any open payload buffered before the frontend had
 /// mounted — the file-association launch path's open attempt runs in
-/// `.setup()`, ahead of any `listen()` call. Call once, at mount, the same
-/// way as [`get_project_state`].
+/// `.setup()`, ahead of any `listen()` call. Call once, at mount.
 #[tauri::command]
 #[allow(clippy::needless_pass_by_value)]
 fn take_pending_open(state: State<AppState>) -> Option<PendingOpenPayload> {
@@ -201,7 +155,6 @@ fn save_project_bytes(app: AppHandle, state: State<AppState>, bytes: Vec<u8>, sa
     let file_name = project.file_name();
     drop(project);
     set_window_title(&app, file_name.as_deref());
-    emit_project_state(&app);
 }
 
 /// Whether `WEBKIT_DISABLE_DMABUF_RENDERER` still needs to be set in this
@@ -270,7 +223,6 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
-            get_project_state,
             take_pending_open,
             confirm_project_opened,
             save_project_bytes,
@@ -333,10 +285,6 @@ fn set_window_title(app: &AppHandle, file_name: Option<&str>) {
     }
 }
 
-fn emit_project_state(app: &AppHandle) {
-    let _ = app.emit("project-state", default_project_state_payload());
-}
-
 /// Emits the live "open-error" event (for an already-mounted frontend) and
 /// buffers the same message in [`AppState`] (for the file-association
 /// launch race — see [`take_pending_open`]). Harmless if nobody ever
@@ -368,7 +316,6 @@ pub(crate) fn handle_new(app: &AppHandle) {
     drop(project);
     set_window_title(app, None);
     let _ = app.emit("new-project", ());
-    emit_project_state(app);
 }
 
 /// Handles File → Open…: the native picker, then [`open_path`].
