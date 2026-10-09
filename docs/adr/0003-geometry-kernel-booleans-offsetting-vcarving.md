@@ -136,37 +136,40 @@ foundation.
    > also turned a valid outline into a self-crossing one. Evidence and
    > fixtures: PR #69, `docs/technical-debt.md` entry of that PR.
    >
-   > - **Decision:** `i_overlay` **`=9.0.0`**, exact pin, workspace dependency
-   >   with default features (none; `allow_multithreading` pulls `rayon` and
-   >   stays off), used only by `curvyo-geometry-core`. MIT OR Apache-2.0;
-   >   its own dependencies `i_float` 5.0.0, `i_shape` 5.0.0, `i_tree` 0.19.0
-   >   and `i_key_sort` 0.11.0 are MIT. Rust 1.88 minimum, below the
-   >   workspace's 1.90. The spike built it for `wasm32-unknown-unknown`;
-   >   nothing on ADR 0011 §6's ban list. An update is a reviewed PR that
-   >   reruns the fixtures and property tests, not a Renovate auto-bump.
-   > - **Determinism (AC 43):** `i_overlay` computes on an `i32` integer grid
-   >   with integer predicates, no platform math. The kernel snaps to its own
-   >   fixed 0.001 mm grid and calls the integer API; it does **not** use the
-   >   float adapter, which picks its scale from the input bounds and would
-   >   make the grid depend on the input. Consequence: the `OutOfRange` bound
-   >   shrinks to fit `i32` with headroom (2³¹ units is about 2,147 m; AC 42's
-   >   100,000 mm is 10⁸ units). PR #69 sets the exact bound and its fixture.
-   >   The golden files and the cross-target check of AC 43 are the evidence.
+   > - **Decision:** `i_overlay` **`=9.0.1`**, exact pin (9.0.0 is the
+   >   spike and property-test evidence; 9.0.1 is what PR #69 pins and
+   >   tests), workspace dependency, `default-features = false`
+   >   (`allow_multithreading` pulls `rayon` and stays off), used only by
+   >   `curvyo-geometry-core`. MIT OR Apache-2.0; its own dependencies
+   >   `i_float`, `i_shape`, `i_tree` and `i_key_sort` are MIT. Rust 1.88
+   >   minimum, below the workspace's 1.90. The spike built it for
+   >   `wasm32-unknown-unknown`; nothing on ADR 0011 §6's ban list. An update
+   >   is a reviewed PR that reruns the fixtures and property tests, not a
+   >   Renovate auto-bump.
+   > - **Determinism (AC 43):** the kernel snaps to its own fixed 0.001 mm
+   >   grid and runs `i_overlay`'s `i64` engine (`Overlay::<i64>`, integer
+   >   predicates, no platform math, range ±2⁶² units). It does **not** use
+   >   the float adapter, which picks its scale from the input bounds and
+   >   would make the grid depend on the input. The `OutOfRange` bound is
+   >   unchanged: 10⁷ mm = 10¹⁰ grid units, far inside the range; AC 42's
+   >   100,000 mm is 10⁸ units. The golden files and the cross-target check
+   >   of AC 43 are the evidence.
    > - **Why `clipper2-rust` lost:** a wrong area is a wrong cut; no other
    >   criterion outweighs it. The spike's tie-breaker (`forbid(unsafe_code)`
-   >   in the dependency, versus about 49 internal `unsafe` sites in
-   >   `i_overlay`) was only ever a tie-breaker: `CLAUDE.md` §5 forbids
-   >   `unsafe` in our crates, and `curvyo-geometry-core` keeps
-   >   `#![forbid(unsafe_code)]`. `geo` stays rejected (wrapper over an older
-   >   `i_overlay`, see above).
+   >   in the dependency) was only ever a tie-breaker. Unsafe count, scoped:
+   >   **49 sites in `i_overlay` 9.0.0's own source** (the spike's count, the
+   >   figure this ADR cites); about 130 across all five `i_*` crates PR #69
+   >   pulls in. `CLAUDE.md` §5 forbids `unsafe` in our crates, and
+   >   `curvyo-geometry-core` keeps `#![forbid(unsafe_code)]`. `geo` stays
+   >   rejected (wrapper over an older `i_overlay`, see above).
    > - **Hard delete:** `clipper2-rust` leaves `Cargo.toml` and `Cargo.lock`
    >   in PR #69. No fallback path, no feature flag, no backend trait (§8). It
    >   can come back only by a new dated decision here that passes the same
    >   property tests. BSL-1.0 stays in `deny.toml` for `xxhash-rust`.
    > - **Consequences:** the library is local to `boolean_grid::run`; the
    >   kernel API, the pipeline of `specs/0016-boolean-operations/adrs.md`
-   >   (normalize, fold pairwise, own cleanup, canonical form), the fixtures
-   >   and the property tests are unchanged. The §4 open question about
+   >   (grid range, normalize, fold pairwise, own cleanup, canonical form),
+   >   the fixtures and the property tests are unchanged. The §4 open question about
    >   Clipper2's offsetter loses its premise: §4 stands as written. Whether
    >   `i_overlay` itself offers outline offsetting with the joins §4 lists is
    >   **to be checked** when the offsetting story is specified (crates.io

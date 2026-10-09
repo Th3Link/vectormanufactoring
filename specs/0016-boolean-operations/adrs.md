@@ -3,8 +3,8 @@
 This slice adds the first real kernel operation and the first document-model
 change since `stroke-and-fill-styling`: a path object may hold more than one
 outline. **No new crate, no new ADR, one new external dependency
-(`i_overlay`, see the 2026-10-09 amendment below; the 2026-10-04 spike had
-chosen `clipper2-rust`), one `format_version` bump.** The compound-path decision below needs the customer's approval
+(`clipper2-rust`, chosen by the 2026-10-04 spike), one `format_version`
+bump.** The compound-path decision below needs the customer's approval
 (`CLAUDE.md` §3, document model) before PR 2 starts; PR 1 does not depend
 on it.
 
@@ -24,8 +24,7 @@ on it.
 - [ADR 0003 §1, §3, §8](../../docs/adr/0003-geometry-kernel-booleans-offsetting-vcarving.md):
   the kernel lives in `curvyo-geometry-core`, takes an explicit `Tolerance`,
   runs on flattened polygons and returns polylines. The library is
-  `i_overlay` (amendment under §3, 2026-10-09, replacing the spike's
-  `clipper2-rust`). No backend trait.
+  `clipper2-rust` (spike note under §3, 2026-10-04). No backend trait.
 - [ADR 0003 §7](../../docs/adr/0003-geometry-kernel-booleans-offsetting-vcarving.md):
   the 0.01 mm kernel tolerance is not the display tessellation tolerance.
 - [ADR 0004 §9](../../docs/adr/0004-persistence-and-cross-machine-sync.md):
@@ -139,21 +138,6 @@ assumptions are found by audit, not by the compiler", with this table.
   `curvyo-geometry-core`. Take the newest 1.x at PR time and pin it exactly
   (`=1.x.y`): its provenance risk (AI-assisted port) means an update is a
   reviewed PR that reruns the fixtures, not a Renovate auto-bump.
-
-  > **Amended 2026-10-09: `i_overlay` `=9.0.0` replaces `clipper2-rust`.**
-  > Proposed by the lead as a default the customer may veto; takes effect
-  > when PR #69 merges. Record and reasons: ADR 0003 §3 amendment.
-  > Evidence: on 5,877 lattice pairs `clipper2-rust` 1.2.0 broke the AC 14
-  > area identities 12 to 16 times (one union fills 0.4 to 0.5 mm² no operand
-  > covers), `i_overlay` 9.0.0 never. For this feature: MIT OR Apache-2.0
-  > (dependencies MIT), default features only (`allow_multithreading` off),
-  > wasm32-clean per the spike, exact pin. The kernel snaps to its own
-  > 0.001 mm grid and calls the `i32` integer API, not the float adapter, so
-  > `OutOfRange` (pipeline step 3) shrinks to fit `i32` with headroom; AC 42's
-  > 100,000 mm still fits. Clipper-specific wording below (`Clipper64`,
-  > `SimplifyPaths`, Clipper's XOR) reads as "the boolean library"; the
-  > pipeline steps themselves are unchanged and the library stays local to
-  > `boolean_grid::run`. `clipper2-rust` is removed, no fallback.
 - **Input and output.** The kernel takes operands as lists of outlines
   (`&[OutlineTriple]` plus `closed`, the triple `curvyo-ui-core` already
   builds for hit-testing) and returns `Vec<Vec<Point>>`. No `kurbo` or
