@@ -5,6 +5,7 @@ import { createSession, openSession } from "@/lib/editorSession";
 import type { WasmSession } from "@/lib/editorSession";
 import type { EditHint } from "@/components/EditHintChip";
 import type { BooleanOp, BooleanResult } from "@/lib/booleanText";
+import type { BreakApartResult, CombineResult } from "@/lib/pathText";
 import type { ClosePathResult } from "@/lib/penText";
 
 /** The canvas's backing-buffer (physical pixel) size for a given CSS
@@ -610,6 +611,10 @@ export interface EditorSession {
   /** A boolean operation on the selection, in one commit (`0016-boolean-operations`);
    * `"ignored"` when no session is live or the Select tool is not active. */
   applyBoolean: (op: BooleanOp) => BooleanResult;
+  /** Combine on the selection, in one commit (`0035-combine-and-break-apart`). */
+  applyCombine: () => CombineResult;
+  /** Break apart on the selection, in one commit (`0035-combine-and-break-apart`). */
+  applyBreakApart: () => BreakApartResult;
   /** The Node bar's Close path buttons (`0034-pen-path-extension`): closes the open paths of
    * the editing set with `join` (`"sharp"` or `"smooth"`) in one commit. */
   closePath: (join: "sharp" | "smooth") => ClosePathResult;
@@ -1161,6 +1166,40 @@ export function useEditorSession(
     [syncFromSession],
   );
 
+  const applyCombine = useCallback((): CombineResult => {
+    const raw = sessionRef.current?.apply_combine();
+    syncFromSession();
+    if (!raw) {
+      return { kind: "ignored", count: 0, of: 0, holes: 0, stylesDiffer: false };
+    }
+    const result = {
+      kind: raw.kind,
+      count: raw.count,
+      of: raw.of,
+      holes: raw.holes,
+      stylesDiffer: raw.styles_differ,
+    };
+    raw.free();
+    return result;
+  }, [syncFromSession]);
+
+  const applyBreakApart = useCallback((): BreakApartResult => {
+    const raw = sessionRef.current?.apply_break_apart();
+    syncFromSession();
+    if (!raw) {
+      return { kind: "ignored", compounds: 0, pieces: 0, withHoles: false, leftAlone: 0 };
+    }
+    const result = {
+      kind: raw.kind,
+      compounds: raw.compounds,
+      pieces: raw.pieces,
+      withHoles: raw.with_holes,
+      leftAlone: raw.left_alone,
+    };
+    raw.free();
+    return result;
+  }, [syncFromSession]);
+
   /** The event's canvas-relative CSS pixel position — pure DOM geometry,
    * no wasm call and no document-space conversion (that happens inside
    * `Session` now, `specs/0004-canvas-navigation-and-selection/adrs.md`).
@@ -1655,6 +1694,8 @@ export function useEditorSession(
     setPolyStarRatio,
     convertSelectedToPaths,
     applyBoolean,
+    applyCombine,
+    applyBreakApart,
     closePath,
     onPointerDown,
     onPointerMove,

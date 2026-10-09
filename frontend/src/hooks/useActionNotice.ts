@@ -14,12 +14,20 @@ export interface ActionNotice {
   text: string;
   /** How long it stays, ms; the default of its kind if absent. */
   ms?: number;
+  /** The card whose first button the notice is level with: the Boolean card (default) or the
+   * Path card. */
+  anchor?: "boolean" | "path";
 }
 
 export interface ActionNoticeState {
   notice: ActionNotice | null;
   /** Shows a notice in place of the one on screen, for `ms` or the default of its kind. */
-  show: (kind: ActionNotice["kind"], text: string, ms?: number) => void;
+  show: (
+    kind: ActionNotice["kind"],
+    text: string,
+    ms?: number,
+    anchor?: ActionNotice["anchor"],
+  ) => void;
 }
 
 /**
@@ -43,10 +51,13 @@ export function useActionNotice(
     onEnd();
   }, [onEnd]);
 
-  const show = useCallback((kind: ActionNotice["kind"], text: string, ms?: number) => {
-    counter.current += 1;
-    setNotice({ id: counter.current, kind, text, ms });
-  }, []);
+  const show = useCallback(
+    (kind: ActionNotice["kind"], text: string, ms?: number, anchor?: ActionNotice["anchor"]) => {
+      counter.current += 1;
+      setNotice({ id: counter.current, kind, text, ms, anchor });
+    },
+    [],
+  );
 
   // The baseline is taken in the commit that shows the notice, after the state the action
   // changed (tool, selection size) has settled in the same batch.

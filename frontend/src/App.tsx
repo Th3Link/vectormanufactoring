@@ -10,7 +10,7 @@ import { ShapeToolbar } from "@/components/ShapeToolbar";
 import { StatusBar } from "@/components/StatusBar";
 import { ToolRail } from "@/components/ToolRail";
 import type { EditorSession } from "@/hooks/useEditorSession";
-import { useBooleanCommands } from "@/hooks/useBooleanCommands";
+import { useRailCommands } from "@/hooks/useRailCommands";
 import { useEditorSession } from "@/hooks/useEditorSession";
 import { useClosePathState } from "@/hooks/usePenCue";
 import { useDocumentPanel } from "@/hooks/useDocumentPanel";
@@ -51,7 +51,7 @@ async function openBytes(
 function App() {
   const [cursorMm, setCursorMm] = useState({ x: 0, y: 0 });
   const editor = useEditorSession(setCursorMm);
-  const booleans = useBooleanCommands(editor);
+  const railCommands = useRailCommands(editor);
   const closePathState = useClosePathState(editor);
   const documentPanel = useDocumentPanel(editor);
   const [openErrorMessage, setOpenErrorMessage] = useState<string | null>(
@@ -168,7 +168,7 @@ function App() {
           selectionCount={editor.selectionCount}
           onSelect={editor.setTool}
           onReturnFocus={() => editor.containerRef.current?.focus()}
-          booleans={booleans}
+          commands={railCommands}
         />
         <Canvas editor={editor} />
         {/* Contextual tool bar: floats over the canvas, right of the tool

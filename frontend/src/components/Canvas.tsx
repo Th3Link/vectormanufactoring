@@ -21,7 +21,7 @@ const READOUT_OFFSET_PX = 12;
 
 /** The tool rail's clearance from the canvas's left edge, px: the readout is
  * never drawn under it. */
-const TOOL_RAIL_CLEAR_PX = 64;
+const TOOL_RAIL_CLEAR_PX = 120;
 /** The properties panel's collapse tab sits on the canvas's right edge: a chip
  * never reaches into the last 14 px, so it cannot cover the tab when the
  * pointer leaves the canvas over the panel. */

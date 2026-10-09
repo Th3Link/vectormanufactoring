@@ -109,9 +109,10 @@
        collision-free name — see docs/design-system.md's own note. */
     /* The tool rail (docs/design-system.md, rows "Tool rail architecture" and "Toolbox card"):
        inset from the viewport edge and the rail's right edge (one 48px column). Bars start at
-       --rail-right + 12; notices and tooltips open from it. 116px once a second column exists. */
+       --rail-right + 12; notices and tooltips open from it. 60px with one column; 116px since the Path card
+       (column B) ships. */
     --rail-inset: 12px;
-    --rail-right: 60px;
+    --rail-right: 116px;
     --toolbar-bg: #DCDCE0;
     --toolbar-icon: #3A3A3F;
     --toolbar-icon-active-bg: #2F6FEE;

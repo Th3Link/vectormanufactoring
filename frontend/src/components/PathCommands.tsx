@@ -1,23 +1,24 @@
 import { useRef, useState } from "react";
 
-import { BooleanGlyph } from "@/components/BooleanGlyphs";
 import { CommandButton } from "@/components/CommandButton";
+import { PathGlyph } from "@/components/PathGlyphs";
 import {
-  COLUMN_A_TOOLTIP_OFFSET_PX,
+  COLUMN_B_TOOLTIP_OFFSET_PX,
   RAIL_CARD_CLASS,
   RAIL_CARD_STYLE,
 } from "@/components/railCard";
-import type { BooleanCommands as BooleanCommandsState } from "@/hooks/useRailCommands";
+import type { PathCommands as PathCommandsState } from "@/hooks/useRailCommands";
 import {
-  BOOLEAN_OPS,
-  type BooleanOp,
-  operationName,
-  operationRule,
-  tooltipNote,
-} from "@/lib/booleanText";
+  commandDimmed,
+  commandName,
+  commandNote,
+  commandRule,
+  PATH_COMMANDS,
+  type PathCommand,
+} from "@/lib/pathText";
 
-interface BooleanCommandsProps {
-  commands: BooleanCommandsState;
+interface PathCommandsProps {
+  commands: PathCommandsState;
   /** Whether the Select tool is active: with another tool the buttons are dimmed and the
    * tooltip says which tool to take. */
   selectTool: boolean;
@@ -28,7 +29,7 @@ interface BooleanCommandsProps {
 
 /** The index a navigation key moves the focus to (no wrap), or `null` for any other key. */
 function targetIndex(key: string, index: number): number | null {
-  const last = BOOLEAN_OPS.length - 1;
+  const last = PATH_COMMANDS.length - 1;
   switch (key) {
     case "ArrowDown":
       return Math.min(index + 1, last);
@@ -44,41 +45,39 @@ function targetIndex(key: string, index: number): number | null {
 }
 
 /**
- * The Boolean toolbox of the tool rail (`docs/design-system.md`, rows "Boolean toolbox" and
- * "Toolbox card"): a card of its own below the tools card, five commands, not tools, one
- * column. One Tab stop with roving focus. It shows what the session says is available and
- * decides nothing. Its notice is drawn by the rail (`BooleanNotice`), outside the card's
- * scrolling column.
+ * The Path card of the tool rail (`docs/design-system.md`, row "Path toolbox"): the first card of
+ * column B, Combine above Break apart, commands and not tools. One Tab stop with roving focus. It
+ * shows what the session says is available and decides nothing. Its notice is drawn by the rail.
  */
-export function BooleanCommands({ commands, selectTool, onReturnFocus }: BooleanCommandsProps) {
+export function PathCommands({ commands, selectTool, onReturnFocus }: PathCommandsProps) {
   const { availability, busy, apply } = commands;
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const [stop, setStop] = useState(0);
-  const [pressed, setPressed] = useState<BooleanOp | null>(null);
+  const [pressed, setPressed] = useState<PathCommand | null>(null);
 
   return (
     <div
       role="toolbar"
-      aria-label="Boolean operations"
+      aria-label="Path operations"
       aria-orientation="vertical"
       aria-busy={busy}
       className={RAIL_CARD_CLASS}
       style={RAIL_CARD_STYLE}
     >
-      {BOOLEAN_OPS.map((op, index) => (
+      {PATH_COMMANDS.map((command, index) => (
         <CommandButton
-          key={op}
+          key={command}
           ref={(element) => {
             buttons.current[index] = element;
           }}
-          name={operationName(op)}
-          rule={operationRule(op)}
-          note={tooltipNote(availability, selectTool)}
-          glyph={<BooleanGlyph op={op} />}
-          dimmed={availability.needsTwo}
-          tooltipOffset={COLUMN_A_TOOLTIP_OFFSET_PX}
+          name={commandName(command)}
+          rule={commandRule(command)}
+          note={commandNote(command, availability, selectTool)}
+          glyph={<PathGlyph command={command} />}
+          dimmed={commandDimmed(command, availability)}
+          tooltipOffset={COLUMN_B_TOOLTIP_OFFSET_PX}
           tabIndex={index === stop ? 0 : -1}
-          pressed={busy && pressed === op}
+          pressed={busy && pressed === command}
           onFocus={() => setStop(index)}
           onKeyDown={(event) => {
             const target = targetIndex(event.key, index);
@@ -91,8 +90,8 @@ export function BooleanCommands({ commands, selectTool, onReturnFocus }: Boolean
             if (busy) {
               return;
             }
-            setPressed(op);
-            apply(op);
+            setPressed(command);
+            apply(command);
             if (byMouse) {
               onReturnFocus();
             }
