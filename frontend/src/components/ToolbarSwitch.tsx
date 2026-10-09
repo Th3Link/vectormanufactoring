@@ -36,7 +36,7 @@ export function ToolbarSwitch({
             htmlFor={id}
             className="flex h-7 cursor-pointer items-center gap-2 rounded-md px-2 text-sm text-[var(--toolbar-icon)] hover:bg-[var(--editor-accent-hover)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--editor-accent)] has-[:focus-visible]:ring-offset-1 has-[:focus-visible]:ring-offset-[var(--toolbar-bg)]"
           >
-            <span>{label}</span>
+            <span className="whitespace-nowrap">{label}</span>
             <Switch.Root
               id={id}
               checked={checked}

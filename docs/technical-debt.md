@@ -699,6 +699,13 @@ frame on a path of 5000 nodes costs about 7.6 ms after the first frame
 (`curvyo-editor-wasm/tests/segment_bend_budget.rs`). The same assumption holds: no remote merge and no
 undo may run during a Node-tool drag.
 
+**Update 2026-10-10 (`0035-combine-and-break-apart`).** Combine and Break apart read every selected
+object once and write one commit, so they do not need the cache: with 1000 circles in a rectangle,
+2000 disjoint squares, 500 nested squares or a compound path of 5000 squares a command takes 11 to
+373 ms in a release build (budget 2 s, `curvyo-editor-wasm/tests/combine_interactivity.rs`), and the
+touch and nesting kernel 16 ms for 1001 outlines. The Boolean busy state (two painted frames before
+the call) is shared by both cards of the rail.
+
 ## The canvas does not react to a `devicePixelRatio` change with no resize event
 
 The fix below sizes the backing store once, at attach and on every

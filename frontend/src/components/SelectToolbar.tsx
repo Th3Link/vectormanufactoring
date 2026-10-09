@@ -34,6 +34,10 @@ export interface SelectToolbarProps {
 const MIN_POINT_COUNT = 3;
 const MAX_POINT_COUNT = 1024;
 
+/** A kind group: its controls wrap inside it in a bar too narrow for all of them (the first row
+ * keeps its y; every row is 36px: 28px controls and 4px above and below). */
+const GROUP_CLASS = "flex flex-wrap content-start items-center gap-x-3 py-1";
+
 const DIVIDER_STYLE = {
   background: "color-mix(in srgb, var(--toolbar-icon) 25%, transparent)",
 } as const;
@@ -50,7 +54,7 @@ function Divider() {
   return (
     <span
       aria-hidden
-      className="h-5 w-px shrink-0 group-data-[row-start]/row:invisible"
+      className="mt-2 h-5 w-px shrink-0 group-data-[row-start]/row:invisible"
       style={DIVIDER_STYLE}
     />
   );
@@ -88,7 +92,7 @@ function useRowStarts(container: React.RefObject<HTMLDivElement | null>) {
 }
 
 const BUTTON_CLASS =
-  "h-7 rounded-md px-2 text-sm text-[var(--toolbar-icon)] outline-none hover:bg-[var(--editor-accent-hover)] focus-visible:ring-2 focus-visible:ring-[var(--editor-accent)]";
+  "h-7 whitespace-nowrap rounded-md px-2 text-sm text-[var(--toolbar-icon)] outline-none hover:bg-[var(--editor-accent-hover)] focus-visible:ring-2 focus-visible:ring-[var(--editor-accent)]";
 
 interface RadiusFieldProps {
   bar: SelectBarState;
@@ -429,7 +433,7 @@ export function SelectToolbar({
   const groups: React.ReactNode[] = [];
   if (bar.radiusShown) {
     groups.push(
-      <div key="rectangle" className="flex items-center gap-3">
+      <div key="rectangle" className={GROUP_CLASS}>
         <RadiusField bar={bar} onSetRadius={onSetRadius} onReturnFocus={onReturnFocus} />
         <LinkCornersToggle linked={linkCorners} onLinkedChange={onSetLinkCorners} />
         <button
@@ -450,7 +454,7 @@ export function SelectToolbar({
   }
   if (bar.pointsShown || bar.ratioShown) {
     groups.push(
-      <div key="star" className="flex items-center gap-3">
+      <div key={"star"} className={GROUP_CLASS}>
         {bar.pointsShown && <PointsField bar={bar} onSetPointCount={onSetPointCount} />}
         {bar.ratioShown && (
           <label
@@ -489,7 +493,7 @@ export function SelectToolbar({
         type="button"
         title="Convert the selected shapes to paths"
         onClick={onConvertToPaths}
-        className={BUTTON_CLASS}
+        className={`${BUTTON_CLASS} my-1`}
       >
         Object to path
       </button>,
@@ -500,14 +504,17 @@ export function SelectToolbar({
       ref={barRef}
       data-context-bar=""
       // Every row is 36 px (28 px controls), so the switches, always on the
-      // first row, sit at the same y whether the bar has one row or two.
-      className="pointer-events-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0 rounded-lg px-2 text-sm"
+      // first row, sit at the same y whether the bar has one row or two. Groups are
+      // top-aligned so a tall settings group does not move the others.
+      className="pointer-events-auto flex min-w-0 flex-wrap items-start gap-x-3 gap-y-0 rounded-lg px-2 text-sm"
       style={{
         background: "var(--toolbar-bg)",
         boxShadow: "var(--panel-elevation-shadow)",
       }}
     >
-      <div className="flex min-h-9 items-center gap-3">
+      {/* The two switches wrap inside their group in a bar too narrow for both (the 356px row
+       * of a window of 800px with the second rail column); the first row keeps its y. */}
+      <div className="flex min-h-9 flex-wrap content-start items-center gap-x-3 gap-y-0 py-1">
         <ToolbarSwitch
           label="Scale stroke width"
           tooltip="Scale stroke width with the object. Off: a resize keeps the stroke thickness."
@@ -522,7 +529,7 @@ export function SelectToolbar({
         />
       </div>
       {groups.map((group, index) => (
-        <div key={index} className="group/row flex min-h-9 items-center gap-3">
+        <div key={index} className="group/row flex min-h-9 items-start gap-3">
           <Divider />
           {group}
         </div>
