@@ -382,3 +382,49 @@ fn the_node_tool_draws_no_overlay_for_a_compound_path() {
     assert!(session.node_toolbar_state().compound_only);
     assert_eq!(session.draw_list().triangle_count(), artwork);
 }
+
+/// Copy of a ring made by a boolean through the typed move entry's Copy check (the other route to
+/// `duplicate_objects` next to Ctrl-move): both compound paths keep both outlines, and every
+/// anchor id in the document is unique.
+#[test]
+fn a_typed_copy_of_a_ring_keeps_every_outline_with_fresh_anchor_ids() {
+    let document = Document::new(1);
+    let _ = rect(&document, 0.0, 0.0, 40.0);
+    let _ = rect(&document, 10.0, 10.0, 20.0);
+    let mut session = session_of(&document);
+    click(&mut session, pt(40.0, 20.0), false);
+    click(&mut session, pt(10.0, 20.0), true);
+    assert!(matches!(
+        session.apply_boolean(BooleanOp::Difference),
+        BooleanOutcome::Applied { compound: true, .. }
+    ));
+    let opened = session.key_down(curvyo_editor_wasm::KeyInput {
+        key: "m",
+        ..curvyo_editor_wasm::KeyInput::default()
+    });
+    assert_ne!(opened, curvyo_editor_wasm::KeyOutcome::Ignored);
+    assert!(session.move_entry().is_some(), "the move entry is open");
+    session.commit_move_entry(
+        "60",
+        "0",
+        curvyo_ui_core::MoveEntryMode {
+            absolute: false,
+            copy: true,
+        },
+    );
+    let after = doc(&session);
+    let rings: Vec<_> = after
+        .object_ids()
+        .into_iter()
+        .filter_map(|id| after.path(id))
+        .filter(curvyo_document_core::PathSnapshot::is_compound)
+        .collect();
+    assert_eq!(rings.len(), 2, "the original and the copy");
+    let mut ids = std::collections::HashSet::new();
+    for ring in &rings {
+        assert_eq!(ring.extra_subpaths.len(), 1, "both outlines");
+        assert_eq!(ring.all_anchors().count(), 8);
+        ids.extend(ring.all_anchors().map(|anchor| anchor.id));
+    }
+    assert_eq!(ids.len(), 16, "no anchor id is shared");
+}
