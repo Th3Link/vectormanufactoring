@@ -12,6 +12,7 @@
 //! meta map:
 //!   closed       : bool                     LWW register
 //!   (style keys   : see [`crate::style_codec`])
+//!   extra_subpaths : see [`crate::subpath_codec`] (a compound path's further outlines)
 //!   anchors      : movable list (ADR 0009 §3), each element a map:
 //!     id         : hex string of the AnchorId's u128   written once
 //!     point      : [x, y] (f64)              ONE LWW register
@@ -350,7 +351,7 @@ pub(crate) fn write_closed(meta: &LoroMap, closed: bool) {
     meta.insert(KEY_CLOSED, closed).unwrap();
 }
 
-fn read_anchor_snapshot(map: &LoroMap) -> AnchorSnapshot {
+pub(crate) fn read_anchor_snapshot(map: &LoroMap) -> AnchorSnapshot {
     AnchorSnapshot {
         // invariant: `write_anchor_fields` always sets `id` before this
         // map is ever reachable from `path()`, and `validate_path_tree`
@@ -404,6 +405,7 @@ pub(crate) fn read_path_snapshot(id: NodeId, meta: &LoroMap) -> PathSnapshot {
         closed: read_closed(meta),
         style: style_codec::read_style(meta),
         anchors,
+        extra_subpaths: crate::subpath_codec::read_extra_subpaths(meta),
         rotation: read_rotation(meta),
     }
 }
@@ -462,11 +464,12 @@ fn validate_path_node(meta: &LoroMap) -> bool {
         return false;
     };
     rotation_is_valid(meta)
+        && crate::subpath_codec::validate_extra_subpaths(meta)
         && style_validation::style_is_valid(meta)
         && (0..anchors.len()).all(|index| validate_anchor(&anchors, index))
 }
 
-fn validate_anchor(anchors: &LoroMovableList, index: usize) -> bool {
+pub(crate) fn validate_anchor(anchors: &LoroMovableList, index: usize) -> bool {
     let Some(ValueOrContainer::Container(Container::Map(map))) = anchors.get(index) else {
         return false;
     };

@@ -823,10 +823,11 @@ fn inch_size_is_stored_in_millimetres() {
     assert_eq!(d.size(), s);
 }
 
-/// AC 38: no `format_version` bump, no snapshot-version bump.
+/// AC 38: the display unit needs no `format_version` bump of its own (the file
+/// declares whatever version the build has, 7 when this was written) and no
+/// snapshot-version bump.
 #[test]
-fn a_file_with_a_display_unit_is_still_format_version_7() {
-    assert_eq!(CURRENT_FORMAT_VERSION, 7);
+fn a_file_with_a_display_unit_declares_the_current_format_version() {
     assert_eq!(curvyo_document_core::CURRENT_LORO_SNAPSHOT_VERSION, 1);
     let d = Document::new(1);
     let _ = d.set_display_unit(DisplayUnit::In);
@@ -835,7 +836,7 @@ fn a_file_with_a_display_unit_is_still_format_version_7() {
     let mut s = String::new();
     std::io::Read::read_to_string(&mut z.by_name("manifest.json").unwrap(), &mut s).unwrap();
     let m: serde_json::Value = serde_json::from_str(&s).unwrap();
-    assert_eq!(m["format_version"], 7);
+    assert_eq!(m["format_version"], CURRENT_FORMAT_VERSION);
     assert_eq!(m["loro_snapshot_version"], 1);
 }
 

@@ -228,21 +228,55 @@ impl NewAnchor {
 /// accidentally interchanged at a call site.
 pub type AnchorSnapshot = NewAnchor;
 
+/// One further outline of a compound path: the same two fields as a path's
+/// first outline (`specs/0016-boolean-operations/adrs.md`, "compound path").
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SubpathSnapshot {
+    /// Whether the last anchor connects back to the first.
+    pub closed: bool,
+    /// Anchors in traversal order. Every anchor id is unique within the
+    /// whole document, like those of the first outline.
+    pub anchors: Vec<AnchorSnapshot>,
+}
+
+/// One outline of a path as a borrowed view: its `closed` flag and anchors.
+/// [`PathSnapshot::subpaths`] yields one per outline, the first included.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SubpathRef<'a> {
+    /// Whether the last anchor connects back to the first.
+    pub closed: bool,
+    /// The outline's anchors in traversal order.
+    pub anchors: &'a [AnchorSnapshot],
+}
+
 /// A path's full data as read from the document — the ADR 0002 §5 "derived
 /// local read model" `curvyo-ui-core` and `curvyo-render-core` consume
 /// instead of touching Loro themselves.
+///
+/// A path has one outline (`closed`, `anchors`) or, as the result of a
+/// boolean operation, several: the first outline stays in those two fields
+/// and the others are `extra_subpaths` (empty for an ordinary path). The
+/// fill rule is nonzero over all outlines together, so an outline wound
+/// against its surrounding one is a hole.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PathSnapshot {
     /// This path's identity.
     pub id: NodeId,
-    /// Whether the last anchor connects back to the first.
+    /// Whether the last anchor of the first outline connects back to its
+    /// first.
     pub closed: bool,
     /// This path's whole style: stroke and fill (`specs/0007-stroke-and-fill-
     /// styling/adrs.md`). The same type a primitive carries.
     pub style: Style,
-    /// Anchors in traversal order (ADR 0009 §3's movable-list order, never
-    /// an array index — `specs/0002-path-node-editing/adrs.md`).
+    /// The first outline's anchors in traversal order (ADR 0009 §3's
+    /// movable-list order, never an array index — `specs/0002-path-node-
+    /// editing/adrs.md`).
     pub anchors: Vec<AnchorSnapshot>,
+    /// The outlines after the first, in order; empty for an ordinary path.
+    /// Skipped in `document.json` when empty, so an ordinary path exports as
+    /// before.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extra_subpaths: Vec<SubpathSnapshot>,
     /// This path's own cumulative rotation (`specs/0005-object-transform/
     /// adrs.md`: "used only to keep its selection box oriented on a later
     /// reselect... never consulted to render, hit-test, export or
@@ -255,6 +289,40 @@ pub struct PathSnapshot {
 }
 
 impl PathSnapshot {
+    /// Whether this path has more than one outline.
+    #[must_use]
+    pub fn is_compound(&self) -> bool {
+        !self.extra_subpaths.is_empty()
+    }
+
+    /// Every outline, the first included, in storage order.
+    pub fn subpaths(&self) -> impl Iterator<Item = SubpathRef<'_>> {
+        std::iter::once(SubpathRef {
+            closed: self.closed,
+            anchors: &self.anchors,
+        })
+        .chain(self.extra_subpaths.iter().map(|subpath| SubpathRef {
+            closed: subpath.closed,
+            anchors: &subpath.anchors,
+        }))
+    }
+
+    /// Every anchor of every outline, in [`PathSnapshot::subpaths`] order.
+    pub fn all_anchors(&self) -> impl Iterator<Item = &AnchorSnapshot> {
+        self.anchors
+            .iter()
+            .chain(self.extra_subpaths.iter().flat_map(|s| s.anchors.iter()))
+    }
+
+    /// Every anchor of every outline, mutably, in the same order.
+    pub fn all_anchors_mut(&mut self) -> impl Iterator<Item = &mut AnchorSnapshot> {
+        self.anchors.iter_mut().chain(
+            self.extra_subpaths
+                .iter_mut()
+                .flat_map(|s| s.anchors.iter_mut()),
+        )
+    }
+
     /// This path rotated by `angle` about `pivot`: every anchor's `point`
     /// rotates about `pivot`; every `handle_in`/`handle_out` rotates by
     /// `angle` alone (already relative to its own anchor, so it needs no
@@ -266,7 +334,7 @@ impl PathSnapshot {
     #[must_use]
     pub fn rotated(&self, pivot: Point, angle: Angle) -> Self {
         let mut rotated = self.clone();
-        for anchor in &mut rotated.anchors {
+        for anchor in rotated.all_anchors_mut() {
             anchor.point = anchor.point.rotated_around(pivot, angle);
             anchor.handle_in = anchor.handle_in.rotated(angle);
             anchor.handle_out = anchor.handle_out.rotated(angle);
@@ -291,7 +359,7 @@ impl PathSnapshot {
         let into_local = Angle::from_radians(-self.rotation.as_radians());
         let out_of_local = self.rotation;
         let mut scaled = self.clone();
-        for anchor in &mut scaled.anchors {
+        for anchor in scaled.all_anchors_mut() {
             anchor.point =
                 scale_point_in_local_frame(anchor.point, pivot, into_local, out_of_local, sx, sy);
             anchor.handle_in =
@@ -320,7 +388,7 @@ impl PathSnapshot {
         let out_of_local = self.rotation;
         let shear = |x: f64, y: f64| (x + ku * y, y + kv * x);
         let mut sheared = self.clone();
-        for anchor in &mut sheared.anchors {
+        for anchor in sheared.all_anchors_mut() {
             let local = anchor.point.rotated_around(pivot, into_local);
             let (dx, dy) = shear(local.x - pivot.x, local.y - pivot.y);
             anchor.point =
@@ -429,6 +497,7 @@ mod tests {
                     kind: AnchorKind::Symmetric,
                 },
             ],
+            extra_subpaths: Vec::new(),
             rotation: Angle::from_radians(0.0),
         }
     }

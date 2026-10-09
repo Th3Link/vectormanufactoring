@@ -394,7 +394,7 @@ impl ObjectSnapshot {
         match self {
             Self::Path(path) => {
                 let mut path = path.clone();
-                for anchor in &mut path.anchors {
+                for anchor in path.all_anchors_mut() {
                     anchor.point = anchor.point.translated(offset);
                 }
                 Self::Path(path)
@@ -764,6 +764,7 @@ mod tests {
             closed: false,
             style: Style::default(),
             anchors: Vec::new(),
+            extra_subpaths: Vec::new(),
             rotation: Angle::from_radians(-0.25),
         });
         assert!((path.orientation().as_radians() + 0.25).abs() < 1e-12);
@@ -845,6 +846,7 @@ mod tests {
             closed: false,
             style: Style::default(),
             anchors: vec![anchor],
+            extra_subpaths: Vec::new(),
             rotation: Angle::from_radians(0.0),
         };
         let moved = ObjectSnapshot::Path(path).translated(Vec2::new(1.0, 2.0));
