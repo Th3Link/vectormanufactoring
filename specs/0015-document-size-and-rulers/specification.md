@@ -207,10 +207,11 @@ Left: "x: 12.3  y: 45.6" followed by the unit once, "mm", fixed decimals so the 
   - **15:** leaving a size field with edited text commits it (the field keeps a refused value and its message); Escape restores. `NumberField` has a `commitOnBlur` option for this; the Style fields still restore on leaving.
   - **33 to 37 (Part C):** built as option A of Question 2 (mm, cm, in for rulers, size fields and status bar). It stays a proposal until the customer accepts it; removing it means deleting the Unit row and `set_display_unit` calls.
   - **35:** typed inches are converted as `value * 254 / 10`, so 8.5 in is the double nearest to 215.9 mm.
+  - **14a, 15:** the Pen's unfinished path ends as drawn when the Pen is left (a lone node is dropped), and no resize or fit runs while a path exists. A press on the canvas first blurs a focused panel field, so a size typed there is applied before the tool sees the press.
   - **20:** after a resize or fit the view moves by the same shift as the objects (`Viewport::pan_by_document_offset`); the untouched default view keeps its 72 px inset.
 
 ## Links
 
 Requirements: R-EDIT-018 (new, added with this refresh).
 Related: `specs/0001-project-file-foundation/specification.md` (the existing `DocumentSize` and status bar size field), `specs/0004-canvas-navigation-and-selection/specification.md` and `adrs.md` (`ViewTransform`, zoom range), `specs/0017-style-panel-rework/specification.md` (panel rules: no popups, validation chip, criterion 48; its criterion 1 is amended by criterion 14a here), `docs/design-system.md` (chrome, tokens), `docs/adr/0012-pages-in-the-document-model.md` (rejected), `docs/adr/0002-document-model-units-and-svg-round-trip.md` (mm, Y-down), `adrs.md` in this folder (rewritten 2026-10-09).
-PR: none yet.
+PR: #67 (model), #72 (rulers, pasteboard and the Document panel).

@@ -258,6 +258,24 @@ keeps the view centre (`0004` criterion 10), so the document's corner can land
 under the tool rail. **Resolution:** a "fit document to window" or "reset view"
 command, a later story (zoom presets are out of scope of `0015`).
 
+## The ruler's label offset exists in Rust and TypeScript
+
+`curvyo-ui-core/src/ruler.rs` (`LABEL_OFFSET_PX`, 4 px, private) and
+`frontend/src/lib/rulerDraw.ts` (`LABEL_OFFSET`) both hold the distance
+between a major tick and the start of its label, because the tester's
+`rulerDrawEdges` test pins the TypeScript constant. **Resolution:** return the
+label start positions from `RulerView` instead of tick positions and delete
+the TypeScript copy together with that test's import.
+
+## `panel_content` needs the active tool when 0017 is built
+
+`curvyo-ui-core::panel_content` decides Document, Style or Empty from the
+object selection and the Pen's unfinished path only. `0017-style-panel-rework`
+criterion 1 (the Pen or Node tool with a selection gives an empty panel) needs
+the tool or the style scope as a third input. **Resolution:** 0017 extends
+`panel_content`, the one place for this; no second decision is made in
+TypeScript.
+
 ## A collaborator without the font sees substituted text
 
 Fonts are referenced from a user-managed collection, not embedded by default

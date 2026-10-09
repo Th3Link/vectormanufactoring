@@ -206,6 +206,9 @@ root register that older builds read correctly by ignoring it (decision 1).
     and the fit test (AC 23). If booleans goes first, this feature only
     rebases. No version number has to change in either order.
 
+**Dated note (2026-10-09):** PR 1 shipped as #67; PRs 2 and 3 shipped together
+as #72 (one PR per slice). The order above is the order of the milestones.
+
 ## Dated notes from PR 2 (2026-10-09, implementer; the architect confirms)
 
 - **Decision 7 (view):** the default view of a new or opened project is

@@ -1,11 +1,10 @@
 # Plan for Document size and rulers
 
-Three PRs, in the architect's order (`adrs.md`, decision 15). PR 1 (model, no
-UI) is merged (#67). PR 2 (rulers and pasteboard) is branch
-`story/rulers-and-pasteboard`. PR 3 (panel) gets its own branch from the
-then-current `main`. PRs 2 and 3 are staggered with the later PRs of
-`0016-boolean-operations` (both touch `ui-core`, `render-core`, `editor-wasm`
-and `frontend`).
+The slice was planned as three PRs (`adrs.md`, decision 15): PR 1 the model
+(#67, merged), PR 2 rulers and pasteboard, PR 3 the Document panel. PRs 2 and 3
+shipped together as #72 (one PR per slice, 2026-10-09), branch
+`story/rulers-and-pasteboard`; the tasks below keep their PR numbers as
+milestones. All tasks are done.
 
 ## Affected crates/modules
 
@@ -89,7 +88,8 @@ PR 3 (panel, later): `ui-core` `panel_content`, `Viewport::pan_by_document_offse
 
 - [x] 15. `panel_content` and `Viewport::pan_by_document_offset` (decision 7
   puts the latter in PR 3, not PR 2); the view
-  follows a resize or fit (AC 14a, 20).
+  follows a resize or fit (AC 14a, 20). `panel_content` will need the active tool when 0017 is built
+  (technical debt).
 - [x] 16. Session and wasm commands for resize, fit, unit; frontend Document
   section with Width, Height, Unit, Fit, notice and validation chip (AC 14,
   15, 16, 22, 26, 27a, 33, 34, 37). `fit_document_to_content` returns
