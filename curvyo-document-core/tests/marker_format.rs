@@ -220,7 +220,10 @@ fn object_to_path_gives_the_new_path_no_markers() {
     let anchors: Vec<NewAnchor> = (0..4)
         .map(|i| NewAnchor {
             kind: AnchorKind::Corner,
-            ..NewAnchor::corner(AnchorId::new(4, i + 1), pt(f64::from(u32::try_from(i).unwrap()), 0.0))
+            ..NewAnchor::corner(
+                AnchorId::new(4, i + 1),
+                pt(f64::from(u32::try_from(i).unwrap()), 0.0),
+            )
         })
         .collect();
     document.convert_to_paths(&[(shape, anchors)]).unwrap();
