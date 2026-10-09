@@ -35,6 +35,7 @@
 #                        ADR 0011 §6 dependency ban list. Ubuntu only, per the
 #                        ADR.
 #   boolean-budgets   — the boolean kernel's performance budgets in a release build, ubuntu only.
+#   boolean-wasm-golden — the kernel's golden results in the wasm build, run in Node, ubuntu only.
 #   deny              — `cargo deny check`, once, over the whole workspace
 #                        (ADR 0011 §7: not matrixed — it inspects the
 #                        dependency graph, not compiled code, so one run
@@ -348,6 +349,32 @@ jobs:
           cargo test --release -p curvyo-document-core --test compound_write_cost -- --nocapture
           cargo test --release -p curvyo-editor-wasm --test compound_path_interactivity -- --nocapture
           cargo test --release -p curvyo-editor-wasm --test boolean_interactivity -- --nocapture
+
+  # Criterion 43 of specs/0016-boolean-operations: the golden results of the boolean kernel are
+  # compared in the build that ships to the browser, run in Node by wasm-bindgen-test-runner
+  # (part of wasm-bindgen-cli, which must match the wasm-bindgen crate in Cargo.lock).
+  boolean-wasm-golden:
+    name: boolean golden results (wasm32)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-bindgen CLI matching Cargo.lock
+        run: |
+          set -euo pipefail
+          version=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | grep '^version' | head -1 | sed -E 's/version = "(.*)"/\1/')
+          echo "wasm-bindgen crate version: $version"
+          cargo install wasm-bindgen-cli --version "$version" --locked
+
+      - name: Run the golden comparison on wasm32-unknown-unknown
+        env:
+          CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: wasm-bindgen-test-runner
+        run: cargo test --target wasm32-unknown-unknown -p curvyo-geometry-core --test boolean_golden_wasm
 
   # Dependency-graph/license check, not compiled code — one run sees every
   # target deny.toml's [graph] lists (including wasm32-unknown-unknown),
