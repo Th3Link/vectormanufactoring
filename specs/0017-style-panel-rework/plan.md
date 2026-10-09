@@ -48,33 +48,33 @@ crates); the full gate runs before the PR is opened. Criteria are numbered as in
 
 ### Milestone 2: panel content (criteria 1 to 21, 28 to 33, 49, 55 to 60)
 
-- [ ] 2.1 Empty and hidden rules in `style_panel` / `style_view` and the panel
+- [x] 2.1 Empty and hidden rules in `style_panel` / `style_view` and the panel
   components: no `disabled` anywhere, Paint None hides the rows, heading and
   switch are one row, mixed Paint shows the rows (1 to 10).
-- [ ] 2.2 8-digit RGBA hex: `StyleEdit::StrokeRgba` / `FillRgba`, `parse_hex`
+- [x] 2.2 8-digit RGBA hex: `StyleEdit::StrokeRgba` / `FillRgba`, `parse_hex`
   for 3/4/6/8 digits, alpha stored as AA/255 (11 to 16).
-- [ ] 2.3 `colour_hsv.rs` and the inline picker (area, hue slider) in TSX; remove
+- [x] 2.3 `colour_hsv.rs` and the inline picker (area, hue slider) in TSX; remove
   `react-colorful`, `ColourPopover`, `ColorAlphaPicker`, `ui/popover` (17 to 21,
   55, 56).
-- [ ] 2.4 Dash: preset group, text line, `parse_dash_text`, odd lists in
+- [x] 2.4 Dash: preset group, text line, `parse_dash_text`, odd lists in
   `DashPattern`, renderer expansion and zero-on dot, format version bump and
   fixture, `DashSelect` and `ui/select` removed (28 to 33).
-- [ ] 2.5 `.oxlintrc.json` override for `components/panel/`, Escape order, focus
+- [x] 2.5 `.oxlintrc.json` override for `components/panel/`, Escape order, focus
   rules (1, 57, 59, 60).
 
 ### Milestone 3: value fields (criteria 34 to 48, 61)
 
-- [ ] 3.1 `value_scale.rs` with the check values of criteria 46 and 47.
-- [ ] 3.2 wasm `preview_value_field` / `step_value_field`; `ValueField.tsx`,
+- [x] 3.1 `value_scale.rs` with the check values of criteria 46 and 47.
+- [x] 3.2 wasm `preview_value_field` / `step_value_field`; `ValueField.tsx`,
   `useValueDrag.ts`; `NumberField` becomes `EntryField` without `disabled`.
-- [ ] 3.3 Reset slot and Ctrl+Backspace; spinbutton semantics; user-select rules
+- [x] 3.3 Reset slot and Ctrl+Backspace; spinbutton semantics; user-select rules
   (34 to 45, 61).
 
 ### Milestone 4: eyedropper (criteria 22 to 27)
 
-- [ ] 4.1 `colour_pick.rs` and the session pick mode (`begin_colour_pick` /
+- [x] 4.1 `colour_pick.rs` and the session pick mode (`begin_colour_pick` /
   `end_colour_pick`, view fields `pick_target` / `pick_hover_hex`).
-- [ ] 4.2 Frontend eyedropper button, cursor, hover chip, cancel rules (22 to 27).
+- [x] 4.2 Frontend eyedropper button, cursor, hover chip, cancel rules (22 to 27).
 
 ## Validation
 

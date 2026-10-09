@@ -29,6 +29,8 @@ export type CapName = "butt" | "round" | "square";
  * all (they are removed while every edited paint is off). */
 export interface StyleView {
   subject: string;
+  /** The paint the eyedropper is picking for, or empty. */
+  pickTarget: "stroke" | "fill" | "";
   /** Changes when the edited objects change. */
   scopeKey: string;
   strokePaint: "on" | "off" | "mixed";
@@ -71,6 +73,7 @@ export interface StyleView {
 
 const DISABLED_VIEW: StyleView = {
   subject: "",
+  pickTarget: "",
   scopeKey: "",
   strokePaint: "on",
   strokeRows: true,
@@ -114,6 +117,7 @@ function readView(session: WasmSession | null): StyleView {
   const raw = session.style_panel_view();
   const view: StyleView = {
     subject: raw.subject,
+    pickTarget: raw.pick_target as StyleView["pickTarget"],
     scopeKey: raw.scope_key,
     strokePaint: raw.stroke_paint as StyleView["strokePaint"],
     strokeRows: raw.stroke_rows,
@@ -187,6 +191,11 @@ export interface StylePanelApi {
   setStrokeDash: (name: DashName) => void;
   /** Enter or Tab in the pattern line. */
   setStrokeDashText: (text: string) => TextOutcome;
+  /** The eyedropper button: starts picking for a paint, or ends it when that
+   * paint is already being picked. */
+  beginPick: (target: "stroke" | "fill") => void;
+  /** Ends picking and writes nothing. */
+  endPick: () => void;
   setStrokeJoin: (name: JoinName) => void;
   setStrokeCap: (name: CapName) => void;
 }
@@ -273,6 +282,8 @@ export function useStylePanel(editor: EditorHandle): StylePanelApi {
       refresh();
       return outcome;
     },
+    beginPick: (target) => act((s) => s.begin_colour_pick(target)),
+    endPick: () => act((s) => s.end_colour_pick()),
     setStrokeJoin: (name) => act((s) => s.set_stroke_join(name)),
     setStrokeCap: (name) => act((s) => s.set_stroke_cap(name)),
   };

@@ -165,6 +165,16 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
               returnFocus();
             }
           }}
+          onPointerDownCapture={(event) => {
+            // A press anywhere in the panel other than the eyedropper button ends
+            // picking and writes nothing (`0017` criterion 26).
+            if (
+              panel.view.pickTarget !== "" &&
+              !(event.target as HTMLElement).closest("[data-eyedropper]")
+            ) {
+              panel.endPick();
+            }
+          }}
           onKeyDown={(event) => {
             // Escape in the panel (`0017` criterion 60): a running drag is
             // reverted first (`usePreviewGesture` takes the key before it gets
@@ -173,6 +183,11 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
             // reaches the canvas.
             if (event.key === "Escape" && event.currentTarget.contains(event.target as Node)) {
               event.preventDefault();
+              // Picking ends first and keeps the focus where it is.
+              if (panel.view.pickTarget !== "") {
+                panel.endPick();
+                return;
+              }
               returnFocus();
             }
           }}

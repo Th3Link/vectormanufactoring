@@ -1193,6 +1193,17 @@ export function useEditorSession(
         return;
       }
 
+      // A right press while the eyedropper is picking ends picking and writes
+      // nothing; no tool sees it and no context menu opens
+      // (`specs/0017-style-panel-rework` criterion 26).
+      if (event.button === 2 && session.cursor_hint() === "eyedropper") {
+        event.preventDefault();
+        session.end_colour_pick();
+        setCursorHint(session.cursor_hint());
+        syncFromSession();
+        return;
+      }
+
       const now = performance.now();
       const last = lastPressRef.current;
       // Alt-clicks step through overlapping objects (`specs/0014-advanced-selection/`

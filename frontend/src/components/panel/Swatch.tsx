@@ -9,6 +9,8 @@ interface SwatchProps {
   opacity: number;
   /** The edited objects differ: a 45 degree hatch, never a checkerboard. */
   mixed: boolean;
+  /** Edge length, px (28 in a row, 16 in the eyedropper chip). */
+  size?: number;
 }
 
 /**
@@ -18,13 +20,14 @@ interface SwatchProps {
  * only (`specs/0017-style-panel-rework` criterion 16): hidden from the
  * accessibility tree, no hover state, not a tab stop.
  */
-export function Swatch({ rgb, opacity, mixed }: SwatchProps) {
+export function Swatch({ rgb, opacity, mixed, size = 28 }: SwatchProps) {
   const id = useId();
   const cell = 7;
   return (
     <span
       aria-hidden
-      className="relative block size-7 shrink-0 overflow-hidden rounded-[5px] border border-[var(--swatch-border)]"
+      className="relative block shrink-0 overflow-hidden rounded-[5px] border border-[var(--swatch-border)]"
+      style={{ width: size, height: size }}
     >
       <svg aria-hidden className="absolute inset-0 size-full">
         <defs>
