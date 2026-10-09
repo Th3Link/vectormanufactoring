@@ -105,6 +105,11 @@ pub enum SelectDoubleClickOutcome {
     /// handoff and nothing changes; the caller shows the edit hint chip
     /// (criterion 32, which replaces criterion 23 of slice 4).
     EditHint,
+    /// A compound path was hit: its nodes cannot be edited yet, so there is no
+    /// handoff to the Node tool and nothing changes (`specs/0016-boolean-
+    /// operations` criterion 38). The caller may show the sentence "Nodes of
+    /// compound paths cannot be edited yet."
+    CompoundPath,
     /// A rotate, resize, skew or parameter handle, or the centre handle, was
     /// double-clicked: the numeric entry is open (criteria 18, 25, 26; 9 and
     /// 15 of `edit-interaction-polish`), and there is no handoff.

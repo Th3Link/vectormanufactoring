@@ -294,11 +294,15 @@ impl Session {
         self.tool = tool;
     }
 
+    /// The paths the Node and Pen tools work on. A compound path is left out:
+    /// its nodes cannot be edited yet (`specs/0016-boolean-operations`
+    /// criteria 38 and 38a), so it contributes no node, handle or segment.
     fn paths(&self) -> Vec<curvyo_document_core::PathSnapshot> {
         self.document
             .object_ids()
             .into_iter()
             .filter_map(|id| self.document.path(id))
+            .filter(|path| !path.is_compound())
             .collect()
     }
 

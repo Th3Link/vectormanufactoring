@@ -8,13 +8,15 @@ use curvyo_document_core::{
     outline_of_rotated,
 };
 
+use lyon::path::Path;
+
 use crate::color::RgbaColor;
 use crate::dash::{self, DashBudget};
 use crate::fill;
 use crate::glyphs::DrawList;
 use crate::gradient::{GradientFill, GradientFrame, Ramp};
 use crate::shape_preview::outline_to_anchors;
-use crate::stroke::{self, StrokeParams};
+use crate::stroke::{self, OutlineRef, StrokeParams};
 use crate::theme;
 
 /// The widest stroke ever tessellated, in millimetres. A stored width has no
@@ -83,11 +85,14 @@ fn draw_path(
     view: ViewTransform,
     budget: &mut DashBudget,
 ) {
-    let outline = Outline {
-        anchors: &path.anchors,
-        closed: path.closed,
-    };
-    draw_object(list, &outline, &path.style, frame, view, budget);
+    let outlines: Vec<OutlineRef<'_>> = path
+        .subpaths()
+        .map(|subpath| OutlineRef {
+            anchors: subpath.anchors,
+            closed: subpath.closed,
+        })
+        .collect();
+    draw_object(list, &outlines, &path.style, frame, view, budget);
 }
 
 fn draw_primitive(
@@ -98,22 +103,18 @@ fn draw_primitive(
     budget: &mut DashBudget,
 ) {
     let anchors = outline_to_anchors(&outline_of_rotated(&primitive.shape, primitive.rotation));
-    let outline = Outline {
+    let outline = [OutlineRef {
         anchors: &anchors,
         closed: true,
-    };
+    }];
     draw_object(list, &outline, &primitive.style, frame, view, budget);
 }
 
-/// An object's outline as the fill and the stroke read it.
-struct Outline<'a> {
-    anchors: &'a [curvyo_document_core::AnchorSnapshot],
-    closed: bool,
-}
-
+/// An object's outlines as the fill and the stroke read them: one for an
+/// ordinary path or a primitive, several for a compound path.
 fn draw_object(
     list: &mut DrawList,
-    outline: &Outline<'_>,
+    outlines: &[OutlineRef<'_>],
     style: &Style,
     frame: Option<GradientFrame>,
     view: ViewTransform,
@@ -122,10 +123,10 @@ fn draw_object(
     // The fill is painted first, with the outline closed by a chord when the
     // path is open; the stroke below keeps the real open path.
     if style.fill.paints() {
-        draw_fill(list, outline, style, frame, view);
+        draw_fill(list, outlines, style, frame, view);
     }
     if style.stroke.enabled {
-        draw_stroke(list, outline.anchors, outline.closed, style, view, budget);
+        draw_stroke(list, outlines, style, view, budget);
     }
 }
 
@@ -135,7 +136,7 @@ fn draw_object(
 /// frame to span, flat in the first stop's colour.
 fn draw_fill(
     list: &mut DrawList,
-    outline: &Outline<'_>,
+    outlines: &[OutlineRef<'_>],
     style: &Style,
     frame: Option<GradientFrame>,
     view: ViewTransform,
@@ -159,7 +160,7 @@ fn draw_fill(
     if gradient.is_none() && color.a == 0 {
         return;
     }
-    let Some(path) = stroke::build_fill_path(outline.anchors, outline.closed) else {
+    let Some(path) = stroke::build_fill_path(outlines) else {
         return;
     };
     let tolerance_mm = screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX);
@@ -176,10 +177,13 @@ fn draw_fill(
     }
 }
 
+/// The stroke layer of an object. Every outline is dashed on its own, so a
+/// dash pattern starts afresh at the first node of each (criterion 31a), and
+/// all of them are tessellated together as one layer, so a translucent stroke
+/// shows no dark spot where two outlines' strokes meet.
 fn draw_stroke(
     list: &mut DrawList,
-    anchors: &[curvyo_document_core::AnchorSnapshot],
-    closed: bool,
+    outlines: &[OutlineRef<'_>],
     style: &Style,
     view: ViewTransform,
     budget: &mut DashBudget,
@@ -201,16 +205,29 @@ fn draw_stroke(
         join: stroke_style.join,
         cap: stroke_style.cap,
     };
-    let Some(path) = stroke::build_path(anchors, closed) else {
-        return;
+    let mut parts: Vec<Path> = outlines
+        .iter()
+        .filter_map(|outline| stroke::build_path(outline.anchors, outline.closed))
+        .map(|path| {
+            dash::dashed(
+                &path,
+                &stroke_style.dash,
+                document_width_mm,
+                view.scale(),
+                tolerance_mm,
+                budget,
+            )
+            .unwrap_or(path)
+        })
+        .collect();
+    let combined = match parts.len() {
+        0 => return,
+        1 => parts.remove(0),
+        _ => {
+            let mut builder = Path::builder();
+            builder.extend_from_paths(&parts.iter().map(Path::as_slice).collect::<Vec<_>>());
+            builder.build()
+        }
     };
-    let dashed = dash::dashed(
-        &path,
-        &stroke_style.dash,
-        document_width_mm,
-        view.scale(),
-        tolerance_mm,
-        budget,
-    );
-    list.extend_artwork(stroke::stroke(dashed.as_ref().unwrap_or(&path), &params));
+    list.extend_artwork(stroke::stroke(&combined, &params));
 }

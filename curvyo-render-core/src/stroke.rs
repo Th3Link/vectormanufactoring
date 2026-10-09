@@ -60,41 +60,58 @@ fn cubic_bezier_to(
     builder.cubic_bezier_to(to_lyon(c1), to_lyon(c2), to_lyon(to.point));
 }
 
+/// One outline of an object: its anchors and whether it closes back to its
+/// first anchor.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct OutlineRef<'a> {
+    pub(crate) anchors: &'a [AnchorSnapshot],
+    pub(crate) closed: bool,
+}
+
 /// Builds one whole path's geometry (every anchor, in traversal order,
 /// closing the loop with its own curved handles rather than `lyon`'s
 /// straight-line `close()` when `closed` is set). `None` when there are
 /// fewer than two anchors — nothing to stroke.
 pub(crate) fn build_path(anchors: &[AnchorSnapshot], closed: bool) -> Option<Path> {
-    build_outline(anchors, closed, false)
+    build_outlines(&[OutlineRef { anchors, closed }], false)
 }
 
 /// The path a fill paints: [`build_path`]'s outline, but an open one is closed
 /// with a straight chord from its last anchor back to its first (acceptance
-/// criterion 15). The stroke keeps using the open path.
-pub(crate) fn build_fill_path(anchors: &[AnchorSnapshot], closed: bool) -> Option<Path> {
-    build_outline(anchors, closed, true)
+/// criterion 15). The stroke keeps using the open path. With several outlines
+/// (a compound path) they are sub-paths of one path, which the fill's nonzero
+/// rule combines, so an outline wound against its surrounding one is a hole.
+pub(crate) fn build_fill_path(outlines: &[OutlineRef<'_>]) -> Option<Path> {
+    build_outlines(outlines, true)
 }
 
-fn build_outline(anchors: &[AnchorSnapshot], closed: bool, chord_close: bool) -> Option<Path> {
-    if anchors.len() < 2 {
-        return None;
-    }
+/// One path holding a sub-path per outline that has two or more anchors;
+/// `None` if none has.
+fn build_outlines(outlines: &[OutlineRef<'_>], chord_close: bool) -> Option<Path> {
     let mut builder = Path::builder();
-    builder.begin(to_lyon(anchors[0].point));
-    for i in 1..anchors.len() {
-        cubic_bezier_to(&mut builder, &anchors[i - 1], &anchors[i]);
+    let mut any = false;
+    for outline in outlines {
+        let anchors = outline.anchors;
+        if anchors.len() < 2 {
+            continue;
+        }
+        any = true;
+        builder.begin(to_lyon(anchors[0].point));
+        for i in 1..anchors.len() {
+            cubic_bezier_to(&mut builder, &anchors[i - 1], &anchors[i]);
+        }
+        if outline.closed {
+            // invariant: `anchors.len() >= 2` was checked above, so both
+            // `last()` and `[0]` are present.
+            #[allow(clippy::unwrap_used)]
+            let last = anchors.last().unwrap();
+            cubic_bezier_to(&mut builder, last, &anchors[0]);
+            builder.end(true);
+        } else {
+            builder.end(chord_close);
+        }
     }
-    if closed {
-        // invariant: `anchors.len() >= 2` was checked above, so both
-        // `last()` and `[0]` are present.
-        #[allow(clippy::unwrap_used)]
-        let last = anchors.last().unwrap();
-        cubic_bezier_to(&mut builder, last, &anchors[0]);
-        builder.end(true);
-    } else {
-        builder.end(chord_close);
-    }
-    Some(builder.build())
+    any.then(|| builder.build())
 }
 
 fn stroke_options(params: &StrokeParams) -> StrokeOptions {

@@ -168,7 +168,7 @@ fn one_outline_is_an_ordinary_path_and_several_are_one_compound_path() {
         .unwrap();
     let plain = path_of(&document, single);
     assert!(!plain.is_compound());
-    assert!(plain.extra_subpaths.is_empty());
+    assert_eq!(plain.extra_subpaths, Vec::new());
 
     let compound = document
         .replace_with_path(&[b], b, &ring_outlines(), "boolean_difference")
@@ -257,9 +257,10 @@ fn a_compound_path_survives_save_and_reopen() {
     let manifest: serde_json::Value =
         serde_json::from_slice(&member(&bytes, "manifest.json")).unwrap();
     assert_eq!(manifest["format_version"], CURRENT_FORMAT_VERSION);
-    assert!(
-        CURRENT_FORMAT_VERSION > PREVIOUS_FORMAT_VERSION,
-        "an earlier build must refuse it as too new"
+    assert_eq!(
+        CURRENT_FORMAT_VERSION,
+        PREVIOUS_FORMAT_VERSION + 1,
+        "an earlier build must refuse the file as too new"
     );
 
     let reopened = unpack(2, &bytes).unwrap();
@@ -368,7 +369,7 @@ fn the_committed_golden_reopens_with_the_same_outlines() {
         expected
     );
     assert_eq!(compound.extra_subpaths.len(), 1);
-    assert!(!compound.extra_subpaths[0].anchors.is_empty());
+    assert_eq!(compound.extra_subpaths[0].anchors.len(), 4);
 }
 
 /// Criterion 37: a file from an earlier build opens unchanged and is not
@@ -424,12 +425,14 @@ fn extras(meta: &LoroMap) -> LoroMovableList {
     }
 }
 
+type Edit = Box<dyn FnOnce(&LoroMap)>;
+
 /// Criterion 37a: damaged extra outlines are refused as damaged, never a
 /// crash.
 #[test]
 fn damaged_extra_outlines_are_refused_as_damaged() {
     assert!(open_ring_with(|_| {}).is_ok(), "the unedited ring opens");
-    let damaged: Vec<(&str, Box<dyn FnOnce(&LoroMap)>)> = vec![
+    let damaged: Vec<(&str, Edit)> = vec![
         (
             "not a list",
             Box::new(|meta| meta.insert("extra_subpaths", "oops").unwrap()),

@@ -217,7 +217,9 @@ impl Session {
                 false
             }
             SelectDoubleClickOutcome::EditHint => true,
-            SelectDoubleClickOutcome::Miss | SelectDoubleClickOutcome::EntryOpened => false,
+            SelectDoubleClickOutcome::Miss
+            | SelectDoubleClickOutcome::EntryOpened
+            | SelectDoubleClickOutcome::CompoundPath => false,
         }
     }
 }

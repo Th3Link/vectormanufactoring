@@ -139,37 +139,41 @@ pub fn oriented_bounds(object: &ObjectSnapshot) -> OrientedBox {
 fn path_oriented_bounds(path: &PathSnapshot) -> OrientedBox {
     let pivot = PATH_DEROTATION_PIVOT;
     let into_local = Angle::from_radians(-path.rotation.as_radians());
-    let derotated: Vec<(
-        Point,
-        curvyo_document_core::Vec2,
-        curvyo_document_core::Vec2,
-    )> = path
-        .anchors
-        .iter()
-        .map(|anchor| {
-            (
-                anchor.point.rotated_around(pivot, into_local),
-                anchor.handle_in.rotated(into_local),
-                anchor.handle_out.rotated(into_local),
-            )
-        })
-        .collect();
-
     let mut min = Point::new(f64::INFINITY, f64::INFINITY);
     let mut max = Point::new(f64::NEG_INFINITY, f64::NEG_INFINITY);
-    for (i, j) in segment_pairs(derotated.len(), path.closed) {
-        let (start, _, start_out) = derotated[i];
-        let (end, end_in, _) = derotated[j];
-        let (seg_min, seg_max) = segment_bounds(start, start_out, end_in, end);
-        min.x = min.x.min(seg_min.x);
-        min.y = min.y.min(seg_min.y);
-        max.x = max.x.max(seg_max.x);
-        max.y = max.y.max(seg_max.y);
+    let mut first_point = None;
+    // Every outline of a compound path takes part (criterion 34).
+    for subpath in path.subpaths() {
+        let derotated: Vec<(
+            Point,
+            curvyo_document_core::Vec2,
+            curvyo_document_core::Vec2,
+        )> = subpath
+            .anchors
+            .iter()
+            .map(|anchor| {
+                (
+                    anchor.point.rotated_around(pivot, into_local),
+                    anchor.handle_in.rotated(into_local),
+                    anchor.handle_out.rotated(into_local),
+                )
+            })
+            .collect();
+        first_point = first_point.or_else(|| derotated.first().map(|(p, _, _)| *p));
+        for (i, j) in segment_pairs(derotated.len(), subpath.closed) {
+            let (start, _, start_out) = derotated[i];
+            let (end, end_in, _) = derotated[j];
+            let (seg_min, seg_max) = segment_bounds(start, start_out, end_in, end);
+            min.x = min.x.min(seg_min.x);
+            min.y = min.y.min(seg_min.y);
+            max.x = max.x.max(seg_max.x);
+            max.y = max.y.max(seg_max.y);
+        }
     }
     if min.x.is_infinite() {
         // A degenerate single-anchor path — see `object_bounds::path_bounds`'s
         // own doc comment for why this is defensive, not expected.
-        let only = derotated.first().map_or(pivot, |(p, _, _)| *p);
+        let only = first_point.unwrap_or(pivot);
         min = only;
         max = only;
     }
