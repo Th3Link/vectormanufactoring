@@ -121,9 +121,10 @@ meta map of a path (unchanged keys):
   `extra_subpaths` must be a movable list of maps, each with an `anchors`
   movable list whose elements pass `validate_anchor`. Anything else is
   `OpenError::Damaged`.
-- **`format_version`:** `main`'s current value + 1 at merge (7 today; other
-  drafts claim 8 and 9 provisionally; `document-size-and-rulers` takes none,
-  its `adrs.md` decision 1). Migration from older versions: none, the key is
+- **`format_version`:** this slice takes **8** (`main` is at 7).
+  `document-size-and-rulers` takes none (its `adrs.md` decision 1);
+  `style-panel-rework` (0017) and `stroke-markers` (0018) take "next free at
+  merge", each after the version already on `main`. Migration from older versions: none, the key is
   simply absent. Golden fixtures: a compound path saved and reopened (AC 30,
   37) and a pre-bump file opened unchanged and not rewritten.
 
@@ -381,6 +382,9 @@ assumptions are found by audit, not by the compiler", with this table.
   every golden fixture natively and, in the CI job `boolean-wasm-golden`, on `wasm32-unknown-unknown`
   in Node through `wasm-bindgen-test-runner` (`wasm-bindgen-test`, a wasm32-only dev-dependency of
   `curvyo-geometry-core`, MIT OR Apache-2.0). `proptest` became a native-only dev-dependency.
+  This does not break ADR 0001 §3 ("only `curvyo-editor-wasm` may depend on `wasm-bindgen`"): the
+  rule guards the shipped dependency graph, and a wasm32-only dev-dependency is built only for that
+  test binary, so no product artifact of `curvyo-geometry-core` links `wasm-bindgen`.
 - **Compound path texts.** "Compound path" is the Rust subject line (`style_scope::kind_name`).
   `NodeToolbarState.compound_only` and the double-click code `"compound_path"` come from Rust; the
   sentence of criterion 38 is the one constant `COMPOUND_NODES_TEXT`. The Markers block rule of the
@@ -527,44 +531,49 @@ viewport at an 800 × 600 window is about 546 px high, so the rail fits with
 about 40 px to spare at its 12 px inset. No overflow rule now (no seventh
 tool exists); flagged to the ux-engineer to measure.
 
-## PR split and order
+## Milestones on one branch
 
-Updated 2026-10-09 for the customer decisions.
+Updated 2026-10-09 for the customer rule of one PR per slice: the four steps
+below are milestones on the branch `story/boolean-operations`, in this order,
+each leaving the quality gate green, and not separate PRs. (Earlier sections
+and the review notes still say "PR 1" to "PR 3"; read them as milestones 1 to
+3.)
 
 1. **Kernel.** `geometry-core` only, plus the workspace dependency. AC 7, 8,
    10 to 14, 17, 24 to 26, 39 to 45 at kernel level, fixtures in
    `tests/fixtures/`. Four kernel operations cover all five commands.
-   Unchanged; in progress (`story/boolean-operations`).
 2. **Compound path, format and document command.** Encoding, read model,
-   the audit table, format bump (`main` + 1 at merge, 8 if nothing else
-   bumps first), the `document-core` command `replace_with_path`, fixtures.
-   AC 19 to 22, 27, 28, 30 to 38 and the write-cost measurement. No UI.
+   the audit table, the format bump to **8**, the `document-core` command
+   `replace_with_path`, fixtures. AC 19 to 22, 27, 28, 30 to 38 and the
+   write-cost measurement. No UI.
 3. **Command and rail UI.** `ui-core`: `BooleanOp` (five), `plan_boolean`,
    refusals, `boolean_availability`, selection after; `editor-wasm`:
    `session/boolean.rs`, `wasm_boolean.rs`; frontend: the rail command group.
-   AC 1 to 6, 9, 15 to 18, 23, 29, 46, 47 as the PO rewrites them for the
+   AC 1 to 6, 9, 15 to 18, 23, 29, 46, 47 as the PO rewrote them for the
    rail. No Select bar change.
-4. **Preview** (P1 to P3), only if question 6 is A. Kernel output drawn with
-   the existing `--preview-new` live-preview path; no document write.
+4. **Hover preview (P1 to P3): decided B, not in this slice.** The customer
+   chose "not now" on Question 6; the preview becomes a separate later entry
+   (its own spec or a follow-up to this one) once the maker has tried the
+   buttons. Nothing in milestones 1 to 3 depends on it.
 
-**Parallel plan with `document-size-and-rulers` (re-confirmed 2026-10-09).**
-Rulers takes no `format_version`, so the version number no longer orders
-the two features. `CLAUDE.md` §4 forbids parallel work on shared crates:
+**Order with `document-size-and-rulers` (re-confirmed 2026-10-09).**
+Rulers takes no `format_version`, so the version number does not order the two
+features. `CLAUDE.md` §4 forbids parallel work on shared crates:
 
 | Step | Booleans | Rulers | Shared crates |
 |---|---|---|---|
-| now | PR 1 (`geometry-core`) | PR 1 (`document-core`, `ui-core`) | none: in parallel |
-| next | PR 2 | waits | `document-core` (`objects.rs` move helper), `ui-core` (`object_bounds.rs`), `render-core`, `editor-wasm` |
+| now | milestone 1 (`geometry-core`) | PR 1 (`document-core`, `ui-core`) | none: in parallel |
+| next | milestone 2 | waits | `document-core` (`objects.rs` move helper), `ui-core` (`object_bounds.rs`), `render-core`, `editor-wasm` |
 | then | waits | PR 2 (rulers, pasteboard, viewport) | `ui-core`, `render-core`, `editor-wasm`, `frontend` |
-| then | PR 3 | waits | `ui-core`, `editor-wasm`, `frontend` (`App.tsx`) |
+| then | milestone 3 | waits | `ui-core`, `editor-wasm`, `frontend` (`App.tsx`) |
 | last | | PR 3 (panel; after 0017 if 0017 goes first) | |
 
-Booleans PR 2 starts only after rulers PR 1 merges, because both edit the
+Milestone 2 starts only after rulers PR 1 merges, because both edit the
 move helper and `object_bounds`. It goes before rulers PR 2 because it
 carries the write-cost measurement that could still reopen the encoding.
-Booleans PR 3 goes after rulers PR 2, because PR 2 moves the rail into the
+Milestone 3 goes after rulers PR 2, because that PR moves the rail into the
 ruler viewport (`App.tsx`) and the rail height above is measured there.
-Swapping booleans PR 2 and rulers PR 2 costs nothing but that risk. Whichever
+Swapping milestone 2 and rulers PR 2 costs nothing but that risk. Whichever
 merges second adds the compound-path case to the rulers resize and fit tests
 (rulers AC 17, 23).
 
