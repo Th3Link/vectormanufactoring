@@ -194,6 +194,11 @@ Left: "x: 12.3  y: 45.6" followed by the unit once, "mm", fixed decimals so the 
 4. An aspect-ratio lock between Width and Height. Default: none (a sheet size is typed both ways; the spec has no proportional resize).
 5. Initial view offset of 72 px (criterion 11a). Default: yes.
 
+## As-built notes
+
+- **PR 1 (model), 2026-10-09.** Resize and fit are atomic for one editor. Between collaborating peers they merge field by field (width, height and each object position are separate registers), so two concurrent resizes of different axes can leave the objects centred on neither peer's intent. Accepted as a collaboration limit while sync is not built; tracked in `docs/technical-debt.md` ("Resize and fit merge per field across peers").
+- **Retyping shown text (criteria 16 and 35).** The text a field shows for a limit is accepted when typed back and clamped onto the limit. This matters in inches only: the largest size shows as "3937.0079" in, 0.0007 mm over 100 000 mm. Any other value past a limit is refused as criterion 16 says (1e-9 mm tolerance).
+
 ## Links
 
 Requirements: R-EDIT-018 (new, added with this refresh).

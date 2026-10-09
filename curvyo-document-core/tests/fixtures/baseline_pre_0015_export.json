@@ -1,0 +1,1476 @@
+{
+ "corner_radii_per_corner.curvyo": {
+  "format_version": 7,
+  "objects": [
+   {
+    "bounds": {
+     "height": 40.0,
+     "origin": {
+      "x": 0.0,
+      "y": 0.0
+     },
+     "width": 100.0
+    },
+    "corner_radii": {
+     "bl": 3.5,
+     "br": 8.0,
+     "tl": 12.0,
+     "tr": 0.0
+    },
+    "id": {
+     "counter": 3,
+     "peer": "1"
+    },
+    "rotation": 0.0,
+    "shape": "rect",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   },
+   {
+    "bounds": {
+     "height": 40.0,
+     "origin": {
+      "x": 150.0,
+      "y": 0.0
+     },
+     "width": 60.0
+    },
+    "corner_radii": {
+     "bl": 0.0,
+     "br": 10.0,
+     "tl": 50.0,
+     "tr": 50.0
+    },
+    "id": {
+     "counter": 15,
+     "peer": "1"
+    },
+    "rotation": 0.0,
+    "shape": "rect",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   },
+   {
+    "bounds": {
+     "height": 30.0,
+     "origin": {
+      "x": 0.0,
+      "y": 80.0
+     },
+     "width": 50.0
+    },
+    "corner_radii": {
+     "bl": 2.0,
+     "br": 9.0,
+     "tl": 0.0,
+     "tr": 6.0
+    },
+    "id": {
+     "counter": 27,
+     "peer": "1"
+    },
+    "rotation": 0.5,
+    "shape": "rect",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   },
+   {
+    "bounds": {
+     "height": 40.0,
+     "origin": {
+      "x": 100.0,
+      "y": 80.0
+     },
+     "width": 40.0
+    },
+    "corner_radii": {
+     "bl": 4.0,
+     "br": 7.5,
+     "tl": 4.0,
+     "tr": 4.0
+    },
+    "id": {
+     "counter": 40,
+     "peer": "1"
+    },
+    "rotation": 0.0,
+    "shape": "rect",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   }
+  ],
+  "size": {
+   "height": 297.0,
+   "width": 210.0
+  }
+ },
+ "format_version_1.curvyo": {
+  "format_version": 7,
+  "objects": [],
+  "size": {
+   "height": 297.0,
+   "width": 210.0
+  }
+ },
+ "legacy_corner_radius_v5.curvyo": {
+  "format_version": 7,
+  "objects": [
+   {
+    "bounds": {
+     "height": 20.0,
+     "origin": {
+      "x": 0.0,
+      "y": 0.0
+     },
+     "width": 40.0
+    },
+    "corner_radii": {
+     "bl": 5.0,
+     "br": 5.0,
+     "tl": 5.0,
+     "tr": 5.0
+    },
+    "id": {
+     "counter": 0,
+     "peer": "1"
+    },
+    "rotation": 0.0,
+    "shape": "rect",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   },
+   {
+    "bounds": {
+     "height": 30.0,
+     "origin": {
+      "x": 60.0,
+      "y": 0.0
+     },
+     "width": 30.0
+    },
+    "corner_radii": {
+     "bl": 0.0,
+     "br": 0.0,
+     "tl": 0.0,
+     "tr": 0.0
+    },
+    "id": {
+     "counter": 5,
+     "peer": "1"
+    },
+    "rotation": 0.0,
+    "shape": "rect",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   }
+  ],
+  "size": {
+   "height": 297.0,
+   "width": 210.0
+  }
+ },
+ "paths_v2.curvyo": {
+  "format_version": 7,
+  "objects": [
+   {
+    "anchors": [
+     {
+      "handle_in": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "handle_out": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "id": "00000000000000010000000000000001",
+      "kind": "corner",
+      "point": {
+       "x": 0.0,
+       "y": 0.0
+      }
+     },
+     {
+      "handle_in": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "handle_out": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "id": "00000000000000010000000000000002",
+      "kind": "corner",
+      "point": {
+       "x": 50.0,
+       "y": 0.0
+      }
+     }
+    ],
+    "closed": false,
+    "id": {
+     "counter": 3,
+     "peer": "1"
+    },
+    "rotation": 0.0,
+    "shape": "path",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   },
+   {
+    "anchors": [
+     {
+      "handle_in": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "handle_out": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "id": "00000000000000010000000000000003",
+      "kind": "corner",
+      "point": {
+       "x": 0.0,
+       "y": 0.0
+      }
+     },
+     {
+      "handle_in": {
+       "x": -5.0,
+       "y": 0.0
+      },
+      "handle_out": {
+       "x": 5.0,
+       "y": 0.0
+      },
+      "id": "00000000000000010000000000000004",
+      "kind": "symmetric",
+      "point": {
+       "x": 20.0,
+       "y": 0.0
+      }
+     },
+     {
+      "handle_in": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "handle_out": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "id": "00000000000000010000000000000005",
+      "kind": "corner",
+      "point": {
+       "x": 10.0,
+       "y": 20.0
+      }
+     }
+    ],
+    "closed": true,
+    "id": {
+     "counter": 20,
+     "peer": "1"
+    },
+    "rotation": 0.0,
+    "shape": "path",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   }
+  ],
+  "size": {
+   "height": 297.0,
+   "width": 210.0
+  }
+ },
+ "primitives_v3.curvyo": {
+  "format_version": 7,
+  "objects": [
+   {
+    "bounds": {
+     "height": 10.0,
+     "origin": {
+      "x": 0.0,
+      "y": 0.0
+     },
+     "width": 20.0
+    },
+    "corner_radii": {
+     "bl": 2.0,
+     "br": 2.0,
+     "tl": 2.0,
+     "tr": 2.0
+    },
+    "id": {
+     "counter": 3,
+     "peer": "1"
+    },
+    "rotation": 0.0,
+    "shape": "rect",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   },
+   {
+    "frame": {
+     "center": {
+      "x": 50.0,
+      "y": 0.0
+     },
+     "rx": 5.0,
+     "ry": 5.0
+    },
+    "id": {
+     "counter": 10,
+     "peer": "1"
+    },
+    "rotation": 0.0,
+    "shape": "ellipse",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   },
+   {
+    "frame": {
+     "angle": 0.0,
+     "center": {
+      "x": 0.0,
+      "y": 50.0
+     },
+     "radius": 10.0
+    },
+    "id": {
+     "counter": 15,
+     "peer": "1"
+    },
+    "point_count": 6,
+    "rotation": 0.0,
+    "shape": "polygon",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   },
+   {
+    "frame": {
+     "angle": 0.0,
+     "center": {
+      "x": 50.0,
+      "y": 50.0
+     },
+     "radius": 10.0
+    },
+    "id": {
+     "counter": 21,
+     "peer": "1"
+    },
+    "inner_ratio": 0.5,
+    "point_count": 5,
+    "rotation": 0.0,
+    "shape": "star",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   },
+   {
+    "anchors": [
+     {
+      "handle_in": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "handle_out": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "id": "00000000000000010000000000000065",
+      "kind": "corner",
+      "point": {
+       "x": -10.0,
+       "y": -10.0
+      }
+     },
+     {
+      "handle_in": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "handle_out": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "id": "00000000000000010000000000000066",
+      "kind": "corner",
+      "point": {
+       "x": -10.0,
+       "y": -20.0
+      }
+     }
+    ],
+    "closed": false,
+    "id": {
+     "counter": 28,
+     "peer": "1"
+    },
+    "rotation": 0.0,
+    "shape": "path",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   }
+  ],
+  "size": {
+   "height": 297.0,
+   "width": 210.0
+  }
+ },
+ "rotation_v5.curvyo": {
+  "format_version": 7,
+  "objects": [
+   {
+    "bounds": {
+     "height": 10.0,
+     "origin": {
+      "x": 0.0,
+      "y": 0.0
+     },
+     "width": 20.0
+    },
+    "corner_radii": {
+     "bl": 0.0,
+     "br": 0.0,
+     "tl": 0.0,
+     "tr": 0.0
+    },
+    "id": {
+     "counter": 3,
+     "peer": "1"
+    },
+    "rotation": 0.5,
+    "shape": "rect",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   },
+   {
+    "anchors": [
+     {
+      "handle_in": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "handle_out": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "id": "000000000000000100000000000000c9",
+      "kind": "corner",
+      "point": {
+       "x": 0.0,
+       "y": 30.0
+      }
+     },
+     {
+      "handle_in": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "handle_out": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "id": "000000000000000100000000000000ca",
+      "kind": "corner",
+      "point": {
+       "x": 7.316888688738209,
+       "y": 23.18361239976666
+      }
+     }
+    ],
+    "closed": false,
+    "id": {
+     "counter": 10,
+     "peer": "1"
+    },
+    "rotation": -0.75,
+    "shape": "path",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   }
+  ],
+  "size": {
+   "height": 297.0,
+   "width": 210.0
+  }
+ },
+ "styles_v7.curvyo": {
+  "format_version": 7,
+  "objects": [
+   {
+    "anchors": [
+     {
+      "handle_in": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "handle_out": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "id": "00000000000000010000000000000001",
+      "kind": "corner",
+      "point": {
+       "x": 0.0,
+       "y": 0.0
+      }
+     },
+     {
+      "handle_in": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "handle_out": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "id": "00000000000000010000000000000002",
+      "kind": "corner",
+      "point": {
+       "x": 30.0,
+       "y": 0.0
+      }
+     },
+     {
+      "handle_in": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "handle_out": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "id": "00000000000000010000000000000003",
+      "kind": "corner",
+      "point": {
+       "x": 30.0,
+       "y": 20.0
+      }
+     }
+    ],
+    "closed": false,
+    "id": {
+     "counter": 3,
+     "peer": "1"
+    },
+    "rotation": 0.0,
+    "shape": "path",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 128,
+       "r": 0
+      },
+      "enabled": true,
+      "kind": "linear",
+      "opacity": 0.5,
+      "stops": [
+       {
+        "color": {
+         "b": 0,
+         "g": 0,
+         "r": 255
+        },
+        "id": "00000000000000070000000000000001",
+        "opacity": 1.0,
+        "position": 0.0
+       },
+       {
+        "color": {
+         "b": 0,
+         "g": 128,
+         "r": 0
+        },
+        "id": "00000000000000070000000000000003",
+        "opacity": 0.5,
+        "position": 0.5
+       },
+       {
+        "color": {
+         "b": 255,
+         "g": 0,
+         "r": 0
+        },
+        "id": "00000000000000070000000000000004",
+        "opacity": 0.25,
+        "position": 0.5
+       },
+       {
+        "color": {
+         "b": 255,
+         "g": 0,
+         "r": 0
+        },
+        "id": "00000000000000070000000000000002",
+        "opacity": 1.0,
+        "position": 1.0
+       }
+      ]
+     },
+     "stroke": {
+      "cap": "square",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 255
+      },
+      "dash": [
+       6.0,
+       3.0,
+       1.0,
+       3.0
+      ],
+      "enabled": true,
+      "join": "round",
+      "opacity": 0.75,
+      "width": 1.5
+     }
+    }
+   },
+   {
+    "bounds": {
+     "height": 20.0,
+     "origin": {
+      "x": 50.0,
+      "y": 0.0
+     },
+     "width": 40.0
+    },
+    "corner_radii": {
+     "bl": 0.0,
+     "br": 0.0,
+     "tl": 0.0,
+     "tr": 0.0
+    },
+    "id": {
+     "counter": 26,
+     "peer": "1"
+    },
+    "rotation": 0.0,
+    "shape": "rect",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": true,
+      "kind": "radial",
+      "opacity": 1.0,
+      "stops": [
+       {
+        "color": {
+         "b": 0,
+         "g": 0,
+         "r": 0
+        },
+        "id": "00000000000000080000000000000001",
+        "opacity": 1.0,
+        "position": 0.0
+       },
+       {
+        "color": {
+         "b": 255,
+         "g": 255,
+         "r": 255
+        },
+        "id": "00000000000000080000000000000002",
+        "opacity": 1.0,
+        "position": 1.0
+       }
+      ]
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [
+       1.0,
+       2.0,
+       3.0,
+       4.0,
+       5.0,
+       6.0,
+       7.0,
+       8.0
+      ],
+      "enabled": false,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 2.0
+     }
+    }
+   },
+   {
+    "frame": {
+     "center": {
+      "x": 20.0,
+      "y": 60.0
+     },
+     "rx": 12.0,
+     "ry": 8.0
+    },
+    "id": {
+     "counter": 35,
+     "peer": "1"
+    },
+    "rotation": 0.0,
+    "shape": "ellipse",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 255,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": true,
+      "kind": "solid",
+      "opacity": 0.2,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "round",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   },
+   {
+    "frame": {
+     "angle": 0.0,
+     "center": {
+      "x": 70.0,
+      "y": 60.0
+     },
+     "radius": 10.0
+    },
+    "id": {
+     "counter": 40,
+     "peer": "1"
+    },
+    "inner_ratio": 0.5,
+    "point_count": 5,
+    "rotation": 0.0,
+    "shape": "star",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   }
+  ],
+  "size": {
+   "height": 297.0,
+   "width": 210.0
+  }
+ },
+ "styles_v7_mergeable_stops.curvyo": {
+  "format_version": 7,
+  "objects": [
+   {
+    "anchors": [
+     {
+      "handle_in": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "handle_out": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "id": "00000000000000010000000000000001",
+      "kind": "corner",
+      "point": {
+       "x": 0.0,
+       "y": 0.0
+      }
+     },
+     {
+      "handle_in": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "handle_out": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "id": "00000000000000010000000000000002",
+      "kind": "corner",
+      "point": {
+       "x": 30.0,
+       "y": 0.0
+      }
+     },
+     {
+      "handle_in": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "handle_out": {
+       "x": 0.0,
+       "y": 0.0
+      },
+      "id": "00000000000000010000000000000003",
+      "kind": "corner",
+      "point": {
+       "x": 30.0,
+       "y": 20.0
+      }
+     }
+    ],
+    "closed": false,
+    "id": {
+     "counter": 3,
+     "peer": "1"
+    },
+    "rotation": 0.0,
+    "shape": "path",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 128,
+       "r": 0
+      },
+      "enabled": true,
+      "kind": "linear",
+      "opacity": 0.5,
+      "stops": [
+       {
+        "color": {
+         "b": 0,
+         "g": 0,
+         "r": 255
+        },
+        "id": "00000000000000070000000000000001",
+        "opacity": 1.0,
+        "position": 0.0
+       },
+       {
+        "color": {
+         "b": 0,
+         "g": 128,
+         "r": 0
+        },
+        "id": "00000000000000070000000000000003",
+        "opacity": 0.5,
+        "position": 0.5
+       },
+       {
+        "color": {
+         "b": 255,
+         "g": 0,
+         "r": 0
+        },
+        "id": "00000000000000070000000000000004",
+        "opacity": 0.25,
+        "position": 0.5
+       },
+       {
+        "color": {
+         "b": 255,
+         "g": 0,
+         "r": 0
+        },
+        "id": "00000000000000070000000000000002",
+        "opacity": 1.0,
+        "position": 1.0
+       }
+      ]
+     },
+     "stroke": {
+      "cap": "square",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 255
+      },
+      "dash": [
+       6.0,
+       3.0,
+       1.0,
+       3.0
+      ],
+      "enabled": true,
+      "join": "round",
+      "opacity": 0.75,
+      "width": 1.5
+     }
+    }
+   },
+   {
+    "bounds": {
+     "height": 20.0,
+     "origin": {
+      "x": 50.0,
+      "y": 0.0
+     },
+     "width": 40.0
+    },
+    "corner_radii": {
+     "bl": 0.0,
+     "br": 0.0,
+     "tl": 0.0,
+     "tr": 0.0
+    },
+    "id": {
+     "counter": 26,
+     "peer": "1"
+    },
+    "rotation": 0.0,
+    "shape": "rect",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": true,
+      "kind": "radial",
+      "opacity": 1.0,
+      "stops": [
+       {
+        "color": {
+         "b": 0,
+         "g": 0,
+         "r": 0
+        },
+        "id": "00000000000000080000000000000001",
+        "opacity": 1.0,
+        "position": 0.0
+       },
+       {
+        "color": {
+         "b": 255,
+         "g": 255,
+         "r": 255
+        },
+        "id": "00000000000000080000000000000002",
+        "opacity": 1.0,
+        "position": 1.0
+       }
+      ]
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [
+       1.0,
+       2.0,
+       3.0,
+       4.0,
+       5.0,
+       6.0,
+       7.0,
+       8.0
+      ],
+      "enabled": false,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 2.0
+     }
+    }
+   },
+   {
+    "frame": {
+     "center": {
+      "x": 20.0,
+      "y": 60.0
+     },
+     "rx": 12.0,
+     "ry": 8.0
+    },
+    "id": {
+     "counter": 35,
+     "peer": "1"
+    },
+    "rotation": 0.0,
+    "shape": "ellipse",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 255,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": true,
+      "kind": "solid",
+      "opacity": 0.2,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "round",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   },
+   {
+    "frame": {
+     "angle": 0.0,
+     "center": {
+      "x": 70.0,
+      "y": 60.0
+     },
+     "radius": 10.0
+    },
+    "id": {
+     "counter": 40,
+     "peer": "1"
+    },
+    "inner_ratio": 0.5,
+    "point_count": 5,
+    "rotation": 0.0,
+    "shape": "star",
+    "style": {
+     "fill": {
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "enabled": false,
+      "kind": "solid",
+      "opacity": 1.0,
+      "stops": []
+     },
+     "stroke": {
+      "cap": "butt",
+      "color": {
+       "b": 0,
+       "g": 0,
+       "r": 0
+      },
+      "dash": [],
+      "enabled": true,
+      "join": "miter",
+      "opacity": 1.0,
+      "width": 0.25
+     }
+    }
+   }
+  ],
+  "size": {
+   "height": 297.0,
+   "width": 210.0
+  }
+ },
+ "valid.curvyo": {
+  "format_version": 7,
+  "objects": [],
+  "size": {
+   "height": 297.0,
+   "width": 210.0
+  }
+ }
+}
