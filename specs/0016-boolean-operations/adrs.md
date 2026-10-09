@@ -3,7 +3,8 @@
 This slice adds the first real kernel operation and the first document-model
 change since `stroke-and-fill-styling`: a path object may hold more than one
 outline. **No new crate, no new ADR, one new external dependency
-(`clipper2-rust`, chosen by the 2026-10-04 spike), one `format_version`
+(`i_overlay`; the 2026-10-04 spike chose `clipper2-rust`, replaced on
+2026-10-09, see "what PR 1 settled"), one `format_version`
 bump.** The customer approved the compound-path decision and its file-format
 change on 2026-10-09 (`CLAUDE.md` §3, document model; "Customer decisions"
 below).
@@ -28,7 +29,9 @@ below).
 - [ADR 0003 §1, §3, §8](../../docs/adr/0003-geometry-kernel-booleans-offsetting-vcarving.md):
   the kernel lives in `curvyo-geometry-core`, takes an explicit `Tolerance`,
   runs on flattened polygons and returns polylines. The library is
-  `clipper2-rust` (spike note under §3, 2026-10-04). No backend trait.
+  `i_overlay` (a candidate of the spike note under §3; it replaced the spike's
+  pick `clipper2-rust` on 2026-10-09, see "what PR 1 settled"). No backend
+  trait.
 - [ADR 0003 §7](../../docs/adr/0003-geometry-kernel-booleans-offsetting-vcarving.md):
   the 0.01 mm kernel tolerance is not the display tessellation tolerance.
 - [ADR 0004 §9](../../docs/adr/0004-persistence-and-cross-machine-sync.md):
@@ -150,63 +153,77 @@ assumptions are found by audit, not by the compiler", with this table.
 
 ### 2026-10-09: the kernel
 
-- **Library:** `clipper2-rust`, as the spike decided (ADR 0003 §3 note).
-  Pure Rust, `#![forbid(unsafe_code)]`, BSL-1.0 (already allowed in
-  `deny.toml`, added for `loro`'s `xxhash-rust`, so no `deny.toml` change), one dependency (`num-traits`, MIT/Apache). The
-  spike built it for `wasm32-unknown-unknown`. Added as a workspace
-  dependency, `default-features = false`, used only by
-  `curvyo-geometry-core`. Take the newest 1.x at PR time and pin it exactly
-  (`=1.x.y`): its provenance risk (AI-assisted port) means an update is a
-  reviewed PR that reruns the fixtures, not a Renovate auto-bump.
+- **Library:** `i_overlay =9.0.1`, pinned exactly, `default-features = false`
+  (the default feature set is empty; `allow_multithreading`, which pulls
+  `rayon`, stays off). Licenses: `i_overlay` MIT OR Apache-2.0, `i_float`,
+  `i_shape`, `i_key_sort`, `i_tree` MIT, plus the pure-Rust `libm`; `cargo deny`
+  passes without a change. A workspace dependency used only by
+  `curvyo-geometry-core`. The spike picked `clipper2-rust`; it was replaced
+  during PR 1 (see "what PR 1 settled"). An update of the pin is a reviewed PR
+  that reruns the fixtures and the property tests (command below), not a
+  Renovate auto-bump.
 - **Input and output.** The kernel takes operands as lists of outlines
   (`&[OutlineTriple]` plus `closed`, the triple `curvyo-ui-core` already
-  builds for hit-testing) and returns `Vec<Vec<Point>>`. No `kurbo` or
-  Clipper type crosses the crate API (as today). It does not take
+  builds for hit-testing) and returns `Vec<Vec<Point>>` in a `BooleanResult`.
+  No `kurbo` or `i_overlay` type crosses the crate API. It does not take
   `PathSnapshot`, so PR 1 does not wait for PR 2.
 - **Operations:** `Union`, `Difference` (first operand minus the rest),
   `Intersection`, `Exclusion`. Reverse difference is `Difference` with the
   caller putting the top-most operand first; no fifth kernel operation.
-- **Pipeline**, in this order:
-  1. Refuse an open outline: `BooleanError::OpenOperand { index }` (AC 15;
-     the kernel enforces it, not only the UI).
-  2. Flatten every segment with `kurbo` to `tolerance − 2·GRID` (0.008 mm
-     for the fixed 0.01 mm), leaving room for grid rounding and step 6.
-     Disc of radius 10 mm: about 79 nodes, inside AC 26's 71 to 142.
+- **Pipeline**, in this order (the module doc of `boolean.rs` is the same
+  list):
+  1. Refuse, in this order and listing every offending operand: no operands,
+     a tolerance not above two grid pitches, an open outline
+     (`OpenOperands`, AC 15; the kernel enforces it, not only the UI), a
+     non-finite or out-of-range coordinate or handle (`OutOfRange`).
+  2. Flatten every segment with the kernel's own subdivision (not `kurbo`) to
+     `tolerance − 2·GRID` (0.008 mm for the fixed 0.01 mm), leaving room for
+     grid rounding and the cleanup. Disc of radius 10 mm: 84 nodes, inside
+     AC 26's 71 to 142.
   3. Snap to an integer grid, `GRID` = 0.001 mm (a named constant inside the
-     kernel, not a setting), into `Clipper64`. Non-finite coordinates or
-     |coordinate| > 10⁷ mm: `BooleanError::OutOfRange`. 100 000 mm is 10⁸
-     grid units, far inside Clipper's range (AC 42).
-  4. **Normalize each operand on its own:** a nonzero self-union. This
-     gives every operand positive orientation and its painted region
-     (self-intersections, AC 7; holes of a compound operand, AC 8). Without
-     it, two operands wound in opposite directions would cancel in their
-     overlap under nonzero. An operand that comes out empty:
-     `BooleanError::EmptyOperand { index }` (AC 16).
+     kernel, not a setting), and run on `Overlay<i64>`. The range check is
+     |coordinate| ≤ 10⁷ mm, which is 10¹⁰ grid units, far inside the engine's
+     ±2⁶² units; 100 000 mm is 10⁸ units (AC 42).
+  4. **Normalize each operand on its own:** a nonzero overlay of the operand
+     with nothing. This gives every operand positive orientation and its
+     painted region (self-intersections, AC 7; holes of a compound operand,
+     AC 8). Without it, two operands wound in opposite directions would
+     cancel in their overlap under nonzero. An operand that comes out empty:
+     `EmptyOperands` (AC 16).
   5. The operation: Union = one nonzero union of all; Difference = first
      operand as subject, the rest as clip; Intersection and Exclusion are
-     **folded pairwise** (Clipper's subject/clip form computes
-     `A ∩ (B ∪ C)`, not `A ∩ B ∩ C`, and its XOR is not odd-parity for
-     three or more operands).
-  6. Clean up: Clipper's `SimplifyPaths` with ε = 1 grid unit (AC 24), then
-     one more nonzero self-union to repair any crossing the simplification
-     made (AC 41), then drop outlines with fewer than 3 points or zero area.
+     **folded pairwise** (the subject/clip form computes `A ∩ (B ∪ C)`, not
+     `A ∩ B ∩ C`, and its XOR is not odd-parity for three or more operands).
+  6. Cleanup (`boolean_cleanup.rs`), in up to four rounds: remove vertices
+     within one grid unit of the chord that replaces them, repair crossings
+     with a nonzero union, drop outlines of fewer than 3 points, no area or an
+     average width under one grid pitch (rounding noise). AC 24 and 41.
   7. Canonical form (AC 41, 43): outer outlines have positive shoelace area
      in document coordinates (clockwise on screen, Y down), holes negative;
      each outline starts at its smallest grid point (x, then y); outlines are
      sorted by that start point, ties by signed area, larger first. Then back
      to mm (integer × 0.001).
-  8. Empty result: `BooleanError::EmptyResult` (AC 17).
-- **Determinism (AC 43):** Clipper64 is integer arithmetic; flattening and
-  rounding use IEEE basic operations and `sqrt`, which agree on x86-64,
-  aarch64 and wasm32. PR 1 checks that `kurbo`'s flattening path calls no
-  `powf`/trigonometric function; if it does, the kernel flattens with its own
-  subdivision. No `HashMap` iteration order anywhere in the kernel. Output
-  lies on the grid, so the golden files agree exactly, not just to 1e-6 mm.
+  8. Empty result: `EmptyResult` (AC 17).
+- **Determinism (AC 43):** from the snap on, the work is integer arithmetic;
+  flattening and the cleanup's comparisons use IEEE basic operations and
+  `sqrt`, which agree on x86-64, aarch64 and wasm32; Rust does not contract
+  them into fused multiply-adds. `kurbo`'s flattening was checked and calls
+  `powf`, so the kernel flattens itself. `i_float` calls `libm` in its float
+  adapter only; the kernel uses the integer engine. No `HashMap` iteration
+  order anywhere in the kernel. Output lies on the grid, so the golden files
+  agree exactly, not just to 1e-6 mm: CI compares them on Linux, macOS
+  (aarch64) and Windows. The same results in the wasm build are argued, not
+  tested (technical debt, for PR 3).
 - **Robustness:** `catch_unwind` and timeouts are unavailable in a core
-  crate (no threads, wasm aborts on panic), so the guard is the test suite:
-  the 9 fixtures of AC 40, the 200-pair seeded property test of AC 14
-  (`proptest` is already a dev-dependency), and the spike's four degenerate
-  fixtures. A Clipper error maps to a typed `BooleanError`, never a panic.
+  crate (no threads, wasm aborts on panic), and `i_overlay` returns no errors,
+  so the guard is the test suite: the 9 fixtures of AC 40 (also checked
+  against the output rules of AC 41), fixed-seed property tests on random
+  polygon pairs with holes and self-intersections, and a coarse lattice that
+  provokes coincident and collinear edges. To repeat the runs that justified
+  the library, for example after a pin update:
+  `PROPTEST_CASES=20000 cargo test --release -p curvyo-geometry-core --test
+  boolean_properties` (256 cases per property by default; `lattice_shapes_stay_valid`
+  is the property that separated the two libraries).
 - **Spec issue, AC 39 (for the PO):** grid snapping cannot guarantee "less
   than 0.0004 mm apart is coincident": two values 0.0004 mm apart can round
   to neighbouring grid points. What the kernel guarantees: coordinates that
@@ -218,7 +235,7 @@ assumptions are found by audit, not by the compiler", with this table.
 - **Performance (AC 44 to 47):** realistic for the kernel. The spike did a
   5,000-subpath intersection in 9 to 14 ms; 2 × 1,000 curved nodes flatten
   to a few thousand vertices (low milliseconds), 2 × 10,000 to at most
-  about 200,000 (well under 2 s, four Clipper passes included). **The risk is
+  about 200,000 (well under 2 s). **The risk is
   the document write, not the kernel:** every result node is a Loro map with
   five registers and a 32-character id, about 100 bytes in the operation log.
   AC 46 (1,000 rectangles) and AC 47 (150 ms to repaint) are dominated by that
@@ -227,10 +244,82 @@ assumptions are found by audit, not by the compiler", with this table.
   hard-to-change part. If it misses, the fallback is the packed encoding
   rejected above, as a new decision here and not a silent change.
 
+
+### 2026-10-09: what PR 1 settled (implementer)
+
+- **The library was replaced during PR 1.** The spike's pick, `clipper2-rust`
+  1.2.0, returned wrong unions on reproducing inputs (a triangle of 0.4 to
+  0.5 mm² filled that no operand covers; regression tests
+  `a_union_with_collinear_overlapping_edges_is_exact` and
+  `a_union_with_a_vertex_beside_a_long_edge_is_exact`), and its
+  `SimplifyPaths` made a valid outline cross itself. Comparison on random pairs
+  of 1 to 3 outlines of 3 to 8 vertices, area identities of criterion 14:
+  - 6 mm lattice (many shared and collinear edges): `clipper2-rust` broke the
+    identities in 12 to 16 of 5,877 pairs; `i_overlay` 9.0.0 (a harness
+    outside the repository, same pairs) in none; `i_overlay` 9.0.1 inside the
+    kernel in none of 19,643.
+  - Random, up to 60 mm: none for either library in 6,000 to 12,000 pairs;
+    none for the kernel on `i_overlay` in 19,999. A 20,000-pair run had found
+    one miss with `clipper2-rust`.
+  - Random, up to 600 mm: none for either, 6,000 pairs.
+
+  The lead decided on 2026-10-09 to replace it (the customer may veto). The
+  swap touched `boolean_grid::run` and the pipeline's types, not the API, the
+  result type or the fixtures, except that the golden file of the bow-tie
+  exclusion changed (two triangles touching at the pinch instead of one pinched
+  outline, both valid). `i_overlay` contains `unsafe`: 49 sites in
+  `i_overlay` 9.0.0's own source, about 130 in the five `i_*` crates of this
+  lockfile (`i_overlay`, `i_float`, `i_shape`, `i_key_sort`, `i_tree`); our crate
+  stays `forbid(unsafe_code)`. The 9.0.0 figures above are evidence only; the
+  pin, the 19,643 + 19,999 kernel pairs, the goldens and the budgets are
+  9.0.1.
+- **Flattening is the kernel's own** (`flatten.rs`): `kurbo`'s `flatten` calls
+  `powf` (in `to_quads`), which platform math libraries may round differently,
+  so criterion 43 would not hold. The step count is `ceil(sqrt(M / (8 tol)))`
+  with `M = 6 max(|P2 - 2 P1 + P0|, |P3 - 2 P2 + P1|)`, from the chord error
+  bound `h² max|B''| / 8`; a segment whose inner control points are within the
+  tolerance of its chord is one step. Only `+ - * /` and `sqrt`.
+- **Errors carry every offending operand**, not one: `OpenOperands(Vec<usize>)`,
+  `OutOfRange(Vec<usize>)`, `EmptyOperands(Vec<usize>)`, because criteria 15 and
+  16 need the count ("1 of 3 selected objects") and the red outline of every
+  offender. Further errors: `NoOperands`, `ToleranceTooSmall` (the tolerance
+  must exceed two grid pitches) and `EmptyResult`.
+- **Cleanup is the kernel's own** (`boolean_cleanup.rs`) and drift-free. A first
+  version judged each vertex against the neighbours that remained; on a
+  polyline circle of 100,000 vertices it collapsed the outline to 24 nodes up
+  to 0.42 mm off its input. Now Douglas-Peucker keeps every input vertex within
+  one grid unit of the result, and a second step removes kept vertices that
+  ended up within a unit of their neighbours' line (AC 24, including the tip
+  of a needle thinner than the grid) only while all input vertices of the run
+  stay within a unit of the new line (AC 24a, 24b). After the fix the same
+  circles deviate by under one grid unit from their input (0.0007 mm at
+  100,000 vertices, which collapse to 1,892 nodes). A round's bound is one
+  unit; the repair union can create a few vertices that further rounds (at
+  most four) remove, each within the same bound of the round's input, so the
+  worst case is four units (0.004 mm) in theory, one in practice. Slivers go
+  inside the loop because dropping one can turn a touching vertex of its
+  neighbour into a plain collinear one.
+- **Exclusion** folds the engine's XOR pairwise.
+- **Operand order.** Intersection and Exclusion fold pairwise, so the result
+  can differ with the operand order by rounding within the grid tolerance
+  (areas agree to the bound of criterion 14, nodes may differ). Union is
+  exactly order-independent in the property tests; Difference is ordered by
+  definition.
+- **Criterion 14:** the PO reworded it to
+  `1e-6 * (|A| + |B|) + 0.001 mm * (perimeter A + perimeter B)`, because each
+  crossing is rounded to the grid and a pure 1e-6 cannot hold at the size of a
+  laser bed. The kernel tests assert that bound on shapes up to 60 mm and up
+  to 6 m, for union, intersection, difference and exclusion.
+- **Performance** (release, `boolean_performance.rs`): 2 x 1,000 curved nodes
+  take 5 to 7 ms, 2 x 10,000 take 49 to 63 ms per operation (budgets: 100 ms,
+  2 s). The tests assert them in release builds only; the CI job
+  `boolean-budgets` runs them there.
+
 ### 2026-10-09: where the code lives
 
 - **`curvyo-geometry-core`:** `boolean` (operations, normalization, fold),
-  `boolean_grid` (grid conversion, cleanup, canonical form) and `flatten`;
+  `boolean_grid` (grid conversion, overlay calls, canonical form),
+  `boolean_cleanup` (near-collinear removal, repair, slivers) and `flatten`;
   each under 500 lines. `contains_point` takes several outlines (PR 2).
 - **`curvyo-document-core`:** the encoding above and one command,
   `Document::replace_with_path(operands: &[NodeId], base: NodeId,

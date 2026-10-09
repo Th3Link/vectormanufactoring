@@ -1,0 +1,23 @@
+# a square inside a larger square with one shared edge (AC 40d)
+# Inputs: anchors as `x y [in_x in_y out_x out_y]` in mm, handles relative.
+# Expected results: grid integers (0.001 mm); regenerate with CURVYO_UPDATE_GOLDEN=1.
+operand
+outline closed
+anchor 0 0
+anchor 40 0
+anchor 40 40
+anchor 0 40
+operand
+outline closed
+anchor 0 10
+anchor 15 10
+anchor 15 25
+anchor 0 25
+expect union
+outline 0 0 40000 0 40000 40000 0 40000
+expect difference
+outline 0 0 40000 0 40000 40000 0 40000 0 25000 15000 25000 15000 10000 0 10000
+expect intersection
+outline 0 10000 15000 10000 15000 25000 0 25000
+expect exclusion
+outline 0 0 40000 0 40000 40000 0 40000 0 25000 15000 25000 15000 10000 0 10000

@@ -34,6 +34,7 @@
 #                        wasm32-unknown-unknown, lints it, and asserts the
 #                        ADR 0011 §6 dependency ban list. Ubuntu only, per the
 #                        ADR.
+#   boolean-budgets   — the boolean kernel's performance budgets in a release build, ubuntu only.
 #   deny              — `cargo deny check`, once, over the whole workspace
 #                        (ADR 0011 §7: not matrixed — it inspects the
 #                        dependency graph, not compiled code, so one run
@@ -325,6 +326,23 @@ jobs:
             exit 1
           fi
           echo "$crate: clean"
+
+  # The boolean kernel's performance budgets (specs/0016-boolean-operations criteria 44, 45) are
+  # defined for a release build; the host gate above builds debug, where the tests only print.
+  # Only this crate's test, ubuntu only, so it stays cheap.
+  boolean-budgets:
+    name: boolean budgets (release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run the boolean performance tests in release
+        run: cargo test --release -p curvyo-geometry-core --test boolean_performance -- --nocapture
 
   # Dependency-graph/license check, not compiled code — one run sees every
   # target deny.toml's [graph] lists (including wasm32-unknown-unknown),

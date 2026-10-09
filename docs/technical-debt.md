@@ -20,6 +20,36 @@ Inkscape's and is not cleanly re-editable.
 story using `kurbo`'s curve fitting. Needs a quality bar defined first
 (maximum deviation, node-count target).
 
+## The boolean library is a pinned, young dependency with `unsafe` inside
+
+`i_overlay` (MIT OR Apache-2.0, with `i_float`, `i_shape`, `i_key_sort`,
+`i_tree`, all MIT) is the kernel's polygon engine, pinned exactly. It contains
+`unsafe` (49 sites in `i_overlay` 9.0.0's own source, about 130 across the five
+`i_*` crates of this lockfile: `i_overlay`, `i_float`, `i_shape`, `i_key_sort`,
+`i_tree`; our own crate keeps `#![forbid(unsafe_code)]`), and `i_float` uses the pure-Rust `libm` in its float
+adapter, which the kernel does not use (it calls the integer engine on a grid
+of its own). It replaced `clipper2-rust` after the kernel's property tests
+found wrong unions in that library (see the dated note in
+`specs/0016-boolean-operations/adrs.md`). The safeguards are the golden
+fixtures, the fixed-seed property tests and the regression tests in
+`curvyo-geometry-core/tests/`, which every update of the pin must rerun.
+
+**Resolution:** none planned. Revisit if a defect shows up in real files.
+
+## The boolean kernel's wasm32 results are argued equal, not tested
+
+Criterion 43 of `specs/0016-boolean-operations` asks for the same result in the
+browser build as on the desktop. CI compares the golden files on Linux, macOS
+(aarch64) and Windows (`curvyo-geometry-core/tests/fixtures/boolean/`); the
+`core-wasm32` jobs only build and lint. The argument that wasm32 agrees is
+sound: after the snap everything is integer arithmetic, and the flattening and
+the cleanup use only IEEE `+ - * /`, `sqrt` and `round`, which Rust does not
+fuse into multiply-adds.
+
+**Resolution:** PR 3 of the boolean slice (command and UI) runs the golden inputs
+through the wasm build in `curvyo-editor-wasm` and compares them with the
+fixtures, for example in the frontend test run.
+
 ## V-carve depth comes from an approximate medial axis
 
 V-carving uses a constrained-Delaunay approximation of the medial axis rather

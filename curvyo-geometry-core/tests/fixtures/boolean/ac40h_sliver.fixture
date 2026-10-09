@@ -1,0 +1,27 @@
+# a rectangle 0.005 mm by 100 mm (AC 40h)
+# Inputs: anchors as `x y [in_x in_y out_x out_y]` in mm, handles relative.
+# Expected results: grid integers (0.001 mm); regenerate with CURVYO_UPDATE_GOLDEN=1.
+operand
+outline closed
+anchor 0 0
+anchor 100 0
+anchor 100 0.005
+anchor 0 0.005
+operand
+outline closed
+anchor 40 -10
+anchor 60 -10
+anchor 60 10
+anchor 40 10
+expect union
+outline 0 0 40000 0 40000 -10000 60000 -10000 60000 0 100000 0 100000 5 60000 5 60000 10000 40000 10000 40000 5 0 5
+expect difference
+outline 0 0 40000 0 40000 5 0 5
+outline 60000 0 100000 0 100000 5 60000 5
+expect intersection
+outline 40000 0 60000 0 60000 5 40000 5
+expect exclusion
+outline 0 0 40000 0 40000 5 0 5
+outline 40000 -10000 60000 -10000 60000 0 40000 0
+outline 40000 5 60000 5 60000 10000 40000 10000
+outline 60000 0 100000 0 100000 5 60000 5

@@ -1,0 +1,28 @@
+# a self-intersecting four-node bow-tie (AC 40g)
+# Inputs: anchors as `x y [in_x in_y out_x out_y]` in mm, handles relative.
+# Expected results: grid integers (0.001 mm); regenerate with CURVYO_UPDATE_GOLDEN=1.
+operand
+outline closed
+anchor 0 0
+anchor 20 20
+anchor 20 0
+anchor 0 20
+operand
+outline closed
+anchor 5 5
+anchor 15 5
+anchor 15 15
+anchor 5 15
+expect union
+outline 0 0 5000 5000 15000 5000 20000 0 20000 20000 15000 15000 5000 15000 0 20000
+expect difference
+outline 0 0 5000 5000 5000 15000 0 20000
+outline 15000 5000 20000 0 20000 20000 15000 15000
+expect intersection
+outline 5000 5000 10000 10000 5000 15000
+outline 10000 10000 15000 5000 15000 15000
+expect exclusion
+outline 0 0 5000 5000 5000 15000 0 20000
+outline 5000 5000 15000 5000 10000 10000
+outline 5000 15000 10000 10000 15000 15000
+outline 15000 5000 20000 0 20000 20000 15000 15000
