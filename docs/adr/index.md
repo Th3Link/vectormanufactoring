@@ -26,7 +26,7 @@ A decision too small for a full ADR gets a short dated note in that feature's
 |---|---|---|---|
 | [0001](0001-ui-framework-and-canvas-rendering.md) | UI framework and canvas rendering | workspace | Accepted |
 | [0002](0002-document-model-units-and-svg-round-trip.md) | Internal document model, units and SVG round-trip | workspace | Accepted |
-| [0003](0003-geometry-kernel-booleans-offsetting-vcarving.md) | Geometry kernel, boolean operations, offsetting and V-carving | workspace | Accepted |
+| [0003](0003-geometry-kernel-booleans-offsetting-vcarving.md) | Geometry kernel, boolean operations, offsetting and V-carving | workspace | Accepted; §3 amendment 2026-10-09 proposed (`i_overlay` replaces `clipper2-rust`, takes effect with PR #69) |
 | [0004](0004-persistence-and-cross-machine-sync.md) | Persistence, collaboration and cross-machine sync | workspace | Accepted |
 | [0005](0005-extension-and-plugin-model.md) | Extension and plugin model | workspace | Accepted |
 | [0006](0006-license.md) | License | workspace | Accepted |
@@ -101,20 +101,16 @@ unawareness. Reversing either needs a new ADR, not an edit:
   next touched for an unrelated reason.
 - ~~**Boolean-crate spike (`spike/booleans`).**~~ — done, 2026-10-04: all three
   candidates (`i_overlay`, `geo`'s boolean ops, `clipper2-rust`) handled every
-  degenerate fixture with no panic, hang or divergent output, and all three
-  build cleanly for `wasm32-unknown-unknown`. The result is **`clipper2-rust`**,
-  tie-broken on `#![forbid(unsafe_code)]` (vs. internal `unsafe` in the other
-  two) and on being the Clipper2 algorithms directly rather than `geo`'s wrapper
-  over an older, pinned `i_overlay`. Recorded as the dated note ADR 0003 §3 asks
-  for, written there (not in a `specs/<NNNN-feature-slug>/adrs.md`, since slice 6
-  doesn't exist as a story yet). This reopens the §4 offsetting question below —
-  still pending the customer, not resolved by this spike.
-- **Offsetting may reopen ADR 0003 §4 (customer decision, not yet asked).** Now
-  that the boolean spike has picked `clipper2-rust`, its ported Clipper2
-  offsetter covers the join and cleanup cases §4 decides to build on `kurbo`
-  stroke expansion. Using it would change accepted text, so it needs an ADR
-  superseding 0003 —
-  noted in 0003 §4, pending the customer now that the spike result is in.
+  degenerate fixture and build for `wasm32-unknown-unknown`; the spike picked
+  `clipper2-rust` on a tie-breaker. **Amended 2026-10-09 (proposed, takes
+  effect with PR #69):** the kernel's property tests found wrong areas from
+  `clipper2-rust` on lattice input and none from `i_overlay`, so the library is
+  `i_overlay` `=9.0.1`. Recorded in ADR 0003 §3.
+- **Offsetting (ADR 0003 §4).** §4 stands as written (`kurbo` stroke expansion
+  plus a union with the boolean library). The earlier question whether to use
+  Clipper2's offsetter instead lost its premise with the library change.
+  Whether `i_overlay` can offset outlines with the joins §4 lists: to be
+  checked when the offsetting story is specified.
 - **ADR 0007 is over the five-minute rule and wants splitting, not trimming.**
   It carries three subjects — credential storage, the source/sink trait design,
   and the git-forge sink — and a consolidation pass took out the prose without
