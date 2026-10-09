@@ -9,7 +9,14 @@
 //!
 //! The comparison is exact (grid integers), so a wasm result that differs by one grid step fails.
 
-#![allow(clippy::unwrap_used, clippy::expect_used, missing_docs)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    missing_docs
+)]
 
 mod common;
 

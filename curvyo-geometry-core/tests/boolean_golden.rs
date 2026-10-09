@@ -22,9 +22,7 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use common::golden::{
-    OPS, expected_text, input_part, normalise, parse_operands, tiny_squares_summary,
-};
+use common::golden::{expected_text, input_part, normalise, parse_operands, tiny_squares_summary};
 use common::{area, node_count, run};
 use curvyo_geometry_core::{BooleanError, BooleanOp, BooleanResult};
 
