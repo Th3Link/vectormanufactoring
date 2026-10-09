@@ -1,17 +1,11 @@
-//! `Document`'s size commands: set the size with the centre fixed, fit it to
-//! the content, and set the display unit
-//! (`specs/0015-document-size-and-rulers/`, criteria 17-27a, 36 and 38).
+//! `Document`'s size commands: resize with the centre fixed, and fit to
+//! content (`specs/0015-document-size-and-rulers/`, criteria 17-27a).
 //!
 //! Each command is one commit that writes the size registers and moves every
 //! object together, so no state exists in which only one of the two has
 //! happened. Nothing here scales, crops, restyles or rotates an object.
 
-use loro::LoroMap;
-
-use crate::display_unit::DisplayUnit;
-use crate::document::{
-    Document, KEY_DISPLAY_UNIT, KEY_HEIGHT_MM, KEY_WIDTH_MM, OBJECTS_TREE, ROOT_MAP,
-};
+use crate::document::{Document, KEY_HEIGHT_MM, KEY_WIDTH_MM, OBJECTS_TREE, ROOT_MAP};
 use crate::objects::translate_meta;
 use crate::paths::tree_id_of;
 use crate::units::{DocumentSize, Length, Point, Vec2};
@@ -63,10 +57,6 @@ pub fn validated_document_side(side: Length) -> Result<Length, DocumentSizeError
     Ok(Length::from_mm(mm.clamp(MIN_DOCUMENT_MM, MAX_DOCUMENT_MM)))
 }
 
-fn validated_side(mm: f64) -> Result<f64, DocumentSizeError> {
-    validated_document_side(Length::from_mm(mm)).map(Length::as_mm)
-}
-
 impl Document {
     /// Sets the document size and moves every object by half the change, so
     /// the centre of the document and every object's place relative to it
@@ -85,14 +75,16 @@ impl Document {
     /// [`DocumentSizeError::OutOfRange`] for a side outside
     /// [`MIN_DOCUMENT_MM`]`..=`[`MAX_DOCUMENT_MM`].
     pub fn resize(&self, size: DocumentSize) -> Result<bool, DocumentSizeError> {
-        let width = validated_side(size.width.as_mm())?;
-        let height = validated_side(size.height.as_mm())?;
+        let size = DocumentSize::new(
+            validated_document_side(size.width)?,
+            validated_document_side(size.height)?,
+        );
         let current = self.size();
         let shift = Vec2::new(
-            (width - current.width.as_mm()) / 2.0,
-            (height - current.height.as_mm()) / 2.0,
+            (size.width.as_mm() - current.width.as_mm()) / 2.0,
+            (size.height.as_mm() - current.height.as_mm()) / 2.0,
         );
-        Ok(self.apply_size(width, height, shift, "resize_document"))
+        Ok(self.apply_size(size, shift, "resize_document"))
     }
 
     /// Sets the document to the extent of `content` (the axis-aligned box of
@@ -123,37 +115,42 @@ impl Document {
         if extent_x < 0.0 || extent_y < 0.0 {
             return Err(DocumentSizeError::InvalidBounds);
         }
-        let width = validated_side(extent_x.max(MIN_DOCUMENT_MM))?;
-        let height = validated_side(extent_y.max(MIN_DOCUMENT_MM))?;
+        let size = DocumentSize::new(
+            validated_document_side(Length::from_mm(extent_x.max(MIN_DOCUMENT_MM)))?,
+            validated_document_side(Length::from_mm(extent_y.max(MIN_DOCUMENT_MM)))?,
+        );
         if self.object_ids().is_empty() {
             return Ok(false);
         }
         let shift = Vec2::new(
-            -min.x + (width - extent_x) / 2.0,
-            -min.y + (height - extent_y) / 2.0,
+            -min.x + (size.width.as_mm() - extent_x) / 2.0,
+            -min.y + (size.height.as_mm() - extent_y) / 2.0,
         );
-        Ok(self.apply_size(width, height, shift, "fit_document_to_content"))
+        Ok(self.apply_size(size, shift, "fit_document_to_content"))
     }
 
     /// Writes the size registers and shifts all objects by `shift` in one
     /// commit named `label`; writes nothing and returns `false` if neither
     /// the size nor any position would change.
-    fn apply_size(&self, width: f64, height: f64, shift: Vec2, label: &str) -> bool {
+    fn apply_size(&self, size: DocumentSize, shift: Vec2, label: &str) -> bool {
         let current = self.size();
-        let size_same = (width - current.width.as_mm()).abs() <= EQUAL_EPSILON_MM
-            && (height - current.height.as_mm()).abs() <= EQUAL_EPSILON_MM;
+        let size_same = (size.width.as_mm() - current.width.as_mm()).abs() <= EQUAL_EPSILON_MM
+            && (size.height.as_mm() - current.height.as_mm()).abs() <= EQUAL_EPSILON_MM;
         let shift_zero = shift.x.abs() <= EQUAL_EPSILON_MM && shift.y.abs() <= EQUAL_EPSILON_MM;
         if size_same && shift_zero {
             return false;
         }
-        // Both registers are written together, so a damaged stored side
-        // (read as A4 for both sides, `Document::size`) is repaired as well.
+        // Both registers are set. Loro records an operation only for a value
+        // that differs from the stored one, and a damaged stored side always
+        // differs from the valid new one, so a damaged size is repaired by the
+        // next resize or fit. Across peers each register merges on its own
+        // (docs/technical-debt.md, "Resize and fit merge per field").
         let root = self.loro().get_map(ROOT_MAP);
         // invariant: the root map is attached and the values are plain f64.
         #[allow(clippy::unwrap_used)]
         {
-            root.insert(KEY_WIDTH_MM, width).unwrap();
-            root.insert(KEY_HEIGHT_MM, height).unwrap();
+            root.insert(KEY_WIDTH_MM, size.width.as_mm()).unwrap();
+            root.insert(KEY_HEIGHT_MM, size.height.as_mm()).unwrap();
         }
         if !shift_zero {
             self.translate_all_objects(shift);
@@ -170,34 +167,6 @@ impl Document {
                 translate_meta(&meta, offset);
             }
         }
-    }
-
-    /// Sets the unit lengths are shown in, as one commit labelled
-    /// `set_display_unit` that moves nothing (criteria 36 and 38). Returns
-    /// `false` and writes nothing if `unit` is already the display unit.
-    ///
-    /// # Panics
-    /// Does not panic in practice: it inserts a plain string into the
-    /// attached root map.
-    #[must_use]
-    pub fn set_display_unit(&self, unit: DisplayUnit) -> bool {
-        if self.display_unit() == unit {
-            return false;
-        }
-        let root: LoroMap = self.loro().get_map(ROOT_MAP);
-        // invariant: the root map is attached and the value is a plain string.
-        #[allow(clippy::unwrap_used)]
-        root.insert(KEY_DISPLAY_UNIT, unit.symbol()).unwrap();
-        self.commit_with_label("set_display_unit");
-        true
-    }
-}
-
-impl DocumentSize {
-    /// Builds a size from two millimetre sides.
-    #[must_use]
-    pub const fn from_mm(width: f64, height: f64) -> Self {
-        Self::new(Length::from_mm(width), Length::from_mm(height))
     }
 }
 
@@ -456,6 +425,7 @@ mod tests {
         let document = Document::new(1);
         let a = rect(&document, 30.0, 40.0, 20.0, 10.0);
         let b = line(&document, (-10.0, 5.0), (25.0, 80.0));
+        let rect_before = document.object(a).unwrap();
         let before = changes(&document);
 
         let applied = document.fit_to_content((Point::new(-10.0, 5.0), Point::new(50.0, 80.0)));
@@ -465,11 +435,10 @@ mod tests {
         assert_eq!(last_label(&document), "fit_document_to_content");
         assert_eq!(document.size(), DocumentSize::from_mm(60.0, 75.0));
         let shift = Vec2::new(10.0, -5.0);
-        let expected_rect = ObjectSnapshot::Primitive(match document.object(a).unwrap() {
-            ObjectSnapshot::Primitive(p) => p,
-            ObjectSnapshot::Path(_) => panic!("rect"),
-        });
-        assert_eq!(document.object(a).unwrap(), expected_rect);
+        assert_eq!(
+            document.object(a).as_ref(),
+            Some(&rect_before.translated(shift))
+        );
         let Some(ObjectSnapshot::Path(path)) = document.object(b) else {
             panic!("a path");
         };
@@ -593,37 +562,6 @@ mod tests {
         assert_eq!(path.anchors[0].point, Point::new(-80.0, -118.5));
     }
 
-    #[test]
-    fn display_unit_defaults_to_mm_and_changing_it_is_one_commit_that_moves_nothing() {
-        let document = Document::new(1);
-        let id = rect(&document, 1.0, 2.0, 3.0, 4.0);
-        let object = document.object(id);
-        let size = document.size();
-        assert_eq!(document.display_unit(), DisplayUnit::Mm);
-        let before = changes(&document);
-
-        assert!(document.set_display_unit(DisplayUnit::In));
-
-        assert_eq!(document.display_unit(), DisplayUnit::In);
-        assert_eq!(changes(&document), before + 1);
-        assert_eq!(last_label(&document), "set_display_unit");
-        assert_eq!(document.object(id), object);
-        assert_eq!(document.size(), size);
-
-        assert!(!document.set_display_unit(DisplayUnit::In), "same unit");
-        assert_eq!(changes(&document), before + 1);
-    }
-
-    #[test]
-    fn an_unknown_stored_unit_reads_as_mm() {
-        let document = Document::new(1);
-        let root = document.loro().get_map(ROOT_MAP);
-        root.insert(KEY_DISPLAY_UNIT, "furlong").unwrap();
-        assert_eq!(document.display_unit(), DisplayUnit::Mm);
-        root.insert(KEY_DISPLAY_UNIT, 3.0).unwrap();
-        assert_eq!(document.display_unit(), DisplayUnit::Mm);
-    }
-
     /// Criterion 13: missing, non-finite or out-of-range sides open as A4 on
     /// both axes, and reading writes nothing.
     #[test]
@@ -683,5 +621,64 @@ mod tests {
             .resize(DocumentSize::from_mm(210.0, 400.0))
             .unwrap();
         assert_eq!(document.size(), DocumentSize::from_mm(210.0, 400.0));
+    }
+
+    fn fixture_path(name: &str) -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name)
+    }
+
+    /// The document `size_damaged_v7.curvyo` is made from: a 50 x 50 mm
+    /// rectangle at (10, 10) and a stored height of 100000.5 mm, just over
+    /// the 100 000 mm limit, so the file is damaged in one axis only.
+    fn damaged_size_document() -> Document {
+        let document = Document::new(1);
+        let _ = rect(&document, 10.0, 10.0, 50.0, 50.0);
+        let root = document.loro().get_map(ROOT_MAP);
+        root.insert(KEY_WIDTH_MM, 120.0).unwrap();
+        root.insert(KEY_HEIGHT_MM, 100_000.5).unwrap();
+        document.loro().commit();
+        document
+    }
+
+    /// Run deliberately to regenerate `tests/fixtures/size_damaged_v7.curvyo`
+    /// and `display_unit_in_v7.curvyo` (`cargo test -p curvyo-document-core
+    /// generate_size_fixtures -- --ignored`). The committed bytes are what
+    /// `tests/document_size.rs` pins.
+    #[test]
+    #[ignore = "run deliberately to regenerate tests/fixtures/*.curvyo, not on every `cargo test`"]
+    fn generate_size_fixtures() {
+        let bytes = crate::container::pack(&damaged_size_document(), "0.1.0").unwrap();
+        std::fs::write(fixture_path("size_damaged_v7.curvyo"), bytes).unwrap();
+
+        // A 50 x 50 mm rectangle at (10, 10), resized from A4 to US Letter
+        // (215.9 x 279.4 mm, 8.5 x 11 in), which moves it by (2.95, -8.8), to
+        // (12.95, 1.2); display unit inches.
+        let document = Document::new(1);
+        let _ = rect(&document, 10.0, 10.0, 50.0, 50.0);
+        document
+            .resize(DocumentSize::from_mm(215.9, 279.4))
+            .unwrap();
+        assert!(document.set_display_unit(crate::display_unit::DisplayUnit::In));
+        let bytes = crate::container::pack(&document, "0.1.0").unwrap();
+        std::fs::write(fixture_path("display_unit_in_v7.curvyo"), bytes).unwrap();
+    }
+
+    /// The golden really is damaged: the raw stored height is out of range
+    /// (and the width is valid), so `size()` falling back to A4 is the damaged
+    /// path and not a coincidence of a valid A4 file.
+    #[test]
+    fn the_damaged_golden_stores_a_height_over_the_limit() {
+        let bytes = std::fs::read(fixture_path("size_damaged_v7.curvyo")).unwrap();
+        let document = crate::container::unpack(2, &bytes).unwrap();
+        let root = document.loro().get_map(ROOT_MAP);
+        let stored = |key: &str| match root.get(key).unwrap().get_deep_value() {
+            loro::LoroValue::Double(value) => value,
+            other => panic!("not a double: {other:?}"),
+        };
+        assert!((stored(KEY_WIDTH_MM) - 120.0).abs() < f64::EPSILON);
+        assert!(stored(KEY_HEIGHT_MM) > MAX_DOCUMENT_MM);
+        assert_eq!(document.size(), DocumentSize::default());
     }
 }

@@ -16,12 +16,21 @@ use crate::transform_entry::parse_entry_number;
 /// (criteria 15, 16 and 35). The text is trimmed, may use a decimal point or
 /// a decimal comma, and carries no unit: "21cm" is not a number. A value
 /// outside 1 mm to 100 000 mm (converted from `unit`) is refused, except
-/// within 1e-9 mm of a limit, where it is clamped onto it. `None` is the
-/// "Enter a number from ..." case of [`document_side_message`].
+/// within half a unit of the last decimal the field shows
+/// ([`format_field_length`]) of a limit, where it is clamped onto it. That
+/// makes the text the app shows for the largest size, "3937.0079" in, accept
+/// when it is typed back, although it is 0.0007 mm over the limit. `None` is
+/// the "Enter a number from ..." case of [`document_side_message`].
 #[must_use]
 pub fn parse_document_side(text: &str, unit: DisplayUnit) -> Option<Length> {
     let value = parse_entry_number(text, false)?;
-    validated_document_side(Length::from_unit(value, unit)).ok()
+    let tolerance = field_precision(unit).1 * unit.mm_per_unit();
+    let mm = Length::from_unit(value, unit).as_mm();
+    let snapped = [MIN_DOCUMENT_MM, MAX_DOCUMENT_MM]
+        .into_iter()
+        .find(|limit| (mm - limit).abs() <= tolerance)
+        .unwrap_or(mm);
+    validated_document_side(Length::from_mm(snapped)).ok()
 }
 
 /// The validation message for a refused Width or Height, with the limits in
@@ -55,11 +64,17 @@ pub fn content_too_large_message(unit: DisplayUnit) -> String {
 /// without trailing zeros (criterion 35). Display only.
 #[must_use]
 pub fn format_field_length(length: Length, unit: DisplayUnit) -> String {
-    let decimals = match unit {
-        DisplayUnit::Mm => 3,
-        DisplayUnit::Cm | DisplayUnit::In => 4,
-    };
-    decimal_text(length.in_unit(unit), decimals)
+    decimal_text(length.in_unit(unit), field_precision(unit).0)
+}
+
+/// What a Width or Height field shows in `unit`: the number of decimals, and
+/// half a unit of the last one (the most a shown value can differ from the
+/// stored one).
+fn field_precision(unit: DisplayUnit) -> (usize, f64) {
+    match unit {
+        DisplayUnit::Mm => (3, 0.0005),
+        DisplayUnit::Cm | DisplayUnit::In => (4, 0.00005),
+    }
 }
 
 /// A length for the status bar with a fixed number of decimals so the text
@@ -310,5 +325,46 @@ mod tests {
             format_field_length(Length::from_mm(-0.0001), DisplayUnit::Mm),
             "0"
         );
+    }
+
+    /// The text a field shows for any valid size is accepted when it is typed
+    /// back, at both limits and next to them, in every unit; the value it
+    /// parses to is within half a displayed decimal of the stored one.
+    #[test]
+    fn the_text_shown_for_a_valid_size_is_accepted_when_retyped() {
+        for unit in DisplayUnit::ALL {
+            for mm in [
+                1.0,
+                1.0004,
+                1.5,
+                99.9,
+                25.4,
+                215.9,
+                99_999.999_6,
+                99_999.5,
+                100_000.0,
+            ] {
+                let shown = format_field_length(Length::from_mm(mm), unit);
+                let back = parse_document_side(&shown, unit)
+                    .unwrap_or_else(|| panic!("{unit:?} {mm}: shown {shown:?} is refused"));
+                let half_step = field_precision(unit).1 * unit.mm_per_unit();
+                assert!(
+                    (back.as_mm() - mm).abs() <= half_step + 1e-9,
+                    "{unit:?} {mm}"
+                );
+            }
+        }
+        assert_eq!(parsed_mm("3937.0079", DisplayUnit::In), Some(100_000.0));
+    }
+
+    /// The display tolerance is half a displayed decimal, not more.
+    #[test]
+    fn a_value_beyond_the_display_tolerance_of_a_limit_is_still_refused() {
+        assert_eq!(parsed_mm("3937.01", DisplayUnit::In), None);
+        assert_eq!(parsed_mm("10000.0001", DisplayUnit::Cm), None);
+        assert_eq!(parsed_mm("100000.001", DisplayUnit::Mm), None);
+        assert_eq!(parsed_mm("0.9994", DisplayUnit::Mm), None);
+        assert_eq!(parsed_mm("0.0393", DisplayUnit::In), None);
+        assert_eq!(parsed_mm("0.9996", DisplayUnit::Mm), Some(1.0));
     }
 }

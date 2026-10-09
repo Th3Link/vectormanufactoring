@@ -1,12 +1,16 @@
-//! The unit in which lengths are shown to the maker (mm, cm, in), and the only
-//! conversions between it and [`Length`]'s millimetres.
+//! The display unit: how lengths are shown, converted and stored as a document
+//! setting.
 //!
-//! The display unit is presentation only: stored values stay in millimetres
-//! and a unit change moves nothing (`specs/0015-document-size-and-rulers/`,
-//! criteria 34 and 38; ADR 0002 §2).
+//! It is presentation only: stored values stay in millimetres and a unit
+//! change moves nothing (`specs/0015-document-size-and-rulers/`, criteria 34,
+//! 36 and 38; ADR 0002 §2). [`DisplayUnit`] holds the exact conversions;
+//! [`Document::display_unit`] and [`Document::set_display_unit`] read and
+//! write the root register.
 
+use loro::LoroValue;
 use serde::Serialize;
 
+use crate::document::{Document, KEY_DISPLAY_UNIT, ROOT_MAP};
 use crate::units::Length;
 
 /// A unit for showing lengths. One inch is exactly 25.4 mm.
@@ -70,6 +74,41 @@ impl Length {
     }
 }
 
+impl Document {
+    /// The unit lengths are shown in. Absent or unknown reads as mm
+    /// (`specs/0015-document-size-and-rulers/` criteria 36 and 38).
+    #[must_use]
+    pub fn display_unit(&self) -> DisplayUnit {
+        let root = self.loro().get_map(ROOT_MAP);
+        match root.get(KEY_DISPLAY_UNIT).map(|v| v.get_deep_value()) {
+            Some(LoroValue::String(symbol)) => {
+                DisplayUnit::from_symbol(&symbol).unwrap_or_default()
+            }
+            _ => DisplayUnit::default(),
+        }
+    }
+
+    /// Sets the unit lengths are shown in, as one commit labelled
+    /// `set_display_unit` that moves nothing (criteria 36 and 38). Returns
+    /// `false` and writes nothing if `unit` is already the display unit.
+    ///
+    /// # Panics
+    /// Does not panic in practice: it inserts a plain string into the
+    /// attached root map.
+    #[must_use]
+    pub fn set_display_unit(&self, unit: DisplayUnit) -> bool {
+        if self.display_unit() == unit {
+            return false;
+        }
+        let root = self.loro().get_map(ROOT_MAP);
+        // invariant: the root map is attached and the value is a plain string.
+        #[allow(clippy::unwrap_used)]
+        root.insert(KEY_DISPLAY_UNIT, unit.symbol()).unwrap();
+        self.commit_with_label("set_display_unit");
+        true
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,5 +146,50 @@ mod tests {
             assert_eq!(DisplayUnit::from_symbol(text), None, "{text:?}");
         }
         assert_eq!(DisplayUnit::default(), DisplayUnit::Mm);
+    }
+
+    #[test]
+    fn display_unit_defaults_to_mm_and_changing_it_is_one_commit_that_moves_nothing() {
+        use crate::primitive_model::RectBounds;
+        use crate::units::Point;
+
+        let document = Document::new(1);
+        let id = document.create_rect(RectBounds {
+            origin: Point::new(1.0, 2.0),
+            width: Length::from_mm(3.0),
+            height: Length::from_mm(4.0),
+        });
+        let object = document.object(id);
+        let size = document.size();
+        assert_eq!(document.display_unit(), DisplayUnit::Mm);
+        let before = document.loro().len_changes();
+
+        assert!(document.set_display_unit(DisplayUnit::In));
+
+        assert_eq!(document.display_unit(), DisplayUnit::In);
+        assert_eq!(document.loro().len_changes(), before + 1);
+        let vv = document.loro().oplog_vv();
+        let peer = document.loro().peer_id();
+        let end = vv.get(&peer).copied().expect("the peer has written");
+        let change = document
+            .loro()
+            .get_change(loro::ID::new(peer, end - 1))
+            .expect("the newest change exists");
+        assert_eq!(change.message(), "set_display_unit");
+        assert_eq!(document.object(id), object);
+        assert_eq!(document.size(), size);
+
+        assert!(!document.set_display_unit(DisplayUnit::In), "same unit");
+        assert_eq!(document.loro().len_changes(), before + 1);
+    }
+
+    #[test]
+    fn an_unknown_stored_unit_reads_as_mm() {
+        let document = Document::new(1);
+        let root = document.loro().get_map(ROOT_MAP);
+        root.insert(KEY_DISPLAY_UNIT, "furlong").unwrap();
+        assert_eq!(document.display_unit(), DisplayUnit::Mm);
+        root.insert(KEY_DISPLAY_UNIT, 3.0).unwrap();
+        assert_eq!(document.display_unit(), DisplayUnit::Mm);
     }
 }

@@ -797,7 +797,6 @@ proptest! {
 /// value up to the shown limit). In inches the shown 4 decimals round up past
 /// the limit and the parser refuses the very text the field showed.
 #[test]
-#[ignore = "defect: 100000 mm shows as 3937.0079 in, which the parser refuses"]
 fn the_text_shown_for_the_largest_size_is_accepted_when_retyped() {
     for unit in DisplayUnit::ALL {
         let shown = format_field_length(mm(100_000.0), unit);

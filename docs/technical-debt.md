@@ -191,6 +191,25 @@ obligation: presence must make it visible that someone else is manipulating the
 object you are about to grab (ADR 0009 §2's awareness channel already carries
 what that needs). A design-system story owns it.
 
+## Resize and fit merge per field across peers
+
+A resize or a fit is one commit that writes the size registers and every
+object's position (`specs/0015-document-size-and-rulers/`). Locally it is
+atomic. Across peers it is not: Loro merges each register on its own
+([ADR 0009](adr/0009-concurrent-editing-semantics.md) §3), and records no
+operation for a register whose value did not change. Two concurrent resizes,
+one changing only the width and one only the height, merge to a size with
+both changes but object positions shifted by one of them; a resize concurrent
+with a move keeps one of the two positions for that object. The result
+converges and nothing is lost from the log, but the document is centred on
+neither peer's intent. A test for the two-resizes case is kept as an ignored
+test in `curvyo-document-core/tests/acceptance_0015_pr1_tester.rs`.
+
+**Resolution:** before collaboration ships (post-MVP), either store the
+document origin as one register that objects are read relative to, or make
+resize and fit refuse while a peer is editing. Decide in the collaboration
+slice; nothing in the single-user MVP is affected.
+
 ## A collaborator without the font sees substituted text
 
 Fonts are referenced from a user-managed collection, not embedded by default

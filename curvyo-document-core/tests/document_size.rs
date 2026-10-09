@@ -86,6 +86,12 @@ fn a_file_with_a_stored_display_unit_opens_and_round_trips() {
     assert!((size.width.in_unit(DisplayUnit::In) - 8.5).abs() < 1e-9);
     assert!((size.height.in_unit(DisplayUnit::In) - 11.0).abs() < 1e-9);
     assert!((size.width.as_mm() - 215.9).abs() < 1e-9);
+    // 50 x 50 mm at (10, 10) in A4, moved by ((215.9 - 210) / 2, (279.4 - 297) / 2).
+    let origin = rect_origin(&document, first_rect(&document));
+    assert!(
+        (origin.x - 12.95).abs() < 1e-9 && (origin.y - 1.2).abs() < 1e-9,
+        "{origin:?}"
+    );
 
     let again = unpack(3, &pack(&document, "0.1.0").unwrap()).unwrap();
     assert_eq!(again.display_unit(), DisplayUnit::In);

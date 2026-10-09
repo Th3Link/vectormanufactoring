@@ -230,19 +230,6 @@ impl Document {
         }
     }
 
-    /// The unit lengths are shown in. Absent or unknown reads as mm
-    /// (`specs/0015-document-size-and-rulers/` criteria 36 and 38).
-    #[must_use]
-    pub fn display_unit(&self) -> DisplayUnit {
-        let root = self.loro.get_map(ROOT_MAP);
-        match root.get(KEY_DISPLAY_UNIT).map(|v| v.get_deep_value()) {
-            Some(LoroValue::String(symbol)) => {
-                DisplayUnit::from_symbol(&symbol).unwrap_or_default()
-            }
-            _ => DisplayUnit::default(),
-        }
-    }
-
     /// This document's underlying Loro replica, for [`crate::paths`]'s
     /// methods only — never exposed outside this crate (ADR 0004 §3).
     pub(crate) const fn loro(&self) -> &LoroDoc {

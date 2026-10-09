@@ -119,6 +119,12 @@ impl DocumentSize {
     pub const fn new(width: Length, height: Length) -> Self {
         Self { width, height }
     }
+
+    /// Builds a [`DocumentSize`] from two millimetre sides.
+    #[must_use]
+    pub const fn from_mm(width: f64, height: f64) -> Self {
+        Self::new(Length::from_mm(width), Length::from_mm(height))
+    }
 }
 
 /// An absolute position in document space: millimetres, Y-down (ADR 0002
