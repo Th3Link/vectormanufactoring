@@ -109,5 +109,6 @@ this one when it starts.
   property tests are the safeguard for the risk of a young polygon engine:
   an update of the pin is a reviewed PR that reruns them.
 - Performance numbers measured in release and recorded in the PR; asserted only in release.
+- Known and accepted: Intersection and Exclusion results can depend on the operand order within the grid tolerance (the pairwise fold rounds differently); areas agree to the bound of criterion 14.
 - Gate: `CLAUDE.md` §7 plus every step of `.github/workflows/ci.yml`, run locally on the exact head
   sha, then GitHub CI green on that sha.
