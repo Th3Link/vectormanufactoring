@@ -243,3 +243,35 @@ fn two_toggles_before_a_resize_leave_nothing_pending() {
     let after = viewport.screen_to_document(640.0, 300.0);
     assert!((centre.x - after.x).abs() < 1e-9, "an ordinary resize");
 }
+
+/// A resize or fit moves the objects by `offset` in the document: moving the
+/// origin by the same offset keeps every object's screen position, within
+/// 0.5 px (criterion 20), at any zoom.
+#[test]
+fn panning_by_a_document_offset_keeps_a_shifted_object_on_screen() {
+    for percent in [2.0, 100.0, 800.0, 8000.0] {
+        let mut viewport = Viewport::new();
+        viewport.zoom_about(0.0, 0.0, percent / 100.0);
+        let object = Point::new(55.0, 61.5);
+        let before = viewport.view().document_to_screen(object);
+        let shift = Vec2::new(45.0, -88.5);
+        viewport.pan_by_document_offset(shift);
+        let after = viewport.view().document_to_screen(object.translated(shift));
+        assert!((after.0 - before.0).abs() < 0.5 && (after.1 - before.1).abs() < 0.5);
+    }
+}
+
+/// The command does not end the untouched default view: its inset and its
+/// origin-keeping resize rule stay (architect note, `adrs.md` decision 7).
+#[test]
+fn a_document_offset_does_not_end_the_untouched_view() {
+    let mut viewport = Viewport::with_document_inset();
+    viewport.resize(700.0, 500.0);
+    viewport.pan_by_document_offset(Vec2::new(10.0, 10.0));
+    viewport.resize(900.0, 600.0);
+    let (x, _) = viewport.view().document_to_screen(Point::new(10.0, 10.0));
+    assert!(
+        (x - 72.0).abs() < 1e-9,
+        "origin kept through the resize: {x}"
+    );
+}

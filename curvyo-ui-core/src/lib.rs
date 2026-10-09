@@ -28,6 +28,7 @@ mod node_tool;
 mod object_bounds;
 mod object_selection;
 mod oriented_box;
+mod panel_content;
 mod param_edit;
 mod param_entry;
 mod param_handles;
@@ -76,6 +77,7 @@ pub use node_tool::{
 pub use object_bounds::{content_bounds, object_bounds, object_outline_bounds};
 pub use object_selection::{ObjectSelection, SelectionCombine};
 pub use oriented_box::{OrientedBox, oriented_bounds};
+pub use panel_content::{PanelContent, panel_content};
 pub use param_edit::{
     MAX_INNER_RATIO, MIN_INNER_RATIO, ParamValue, apply_param, clamped_ratio, commit_param_batch,
     value_from_pointer,

@@ -203,6 +203,17 @@ impl Viewport {
         self.origin = Point::new(anchor.x - screen_x / scale, anchor.y - screen_y / scale);
     }
 
+    /// Moves the view's origin by `offset` document millimetres, without
+    /// ending the untouched default view: after a resize or a fit moved every
+    /// object by `offset` (`Document::resize_shift`, `fit_shift`), the objects
+    /// stay where they were on screen and the document's edges move instead
+    /// (`specs/0015-document-size-and-rulers/` criterion 20). A command, not a
+    /// navigation gesture, so a window resize of a still-untouched view keeps
+    /// its origin, the 72 px inset, afterwards too.
+    pub fn pan_by_document_offset(&mut self, offset: Vec2) {
+        self.origin = self.origin.translated(offset);
+    }
+
     /// Starts a drag-pan gesture (acceptance criteria 3, 4): records the
     /// document point currently under `(screen_x, screen_y)` as the
     /// anchor [`Viewport::continue_drag_pan`] keeps fixed under the
