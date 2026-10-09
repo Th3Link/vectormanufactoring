@@ -439,7 +439,7 @@ mod tests {
         );
         let mut bend = begin(&path, 1, 2, Point::new(45.0, 0.0));
         assert!(bend.commit(&document, Point::new(45.0, -30.0)));
-        let bent = document.path(path_id).unwrap();
-        assert!((bent.anchors[0].handle_out.y + 40.0).abs() < 1e-9);
+        let after = document.path(path_id).unwrap();
+        assert!((after.anchors[0].handle_out.y + 40.0).abs() < 1e-9);
     }
 }
