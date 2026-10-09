@@ -20,51 +20,37 @@ Inkscape's and is not cleanly re-editable.
 story using `kurbo`'s curve fitting. Needs a quality bar defined first
 (maximum deviation, node-count target).
 
-## `clipper2-rust` returns a wrong result on rare degenerate input
+## Boolean areas are exact only to the 0.001 mm grid
 
-The boolean kernel (`specs/0016-boolean-operations`, ADR 0003 §3 note) uses
-`clipper2-rust` 1.2.0, pinned exactly. Its provenance risk (an AI-assisted
-port) was the one open point of the 2026-10-04 spike. The property tests of the
-kernel PR found two concrete defects, both in Clipper's union, both on
-reproducing inputs:
+The boolean kernel snaps every vertex to a 0.001 mm grid and rounds every
+crossing to it (`specs/0016-boolean-operations`, criterion 39). A crossing moves
+a result's area by up to 0.0007 mm times the length of the edges meeting there,
+so the area identities of criterion 14 hold to 1e-6 of the summed areas only
+for shapes of several metres. For shapes up to 60 mm the error is 10 to 60 times
+that bound; the kernel tests therefore assert `1e-6 * (|A| + |B|) + 0.001 mm *
+(perimeter A + perimeter B)` there, and the bound as written on shapes up to
+6 m. Manufacturing is unaffected (the grid is far below any machine's
+resolution), but the criterion as worded cannot be met.
 
-1. **A union fills a triangle that neither operand covers.** Two operands whose
-   edges are collinear and overlap, with vertices of one on an edge of the
-   other, give 11.383 mm² where the exact area is 10.986 mm²
-   (`curvyo-geometry-core/tests/boolean_degenerate.rs`,
-   `a_union_with_collinear_overlapping_edges_is_exact`, ignored until fixed).
-2. **A union of an outline set with a vertex within one grid unit of a long
-   edge fills a triangle of 0.45 mm².** It shows up when the kernel repairs a
-   result after removing collinear vertices. The kernel's own cleanup replaced
-   Clipper's `SimplifyPaths`, which turned a valid outline into a
-   self-crossing one in the same area.
+**Resolution:** the product owner rewords criterion 14 to the bound with the
+grid allowance. A finer grid would shrink the error and cost integer range; the
+64-bit engine has room (10⁷ mm at 0.0001 mm is 10¹¹ units), so it is a one-constant
+change if a story needs it.
 
-Measured with random pairs of 1 to 3 outlines of 3 to 8 vertices, area
-identities of criterion 14 within 1e-6 of the summed areas plus 0.001 mm times
-the summed outline lengths:
+## The boolean library is a pinned, young dependency with `unsafe` inside
 
-| Input | Pairs | `clipper2-rust` 1.2.0 | `i_overlay` 9.0.0 |
-|---|---|---|---|
-| vertices on a 6 mm lattice (many shared and collinear edges) | 5,877 | 12 to 16 violations | 0 |
-| vertices anywhere in 60 mm | 12,000 | 0 | 0 |
-| vertices anywhere in 600 mm | 6,000 | 0 | 0 |
+`i_overlay` (MIT OR Apache-2.0, with `i_float`, `i_shape`, `i_key_sort`,
+`i_tree`, all MIT) is the kernel's polygon engine, pinned exactly. It contains
+`unsafe` (about 130 sites in the five crates; our own crate keeps
+`#![forbid(unsafe_code)]`), and `i_float` uses the pure-Rust `libm` in its float
+adapter, which the kernel does not use (it calls the integer engine on a grid
+of its own). It replaced `clipper2-rust` after the kernel's property tests
+found wrong unions in that library (see the dated note in
+`specs/0016-boolean-operations/adrs.md`). The safeguards are the golden
+fixtures, the fixed-seed property tests and the regression tests in
+`curvyo-geometry-core/tests/`, which every update of the pin must rerun.
 
-A 20,000-pair run of the 60 mm property found one further violation
-(0.5 mm² on 707 mm²). A 20,000-pair run of the lattice property finds a
-self-crossing outline in about one case. Real maker files lie between
-the lattice and the random cases (rectilinear parts, many shared edges, few
-diagonals).
-
-**Resolution options, for the lead and the architect:**
-
-- Keep `clipper2-rust` and accept a rare wrong result. The property tests and
-  fixtures stay as the safeguard; the ignored test above marks the defect.
-- Switch the kernel to `i_overlay` (9.0.0 had no violation in the same runs). It
-  uses `unsafe` internally (49 sites, per the spike) and its integer API is
-  `i32`, so the 0.001 mm grid needs its float adapter or a smaller range. The
-  swap is local to `boolean_grid::run`; the API, fixtures and property tests
-  stay. This reopens the ADR 0003 §3 spike result and needs the customer.
-- Report both cases upstream to `clipper2-rust` and keep the pin until a fix.
+**Resolution:** none planned. Revisit if a defect shows up in real files.
 
 ## V-carve depth comes from an approximate medial axis
 

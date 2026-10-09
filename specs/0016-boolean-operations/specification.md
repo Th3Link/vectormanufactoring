@@ -285,9 +285,9 @@ None (criterion 3). Reachable by Tab (the group), arrows inside it, Space or Ent
 ## Flags for the architect
 
 - Document model: compound path (several closed outlines per object; ADR 0002 §6). One-outline assumptions to revisit: `PathSnapshot` (`closed` flag plus a flat anchor list), `path_codec`, `interior::contains_point`, the users of `segment_bounds`, `rotated`/`scaled`/`sheared`, the Node tool, Join and Split (`0006-path-merge-split-and-node-types`), `0018-stroke-markers` (start and end of a path), `0014-advanced-selection` hit-testing, `0019-multi-object-transform`.
-- Kernel: `clipper2-rust` as chosen by the spike (ADR 0003 §3 note, 2026-10-04); fill rule nonzero on input and output; fixed tolerance and grid; canonical outline order and winding (criteria 41, 43).
+- Kernel: `i_overlay` (the spike chose `clipper2-rust`, replaced on 2026-10-09, see `adrs.md`); fill rule nonzero on input and output; fixed tolerance and grid; canonical outline order and winding (criteria 41, 43).
 - Format: `format_version` is `main`'s current value plus one at merge (`main` is at 7).
-- No new crate; `curvyo-geometry-core` gets the boolean module; one new dependency, `clipper2-rust`, pinned exactly.
+- No new crate; `curvyo-geometry-core` gets the boolean module; one new dependency, `i_overlay`, pinned exactly.
 - Settled in `adrs.md` (2026-10-09): encoding, audit table, kernel pipeline, commit labels, code locations. Nothing further is open for the architect.
 
 ## Build order

@@ -13,7 +13,7 @@ this one when it starts.
 | PR | Crate | New or changed |
 |---|---|---|
 | 1 | `curvyo-geometry-core` | New `flatten.rs` (cubic outline to polyline, deterministic), `boolean_grid.rs` (grid snap, cleanup, canonical form), `boolean.rs` (operations, normalization, pairwise fold, errors, result type). `lib.rs` re-exports. `tests/fixtures/` (golden files), `tests/boolean_*.rs`. |
-| 1 | workspace | `Cargo.toml` + `Cargo.lock`: `clipper2-rust` pinned exactly, `thiserror` for the kernel's error type (already a workspace dependency). `deny.toml` is expected to need no change (BSL-1.0 is already allowed). |
+| 1 | workspace and CI | `Cargo.toml` + `Cargo.lock`: `i_overlay` pinned exactly (it replaced `clipper2-rust` during PR 1, see `adrs.md`), `thiserror` for the kernel's error type (already a workspace dependency). `deny.toml` needs no change (`i_overlay` and its helper crates are MIT or MIT OR Apache-2.0). `.github/workflows/ci.yml` gets a `boolean-budgets` job that runs the performance tests in release. |
 | 2 (later) | `curvyo-document-core` | `extra_subpaths` encoding, `PathSnapshot::subpaths()`, `subpath_codec`, the audit table of `adrs.md`, `Document::replace_with_path`, format bump, fixtures. |
 | 2 (later) | `curvyo-geometry-core` | `contains_point` over several outlines. |
 | 2 (later) | `curvyo-ui-core`, `curvyo-render-core` | Hit-testing, bounds, oriented box, fill, stroke and dash over all outlines; Node tool skips compound paths. |
@@ -24,7 +24,7 @@ this one when it starts.
 
 ### PR 1: kernel (`curvyo-geometry-core` only)
 
-- [x] 1. Add `clipper2-rust` (exact pin, `default-features = false`) and `thiserror` to
+- [x] 1. Add `i_overlay` (exact pin, `default-features = false`) and `thiserror` to
   `curvyo-geometry-core`; verify `cargo deny check`, the wasm32 build and the banned-dependency
   tree check of `.github/workflows/ci.yml` (all AC; precondition).
 - [x] 2. `flatten.rs`, tests first: a closed outline of cubic segments becomes a polyline whose
@@ -59,13 +59,12 @@ this one when it starts.
   refused, the AC 39 grid pair (20.0000 / 20.0004 / 20.0020 mm), the AC 7 five-point star and the
   AC 8 ring (AC 7, 8, 16, 39, 40, 42).
 - [x] 9. Performance tests: 2 × 1,000 curved nodes within 100 ms and 2 × 10,000 within 2 s for each
-  of Union, Difference, Intersection (AC 44, 45). Asserted in release only; in debug the numbers
-  are printed, and the 10,000-node test is `#[ignore]`d in debug builds so `cargo nextest run` does
-  not spend minutes on it. Measured numbers go into the PR description.
+  of Union, Difference, Intersection (AC 44, 45). Asserted in release only (the CI job `boolean-budgets` runs them there); in debug the same cases
+  run in about 0.5 s and print the numbers. Measured numbers go into the PR description.
 - [x] 10. Docs: module docs (one responsibility each, files under 500 lines), the winding rule and
   the guarantees written down in `boolean.rs`; a dated note in `adrs.md` for what PR 1 settled
   (own flattening because `kurbo`'s uses `powf`; error lists instead of single indices; own
-  cleanup; the `clipper2-rust` defects found by the property tests, in `docs/technical-debt.md`). Run the
+  cleanup; the library change and why). Run the
   full gate of `CLAUDE.md` §7 and every step of `.github/workflows/ci.yml` on the head sha.
 
 ### PR 2: compound path (later; needs customer answer to question 1 and `0015` merged)
@@ -107,7 +106,7 @@ this one when it starts.
 - Property tests with a fixed seed (area identities of AC 14, idempotence, commutativity,
   determinism, output invariants of AC 41).
 - Degenerate-input tests, including the four fixtures of the ADR 0003 spike. These and the
-  property tests are the safeguard for the provenance risk of `clipper2-rust` (AI-assisted port):
+  property tests are the safeguard for the risk of a young polygon engine:
   an update of the pin is a reviewed PR that reruns them.
 - Performance numbers measured in release and recorded in the PR; asserted only in release.
 - Gate: `CLAUDE.md` §7 plus every step of `.github/workflows/ci.yml`, run locally on the exact head

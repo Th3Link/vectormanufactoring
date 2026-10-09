@@ -3,7 +3,8 @@
 This slice adds the first real kernel operation and the first document-model
 change since `stroke-and-fill-styling`: a path object may hold more than one
 outline. **No new crate, no new ADR, one new external dependency
-(`clipper2-rust`, chosen by the 2026-10-04 spike), one `format_version`
+(`i_overlay`; the 2026-10-04 spike chose `clipper2-rust`, replaced on
+2026-10-09, see "what PR 1 settled"), one `format_version`
 bump.** The compound-path decision below needs the customer's approval
 (`CLAUDE.md` §3, document model) before PR 2 starts; PR 1 does not depend
 on it.
@@ -24,7 +25,9 @@ on it.
 - [ADR 0003 §1, §3, §8](../../docs/adr/0003-geometry-kernel-booleans-offsetting-vcarving.md):
   the kernel lives in `curvyo-geometry-core`, takes an explicit `Tolerance`,
   runs on flattened polygons and returns polylines. The library is
-  `clipper2-rust` (spike note under §3, 2026-10-04). No backend trait.
+  `i_overlay` (a candidate of the spike note under §3; it replaced the spike's
+  pick `clipper2-rust` on 2026-10-09, see "what PR 1 settled"). No backend
+  trait.
 - [ADR 0003 §7](../../docs/adr/0003-geometry-kernel-booleans-offsetting-vcarving.md):
   the 0.01 mm kernel tolerance is not the display tessellation tolerance.
 - [ADR 0004 §9](../../docs/adr/0004-persistence-and-cross-machine-sync.md):
@@ -130,14 +133,15 @@ assumptions are found by audit, not by the compiler", with this table.
 
 ### 2026-10-09: the kernel
 
-- **Library:** `clipper2-rust`, as the spike decided (ADR 0003 §3 note).
-  Pure Rust, `#![forbid(unsafe_code)]`, BSL-1.0 (already allowed in
-  `deny.toml`, added for `loro`'s `xxhash-rust`, so no `deny.toml` change), one dependency (`num-traits`, MIT/Apache). The
-  spike built it for `wasm32-unknown-unknown`. Added as a workspace
-  dependency, `default-features = false`, used only by
-  `curvyo-geometry-core`. Take the newest 1.x at PR time and pin it exactly
-  (`=1.x.y`): its provenance risk (AI-assisted port) means an update is a
-  reviewed PR that reruns the fixtures, not a Renovate auto-bump.
+- **Library:** `i_overlay` 9.0.1, pinned exactly (MIT OR Apache-2.0; its four
+  helper crates are MIT; `cargo deny` passes without a change). The first
+  version of this section named the spike's pick, `clipper2-rust`; see "what PR
+  1 settled" for why it was replaced. Where the text below says Clipper, read
+  "the overlay engine": the subject/clip form, nonzero fill and integer grid
+  are the same for `i_overlay`'s `Overlay<i64>`. Added as a workspace
+  dependency, `default-features = false`, used only by `curvyo-geometry-core`.
+  An update of the pin is a reviewed PR that reruns the fixtures and property
+  tests, not a Renovate auto-bump.
 - **Input and output.** The kernel takes operands as lists of outlines
   (`&[OutlineTriple]` plus `closed`, the triple `curvyo-ui-core` already
   builds for hit-testing) and returns `Vec<Vec<Point>>`. No `kurbo` or
@@ -221,17 +225,14 @@ assumptions are found by audit, not by the compiler", with this table.
   16 need the count ("1 of 3 selected objects") and the red outline of every
   offender. Further errors: `NoOperands`, `ToleranceTooSmall` (the tolerance
   must exceed two grid pitches), `EmptyResult`, `KernelFailed`.
-- **Cleanup is not Clipper's `SimplifyPaths`.** That function turned a valid
-  outline into a self-crossing one (see `docs/technical-debt.md`). The kernel
-  removes vertices within one grid unit of the line between their neighbours
-  itself, in exact integer arithmetic, then repairs with a nonzero union, and
-  repeats while something is removed (at most four rounds). It also drops
+- **Cleanup is the kernel's own.** It removes vertices within one grid unit of
+  the line between their neighbours, in exact integer arithmetic (also the tip
+  of a spike thinner than the grid), repairs with a nonzero union, drops
   outlines thinner than one grid pitch on average (twice the area over the
-  perimeter), which is rounding noise: without it a result could hold a
-  negative-area sliver outside every outer outline.
-- **Exclusion** folds Clipper's XOR pairwise and unions after every step:
-  XOR returns `A - B` and `B - A` as separate pieces that can touch along a line
-  that is not an edge of the region.
+  perimeter: rounding noise), and repeats while something is removed (at most
+  four rounds). The slivers go inside the loop because dropping one can turn a
+  touching vertex of its neighbour into a plain collinear one.
+- **Exclusion** folds the engine's XOR pairwise.
 - **Criterion 14 as written cannot hold on a 0.001 mm grid for shapes of laser-bed
   size.** Each crossing is rounded to the grid, which moves an area by up to
   0.0007 mm times the length of the edges at it. For polygons within 60 mm the
@@ -243,9 +244,34 @@ assumptions are found by audit, not by the compiler", with this table.
 - **Performance** (release, `boolean_performance.rs`): 2 x 1,000 curved nodes
   take 5 to 6 ms, 2 x 10,000 take 55 to 71 ms per operation (budgets: 100 ms,
   2 s). The test asserts them in release builds only.
-- **The robustness risk named in the spike materialised**: see
-  `docs/technical-debt.md`, "`clipper2-rust` returns a wrong result on rare
-  degenerate input". The lead decides whether the kernel library stays.
+- **The library was replaced during PR 1.** The spike's pick, `clipper2-rust`
+  1.2.0, returned wrong unions on reproducing inputs (a triangle of 0.4 to
+  0.5 mm² filled that no operand covers; tests
+  `a_union_with_collinear_overlapping_edges_is_exact` and
+  `a_union_with_a_vertex_beside_a_long_edge_is_exact`), and Clipper's
+  `SimplifyPaths` made a valid outline cross itself. Comparison on the same
+  random pairs of 1 to 3 outlines of 3 to 8 vertices, area identities of
+  criterion 14 within 1e-6 plus the grid allowance:
+
+  - 6 mm lattice (many shared and collinear edges): `clipper2-rust` broke the
+    identities in 12 to 16 of 5,877 pairs; `i_overlay` 9.0.0 (own harness, same
+    pairs) in none; `i_overlay` 9.0.1 inside the kernel in none of 19,643.
+  - Random, up to 60 mm: none for either library in 6,000 to 12,000 pairs;
+    none for the kernel with `i_overlay` in 19,999.
+  - Random, up to 600 mm: none for either, 6,000 pairs.
+
+  A 20,000-pair run of the 60 mm property had found one further miss with
+  `clipper2-rust`. The lead decided on 2026-10-09 to replace it (the customer
+  may veto); the swap touched `boolean_grid::run` and the pipeline's types, not
+  the API, the result type or the fixtures. Differences: `i_overlay` contains
+  `unsafe` (about 130 sites, our crate stays `forbid(unsafe_code)`), the
+  integer engine is generic over `i64`, so the range check (10⁷ mm) is
+  unchanged, the golden file of the bow-tie exclusion changed (two triangles
+  touching at the pinch instead of one pinched outline, both valid), and the
+  5,000-square summary is bit-identical. `i_float` calls the pure-Rust `libm`
+  in its float adapter only; the kernel uses the integer engine, so criterion
+  43 does not depend on it. Output agrees across Linux, macOS and Windows in
+  CI.
 
 ### 2026-10-09: where the code lives
 
