@@ -11,8 +11,9 @@
 //! ephemeral `curvyo-ui-core::PenTool` state, not a document node), and
 //! `NodeId` has no public constructor outside `curvyo-document-core`.
 
-use curvyo_document_core::{AnchorKind, AnchorSnapshot, Point, Vec2, ViewTransform};
+use curvyo_document_core::{AnchorKind, AnchorSnapshot, DocumentSize, Point, Vec2, ViewTransform};
 
+use crate::document_area::background_at;
 use crate::glyphs::{self, DrawList};
 use crate::stroke;
 use crate::theme;
@@ -63,6 +64,11 @@ fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
 /// carries — the spec calls for both the cursor swap *and* this ring as
 /// two independent, deliberately redundant signals that closing is one
 /// click away, not an either/or.
+///
+/// `document_size` is only for the hollow nodes' knockout: each is filled with
+/// the colour behind it, the document's over the document and the
+/// pasteboard's beyond its edge (`specs/0015-document-size-and-rulers/`
+/// criterion 31).
 #[must_use]
 pub fn build_pen_preview(
     nodes: &[AnchorSnapshot],
@@ -70,6 +76,7 @@ pub fn build_pen_preview(
     pending: Option<&AnchorSnapshot>,
     view: ViewTransform,
     is_hovering_close_target: bool,
+    document_size: DocumentSize,
 ) -> DrawList {
     let mut list = DrawList::default();
     if nodes.is_empty() && pending.is_none() {
@@ -109,7 +116,7 @@ pub fn build_pen_preview(
         list.extend(glyph(
             anchor.point,
             (node_size - 2.0 * node_outline).max(0.0),
-            theme::CANVAS_BG,
+            background_at(document_size, anchor.point),
         ));
     }
 
@@ -207,7 +214,7 @@ pub fn build_pen_preview(
         list.extend(glyph(
             pending.point,
             (node_size - 2.0 * node_outline).max(0.0),
-            theme::CANVAS_BG,
+            background_at(document_size, pending.point),
         ));
     } else if let (Some(last), Some(cursor)) = (nodes.last(), cursor) {
         // Rubber-band preview: a line from the last placed node to the
@@ -242,6 +249,7 @@ mod tests {
             None,
             ViewTransform::identity(),
             false,
+            DocumentSize::default(),
         );
         assert_eq!(list.triangles.len(), 0);
     }
@@ -255,9 +263,16 @@ mod tests {
             None,
             ViewTransform::identity(),
             false,
+            DocumentSize::default(),
         );
-        let without_cursor =
-            build_pen_preview(&nodes, None, None, ViewTransform::identity(), false);
+        let without_cursor = build_pen_preview(
+            &nodes,
+            None,
+            None,
+            ViewTransform::identity(),
+            false,
+            DocumentSize::default(),
+        );
         assert!(
             !without_cursor.triangles.is_empty(),
             "glyph + hover ring still draw"
@@ -274,8 +289,22 @@ mod tests {
             NewAnchor::corner(AnchorId::new(1, 1), Point::new(0.0, 0.0)),
             NewAnchor::corner(AnchorId::new(1, 2), Point::new(20.0, 0.0)),
         ];
-        let one_node = build_pen_preview(&nodes[..1], None, None, ViewTransform::identity(), false);
-        let two_nodes = build_pen_preview(&nodes, None, None, ViewTransform::identity(), false);
+        let one_node = build_pen_preview(
+            &nodes[..1],
+            None,
+            None,
+            ViewTransform::identity(),
+            false,
+            DocumentSize::default(),
+        );
+        let two_nodes = build_pen_preview(
+            &nodes,
+            None,
+            None,
+            ViewTransform::identity(),
+            false,
+            DocumentSize::default(),
+        );
         assert!(
             two_nodes.triangle_count() > one_node.triangle_count(),
             "the stroke between the two placed nodes adds geometry"
@@ -294,8 +323,22 @@ mod tests {
             NewAnchor::corner(AnchorId::new(1, 2), Point::new(10.0, 0.0)),
             NewAnchor::corner(AnchorId::new(1, 3), Point::new(5.0, 10.0)),
         ];
-        let not_hovering = build_pen_preview(&nodes, None, None, ViewTransform::identity(), false);
-        let hovering = build_pen_preview(&nodes, None, None, ViewTransform::identity(), true);
+        let not_hovering = build_pen_preview(
+            &nodes,
+            None,
+            None,
+            ViewTransform::identity(),
+            false,
+            DocumentSize::default(),
+        );
+        let hovering = build_pen_preview(
+            &nodes,
+            None,
+            None,
+            ViewTransform::identity(),
+            true,
+            DocumentSize::default(),
+        );
         assert!(
             hovering.triangle_count() > not_hovering.triangle_count(),
             "the first node's hover ring must add geometry when closing is one click away"
@@ -309,8 +352,22 @@ mod tests {
     #[test]
     fn hovering_close_target_with_one_node_does_not_double_the_ring() {
         let nodes = [NewAnchor::corner(AnchorId::new(1, 1), Point::new(0.0, 0.0))];
-        let not_hovering = build_pen_preview(&nodes, None, None, ViewTransform::identity(), false);
-        let hovering = build_pen_preview(&nodes, None, None, ViewTransform::identity(), true);
+        let not_hovering = build_pen_preview(
+            &nodes,
+            None,
+            None,
+            ViewTransform::identity(),
+            false,
+            DocumentSize::default(),
+        );
+        let hovering = build_pen_preview(
+            &nodes,
+            None,
+            None,
+            ViewTransform::identity(),
+            true,
+            DocumentSize::default(),
+        );
         assert_eq!(
             hovering.triangle_count(),
             not_hovering.triangle_count(),
@@ -339,14 +396,21 @@ mod tests {
             kind: AnchorKind::Symmetric,
         };
 
-        let hovering_only =
-            build_pen_preview(&nodes, cursor, None, ViewTransform::identity(), false);
+        let hovering_only = build_pen_preview(
+            &nodes,
+            cursor,
+            None,
+            ViewTransform::identity(),
+            false,
+            DocumentSize::default(),
+        );
         let dragging = build_pen_preview(
             &nodes,
             cursor,
             Some(&pending),
             ViewTransform::identity(),
             false,
+            DocumentSize::default(),
         );
         assert!(
             dragging.triangle_count() > hovering_only.triangle_count(),
@@ -374,6 +438,7 @@ mod tests {
             Some(&pending),
             ViewTransform::identity(),
             false,
+            DocumentSize::default(),
         );
         assert!(
             !dragging.triangles.is_empty(),
@@ -396,6 +461,7 @@ mod tests {
             Some(&pending),
             ViewTransform::identity(),
             false,
+            DocumentSize::default(),
         );
         // Only C's own node glyph (hollow square: outline + fill, 2
         // quads each) should draw — no handle lines, no handle endpoints.
@@ -422,6 +488,7 @@ mod tests {
             Some(&pending),
             ViewTransform::identity(),
             false,
+            DocumentSize::default(),
         );
 
         let smooth_pending = NewAnchor {
@@ -437,6 +504,7 @@ mod tests {
             Some(&smooth_pending),
             ViewTransform::identity(),
             false,
+            DocumentSize::default(),
         );
 
         assert!(
@@ -445,5 +513,28 @@ mod tests {
              one at the same cursor position — proving the handle lines/endpoints come from \
              `pending`'s own fields, not from re-deriving drag distance in this crate"
         );
+    }
+
+    /// Criterion 31: a placed node over the pasteboard has a hole filled with
+    /// the pasteboard colour, one over the document with the document's.
+    #[test]
+    fn the_knockout_takes_the_colour_behind_the_node() {
+        let anchor = |x: f64| NewAnchor::corner(AnchorId::new(1, 1), Point::new(x, 10.0));
+        let size = DocumentSize::from_mm(100.0, 100.0);
+        let colours = |x: f64| {
+            let list = build_pen_preview(
+                &[anchor(x)],
+                None,
+                None,
+                ViewTransform::identity(),
+                false,
+                size,
+            );
+            list.triangles.iter().map(|v| v.color).collect::<Vec<_>>()
+        };
+        let inside = colours(50.0);
+        assert!(inside.contains(&theme::CANVAS_BG) && !inside.contains(&theme::PASTEBOARD_BG));
+        let outside = colours(150.0);
+        assert!(outside.contains(&theme::PASTEBOARD_BG) && !outside.contains(&theme::CANVAS_BG));
     }
 }

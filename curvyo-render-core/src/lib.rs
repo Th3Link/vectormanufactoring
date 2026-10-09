@@ -17,6 +17,7 @@ mod artwork;
 mod color;
 mod dash;
 mod decorations;
+mod document_area;
 mod fill;
 mod glyphs;
 mod gradient;
@@ -33,6 +34,7 @@ mod theme;
 pub use artwork::build_artwork;
 pub use color::RgbaColor;
 pub use decorations::{DecorationInput, Hovered};
+pub use document_area::{background_at, build_document_area};
 pub use glyphs::{DrawList, Vertex};
 pub use gradient::{GradientFill, GradientFrame, MAX_GRADIENTS, RAMP_TEXELS, Ramp};
 pub use live_preview::build_live_edit_preview;
@@ -42,6 +44,7 @@ pub use pen_preview::build_pen_preview;
 pub use select_box::{SelectDecorationInput, SelectionBox};
 pub use select_decoration::{TransformDecorationInput, TransformGlyphKind, TransformHandleGlyph};
 pub use shape_preview::build_shape_live_preview;
+pub use theme::{CANVAS_BG, PASTEBOARD_BG};
 
 use curvyo_document_core::{PathSnapshot, ViewTransform};
 

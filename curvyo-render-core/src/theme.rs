@@ -12,6 +12,11 @@ use crate::color::RgbaColor;
 /// since this is the one place that distinction matters.
 pub const CANVAS_BG: RgbaColor = RgbaColor::opaque(0xE8, 0xE8, 0xEB);
 
+/// `--pasteboard-bg` (`docs/design-system.md`): everything outside the
+/// document rectangle, which the GPU clears to and the document area
+/// (`--canvas-bg`) is painted over.
+pub const PASTEBOARD_BG: RgbaColor = RgbaColor::opaque(0xB8, 0xB8, 0xBE);
+
 /// `--accent` (`docs/design-system.md`): the one selection/active color.
 pub const ACCENT: RgbaColor = RgbaColor::opaque(0x2F, 0x6F, 0xEE);
 
