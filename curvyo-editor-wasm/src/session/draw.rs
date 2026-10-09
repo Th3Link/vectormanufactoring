@@ -130,6 +130,7 @@ impl Session {
                 pending.as_ref(),
                 view,
                 self.is_hovering_pen_close_target(),
+                self.document.size(),
             ));
         }
         list

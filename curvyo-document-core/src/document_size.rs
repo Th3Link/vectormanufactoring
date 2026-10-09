@@ -79,12 +79,35 @@ impl Document {
             validated_document_side(size.width)?,
             validated_document_side(size.height)?,
         );
-        let current = self.size();
-        let shift = Vec2::new(
-            (size.width.as_mm() - current.width.as_mm()) / 2.0,
-            (size.height.as_mm() - current.height.as_mm()) / 2.0,
-        );
+        let shift = Self::resize_shift(self.size(), size);
         Ok(self.apply_size(size, shift, "resize_document"))
+    }
+
+    /// The shift [`Document::resize`] moves every object by when the size goes
+    /// from `from` to `to`: half the change on each axis, so the centre stays
+    /// where it was (criterion 17). A host that shows the document moves its
+    /// view by the same shift, so nothing moves on screen (criterion 20).
+    #[must_use]
+    pub fn resize_shift(from: DocumentSize, to: DocumentSize) -> Vec2 {
+        Vec2::new(
+            (to.width.as_mm() - from.width.as_mm()) / 2.0,
+            (to.height.as_mm() - from.height.as_mm()) / 2.0,
+        )
+    }
+
+    /// The shift [`Document::fit_to_content`] moves every object by for a
+    /// content box: the box's top-left corner goes to (0, 0), and a side
+    /// narrower than [`MIN_DOCUMENT_MM`] is centred on the 1 mm it gets
+    /// (criteria 24 and 25).
+    #[must_use]
+    pub fn fit_shift(content: (Point, Point)) -> Vec2 {
+        let (min, max) = content;
+        let side = |extent: f64| extent.clamp(MIN_DOCUMENT_MM, MAX_DOCUMENT_MM);
+        let (extent_x, extent_y) = (max.x - min.x, max.y - min.y);
+        Vec2::new(
+            -min.x + (side(extent_x) - extent_x) / 2.0,
+            -min.y + (side(extent_y) - extent_y) / 2.0,
+        )
     }
 
     /// Sets the document to the extent of `content` (the axis-aligned box of
@@ -122,11 +145,7 @@ impl Document {
         if self.object_ids().is_empty() {
             return Ok(false);
         }
-        let shift = Vec2::new(
-            -min.x + (size.width.as_mm() - extent_x) / 2.0,
-            -min.y + (size.height.as_mm() - extent_y) / 2.0,
-        );
-        Ok(self.apply_size(size, shift, "fit_document_to_content"))
+        Ok(self.apply_size(size, Self::fit_shift(content), "fit_document_to_content"))
     }
 
     /// Writes the size registers and shifts all objects by `shift` in one
@@ -680,5 +699,32 @@ mod tests {
         assert!((stored(KEY_WIDTH_MM) - 120.0).abs() < f64::EPSILON);
         assert!(stored(KEY_HEIGHT_MM) > MAX_DOCUMENT_MM);
         assert_eq!(document.size(), DocumentSize::default());
+    }
+
+    /// The shifts a host moves its view by are the ones the commands apply:
+    /// the document moves by exactly them (criterion 20).
+    #[test]
+    fn the_published_shifts_are_the_ones_the_commands_apply() {
+        let document = Document::new(1);
+        let id = rect(&document, 30.0, 40.0, 20.0, 10.0);
+        let before = document.object(id).unwrap();
+        let from = document.size();
+        let to = DocumentSize::from_mm(300.0, 120.0);
+        document.resize(to).unwrap();
+        let shift = Document::resize_shift(from, to);
+        assert_eq!(shift, Vec2::new(45.0, -88.5));
+        assert_eq!(document.object(id).unwrap(), before.translated(shift));
+
+        let content = (Point::new(75.0, -48.5), Point::new(95.0, -38.5));
+        let after_resize = document.object(id).unwrap();
+        let fit_shift = Document::fit_shift(content);
+        document.fit_to_content(content).unwrap();
+        assert_eq!(
+            document.object(id).unwrap(),
+            after_resize.translated(fit_shift)
+        );
+        // A side under 1 mm is centred on the 1 mm it gets.
+        let thin = Document::fit_shift((Point::new(10.0, 5.0), Point::new(110.0, 5.0)));
+        assert_eq!(thin, Vec2::new(-10.0, -4.5));
     }
 }

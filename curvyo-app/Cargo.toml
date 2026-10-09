@@ -43,5 +43,4 @@ tauri-plugin-dialog = "2"
 # has no peer id of its own left to mint.
 serde.workspace = true
 serde_json.workspace = true
-curvyo-document-core = { path = "../curvyo-document-core", version = "0.1.0" }
 curvyo-storage-io = { path = "../curvyo-storage-io", version = "0.1.0" }
