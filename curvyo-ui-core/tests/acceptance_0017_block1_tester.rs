@@ -233,7 +233,7 @@ fn typed_width_ignores_a_trailing_mm_unit_like_opacity_ignores_percent() {
             .parse()
             .unwrap();
         assert_eq!(
-            parse_stroke_width(text).map(|w| w.as_mm()),
+            parse_stroke_width(text).map(Length::as_mm),
             Ok(want),
             "{text:?}"
         );
@@ -740,14 +740,13 @@ fn the_field_text_is_up_to_three_decimals_without_trailing_zeros() {
     assert_eq!(w.text(1.820_000_000_000_000_3), "1.82");
     assert_eq!(w.text(19.999_999_999_999_996), "20");
     assert_eq!(w.text(0.3 - 0.1), "0.2");
-    assert!(!w.text(0.0004).is_empty());
     assert_ne!(w.text(0.0004), "0", "a positive width is never shown as 0");
     let o = ValueScale::Opacity;
     assert_eq!(o.text(100.0), "100");
     assert_eq!(o.text(50.196_078), "50");
     assert_eq!(o.text(0.0), "0");
     assert_eq!(o.text(33.0), "33");
-    assert!(!w.text(f64::NAN).is_empty());
+    assert_ne!(w.text(f64::NAN), "");
 }
 
 /// The host's drag rule (criteria 36 to 38), restated as the spec writes it,
