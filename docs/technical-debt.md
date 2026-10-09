@@ -69,10 +69,9 @@ A new reader of `PathSnapshot::anchors` is still a place where a compound path c
 | `build_artwork`, `build_live_edit_preview` | one fill path; each outline dashed alone, one stroke layer |
 | `Session::paths()`, `check_join`, `check_split`, the double-click | a compound path is not node-editable yet (customer question 7, option A) |
 
-**Not covered yet:** `transform_commit` and the Properties panel read one outline's worth of
-nothing special, but node editing of a compound path (question 7, option B), Break Apart and
-Combine will need the outline index or the anchor ids (`(NodeId, AnchorId)` is enough, ids are
-unique over the whole path). Markers on compound paths wait for `0018-stroke-markers`.
+**Not covered yet:** node editing of a compound path (question 7, option B), Break Apart and
+Combine. They can address a node as `(NodeId, AnchorId)` without an outline index, because anchor
+ids are unique over the whole path. Markers on compound paths wait for `0018-stroke-markers`.
 
 **Resolution:** none planned; the audit table above is the checklist for the next reader of paths.
 
