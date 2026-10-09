@@ -12,7 +12,7 @@ workspace = true
 [dependencies]
 curvyo-document-core = { path = "../curvyo-document-core", version = "0.1.0" }
 kurbo.workspace = true
-clipper2-rust.workspace = true
+i_overlay.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

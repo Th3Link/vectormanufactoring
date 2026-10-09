@@ -2,10 +2,9 @@
 //! of 1,000 curved nodes each within 100 ms, and of 10,000 within 2 s, for each of union,
 //! difference and intersection (kernel call only, release build).
 //!
-//! The budgets are asserted in release builds only. In a debug build the 1,000-node case runs
-//! and prints its timings, and the 10,000-node case is ignored, because unoptimised Clipper takes
-//! minutes on it. Run the budgets with
-//! `cargo nextest run --release -p curvyo-geometry-core --test boolean_performance --no-capture`.
+//! The budgets are asserted in release builds only; a debug build runs the same cases (about
+//! 0.05 s and 0.5 s) and prints the timings. CI runs them in release, in the `boolean-budgets`
+//! job; locally: `cargo test --release -p curvyo-geometry-core --test boolean_performance`.
 
 #![allow(
     clippy::unwrap_used,
@@ -84,10 +83,6 @@ fn two_operands_of_one_thousand_nodes() {
 
 /// Criterion 45.
 #[test]
-#[cfg_attr(
-    debug_assertions,
-    ignore = "unoptimised Clipper takes minutes; run with --release"
-)]
 fn two_operands_of_ten_thousand_nodes() {
     measure(10_000, Duration::from_secs(2));
 }

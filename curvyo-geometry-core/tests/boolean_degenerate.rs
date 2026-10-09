@@ -172,18 +172,11 @@ fn nearly_tangent_edges() {
     assert!(node_count(&result) >= 70);
 }
 
-/// KNOWN DEFECT of `clipper2-rust` 1.2.0, found by the lattice property test and recorded in
-/// `docs/technical-debt.md`. The union of these two operands covers 11.383 mm² where the exact
-/// region has 10.986 mm²: a triangle of 0.4 mm² between two collinear, overlapping edges is
-/// filled that should not be. The same inputs give the right area with `i_overlay` 9.0.0. On
-/// 5,877 random pairs of shapes on a 6 mm lattice (which provoke exactly this), `clipper2-rust`
-/// breaks the area identities of criterion 14 in 12, `i_overlay` in none; on 12,000 random
-/// pairs of shapes up to 60 mm and 600 mm across neither does.
-///
-/// Ignored so that the suite stays green; run it with `--run-ignored all` to see the defect.
-/// When it passes, delete this note and the ignore.
+/// Regression test for the defect that made the kernel leave `clipper2-rust` (see the dated note
+/// in `specs/0016-boolean-operations/adrs.md`): with that library the union of these two operands
+/// covered 11.383 mm² where the exact region has 10.986 mm², a triangle of 0.4 mm² between two
+/// collinear, overlapping edges filled that should not be.
 #[test]
-#[ignore = "known defect of clipper2-rust 1.2.0, see docs/technical-debt.md"]
 fn a_union_with_collinear_overlapping_edges_is_exact() {
     let a = vec![
         polygon(&[
@@ -203,6 +196,35 @@ fn a_union_with_collinear_overlapping_edges_is_exact() {
     assert!(
         (area(&union) - 10.985_574).abs() < 0.01,
         "union area {} instead of 10.9856",
+        area(&union)
+    );
+}
+
+/// The second defect of `clipper2-rust`, found on random shapes: a union whose input has a vertex
+/// within one grid unit of a long edge filled a triangle of 0.45 mm² (707 mm² in all).
+#[test]
+fn a_union_with_a_vertex_beside_a_long_edge_is_exact() {
+    let a = vec![
+        polygon(&[(34.04, 13.564), (31.305, 20.239), (20.621, 46.344)]),
+        polygon(&[(0.0, 25.37), (15.797, 22.591), (59.852, 32.383)]),
+        polygon(&[
+            (44.225, 10.117),
+            (18.405, 36.521),
+            (33.552, 22.68),
+            (0.013, 0.0),
+        ]),
+    ];
+    let b = vec![polygon(&[
+        (9.605, 35.349),
+        (43.624, 19.819),
+        (44.041, 5.993),
+        (12.313, 48.657),
+    ])];
+    let union = ok(BooleanOp::Union, &[a, b]);
+    // Exact area, computed with GEOS (shapely).
+    assert!(
+        (area(&union) - 674.437_515).abs() < 0.05,
+        "union area {} instead of 674.4375",
         area(&union)
     );
 }

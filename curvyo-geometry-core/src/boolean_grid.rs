@@ -1,14 +1,22 @@
-//! The 0.001 mm integer grid the boolean kernel works on: snapping to it, the Clipper calls on it,
+//! The 0.001 mm integer grid the boolean kernel works on: snapping to it, the overlay calls on it,
 //! the cleanup of a result and its canonical output form.
 //!
 //! Everything between the snap and the final conversion back to millimetres is integer
 //! arithmetic, which is what makes the kernel's output identical on every target
 //! (`specs/0016-boolean-operations` criteria 39 and 43).
 
-use clipper2_rust::{ClipType, Clipper64, FillRule, Path64, Paths64, Point64};
 use curvyo_document_core::Point;
+use i_overlay::core::fill_rule::FillRule;
+use i_overlay::core::overlay::{Overlay, ShapeType};
+use i_overlay::core::overlay_rule::OverlayRule;
+use i_overlay::i_float::int::point::IntPoint;
 
-use crate::boolean::BooleanError;
+/// A vertex on the grid, in grid units.
+pub(crate) type Point64 = IntPoint<i64>;
+/// A closed polygon on the grid.
+pub(crate) type Path64 = Vec<Point64>;
+/// Polygons on the grid.
+pub(crate) type Paths64 = Vec<Path64>;
 
 /// Grid units per millimetre. A power of ten that is exact as a float, so snapping is one
 /// multiplication and the way back one correctly rounded division.
@@ -19,7 +27,7 @@ const UNITS_PER_MM: f64 = 1000.0;
 pub(crate) const GRID_MM: f64 = 0.001;
 
 /// The largest absolute coordinate the kernel accepts, in millimetres. 10⁷ mm is 10¹⁰ grid units,
-/// far inside Clipper's integer range, whose cross products need 63 bits at most at 10¹⁸.
+/// far inside the 64-bit engine's range of ±2⁶² units.
 pub(crate) const MAX_COORDINATE_MM: f64 = 1.0e7;
 
 /// Distance, in grid units, within which a vertex counts as lying on the line between its
@@ -67,27 +75,28 @@ pub(crate) fn double_area(path: &[Point64]) -> i128 {
     sum
 }
 
-/// Runs one Clipper operation with the nonzero fill rule on both inputs.
-pub(crate) fn run(
-    clip_type: ClipType,
-    subjects: &Paths64,
-    clips: &Paths64,
-) -> Result<Paths64, BooleanError> {
-    let mut clipper = Clipper64::new();
-    clipper.add_subject(subjects);
-    clipper.add_clip(clips);
-    let mut solution = Paths64::new();
-    if clipper.execute(clip_type, FillRule::NonZero, &mut solution, None) {
-        Ok(solution)
-    } else {
-        Err(BooleanError::KernelFailed)
+/// Runs one overlay operation with the nonzero fill rule on both inputs. Outer outlines come back
+/// with positive area (counter-clockwise in a Y-up plane), holes with negative.
+pub(crate) fn run(rule: OverlayRule, subjects: &Paths64, clips: &Paths64) -> Paths64 {
+    let capacity = subjects.iter().chain(clips).map(Vec::len).sum();
+    let mut overlay = Overlay::<i64>::new(capacity);
+    for contour in subjects {
+        overlay.add_contour(contour, ShapeType::Subject);
     }
+    for contour in clips {
+        overlay.add_contour(contour, ShapeType::Clip);
+    }
+    overlay
+        .overlay(rule, FillRule::NonZero)
+        .into_iter()
+        .flatten()
+        .collect()
 }
 
-/// The painted region of a set of outlines under the nonzero rule: a union of the set with
-/// itself. Outer outlines come back with positive area, holes with negative.
-pub(crate) fn normalize(paths: &Paths64) -> Result<Paths64, BooleanError> {
-    run(ClipType::Union, paths, &Paths64::new())
+/// The painted region of a set of outlines under the nonzero rule: the set overlaid with
+/// nothing. Outer outlines come back with positive area, holes with negative.
+pub(crate) fn normalize(paths: &Paths64) -> Paths64 {
+    run(OverlayRule::Subject, paths, &Paths64::new())
 }
 
 /// Whether `b` may be dropped from the run `a`, `b`, `c`: it lies within `SIMPLIFY_DISTANCE_UNITS`
@@ -120,8 +129,6 @@ fn is_removable(a: Point64, b: Point64, c: Point64) -> bool {
 /// the neighbours that remain, so a long gentle run collapses to its end points only if the run
 /// stays within about a unit of them.
 ///
-/// This replaces Clipper's `SimplifyPaths`, which in testing turned a valid outline into one that
-/// crossed itself with a lobe of 0.45 mm² (specs/0016-boolean-operations/plan.md).
 fn remove_near_collinear(path: &Path64) -> Path64 {
     let mut kept: Path64 = Vec::with_capacity(path.len());
     for &point in path {
@@ -153,28 +160,34 @@ const SLIVER_WIDTH_UNITS: f64 = 1.0;
 /// settle every case seen so far, and the bound keeps the cost fixed for any input.
 const MAX_CLEANUP_ROUNDS: usize = 4;
 
-/// Removes vertices that lie within one grid unit of the line between their neighbours, repairs
-/// any crossing that made with a nonzero union, and repeats until nothing is removed. Then drops
-/// outlines of fewer than three vertices, of no area, or thinner than one grid pitch on average
-/// (criteria 24 and 41).
+/// Drops the near-collinear vertices of every polygon (see `remove_near_collinear`).
 fn simplify(paths: &Paths64) -> Paths64 {
     paths.iter().map(remove_near_collinear).collect()
 }
 
-/// The cleanup of a raw result; see the module documentation.
-pub(crate) fn cleanup(paths: &Paths64) -> Result<Paths64, BooleanError> {
-    // Always at least one round: Clipper's own output can cross itself where a crossing was
-    // rounded to the grid, and only the repairing union makes it simple again.
-    let mut current = normalize(&simplify(paths))?;
+/// Cleans a raw result: removes vertices within one grid unit of the line between their
+/// neighbours, repairs the crossings that may cause with a nonzero union, drops outlines of fewer
+/// than three vertices, of no area, or thinner than one grid pitch on average, and repeats while
+/// something is removed, at most `MAX_CLEANUP_ROUNDS` times (criteria 24 and 41).
+pub(crate) fn cleanup(paths: &Paths64) -> Paths64 {
+    // Always at least one round: removing a vertex can make an outline cross another, and only
+    // the repairing union makes the result simple again. Slivers go inside the loop because
+    // dropping one can turn a touching vertex of its neighbour into a plain collinear one.
+    let mut current = without_slivers(normalize(&simplify(paths)));
     for _ in 1..MAX_CLEANUP_ROUNDS {
         let simplified = simplify(&current);
         if simplified == current {
             break;
         }
-        current = normalize(&simplified)?;
+        current = without_slivers(normalize(&simplified));
     }
-    current.retain(|path| path.len() >= 3 && !is_sliver(path));
-    Ok(current)
+    current
+}
+
+/// `paths` without outlines of fewer than three vertices or thinner than a grid pitch.
+fn without_slivers(mut paths: Paths64) -> Paths64 {
+    paths.retain(|path| path.len() >= 3 && !is_sliver(path));
+    paths
 }
 
 /// Whether an outline is thinner than one grid pitch on average, which is rounding noise: its
@@ -236,7 +249,7 @@ fn rotate_to_start(path: &Path64) -> Path64 {
 /// Puts a result into its canonical form and converts it back to millimetres.
 ///
 /// Each outline starts at its smallest vertex; outlines are sorted by that vertex, then by area
-/// (larger first), then by their vertices. The winding is whatever Clipper's nonzero union gives:
+/// (larger first), then by their vertices. The winding is whatever the nonzero overlay gives:
 /// positive area for outer outlines, negative for holes. Criteria 41 and 43.
 pub(crate) fn canonical_millimetres(paths: &Paths64) -> Vec<Vec<Point>> {
     let mut outlines: Vec<Canonical> = paths
@@ -328,7 +341,7 @@ mod tests {
     #[test]
     fn normalizing_flips_a_clockwise_outline_to_positive_area() {
         let clockwise = vec![path(&[(0, 10), (10, 10), (10, 0), (0, 0)])];
-        let normalized = normalize(&clockwise).unwrap();
+        let normalized = normalize(&clockwise);
         assert_eq!(normalized.len(), 1);
         assert_eq!(double_area(&normalized[0]), 200);
     }
@@ -342,7 +355,7 @@ mod tests {
             (10_000, 10_000),
             (0, 10_000),
         ])];
-        let cleaned = cleanup(&square).unwrap();
+        let cleaned = cleanup(&square);
         assert_eq!(cleaned.len(), 1);
         assert_eq!(cleaned[0].len(), 4);
     }

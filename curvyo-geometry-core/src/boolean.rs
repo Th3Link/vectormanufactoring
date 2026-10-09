@@ -12,7 +12,7 @@
 //!    holes) and makes two operands wound in opposite directions behave the same as two wound
 //!    alike. An operand without area is refused.
 //! 5. The operation runs: union once over all operands; difference as the first operand minus
-//!    the union of the others; intersection and exclusion folded pairwise, because Clipper's
+//!    the union of the others; intersection and exclusion folded pairwise, because the
 //!    subject/clip form computes `A ∩ (B ∪ C)` and its XOR is not odd-parity for three operands.
 //! 6. Vertices within one grid unit of the line between their neighbours are removed, a nonzero
 //!    union repairs the crossings that rounding left, and outlines thinner than one grid pitch on
@@ -21,23 +21,16 @@
 //!
 //! Steps 3 to 7 are integer arithmetic, and step 2 uses only `+ - * /` and `sqrt`, so a result
 //! is identical on every target and on every run.
-//!
-//! # Known limits
-//!
-//! The polygon work is done by `clipper2-rust` 1.2.0, an AI-assisted port of Clipper2. On
-//! ordinary shapes it was exact in every property test; on shapes that put many vertices on the
-//! edges of other shapes (a lattice of whole millimetres with diagonals) it returned a wrong
-//! union in about 0.2 % of random pairs, and on random shapes up to 60 mm in about 1 of 20,000.
-//! `docs/technical-debt.md` has the reproducing case and the comparison with `i_overlay`.
 
 use curvyo_document_core::{Point, Tolerance};
 
 use crate::OutlineTriple;
 use crate::boolean_grid::{
-    GRID_MM, MAX_COORDINATE_MM, canonical_millimetres, cleanup, normalize, run, snap_polygon,
+    GRID_MM, MAX_COORDINATE_MM, Paths64, canonical_millimetres, cleanup, normalize, run,
+    snap_polygon,
 };
 use crate::flatten::flatten_closed;
-use clipper2_rust::{ClipType, Paths64};
+use i_overlay::core::overlay_rule::OverlayRule;
 
 /// What to compute over the operands' regions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,10 +86,6 @@ pub enum BooleanError {
     /// The operation's region is empty.
     #[error("the result is empty")]
     EmptyResult,
-    /// Clipper reported that it could not finish. Not expected for any input that passed the
-    /// checks above; reported instead of panicking.
-    #[error("the polygon clipper failed")]
-    KernelFailed,
 }
 
 /// The result of an operation: closed polygons, outer outlines and holes together.
@@ -225,7 +214,7 @@ pub fn boolean(
     let mut regions: Vec<Paths64> = Vec::with_capacity(operands.len());
     let mut empty = Vec::new();
     for (index, operand) in operands.iter().enumerate() {
-        let region = normalize(&grid_paths(operand, flatten_tolerance_mm))?;
+        let region = normalize(&grid_paths(operand, flatten_tolerance_mm));
         if region.is_empty() {
             empty.push(index);
         }
@@ -235,8 +224,8 @@ pub fn boolean(
         return Err(BooleanError::EmptyOperands(empty));
     }
 
-    let raw = combine(op, regions)?;
-    let outlines = canonical_millimetres(&cleanup(&raw)?);
+    let raw = combine(op, regions);
+    let outlines = canonical_millimetres(&cleanup(&raw));
     if outlines.is_empty() {
         return Err(BooleanError::EmptyResult);
     }
@@ -244,7 +233,7 @@ pub fn boolean(
 }
 
 /// Step 5: the operation on normalized regions, at least one.
-fn combine(op: BooleanOp, regions: Vec<Paths64>) -> Result<Paths64, BooleanError> {
+fn combine(op: BooleanOp, regions: Vec<Paths64>) -> Paths64 {
     let mut regions = regions.into_iter();
     let first = regions.next().unwrap_or_default();
     match op {
@@ -255,35 +244,24 @@ fn combine(op: BooleanOp, regions: Vec<Paths64>) -> Result<Paths64, BooleanError
         BooleanOp::Difference => {
             let rest: Paths64 = regions.flatten().collect();
             if rest.is_empty() {
-                return Ok(first);
+                return first;
             }
-            run(ClipType::Difference, &first, &rest)
+            run(OverlayRule::Difference, &first, &rest)
         }
-        BooleanOp::Intersection => fold(ClipType::Intersection, first, regions),
-        BooleanOp::Exclusion => fold(ClipType::Xor, first, regions),
+        BooleanOp::Intersection => fold(OverlayRule::Intersect, first, regions),
+        BooleanOp::Exclusion => fold(OverlayRule::Xor, first, regions),
     }
 }
 
-/// Applies a binary Clipper operation left to right, stopping early on an empty accumulator for
+/// Applies a binary overlay operation left to right, stopping early on an empty accumulator for
 /// an intersection, where nothing can come back.
-///
-/// Clipper's XOR returns the two pieces `A - B` and `B - A` as they are, even where they touch
-/// along a line that is not an edge of the XOR region, so each XOR step is followed by a nonzero
-/// union that merges the pieces into one region.
-fn fold(
-    clip_type: ClipType,
-    first: Paths64,
-    rest: impl Iterator<Item = Paths64>,
-) -> Result<Paths64, BooleanError> {
+fn fold(rule: OverlayRule, first: Paths64, rest: impl Iterator<Item = Paths64>) -> Paths64 {
     let mut accumulator = first;
     for next in rest {
-        accumulator = run(clip_type, &accumulator, &next)?;
-        if clip_type == ClipType::Xor {
-            accumulator = normalize(&accumulator)?;
-        }
-        if accumulator.is_empty() && clip_type == ClipType::Intersection {
+        accumulator = run(rule, &accumulator, &next);
+        if accumulator.is_empty() && rule == OverlayRule::Intersect {
             break;
         }
     }
-    Ok(accumulator)
+    accumulator
 }

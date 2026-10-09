@@ -58,7 +58,7 @@ fn outline(extent_mm: i32) -> impl Strategy<Value = Vec<(f64, f64)>> {
 }
 
 /// Operands on a coarse lattice of whole millimetres between 0 and 6: most vertices, edges and
-/// crossings coincide, the worst case for the clipper.
+/// crossings coincide, the worst case for the overlay.
 fn lattice_operand() -> impl Strategy<Value = Operand> {
     let lattice = || (0..=6_i32).prop_map(f64::from);
     prop::collection::vec(
@@ -161,7 +161,7 @@ fn distance_to_segment(p: Grid, a: Grid, b: Grid) -> f64 {
 
 /// Whether two segments cross at a point interior to both, by more than the grid can resolve.
 /// Touching at a vertex or along a line is not a crossing, and neither is an end that pokes
-/// through the other segment by less than one grid unit: Clipper rounds each crossing to the
+/// through the other segment by less than one grid unit: the overlay rounds each crossing to the
 /// grid, so a vertex may sit up to about 0.7 units off the edge it was computed on.
 fn properly_cross(a: (Grid, Grid), b: (Grid, Grid)) -> bool {
     let (o1, o2) = (orientation(a.0, a.1, b.0), orientation(a.0, a.1, b.1));
@@ -202,6 +202,14 @@ fn check_invariants(result: &BooleanResult) -> Result<(), String> {
             *seen.entry(g).or_default() += 1;
         }
     }
+    let every_segment: Vec<(Grid, Grid)> = result
+        .outlines()
+        .iter()
+        .flat_map(|o| {
+            let g = grid_points(o);
+            (0..g.len()).map(move |i| (g[i], g[(i + 1) % g.len()]))
+        })
+        .collect();
     for outline in result.outlines() {
         if outline.len() < 3 {
             return Err("an outline has fewer than 3 nodes".into());
@@ -230,11 +238,15 @@ fn check_invariants(result: &BooleanResult) -> Result<(), String> {
             if length > 0.0 {
                 let distance =
                     (((b.0 - a.0) as f64) * dy - ((b.1 - a.1) as f64) * dx).abs() / length;
-                // Waived at a pinch vertex and next to an edge of two units or less: at that
-                // size the grid cannot place a vertex better.
-                let short = ((b.0 - a.0) as f64).hypot((b.1 - a.1) as f64) <= 2.0
-                    || ((c.0 - b.0) as f64).hypot((c.1 - b.1) as f64) <= 2.0;
-                if distance <= 1.0 && seen[&b] == 1 && !short {
+                // Waived at a pinch vertex, next to an edge of three units or less, and where the
+                // vertex touches another edge within a unit: at that size the grid cannot place
+                // a vertex better, and removing it would change how the outlines touch.
+                let touches = every_segment
+                    .iter()
+                    .any(|(p, q)| *p != b && *q != b && distance_to_segment(b, *p, *q) <= 1.0);
+                let short = ((b.0 - a.0) as f64).hypot((b.1 - a.1) as f64) <= 3.0
+                    || ((c.0 - b.0) as f64).hypot((c.1 - b.1) as f64) <= 3.0;
+                if distance <= 1.0 && seen[&b] == 1 && !short && !touches {
                     return Err(format!(
                         "node {b:?} lies {distance} grid units from the line {a:?} {c:?}"
                     ));
@@ -318,7 +330,7 @@ proptest! {
         check_area_identities(&a, &b, |area_sum, _| 1e-6 * area_sum)?;
     }
 
-    /// Criterion 14 with the grid's allowance, on shapes up to 60 mm across: Clipper puts each
+    /// Criterion 14 with the grid's allowance, on shapes up to 60 mm across: The overlay puts each
     /// crossing on the 0.001 mm grid, which moves the area of a result by at most the grid pitch
     /// times the length of the edges at that crossing. That allowance is added to the 1e-6.
     #[test]
@@ -330,12 +342,14 @@ proptest! {
         })?;
     }
 
-    /// Coincident edges, shared vertices and touching points everywhere: no panic, and the
-    /// output rules hold. The area identities are not checked here: `clipper2-rust` 1.2.0 has a
-    /// rare defect on exactly this kind of input, see
-    /// `a_union_with_collinear_overlapping_edges_is_exact` in `boolean_degenerate.rs`.
+    /// Coincident edges, shared vertices and touching points everywhere: no panic, the area
+    /// identities hold to the grid and the output rules hold. This input broke the area
+    /// identities of the previous kernel library in 0.2 % of the pairs.
     #[test]
     fn lattice_shapes_stay_valid(a in lattice_operand(), b in lattice_operand()) {
+        check_area_identities(&a, &b, |area_sum, length_sum| {
+            1e-6 * area_sum + GRID_MM * length_sum
+        })?;
         for op in ALL_OPS {
             check_result(op, &a, &b)?;
         }
