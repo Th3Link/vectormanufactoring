@@ -24,6 +24,7 @@ mod boolean;
 #[cfg(test)]
 mod box_refit_tests;
 mod close_path;
+mod combine;
 mod corner_readout;
 mod document;
 mod draw;
@@ -35,6 +36,7 @@ mod navigation;
 mod node;
 mod open_error;
 mod pen;
+mod refusal;
 mod ruler;
 mod select;
 mod select_bar;
@@ -55,6 +57,7 @@ use curvyo_ui_core::{
 
 pub use boolean::BooleanOutcome;
 pub use close_path::{ClosePathOutcome, ClosePathState};
+pub use combine::{BreakApartOutcome, CombineOutcome};
 pub use document::{DocumentSide, FitOutcome, SizeOutcome};
 pub use keys::{EscapeStep, KeyHint, KeyInput, KeyOutcome};
 pub use move_indicators::MoveIndicators;
@@ -185,9 +188,9 @@ pub struct Session {
     /// limit is never silent. The host clears it after the delay
     /// ([`Session::clear_limit_notice`]); a press clears it too.
     limit_notice: Option<shapes::LiveReadout>,
-    /// The objects a refused boolean operation is drawn around (red, hollow, never stored), and
+    /// The objects a refused rail command is drawn around (red, hollow, never stored), and
     /// the selection it was refused for: the outline ends with the selection or the tool.
-    boolean_refusal: Option<boolean::RefusalMarks>,
+    command_refusal: Option<refusal::RefusalMarks>,
     /// The Pen's end-node cache and the target of the press in flight (`0034`).
     pen_cue: pen::PenCueState,
 }
@@ -225,7 +228,7 @@ impl Session {
             device_pixel_ratio: 1.0,
             button_down: false,
             limit_notice: None,
-            boolean_refusal: None,
+            command_refusal: None,
             pen_cue: pen::PenCueState::default(),
         }
     }
@@ -259,7 +262,7 @@ impl Session {
             device_pixel_ratio: 1.0,
             button_down: false,
             limit_notice: None,
-            boolean_refusal: None,
+            command_refusal: None,
             pen_cue: pen::PenCueState::default(),
         })
     }
@@ -317,7 +320,7 @@ impl Session {
             self.hovered_object = None;
         }
         if tool != self.tool {
-            self.boolean_refusal = None;
+            self.command_refusal = None;
         }
         self.tool = tool;
     }

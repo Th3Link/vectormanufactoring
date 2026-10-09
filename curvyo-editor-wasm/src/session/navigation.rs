@@ -34,7 +34,7 @@ fn zoom_factor_from_wheel_delta(delta_y: f64) -> f64 {
 }
 
 impl Session {
-    /// Puts the document's top-left corner 72 px in from the canvas's
+    /// Puts the document's top-left corner 128 px in from the canvas's
     /// top-left corner at 100 % zoom (criterion 11a). The host calls it once
     /// for a project that was just created or opened (`WasmSession::new` and
     /// `open`), not `Session::new`: headless sessions keep the plain view of

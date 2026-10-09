@@ -2,12 +2,12 @@
 //! (`Document::replace_with_path`) and the red outline of the objects a refusal names
 //! (`specs/0016-boolean-operations`).
 
-use curvyo_document_core::{NodeId, ObjectSnapshot};
 use curvyo_ui_core::{
     BooleanAvailability, BooleanOp, BooleanRefusal, ObjectSelection, boolean_availability,
     plan_boolean,
 };
 
+use super::refusal::RefusalMarks;
 use super::{Session, Tool};
 
 /// What [`Session::apply_boolean`] did.
@@ -28,23 +28,25 @@ pub enum BooleanOutcome {
     Refused(BooleanRefusal),
 }
 
-/// The objects a refusal outlines, and the selection it was refused for.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct RefusalMarks {
-    offenders: Vec<NodeId>,
-    selection: Vec<NodeId>,
-}
-
 impl Session {
     /// The selection the buttons act on: the object selection while the Select tool is active,
     /// otherwise none (the selection is not drawn then, and a command must act only on a
     /// selection the maker can see).
-    fn boolean_selection(&self) -> ObjectSelection {
+    pub(super) fn boolean_selection(&self) -> ObjectSelection {
         if self.tool == Tool::Select {
             self.selection.clone()
         } else {
             ObjectSelection::new()
         }
+    }
+
+    /// Whether a rail command may run now: the Select tool is active, no drag is in flight and no
+    /// typed entry is open (the entry is not discarded).
+    pub(super) fn rail_command_ready(&self) -> bool {
+        self.tool == Tool::Select
+            && !self.select.drag_in_flight()
+            && self.move_entry().is_none()
+            && self.transform_entry().is_none()
     }
 
     /// What the Boolean toolbox of the tool rail shows now. Read it after every pointer release
@@ -58,11 +60,7 @@ impl Session {
     /// one commit labelled `boolean_<op>`, and selects the result alone. The tool stays Select.
     /// A refusal changes nothing (no commit, same selection) and outlines its offenders.
     pub fn apply_boolean(&mut self, op: BooleanOp) -> BooleanOutcome {
-        if self.tool != Tool::Select
-            || self.select.drag_in_flight()
-            || self.move_entry().is_some()
-            || self.transform_entry().is_some()
-        {
+        if !self.rail_command_ready() {
             return BooleanOutcome::Ignored;
         }
         self.flush_select_bar_preview();
@@ -71,13 +69,12 @@ impl Session {
         let plan = match plan_boolean(&objects, &selection, op, &mut self.minter) {
             Ok(plan) => plan,
             Err(refusal) => {
-                self.boolean_refusal = match &refusal {
+                self.command_refusal = match &refusal {
                     BooleanRefusal::OpenPaths { offenders, .. }
                     | BooleanRefusal::NoArea { offenders, .. }
-                    | BooleanRefusal::OutOfRange { offenders, .. } => Some(RefusalMarks {
-                        offenders: offenders.clone(),
-                        selection: selection.ids().to_vec(),
-                    }),
+                    | BooleanRefusal::OutOfRange { offenders, .. } => {
+                        Some(RefusalMarks::new(offenders.clone(), &selection))
+                    }
                     BooleanRefusal::NeedsTwo | BooleanRefusal::Empty => None,
                 };
                 return BooleanOutcome::Refused(refusal);
@@ -95,7 +92,7 @@ impl Session {
             debug_assert!(false, "a planned boolean operation could not be written");
             return BooleanOutcome::Ignored;
         };
-        self.boolean_refusal = None;
+        self.command_refusal = None;
         // The operands are gone, and so are the nodes a Node-tool selection held.
         self.node.clear_selection();
         self.selection.select_single(result);
@@ -104,26 +101,5 @@ impl Session {
             operands: plan.operands.len(),
             compound: plan.compound,
         }
-    }
-
-    /// Removes the red outline of a refusal (the host's timer ran out, or the next action).
-    pub fn clear_boolean_refusal(&mut self) {
-        self.boolean_refusal = None;
-    }
-
-    /// The offending objects of the refusal that is showing, or none once the selection or the
-    /// tool has changed since.
-    pub(super) fn refusal_objects(&self, objects: &[ObjectSnapshot]) -> Vec<ObjectSnapshot> {
-        let Some(marks) = &self.boolean_refusal else {
-            return Vec::new();
-        };
-        if self.tool != Tool::Select || self.selection.ids() != marks.selection.as_slice() {
-            return Vec::new();
-        }
-        objects
-            .iter()
-            .filter(|object| marks.offenders.contains(&object.id()))
-            .cloned()
-            .collect()
     }
 }

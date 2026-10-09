@@ -68,9 +68,7 @@ pub use angle_snap::{MAX_SKEW_SNAP_DEG, snap_angle, snap_skew_angle};
 pub use boolean::{
     BooleanAvailability, BooleanOp, BooleanPlan, BooleanRefusal, boolean_availability, plan_boolean,
 };
-pub use break_apart::{
-    BREAK_APART_COMMIT_LABEL, BreakApartPlan, BreakApartRefusal, Piece, plan_break_apart,
-};
+pub use break_apart::{BreakApartPlan, BreakApartRefusal, Piece, plan_break_apart};
 pub use close_path::{ClosePlan, closable_counts, plan_close_paths};
 pub use closing_join::{JoinType, resolve_closing_node};
 pub use combine::{

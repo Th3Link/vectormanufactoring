@@ -14,9 +14,6 @@ use crate::boolean::operands_in_order;
 use crate::combine::{fresh_ids, is_compound};
 use crate::object_selection::ObjectSelection;
 
-/// The commit label of Break apart; the undo slice maps it to display text.
-pub const BREAK_APART_COMMIT_LABEL: &str = "break_apart";
-
 /// One piece: the outlines of a region, the shape first and its holes after it.
 pub type Piece = Vec<(Vec<NewAnchor>, bool)>;
 

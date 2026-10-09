@@ -372,3 +372,55 @@ fn one_region_compounds_are_left_as_they_are() {
     assert_eq!(plan.kept, vec![ring_id]);
     assert_eq!(plan.left_alone, 1);
 }
+
+/// Criterion 4: concentric discs, drawn in either stacking order, combine into a ring that the
+/// canvas paints (nonzero fill) at radius 15 mm and not at the centre, of the area
+/// pi (400 - 100) within 1 mm squared; a third disc inside the hole is painted again.
+#[test]
+fn concentric_discs_paint_as_a_ring_with_an_island() {
+    use curvyo_geometry_core::{Outline, contains_point_in_outlines, outline_area_mm2};
+
+    for inner_first in [false, true] {
+        let document = Document::new(1);
+        let (outer, inner) = if inner_first {
+            let inner = disc(&document, 50.0, 50.0, 10.0);
+            (disc(&document, 50.0, 50.0, 20.0), inner)
+        } else {
+            let outer = disc(&document, 50.0, 50.0, 20.0);
+            (outer, disc(&document, 50.0, 50.0, 10.0))
+        };
+        let island = disc(&document, 50.0, 50.0, 5.0);
+        let all = objects(&document);
+        let plan = plan_combine(&all, &select(&[outer, inner, island]), &mut minter()).unwrap();
+        let triples: Vec<Vec<_>> = plan
+            .outlines
+            .iter()
+            .map(|(anchors, _)| {
+                anchors
+                    .iter()
+                    .map(|a| (a.point, a.handle_in, a.handle_out))
+                    .collect()
+            })
+            .collect();
+        let views: Vec<Outline<'_>> = triples.iter().map(|t| Outline::new(t, true)).collect();
+
+        assert!(
+            contains_point_in_outlines(&views, pt(65.0, 50.0)),
+            "radius 15"
+        );
+        assert!(
+            !contains_point_in_outlines(&views, pt(50.0, 50.0 - 7.5)),
+            "radius 7.5, the hole"
+        );
+        assert!(
+            contains_point_in_outlines(&views, pt(50.0, 50.0 - 2.0)),
+            "the island"
+        );
+        let ring: f64 = views[..2].iter().map(outline_area_mm2).sum();
+        let expected = std::f64::consts::PI * 300.0;
+        assert!(
+            (ring - expected).abs() < 1.0,
+            "ring area {ring} against {expected}"
+        );
+    }
+}

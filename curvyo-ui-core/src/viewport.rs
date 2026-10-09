@@ -73,10 +73,11 @@ impl Default for Zoom {
 }
 
 /// How far the document's top-left corner sits from the canvas's top-left
-/// corner in a new view, CSS pixels on both axes: the tool rail's 12 + 48 + 12,
-/// so the document edge and the 0 ticks of the rulers are not hidden under it
-/// (`specs/0015-document-size-and-rulers/` criterion 11a).
-pub const DOCUMENT_INSET_PX: f64 = 72.0;
+/// corner in a new view, CSS pixels on both axes: the tool rail's two columns,
+/// 12 + 48 + 8 + 48 + 12, so the document edge and the 0 ticks of the rulers are not
+/// hidden under it (`specs/0015-document-size-and-rulers/` criterion 11a, moved from 72 px by
+/// `specs/0035-combine-and-break-apart` criterion 1a).
+pub const DOCUMENT_INSET_PX: f64 = 128.0;
 
 /// How far the real width change of a panel toggle may differ from the
 /// announced one, CSS pixels: the host rounds to whole device pixels.
@@ -110,7 +111,7 @@ pub struct Viewport {
     /// properties panel opening or closing.
     keep_origin_for: Option<f64>,
     /// Whether the view is still the untouched [`Viewport::with_document_inset`]
-    /// one: resizes keep its origin, so the 72 px inset survives a window that
+    /// one: resizes keep its origin, so the 128 px inset survives a window that
     /// is shown, maximised or resized after the session was created (measured
     /// in the browser: without the flag such a resize moves the document
     /// corner to wherever keeping the centre puts it) until the maker pans or
@@ -209,7 +210,7 @@ impl Viewport {
     /// stay where they were on screen and the document's edges move instead
     /// (`specs/0015-document-size-and-rulers/` criterion 20). A command, not a
     /// navigation gesture, so a window resize of a still-untouched view keeps
-    /// its origin, the 72 px inset, afterwards too.
+    /// its origin, the 128 px inset, afterwards too.
     pub fn pan_by_document_offset(&mut self, offset: Vec2) {
         self.origin = self.origin.translated(offset);
     }
