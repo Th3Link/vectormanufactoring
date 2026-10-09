@@ -1,6 +1,6 @@
 # Style panel rework: empty when idle, hidden instead of disabled, RGBA hex, inline colour, eyedropper, custom dash, value fields, no gradients
 
-Status: Ready
+Status: In progress
 Priority: Must
 Origin: Customer
 
@@ -1010,4 +1010,4 @@ reopen them after trying the panel.
 Requirements: R-EDIT-005, R-EDIT-006 (`docs/requirements.md`)
 Supersedes in part: `specs/0007-stroke-and-fill-styling/`
 Followed by: `specs/0018-stroke-markers/`, `specs/0022-color-management/`
-PR: TBD
+PR: #78
