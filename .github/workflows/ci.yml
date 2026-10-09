@@ -15,17 +15,20 @@
 #                        downloads its dist/ artifact instead of rebuilding
 #                        the frontend per OS.
 #   rust-host-gate    — the full host gate (fmt, clippy, nextest) over the
-#                        *whole workspace*, matrixed over ubuntu/windows/
-#                        macos. Originally this was meant to be scoped to just
-#                        curvyo-app's dependency closure (ADR 0011 §7), with
-#                        a separate ubuntu-only `core-host` job for the rest —
-#                        dropped: hand-maintained crate lists silently go
-#                        stale, and `--workspace` isn't actually more
-#                        expensive on windows/macos here (every crate in the
-#                        workspace already builds clean on all three, so
-#                        there was nothing the split was buying beyond fewer
-#                        CPU-minutes on two platforms Tauri's own code
-#                        dominates the runtime of anyway).
+#                        *whole workspace*. On pull_request and push to main
+#                        the matrix is ubuntu only; the nightly run
+#                        (`schedule`, or `workflow_dispatch` by hand) adds
+#                        windows and macos. Customer decision 2026-10-09:
+#                        Windows/macOS are not in focus, so their test runs
+#                        happen only at night, never per PR (see
+#                        docs/technical-debt.md). The ubuntu job name,
+#                        `rust-host-gate (ubuntu-latest)`, is the same in
+#                        every run. Originally this was meant to be scoped to
+#                        just curvyo-app's dependency closure (ADR 0011 §7),
+#                        with a separate ubuntu-only `core-host` job for the
+#                        rest — dropped: hand-maintained crate lists silently
+#                        go stale, and `--workspace` is not more expensive
+#                        here than the split would have been.
 #   core-wasm32       — one job per workspace member whose name ends in
 #                        `-core`, plus `curvyo-editor-wasm` (see its own
 #                        comment) — discovered via `cargo metadata`, not
@@ -44,6 +47,18 @@
 #                        same reason rust-host-gate does: cargo doc expands
 #                        curvyo-app's proc macros too.
 #
+# Nightly run: the same workflow runs on `schedule` (02:30 UTC, default
+# branch only) and on `workflow_dispatch`, with every job above, not just the
+# host gate: it also catches new advisories against an unchanged main. A
+# failed scheduled run shows up red in the Actions tab and GitHub mails the
+# user who last edited the cron line; there are no notification steps,
+# secrets or other reporting here. Windows/macOS failures are expected to be
+# fixed later, and must never be required status checks in branch protection
+# (they do not run on pull requests, so a required check would block every PR).
+#
+# The full local gate (CLAUDE.md §7) runs before a PR is opened, so CI runs
+# once per PR on a green tree.
+#
 # Toolchain: every job reads the exact version pinned in the repo's
 # `rust-toolchain.toml` (currently 1.99.0, with the `rustfmt`/`clippy`
 # components and the `wasm32-unknown-unknown` target already declared there)
@@ -61,9 +76,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # event_name keeps a nightly run from cancelling (or being cancelled by) a
+  # push-to-main run on the same ref.
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -178,11 +198,10 @@ jobs:
           path: frontend/dist
           retention-days: 7
 
-  # The full host gate (fmt, clippy, nextest) over the whole workspace,
-  # matrixed across the three desktop OSes because curvyo-app (Tauri)
-  # carries platform-specific webview/windowing code. See the file header
-  # for why this replaced a narrower curvyo-app-only job plus a separate
-  # core-host job.
+  # The full host gate (fmt, clippy, nextest) over the whole workspace.
+  # Ubuntu only on pull_request/push; the nightly run (schedule,
+  # workflow_dispatch) adds windows and macos because curvyo-app (Tauri)
+  # carries platform-specific webview/windowing code. See the file header.
   rust-host-gate:
     name: rust-host-gate (${{ matrix.os }})
     needs: frontend
@@ -190,7 +209,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '["ubuntu-latest","windows-latest","macos-latest"]' || '["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@v4
 

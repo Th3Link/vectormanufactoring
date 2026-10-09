@@ -200,7 +200,9 @@ product code:
 ## 7. Quality gate
 
 Run before reporting a story as done. Quiet flags keep output (and tokens)
-small; show only failures to the lead.
+small; show only failures to the lead. **The full gate runs locally first.**
+Push and open the PR only when it is green: no early draft PRs just to get CI,
+so CI runs once per PR on a green tree.
 
 ```text
 cargo fmt --all --check
@@ -228,8 +230,9 @@ and CI structure. Adaptations for this project:
   SDK crate (e.g. `curvyo-plugin`, ADR 0005) takes no suffix. There is no
   `-hardware` suffix and no embedded toolchain. Full layout in
   [ADR 0011](docs/adr/0011-workspace-and-crate-layout.md).
-- CI runs the app crates on an OS matrix (ubuntu, windows, macos) and adds
-  the wasm32 build of core crates.
+- CI on pull requests and pushes to main runs the host gate on ubuntu and adds
+  the wasm32 build of core crates. Windows and macOS test runs happen nightly
+  only (customer decision 2026-10-09, `docs/technical-debt.md`).
 - `specs/` holds feature specs (§4); `docs/design-system.md` holds the UI
   design system.
 
