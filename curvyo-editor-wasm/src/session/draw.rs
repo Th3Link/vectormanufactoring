@@ -75,6 +75,11 @@ impl Session {
                 view,
             ));
         }
+        // The red hollow outline of the objects a refused boolean operation names.
+        let refused = self.refusal_objects(&objects);
+        if !refused.is_empty() {
+            list.extend(curvyo_render_core::build_refusal_outlines(&refused, view));
+        }
         let live_objects = Self::live_objects_in(objects, live.as_ref());
         list.extend(build_select_draw_list(
             view,

@@ -20,6 +20,7 @@
 //! methods join this type's `impl Session` the same way any other
 //! `impl` block in the same crate would.
 
+mod boolean;
 #[cfg(test)]
 mod box_refit_tests;
 mod corner_readout;
@@ -48,6 +49,7 @@ use curvyo_ui_core::{
     PolygonStarTool, RectangleTool, SelectTool, StyleEditor, Viewport, hit_test,
 };
 
+pub use boolean::BooleanOutcome;
 pub use keys::{EscapeStep, KeyHint, KeyInput, KeyOutcome};
 pub use move_indicators::MoveIndicators;
 #[cfg(target_arch = "wasm32")]
@@ -106,6 +108,30 @@ pub enum Tool {
     Ellipse,
     /// The polygon/star tool (acceptance criteria 10-15).
     PolygonStar,
+}
+
+/// What a double-click asks the host to show.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DoubleClickHint {
+    /// Nothing.
+    None,
+    /// The edit hint of a primitive (`unified-object-editing` criterion 32).
+    EditHint,
+    /// The sentence that a compound path's nodes cannot be edited yet
+    /// (`0016-boolean-operations` criterion 38).
+    CompoundPath,
+}
+
+impl DoubleClickHint {
+    /// The code the host keys its text on: `""`, `"edit_hint"` or `"compound_path"`.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::None => "",
+            Self::EditHint => "edit_hint",
+            Self::CompoundPath => "compound_path",
+        }
+    }
 }
 
 /// One open document's whole editing session.
@@ -176,6 +202,9 @@ pub struct Session {
     /// limit is never silent. The host clears it after the delay
     /// ([`Session::clear_limit_notice`]); a press clears it too.
     limit_notice: Option<shapes::LiveReadout>,
+    /// The objects a refused boolean operation is drawn around (red, hollow, never stored), and
+    /// the selection it was refused for: the outline ends with the selection or the tool.
+    boolean_refusal: Option<boolean::RefusalMarks>,
 }
 
 impl Session {
@@ -211,6 +240,7 @@ impl Session {
             device_pixel_ratio: 1.0,
             button_down: false,
             limit_notice: None,
+            boolean_refusal: None,
         }
     }
 
@@ -243,6 +273,7 @@ impl Session {
             device_pixel_ratio: 1.0,
             button_down: false,
             limit_notice: None,
+            boolean_refusal: None,
         })
     }
 
@@ -290,6 +321,9 @@ impl Session {
         if matches!(tool, Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar) {
             self.selection.clear();
             self.hovered_object = None;
+        }
+        if tool != self.tool {
+            self.boolean_refusal = None;
         }
         self.tool = tool;
     }
@@ -463,8 +497,13 @@ impl Session {
     /// ordinary press with no movement, which writes nothing). Returns
     /// whether the host should show the edit hint chip (criterion 32).
     pub fn double_click(&mut self, point: Point, shift: bool, ctrl: bool) -> bool {
+        self.double_click_hint(point, shift, ctrl) == DoubleClickHint::EditHint
+    }
+
+    /// [`Session::double_click`], telling the host which hint to show, if any.
+    pub fn double_click_hint(&mut self, point: Point, shift: bool, ctrl: bool) -> DoubleClickHint {
         let Some(point) = sanitized_point(point) else {
-            return false;
+            return DoubleClickHint::None;
         };
         match self.tool {
             Tool::Pen => self.finish_pen(),
@@ -472,7 +511,7 @@ impl Session {
             Tool::Select => return self.select_double_click(point, shift, ctrl),
             Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {}
         }
-        false
+        DoubleClickHint::None
     }
 }
 

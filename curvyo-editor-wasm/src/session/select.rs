@@ -196,8 +196,15 @@ impl Session {
     /// activated with the path selected, "ready for node editing with no
     /// nodes selected" (`adrs.md`); on a primitive nothing changes and the
     /// host is asked to show the edit hint (the returned `true`). No
-    /// double-click switches to a primitive's own tool: there is none.
-    pub(super) fn select_double_click(&mut self, point: Point, shift: bool, ctrl: bool) -> bool {
+    /// double-click switches to a primitive's own tool: there is none. On a compound path
+    /// the tool does not change either, and the host is told to show the sentence of criterion
+    /// 38 of `0016-boolean-operations`.
+    pub(super) fn select_double_click(
+        &mut self,
+        point: Point,
+        shift: bool,
+        ctrl: bool,
+    ) -> super::DoubleClickHint {
         let objects = self.objects();
         let tolerance = self.object_tolerance();
         let handle_tolerances = self.transform_handle_tolerances();
@@ -214,12 +221,13 @@ impl Session {
                 self.node.cancel_drag();
                 self.node.clear_selection();
                 self.tool = Tool::Node;
-                false
+                super::DoubleClickHint::None
             }
-            SelectDoubleClickOutcome::EditHint => true,
-            SelectDoubleClickOutcome::Miss
-            | SelectDoubleClickOutcome::EntryOpened
-            | SelectDoubleClickOutcome::CompoundPath => false,
+            SelectDoubleClickOutcome::EditHint => super::DoubleClickHint::EditHint,
+            SelectDoubleClickOutcome::CompoundPath => super::DoubleClickHint::CompoundPath,
+            SelectDoubleClickOutcome::Miss | SelectDoubleClickOutcome::EntryOpened => {
+                super::DoubleClickHint::None
+            }
         }
     }
 }

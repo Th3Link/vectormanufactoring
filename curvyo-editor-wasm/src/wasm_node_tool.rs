@@ -42,6 +42,7 @@ pub struct NodeToolbarState {
     pub can_make_curve: bool,
     pub can_join: bool,
     pub can_split: bool,
+    pub compound_only: bool,
 }
 
 impl From<SessionNodeToolbarState> for NodeToolbarState {
@@ -56,6 +57,7 @@ impl From<SessionNodeToolbarState> for NodeToolbarState {
             can_make_curve: state.can_make_curve,
             can_join: state.can_join,
             can_split: state.can_split,
+            compound_only: state.compound_only,
         }
     }
 }

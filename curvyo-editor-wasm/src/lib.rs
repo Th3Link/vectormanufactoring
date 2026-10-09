@@ -28,6 +28,8 @@ mod gpu_pipeline;
 #[cfg(target_arch = "wasm32")]
 mod wasm_api;
 #[cfg(target_arch = "wasm32")]
+mod wasm_boolean;
+#[cfg(target_arch = "wasm32")]
 mod wasm_keys;
 #[cfg(target_arch = "wasm32")]
 mod wasm_move;
@@ -48,7 +50,10 @@ mod wasm_select_tool;
 #[cfg(target_arch = "wasm32")]
 mod wasm_shape_tools;
 
-pub use session::{EscapeStep, KeyHint, KeyInput, KeyOutcome, MoveIndicators, Session, Tool};
+pub use session::{
+    BooleanOutcome, DoubleClickHint, EscapeStep, KeyHint, KeyInput, KeyOutcome, MoveIndicators,
+    Session, Tool,
+};
 
 #[cfg(target_arch = "wasm32")]
 pub use wasm_api::{WasmSession, init_panic_hook};

@@ -247,11 +247,15 @@ impl WasmSession {
     /// `(x, y)` — the host's own double-click detector (unchanged, now in
     /// pixels) calls this instead of choosing per tool itself
     /// (`specs/0004-canvas-navigation-and-selection/adrs.md`). Returns
-    /// `true` when the host should show the edit hint chip (a double-click on
-    /// a primitive's outline, body or centre handle: nothing else changes).
-    pub fn double_click(&mut self, x: f64, y: f64, shift: bool, ctrl: bool) -> bool {
+    /// the code of the hint the host should show: `"edit_hint"` (a double-click on a
+    /// primitive's outline, body or centre handle: nothing else changes),
+    /// `"compound_path"` (on a compound path: its nodes cannot be edited yet) or `""`.
+    pub fn double_click(&mut self, x: f64, y: f64, shift: bool, ctrl: bool) -> String {
         let point = self.session.screen_to_document(x, y);
-        self.session.double_click(point, shift, ctrl)
+        self.session
+            .double_click_hint(point, shift, ctrl)
+            .code()
+            .to_string()
     }
 
     /// Shift, Ctrl or Alt changed with no pointer movement
