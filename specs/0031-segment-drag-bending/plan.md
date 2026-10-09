@@ -54,10 +54,13 @@ No new crate, no new dependency, no format change (`adrs.md`).
   selected-segment overlay suppressed while the bend runs, the "Δ x, y mm" readout and the Lock
   badge, no hover test during a drag, one document read per Node-tool drag (criteria 14 to 17, 20).
   `tests/segment_bend.rs`.
-- [ ] 6. Frontend: the Node tool's rail tooltip second line (criterion 23); verify pointer capture
-  and Escape in the browser (criterion 14).
-- [ ] 7. Benchmark budgets as an `#[ignore]` test (5000-node path; bend frame at most 12 ms, one
-  hover hit test at most 2 ms) (criterion 17).
+- [x] 6. Frontend: the Node tool's rail tooltip second line (criterion 23). Pointer capture and
+  the rest of the gesture were checked in the browser: a drag on a segment bends it and leaves it
+  selected; the band flanks, computed from the token values, are 1.86:1 on `--canvas-bg`, 1.53:1 on
+  `--pasteboard-bg` and 2.02:1 over a white fill (all at least 1.5:1, so 50 % stays).
+- [x] 7. Benchmark budgets as an `#[ignore]` test (`curvyo-editor-wasm/tests/segment_bend_budget.rs`,
+  5000 nodes, release): bend frame at most 7.6 ms after the first frame (which reads the document
+  once: 19 ms), one hover hit test about 0.1 ms; budgets 12 ms and 2 ms (criterion 17).
 
 ## Validation
 
