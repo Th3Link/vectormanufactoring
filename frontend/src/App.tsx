@@ -9,6 +9,7 @@ import { ShapeToolbar } from "@/components/ShapeToolbar";
 import { StatusBar } from "@/components/StatusBar";
 import { ToolRail } from "@/components/ToolRail";
 import type { EditorSession } from "@/hooks/useEditorSession";
+import { useBooleanCommands } from "@/hooks/useBooleanCommands";
 import { useEditorSession } from "@/hooks/useEditorSession";
 import type {
   OpenBytesPayload,
@@ -50,6 +51,7 @@ function App() {
   const [cursorMm, setCursorMm] = useState({ x: 0, y: 0 });
   const [sizeMm, setSizeMm] = useState(DEFAULT_SIZE_MM);
   const editor = useEditorSession(setCursorMm);
+  const booleans = useBooleanCommands(editor);
   const [openErrorMessage, setOpenErrorMessage] = useState<string | null>(
     null,
   );
@@ -165,6 +167,7 @@ function App() {
           selectionCount={editor.selectionCount}
           onSelect={editor.setTool}
           onReturnFocus={() => editor.containerRef.current?.focus()}
+          booleans={booleans}
         />
         <Canvas editor={editor} />
         {/* Contextual tool bar: floats over the canvas, right of the tool

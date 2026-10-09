@@ -347,6 +347,7 @@ jobs:
           cargo test --release -p curvyo-geometry-core --test boolean_performance -- --nocapture
           cargo test --release -p curvyo-document-core --test compound_write_cost -- --nocapture
           cargo test --release -p curvyo-editor-wasm --test compound_path_interactivity -- --nocapture
+          cargo test --release -p curvyo-editor-wasm --test boolean_interactivity -- --nocapture
 
   # Dependency-graph/license check, not compiled code — one run sees every
   # target deny.toml's [graph] lists (including wasm32-unknown-unknown),

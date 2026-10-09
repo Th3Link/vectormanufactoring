@@ -4,6 +4,7 @@ import { ModifierTracker } from "@/lib/keyModifiers";
 import { createSession, openSession } from "@/lib/editorSession";
 import type { WasmSession } from "@/lib/editorSession";
 import type { EditHint } from "@/components/EditHintChip";
+import type { BooleanOp, BooleanResult } from "@/lib/booleanText";
 
 /** The canvas's backing-buffer (physical pixel) size for a given CSS
  * (layout) size, plus the `devicePixelRatio` that relates the two —
@@ -53,6 +54,9 @@ export interface NodeToolbarState {
   canJoin: boolean;
   /** Split (acceptance criterion 12). */
   canSplit: boolean;
+  /** The only selected object is a compound path: the bar says its nodes
+   * cannot be edited yet (`0016-boolean-operations` criterion 38). */
+  compoundOnly: boolean;
 }
 
 const EMPTY_TOOLBAR_STATE: NodeToolbarState = {
@@ -65,6 +69,7 @@ const EMPTY_TOOLBAR_STATE: NodeToolbarState = {
   canMakeCurve: false,
   canJoin: false,
   canSplit: false,
+  compoundOnly: false,
 };
 
 /** A plain-JS copy of the Rust `SelectBarView` (`specs/0009-unified-object-editing/`
@@ -220,6 +225,7 @@ function readToolbarState(raw: {
   can_make_curve: boolean;
   can_join: boolean;
   can_split: boolean;
+  compound_only: boolean;
   free(): void;
 }): NodeToolbarState {
   const state: NodeToolbarState = {
@@ -232,6 +238,7 @@ function readToolbarState(raw: {
     canMakeCurve: raw.can_make_curve,
     canJoin: raw.can_join,
     canSplit: raw.can_split,
+    compoundOnly: raw.compound_only,
   };
   raw.free();
   return state;
@@ -590,6 +597,9 @@ export interface EditorSession {
   setPolyStarRatio: (ratio: number) => void;
   /** "Object to path" (acceptance criteria 17, 21, 22). */
   convertSelectedToPaths: () => void;
+  /** A boolean operation on the selection, in one commit (`0016-boolean-operations`);
+   * `"ignored"` when no session is live or the Select tool is not active. */
+  applyBoolean: (op: BooleanOp) => BooleanResult;
   onPointerDown: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerMove: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerUp: (event: React.PointerEvent<HTMLCanvasElement>) => void;
@@ -1088,6 +1098,20 @@ export function useEditorSession(
     syncFromSession();
   }, [syncFromSession]);
 
+  const applyBoolean = useCallback(
+    (op: BooleanOp): BooleanResult => {
+      const raw = sessionRef.current?.apply_boolean(op);
+      syncFromSession();
+      if (!raw) {
+        return { kind: "ignored", count: 0, of: 0, compound: false };
+      }
+      const result = { kind: raw.kind, count: raw.count, of: raw.of, compound: raw.compound };
+      raw.free();
+      return result;
+    },
+    [syncFromSession],
+  );
+
   /** The event's canvas-relative CSS pixel position — pure DOM geometry,
    * no wasm call and no document-space conversion (that happens inside
    * `Session` now, `specs/0004-canvas-navigation-and-selection/adrs.md`).
@@ -1251,11 +1275,18 @@ export function useEditorSession(
           ctrl: event.ctrlKey || event.metaKey,
         };
         doubleClickPressRef.current = null;
-        if (session.double_click(press.x, press.y, press.shift, press.ctrl)) {
+        const hintCode = session.double_click(press.x, press.y, press.shift, press.ctrl);
+        if (hintCode) {
           // A double-click on a primitive changes nothing; the hint says how
-          // to edit it (criterion 32), on every such double-click.
+          // to edit it (criterion 32), on every such double-click. On a
+          // compound path it says why there are no nodes (`0016` criterion 38).
           editHintCounter.current += 1;
-          setEditHint({ x: press.x, y: press.y, id: editHintCounter.current });
+          setEditHint({
+            x: press.x,
+            y: press.y,
+            id: editHintCounter.current,
+            compound: hintCode === "compound_path",
+          });
         }
         // Re-run the hover so the cursor describes the handle under the
         // pointer right away (a skew double-click changes nothing else).
@@ -1557,6 +1588,7 @@ export function useEditorSession(
     setPolyStarPointCount,
     setPolyStarRatio,
     convertSelectedToPaths,
+    applyBoolean,
     onPointerDown,
     onPointerMove,
     onPointerUp,

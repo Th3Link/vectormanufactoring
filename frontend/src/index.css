@@ -309,3 +309,10 @@ input[type="range"].select-bar-slider-mixed::-moz-range-thumb {
   outline: 2px solid var(--editor-accent);
   outline-offset: 1px;
 }
+
+/* While a boolean operation runs the whole window shows the wait cursor
+   (`0016-boolean-operations` criterion 47a). */
+html[data-boolean-busy],
+html[data-boolean-busy] * {
+  cursor: wait !important;
+}
