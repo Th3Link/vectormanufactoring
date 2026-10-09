@@ -1141,3 +1141,19 @@ box size; those tests count fans only (`white_count` in
   when no such file can still exist (for example once a file conversion step has
   run over every customer project). Until then they are the only place the word
   "gradient" remains in the code.
+
+**2026-10-09 (`0018-stroke-markers`):**
+
+- **Marker placement lives in `render-core` at display tolerance.** Spaced
+  markers are measured with `lyon` at `min(display tolerance, 0.01 mm)` and drawn
+  every frame with the rest of the artwork (no cache). If SVG export of Spaced
+  markers (SVG has no equivalent) or a manufacturing use (open question 5 of the
+  spec) needs the same positions, the placement function moves to a core crate
+  both can reach.
+- **Markers are not part of the selection box, hit tests or bounds** (criterion
+  18): a marker may stick out of the box. A marker that matters for a cut job is
+  a `manufacturing-roles` decision.
+- **At most 500 markers per slot of one outline and 50,000 per frame are drawn**;
+  past the frame budget further markers are skipped, never the stroke.
+- **A compound path applies its markers to each outline** (each outline is closed
+  in practice, so only Middle shows); the spec does not say more.

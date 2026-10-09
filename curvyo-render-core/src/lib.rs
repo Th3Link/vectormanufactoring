@@ -21,6 +21,8 @@ mod document_area;
 mod fill;
 mod glyphs;
 mod live_preview;
+mod marker_place;
+mod markers;
 mod marquee_overlay;
 mod move_axes;
 mod pen_preview;

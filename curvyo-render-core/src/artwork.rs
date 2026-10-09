@@ -4,7 +4,7 @@
 //! Editor decorations are not artwork; they are drawn after it.
 
 use curvyo_document_core::{
-    ObjectSnapshot, Opacity, PathSnapshot, PrimitiveSnapshot, Style, ViewTransform,
+    ObjectSnapshot, Opacity, PathSnapshot, PrimitiveSnapshot, Stroke, Style, ViewTransform,
     outline_of_rotated,
 };
 
@@ -14,6 +14,8 @@ use crate::color::RgbaColor;
 use crate::dash::{self, DashBudget};
 use crate::fill;
 use crate::glyphs::DrawList;
+use crate::marker_place::marker_placements;
+use crate::markers::{MarkerBudget, marker_triangles};
 use crate::shape_preview::outline_to_anchors;
 use crate::stroke::{self, OutlineRef, StrokeParams};
 use crate::theme;
@@ -48,15 +50,18 @@ fn paint(color: curvyo_document_core::Color, opacity: Opacity) -> RgbaColor {
 /// visually identical.
 #[must_use]
 pub fn build_artwork(objects: &[ObjectSnapshot], view: ViewTransform) -> DrawList {
-    let mut budget = DashBudget::per_frame();
+    let mut budgets = FrameBudgets {
+        dashes: DashBudget::per_frame(),
+        markers: MarkerBudget::per_frame(),
+    };
     let mut list = DrawList::default();
     for object in objects {
         match object {
             ObjectSnapshot::Path(path) => {
-                draw_path(&mut list, path, view, &mut budget);
+                draw_path(&mut list, path, view, &mut budgets);
             }
             ObjectSnapshot::Primitive(primitive) => {
-                draw_primitive(&mut list, primitive, view, &mut budget);
+                draw_primitive(&mut list, primitive, view, &mut budgets);
             }
         }
     }
@@ -67,7 +72,7 @@ fn draw_path(
     list: &mut DrawList,
     path: &PathSnapshot,
     view: ViewTransform,
-    budget: &mut DashBudget,
+    budgets: &mut FrameBudgets,
 ) {
     let outlines: Vec<OutlineRef<'_>> = path
         .subpaths()
@@ -76,31 +81,40 @@ fn draw_path(
             closed: subpath.closed,
         })
         .collect();
-    draw_object(list, &outlines, &path.style, view, budget);
+    draw_object(list, &outlines, &path.style, true, view, budgets);
 }
 
 fn draw_primitive(
     list: &mut DrawList,
     primitive: &PrimitiveSnapshot,
     view: ViewTransform,
-    budget: &mut DashBudget,
+    budgets: &mut FrameBudgets,
 ) {
     let anchors = outline_to_anchors(&outline_of_rotated(&primitive.shape, primitive.rotation));
     let outline = [OutlineRef {
         anchors: &anchors,
         closed: true,
     }];
-    draw_object(list, &outline, &primitive.style, view, budget);
+    // A primitive has no markers and draws none (`0018` criterion 21).
+    draw_object(list, &outline, &primitive.style, false, view, budgets);
+}
+
+/// The limits shared by every object of one frame.
+struct FrameBudgets {
+    dashes: DashBudget,
+    markers: MarkerBudget,
 }
 
 /// An object's outlines as the fill and the stroke read them: one for an
-/// ordinary path or a primitive, several for a compound path.
+/// ordinary path or a primitive, several for a compound path. `markers` says
+/// whether the object may draw its stroke markers (paths only).
 fn draw_object(
     list: &mut DrawList,
     outlines: &[OutlineRef<'_>],
     style: &Style,
+    markers: bool,
     view: ViewTransform,
-    budget: &mut DashBudget,
+    budgets: &mut FrameBudgets,
 ) {
     // The fill is painted first, with the outline closed by a chord when the
     // path is open; the stroke below keeps the real open path.
@@ -108,7 +122,7 @@ fn draw_object(
         draw_fill(list, outlines, style, view);
     }
     if style.stroke.enabled {
-        draw_stroke(list, outlines, style, view, budget);
+        draw_stroke(list, outlines, style, markers, view, budgets);
     }
 }
 
@@ -128,13 +142,17 @@ fn draw_fill(list: &mut DrawList, outlines: &[OutlineRef<'_>], style: &Style, vi
 /// The stroke layer of an object. Every outline is dashed on its own, so a
 /// dash pattern starts afresh at the first node of each (criterion 31a), and
 /// all of them are tessellated together as one layer, so a translucent stroke
-/// shows no dark spot where two outlines' strokes meet.
+/// shows no dark spot where two outlines' strokes meet. The stroke's markers
+/// join the same layer (`0018` decision 3): a pixel where a marker and its
+/// stroke overlap is written once, so a translucent stroke does not darken
+/// there.
 fn draw_stroke(
     list: &mut DrawList,
     outlines: &[OutlineRef<'_>],
     style: &Style,
+    markers: bool,
     view: ViewTransform,
-    budget: &mut DashBudget,
+    budgets: &mut FrameBudgets,
 ) {
     let stroke_style = &style.stroke;
     let color = paint(stroke_style.color, stroke_style.opacity);
@@ -166,7 +184,7 @@ fn draw_stroke(
         document_width_mm,
         view.scale(),
         tolerance_mm,
-        budget,
+        &mut budgets.dashes,
     )
     .unwrap_or(solid);
     let combined = match parts.len() {
@@ -178,5 +196,42 @@ fn draw_stroke(
             builder.build()
         }
     };
-    list.extend_artwork(stroke::stroke(&combined, &params));
+    let mut layer = stroke::stroke(&combined, &params);
+    if markers {
+        layer.triangles.extend(marker_vertices(
+            outlines,
+            stroke_style,
+            &params,
+            &mut budgets.markers,
+        ));
+    }
+    list.extend_artwork(layer);
+}
+
+/// The triangles of every marker of an object's outlines, in the stroke's
+/// colour. Placement reads the undashed outline, so dashes, caps and joins
+/// never move or hide a marker (criterion 12).
+fn marker_vertices(
+    outlines: &[OutlineRef<'_>],
+    stroke_style: &Stroke,
+    params: &StrokeParams,
+    budget: &mut MarkerBudget,
+) -> Vec<crate::glyphs::Vertex> {
+    let mut vertices = Vec::new();
+    for outline in outlines {
+        let mut placements = marker_placements(
+            outline.anchors,
+            outline.closed,
+            stroke_style.markers,
+            params.tolerance_mm,
+        );
+        placements.truncate(budget.take(placements.len()));
+        vertices.extend(marker_triangles(
+            &placements,
+            params.width_mm,
+            params.color,
+            params.tolerance_mm,
+        ));
+    }
+    vertices
 }
