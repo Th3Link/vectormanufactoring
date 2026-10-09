@@ -129,7 +129,7 @@ export function BooleanCommands({ commands, selectTool, onReturnFocus }: Boolean
         {/* Both live regions are in the tree from the start, so a notice is
          * announced as a change of text. */}
         <div
-          className="pointer-events-none absolute top-0 left-[60px] z-30 flex max-w-[min(360px,calc(100vw-96px))] flex-col gap-1 text-xs"
+          className="pointer-events-none absolute top-0 left-[60px] z-30 flex w-max max-w-[min(360px,calc(100vw-96px))] flex-col gap-1 text-xs"
           data-boolean-notice
         >
           <div role="status">
