@@ -2,7 +2,9 @@
 //! becomes the style edit it commits (`specs/0007-stroke-and-fill-styling`
 //! criteria 5, 6, 13, 14).
 
-use curvyo_document_core::{Color, Length, LineCap, LineJoin, Opacity, StyleEdit};
+use curvyo_document_core::{
+    Color, Length, LineCap, LineJoin, MarkerCount, MarkerPlace, MarkerShape, Opacity, StyleEdit,
+};
 
 use crate::transform_entry::parse_entry_number;
 
@@ -19,6 +21,8 @@ pub enum StyleEntryError {
     Percent,
     /// Not a number from 0 to 1000 ("Enter a number from 0 to 1000").
     Width,
+    /// Not a whole number from 1 to 500 ("Enter a whole number from 1 to 500").
+    Count,
     /// Not 1 to 16 numbers from 0 to 1000 with a sum above 0, separated by
     /// spaces ("Enter 1 to 16 numbers from 0 to 1000, for example 1 2 4 2").
     Dash,
@@ -32,6 +36,7 @@ impl StyleEntryError {
             Self::Hex => "hex",
             Self::Percent => "percent",
             Self::Width => "width",
+            Self::Count => "count",
             Self::Dash => "dash",
         }
     }
@@ -135,6 +140,27 @@ pub fn parse_stroke_width(text: &str) -> Result<Length, StyleEntryError> {
     }
 }
 
+/// The largest count that may be typed.
+pub const MAX_MARKER_COUNT: u32 = 500;
+
+/// Parses the Count field: a whole number from 1 to 500. A decimal like `2.5`,
+/// `0`, `501` or text is refused.
+///
+/// # Errors
+/// [`StyleEntryError::Count`] for anything else.
+pub fn parse_marker_count(text: &str) -> Result<MarkerCount, StyleEntryError> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() || !trimmed.chars().all(|c| c.is_ascii_digit()) {
+        return Err(StyleEntryError::Count);
+    }
+    trimmed
+        .parse::<u32>()
+        .ok()
+        .filter(|n| (1..=MAX_MARKER_COUNT).contains(n))
+        .and_then(|n| MarkerCount::new(n).ok())
+        .ok_or(StyleEntryError::Count)
+}
+
 /// A style property edited with a typed value or a colour area.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StyleField {
@@ -148,6 +174,8 @@ pub enum StyleField {
     FillColor,
     /// The solid fill opacity.
     FillOpacity,
+    /// The number of Middle markers.
+    MarkerCount,
 }
 
 impl StyleField {
@@ -160,6 +188,7 @@ impl StyleField {
             "stroke-opacity" => Self::StrokeOpacity,
             "fill-color" => Self::FillColor,
             "fill-opacity" => Self::FillOpacity,
+            "marker-count" => Self::MarkerCount,
             _ => return None,
         })
     }
@@ -181,6 +210,7 @@ impl StyleField {
                 hex_edit(parse_hex(text)?, StyleEdit::FillColor, StyleEdit::FillRgba)
             }
             Self::FillOpacity => StyleEdit::FillOpacity(parse_opacity_percent(text)?),
+            Self::MarkerCount => StyleEdit::MarkerCount(parse_marker_count(text)?),
         })
     }
 
@@ -238,6 +268,51 @@ pub fn cap_from_name(name: &str) -> Option<LineCap> {
         "butt" => Some(LineCap::Butt),
         "round" => Some(LineCap::Round),
         "square" => Some(LineCap::Square),
+        _ => None,
+    }
+}
+
+/// A marker slot of a path's stroke (`specs/0018-stroke-markers`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkerSlot {
+    /// The first node of an open path.
+    Start,
+    /// Along the path or on its nodes.
+    Mid,
+    /// The last node of an open path.
+    End,
+}
+
+impl MarkerSlot {
+    /// The slot named by the host (`"start"`, `"mid"`, `"end"`).
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "start" => Some(Self::Start),
+            "mid" => Some(Self::Mid),
+            "end" => Some(Self::End),
+            _ => None,
+        }
+    }
+}
+
+/// Parses the host's marker shape word (`"none"`, `"arrow"`, `"dot"`).
+#[must_use]
+pub fn marker_shape_from_name(name: &str) -> Option<MarkerShape> {
+    match name {
+        "none" => Some(MarkerShape::None),
+        "arrow" => Some(MarkerShape::Arrow),
+        "dot" => Some(MarkerShape::Dot),
+        _ => None,
+    }
+}
+
+/// Parses the host's Place word (`"spaced"`, `"nodes"`).
+#[must_use]
+pub fn marker_place_from_name(name: &str) -> Option<MarkerPlace> {
+    match name {
+        "spaced" => Some(MarkerPlace::Spaced),
+        "nodes" => Some(MarkerPlace::AtNodes),
         _ => None,
     }
 }

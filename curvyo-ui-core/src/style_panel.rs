@@ -4,7 +4,8 @@
 //! of the snapshots, so the DOM holds no editing logic.
 
 use curvyo_document_core::{
-    Color, DashPattern, Length, LineCap, LineJoin, ObjectSnapshot, Opacity, Style,
+    Color, DashPattern, Length, LineCap, LineJoin, MarkerCount, MarkerPlace, MarkerShape,
+    ObjectSnapshot, Opacity, PathSnapshot, Style,
 };
 
 use crate::dash_text::dash_text;
@@ -119,6 +120,33 @@ pub struct StrokePanel {
     pub join: BarValue<LineJoin>,
     /// The cap.
     pub cap: BarValue<LineCap>,
+    /// The Markers group (`specs/0018-stroke-markers`): present while the
+    /// stroke rows are shown and the scope holds at least one path.
+    pub markers: Option<MarkersPanel>,
+}
+
+/// What the Markers group shows, over the paths of the scope only (a primitive
+/// has no markers, criteria 21 and 22).
+#[derive(Debug, Clone, PartialEq)]
+pub struct MarkersPanel {
+    /// The Start slot.
+    pub start: BarValue<MarkerShape>,
+    /// The Middle slot.
+    pub mid: BarValue<MarkerShape>,
+    /// The End slot.
+    pub end: BarValue<MarkerShape>,
+    /// Where the Middle marker goes; only meaningful while `place_shown`.
+    pub place: BarValue<MarkerPlace>,
+    /// The Place group is shown: some path has a Middle shape (criterion 2).
+    pub place_shown: bool,
+    /// How many Middle markers a Spaced placement draws.
+    pub count: BarValue<MarkerCount>,
+    /// The Count field is shown: Place is shown and some path with a Middle
+    /// shape is Spaced.
+    pub count_shown: bool,
+    /// Start or End is set and every path in scope is closed: one muted line
+    /// says closed paths have no start or end (criterion 32).
+    pub closed_note: bool,
 }
 
 /// The fill rows of the panel.
@@ -201,6 +229,7 @@ pub fn style_panel_state(
             dash: dash_of(&styles),
             join: shared(&column(&styles, |s| s.stroke.join)),
             cap: shared(&column(&styles, |s| s.stroke.cap)),
+            markers: markers_panel(shown, scope, held.iter().any(|s| s.stroke.enabled)),
         },
         fill: FillPanel {
             paint: shared(&column(&styles, |s| s.fill.paints())),
@@ -210,6 +239,48 @@ pub fn style_panel_state(
             opacity: shared(&column(&styles, |s| s.fill.opacity)),
         },
     })
+}
+
+fn markers_panel(
+    shown: &[ObjectSnapshot],
+    scope: &StyleScope,
+    rows_shown: bool,
+) -> Option<MarkersPanel> {
+    let paths: Vec<&PathSnapshot> = scope
+        .ids
+        .iter()
+        .filter_map(|id| shown.iter().find(|object| object.id() == *id))
+        .filter_map(|object| match object {
+            ObjectSnapshot::Path(path) => Some(path),
+            ObjectSnapshot::Primitive(_) => None,
+        })
+        .collect();
+    if !rows_shown || paths.is_empty() {
+        return None;
+    }
+    let markers: Vec<_> = paths.iter().map(|p| p.style.stroke.markers).collect();
+    let with_mid: Vec<_> = markers
+        .iter()
+        .filter(|m| m.mid != MarkerShape::None)
+        .collect();
+    let place_shown = !with_mid.is_empty();
+    Some(MarkersPanel {
+        start: shared(&column_of(&markers, |m| m.start)),
+        mid: shared(&column_of(&markers, |m| m.mid)),
+        end: shared(&column_of(&markers, |m| m.end)),
+        place: shared(&column_of(&markers, |m| m.mid_place)),
+        place_shown,
+        count: shared(&column_of(&markers, |m| m.mid_count)),
+        count_shown: with_mid.iter().any(|m| m.mid_place == MarkerPlace::Spaced),
+        closed_note: paths.iter().all(|p| p.closed)
+            && markers
+                .iter()
+                .any(|m| m.start != MarkerShape::None || m.end != MarkerShape::None),
+    })
+}
+
+fn column_of<T, U>(items: &[T], pick: impl Fn(&T) -> U) -> Vec<U> {
+    items.iter().map(pick).collect()
 }
 
 fn column<T>(styles: &[&Style], pick: impl Fn(&Style) -> T) -> Vec<T> {

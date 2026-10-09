@@ -117,11 +117,13 @@ pub use skew_entry::SkewEntry;
 pub use skew_math::{SkewFrame, skew_angle, skew_factor, skew_frame};
 pub use style_edit::StyleEditor;
 pub use style_entry::{
-    HexColour, MAX_STROKE_WIDTH_MM, StyleEntryError, StyleField, cap_from_name, hex_text,
-    join_from_name, opacity_from_percent, parse_hex, parse_opacity_percent, parse_stroke_width,
+    HexColour, MAX_STROKE_WIDTH_MM, MarkerSlot, StyleEntryError, StyleField, cap_from_name,
+    hex_text, join_from_name, marker_place_from_name, marker_shape_from_name, opacity_from_percent,
+    parse_hex, parse_marker_count, parse_opacity_percent, parse_stroke_width,
 };
 pub use style_panel::{
-    DashChoice, DashShown, FillPanel, Rgba, StrokePanel, StylePanelState, style_panel_state,
+    DashChoice, DashShown, FillPanel, MarkersPanel, Rgba, StrokePanel, StylePanelState,
+    style_panel_state,
 };
 pub use style_scope::{StyleScope, StyleTool, style_scope};
 pub use transform_drag::{

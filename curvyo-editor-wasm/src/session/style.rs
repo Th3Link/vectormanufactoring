@@ -5,10 +5,12 @@
 //! `curvyo_ui_core` (`style_scope`, `style_panel_state`, `StyleEditor`); the DOM
 //! holds only the open text, the invalid state and "Escape restores".
 
-use curvyo_document_core::{Color, LineCap, LineJoin, StyleEdit};
+use curvyo_document_core::{
+    Color, LineCap, LineJoin, MarkerPlace, MarkerShape, NodeId, ObjectSnapshot, StyleEdit,
+};
 use curvyo_ui_core::{
-    BarValue, DashChoice, Grid, StyleEntryError, StyleField, StylePanelState, StyleScope,
-    StyleTool, ValueField, hsv_to_rgb, parse_dash_text, style_panel_state, style_scope,
+    BarValue, DashChoice, Grid, MarkerSlot, StyleEntryError, StyleField, StylePanelState,
+    StyleScope, StyleTool, ValueField, hsv_to_rgb, parse_dash_text, style_panel_state, style_scope,
 };
 
 use super::style_view::StylePanelView;
@@ -132,7 +134,7 @@ impl Session {
         let ids = if self.style.is_active() {
             Vec::new()
         } else {
-            self.style_scope().ids
+            self.edit_ids(&edit)
         };
         if self.style.is_active() || !ids.is_empty() {
             self.style.preview(&ids, edit);
@@ -181,6 +183,10 @@ impl Session {
                 BarValue::Uniform(opacity) => opacity.get() * 100.0,
                 BarValue::Mixed => return,
             },
+            ValueField::MarkerCount => match state.stroke.markers.map(|m| m.count) {
+                Some(BarValue::Uniform(count)) => f64::from(count.get()),
+                _ => return,
+            },
         };
         self.preview_style_edit(field.edit(field.scale().step(shown, steps, grid)));
     }
@@ -190,6 +196,40 @@ impl Session {
     /// already is the default; `false` when there is nothing to edit.
     pub fn reset_value_field(&mut self, field: ValueField) -> bool {
         self.apply_style_edit(&field.reset_edit())
+    }
+
+    /// The objects `edit` goes to: the style scope, or for a marker edit the
+    /// paths of it (a primitive has no markers, `0018` criterion 22).
+    fn edit_ids(&self, edit: &StyleEdit) -> Vec<NodeId> {
+        let scope = self.style_scope().ids;
+        if !edit.is_marker_edit() {
+            return scope;
+        }
+        let objects = self.objects();
+        scope
+            .into_iter()
+            .filter(|id| {
+                objects
+                    .iter()
+                    .any(|o| o.id() == *id && matches!(o, ObjectSnapshot::Path(_)))
+            })
+            .collect()
+    }
+
+    /// A marker slot choice (`specs/0018-stroke-markers` criteria 1 and 22):
+    /// one commit to the paths of the scope.
+    pub fn set_marker_shape(&mut self, slot: MarkerSlot, shape: MarkerShape) {
+        let edit = match slot {
+            MarkerSlot::Start => StyleEdit::MarkerStart(shape),
+            MarkerSlot::Mid => StyleEdit::MarkerMid(shape),
+            MarkerSlot::End => StyleEdit::MarkerEnd(shape),
+        };
+        self.apply_style_edit(&edit);
+    }
+
+    /// The Place group (criterion 2): one commit to the paths of the scope.
+    pub fn set_marker_place(&mut self, place: MarkerPlace) {
+        self.apply_style_edit(&StyleEdit::MarkerPlace(place));
     }
 
     /// The stroke Paint switch (criterion 5): one commit.
@@ -233,7 +273,7 @@ impl Session {
     /// is nothing to edit or the document refused it.
     pub(super) fn apply_style_edit(&mut self, edit: &StyleEdit) -> bool {
         self.flush_style_preview();
-        let ids = self.style_scope().ids;
+        let ids = self.edit_ids(edit);
         !ids.is_empty() && self.document.edit_style(&ids, edit).is_ok()
     }
 }

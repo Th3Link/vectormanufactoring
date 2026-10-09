@@ -8,8 +8,8 @@
 
 use curvyo_document_core::Color;
 use curvyo_ui_core::{
-    DashChoice, Grid, PaintTarget, StyleField, ValueField, cap_from_name, hsv_to_rgb,
-    join_from_name, rgb_to_hsv,
+    DashChoice, Grid, MarkerSlot, PaintTarget, StyleField, ValueField, cap_from_name, hsv_to_rgb,
+    join_from_name, marker_place_from_name, marker_shape_from_name, rgb_to_hsv,
 };
 use wasm_bindgen::prelude::*;
 
@@ -162,6 +162,25 @@ impl WasmSession {
     /// The fill Paint switch: one commit.
     pub fn set_fill_paint(&mut self, on: bool) {
         self.session.set_fill_paint(on);
+    }
+
+    /// A marker slot choice: `slot_name` is `"start"`, `"mid"` or `"end"`,
+    /// `shape_name` `"none"`, `"arrow"` or `"dot"`. One commit to the paths of
+    /// the edited objects.
+    pub fn set_marker_shape(&mut self, slot_name: &str, shape_name: &str) {
+        if let (Some(slot), Some(shape)) = (
+            MarkerSlot::from_name(slot_name),
+            marker_shape_from_name(shape_name),
+        ) {
+            self.session.set_marker_shape(slot, shape);
+        }
+    }
+
+    /// The Place group: `"spaced"` or `"nodes"`.
+    pub fn set_marker_place(&mut self, name: &str) {
+        if let Some(place) = marker_place_from_name(name) {
+            self.session.set_marker_place(place);
+        }
     }
 
     /// The eyedropper button: starts picking a colour from the drawing for

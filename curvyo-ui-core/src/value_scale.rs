@@ -5,7 +5,7 @@
 //! only the gesture (pointer, threshold, modifiers); it sends `p` or a step
 //! count and the grid, and Rust maps, rounds and previews.
 
-use curvyo_document_core::{Length, Opacity, Style, StyleEdit};
+use curvyo_document_core::{Length, MarkerCount, Opacity, Style, StyleEdit};
 
 use crate::style_entry::opacity_from_percent;
 
@@ -42,6 +42,10 @@ const OPACITY_MAX: f64 = 100.0;
 const OPACITY_BASE: f64 = 4.0;
 /// The largest value a typed width may hold, millimetres.
 const WIDTH_TYPED_MAX_MM: f64 = 1000.0;
+/// The marker count scale: `v = 1 + 49 p`, drag 1 to 50, typed 1 to 500.
+const COUNT_MIN: f64 = 1.0;
+const COUNT_DRAG_MAX: f64 = 50.0;
+const COUNT_TYPED_MAX: f64 = 500.0;
 
 /// A scale: the mapping of `p` in `[0, 1]` to a value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +54,8 @@ pub enum ValueScale {
     StrokeWidth,
     /// An opacity, whole percent.
     Opacity,
+    /// The number of Middle markers: a whole number, linear.
+    MarkerCount,
 }
 
 impl ValueScale {
@@ -66,6 +72,7 @@ impl ValueScale {
                 WIDTH_DRAG_MAX_MM * (WIDTH_BASE.powf(p) - 1.0) / (WIDTH_BASE - 1.0)
             }
             Self::Opacity => OPACITY_MAX * (OPACITY_BASE.powf(p) - 1.0) / (OPACITY_BASE - 1.0),
+            Self::MarkerCount => COUNT_MIN + (COUNT_DRAG_MAX - COUNT_MIN) * p,
         }
     }
 
@@ -77,6 +84,7 @@ impl ValueScale {
             return 0.0;
         }
         let p = match self {
+            Self::MarkerCount => (value - COUNT_MIN) / (COUNT_DRAG_MAX - COUNT_MIN),
             Self::StrokeWidth => {
                 (1.0 + value * (WIDTH_BASE - 1.0) / WIDTH_DRAG_MAX_MM).ln() / WIDTH_BASE.ln()
             }
@@ -93,6 +101,16 @@ impl ValueScale {
         match self {
             Self::StrokeWidth => WIDTH_DRAG_MAX_MM,
             Self::Opacity => OPACITY_MAX,
+            Self::MarkerCount => COUNT_DRAG_MAX,
+        }
+    }
+
+    /// The smallest value of the scale (`Home`).
+    #[must_use]
+    pub const fn scale_start(self) -> f64 {
+        match self {
+            Self::StrokeWidth | Self::Opacity => 0.0,
+            Self::MarkerCount => COUNT_MIN,
         }
     }
 
@@ -102,6 +120,7 @@ impl ValueScale {
         match self {
             Self::StrokeWidth => WIDTH_TYPED_MAX_MM,
             Self::Opacity => OPACITY_MAX,
+            Self::MarkerCount => COUNT_TYPED_MAX,
         }
     }
 
@@ -111,6 +130,7 @@ impl ValueScale {
         match self {
             Self::StrokeWidth => 0.25,
             Self::Opacity => OPACITY_MAX,
+            Self::MarkerCount => COUNT_MIN,
         }
     }
 
@@ -120,8 +140,8 @@ impl ValueScale {
             (Self::StrokeWidth, Grid::Normal) => 0.01,
             (Self::StrokeWidth, Grid::Coarse) => 0.1,
             (Self::StrokeWidth, Grid::Fine) => 0.001,
-            (Self::Opacity, Grid::Coarse) => 10.0,
-            (Self::Opacity, _) => 1.0,
+            (Self::Opacity | Self::MarkerCount, Grid::Coarse) => 10.0,
+            (Self::Opacity | Self::MarkerCount, _) => 1.0,
         }
     }
 
@@ -129,6 +149,17 @@ impl ValueScale {
     /// 47). Never negative.
     #[must_use]
     pub fn round(self, value: f64, grid: Grid) -> f64 {
+        if self == Self::MarkerCount {
+            // A whole number, never below 1.
+            return if value.is_finite() {
+                (value / self.spacing(grid))
+                    .round()
+                    .mul_add(self.spacing(grid), 0.0)
+                    .max(COUNT_MIN)
+            } else {
+                COUNT_MIN
+            };
+        }
         if !value.is_finite() || value <= 0.0 {
             return 0.0;
         }
@@ -153,7 +184,7 @@ impl ValueScale {
     #[must_use]
     pub fn text(self, value: f64) -> String {
         match self {
-            Self::Opacity => format!("{}", value.round()),
+            Self::Opacity | Self::MarkerCount => format!("{}", value.round()),
             Self::StrokeWidth => {
                 let rounded = (value * 1000.0).round() / 1000.0;
                 if rounded != 0.0 || value <= 0.0 || !value.is_finite() {
@@ -178,6 +209,8 @@ pub enum ValueField {
     StrokeOpacity,
     /// The fill opacity.
     FillOpacity,
+    /// The number of Middle markers.
+    MarkerCount,
 }
 
 impl ValueField {
@@ -189,6 +222,7 @@ impl ValueField {
             "stroke-width" => Some(Self::StrokeWidth),
             "stroke-opacity" => Some(Self::StrokeOpacity),
             "fill-opacity" => Some(Self::FillOpacity),
+            "marker-count" => Some(Self::MarkerCount),
             _ => None,
         }
     }
@@ -199,6 +233,7 @@ impl ValueField {
         match self {
             Self::StrokeWidth => ValueScale::StrokeWidth,
             Self::StrokeOpacity | Self::FillOpacity => ValueScale::Opacity,
+            Self::MarkerCount => ValueScale::MarkerCount,
         }
     }
 
@@ -210,6 +245,7 @@ impl ValueField {
             Self::StrokeWidth => StyleEdit::StrokeWidth(Length::from_mm(value)),
             Self::StrokeOpacity => StyleEdit::StrokeOpacity(opacity_from_percent(value)),
             Self::FillOpacity => StyleEdit::FillOpacity(opacity_from_percent(value)),
+            Self::MarkerCount => StyleEdit::MarkerCount(count_from(value)),
         }
     }
 
@@ -226,8 +262,16 @@ impl ValueField {
             Self::StrokeWidth => style.stroke.width.as_mm(),
             Self::StrokeOpacity => percent(style.stroke.opacity),
             Self::FillOpacity => percent(style.fill.opacity),
+            Self::MarkerCount => f64::from(style.stroke.markers.mid_count.get()),
         }
     }
+}
+
+/// A marker count from a rounded value: a whole number of at least 1.
+fn count_from(value: f64) -> MarkerCount {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let whole = value.round().clamp(COUNT_MIN, COUNT_TYPED_MAX) as u32;
+    MarkerCount::new(whole).unwrap_or(MarkerCount::ONE)
 }
 
 fn percent(opacity: Opacity) -> f64 {
@@ -344,6 +388,38 @@ mod tests {
         );
         assert_eq!(opacity.step(100.0, 1, Grid::Normal), 100.0);
         assert_eq!(opacity.step(0.0, -1, Grid::Normal), 0.0);
+    }
+
+    #[test]
+    fn the_marker_count_scale_is_linear_and_whole() {
+        let count = ValueScale::MarkerCount;
+        assert_eq!(count.round(count.value_at(0.0), Grid::Normal), 1.0);
+        assert_eq!(count.round(count.value_at(1.0), Grid::Normal), 50.0);
+        // 5 px per step at 244 px.
+        let step = count.position_of(2.0) * 244.0 - count.position_of(1.0) * 244.0;
+        near(step, 244.0 / 49.0, 1e-9);
+        assert_eq!(count.round(0.2, Grid::Normal), 1.0, "never below 1");
+        assert_eq!(count.round(f64::NAN, Grid::Normal), 1.0);
+        assert_eq!(count.step(1.0, -1, Grid::Normal), 1.0);
+        assert_eq!(count.step(499.0, 5, Grid::Normal), 500.0);
+        assert_eq!(
+            count.step(5.0, 1, Grid::Coarse),
+            20.0,
+            "15 rounds on the 10 grid"
+        );
+        assert_eq!(
+            count.position_of(300.0),
+            1.0,
+            "a full bar above the drag range"
+        );
+        assert_eq!(count.text(3.0), "3");
+        assert_eq!(count.default_value(), 1.0);
+        assert_eq!(count.typed_max(), 500.0);
+        assert_eq!(count.scale_start(), 1.0);
+        assert_eq!(
+            ValueField::MarkerCount.edit(7.4),
+            StyleEdit::MarkerCount(MarkerCount::new(7).unwrap())
+        );
     }
 
     #[test]

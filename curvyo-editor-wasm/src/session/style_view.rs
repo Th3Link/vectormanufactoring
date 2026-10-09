@@ -2,9 +2,9 @@
 //! reads (ADR 0001 §5): one read after every change, no editing logic. Kept
 //! apart from `style.rs` so the conversion is plain Rust a host test can pin.
 
-use curvyo_document_core::{Color, Length, LineCap, LineJoin, Style};
+use curvyo_document_core::{Color, Length, LineCap, LineJoin, MarkerPlace, MarkerShape, Style};
 use curvyo_ui_core::{
-    BarValue, DashChoice, DashShown, Rgba, StylePanelState, ValueScale, hex_text,
+    BarValue, DashChoice, DashShown, MarkersPanel, Rgba, StylePanelState, ValueScale, hex_text,
 };
 
 /// What the Style panel shows. A `*_mixed` flag means the edited objects
@@ -91,6 +91,37 @@ pub struct StylePanelView {
     pub fill_opacity_mixed: bool,
     /// The fill opacity, percent.
     pub fill_opacity: f64,
+    /// The Markers group is shown (`specs/0018-stroke-markers`).
+    pub markers_shown: bool,
+    /// `"none"`, `"arrow"`, `"dot"` or `"mixed"`.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub marker_start: String,
+    /// The Middle slot, same words.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub marker_mid: String,
+    /// The End slot, same words.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub marker_end: String,
+    /// The Place group is shown.
+    pub marker_place_shown: bool,
+    /// `"spaced"`, `"nodes"` or `"mixed"`.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub marker_place: String,
+    /// The Count field is shown.
+    pub marker_count_shown: bool,
+    /// The count as the field shows it; empty when mixed.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub marker_count_text: String,
+    /// The count's value, for `aria-valuenow`.
+    pub marker_count: f64,
+    /// The counts differ.
+    pub marker_count_mixed: bool,
+    /// The bar position of the count.
+    pub marker_count_bar: f64,
+    /// The count is mixed or not 1: the reset icon shows.
+    pub marker_count_resettable: bool,
+    /// One muted line says closed paths have no start or end.
+    pub marker_closed_note: bool,
     /// The paint the eyedropper is picking for: `"stroke"`, `"fill"`, or empty
     /// while picking is off.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
@@ -200,7 +231,7 @@ impl StylePanelView {
             ),
             DashShown::Mixed => ("mixed".to_string(), String::new()),
         };
-        Self {
+        let mut view = Self {
             subject: state.subject.clone(),
             scope_key,
             stroke_paint: word(state.stroke.paint, |on| if on { "on" } else { "off" }),
@@ -243,7 +274,62 @@ impl StylePanelView {
             fill_opacity_bar,
             fill_opacity_resettable,
             pick_target: String::new(),
+            markers_shown: false,
+            marker_start: "none".to_string(),
+            marker_mid: "none".to_string(),
+            marker_end: "none".to_string(),
+            marker_place_shown: false,
+            marker_place: "spaced".to_string(),
+            marker_count_shown: false,
+            marker_count_text: "1".to_string(),
+            marker_count: 1.0,
+            marker_count_mixed: false,
+            marker_count_bar: 0.0,
+            marker_count_resettable: false,
+            marker_closed_note: false,
+        };
+        view.apply_markers(state.stroke.markers.as_ref());
+        view
+    }
+
+    /// Fills the marker fields from the Markers group, if it is shown.
+    fn apply_markers(&mut self, markers: Option<&MarkersPanel>) {
+        let Some(markers) = markers else {
+            return;
+        };
+        let shape = |value: BarValue<MarkerShape>| {
+            word(value, |shape| match shape {
+                MarkerShape::None => "none",
+                MarkerShape::Arrow => "arrow",
+                MarkerShape::Dot => "dot",
+            })
+        };
+        self.markers_shown = true;
+        self.marker_start = shape(markers.start);
+        self.marker_mid = shape(markers.mid);
+        self.marker_end = shape(markers.end);
+        self.marker_place_shown = markers.place_shown;
+        self.marker_place = word(markers.place, |place| match place {
+            MarkerPlace::Spaced => "spaced",
+            MarkerPlace::AtNodes => "nodes",
+        });
+        self.marker_count_shown = markers.count_shown;
+        let scale = ValueScale::MarkerCount;
+        let (text, bar, resettable) = value_field(
+            scale,
+            map_value(markers.count, |count| f64::from(count.get())),
+        );
+        self.marker_count_text = text;
+        self.marker_count_bar = bar;
+        self.marker_count_resettable = resettable;
+        match markers.count {
+            BarValue::Uniform(count) => {
+                self.marker_count = f64::from(count.get());
+                self.marker_count_mixed = false;
+            }
+            BarValue::Mixed => self.marker_count_mixed = true,
         }
+        self.marker_closed_note = markers.closed_note;
     }
 
     /// Shows `width` (millimetres) in the Width field, for a drag in flight.
@@ -296,6 +382,19 @@ impl StylePanelView {
             fill_opacity_bar: 1.0,
             fill_opacity_resettable: false,
             pick_target: String::new(),
+            markers_shown: false,
+            marker_start: "none".to_string(),
+            marker_mid: "none".to_string(),
+            marker_end: "none".to_string(),
+            marker_place_shown: false,
+            marker_place: "spaced".to_string(),
+            marker_count_shown: false,
+            marker_count_text: "1".to_string(),
+            marker_count: 1.0,
+            marker_count_mixed: false,
+            marker_count_bar: 0.0,
+            marker_count_resettable: false,
+            marker_closed_note: false,
         }
     }
 }
