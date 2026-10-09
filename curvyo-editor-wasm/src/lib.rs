@@ -42,6 +42,8 @@ mod wasm_navigation;
 #[cfg(target_arch = "wasm32")]
 mod wasm_node_tool;
 #[cfg(target_arch = "wasm32")]
+mod wasm_pen;
+#[cfg(target_arch = "wasm32")]
 mod wasm_properties_panel;
 #[cfg(target_arch = "wasm32")]
 mod wasm_render;
@@ -55,8 +57,8 @@ mod wasm_select_tool;
 mod wasm_shape_tools;
 
 pub use session::{
-    BooleanOutcome, DocumentSide, DoubleClickHint, EscapeStep, FitOutcome, KeyHint, KeyInput,
-    KeyOutcome, MoveIndicators, Session, SizeOutcome, Tool,
+    BooleanOutcome, ClosePathOutcome, ClosePathState, DocumentSide, DoubleClickHint, EscapeStep,
+    FitOutcome, KeyHint, KeyInput, KeyOutcome, MoveIndicators, Session, SizeOutcome, Tool,
 };
 
 #[cfg(target_arch = "wasm32")]

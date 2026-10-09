@@ -6,9 +6,9 @@
 //! cargo test --release -p curvyo-editor-wasm --test segment_bend_budget -- --ignored --nocapture
 //! ```
 //!
-//! Budgets: a bend frame's `draw_list` at most 12 ms (after the first frame of the drag, which
-//! reads the document once) (headroom under the 20 ms of 50 frames per
-//! second for the WebKitGTK upload); one hover hit test at most 2 ms, the document read excluded.
+//! Budgets: a bend frame's `draw_list` at most 12 ms after the first frame of the drag, which
+//! reads the document once (headroom under the 20 ms of 50 frames per second for the `WebKitGTK`
+//! upload); one hover hit test at most 2 ms, the document read excluded.
 
 #![allow(
     clippy::unwrap_used,

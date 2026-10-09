@@ -147,10 +147,19 @@ impl Session {
             });
             list.extend(build_pen_preview(
                 nodes,
-                self.pointer_position,
+                self.pen_rubber_band_end(),
                 pending.as_ref(),
                 view,
-                self.is_hovering_pen_close_target(),
+                // The cue below rings the closing node itself.
+                false,
+                self.document.size(),
+            ));
+        }
+        // What a press would continue, join or close onto, before the click (`0034`).
+        if self.tool == Tool::Pen {
+            list.extend(curvyo_render_core::build_pen_cue(
+                &self.pen_cue_data(),
+                view,
                 self.document.size(),
             ));
         }

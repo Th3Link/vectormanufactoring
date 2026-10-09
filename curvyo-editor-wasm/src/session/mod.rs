@@ -23,6 +23,7 @@
 mod boolean;
 #[cfg(test)]
 mod box_refit_tests;
+mod close_path;
 mod corner_readout;
 mod document;
 mod draw;
@@ -53,6 +54,7 @@ use curvyo_ui_core::{
 };
 
 pub use boolean::BooleanOutcome;
+pub use close_path::{ClosePathOutcome, ClosePathState};
 pub use document::{DocumentSide, FitOutcome, SizeOutcome};
 pub use keys::{EscapeStep, KeyHint, KeyInput, KeyOutcome};
 pub use move_indicators::MoveIndicators;
@@ -186,6 +188,8 @@ pub struct Session {
     /// The objects a refused boolean operation is drawn around (red, hollow, never stored), and
     /// the selection it was refused for: the outline ends with the selection or the tool.
     boolean_refusal: Option<boolean::RefusalMarks>,
+    /// The Pen's end-node cache and the target of the press in flight (`0034`).
+    pen_cue: pen::PenCueState,
 }
 
 impl Session {
@@ -222,6 +226,7 @@ impl Session {
             button_down: false,
             limit_notice: None,
             boolean_refusal: None,
+            pen_cue: pen::PenCueState::default(),
         }
     }
 
@@ -255,6 +260,7 @@ impl Session {
             button_down: false,
             limit_notice: None,
             boolean_refusal: None,
+            pen_cue: pen::PenCueState::default(),
         })
     }
 
@@ -375,8 +381,7 @@ impl Session {
                 self.select_pointer_down(point, shift);
             }
             Tool::Pen => {
-                let tolerance = self.point_tolerance_as_length();
-                self.pen.pointer_down(point, tolerance);
+                self.pen_pointer_down(point, shift);
             }
             Tool::Node => {
                 let paths = self.paths();
@@ -464,6 +469,7 @@ impl Session {
                 let threshold = self.drag_threshold();
                 self.pen
                     .pointer_up(&mut self.minter, &self.document, point, threshold);
+                self.pen_cue.release();
             }
             Tool::Node => {
                 self.node.pointer_moved(point, shift);
@@ -760,10 +766,17 @@ mod tests {
         session.pointer_down(Point::new(50.0, 0.0), false);
         session.pointer_up(Point::new(50.0, 0.0), false, false);
 
+        // Two nodes are not enough to close (`0034` criterion 13: a closed path of two nodes is
+        // refused); the third makes the first node a close target.
+        session.pointer_hover(Point::new(0.1, 0.1), false, false);
+        assert!(!session.is_hovering_pen_close_target());
+        session.pointer_down(Point::new(50.0, 50.0), false);
+        session.pointer_up(Point::new(50.0, 50.0), false, false);
+
         session.pointer_hover(Point::new(0.1, 0.1), false, false);
         assert!(session.is_hovering_pen_close_target());
 
-        session.pointer_hover(Point::new(50.0, 0.0), false, false);
+        session.pointer_hover(Point::new(50.0, 50.0), false, false);
         assert!(
             !session.is_hovering_pen_close_target(),
             "near the last node, not the first"
