@@ -99,8 +99,10 @@ export function drawRuler(
       ctx.fillRect(thickness - depth, at, depth, span);
     }
   };
-  const tickAt = (px: number, span: number) =>
-    Math.round(px * dpr) - Math.floor(span / 2);
+  // The first device pixel of a mark `span` device pixels wide whose centre
+  // is on `px`: the rounded left edge, not the rounded centre, so the mark is
+  // never more than half a device pixel from the position it stands for.
+  const tickAt = (px: number, span: number) => Math.round(px * dpr - span / 2);
 
   bar(0, length, thickness, colours.background);
 

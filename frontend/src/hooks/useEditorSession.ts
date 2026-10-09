@@ -572,6 +572,12 @@ export interface EditorSession {
   syncRevision: number;
   /** The live wasm session, or `null` before the first attach. */
   getSession: () => WasmSession | null;
+  /** Registers a function that runs right after every canvas resize has
+   * reached the session (window resize, Properties panel toggle), in the
+   * same task as the canvas's own redraw: whatever is drawn beside the canvas
+   * from the view repaints there instead of one frame late. Returns the
+   * function that removes it. */
+  addViewResizedListener: (listener: () => void) => () => void;
   /** Enter in the bar's "Radius" field: `"committed"`, `"unchanged"`,
    * `"invalid:number"` or `"invalid:negative"`. */
   setSelectedRadius: (text: string) => string;
@@ -641,6 +647,8 @@ export function useEditorSession(
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<WasmSession | null>(null);
+  /** Functions to run after each canvas resize reached the session. */
+  const viewResizedListenersRef = useRef(new Set<() => void>());
   /** The tail of the session queue (`enqueueSessionTask`). */
   const sessionQueueRef = useRef<Promise<void>>(Promise.resolve());
   const lastPressRef = useRef<{ time: number; x: number; y: number } | null>(
@@ -779,6 +787,13 @@ export function useEditorSession(
 
   const getSession = useCallback(() => sessionRef.current, []);
 
+  const addViewResizedListener = useCallback((listener: () => void) => {
+    viewResizedListenersRef.current.add(listener);
+    return () => {
+      viewResizedListenersRef.current.delete(listener);
+    };
+  }, []);
+
   /** Runs `task` once every earlier queued task has settled. Everything
    * that frees, replaces or publishes the live session goes through this
    * one queue, so none of it can overlap an in-flight `attach_canvas`:
@@ -879,6 +894,9 @@ export function useEditorSession(
           // swallow rather than let it break the ResizeObserver callback
           // for every future resize.
         }
+        for (const listener of viewResizedListenersRef.current) {
+          listener();
+        }
       });
       resizeObserver.observe(canvas);
     }
@@ -900,6 +918,8 @@ export function useEditorSession(
       const { deltaX, deltaY } = normalizedWheelDelta(event);
       session.wheel(deltaX, deltaY, x, y, event.shiftKey, event.ctrlKey || event.metaKey);
       setZoomPercent(session.zoom_percent());
+      // A pan or zoom moves the document under a still pointer.
+      onCursorMove(readDocumentPoint(session.screen_to_document(x, y)));
       if (entryOpenRef.current) {
         syncEntry(session);
       }
@@ -928,7 +948,7 @@ export function useEditorSession(
         sessionRef.current = null;
       });
     };
-  }, [attachSession, enqueueSessionTask, syncEntry]);
+  }, [attachSession, enqueueSessionTask, onCursorMove, syncEntry]);
 
   const newProject = useCallback(() => {
     void createSession().then(attachSession);
@@ -1184,6 +1204,10 @@ export function useEditorSession(
       }
       if (panningRef.current) {
         session?.pan_to(x, y);
+        if (session) {
+          // The pan moved the document under the pointer: read it again.
+          onCursorMove(readDocumentPoint(session.screen_to_document(x, y)));
+        }
         if (entryOpenRef.current && session) {
           syncEntry(session);
         }
@@ -1549,6 +1573,7 @@ export function useEditorSession(
     selectBar,
     syncRevision,
     getSession,
+    addViewResizedListener,
     setSelectedRadius,
     setSelectedPointCount,
     previewSelectedRatio,

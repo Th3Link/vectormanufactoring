@@ -29,14 +29,16 @@ function readColours(): RulerColours {
   };
 }
 
-/** The advance of one digit of the label font, CSS px. */
+/** The width every label character is counted as, CSS px: the widest advance
+ * of any character a label holds, so a label is never wider than counted
+ * whatever the font (proportional fonts have no tabular figures in a canvas). */
 function measureDigit(): number {
   const ctx = document.createElement("canvas").getContext("2d");
   if (!ctx) {
     return LABEL_SIZE * 0.6;
   }
   ctx.font = labelFont(1);
-  return ctx.measureText("0").width;
+  return Math.max(...[..."0123456789.\u2212"].map((c) => ctx.measureText(c).width));
 }
 
 /** What the strips were last painted from; a change in any field repaints. */
@@ -88,15 +90,18 @@ export function Rulers({ editor, unit }: RulersProps) {
     unitRef.current = unit;
   }, [unit]);
 
-  const { canvasRef, getSession } = editor;
+  const cornerRef = useRef<HTMLDivElement>(null);
+  const { canvasRef, getSession, addViewResizedListener } = editor;
 
   useEffect(() => {
     const horizontal = horizontalRef.current;
     const vertical = verticalRef.current;
+    const corner = cornerRef.current;
     const canvas = canvasRef.current;
-    if (!horizontal || !vertical || !canvas) {
+    if (!horizontal || !vertical || !corner || !canvas) {
       return;
     }
+    const strips: HTMLElement[] = [horizontal, vertical, corner];
     const colours = readColours();
     const digit = measureDigit();
     const pointer: { x: number | null; y: number | null } = { x: null, y: null };
@@ -136,8 +141,9 @@ export function Rulers({ editor, unit }: RulersProps) {
         }),
       );
     };
-    horizontal.addEventListener("wheel", forwardWheel, { passive: false });
-    vertical.addEventListener("wheel", forwardWheel, { passive: false });
+    for (const element of strips) {
+      element.addEventListener("wheel", forwardWheel, { passive: false });
+    }
 
     const paint = (strip: HTMLCanvasElement, isHorizontal: boolean) => {
       const session = getSession();
@@ -178,8 +184,13 @@ export function Rulers({ editor, unit }: RulersProps) {
       );
     };
 
-    let frame = requestAnimationFrame(function loop() {
-      frame = requestAnimationFrame(loop);
+    // Repaints when anything the strips are drawn from changed. Runs every
+    // animation frame (pan, zoom, pointer, unit) and, through the session's
+    // resize hook, right after a canvas resize reached the session: the
+    // browser runs animation-frame callbacks before its resize observers, so
+    // without that hook a window resize or a panel toggle would show the
+    // canvas with its new view and the rulers with the old one for a frame.
+    const repaintIfChanged = () => {
       const session = getSession();
       if (!session) {
         return;
@@ -201,16 +212,23 @@ export function Rulers({ editor, unit }: RulersProps) {
       painted = now;
       paint(horizontal, true);
       paint(vertical, false);
+    };
+    let frame = requestAnimationFrame(function loop() {
+      frame = requestAnimationFrame(loop);
+      repaintIfChanged();
     });
+    const removeResizeListener = addViewResizedListener(repaintIfChanged);
 
     return () => {
       cancelAnimationFrame(frame);
+      removeResizeListener();
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerleave", onPointerLeave);
-      horizontal.removeEventListener("wheel", forwardWheel);
-      vertical.removeEventListener("wheel", forwardWheel);
+      for (const element of strips) {
+        element.removeEventListener("wheel", forwardWheel);
+      }
     };
-  }, [canvasRef, getSession]);
+  }, [canvasRef, getSession, addViewResizedListener]);
 
   // A press on a ruler or the corner does nothing and keeps the focus where
   // it was (criterion 10): no guide, no selection change, no tool action.
@@ -224,6 +242,7 @@ export function Rulers({ editor, unit }: RulersProps) {
   return (
     <>
       <div
+        ref={cornerRef}
         aria-hidden="true"
         className="flex cursor-default items-center justify-center text-xs select-none"
         style={{

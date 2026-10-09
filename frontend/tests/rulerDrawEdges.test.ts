@@ -253,7 +253,6 @@ test("ticks off the strip (negative or past the end) are drawn without NaN geome
 
 test(
   "the marker's centre is within half a pixel of the pointer position",
-  { todo: "defect 3: a 1 px mark is drawn from round(position), so its centre is up to 1 px right of the pointer" },
   () => {
     for (let k = 0; k < 100; k += 1) {
       const pointer = 100 + k / 100;
@@ -268,7 +267,6 @@ test(
 
 test(
   "a major tick's centre is within half a pixel of its projected position (criterion 2)",
-  { todo: "defect 3: same bias as the marker" },
   () => {
     for (let k = 0; k < 100; k += 1) {
       const px = 100 + k / 100;
