@@ -75,6 +75,10 @@ pub struct NodeToolbarState {
     pub can_make_line: bool,
     /// Make curve: a segment is selected and it is already a line.
     pub can_make_curve: bool,
+    /// The Node tool is active and the only selected object is a compound path: it shows its
+    /// outline but no node, and the host says why (`0016-boolean-operations` criterion 38).
+    /// Set by the session, which sees the object selection; the node tool does not.
+    pub compound_only: bool,
     /// Join: the current selection is exactly two endpoint nodes of
     /// open paths (same path or two different objects), not the two
     /// ends of a 2-anchor open path (acceptance criterion 8).
@@ -568,6 +572,7 @@ impl NodeTool {
             can_convert_to_asymmetric: has_nodes,
             can_make_line: segment_is_line == Some(false),
             can_make_curve: segment_is_line == Some(true),
+            compound_only: false,
             can_join: self.can_join(document),
             can_split: self.can_split(document),
         }

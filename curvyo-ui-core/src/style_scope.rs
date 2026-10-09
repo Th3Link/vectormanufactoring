@@ -89,6 +89,7 @@ fn node_owners(nodes: &NodeSelection) -> Vec<NodeId> {
 
 fn kind_name(object: &ObjectSnapshot) -> (&'static str, &'static str) {
     match object {
+        ObjectSnapshot::Path(path) if path.is_compound() => ("Compound path", "compound paths"),
         ObjectSnapshot::Path(_) => ("Path", "paths"),
         ObjectSnapshot::Primitive(PrimitiveSnapshot { shape, .. }) => match shape {
             Shape::Rect { .. } => ("Rectangle", "rectangles"),

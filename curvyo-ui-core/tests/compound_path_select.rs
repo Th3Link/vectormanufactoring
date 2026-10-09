@@ -17,10 +17,10 @@ use curvyo_document_core::{
     ObjectSnapshot, PathSnapshot, Point, RectBounds, StyleEdit, Tolerance, Vec2,
 };
 use curvyo_ui_core::{
-    AnchorIdMinter, EditHandle, EntryOutcome, Modifiers, ObjectSelection, ResizeDirection,
-    SelectDoubleClickOutcome, SelectTool, Side, StrokeScaling, TransformHandleTolerances,
-    fit_document_to_content, hit_test_object, hit_test_objects_along, object_bounds,
-    object_outline_bounds, oriented_bounds,
+    AnchorIdMinter, EditHandle, EntryOutcome, Modifiers, NodeSelection, ObjectSelection,
+    ResizeDirection, SelectDoubleClickOutcome, SelectTool, Side, StrokeScaling, StyleTool,
+    TransformHandleTolerances, fit_document_to_content, hit_test_object, hit_test_objects_along,
+    object_bounds, object_outline_bounds, oriented_bounds, style_scope,
 };
 
 const SEGMENT_TOLERANCE: Tolerance = Tolerance::from_mm(0.5);
@@ -575,4 +575,33 @@ fn a_lasso_picks_a_compound_path_by_any_of_its_outlines() {
         hit_test_objects_along(&objects, &outside_touching_outer, tolerance),
         vec![id]
     );
+}
+
+// ------------------------------------------------------------ subject line
+
+/// The Properties panel names a compound path as such (criterion 38), one or several.
+#[test]
+fn the_subject_line_names_compound_paths() {
+    let document = Document::new(1);
+    let first = add_compound(&document, &ring_outlines());
+    let objects_one = objects(&document);
+    let mut selection = ObjectSelection::new();
+    selection.set(&[first]);
+    let one = style_scope(
+        StyleTool::Other,
+        &objects_one,
+        &selection,
+        &NodeSelection::new(),
+    );
+    assert_eq!(one.subject, "Compound path");
+
+    let rect = document.create_rect(RectBounds {
+        origin: pt(500.0, 0.0),
+        width: Length::from_mm(5.0),
+        height: Length::from_mm(5.0),
+    });
+    let all = objects(&document);
+    selection.set(&[first, rect]);
+    let mixed = style_scope(StyleTool::Other, &all, &selection, &NodeSelection::new());
+    assert_eq!(mixed.subject, "2 objects");
 }
