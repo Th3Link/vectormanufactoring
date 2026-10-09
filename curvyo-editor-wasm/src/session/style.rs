@@ -148,6 +148,10 @@ impl Session {
     /// rounded to `grid`; it is shown without writing. The gesture ends with
     /// [`Session::commit_style_preview`] or [`Session::cancel_style_preview`].
     pub fn preview_value_field(&mut self, field: ValueField, p: f64, grid: Grid) {
+        // A tick that is not a number shows and writes nothing.
+        if !p.is_finite() {
+            return;
+        }
         let scale = field.scale();
         let value = scale.round(scale.value_at(p), grid);
         self.preview_style_edit(field.edit(value));

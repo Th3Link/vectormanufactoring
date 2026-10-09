@@ -548,3 +548,17 @@ fn the_view_carries_bar_text_and_a_full_bar_above_the_drag_range() {
     assert_eq!(view.stroke_width_bar, 1.0);
     assert_eq!(view.stroke_width_text, "500");
 }
+
+#[test]
+fn a_tick_that_is_not_a_number_shows_and_writes_nothing() {
+    let mut session = session_with_rectangles(1);
+    let ops = op_count(&session);
+    for p in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        session.preview_value_field(ValueField::StrokeWidth, p, Grid::Normal);
+        session.preview_value_field(ValueField::StrokeOpacity, p, Grid::Normal);
+    }
+    session.commit_style_preview();
+    assert_eq!(op_count(&session), ops);
+    assert!(stored_styles(&session)[0].stroke.enabled);
+    assert_eq!(session.style_panel_view().stroke_width_text, "0.25");
+}

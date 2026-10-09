@@ -111,3 +111,17 @@ crates); the full gate runs before the PR is opened. Criteria are numbered as in
   popup roles) are checked by hand in the Browser pane against a production
   wasm build, because no component test runner exists (`technical-debt.md`).
 - Full gate of `CLAUDE.md` §7 before the PR is opened.
+
+## As-built notes (for the product owner)
+
+- **A version-8 file that holds an odd dash list** opens as stored: open-file
+  validation does not look at the declared `format_version` for this key. The
+  spec does not define the case; an older (version-8) writer never wrote one, so
+  only a hand-edited file can hit it. Accepted.
+- **Criterion 37's worked example** ("300 px out, 100 px back") gives 19.5 mm for
+  Width, not exactly 20, because the scale is logarithmic and the value at
+  `dx = 200 px` from the press is not the value at the end of the scale. The rule
+  (`clamp(p0 + dx / W)`, no re-basing at the ends) is built as written; only the
+  example's number is off.
+- **A system `pointercancel` during a value drag** drops the preview and writes
+  nothing (criterion 40), the same path as Escape.
