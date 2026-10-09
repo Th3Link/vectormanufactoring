@@ -439,10 +439,11 @@ The reset slot and the reset action are criterion 61.
 54. Given the format, then the gradient removal needs no format version bump (a
     gradient fill kind read as None is a read-side rule). Storing odd-length dash
     lists (criteria 30 to 33) does need one: an older reader would refuse them as
-    damaged. The format version goes from `main`'s 7 to 8 in the PR that first
-    writes an odd list (provisional by the merge rule; `adrs.md` decision 2). A
-    version-7 file opens unchanged. `stroke-markers` takes the next number after
-    that (9 expected).
+    damaged. The format version goes to `CURRENT_FORMAT_VERSION + 1` at merge in
+    the PR that first writes an odd list (the next free number; `adrs.md`
+    decision 2; `boolean-operations` takes 8 first, see the `format_version` plan in
+    `specs/README.md`). A file of any earlier version opens unchanged.
+    `stroke-markers` takes the next free number after that.
 
 ### No popups, interaction rules
 

@@ -243,12 +243,14 @@ manufacturing).
 New stroke style values: Start, Middle and End shape (None, Arrow, Dot), Middle
 place (Spaced, At nodes) and Middle count (whole number, 1 or more). Defaults as
 above; an absent value is the default. This is a **format change: the
-`format_version` goes up**. `main` is at 7; `style-panel-rework` takes 8 (odd dash
-lists), so this feature takes 9, expected (by the merge rule, the number is the
-next free one at merge). Key names: `adrs.md` decision 1. `advanced-selection` has no bump. `rectangle-corner-radii` and
+`format_version` goes up**. The number is the next free one at merge (see the
+`format_version` plan in `specs/README.md`: `boolean-operations` takes 8,
+`style-panel-rework` takes the next free number for odd dash lists, and this
+feature the one after, whatever merge order results). Key names: `adrs.md`
+decision 1. `advanced-selection` has no bump. `rectangle-corner-radii` and
 `ellipse-arcs-and-shaping` (both Draft) also want one; the PR that merges first
 takes the next number. A golden fixture holds a project with all values set,
-another one with a version-7 file.
+another one with a file of the previous format version.
 
 ## UX notes
 

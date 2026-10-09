@@ -67,12 +67,12 @@ trait, no generic, no ADR amendment.** Builds after `style-panel-rework` PR 2
     name this build does not know reads as None" holds for merged documents
     only, and "a Count in a file below 1 reads as 1" becomes "is refused as
     damaged". Default: build it this way; the PO rewords 29.
-  - **`format_version`:** `CURRENT_FORMAT_VERSION + 1` at merge, **9 expected**
-    (`style-panel-rework` PR 2 takes 8; `ellipse-arcs-and-shaping` or another
-    bump merging first shifts it, by the standing rule). Migration empty:
-    absent keys read as None, Spaced, 1. Fixtures: `markers_v9.curvyo` (every
+  - **`format_version`:** `CURRENT_FORMAT_VERSION + 1` at merge, **next free at merge (after 0016's 8)**
+    (`style-panel-rework` and `ellipse-arcs-and-shaping` take theirs the same
+    way; whichever merges first gets the lower number, by the standing rule). Migration empty:
+    absent keys read as None, Spaced, 1. Fixtures: `markers_vNEXT.curvyo` (named after the version it takes) (every
     key set, a count of 501, a closed path), and the existing
-    `legacy_gradient_v7.curvyo` and `dash_v8.curvyo` must open with every slot
+    `legacy_gradient_v7.curvyo` and `dash_vNEXT.curvyo` (0017's fixture) must open with every slot
     None.
 
 - **2026-10-08: (2) placement, a pure function in `render-core`.** New module
