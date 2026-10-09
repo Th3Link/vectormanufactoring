@@ -24,6 +24,7 @@ mod gradient;
 mod live_preview;
 mod marquee_overlay;
 mod move_axes;
+mod pen_cue;
 mod pen_preview;
 mod refusal_outline;
 mod select_box;
@@ -41,6 +42,7 @@ pub use gradient::{GradientFill, GradientFrame, MAX_GRADIENTS, RAMP_TEXELS, Ramp
 pub use live_preview::build_live_edit_preview;
 pub use marquee_overlay::{MarqueeOverlay, build_marquee_overlay};
 pub use move_axes::{LockedAxis, MoveAxes, build_move_axes};
+pub use pen_cue::{ClosingCue, PenCue, build_pen_cue};
 pub use pen_preview::build_pen_preview;
 pub use refusal_outline::build_refusal_outlines;
 pub use select_box::{SelectDecorationInput, SelectionBox};
