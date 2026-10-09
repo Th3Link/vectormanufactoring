@@ -68,7 +68,8 @@ pub use primitive_outline::{
 };
 pub use shapes::ShapeEditError;
 pub use style_model::{
-    DashPattern, Fill, LineCap, LineJoin, Opacity, Stroke, Style, StyleParamError,
+    DashPattern, Fill, LineCap, LineJoin, MarkerCount, MarkerPlace, MarkerShape, Markers, Opacity,
+    Stroke, Style, StyleParamError,
 };
 pub use styles::{StyleEdit, StyleEditError};
 pub use units::{Angle, DocumentSize, Length, Point, Tolerance, Vec2, ViewTransform};

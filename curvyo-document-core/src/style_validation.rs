@@ -7,9 +7,11 @@ use crate::legacy_fill::{KEY_FILL_KIND, is_valid_kind};
 use crate::path_codec::as_f64;
 use crate::style_codec::{
     CAP_BUTT, CAP_ROUND, CAP_SQUARE, JOIN_BEVEL, JOIN_MITER, JOIN_ROUND, KEY_FILL,
-    KEY_FILL_ENABLED, KEY_FILL_OPACITY, KEY_STROKE, KEY_STROKE_CAP, KEY_STROKE_DASH,
+    KEY_FILL_ENABLED, KEY_FILL_OPACITY, KEY_MARKER_END, KEY_MARKER_MID, KEY_MARKER_MID_COUNT,
+    KEY_MARKER_MID_PLACE, KEY_MARKER_START, KEY_STROKE, KEY_STROKE_CAP, KEY_STROKE_DASH,
     KEY_STROKE_ENABLED, KEY_STROKE_JOIN, KEY_STROKE_OPACITY, KEY_STROKE_WIDTH, read_value,
 };
+use crate::style_codec::{PLACE_NODES, PLACE_SPACED, SHAPE_ARROW, SHAPE_DOT, SHAPE_NONE};
 use crate::style_model::DashPattern;
 
 /// A key that is absent is valid; a present key must satisfy `ok`.
@@ -53,6 +55,11 @@ fn is_bool(value: &LoroValue) -> bool {
     matches!(value, LoroValue::Bool(_))
 }
 
+/// A marker count in a file: a whole number of at least 1 (more than 500 opens).
+fn is_marker_count(value: &LoroValue) -> bool {
+    matches!(value, LoroValue::I64(n) if *n >= 1)
+}
+
 /// Whether every style key of this object that is present has the right type
 /// and range. `fill_kind` may hold any kind a version-7 build wrote, and
 /// `fill_stops` is accepted in any form and never read (`legacy_fill`).
@@ -68,6 +75,17 @@ pub(crate) fn style_is_valid(meta: &LoroMap) -> bool {
         && key_ok(meta, KEY_STROKE_CAP, |v| {
             is_one_of(v, &[CAP_BUTT, CAP_ROUND, CAP_SQUARE])
         })
+        && [KEY_MARKER_START, KEY_MARKER_MID, KEY_MARKER_END]
+            .iter()
+            .all(|key| {
+                key_ok(meta, key, |v| {
+                    is_one_of(v, &[SHAPE_NONE, SHAPE_ARROW, SHAPE_DOT])
+                })
+            })
+        && key_ok(meta, KEY_MARKER_MID_PLACE, |v| {
+            is_one_of(v, &[PLACE_SPACED, PLACE_NODES])
+        })
+        && key_ok(meta, KEY_MARKER_MID_COUNT, is_marker_count)
         && key_ok(meta, KEY_FILL_ENABLED, is_bool)
         && key_ok(meta, KEY_FILL_KIND, is_valid_kind)
         && key_ok(meta, KEY_FILL, is_color)

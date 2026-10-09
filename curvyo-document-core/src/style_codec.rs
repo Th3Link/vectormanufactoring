@@ -13,6 +13,11 @@
 //!   stroke_dash    : [f64 ...] multiples of width  absent = [] (solid)
 //!   stroke_join    : "miter" | "round" | "bevel"   absent = "miter"
 //!   stroke_cap     : "butt" | "round" | "square"   absent = "butt"
+//!   stroke_marker_start     : "none" | "arrow" | "dot"  absent = "none"
+//!   stroke_marker_mid       : "none" | "arrow" | "dot"  absent = "none"
+//!   stroke_marker_end       : "none" | "arrow" | "dot"  absent = "none"
+//!   stroke_marker_mid_place : "spaced" | "nodes"        absent = "spaced"
+//!   stroke_marker_mid_count : integer >= 1              absent = 1
 //!   fill_enabled   : bool                          absent = false
 //!   fill           : [r, g, b]                     absent = black
 //!   fill_opacity   : f64 in [0, 1]                 absent = 1
@@ -26,7 +31,10 @@ use loro::{LoroMap, LoroValue};
 use crate::legacy_fill;
 use crate::path_codec::{as_f64, as_u8};
 use crate::path_model::Color;
-use crate::style_model::{DashPattern, Fill, LineCap, LineJoin, Opacity, Stroke, Style};
+use crate::style_model::{
+    DashPattern, Fill, LineCap, LineJoin, MarkerCount, MarkerPlace, MarkerShape, Markers, Opacity,
+    Stroke, Style,
+};
 use crate::units::Length;
 
 pub(crate) const KEY_STROKE_ENABLED: &str = "stroke_enabled";
@@ -36,6 +44,11 @@ pub(crate) const KEY_STROKE_OPACITY: &str = "stroke_opacity";
 pub(crate) const KEY_STROKE_DASH: &str = "stroke_dash";
 pub(crate) const KEY_STROKE_JOIN: &str = "stroke_join";
 pub(crate) const KEY_STROKE_CAP: &str = "stroke_cap";
+pub(crate) const KEY_MARKER_START: &str = "stroke_marker_start";
+pub(crate) const KEY_MARKER_MID: &str = "stroke_marker_mid";
+pub(crate) const KEY_MARKER_END: &str = "stroke_marker_end";
+pub(crate) const KEY_MARKER_MID_PLACE: &str = "stroke_marker_mid_place";
+pub(crate) const KEY_MARKER_MID_COUNT: &str = "stroke_marker_mid_count";
 pub(crate) const KEY_FILL_ENABLED: &str = "fill_enabled";
 pub(crate) const KEY_FILL: &str = "fill";
 pub(crate) const KEY_FILL_OPACITY: &str = "fill_opacity";
@@ -46,6 +59,11 @@ pub(crate) const JOIN_BEVEL: &str = "bevel";
 pub(crate) const CAP_BUTT: &str = "butt";
 pub(crate) const CAP_ROUND: &str = "round";
 pub(crate) const CAP_SQUARE: &str = "square";
+pub(crate) const SHAPE_NONE: &str = "none";
+pub(crate) const SHAPE_ARROW: &str = "arrow";
+pub(crate) const SHAPE_DOT: &str = "dot";
+pub(crate) const PLACE_SPACED: &str = "spaced";
+pub(crate) const PLACE_NODES: &str = "nodes";
 
 /// Every style key of an object's meta map, none of them a shape-parameter
 /// key: "object to path" strips `shape_codec::ALL_PRIMITIVE_KEYS` only, so
@@ -59,6 +77,11 @@ pub(crate) const ALL_STYLE_KEYS: &[&str] = &[
     KEY_STROKE_DASH,
     KEY_STROKE_JOIN,
     KEY_STROKE_CAP,
+    KEY_MARKER_START,
+    KEY_MARKER_MID,
+    KEY_MARKER_END,
+    KEY_MARKER_MID_PLACE,
+    KEY_MARKER_MID_COUNT,
     KEY_FILL_ENABLED,
     KEY_FILL,
     KEY_FILL_OPACITY,
@@ -135,6 +158,35 @@ fn read_join(meta: &LoroMap) -> LineJoin {
     }
 }
 
+fn read_marker_shape(meta: &LoroMap, key: &str) -> MarkerShape {
+    match read_string(meta, key).as_deref() {
+        Some(SHAPE_ARROW) => MarkerShape::Arrow,
+        Some(SHAPE_DOT) => MarkerShape::Dot,
+        _ => MarkerShape::None,
+    }
+}
+
+fn read_markers(meta: &LoroMap) -> Markers {
+    Markers {
+        start: read_marker_shape(meta, KEY_MARKER_START),
+        mid: read_marker_shape(meta, KEY_MARKER_MID),
+        end: read_marker_shape(meta, KEY_MARKER_END),
+        mid_place: match read_string(meta, KEY_MARKER_MID_PLACE).as_deref() {
+            Some(PLACE_NODES) => MarkerPlace::AtNodes,
+            _ => MarkerPlace::Spaced,
+        },
+        // A count below 1 or not a whole number reads as 1 (lenient: only a
+        // merged document can hold one; open validation refuses a file's).
+        mid_count: match read_value(meta, KEY_MARKER_MID_COUNT) {
+            Some(LoroValue::I64(n)) => u32::try_from(n)
+                .ok()
+                .and_then(|n| MarkerCount::new(n).ok())
+                .unwrap_or(MarkerCount::ONE),
+            _ => MarkerCount::ONE,
+        },
+    }
+}
+
 fn read_cap(meta: &LoroMap) -> LineCap {
     match read_string(meta, KEY_STROKE_CAP).as_deref() {
         Some(CAP_ROUND) => LineCap::Round,
@@ -161,6 +213,7 @@ pub(crate) fn read_style(meta: &LoroMap) -> Style {
             dash: read_dash(meta),
             join: read_join(meta),
             cap: read_cap(meta),
+            markers: read_markers(meta),
         },
         fill: Fill {
             enabled: read_bool(meta, KEY_FILL_ENABLED, default.fill.enabled)
@@ -232,6 +285,43 @@ const fn cap_text(cap: LineCap) -> &'static str {
     }
 }
 
+const fn shape_text(shape: MarkerShape) -> &'static str {
+    match shape {
+        MarkerShape::None => SHAPE_NONE,
+        MarkerShape::Arrow => SHAPE_ARROW,
+        MarkerShape::Dot => SHAPE_DOT,
+    }
+}
+
+/// Writes the marker slots of `new` that differ from `old`; returns whether
+/// anything was written.
+fn write_marker_changes(meta: &LoroMap, old: Markers, new: Markers) -> bool {
+    let mut wrote = false;
+    for (key, before, after) in [
+        (KEY_MARKER_START, old.start, new.start),
+        (KEY_MARKER_MID, old.mid, new.mid),
+        (KEY_MARKER_END, old.end, new.end),
+    ] {
+        if before != after {
+            write_text(meta, key, shape_text(after));
+            wrote = true;
+        }
+    }
+    if old.mid_place != new.mid_place {
+        let text = match new.mid_place {
+            MarkerPlace::Spaced => PLACE_SPACED,
+            MarkerPlace::AtNodes => PLACE_NODES,
+        };
+        write_text(meta, KEY_MARKER_MID_PLACE, text);
+        wrote = true;
+    }
+    if old.mid_count != new.mid_count {
+        insert(meta, KEY_MARKER_MID_COUNT, i64::from(new.mid_count.get()));
+        wrote = true;
+    }
+    wrote
+}
+
 /// Writes what a brand-new object carries: the width and colour, explicitly,
 /// and nothing else. Every other key is absent and reads as its default.
 pub(crate) fn write_creation_style(meta: &LoroMap) {
@@ -280,6 +370,7 @@ pub(crate) fn write_changes(meta: &LoroMap, old: &Style, new: &Style) -> bool {
         write_text(meta, KEY_STROKE_CAP, cap_text(ns.cap));
         wrote = true;
     }
+    wrote |= write_marker_changes(meta, os.markers, ns.markers);
     if of.enabled != nf.enabled {
         write_bool(meta, KEY_FILL_ENABLED, nf.enabled);
         wrote = true;

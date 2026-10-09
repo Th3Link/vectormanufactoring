@@ -105,6 +105,13 @@ use crate::units::{DocumentSize, Length};
 /// Migration from version 8 is none: every stored even list stays valid, and
 /// a file from an earlier build opens unchanged and is not rewritten. Golden:
 /// `dash_v9.curvyo`.
+///
+/// Version 9 also carries the five stroke marker keys of `stroke-markers`
+/// (`specs/0018-stroke-markers/adrs.md`, decision 1): the two features share
+/// one bump because they merge in one pull request. A build that stops at
+/// version 8 would ignore the keys and draw no markers, a silent partial read,
+/// so it must refuse the file as too new. Migration from version 8 is none:
+/// absent keys read as None, Spaced and 1. Golden: `markers_v9.curvyo`.
 pub const CURRENT_FORMAT_VERSION: u32 = 9;
 
 pub(crate) const ROOT_MAP: &str = "root";

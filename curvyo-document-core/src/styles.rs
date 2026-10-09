@@ -12,8 +12,11 @@ use crate::document::{Document, OBJECTS_TREE};
 use crate::path_codec::node_exists;
 use crate::path_model::{Color, NodeId};
 use crate::paths::tree_id_of;
+use crate::shape_codec::{ShapeTag, read_shape_tag_checked};
 use crate::style_codec::{read_style, write_changes};
-use crate::style_model::{DashPattern, LineCap, LineJoin, Opacity, Style};
+use crate::style_model::{
+    DashPattern, LineCap, LineJoin, MarkerCount, MarkerPlace, MarkerShape, Opacity, Style,
+};
 use crate::units::Length;
 
 /// Why a style command refused to apply. Every variant describes a caller
@@ -28,6 +31,11 @@ pub enum StyleEditError {
     /// stroke off).
     #[error("stroke width must be zero or greater")]
     InvalidWidth,
+    /// A marker edit names a primitive: markers belong to paths only
+    /// (`specs/0018-stroke-markers` criteria 21 and 22). The whole call is
+    /// refused.
+    #[error("markers can only be set on paths")]
+    NotAPath,
 }
 
 /// One style property change. Applied to each target object on its own, so
@@ -63,6 +71,16 @@ pub enum StyleEdit {
     FillRgba(Color, Opacity),
     /// The solid fill opacity. Never turns the fill on.
     FillOpacity(Opacity),
+    /// The shape of the Start marker (a path only).
+    MarkerStart(MarkerShape),
+    /// The shape of the Middle marker (a path only).
+    MarkerMid(MarkerShape),
+    /// The shape of the End marker (a path only).
+    MarkerEnd(MarkerShape),
+    /// Where the Middle marker goes (a path only).
+    MarkerPlace(MarkerPlace),
+    /// How many Middle markers a Spaced placement draws (a path only).
+    MarkerCount(MarkerCount),
 }
 
 impl StyleEdit {
@@ -113,8 +131,26 @@ impl StyleEdit {
                 style.fill.opacity = *opacity;
             }
             Self::FillOpacity(opacity) => style.fill.opacity = *opacity,
+            Self::MarkerStart(shape) => stroke.markers.start = *shape,
+            Self::MarkerMid(shape) => stroke.markers.mid = *shape,
+            Self::MarkerEnd(shape) => stroke.markers.end = *shape,
+            Self::MarkerPlace(place) => stroke.markers.mid_place = *place,
+            Self::MarkerCount(count) => stroke.markers.mid_count = *count,
         }
         Ok(())
+    }
+
+    /// Whether this edit changes a marker setting, which only a path has.
+    #[must_use]
+    pub const fn is_marker_edit(&self) -> bool {
+        matches!(
+            self,
+            Self::MarkerStart(_)
+                | Self::MarkerMid(_)
+                | Self::MarkerEnd(_)
+                | Self::MarkerPlace(_)
+                | Self::MarkerCount(_)
+        )
     }
 }
 
@@ -126,10 +162,18 @@ impl Document {
     ///
     /// # Errors
     /// [`StyleEditError::NoSuchObject`] if any id is gone;
-    /// [`StyleEditError::InvalidWidth`] for a negative or non-finite width.
+    /// [`StyleEditError::InvalidWidth`] for a negative or non-finite width;
+    /// [`StyleEditError::NotAPath`] for a marker edit that names a primitive.
     /// Either refuses the whole call.
     pub fn edit_style(&self, ids: &[NodeId], edit: &StyleEdit) -> Result<(), StyleEditError> {
         let metas = self.style_metas(ids)?;
+        if edit.is_marker_edit()
+            && metas
+                .iter()
+                .any(|meta| !matches!(read_shape_tag_checked(meta), ShapeTag::Absent))
+        {
+            return Err(StyleEditError::NotAPath);
+        }
         let planned: Vec<(LoroMap, Style, Style)> = metas
             .into_iter()
             .map(|meta| {

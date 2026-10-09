@@ -23,6 +23,9 @@ pub enum StyleParamError {
     /// zero (or be empty, which is solid).
     #[error("a dash pattern needs non-negative lengths with a positive sum")]
     InvalidDashPattern,
+    /// A marker count must be a whole number of at least 1.
+    #[error("a marker count must be at least 1")]
+    MarkerCountBelowOne,
 }
 
 /// An opacity, validated to `[0, 1]` and finite at construction (`1` is
@@ -174,6 +177,101 @@ pub struct Stroke {
     pub join: LineJoin,
     /// The cap style at open ends.
     pub cap: LineCap,
+    /// The markers on a path's start, along it and at its end
+    /// (`specs/0018-stroke-markers`). A primitive never holds any.
+    #[serde(default)]
+    pub markers: Markers,
+}
+
+/// The shape of one marker slot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MarkerShape {
+    /// No marker.
+    #[default]
+    None,
+    /// A filled arrow, 4 stroke widths long and 3 wide.
+    Arrow,
+    /// A filled dot, 3 stroke widths across.
+    Dot,
+}
+
+/// Where the Middle marker goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MarkerPlace {
+    /// A count of markers spread evenly along the path's length.
+    #[default]
+    Spaced,
+    /// One marker on each node (not the ends of an open path).
+    #[serde(rename = "nodes")]
+    AtNodes,
+}
+
+/// How many Middle markers a Spaced placement draws: a whole number, at
+/// least 1. The editor limits typing to 500 and dragging to 50; a file may
+/// hold more (at most 500 are drawn).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "u32", into = "u32")]
+pub struct MarkerCount(u32);
+
+impl MarkerCount {
+    /// One marker, the default.
+    pub const ONE: Self = Self(1);
+
+    /// Validates `count` against the lower bound.
+    ///
+    /// # Errors
+    /// [`StyleParamError::MarkerCountBelowOne`] for `0`.
+    pub const fn new(count: u32) -> Result<Self, StyleParamError> {
+        if count >= 1 {
+            Ok(Self(count))
+        } else {
+            Err(StyleParamError::MarkerCountBelowOne)
+        }
+    }
+
+    /// The count.
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+}
+
+impl Default for MarkerCount {
+    fn default() -> Self {
+        Self::ONE
+    }
+}
+
+impl TryFrom<u32> for MarkerCount {
+    type Error = StyleParamError;
+
+    fn try_from(count: u32) -> Result<Self, Self::Error> {
+        Self::new(count)
+    }
+}
+
+impl From<MarkerCount> for u32 {
+    fn from(count: MarkerCount) -> Self {
+        count.0
+    }
+}
+
+/// The five marker settings of a stroke. Place and Count stay stored while
+/// the Middle slot is None or Place is At nodes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct Markers {
+    /// The marker on the first node of an open path.
+    pub start: MarkerShape,
+    /// The marker along the path or on its nodes.
+    pub mid: MarkerShape,
+    /// The marker on the last node of an open path.
+    pub end: MarkerShape,
+    /// Where the Middle marker goes.
+    pub mid_place: MarkerPlace,
+    /// How many Middle markers a Spaced placement draws.
+    pub mid_count: MarkerCount,
 }
 
 impl Default for Stroke {
@@ -186,6 +284,7 @@ impl Default for Stroke {
             dash: DashPattern::solid(),
             join: LineJoin::Miter,
             cap: LineCap::Butt,
+            markers: Markers::default(),
         }
     }
 }
