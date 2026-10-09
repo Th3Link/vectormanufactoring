@@ -209,6 +209,37 @@ pub fn segment_stroke(
     stroke(&builder.build(), &plain(width_mm, color, tolerance_mm))
 }
 
+/// Tessellates one segment as a band with round caps ending at the two node centres — the hover
+/// highlight of a segment a press would bend (`0031-segment-drag-bending` criterion 15). See
+/// [`path_stroke`] for `tolerance_mm`.
+#[must_use]
+pub fn segment_band(
+    start: Point,
+    start_handle_out: Vec2,
+    end_handle_in: Vec2,
+    end: Point,
+    width_mm: f64,
+    color: RgbaColor,
+    tolerance_mm: f64,
+) -> DrawList {
+    let mut builder = Path::builder();
+    builder.begin(to_lyon(start));
+    let c1 = start.translated(start_handle_out);
+    let c2 = end.translated(end_handle_in);
+    builder.cubic_bezier_to(to_lyon(c1), to_lyon(c2), to_lyon(end));
+    builder.end(false);
+    stroke(
+        &builder.build(),
+        &StrokeParams {
+            width_mm,
+            color,
+            tolerance_mm,
+            join: LineJoin::Round,
+            cap: LineCap::Round,
+        },
+    )
+}
+
 /// The default join and cap (miter, butt), as every stroke before
 /// `stroke-and-fill-styling` had.
 fn plain(width_mm: f64, color: RgbaColor, tolerance_mm: f64) -> StrokeParams {

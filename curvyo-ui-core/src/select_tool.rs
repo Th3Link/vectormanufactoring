@@ -45,6 +45,7 @@ pub use entry::{EntryKey, KeyEntryRefusal, MoveEntryMode, double_click};
 pub use gesture::{GestureKind, GestureShape, LiveGesture};
 pub use handles::entry_anchor;
 use move_drag::MoveDrag;
+pub(crate) use move_drag::lock_axis;
 pub use move_drag::{Axis, MoveResolution};
 use press::begin_object_press;
 pub use press::{PressTarget, classify_press};

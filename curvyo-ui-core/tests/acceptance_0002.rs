@@ -19,6 +19,7 @@ const TOLERANCES: HitTolerances = HitTolerances {
     point: Tolerance::from_mm(2.0),
     handle: Tolerance::from_mm(4.0),
     segment: Tolerance::from_mm(1.0),
+    drag_threshold: Tolerance::from_mm(0.5),
 };
 
 // ---------------------------------------------------------------------

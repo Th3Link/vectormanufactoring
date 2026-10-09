@@ -15,7 +15,9 @@
 //! neither a node nor a handle hit, and the nearest segment candidate
 //! within its own tolerance wins, same as before.
 
-use curvyo_document_core::{AnchorId, HandleSlot, NodeId, PathSnapshot, Point, Tolerance, Vec2};
+use curvyo_document_core::{
+    AnchorId, AnchorSnapshot, HandleSlot, NodeId, PathSnapshot, Point, Tolerance, Vec2,
+};
 use curvyo_geometry_core::nearest_point_on_segment;
 
 use crate::NodeSelection;
@@ -186,22 +188,54 @@ fn hit_test_node(
 
 /// Every adjacent pair of indices into a run of `len` anchors, in
 /// traversal order, including the wraparound closing pair when `closed`
-/// and there are more than two — the one shared definition of this rule
+/// and there are two or more (a closed path of two nodes has two segments,
+/// `0031` criterion 6a) — the one shared definition of this rule
 /// (architect review: it was implemented identically three times, here,
 /// in `hit_test_object.rs` and in `object_bounds.rs`). `len`/`closed`
 /// rather than a `&PathSnapshot` so it works equally for a path's own
 /// anchors or a primitive's outline.
 pub(crate) fn segment_pairs(len: usize, closed: bool) -> impl Iterator<Item = (usize, usize)> {
     let adjacent = (0..len.saturating_sub(1)).map(|i| (i, i + 1));
-    let wraparound = (closed && len > 2).then_some((len - 1, 0));
+    let wraparound = (closed && len >= 2).then_some((len - 1, 0));
     adjacent.chain(wraparound)
 }
 
 /// Every path-adjacent pair of anchors in traversal order, including the
-/// wraparound closing segment when the path is closed and has more than
-/// two anchors.
+/// wraparound closing segment when the path is closed and has two or more
+/// anchors.
 fn segments(snapshot: &PathSnapshot) -> impl Iterator<Item = (usize, usize)> {
     segment_pairs(snapshot.anchors.len(), snapshot.closed)
+}
+
+/// A cheap reject before the exact nearest-point search: a segment lies inside the bounding box
+/// of its four control points, so a point farther than `tolerance` outside that box cannot hit
+/// it. Plain minima and maxima, no curve evaluation (`0031` criterion 17: a hover over a path of
+/// thousands of nodes must not cost a search per segment).
+fn near_control_polygon(
+    start: &AnchorSnapshot,
+    end: &AnchorSnapshot,
+    point: Point,
+    tolerance: Tolerance,
+) -> bool {
+    let controls = [
+        start.point,
+        start.point.translated(start.handle_out),
+        end.point.translated(end.handle_in),
+        end.point,
+    ];
+    let reach = tolerance.as_mm();
+    let (mut min_x, mut max_x) = (f64::INFINITY, f64::NEG_INFINITY);
+    let (mut min_y, mut max_y) = (f64::INFINITY, f64::NEG_INFINITY);
+    for control in controls {
+        min_x = min_x.min(control.x);
+        max_x = max_x.max(control.x);
+        min_y = min_y.min(control.y);
+        max_y = max_y.max(control.y);
+    }
+    point.x >= min_x - reach
+        && point.x <= max_x + reach
+        && point.y >= min_y - reach
+        && point.y <= max_y + reach
 }
 
 fn hit_test_segment(paths: &[PathSnapshot], point: Point, tolerance: Tolerance) -> Option<Hit> {
@@ -210,6 +244,9 @@ fn hit_test_segment(paths: &[PathSnapshot], point: Point, tolerance: Tolerance) 
         for (i, j) in segments(snapshot) {
             let start = &snapshot.anchors[i];
             let end = &snapshot.anchors[j];
+            if !near_control_polygon(start, end, point, tolerance) {
+                continue;
+            }
             let (_, segment_distance, _) = nearest_point_on_segment(
                 start.point,
                 start.handle_out,
@@ -715,6 +752,64 @@ mod tests {
                 path: first.0,
                 anchor: first.1
             })
+        );
+    }
+
+    /// `0031` criterion 6a: a closed path of two nodes has two segments, and each can be pressed
+    /// on its own: with both curved the press picks the nearer one.
+    #[test]
+    fn both_segments_of_a_two_node_closed_path_are_hit() {
+        let document = Document::new(1);
+        let a = AnchorId::new(1, 1);
+        let b = AnchorId::new(1, 2);
+        let path = document.create_path(
+            &[
+                NewAnchor {
+                    id: a,
+                    point: Point::new(0.0, 0.0),
+                    handle_in: Vec2::new(0.0, 20.0),
+                    handle_out: Vec2::new(0.0, -20.0),
+                    kind: AnchorKind::Corner,
+                },
+                NewAnchor {
+                    id: b,
+                    point: Point::new(40.0, 0.0),
+                    handle_in: Vec2::new(0.0, -20.0),
+                    handle_out: Vec2::new(0.0, 20.0),
+                    kind: AnchorKind::Corner,
+                },
+            ],
+            true,
+        );
+        let paths = vec![document.path(path).unwrap()];
+        let hit = |x: f64, y: f64| {
+            hit_test(
+                &paths,
+                &NodeSelection::new(),
+                Point::new(x, y),
+                Tolerance::from_mm(0.5),
+                Tolerance::from_mm(0.5),
+                SEGMENT_TOLERANCE,
+            )
+        };
+        // A to B bows up (negative y), the closing segment B to A bows down.
+        let up = hit(20.0, -15.0).expect("the first segment");
+        let down = hit(20.0, 15.0).expect("the closing segment");
+        assert_eq!(
+            up,
+            Hit::Segment {
+                path,
+                start: a,
+                end: b
+            }
+        );
+        assert_eq!(
+            down,
+            Hit::Segment {
+                path,
+                start: b,
+                end: a
+            }
         );
     }
 }

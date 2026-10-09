@@ -12,6 +12,7 @@ use curvyo_document_core::{
 use curvyo_geometry_core::{nearest_point_on_segment, subdivide_at_parameter};
 
 use crate::hit_test::{Hit, hit_test};
+use crate::segment_bend::{BendResolution, SegmentBend};
 use crate::{AnchorIdMinter, NodeSelection};
 
 /// The three hit-test tolerances the node tool needs — 8px node, 16px
@@ -32,6 +33,9 @@ pub struct HitTolerances {
     pub handle: Tolerance,
     /// Bounds segment hits.
     pub segment: Tolerance,
+    /// The drag threshold (3 px): a press on a segment starts a bend only once the pointer has
+    /// moved farther than this from the press (`0031` criterion 3).
+    pub drag_threshold: Tolerance,
 }
 
 /// Which of the node-tool's contextual-toolbar actions apply right now
@@ -135,6 +139,9 @@ enum Drag {
         start_handle_in: Vec2,
         start_handle_out: Vec2,
     },
+    /// Bending a segment: a press on it that has not left the drag threshold is only a click
+    /// (`specs/0031-segment-drag-bending`).
+    Bend(Box<SegmentBend>),
 }
 
 /// What [`NodeTool::live_drag`] resolves a drag in flight to — mirrors
@@ -174,6 +181,10 @@ pub enum LiveNodeDrag {
         /// The anchor's live `handle_out`.
         handle_out: Vec2,
     },
+    /// A segment bend (`0031`): the live handles of the two ends of the dragged segment and the
+    /// shape of every segment the bend changes, resolved by the same function the release
+    /// commits with.
+    Bend(BendResolution),
 }
 
 /// What [`NodeTool::pointer_down`] did.
@@ -200,6 +211,8 @@ pub enum PointerUpOutcome {
     NodesMoved,
     /// Acceptance criterion 9: one handle was moved.
     HandleMoved,
+    /// `0031` criterion 18: a segment was bent, one `bend_segment` commit.
+    SegmentBent,
 }
 
 impl NodeTool {
@@ -300,6 +313,20 @@ impl NodeTool {
             }
             Some(Hit::Segment { path, start, end }) => {
                 self.selection.select_segment(path, start, end);
+                // The press may turn into a bend once the pointer leaves the drag threshold;
+                // until then it is the click it always was (`0031` criteria 1 and 2).
+                if let Some(snapshot) = paths.iter().find(|p| p.id == path)
+                    && let Some(bend) = SegmentBend::begin(
+                        snapshot,
+                        start,
+                        end,
+                        point,
+                        tolerances.drag_threshold,
+                        tolerances.segment,
+                    )
+                {
+                    self.drag = Drag::Bend(Box::new(bend));
+                }
                 PointerDownOutcome::Segment
             }
             None => {
@@ -411,9 +438,10 @@ impl NodeTool {
     /// public surface), so the preview and the eventual commit can never
     /// disagree. `None` when no drag is in flight.
     #[must_use]
-    pub fn live_drag(&self, cursor: Point) -> Option<LiveNodeDrag> {
+    pub fn live_drag(&self, cursor: Point, shift: bool) -> Option<LiveNodeDrag> {
         match &self.drag {
             Drag::None => None,
+            Drag::Bend(bend) => bend.resolve(cursor, shift).map(LiveNodeDrag::Bend),
             Drag::Nodes { down_at, starts } => Some(LiveNodeDrag::Nodes {
                 positions: Self::resolve_node_positions(*down_at, starts, cursor),
             }),
@@ -443,12 +471,28 @@ impl NodeTool {
         }
     }
 
+    /// The pointer moved to `point` with `shift` as given: a bend in flight records it (the drag
+    /// threshold, once left, stays left; Shift decides the axis lock). A no-op for every other
+    /// drag and when none runs.
+    pub fn pointer_moved(&mut self, point: Point, shift: bool) {
+        if let Drag::Bend(bend) = &mut self.drag {
+            bend.pointer_moved(point, shift);
+        }
+    }
+
     /// The maker released the mouse button at `point`, ending whatever
     /// drag [`NodeTool::pointer_down`] began. Commits the drag as exactly
     /// one command.
     pub fn pointer_up(&mut self, document: &Document, point: Point) -> PointerUpOutcome {
         match std::mem::take(&mut self.drag) {
             Drag::None => PointerUpOutcome::NoOp,
+            Drag::Bend(mut bend) => {
+                if bend.commit(document, point) {
+                    PointerUpOutcome::SegmentBent
+                } else {
+                    PointerUpOutcome::NoOp
+                }
+            }
             Drag::Nodes { down_at, starts } => {
                 // A press and release at the exact same point writes
                 // nothing (`specs/0002-path-node-editing/adrs.md`'s dated
@@ -789,6 +833,7 @@ mod tests {
         point: Tolerance::from_mm(2.0),
         handle: Tolerance::from_mm(4.0),
         segment: Tolerance::from_mm(1.0),
+        drag_threshold: Tolerance::from_mm(0.5),
     };
 
     fn open_two_node_path(document: &Document, a: AnchorId, b: AnchorId) -> NodeId {
@@ -863,14 +908,14 @@ mod tests {
         let paths = vec![document.path(path).expect("exists")];
         let mut tool = NodeTool::new();
         assert_eq!(
-            tool.live_drag(Point::new(0.0, 0.0)),
+            tool.live_drag(Point::new(0.0, 0.0), false),
             None,
             "nothing pressed"
         );
 
         tool.pointer_down(&paths, Point::new(0.0, 0.0), TOLERANCES, false);
         assert_eq!(
-            tool.live_drag(Point::new(5.0, 7.0)),
+            tool.live_drag(Point::new(5.0, 7.0), false),
             Some(LiveNodeDrag::Nodes {
                 positions: vec![(path, a, Point::new(5.0, 7.0))],
             }),
@@ -882,7 +927,7 @@ mod tests {
         let snapshot = document.path(path).expect("exists");
         assert_eq!(snapshot.anchors[0].point, Point::new(5.0, 7.0));
         assert_eq!(
-            tool.live_drag(Point::new(5.0, 7.0)),
+            tool.live_drag(Point::new(5.0, 7.0), false),
             None,
             "released: no drag in flight any more"
         );
@@ -987,7 +1032,7 @@ mod tests {
         let paths = vec![document.path(path).expect("exists")];
         tool.pointer_down(&paths, Point::new(5.0, 0.0), TOLERANCES, false);
         assert_eq!(
-            tool.live_drag(Point::new(3.0, 4.0)),
+            tool.live_drag(Point::new(3.0, 4.0), false),
             Some(LiveNodeDrag::Handle {
                 path,
                 anchor: a,
@@ -1032,7 +1077,7 @@ mod tests {
         let paths = vec![document.path(path).expect("exists")];
         tool.pointer_down(&paths, Point::new(5.0, 0.0), TOLERANCES, false);
         assert_eq!(
-            tool.live_drag(Point::new(3.0, 4.0)),
+            tool.live_drag(Point::new(3.0, 4.0), false),
             Some(LiveNodeDrag::Handle {
                 path,
                 anchor: a,

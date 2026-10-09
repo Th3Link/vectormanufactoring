@@ -38,6 +38,7 @@ mod poly_star_tool;
 mod rectangle_tool;
 mod resize_direction;
 mod ruler;
+mod segment_bend;
 mod select_bar;
 mod select_tool;
 mod selection;
@@ -97,6 +98,7 @@ pub use poly_star_tool::{PolyStarMode, PolygonStarTool};
 pub use rectangle_tool::RectangleTool;
 pub use resize_direction::ResizeDirection;
 pub use ruler::{RulerAxis, RulerLabel, RulerLayout, RulerMajor, ruler_layout};
+pub use segment_bend::{BendResolution, segment_is_bendable};
 pub use select_bar::{
     BarPreview, BarValue, ObjectKind, SelectBarState, ids_of_kind, select_bar_state,
 };
