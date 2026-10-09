@@ -42,6 +42,8 @@ mod wasm_properties_panel;
 #[cfg(target_arch = "wasm32")]
 mod wasm_render;
 #[cfg(target_arch = "wasm32")]
+mod wasm_ruler;
+#[cfg(target_arch = "wasm32")]
 mod wasm_select_bar;
 #[cfg(target_arch = "wasm32")]
 mod wasm_select_tool;

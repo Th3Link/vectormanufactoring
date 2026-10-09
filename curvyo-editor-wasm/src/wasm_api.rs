@@ -106,10 +106,9 @@ impl WasmSession {
     #[wasm_bindgen(constructor)]
     #[must_use]
     pub fn new(peer: u64) -> Self {
-        Self {
-            session: Session::new(peer),
-            gpu: None,
-        }
+        let mut session = Session::new(peer);
+        session.show_default_view();
+        Self { session, gpu: None }
     }
 
     /// Reopens a previously saved `.curvyo` container's bytes.
@@ -127,8 +126,9 @@ impl WasmSession {
     /// A `JsValue` (a plain string) — one of the three sentences named
     /// above — describing why the file could not be opened.
     pub fn open(peer: u64, bytes: &[u8]) -> Result<WasmSession, JsValue> {
-        let session = Session::open(peer, bytes)
+        let mut session = Session::open(peer, bytes)
             .map_err(|err| JsValue::from_str(crate::session::map_open_error(&err)))?;
+        session.show_default_view();
         Ok(Self { session, gpu: None })
     }
 

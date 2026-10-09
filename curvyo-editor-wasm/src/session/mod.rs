@@ -24,6 +24,7 @@
 mod box_refit_tests;
 mod corner_readout;
 mod draw;
+mod frame;
 mod keys;
 mod move_entry;
 mod move_indicators;
@@ -31,6 +32,7 @@ mod navigation;
 mod node;
 mod open_error;
 mod pen;
+mod ruler;
 mod select;
 mod select_bar;
 mod select_gesture;
