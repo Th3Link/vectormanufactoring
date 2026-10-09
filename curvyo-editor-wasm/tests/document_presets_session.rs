@@ -174,7 +174,7 @@ fn the_pressed_preset_and_the_subject_follow_a_pick_a_typed_size_and_a_fit() {
     assert_eq!(s.document_presets_view().subject, "A4, landscape");
     s.set_document_side(curvyo_editor_wasm::DocumentSide::Width, "211");
     assert_eq!(s.document_presets_view().subject, "Custom");
-    assert!(pressed(&s).is_empty());
+    assert_eq!(pressed(&s), Vec::<String>::new());
     s.apply_document_preset("slide-16-9");
     assert_eq!(s.document_presets_view().subject, "16:9, landscape");
     assert_eq!(pressed(&s), ["16:9"]);
@@ -250,6 +250,6 @@ fn a_pick_survives_save_and_open_and_the_file_holds_no_preset_id() {
 #[test]
 fn a_custom_size_opens_with_no_preset_and_nothing_is_written_by_opening() {
     let custom = session_with_size(123.0, 456.0);
-    assert!(pressed(&custom).is_empty());
+    assert_eq!(pressed(&custom), Vec::<String>::new());
     assert_eq!(custom.document_presets_view().subject, "Custom");
 }
