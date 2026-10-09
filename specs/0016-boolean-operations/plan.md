@@ -24,47 +24,48 @@ this one when it starts.
 
 ### PR 1: kernel (`curvyo-geometry-core` only)
 
-- [ ] 1. Add `clipper2-rust` (exact pin, `default-features = false`) and `thiserror` to
+- [x] 1. Add `clipper2-rust` (exact pin, `default-features = false`) and `thiserror` to
   `curvyo-geometry-core`; verify `cargo deny check`, the wasm32 build and the banned-dependency
   tree check of `.github/workflows/ci.yml` (all AC; precondition).
-- [ ] 2. `flatten.rs`, tests first: a closed outline of cubic segments becomes a polyline whose
+- [x] 2. `flatten.rs`, tests first: a closed outline of cubic segments becomes a polyline whose
   chords stay within the given tolerance of the curve, using only `+ - * /` and `sqrt` so the
   result is bit-identical on every target (AC 25, 26, 43). Test: disc of radius 10 mm from four
   Béziers gives 71 to 142 nodes at 0.01 mm tolerance and every chord midpoint is within 0.01 mm of
   the circle.
-- [ ] 3. `boolean_grid.rs`, tests first: snap to the 0.001 mm integer grid (named constant),
+- [x] 3. `boolean_grid.rs`, tests first: snap to the 0.001 mm integer grid (named constant),
   range check (non-finite or beyond 10⁷ mm refused), consecutive duplicate removal, canonical form
   (winding, start point, outline order) and conversion back to mm (AC 39, 41, 42, 43).
-- [ ] 4. `boolean.rs` types and refusals, tests first: `BooleanOp` (Union, Difference,
+- [x] 4. `boolean.rs` types and refusals, tests first: `BooleanOp` (Union, Difference,
   Intersection, Exclusion), `Outline`, `BooleanResult`, `BooleanError` (no operands, tolerance too
   small, open operands, out of range, empty operands, empty result). Open paths and operands
   without area are refused with all offending operand indices, so the UI can give the counts and
   outline every offender (AC 15, 16, 17).
-- [ ] 5. `boolean.rs` pipeline, tests first: flatten, snap, normalize each operand by a nonzero
+- [x] 5. `boolean.rs` pipeline, tests first: flatten, snap, normalize each operand by a nonzero
   self-union, run the operation (Union as one union; Difference as subject minus the union of the
   rest; Intersection and Exclusion folded pairwise), simplify with epsilon 1 grid unit, repair by
   a second nonzero union, drop degenerate outlines (AC 4, 7, 8, 10, 11, 12, 13, 24, 39, 41).
-- [ ] 6. Golden fixtures in `tests/fixtures/` for the nine shapes of AC 40, the ring plus island of
+- [x] 6. Golden fixtures in `tests/fixtures/` for the nine shapes of AC 40, the ring plus island of
   AC 8, the two discs of AC 25, the AC 39 pairs, and the four spike fixtures of ADR 0003 (bow-tie,
-  duplicated point, sliver, 5,000 tiny squares). Fixtures are plain text (`.outlines`): a header
-  line, then one outline per line as grid integers, so they diff and agree exactly on every OS
-  (AC 40, 43).
-- [ ] 7. Property tests, `proptest` with a fixed seed: at least 200 random polygon pairs including
+  duplicated point, sliver, 5,000 tiny squares). Fixtures are plain text (`.fixture`): the operands as anchors in mm, then the expected result
+  of each operation as grid integers, so they diff and agree exactly on every OS (AC 40, 43). The
+  5,000-square case is generated in the test and stored as a summary with a hash.
+- [x] 7. Property tests, `proptest` with a fixed seed: at least 200 random polygon pairs including
   holes and self-intersections; `|A ∪ B| + |A ∩ B| = |A| + |B|` and `|A − B| + |A ∩ B| = |A|`
   within 1e-6 · (|A| + |B|); idempotence of Union; commutativity of Union, Intersection and
   Exclusion; Exclusion area identity; determinism over repeated runs; output invariants of AC 41
   (at least 3 points, area > 0, no self crossing, finite, holes inside outers) (AC 14, 41, 43).
-- [ ] 8. Degenerate inputs: zero area, coincident edges, touching points, self-intersections,
+- [x] 8. Degenerate inputs: zero area, coincident edges, touching points, self-intersections,
   opposite winding operands, tiny and huge coordinates (up to 100 000 mm), NaN and infinity
   refused, the AC 39 grid pair (20.0000 / 20.0004 / 20.0020 mm), the AC 7 five-point star and the
   AC 8 ring (AC 7, 8, 16, 39, 40, 42).
-- [ ] 9. Performance tests: 2 × 1,000 curved nodes within 100 ms and 2 × 10,000 within 2 s for each
+- [x] 9. Performance tests: 2 × 1,000 curved nodes within 100 ms and 2 × 10,000 within 2 s for each
   of Union, Difference, Intersection (AC 44, 45). Asserted in release only; in debug the numbers
   are printed, and the 10,000-node test is `#[ignore]`d in debug builds so `cargo nextest run` does
   not spend minutes on it. Measured numbers go into the PR description.
-- [ ] 10. Docs: module docs (one responsibility each, files under 500 lines), the winding rule and
+- [x] 10. Docs: module docs (one responsibility each, files under 500 lines), the winding rule and
   the guarantees written down in `boolean.rs`; a dated note in `adrs.md` for what PR 1 settled
-  (own flattening because `kurbo`'s uses `powf`; error lists instead of single indices). Run the
+  (own flattening because `kurbo`'s uses `powf`; error lists instead of single indices; own
+  cleanup; the `clipper2-rust` defects found by the property tests, in `docs/technical-debt.md`). Run the
   full gate of `CLAUDE.md` §7 and every step of `.github/workflows/ci.yml` on the head sha.
 
 ### PR 2: compound path (later; needs customer answer to question 1 and `0015` merged)

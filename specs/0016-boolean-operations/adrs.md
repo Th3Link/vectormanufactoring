@@ -207,6 +207,46 @@ assumptions are found by audit, not by the compiler", with this table.
   hard-to-change part. If it misses, the fallback is the packed encoding
   rejected above, as a new decision here and not a silent change.
 
+### 2026-10-09: what PR 1 settled (implementer)
+
+- **Flattening is the kernel's own** (`flatten.rs`): `kurbo`'s `flatten` calls
+  `powf` (in `to_quads`), which platform math libraries may round differently,
+  so criterion 43 would not hold. The step count is `ceil(sqrt(M / (8 tol)))`
+  with `M = 6 max(|P2 - 2 P1 + P0|, |P3 - 2 P2 + P1|)`, from the chord error
+  bound `h² max|B''| / 8`; a segment whose inner control points are within the
+  tolerance of its chord is one step. Only `+ - * /` and `sqrt`. A disc of
+  radius 10 mm gets 84 nodes (criterion 26: 71 to 142).
+- **Errors carry every offending operand**, not one: `OpenOperands(Vec<usize>)`,
+  `OutOfRange(Vec<usize>)`, `EmptyOperands(Vec<usize>)`, because criteria 15 and
+  16 need the count ("1 of 3 selected objects") and the red outline of every
+  offender. Further errors: `NoOperands`, `ToleranceTooSmall` (the tolerance
+  must exceed two grid pitches), `EmptyResult`, `KernelFailed`.
+- **Cleanup is not Clipper's `SimplifyPaths`.** That function turned a valid
+  outline into a self-crossing one (see `docs/technical-debt.md`). The kernel
+  removes vertices within one grid unit of the line between their neighbours
+  itself, in exact integer arithmetic, then repairs with a nonzero union, and
+  repeats while something is removed (at most four rounds). It also drops
+  outlines thinner than one grid pitch on average (twice the area over the
+  perimeter), which is rounding noise: without it a result could hold a
+  negative-area sliver outside every outer outline.
+- **Exclusion** folds Clipper's XOR pairwise and unions after every step:
+  XOR returns `A - B` and `B - A` as separate pieces that can touch along a line
+  that is not an edge of the region.
+- **Criterion 14 as written cannot hold on a 0.001 mm grid for shapes of laser-bed
+  size.** Each crossing is rounded to the grid, which moves an area by up to
+  0.0007 mm times the length of the edges at it. For polygons within 60 mm the
+  error is 10 to 60 times 1e-6 of the summed areas; it is under that bound
+  only for polygons of several metres. The kernel tests assert the bound as
+  written on polygons up to 6 m, and `1e-6` plus 0.001 mm times the summed
+  outline lengths on polygons up to 60 mm. **For the PO:** reword criterion 14
+  accordingly.
+- **Performance** (release, `boolean_performance.rs`): 2 x 1,000 curved nodes
+  take 5 to 6 ms, 2 x 10,000 take 55 to 71 ms per operation (budgets: 100 ms,
+  2 s). The test asserts them in release builds only.
+- **The robustness risk named in the spike materialised**: see
+  `docs/technical-debt.md`, "`clipper2-rust` returns a wrong result on rare
+  degenerate input". The lead decides whether the kernel library stays.
+
 ### 2026-10-09: where the code lives
 
 - **`curvyo-geometry-core`:** `boolean` (operations, normalization, fold),

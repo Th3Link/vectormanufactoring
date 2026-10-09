@@ -20,6 +20,52 @@ Inkscape's and is not cleanly re-editable.
 story using `kurbo`'s curve fitting. Needs a quality bar defined first
 (maximum deviation, node-count target).
 
+## `clipper2-rust` returns a wrong result on rare degenerate input
+
+The boolean kernel (`specs/0016-boolean-operations`, ADR 0003 §3 note) uses
+`clipper2-rust` 1.2.0, pinned exactly. Its provenance risk (an AI-assisted
+port) was the one open point of the 2026-10-04 spike. The property tests of the
+kernel PR found two concrete defects, both in Clipper's union, both on
+reproducing inputs:
+
+1. **A union fills a triangle that neither operand covers.** Two operands whose
+   edges are collinear and overlap, with vertices of one on an edge of the
+   other, give 11.383 mm² where the exact area is 10.986 mm²
+   (`curvyo-geometry-core/tests/boolean_degenerate.rs`,
+   `a_union_with_collinear_overlapping_edges_is_exact`, ignored until fixed).
+2. **A union of an outline set with a vertex within one grid unit of a long
+   edge fills a triangle of 0.45 mm².** It shows up when the kernel repairs a
+   result after removing collinear vertices. The kernel's own cleanup replaced
+   Clipper's `SimplifyPaths`, which turned a valid outline into a
+   self-crossing one in the same area.
+
+Measured with random pairs of 1 to 3 outlines of 3 to 8 vertices, area
+identities of criterion 14 within 1e-6 of the summed areas plus 0.001 mm times
+the summed outline lengths:
+
+| Input | Pairs | `clipper2-rust` 1.2.0 | `i_overlay` 9.0.0 |
+|---|---|---|---|
+| vertices on a 6 mm lattice (many shared and collinear edges) | 5,877 | 12 to 16 violations | 0 |
+| vertices anywhere in 60 mm | 12,000 | 0 | 0 |
+| vertices anywhere in 600 mm | 6,000 | 0 | 0 |
+
+A 20,000-pair run of the 60 mm property found one further violation
+(0.5 mm² on 707 mm²). A 20,000-pair run of the lattice property finds a
+self-crossing outline in about one case. Real maker files lie between
+the lattice and the random cases (rectilinear parts, many shared edges, few
+diagonals).
+
+**Resolution options, for the lead and the architect:**
+
+- Keep `clipper2-rust` and accept a rare wrong result. The property tests and
+  fixtures stay as the safeguard; the ignored test above marks the defect.
+- Switch the kernel to `i_overlay` (9.0.0 had no violation in the same runs). It
+  uses `unsafe` internally (49 sites, per the spike) and its integer API is
+  `i32`, so the 0.001 mm grid needs its float adapter or a smaller range. The
+  swap is local to `boolean_grid::run`; the API, fixtures and property tests
+  stay. This reopens the ADR 0003 §3 spike result and needs the customer.
+- Report both cases upstream to `clipper2-rust` and keep the pin until a fix.
+
 ## V-carve depth comes from an approximate medial axis
 
 V-carving uses a constrained-Delaunay approximation of the medial axis rather
