@@ -84,6 +84,17 @@ test("open paths and objects without area are refused with their counts (criteri
   );
 });
 
+test("objects out of range are refused with the 10 km rule (criteria 15 to 17 wording)", () => {
+  assert.equal(
+    refusalText("union", result("out_of_range", 1, 3)),
+    "Union works only within 10 km of the point 0, 0. 1 of 3 selected objects reaches further. Nothing was changed.",
+  );
+  assert.equal(
+    refusalText("difference", result("out_of_range", 2, 3)),
+    "Difference works only within 10 km of the point 0, 0. 2 of 3 selected objects reach further. Nothing was changed.",
+  );
+});
+
 test("an empty result has one sentence per operation (criterion 17)", () => {
   assert.equal(
     refusalText("intersection", result("empty")),

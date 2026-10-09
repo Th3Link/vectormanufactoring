@@ -122,8 +122,10 @@ export function refusalText(op: BooleanOp, result: BooleanResult): string | null
     }
     case "empty":
       return `${EMPTY_TEXTS[op]} ${NOTHING_CHANGED}`;
-    case "out_of_range":
-      return `${name} cannot handle objects this large or this far from the page. ${NOTHING_CHANGED}`;
+    case "out_of_range": {
+      const verb = result.count === 1 ? "reaches" : "reach";
+      return `${name} works only within 10 km of the point 0, 0. ${result.count} of ${plural(result.of, "selected object", "selected objects")} ${verb} further. ${NOTHING_CHANGED}`;
+    }
     default:
       return null;
   }
