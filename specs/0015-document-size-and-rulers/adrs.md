@@ -227,6 +227,27 @@ root register that older builds read correctly by ignoring it (decision 1).
   overlay for headless tests. A future raster, thumbnail or export path must
   use `frame_draw_list`.
 
+## Dated notes from PR 3 (2026-10-09, implementer; the architect confirms)
+
+- **Decision 13 (panel):** `panel_content(&ObjectSelection, pen_path_unfinished)
+  -> PanelContent { Document, Style, Empty }` in `ui-core`, an enum with no
+  trait. The signature takes the selection and the Pen's state, not the tool,
+  because the Pen's unfinished path is the only tool state that matters.
+  `Style` is any non-empty selection, also while the Pen has a path (the
+  Style area says "finish the path to style it", as before 0017).
+- **Decision 7 (view follows):** `Viewport::pan_by_document_offset` does not
+  end the untouched default view (see the PR 2 note), tested. The shifts are
+  published by `document-core` as `Document::resize_shift` and
+  `Document::fit_shift`, the same functions the commands use, so the session
+  moves the view by exactly what moved the objects.
+- **Decision 3 (units):** `Length::from_unit` and `in_unit` compute inches as
+  `* 254 / 10` and `* 10 / 254`, one rounding, so 8.5 in is exactly the double
+  of 215.9 mm.
+- **Decision 12 (status texts):** the status bar's size text, the unit and the
+  panel's fields are read from the session whenever its UI state is re-read
+  (`syncRevision`) or a panel command ran (`useDocumentPanel`); the
+  per-frame poll is gone. The cursor text is read on render.
+
 ## Flagged to the lead and the PO
 
 1. **AC 38:** the display unit needs no `format_version` bump (decision 1).

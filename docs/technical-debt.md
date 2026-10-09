@@ -240,17 +240,6 @@ document origin as one register that objects are read relative to, or make
 resize and fit refuse while a peer is editing. Decide in the collaboration
 slice; nothing in the single-user MVP is affected.
 
-## The status bar texts are polled every animation frame
-
-`frontend/src/hooks/useSessionStatus.ts` reads the size text and the display
-unit from the session in its own animation-frame loop (`specs/0015-document-size-and-rulers/`,
-PR 2), next to the render loop and the ruler loop. It costs two short string
-reads a frame and re-renders only on change, but it is a third perpetual loop,
-and its initial text copies Rust's formatting.
-
-**Resolution:** PR 3 adds the resize, fit and unit commands, which all go
-through `syncFromSession`; read the texts there and delete the loop.
-
 ## The document's edge and the origin tick can differ by one device pixel
 
 The 2 px origin tick of the rulers and the document rectangle's left or top

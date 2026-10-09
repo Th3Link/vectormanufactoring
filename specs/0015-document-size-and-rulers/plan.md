@@ -87,16 +87,16 @@ PR 3 (panel, later): `ui-core` `panel_content`, `Viewport::pan_by_document_offse
 
 ### PR 3: panel (later)
 
-- [ ] 15. `panel_content` and `Viewport::pan_by_document_offset` (decision 7
+- [x] 15. `panel_content` and `Viewport::pan_by_document_offset` (decision 7
   puts the latter in PR 3, not PR 2); the view
   follows a resize or fit (AC 14a, 20).
-- [ ] 16. Session and wasm commands for resize, fit, unit; frontend Document
+- [x] 16. Session and wasm commands for resize, fit, unit; frontend Document
   section with Width, Height, Unit, Fit, notice and validation chip (AC 14,
   15, 16, 22, 26, 27a, 33, 34, 37). `fit_document_to_content` returns
   `Ok(false)` both for "already fits" and for "no objects": show "Already
   fits the content." only if `content_bounds` is `Some`, never on `Ok(false)`
   alone.
-- [ ] 17. Move the status texts and the unit read (`session/ruler.rs`, `wasm_ruler.rs`) to the new
+- [x] 17. Move the status texts and the unit read (`session/ruler.rs`, `wasm_ruler.rs`) to the new
   `session/document.rs` and read them in `syncFromSession`, deleting
   `useSessionStatus`'s loop (debt entry); status bar units and decimals; save, close and open round trip
   (AC 21, 34, 36, 39).
