@@ -6,8 +6,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use curvyo_document_core::{
-    Color, DashPattern, Document, EllipseFrame, FillMode, FillModeTarget, Length, LineCap,
-    LineJoin, NewAnchor, NodeId, ObjectSnapshot, Opacity, Point, RectBounds, StyleEdit,
+    Color, DashPattern, Document, EllipseFrame, Length, LineCap, LineJoin, NewAnchor, NodeId,
+    ObjectSnapshot, Opacity, Point, RectBounds, StyleEdit,
 };
 use curvyo_ui_core::{
     BarValue, DashChoice, NodeSelection, ObjectSelection, StyleEditor, StyleField, StyleTool,
@@ -226,7 +226,7 @@ fn a_disabled_panel_shows_the_frozen_defaults() {
     assert_eq!(state.stroke.dash, BarValue::Uniform(DashChoice::Solid));
     assert_eq!(state.stroke.join, BarValue::Uniform(LineJoin::Miter));
     assert_eq!(state.stroke.cap, BarValue::Uniform(LineCap::Butt));
-    assert_eq!(state.fill.mode, BarValue::Uniform(FillMode::None));
+    assert_eq!(state.fill.paint, BarValue::Uniform(false));
 }
 
 #[test]
@@ -302,27 +302,21 @@ fn the_dash_choice_names_a_preset_or_custom() {
 }
 
 #[test]
-fn the_fill_mode_row_reads_none_and_solid_and_mixed() {
+fn the_fill_paint_row_reads_off_on_and_mixed() {
     let document = Document::new(1);
     let (a, b) = (square(&document, 0.0), square(&document, 20.0));
     assert_eq!(
-        state_of(&document, &[a, b]).fill.mode,
-        BarValue::Uniform(FillMode::None)
+        state_of(&document, &[a, b]).fill.paint,
+        BarValue::Uniform(false)
     );
     document
-        .set_fill_mode(
-            FillMode::Solid,
-            &[FillModeTarget {
-                id: a,
-                seed_stops: vec![],
-            }],
-        )
+        .edit_style(&[a], &StyleEdit::FillEnabled(true))
         .unwrap();
     let state = state_of(&document, &[a, b]);
-    assert_eq!(state.fill.mode, BarValue::Mixed);
+    assert_eq!(state.fill.paint, BarValue::Mixed);
     assert_eq!(
-        state_of(&document, &[a]).fill.mode,
-        BarValue::Uniform(FillMode::Solid)
+        state_of(&document, &[a]).fill.paint,
+        BarValue::Uniform(true)
     );
 }
 
@@ -494,10 +488,8 @@ fn a_cancel_with_no_drag_running_does_not_block_the_next_one() {
 
 #[test]
 fn the_host_words_parse_back() {
-    use curvyo_ui_core::{cap_from_name, fill_mode_from_name, join_from_name};
+    use curvyo_ui_core::{cap_from_name, join_from_name};
     assert_eq!(join_from_name("bevel"), Some(LineJoin::Bevel));
     assert_eq!(cap_from_name("square"), Some(LineCap::Square));
-    assert_eq!(fill_mode_from_name("solid"), Some(FillMode::Solid));
     assert_eq!(join_from_name("mixed"), None);
-    assert_eq!(fill_mode_from_name("custom"), None);
 }

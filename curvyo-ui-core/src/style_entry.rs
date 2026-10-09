@@ -2,9 +2,7 @@
 //! becomes the style edit it commits (`specs/0007-stroke-and-fill-styling`
 //! criteria 5, 6, 13, 14).
 
-use curvyo_document_core::{
-    Color, FillMode, Length, LineCap, LineJoin, Opacity, StopChange, StopPosition, StyleEdit,
-};
+use curvyo_document_core::{Color, Length, LineCap, LineJoin, Opacity, StyleEdit};
 
 use crate::transform_entry::parse_entry_number;
 
@@ -200,93 +198,5 @@ pub fn cap_from_name(name: &str) -> Option<LineCap> {
         "round" => Some(LineCap::Round),
         "square" => Some(LineCap::Square),
         _ => None,
-    }
-}
-
-/// Parses the host's fill-mode word.
-#[must_use]
-pub fn fill_mode_from_name(name: &str) -> Option<FillMode> {
-    match name {
-        "none" => Some(FillMode::None),
-        "solid" => Some(FillMode::Solid),
-        "linear" => Some(FillMode::Linear),
-        "radial" => Some(FillMode::Radial),
-        _ => None,
-    }
-}
-
-/// Parses a stop position field: a percent from 0 to 100 with an optional
-/// trailing `%` and either decimal mark, stored as the fraction typed (the
-/// panel shows one decimal at most).
-///
-/// # Errors
-/// [`StyleEntryError::Percent`] for text that is not a number from 0 to 100.
-pub fn parse_position_percent(text: &str) -> Result<StopPosition, StyleEntryError> {
-    let trimmed = text.trim();
-    let number = trimmed.strip_suffix('%').unwrap_or(trimmed);
-    let value = parse_entry_number(number, false).ok_or(StyleEntryError::Percent)?;
-    if !(0.0..=100.0).contains(&value) {
-        return Err(StyleEntryError::Percent);
-    }
-    // `+ 0.0` turns a negative zero into zero.
-    StopPosition::new(value / 100.0 + 0.0).map_err(|_| StyleEntryError::Percent)
-}
-
-/// A value of a gradient stop edited with typed text or a drag.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StopField {
-    /// Where the stop sits along the gradient.
-    Position,
-    /// The stop's colour.
-    Color,
-    /// The stop's own opacity.
-    Opacity,
-}
-
-impl StopField {
-    /// The field named by the host (`"position"`, `"color"`, `"opacity"`).
-    #[must_use]
-    pub fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "position" => Some(Self::Position),
-            "color" => Some(Self::Color),
-            "opacity" => Some(Self::Opacity),
-            _ => None,
-        }
-    }
-
-    /// The change that typing `text` commits.
-    ///
-    /// # Errors
-    /// The parse error of the field's own kind of value.
-    pub fn parse_text(self, text: &str) -> Result<StopChange, StyleEntryError> {
-        Ok(match self {
-            Self::Position => StopChange::Position(parse_position_percent(text)?),
-            Self::Color => StopChange::Color(parse_hex(text)?),
-            Self::Opacity => StopChange::Opacity(parse_opacity_percent(text)?),
-        })
-    }
-
-    /// The change a drag tick makes: `value` is a percent for a position and an
-    /// opacity, `0xRRGGBB` for a colour.
-    #[must_use]
-    pub fn drag_change(self, value: f64) -> StopChange {
-        match self {
-            // To 0.1 %: a position set by the pointer or a key is a round number.
-            Self::Position => StopChange::Position(
-                StopPosition::new(((value * 10.0).round() / 1000.0).clamp(0.0, 1.0))
-                    .unwrap_or(StopPosition::START),
-            ),
-            Self::Color => {
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let rgb = value.clamp(0.0, f64::from(0x00FF_FFFF_u32)) as u32;
-                StopChange::Color(Color {
-                    r: ((rgb >> 16) & 0xFF) as u8,
-                    g: ((rgb >> 8) & 0xFF) as u8,
-                    b: (rgb & 0xFF) as u8,
-                })
-            }
-            Self::Opacity => StopChange::Opacity(opacity_from_percent(value)),
-        }
     }
 }

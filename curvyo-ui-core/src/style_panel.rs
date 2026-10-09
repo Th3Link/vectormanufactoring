@@ -3,13 +3,11 @@
 //! 13, 24). A pure function of the snapshots, so the DOM holds no editing logic.
 
 use curvyo_document_core::{
-    Color, DashPattern, FillKind, FillMode, Length, LineCap, LineJoin, ObjectSnapshot, Opacity,
-    Style,
+    Color, DashPattern, Length, LineCap, LineJoin, ObjectSnapshot, Opacity, Style,
 };
 
 use crate::select_bar::BarValue;
 use crate::style_scope::StyleScope;
-use crate::style_stops::{StopsPanel, stops_panel};
 
 /// Two stroke widths closer than this are one value, millimetres.
 const WIDTH_EQUAL_EPSILON_MM: f64 = 1e-9;
@@ -102,15 +100,12 @@ pub struct StrokePanel {
 /// The fill rows of the panel.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FillPanel {
-    /// The Fill type row. A mode the panel has no button for yet still reads
-    /// as itself.
-    pub mode: BarValue<FillMode>,
-    /// The solid colour.
+    /// The Paint switch: on, off, or "no state pressed".
+    pub paint: BarValue<bool>,
+    /// The colour.
     pub color: BarValue<Color>,
-    /// The solid opacity.
+    /// The opacity.
     pub opacity: BarValue<Opacity>,
-    /// The gradient stop editor (criteria 16 to 20, 34, 35).
-    pub stops: StopsPanel,
 }
 
 /// Everything the panel shows.
@@ -138,15 +133,6 @@ fn shared_by<T: Copy>(values: &[T], same: impl Fn(T, T) -> bool) -> BarValue<T> 
 
 fn shared<T: Copy + PartialEq>(values: &[T]) -> BarValue<T> {
     shared_by(values, |a, b| a == b)
-}
-
-pub(crate) fn fill_mode(style: &Style) -> FillMode {
-    match (style.fill.enabled, style.fill.kind) {
-        (false, _) => FillMode::None,
-        (true, FillKind::Solid) => FillMode::Solid,
-        (true, FillKind::Linear) => FillMode::Linear,
-        (true, FillKind::Radial) => FillMode::Radial,
-    }
 }
 
 /// What the panel shows for the objects of `scope` out of `objects`. With
@@ -180,14 +166,9 @@ pub fn style_panel_state(objects: &[ObjectSnapshot], scope: &StyleScope) -> Styl
             cap: shared(&column(&styles, |s| s.stroke.cap)),
         },
         fill: FillPanel {
-            mode: shared(&column(&styles, fill_mode)),
+            paint: shared(&column(&styles, |s| s.fill.paints())),
             color: shared(&column(&styles, |s| s.fill.color)),
             opacity: shared(&column(&styles, |s| s.fill.opacity)),
-            stops: if enabled {
-                stops_panel(objects, &scope.ids)
-            } else {
-                StopsPanel::Hidden
-            },
         },
     }
 }

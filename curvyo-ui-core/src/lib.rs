@@ -48,7 +48,6 @@ mod style_edit;
 mod style_entry;
 mod style_panel;
 mod style_scope;
-mod style_stops;
 mod transform_commit;
 mod transform_drag;
 mod transform_entry;
@@ -111,16 +110,11 @@ pub use skew_entry::SkewEntry;
 pub use skew_math::{SkewFrame, skew_angle, skew_factor, skew_frame};
 pub use style_edit::StyleEditor;
 pub use style_entry::{
-    MAX_STROKE_WIDTH_MM, StopField, StyleEntryError, StyleField, cap_from_name,
-    fill_mode_from_name, join_from_name, opacity_from_percent, parse_hex, parse_opacity_percent,
-    parse_position_percent, parse_stroke_width,
+    MAX_STROKE_WIDTH_MM, StyleEntryError, StyleField, cap_from_name, join_from_name,
+    opacity_from_percent, parse_hex, parse_opacity_percent, parse_stroke_width,
 };
 pub use style_panel::{DashChoice, FillPanel, StrokePanel, StylePanelState, style_panel_state};
 pub use style_scope::{StyleScope, StyleTool, style_scope};
-pub use style_stops::{
-    BarStop, NewStop, StopEditorView, StopRowView, StopsPanel, fill_targets, new_stop_values,
-    selected_rank, stop_edits, stop_targets, stops_panel,
-};
 pub use transform_drag::{
     CornerLinking, CornerRadiusScaling, ParamDragInfo, ScaleModes, StrokeScaling,
 };

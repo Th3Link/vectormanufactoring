@@ -577,19 +577,11 @@ mod tests {
     // `0007` criteria 23, 27 and 29: a filled interior is hittable
     // -----------------------------------------------------------------
 
-    use curvyo_document_core::{
-        FillMode, FillModeTarget, GradientStop, Opacity, StopId, StyleEdit,
-    };
+    use curvyo_document_core::{Opacity, StyleEdit};
 
     fn fill(document: &Document, id: NodeId) {
         document
-            .set_fill_mode(
-                FillMode::Solid,
-                &[FillModeTarget {
-                    id,
-                    seed_stops: vec![],
-                }],
-            )
+            .edit_style(&[id], &StyleEdit::FillEnabled(true))
             .expect("fill on");
     }
 
@@ -649,43 +641,6 @@ mod tests {
         document
             .edit_style(&[id], &StyleEdit::FillOpacity(Opacity::new(0.0).unwrap()))
             .expect("opacity");
-        assert_eq!(
-            hit_test_object(&objects_of(&document), Point::new(10.0, 10.0), TOL),
-            Some(id)
-        );
-    }
-
-    #[test]
-    fn ac23_a_gradient_without_stops_paints_nothing_and_is_not_hit() {
-        let document = Document::new(1);
-        let id = square(&document, 0.0, 0.0, 20.0);
-        document
-            .set_fill_mode(
-                FillMode::Linear,
-                &[FillModeTarget {
-                    id,
-                    seed_stops: vec![],
-                }],
-            )
-            .expect("gradient mode");
-        assert_eq!(
-            hit_test_object(&objects_of(&document), Point::new(10.0, 10.0), TOL),
-            None
-        );
-        document
-            .set_fill_mode(
-                FillMode::Linear,
-                &[FillModeTarget {
-                    id,
-                    seed_stops: GradientStop::default_pair(
-                        curvyo_document_core::Color::BLACK,
-                        StopId::new(1, 1),
-                        StopId::new(1, 2),
-                    )
-                    .to_vec(),
-                }],
-            )
-            .expect("seeded");
         assert_eq!(
             hit_test_object(&objects_of(&document), Point::new(10.0, 10.0), TOL),
             Some(id)

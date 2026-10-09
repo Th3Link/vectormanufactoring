@@ -22,8 +22,8 @@
 )]
 
 use curvyo_document_core::{
-    AnchorId, AnchorKind, Angle, Color, Document, FillMode, FillModeTarget, Length, NewAnchor,
-    NodeId, ObjectSnapshot, Point, RectBounds, StyleEdit, Tolerance, Vec2,
+    AnchorId, AnchorKind, Angle, Color, Document, Length, NewAnchor, NodeId, ObjectSnapshot, Point,
+    RectBounds, StyleEdit, Tolerance, Vec2,
 };
 use curvyo_geometry_core::{Outline, contains_point_in_outlines};
 use curvyo_ui_core::{
@@ -69,14 +69,7 @@ fn rect(d: &Document, x: f64, y: f64, w: f64, h: f64) -> NodeId {
 }
 
 fn solid_fill(d: &Document, id: NodeId, on: bool) {
-    d.set_fill_mode(
-        if on { FillMode::Solid } else { FillMode::None },
-        &[FillModeTarget {
-            id,
-            seed_stops: vec![],
-        }],
-    )
-    .unwrap();
+    d.edit_style(&[id], &StyleEdit::FillEnabled(on)).unwrap();
     if on {
         d.edit_style(&[id], &StyleEdit::FillColor(Color { r: 9, g: 9, b: 9 }))
             .unwrap();
