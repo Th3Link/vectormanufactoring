@@ -104,7 +104,14 @@ fn ac5_spec_examples_mm() {
     ];
     for (pct, mant, exp, step) in cases {
         for axis in axes() {
-            let l = ruler_layout(view_at(pct, 0.0, 0.0), axis, 1000.0, DisplayUnit::Mm, 0.0);
+            let l = ruler_layout(
+                view_at(pct, 0.0, 0.0),
+                axis,
+                1000.0,
+                DisplayUnit::Mm,
+                0.0,
+                0.0,
+            );
             assert!(
                 (l.step() - step).abs() < step * 1e-12,
                 "pct {pct}: step {} want {step}",
@@ -123,6 +130,7 @@ fn ac34_spec_examples_cm_and_in_at_100_percent() {
         1000.0,
         DisplayUnit::Cm,
         0.0,
+        0.0,
     );
     assert!((cm.step() - 2.0).abs() < 1e-12, "cm step {}", cm.step());
     let inch = ruler_layout(
@@ -130,6 +138,7 @@ fn ac34_spec_examples_cm_and_in_at_100_percent() {
         RulerAxis::Horizontal,
         1000.0,
         DisplayUnit::In,
+        0.0,
         0.0,
     );
     assert!((inch.step() - 0.5).abs() < 1e-12, "in step {}", inch.step());
@@ -141,7 +150,7 @@ fn ac5_step_is_smallest_125_at_least_40px_without_labels() {
         for pct in zoom_sweep() {
             for axis in axes() {
                 let view = view_at(pct, -33.3, 71.1);
-                let l = ruler_layout(view, axis, 900.0, unit, 0.0);
+                let l = ruler_layout(view, axis, 900.0, unit, 0.0, 0.0);
                 let px_per_unit = view.scale() * mm_per(unit);
                 assert!([1, 2, 5].contains(&l.mantissa), "{unit:?} {pct}");
                 let step = f64::from(l.mantissa) * 10f64.powi(l.exponent);
@@ -169,7 +178,7 @@ fn ac5_step_accounts_for_widest_label_plus_4px() {
     for unit in UNITS {
         for pct in zoom_sweep() {
             let view = view_at(pct, 0.0, 0.0);
-            let l = ruler_layout(view, RulerAxis::Horizontal, 900.0, unit, 8.0);
+            let l = ruler_layout(view, RulerAxis::Horizontal, 900.0, unit, 8.0, 8.0);
             let widest = l
                 .majors
                 .iter()
@@ -200,7 +209,7 @@ fn ac5_step_is_monotonic_in_zoom_without_labels() {
         for axis in axes() {
             let mut prev = f64::INFINITY;
             for pct in zoom_sweep() {
-                let l = ruler_layout(view_at(pct, 12.0, 7.0), axis, 900.0, unit, 0.0);
+                let l = ruler_layout(view_at(pct, 12.0, 7.0), axis, 900.0, unit, 0.0, 0.0);
                 let step = l.step();
                 assert!(
                     step <= prev * (1.0 + 1e-12),
@@ -225,6 +234,7 @@ fn ac5_step_is_monotonic_in_zoom_with_labels() {
                 900.0,
                 unit,
                 7.0,
+                7.0,
             );
             let step = l.step();
             assert!(
@@ -245,6 +255,7 @@ fn ac5_five_minors_per_major_equally_spaced() {
                 RulerAxis::Horizontal,
                 800.0,
                 unit,
+                7.0,
                 7.0,
             );
             let expect_minor = l.major_px / 5.0;
@@ -290,7 +301,7 @@ fn ac2_every_major_matches_canvas_projection() {
         for unit in UNITS {
             for axis in axes() {
                 let view = vp.view();
-                let l = ruler_layout(view, axis, 900.0, unit, 7.0);
+                let l = ruler_layout(view, axis, 900.0, unit, 7.0, 7.0);
                 for m in &l.majors {
                     let value_mm = m.index as f64 * l.step() * mm_per(unit);
                     let (sx, sy) = view.document_to_screen(Point::new(value_mm, value_mm));
@@ -314,8 +325,15 @@ fn ac2_every_major_matches_canvas_projection() {
 #[test]
 fn ac3_origin_tick_is_document_corner_and_values_grow_right_and_down() {
     let view = view_at(100.0, -50.0, -30.0);
-    let h = ruler_layout(view, RulerAxis::Horizontal, 800.0, DisplayUnit::Mm, 7.0);
-    let v = ruler_layout(view, RulerAxis::Vertical, 800.0, DisplayUnit::Mm, 7.0);
+    let h = ruler_layout(
+        view,
+        RulerAxis::Horizontal,
+        800.0,
+        DisplayUnit::Mm,
+        7.0,
+        7.0,
+    );
+    let v = ruler_layout(view, RulerAxis::Vertical, 800.0, DisplayUnit::Mm, 7.0, 7.0);
     let (cx, cy) = view.document_to_screen(Point::new(0.0, 0.0));
     assert!((h.origin_px.unwrap() - cx).abs() < 1e-9);
     assert!((v.origin_px.unwrap() - cy).abs() < 1e-9);
@@ -344,6 +362,7 @@ fn ac3_no_origin_when_zero_is_off_strip() {
         800.0,
         DisplayUnit::Mm,
         7.0,
+        7.0,
     );
     assert_eq!(right.origin_px, None);
     let neg = ruler_layout(
@@ -351,6 +370,7 @@ fn ac3_no_origin_when_zero_is_off_strip() {
         RulerAxis::Horizontal,
         800.0,
         DisplayUnit::Mm,
+        7.0,
         7.0,
     );
     assert_eq!(neg.origin_px, None);
@@ -360,7 +380,7 @@ fn ac3_no_origin_when_zero_is_off_strip() {
 fn ac4_rulers_continue_with_negative_values() {
     let view = view_at(100.0, -200.0, -200.0);
     for axis in axes() {
-        let l = ruler_layout(view, axis, 800.0, DisplayUnit::Mm, 7.0);
+        let l = ruler_layout(view, axis, 800.0, DisplayUnit::Mm, 7.0, 7.0);
         assert!(l.labels.iter().any(|x| x.text.starts_with(MINUS)));
         assert!(l.labels.iter().any(|x| x.text == "0"));
         assert!(
@@ -375,6 +395,7 @@ fn ac4_rulers_continue_with_negative_values() {
         RulerAxis::Horizontal,
         800.0,
         DisplayUnit::Mm,
+        7.0,
         7.0,
     );
     assert!(
@@ -399,7 +420,7 @@ fn ac6_labels_are_exact_decimals_everywhere() {
             ] {
                 for axis in axes() {
                     let view = view_at(pct, ox, oy);
-                    let l = ruler_layout(view, axis, 900.0, unit, 7.0);
+                    let l = ruler_layout(view, axis, 900.0, unit, 7.0, 7.0);
                     for lab in &l.labels {
                         let idx = label_for_major(&l, lab.tick_px);
                         let want = exact_label(idx * i64::from(l.mantissa), l.exponent);
@@ -439,6 +460,7 @@ fn ac6_tick_at_0_3_reads_0_3() {
                 900.0,
                 unit,
                 0.0,
+                0.0,
             );
             for lab in &l.labels {
                 assert_ne!(lab.text, "0.30000000000000004");
@@ -458,6 +480,7 @@ fn ac6_no_negative_zero_label() {
             RulerAxis::Horizontal,
             900.0,
             DisplayUnit::Mm,
+            7.0,
             7.0,
         );
         for lab in &l.labels {
@@ -484,7 +507,7 @@ fn ac7_labels_inside_strip_and_never_overlap() {
             ] {
                 for axis in axes() {
                     for (len, digit) in [(900.0, 7.0), (24.0, 7.0), (60.0, 8.0), (300.0, 7.0)] {
-                        let l = ruler_layout(view_at(pct, ox, oy), axis, len, unit, digit);
+                        let l = ruler_layout(view_at(pct, ox, oy), axis, len, unit, digit, digit);
                         let mut prev_end = f64::NEG_INFINITY;
                         for lab in &l.labels {
                             let start = lab.tick_px + 4.0;
@@ -525,6 +548,7 @@ fn ac7_thinning_uses_every_second_or_fifth_and_keeps_all_ticks() {
                 900.0,
                 unit,
                 8.0,
+                8.0,
             );
             assert!([1, 2, 5].contains(&l.label_every));
             if l.label_every > 1 {
@@ -559,6 +583,7 @@ fn ac7_thinning_when_label_plus_8px_exceeds_major() {
                 1200.0,
                 unit,
                 8.0,
+                8.0,
             );
             if l.labels.len() < 2 {
                 continue;
@@ -591,6 +616,7 @@ fn ac7_numbers_are_never_abbreviated() {
             900.0,
             DisplayUnit::Mm,
             7.0,
+            7.0,
         );
         for lab in &l.labels {
             assert!(
@@ -612,7 +638,7 @@ fn degenerate_strip_lengths_and_digit_widths_do_not_panic_or_blow_up() {
         for digit in [0.0, -3.0, f64::NAN, f64::INFINITY, 7.0, 1e9] {
             for unit in UNITS {
                 for axis in axes() {
-                    let l = ruler_layout(view_at(100.0, 0.0, 0.0), axis, len, unit, digit);
+                    let l = ruler_layout(view_at(100.0, 0.0, 0.0), axis, len, unit, digit, digit);
                     assert!(
                         l.majors.len() < 100_000,
                         "len {len} digit {digit}: {} majors",
@@ -652,7 +678,7 @@ fn extreme_finite_view_values_do_not_panic_or_blow_up() {
             for unit in UNITS {
                 for axis in axes() {
                     let view = ViewTransform::new(s, Point::new(ox, ox));
-                    let l = ruler_layout(view, axis, 900.0, unit, 7.0);
+                    let l = ruler_layout(view, axis, 900.0, unit, 7.0, 7.0);
                     assert!(
                         l.majors.len() < 100_000,
                         "scale {s} origin {ox}: {}",
@@ -690,6 +716,7 @@ fn unusable_scales_give_an_empty_layout() {
                 900.0,
                 unit,
                 7.0,
+                7.0,
             );
             assert!(
                 l.majors.is_empty() && l.minors.is_empty() && l.labels.is_empty(),
@@ -718,6 +745,7 @@ fn nonfinite_origin_gives_no_nonfinite_positions() {
                     900.0,
                     DisplayUnit::Mm,
                     7.0,
+                    7.0,
                 );
                 assert!(
                     l.majors.iter().all(|m| m.px.is_finite()),
@@ -736,7 +764,14 @@ fn huge_pan_offsets_keep_labels_exact_where_representable() {
     // 0.2 mm steps (index ~ 5e9). The labels must still be exact decimals.
     for ox in [1.0e9, -1.0e9, 123_456_789.0] {
         let view = view_at(8000.0, ox, ox);
-        let l = ruler_layout(view, RulerAxis::Horizontal, 900.0, DisplayUnit::Mm, 7.0);
+        let l = ruler_layout(
+            view,
+            RulerAxis::Horizontal,
+            900.0,
+            DisplayUnit::Mm,
+            7.0,
+            7.0,
+        );
         for m in &l.majors {
             assert!(
                 m.px > -200.0 && m.px < 1100.0,
@@ -759,7 +794,7 @@ fn majors_cover_the_whole_strip() {
     for unit in UNITS {
         for pct in zoom_sweep() {
             for axis in axes() {
-                let l = ruler_layout(view_at(pct, -17.0, 4.0), axis, 700.0, unit, 7.0);
+                let l = ruler_layout(view_at(pct, -17.0, 4.0), axis, 700.0, unit, 7.0, 7.0);
                 assert!(
                     l.majors.first().unwrap().px <= 0.0,
                     "{unit:?} {pct} first {}",
@@ -929,6 +964,7 @@ fn ac7_labels_on_every_tick_only_with_8px_room_and_thinned_only_when_needed() {
                     RulerAxis::Horizontal,
                     len,
                     unit,
+                    digit,
                     digit,
                 );
                 let widest = widest_in_strip(&l, len, digit);

@@ -18,11 +18,24 @@ impl Session {
     }
 
     /// The tick layout of the ruler along `axis`, `length_px` long, for the
-    /// live view, in the display unit. `digit_px` is the advance of one digit
-    /// of the label font.
+    /// live view, in the display unit. `digit_px` and `minus_px` are the
+    /// widest digit's and the minus sign's advance in the label font.
     #[must_use]
-    pub fn ruler_layout(&self, axis: RulerAxis, length_px: f64, digit_px: f64) -> RulerLayout {
-        ruler_layout(self.view(), axis, length_px, self.display_unit(), digit_px)
+    pub fn ruler_layout(
+        &self,
+        axis: RulerAxis,
+        length_px: f64,
+        digit_px: f64,
+        minus_px: f64,
+    ) -> RulerLayout {
+        ruler_layout(
+            self.view(),
+            axis,
+            length_px,
+            self.display_unit(),
+            digit_px,
+            minus_px,
+        )
     }
 
     /// The status bar's cursor readout for a document point in millimetres,
@@ -69,7 +82,7 @@ mod tests {
     fn the_ruler_zero_is_at_the_document_corner_and_ticks_convert_back() {
         let mut session = Session::new(1);
         session.show_default_view();
-        let layout = session.ruler_layout(RulerAxis::Horizontal, 800.0, 7.0);
+        let layout = session.ruler_layout(RulerAxis::Horizontal, 800.0, 7.0, 7.0);
         let origin = layout.origin_px.unwrap();
         assert!((origin - 72.0).abs() < 1e-9);
         // The tick labelled "100" (mm) at 100 % is where a click lands at
@@ -96,7 +109,7 @@ mod tests {
         assert!(session.document.set_display_unit(DisplayUnit::In));
         assert_eq!(session.display_unit(), DisplayUnit::In);
         assert_eq!(session.size_text(), "8.268 \u{d7} 11.693 in");
-        let layout = session.ruler_layout(RulerAxis::Horizontal, 800.0, 7.0);
+        let layout = session.ruler_layout(RulerAxis::Horizontal, 800.0, 7.0, 7.0);
         assert!((layout.step() - 0.5).abs() < 1e-9, "{}", layout.step());
         assert_eq!(session.document.size(), DocumentSize::default());
     }

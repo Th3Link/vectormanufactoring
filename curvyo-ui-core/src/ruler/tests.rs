@@ -10,7 +10,7 @@ fn view_at(percent: f64, x_mm: f64, y_mm: f64) -> ViewTransform {
 }
 
 fn layout(view: ViewTransform, unit: DisplayUnit) -> RulerLayout {
-    ruler_layout(view, RulerAxis::Horizontal, 800.0, unit, DIGIT)
+    ruler_layout(view, RulerAxis::Horizontal, 800.0, unit, DIGIT, DIGIT)
 }
 
 /// Criterion 5's examples in mm: 100 % gives 20 mm, 8000 % gives 0.2 mm,
@@ -117,8 +117,22 @@ fn no_label_at_any_zoom_has_float_noise_or_trailing_zeros() {
 #[test]
 fn the_origin_tick_is_at_the_document_corner_on_both_axes() {
     let view = view_at(100.0, -10.0, -20.0);
-    let horizontal = ruler_layout(view, RulerAxis::Horizontal, 800.0, DisplayUnit::Mm, DIGIT);
-    let vertical = ruler_layout(view, RulerAxis::Vertical, 600.0, DisplayUnit::Mm, DIGIT);
+    let horizontal = ruler_layout(
+        view,
+        RulerAxis::Horizontal,
+        800.0,
+        DisplayUnit::Mm,
+        DIGIT,
+        DIGIT,
+    );
+    let vertical = ruler_layout(
+        view,
+        RulerAxis::Vertical,
+        600.0,
+        DisplayUnit::Mm,
+        DIGIT,
+        DIGIT,
+    );
     let corner = view.document_to_screen(Point::new(0.0, 0.0));
     assert!((horizontal.origin_px.unwrap() - corner.0).abs() < 1e-9);
     assert!((vertical.origin_px.unwrap() - corner.1).abs() < 1e-9);
@@ -171,7 +185,7 @@ fn every_major_tick_matches_the_canvas_projection_after_pan_and_zoom() {
         for unit in DisplayUnit::ALL {
             let layout = layout(view, unit);
             for axis in [RulerAxis::Horizontal, RulerAxis::Vertical] {
-                let layout = ruler_layout(view, axis, 600.0, unit, DIGIT);
+                let layout = ruler_layout(view, axis, 600.0, unit, DIGIT, DIGIT);
                 for major in &layout.majors {
                     #[allow(clippy::cast_precision_loss)]
                     let mm = major.index as f64 * layout.step() * unit.mm_per_unit();
@@ -207,7 +221,8 @@ fn no_label_is_clipped_or_overlaps_another_up_to_a_million() {
                 let origin = centre * to_mm - 400.0 / scale;
                 let view = ViewTransform::new(scale, Point::new(origin, origin));
                 for length in [90.0, 400.0, 800.0] {
-                    let layout = ruler_layout(view, RulerAxis::Horizontal, length, unit, DIGIT);
+                    let layout =
+                        ruler_layout(view, RulerAxis::Horizontal, length, unit, DIGIT, DIGIT);
                     let mut previous_end = f64::NEG_INFINITY;
                     for label in &layout.labels {
                         #[allow(clippy::cast_precision_loss)]
@@ -231,7 +246,14 @@ fn labels_thin_out_to_every_second_tick_when_they_would_touch() {
     // wide at 12 px per digit: they fit the step (40) but not with 8 px
     // between them (44).
     let view = ViewTransform::new(4.2, Point::new(0.0, 0.0));
-    let layout = ruler_layout(view, RulerAxis::Horizontal, 800.0, DisplayUnit::Mm, 12.0);
+    let layout = ruler_layout(
+        view,
+        RulerAxis::Horizontal,
+        800.0,
+        DisplayUnit::Mm,
+        12.0,
+        12.0,
+    );
     assert!((layout.step() - 10.0).abs() < 1e-9);
     assert_eq!(layout.label_every, 2);
     assert!(layout.labels.iter().all(|l| {
@@ -255,7 +277,14 @@ fn a_label_that_does_not_fit_in_the_strip_is_not_drawn() {
     // The tick at 0 sits 2 px from the strip's start: its label would
     // start at 6 px and be 7 px wide, so with a 10 px strip it is cut.
     let view = ViewTransform::new(PX_PER_MM_AT_100, Point::new(-2.0 / PX_PER_MM_AT_100, 0.0));
-    let layout = ruler_layout(view, RulerAxis::Horizontal, 10.0, DisplayUnit::Mm, DIGIT);
+    let layout = ruler_layout(
+        view,
+        RulerAxis::Horizontal,
+        10.0,
+        DisplayUnit::Mm,
+        DIGIT,
+        DIGIT,
+    );
     assert!(layout.labels.is_empty(), "{:?}", layout.labels);
     assert!(!layout.majors.is_empty(), "ticks are never removed");
 }
@@ -263,7 +292,14 @@ fn a_label_that_does_not_fit_in_the_strip_is_not_drawn() {
 #[test]
 fn an_empty_strip_has_an_empty_layout() {
     let view = view_at(100.0, 0.0, 0.0);
-    let layout = ruler_layout(view, RulerAxis::Horizontal, 0.0, DisplayUnit::Mm, DIGIT);
+    let layout = ruler_layout(
+        view,
+        RulerAxis::Horizontal,
+        0.0,
+        DisplayUnit::Mm,
+        DIGIT,
+        DIGIT,
+    );
     assert!(layout.majors.is_empty() && layout.labels.is_empty());
 }
 
@@ -276,6 +312,7 @@ fn an_infinite_or_huge_strip_gets_an_empty_layout() {
             RulerAxis::Horizontal,
             length,
             DisplayUnit::Mm,
+            DIGIT,
             DIGIT,
         );
         assert!(
@@ -308,7 +345,7 @@ fn a_non_finite_view_gets_an_empty_layout() {
                 RulerAxis::Vertical,
             ),
         ] {
-            let layout = ruler_layout(view, axis, 800.0, DisplayUnit::Mm, DIGIT);
+            let layout = ruler_layout(view, axis, 800.0, DisplayUnit::Mm, DIGIT, DIGIT);
             assert!(layout.majors.is_empty() && layout.minors.is_empty());
         }
     }
@@ -326,7 +363,7 @@ fn a_view_outside_any_zoom_range_does_not_panic() {
     ] {
         for unit in DisplayUnit::ALL {
             let view = ViewTransform::new(scale, Point::new(origin, origin));
-            let layout = ruler_layout(view, RulerAxis::Horizontal, 800.0, unit, DIGIT);
+            let layout = ruler_layout(view, RulerAxis::Horizontal, 800.0, unit, DIGIT, DIGIT);
             assert!(layout.majors.len() <= 4097, "{scale} {origin}");
         }
     }
@@ -339,7 +376,56 @@ fn a_view_outside_any_zoom_range_does_not_panic() {
 fn a_tick_just_off_the_strip_does_not_widen_the_step() {
     let view = view_at(100.0, 961.0, 0.0);
     let length = (999.9 - 961.0) * PX_PER_MM_AT_100;
-    let layout = ruler_layout(view, RulerAxis::Horizontal, length, DisplayUnit::Mm, 18.0);
+    let layout = ruler_layout(
+        view,
+        RulerAxis::Horizontal,
+        length,
+        DisplayUnit::Mm,
+        18.0,
+        18.0,
+    );
     assert!((layout.step() - 20.0).abs() < 1e-9, "{}", layout.step());
     assert!(layout.labels.iter().any(|label| label.text == "980"));
+}
+
+/// The minus sign is measured on its own: at 100 % in inches (0.5 in is 48 px)
+/// with a digit of 7.63 px and a minus of 10.05 px, "-0.5" is 33 px and every
+/// 0.5 in tick is labelled, negative ones included. Counting the minus at digit
+/// width, as the widest character, thinned them to whole inches.
+#[test]
+fn half_inch_ticks_are_labelled_at_100_percent_with_a_wide_minus_sign() {
+    let view = ViewTransform::new(PX_PER_MM_AT_100, Point::new(-72.0 / PX_PER_MM_AT_100, 0.0));
+    let layout = ruler_layout(
+        view,
+        RulerAxis::Horizontal,
+        800.0,
+        DisplayUnit::In,
+        7.63,
+        10.05,
+    );
+    assert!((layout.step() - 0.5).abs() < 1e-9);
+    assert_eq!(layout.label_every, 1);
+    let texts: Vec<_> = layout.labels.iter().map(|l| l.text.as_str()).collect();
+    assert!(
+        texts.contains(&"0.5") && texts.contains(&"1.5"),
+        "{texts:?}"
+    );
+    let narrow = ruler_layout(
+        view,
+        RulerAxis::Horizontal,
+        800.0,
+        DisplayUnit::In,
+        7.63,
+        7.63,
+    );
+    assert_eq!(narrow.labels.len(), layout.labels.len());
+}
+
+/// A negative label is wider by the minus sign's own width, a positive one is
+/// not.
+#[test]
+fn only_negative_labels_pay_for_the_minus_sign() {
+    assert!((text_width("12", 7.0, 10.0) - 14.0).abs() < 1e-9);
+    assert!((text_width("\u{2212}12", 7.0, 10.0) - 24.0).abs() < 1e-9);
+    assert!((text_width("\u{2212}0.5", 7.0, 10.0) - 31.0).abs() < 1e-9);
 }

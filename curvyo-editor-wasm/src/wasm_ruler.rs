@@ -70,16 +70,25 @@ impl RulerView {
 impl WasmSession {
     /// The layout of the ruler along the top (`horizontal`) or left edge,
     /// `length_px` CSS pixels long, with labels in the display unit.
-    /// `digit_px` is the advance of one digit of the label font.
+    /// `digit_px` is the widest digit's advance and `minus_px` the minus sign's,
+    /// both in the label font.
     #[must_use]
-    pub fn ruler_view(&self, horizontal: bool, length_px: f64, digit_px: f64) -> RulerView {
+    pub fn ruler_view(
+        &self,
+        horizontal: bool,
+        length_px: f64,
+        digit_px: f64,
+        minus_px: f64,
+    ) -> RulerView {
         let axis = if horizontal {
             RulerAxis::Horizontal
         } else {
             RulerAxis::Vertical
         };
         RulerView {
-            layout: self.session.ruler_layout(axis, length_px, digit_px),
+            layout: self
+                .session
+                .ruler_layout(axis, length_px, digit_px, minus_px),
         }
     }
 

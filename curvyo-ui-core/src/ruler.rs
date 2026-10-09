@@ -121,9 +121,12 @@ impl RulerLayout {
 }
 
 /// Lays out one ruler strip of `length_px` px along `axis` for `view`, with
-/// labels in `unit`. `digit_px` is the advance of one digit of the label font;
-/// every character of a label is counted as one digit wide, which is never
-/// narrower than the real text.
+/// labels in `unit`. `digit_px` is the widest advance of a digit of the label
+/// font; every character of a label other than its minus sign is counted as
+/// one digit wide (a point is narrower, so that is never narrower than the real
+/// text), and a negative label adds `minus_px`, the advance of the minus sign,
+/// which is measured on its own because the font that supplies U+2212 differs
+/// per platform.
 ///
 /// The step is the smallest 1, 2 or 5 times a power of ten (in `unit`) whose
 /// major spacing is at least 40 px and at least the widest visible
@@ -136,6 +139,7 @@ pub fn ruler_layout(
     length_px: f64,
     unit: DisplayUnit,
     digit_px: f64,
+    minus_px: f64,
 ) -> RulerLayout {
     let px_per_unit = view.scale() * unit.mm_per_unit();
     if !(length_px > 0.0 && length_px.is_finite() && px_per_unit.is_finite() && px_per_unit > 0.0) {
@@ -165,7 +169,7 @@ pub fn ruler_layout(
         first,
         last,
         widest,
-    }) = choose_step(px_per_unit, start, end, digit_px)
+    }) = choose_step(px_per_unit, start, end, digit_px, minus_px)
     else {
         return RulerLayout::empty();
     };
@@ -198,8 +202,7 @@ pub fn ruler_layout(
         .filter(|major| major.index.rem_euclid(i64::from(label_every)) == 0)
         .filter_map(|major| {
             let text = label_text(major.index, mantissa, exponent);
-            #[allow(clippy::cast_precision_loss)]
-            let width = text.chars().count() as f64 * digit_px;
+            let width = text_width(&text, digit_px, minus_px);
             let label_start = major.px + LABEL_OFFSET_PX;
             (label_start >= 0.0 && label_start + width <= length_px).then_some(RulerLabel {
                 tick_px: major.px,
@@ -246,7 +249,13 @@ struct Step {
 /// steps give ".5" labels one character longer than their neighbours. `None`
 /// when no step fits (a zoom outside any real range) or the strip would hold
 /// more than [`MAX_MAJORS`] ticks.
-fn choose_step(px_per_unit: f64, start: f64, end: f64, digit_px: f64) -> Option<Step> {
+fn choose_step(
+    px_per_unit: f64,
+    start: f64,
+    end: f64,
+    digit_px: f64,
+    minus_px: f64,
+) -> Option<Step> {
     for exponent in MIN_EXPONENT..=MAX_EXPONENT {
         for mantissa in MANTISSAS {
             let step = f64::from(mantissa) * 10f64.powi(exponent);
@@ -267,12 +276,9 @@ fn choose_step(px_per_unit: f64, start: f64, end: f64, digit_px: f64) -> Option<
                 ((start - LABEL_OFFSET_PX / px_per_unit) / step).ceil() as i64,
                 (end / step).floor() as i64,
             );
-            #[allow(clippy::cast_precision_loss)]
             let widest = (labelled_first..=labelled_last)
-                .map(|index| label_text(index, mantissa, exponent).chars().count())
-                .max()
-                .unwrap_or(1) as f64
-                * digit_px;
+                .map(|index| text_width(&label_text(index, mantissa, exponent), digit_px, minus_px))
+                .fold(digit_px, f64::max);
             if major_px >= widest + STEP_LABEL_GAP_PX {
                 return Some(Step {
                     mantissa,
@@ -285,6 +291,15 @@ fn choose_step(px_per_unit: f64, start: f64, end: f64, digit_px: f64) -> Option<
         }
     }
     None
+}
+
+/// The width of a label in px: every character but the minus sign counts as a
+/// digit, a minus sign counts as `minus_px`.
+fn text_width(text: &str, digit_px: f64, minus_px: f64) -> f64 {
+    let minus = usize::from(text.starts_with(MINUS));
+    #[allow(clippy::cast_precision_loss)]
+    let digits = (text.chars().count() - minus) as f64;
+    digits * digit_px + if minus == 1 { minus_px } else { 0.0 }
 }
 
 /// The label of major tick `index` of a step of `mantissa * 10^exponent`: the

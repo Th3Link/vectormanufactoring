@@ -184,7 +184,7 @@ fn ac2_session_layout_matches_the_canvas_projection_across_scripted_steps() {
             ),
         }
         for axis in [RulerAxis::Horizontal, RulerAxis::Vertical] {
-            let l = s.ruler_layout(axis, 900.0, 7.0);
+            let l = s.ruler_layout(axis, 900.0, 7.0, 7.0);
             for m in &l.majors {
                 let mm = m.index as f64 * l.step();
                 let (sx, sy) = s.view().document_to_screen(pt(mm, mm));
@@ -209,7 +209,7 @@ fn ac3_default_view_has_the_origin_tick_72px_in_and_labels_0() {
     s.show_default_view();
     s.resize_viewport(1000.0, 700.0);
     for axis in [RulerAxis::Horizontal, RulerAxis::Vertical] {
-        let l = s.ruler_layout(axis, 900.0, 7.0);
+        let l = s.ruler_layout(axis, 900.0, 7.0, 7.0);
         assert!((l.origin_px.unwrap() - 72.0).abs() < 1e-9);
         assert!(
             l.labels
@@ -218,7 +218,7 @@ fn ac3_default_view_has_the_origin_tick_72px_in_and_labels_0() {
         );
     }
     // mm at 100 %: majors every 20 mm
-    let h = s.ruler_layout(RulerAxis::Horizontal, 900.0, 7.0);
+    let h = s.ruler_layout(RulerAxis::Horizontal, 900.0, 7.0, 7.0);
     assert!((h.step() - 20.0).abs() < 1e-12);
     assert!(h.labels.iter().any(|x| x.text == "200"));
 }
@@ -229,7 +229,7 @@ fn ac4_rulers_run_on_past_the_document_in_every_direction() {
     s.show_default_view();
     s.resize_viewport(1600.0, 1200.0);
     // A4 portrait is 210 wide: values past 210 and before 0 exist.
-    let h = s.ruler_layout(RulerAxis::Horizontal, 1500.0, 7.0);
+    let h = s.ruler_layout(RulerAxis::Horizontal, 1500.0, 7.0, 7.0);
     let texts: Vec<_> = h.labels.iter().map(|x| x.text.as_str()).collect();
     assert!(
         texts.contains(&"220") || texts.contains(&"240"),
@@ -242,7 +242,7 @@ fn ac4_rulers_run_on_past_the_document_in_every_direction() {
         s2.wheel(-100.0, 0.0, 0.0, 0.0, false, false);
         s2
     };
-    let h2 = s2.ruler_layout(RulerAxis::Horizontal, 1500.0, 7.0);
+    let h2 = s2.ruler_layout(RulerAxis::Horizontal, 1500.0, 7.0, 7.0);
     assert!(h2.labels.iter().any(|x| x.text.starts_with(MINUS)));
 }
 
@@ -260,7 +260,7 @@ fn ac9_click_on_a_tick_hits_its_value_at_100_and_800_percent() {
             s.wheel(1182.0, 0.0, 72.0, 72.0, false, false);
         }
         assert_eq!(s.zoom_percent(), percent);
-        let l = s.ruler_layout(RulerAxis::Horizontal, 900.0, 7.0);
+        let l = s.ruler_layout(RulerAxis::Horizontal, 900.0, 7.0, 7.0);
         let tick = l
             .majors
             .iter()
