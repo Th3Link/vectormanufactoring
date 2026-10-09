@@ -689,6 +689,16 @@ tessellated every frame, and measures again. PR 4 adds gradient ramps, which
 are rebuilt and uploaded every frame as well (at most 1024 of them); a cache
 would cover them with the tessellation.
 
+**Update 2026-10-10 (`0031-segment-drag-bending` and `0034-pen-path-extension`).** The "cheap document
+version" the cache needs now exists: `Document::version()` (an opaque marker that changes exactly
+when something is committed or merged). The Pen's index of path ends uses it (`Session::with_end_index`
+rebuilds only when the version changes: 45 ms for 5000 open paths, 0.1 ms warm,
+`curvyo-editor-wasm/tests/pen_target_budget.rs`). The draw-list cache itself is still not built. A
+Node-tool drag now keeps the snapshot it started with, like a Select drag (`Session::objects`): a bend
+frame on a path of 5000 nodes costs about 7.6 ms after the first frame
+(`curvyo-editor-wasm/tests/segment_bend_budget.rs`). The same assumption holds: no remote merge and no
+undo may run during a Node-tool drag.
+
 ## The canvas does not react to a `devicePixelRatio` change with no resize event
 
 The fix below sizes the backing store once, at attach and on every
