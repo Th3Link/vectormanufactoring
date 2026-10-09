@@ -1,12 +1,13 @@
 # Plan for Boolean operations
 
-Branch `story/boolean-operations`, worktree `/home/marc/workbench/vecmanf-claude/boolean-kernel`, from
-`main` at `2a83559`. This plan covers all four PRs of the architect's split (`adrs.md`, "PR split and
-order"). Only PR 1 is written now; PRs 2 to 4 are listed so the kernel API fits what they need and
-are marked **later**. PR 2 waits for the customer's answer to question 1 (default: option A) and,
-per `CLAUDE.md` §4, for `0015-document-size-and-rulers` to merge, because it shares crates with it.
-PR 3 and PR 4 start after PR 2. Each later PR gets its own branch and re-derives its task list from
-this one when it starts.
+This plan covers all four PRs of the architect's split (`adrs.md`, "PR split and order").
+
+- **PR 1, the kernel: merged** (#69, branch `story/boolean-operations`).
+- **PR 2, the compound path in the document model: in progress** on `story/boolean-compound-path`,
+  worktree `/home/marc/workbench/vecmanf-claude/boolean-compound`, from `main` at `c61a5fb`. The
+  customer approved option A (one object, several outlines) on 2026-10-09. Details below.
+- **PR 3 and PR 4 are later**: each gets its own branch and re-derives its task list from this one
+  when it starts.
 
 ## Affected crates/modules
 
@@ -67,21 +68,37 @@ this one when it starts.
   cleanup; the library change and why). Run the
   full gate of `CLAUDE.md` §7 and every step of `.github/workflows/ci.yml` on the head sha.
 
-### PR 2: compound path (later; needs customer answer to question 1 and `0015` merged)
+### PR 2: compound path (`story/boolean-compound-path`)
 
-- [ ] 11. `extra_subpaths` encoding, read model (`SubpathSnapshot`, `subpaths()`), open-file
-  validation, `format_version` bump (`main` plus one at merge), golden files for a compound path
-  and an unchanged older file (AC 30, 37, 37a).
-- [ ] 12. The audit table, one test per line: `rotated`/`scaled`/`sheared`, `translate_objects`,
-  `duplicate_objects`, resize, rotate and skew commits (AC 35, 35a, 36, 36a).
-- [ ] 13. `contains_point` over several outlines; `ui-core` hit-test, bounds, oriented box
-  (AC 33, 34).
-- [ ] 14. `render-core`: fill, stroke, dash over all outlines (AC 31, 31a, 32).
-- [ ] 15. Node tool skips compound paths, hint chip, Join and Split refuse, Markers block hidden
-  (AC 38, 38a, 38b).
-- [ ] 16. `Document::replace_with_path` (one commit, label, base operand's place and style,
-  rotation 0) and the write-cost measurement of a 20,000-anchor compound path (AC 19 to 22, 27, 28,
-  46, 47).
+Crates: `curvyo-document-core` (model, codec, commands), `curvyo-geometry-core` (`contains_point_in_outlines`),
+`curvyo-ui-core` (hit test, bounds, oriented box, commits, double-click outcome), `curvyo-render-core`
+(fill, stroke, dash, live preview), `curvyo-editor-wasm` (`Session::paths()` leaves compound paths
+out). No frontend change: the Node-bar sentence, the hint chip and the Properties panel are PR 3.
+
+- [x] 11. `extra_subpaths` encoding in a new `subpath_codec.rs`, read model (`SubpathSnapshot`,
+  `SubpathRef`, `PathSnapshot::subpaths()` / `all_anchors()` / `is_compound()`), open-file
+  validation, `CURRENT_FORMAT_VERSION` 7 to 8, golden `compound_v8.curvyo`, older fixtures
+  re-read and compared with their stored Loro state (AC 30, 37, 37a).
+- [x] 12. The audit table, one test per line (`curvyo-document-core/tests/compound_path.rs`):
+  `rotated` / `scaled` / `sheared`, `translate_objects`, `ObjectSnapshot::translated`,
+  `duplicate_objects` (`check_anchor_ids`, `renumber_anchors`), `rotate_object`, `resize_path`
+  (AC 35, 35a, 36, 36a). In `ui-core`: `commit_move`, `commit_resize`, `numbers_of`.
+- [x] 13. `contains_point_in_outlines` (one `BezPath`, winding summed); `ui-core` `hit_test_object`
+  (`distance_to_object`, `fills_point`, `certainly_farther_than`), `object_bounds`,
+  `object_outline_bounds`, `oriented_bounds` (AC 33, 34; `tests/compound_path_select.rs`).
+- [x] 14. `render-core`: the fill is one path with a sub-path per outline; the stroke dashes each
+  outline on its own and tessellates them as one layer; the live preview outlines every outline
+  (AC 31, 31a, 32; `tests/compound_artwork.rs`).
+- [x] 15. Node tool: `Session::paths()` leaves compound paths out, so they show no node, handle or
+  segment and cannot be selected, joined, split or deleted; `check_join` / `check_split` and the
+  commands refuse; a double-click on a compound path in the Select tool is the new outcome
+  `SelectDoubleClickOutcome::CompoundPath` (AC 38, 38a). The sentence and the hint chip are PR 3;
+  38b has nothing to hide yet (no markers exist; `0018` decides).
+- [x] 16. `Document::replace_with_path` in a new `replace.rs` (one commit with the caller's label,
+  the base's place and style, rotation 0, every id resolved first) and the write-cost measurement
+  (`tests/compound_write_cost.rs`; numbers in the PR) (AC 19 to 22, 27, 28, 46, 47).
+- [x] 16a. Docs: `docs/technical-debt.md` entry "one-outline assumptions are found by audit"; the
+  `format_version` paragraph in `document.rs`.
 
 ### PR 3: command and UI (later; after PR 2)
 

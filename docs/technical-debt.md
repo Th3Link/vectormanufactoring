@@ -50,6 +50,32 @@ fuse into multiply-adds.
 through the wasm build in `curvyo-editor-wasm` and compares them with the
 fixtures, for example in the frontend test run.
 
+## One-outline assumptions are found by audit, not by the compiler
+
+A path object may hold several outlines since `0016-boolean-operations` (the first in the
+`closed` / `anchors` keys, the others in `extra_subpaths`; `PathSnapshot::subpaths()` lists
+them all). Adding a field does not make the compiler find a reader that ignores it, so the places
+below were found by an audit of every `.anchors` use and each has a test
+(`curvyo-document-core/tests/compound_path.rs`, `curvyo-ui-core/tests/compound_path_select.rs`,
+`curvyo-render-core/tests/compound_artwork.rs`, `curvyo-editor-wasm/tests/compound_path_session.rs`).
+A new reader of `PathSnapshot::anchors` is still a place where a compound path can be forgotten.
+
+| Where | What it does with several outlines |
+|---|---|
+| `path_codec` + `subpath_codec` | reads, writes and validates `extra_subpaths` |
+| `PathSnapshot::rotated`, `scaled`, `sheared`; `ObjectSnapshot::translated` | map every outline |
+| `translate_objects`, `duplicate_objects` (ids over all outlines), `rotate_object`, `resize_path` | write every outline; the stroke width once |
+| `contains_point_in_outlines`, `hit_test_object`, `object_bounds`, `object_outline_bounds`, `oriented_bounds` | all outlines, winding summed |
+| `build_artwork`, `build_live_edit_preview` | one fill path; each outline dashed alone, one stroke layer |
+| `Session::paths()`, `check_join`, `check_split`, the double-click | a compound path is not node-editable yet (customer question 7, option A) |
+
+**Not covered yet:** `transform_commit` and the Properties panel read one outline's worth of
+nothing special, but node editing of a compound path (question 7, option B), Break Apart and
+Combine will need the outline index or the anchor ids (`(NodeId, AnchorId)` is enough, ids are
+unique over the whole path). Markers on compound paths wait for `0018-stroke-markers`.
+
+**Resolution:** none planned; the audit table above is the checklist for the next reader of paths.
+
 ## V-carve depth comes from an approximate medial axis
 
 V-carving uses a constrained-Delaunay approximation of the medial axis rather

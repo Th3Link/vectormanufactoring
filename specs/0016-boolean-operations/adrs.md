@@ -315,6 +315,30 @@ assumptions are found by audit, not by the compiler", with this table.
   2 s). The tests assert them in release builds only; the CI job
   `boolean-budgets` runs them there.
 
+### 2026-10-09: what PR 2 settled (implementer)
+
+- **The encoding is as decided above**, in a new `subpath_codec.rs`; `path_codec.rs` only calls it.
+  `extra_subpaths` is created with `insert_container` like `anchors` (a boolean result is written once
+  by one peer, so the mergeable form of the style stops is not needed). `format_version` is 8.
+- **`replace_with_path`** lives in `replace.rs`, takes the label as a `&str`, returns the new
+  `NodeId`, and refuses with `NoSuchObject`, `BaseNotAnOperand`, `NoOutlines` (none, or an outline
+  without an anchor) or `AnchorIds` (an id twice). It takes the base's whole style by `read_style` /
+  `write_path_style`, so a rectangle base works as well as a path base.
+- **Measured write cost** (release, this machine): 20,000 anchors in four outlines are written in
+  178 ms, read back in 21 ms, saved in 186 ms (1.6 MB) and reopened in 50 ms; replacing 1,000
+  objects by a result of 4,000 anchors takes 33 ms. That meets criteria 46 and 47 with room, so the
+  packed-coordinate encoding stays rejected.
+- **`contains_point_in_outlines`** is new next to `contains_point`, which now calls it with one
+  outline; the old signature is unchanged.
+- **Compound paths leave the Node tool at one place**, `Session::paths()`; `check_join`,
+  `check_split` and the commands refuse independently. A double-click on one in the Select tool is
+  the new `SelectDoubleClickOutcome::CompoundPath` (no handoff, nothing changes); the session maps it
+  to "no edit hint" until PR 3 shows the sentence of criterion 38.
+- **Stroke of a compound path** is one lyon path per outline after dashing, concatenated and
+  tessellated as one layer, so a translucent stroke has no dark spot where two outlines meet.
+- **Four older tests pinned the literal version 7** (the `0015` and `0007` slices' "no bump"
+  checks); they now name the build's current version or the constant of this story.
+
 ### 2026-10-09: where the code lives
 
 - **`curvyo-geometry-core`:** `boolean` (operations, normalization, fold),
