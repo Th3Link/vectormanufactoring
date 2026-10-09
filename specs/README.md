@@ -50,7 +50,7 @@ they do not run side by side.
 | No. | Slug | What it delivers | Status | Priority | Requirements | MVP slice |
 |---|---|---|---|---|---|---|
 | [0015](0015-document-size-and-rulers/) | `document-size-and-rulers` | Rulers in mm along the top and left, document resize with the content staying centred, fit the document to the drawing, drawing outside the document edge. | Draft, being refined | Must | none yet | - |
-| [0016](0016-boolean-operations/) | `boolean-operations` | Union, difference and intersection on closed paths. | Draft, being written | Must | R-EDIT-003 | 9 |
+| [0016](0016-boolean-operations/) | `boolean-operations` | Union, difference, intersection, exclusion and reverse difference on closed paths, as a command section in the left tool rail; compound-path results. | Ready | Must | R-EDIT-003 | 9 |
 | [0017](0017-style-panel-rework/) | `style-panel-rework` | Empty panel when nothing is selected, controls hidden instead of disabled, 8-digit RGBA hex, inline colour picker, eyedropper, custom dash text line, GIMP-style value fields, gradients removed. Replaces parts of 0007. | Ready | Must | R-EDIT-005, R-EDIT-006 | - |
 | [0018](0018-stroke-markers/) | `stroke-markers` | Arrow or dot at the start, the end, N places along and on every node of a path. Builds on 0017. | Ready | Should | R-EDIT-005, R-EDIT-016 | - |
 | [0019](0019-multi-object-transform/) | `multi-object-transform` | One group box with the same handles as a single object, for a selection of several objects. Runs after 0017; 0014 is merged. | Ready | Should | R-EDIT-012 | - |

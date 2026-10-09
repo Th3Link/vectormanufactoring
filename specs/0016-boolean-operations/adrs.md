@@ -5,12 +5,16 @@ change since `stroke-and-fill-styling`: a path object may hold more than one
 outline. **No new crate, no new ADR, one new external dependency
 (`i_overlay`; the 2026-10-04 spike chose `clipper2-rust`, replaced on
 2026-10-09, see "what PR 1 settled"), one `format_version`
-bump.** The compound-path decision below needs the customer's approval
-(`CLAUDE.md` §3, document model) before PR 2 starts; PR 1 does not depend
-on it.
+bump.** The customer approved the compound-path decision and its file-format
+change on 2026-10-09 (`CLAUDE.md` §3, document model; "Customer decisions"
+below).
 
 ## Depends on
 
+- [ADR 0001 §1, §3](../../docs/adr/0001-ui-framework-and-canvas-rendering.md):
+  the rail buttons' enabled state and the command live in `curvyo-ui-core` as
+  pure functions; `curvyo-editor-wasm` only binds; the frontend renders the
+  state and forwards clicks.
 - [ADR 0002 §6](../../docs/adr/0002-document-model-units-and-svg-round-trip.md):
   "paths are sequences of cubic Bézier segments and lines, with explicit
   open/closed subpaths". The compound path below implements this accepted
@@ -42,10 +46,26 @@ on it.
 - [`specs/0006-path-merge-split-and-node-types/adrs.md`](../0006-path-merge-split-and-node-types/adrs.md):
   caller-minted `AnchorId`s, "a refusal writes nothing", the `format_version`
   merge rule (the merging PR takes `main`'s current version + 1).
+- [`specs/0010-edit-interaction-polish/`](../0010-edit-interaction-polish/)
+  criteria 54, 55: the key table and its gate; booleans add no entry.
 
 ## Feature-local decisions
 
-### 2026-10-09: compound path = option A, one object with several outlines (`needs-customer`)
+### 2026-10-09: customer decisions (final)
+
+1. **Compound path: option A**, one object with several outlines, encoded
+   as `extra_subpaths` (next section). The document-model and file-format
+   change is **approved by the customer**; the next section is accepted as
+   written.
+2. **Exclusion and Reverse difference are in:** five operations. No kernel
+   change: the kernel keeps four operations (see "the kernel").
+3. **The five operations are command buttons in their own group in the left
+   tool rail**, under the existing tools, always visible, greyed out when
+   fewer than two objects are selected. They are **no longer a Select bar
+   group**. Consequences: "boolean commands in the tool rail" below.
+4. **No keyboard shortcuts for now** (criterion 3 stands).
+
+### 2026-10-09: compound path = option A, one object with several outlines (accepted by the customer 2026-10-09)
 
 Answers the PO's open question 1. **Recommendation and default: A.**
 
@@ -102,8 +122,8 @@ meta map of a path (unchanged keys):
   movable list whose elements pass `validate_anchor`. Anything else is
   `OpenError::Damaged`.
 - **`format_version`:** `main`'s current value + 1 at merge (7 today; other
-  drafts claim 8 and 9 provisionally, and `document-size-and-rulers` may take
-  one at its own merge). Migration from older versions: none, the key is
+  drafts claim 8 and 9 provisionally; `document-size-and-rulers` takes none,
+  its `adrs.md` decision 1). Migration from older versions: none, the key is
   simply absent. Golden fixtures: a compound path saved and reopened (AC 30,
   37) and a pre-bump file opened unchanged and not rewritten.
 
@@ -321,45 +341,170 @@ assumptions are found by audit, not by the compiler", with this table.
   stored, primitives via `outline_of_rotated`, through one shared helper that
   `hit_test_object` also uses), the kernel call at a named constant
   `BOOLEAN_TOLERANCE` = 0.01 mm, ids from `AnchorIdMinter`, the refusal types
-  with the counts AC 15 to 17 need, the selection afterwards (AC 23). The
-  select bar only gets an availability flag. Nothing goes into
-  `select_tool.rs` (2,502 lines) or `node_tool.rs` (1,809).
+  with the counts AC 15 to 17 need, the selection afterwards (AC 23), the
+  `BooleanOp` enum and `boolean_availability` (next section). Split into
+  `boolean` and `boolean_availability` if it passes 500 lines. The Select bar
+  does not change (`select_bar.rs`, `SelectBarState` untouched). Nothing goes
+  into `select_tool.rs` (2,502 lines) or `node_tool.rs` (1,809).
 - **`curvyo-editor-wasm`:** a `session/boolean.rs` glue module (`Session` is
-  already past the size limit, technical debt entry).
+  already past the size limit, technical debt entry) and a `wasm_boolean.rs`
+  binding.
 - **No new crate.**
+
+### 2026-10-09: boolean commands in the tool rail (customer decision 3)
+
+**Commands are not tools.** The Rust `Tool` enum
+(`curvyo-editor-wasm/src/session/mod.rs`) and the TS `Tool` type
+(`frontend/src/hooks/useEditorSession.ts`) do **not** grow. A command button
+never changes the active tool, is not `aria-pressed`, and never goes through
+`onSelect(tool)` or `Session::set_tool`. Rejected: a `Tool::Boolean` mode with
+its own bar. It is the Select bar again under another name, a mode the user
+has to leave again, and it would claim a tool letter in the key table.
+
+**Where the enabled state is computed.** One pure function in
+`curvyo-ui-core::boolean`, never in the frontend and never in editor-wasm
+(ADR 0001 §1 and §3):
+
+```text
+boolean_availability(objects: &[ObjectSnapshot], selection: &ObjectSelection)
+  -> BooleanAvailability
+BooleanAvailability = NeedsTwo                          greyed out
+                    | OpenPaths { open: usize, of: usize }  enabled, refusal on activation (AC 15)
+                    | Ready
+```
+
+- One state for all five buttons: their preconditions are identical.
+- Counts only selected ids the document still holds (as `ids_of_kind`).
+- AC 16 (operand without area) and AC 17 (empty result) are not part of the
+  state: they need the kernel, so they are refused on activation.
+- `plan_boolean` checks the same precondition function first, so a button
+  state and the command cannot disagree.
+- Whether `OpenPaths` looks different from `NeedsTwo`, and whether a greyed
+  button is native `disabled` or `aria-disabled`, is the ux-engineer's call.
+  The state keeps the two apart so the frontend never has to decide.
+- The frontend reads it in `syncFromSession`, next to `selection_count()`,
+  as a read-and-free plain object (the `NodeToolbarState` pattern), and only
+  renders it.
+
+**Which selection counts, per active tool.** `Session` passes its object
+selection only while the Select tool is active, otherwise an empty one: the
+rule `selected_for_keys` (`session/keys.rs`) already applies to the key
+table. One private `Session` helper serves both.
+
+| Active tool | Object selection today | Buttons |
+|---|---|---|
+| Select | drawn | `NeedsTwo`, `OpenPaths` or `Ready` |
+| Node, Pen | kept by `set_tool`, not drawn; Node shows its node selection | `NeedsTwo` |
+| Rectangle, Ellipse, Polygon/star | cleared by `set_tool` | `NeedsTwo` |
+
+After a shape is drawn, the tool hands over to Select with that one shape
+selected, so the buttons stay greyed until a second object is added.
+Rejected: enabling the buttons in the Node tool on the kept object
+selection. The command deletes objects and there is no undo yet; it must act
+only on a selection the user can see, and in the Node tool the visible
+selection is nodes, which can span other paths.
+
+**Dispatch.** Button → `apply_boolean(op: &str) -> String` in
+`wasm_boolean.rs` (an unknown `op` is a `JsValue` error, as
+`convert_selected(kind)`) → `Session::apply_boolean(BooleanOp)` in
+`session/boolean.rs` → `curvyo_ui_core::plan_boolean(objects, selection, op,
+minter) -> Result<BooleanPlan, BooleanRefusal>` →
+`Document::replace_with_path` → selection = the result (AC 23).
+
+- `BooleanOp` lives in `ui-core` with five variants, the user's operations.
+  It maps to the kernel's four operations plus operand order (Reverse
+  difference = `Difference` with the top-most operand first) and to the
+  commit label.
+- `Session::apply_boolean` returns `"ignored"` unless the Select tool is
+  active and no drag is in flight. It then flushes the Select bar and style
+  previews and cancels an open entry (as `convert_selected_to_paths` does),
+  plans, and writes once. Outcomes are `"applied"`, `"ignored"` or a refusal
+  kind; refusal counts come from the read-and-free state above. The notice
+  text lives in the frontend, keyed by refusal kind (as `KEY_HINT_TEXT`).
+- The tool stays Select after the command.
+
+**The rail.** `ToolRail.tsx` keeps its `ToolButton`s unchanged and renders,
+under a divider, a command group from a new component (e.g.
+`frontend/src/components/BooleanCommands.tsx`): plain buttons of the same
+40 px size, props `availability`, `onCommand(op)`, `onReturnFocus`. New
+tools are appended to the tool group above the divider, so the command group
+moves down with them. Tab order, grouping and roving focus are the
+ux-engineer's.
+
+**Focus and key gating.** Nothing in the key gate changes.
+
+- The rail is outside the canvas container that owns `onKeyDown`
+  (`Canvas.tsx`), and `isFormControl` matches `button`. So while a rail
+  button has focus, no canvas key fires and Space or Enter activates the
+  button natively.
+- After a mouse click, focus returns to the canvas (`onReturnFocus` when
+  `event.detail > 0`, as `ToolButton` does), so Delete and the tool letters
+  keep working. Keyboard activation keeps focus on the button.
+- During a canvas drag the rail cannot be reached (pointer captured, focus
+  in the canvas); the in-flight check in `apply_boolean` is a guard only.
+- **No keyboard shortcuts:** `decide` in `session/keys.rs` gets no boolean
+  action (AC 3).
+
+**Height.** Six tools, a divider and five commands come to about 495 px
+(11 × 40 px buttons, 4 px gaps, 4 px padding). With rulers (0015) the
+viewport at an 800 × 600 window is about 546 px high, so the rail fits with
+about 40 px to spare at its 12 px inset. No overflow rule now (no seventh
+tool exists); flagged to the ux-engineer to measure.
 
 ## PR split and order
 
+Updated 2026-10-09 for the customer decisions.
+
 1. **Kernel.** `geometry-core` only, plus the workspace dependency. AC 7, 8,
    10 to 14, 17, 24 to 26, 39 to 45 at kernel level, fixtures in
-   `tests/fixtures/`. Independent of question 1.
-2. **Compound path.** Encoding, read model, the audit table, format bump,
-   `replace_with_path`, fixtures. AC 19 to 22, 27, 28, 30 to 38 and the
-   write-cost measurement. Starts after the customer answers question 1 (or
-   on the default A).
-3. **Command and UI.** `ui-core` entry, refusals, select bar group, wasm,
-   frontend. AC 1 to 6, 9, 15 to 18, 23, 29, 46, 47. Exclusion and Reverse
-   difference go here if question 2 is A (no extra kernel work).
+   `tests/fixtures/`. Four kernel operations cover all five commands.
+   Unchanged; in progress (`story/boolean-operations`).
+2. **Compound path, format and document command.** Encoding, read model,
+   the audit table, format bump (`main` + 1 at merge, 8 if nothing else
+   bumps first), the `document-core` command `replace_with_path`, fixtures.
+   AC 19 to 22, 27, 28, 30 to 38 and the write-cost measurement. No UI.
+3. **Command and rail UI.** `ui-core`: `BooleanOp` (five), `plan_boolean`,
+   refusals, `boolean_availability`, selection after; `editor-wasm`:
+   `session/boolean.rs`, `wasm_boolean.rs`; frontend: the rail command group.
+   AC 1 to 6, 9, 15 to 18, 23, 29, 46, 47 as the PO rewrites them for the
+   rail. No Select bar change.
 4. **Preview** (P1 to P3), only if question 6 is A. Kernel output drawn with
    the existing `--preview-new` live-preview path; no document write.
 
-**Overlap with `document-size-and-rulers`.** That story touches
-`document-core` (size command, format version, fixtures), `ui-core` (ruler,
-fit-to-content over `object_bounds`), `render-core` (pasteboard),
-`editor-wasm` and `frontend/`. Only **PR 1** shares no crate with it and can
-run in parallel. PRs 2 to 4 share every crate except `geometry-core`, so per
-`CLAUDE.md` §4 they start after rulers merges. Merge order matters in two
-places: `CURRENT_FORMAT_VERSION` (whichever merges first takes `main` + 1,
-the other rebases and renumbers its fixtures and notes), and `object_bounds`
-(PR 2 makes it cover all outlines; fit-to-content then covers separate
-pieces of a compound path with no rulers change).
+**Parallel plan with `document-size-and-rulers` (re-confirmed 2026-10-09).**
+Rulers takes no `format_version`, so the version number no longer orders
+the two features. `CLAUDE.md` §4 forbids parallel work on shared crates:
+
+| Step | Booleans | Rulers | Shared crates |
+|---|---|---|---|
+| now | PR 1 (`geometry-core`) | PR 1 (`document-core`, `ui-core`) | none: in parallel |
+| next | PR 2 | waits | `document-core` (`objects.rs` move helper), `ui-core` (`object_bounds.rs`), `render-core`, `editor-wasm` |
+| then | waits | PR 2 (rulers, pasteboard, viewport) | `ui-core`, `render-core`, `editor-wasm`, `frontend` |
+| then | PR 3 | waits | `ui-core`, `editor-wasm`, `frontend` (`App.tsx`) |
+| last | | PR 3 (panel; after 0017 if 0017 goes first) | |
+
+Booleans PR 2 starts only after rulers PR 1 merges, because both edit the
+move helper and `object_bounds`. It goes before rulers PR 2 because it
+carries the write-cost measurement that could still reopen the encoding.
+Booleans PR 3 goes after rulers PR 2, because PR 2 moves the rail into the
+ruler viewport (`App.tsx`) and the rail height above is measured there.
+Swapping booleans PR 2 and rulers PR 2 costs nothing but that risk. Whichever
+merges second adds the compound-path case to the rulers resize and fit tests
+(rulers AC 17, 23).
 
 ## Flagged to the lead
 
-1. **Customer, question 1:** A (one object, several outlines; recommended,
-   default) or B (one object per outline). A changes the file format; it
-   implements ADR 0002 §6 as accepted, so no new ADR.
-2. **PO:** reword AC 39 (grid wording above) and AC 28 (label).
-3. **`stroke-markers`:** needs a rule for markers on compound paths.
-4. **Risk:** AC 46/47 depend on Loro write cost; measured in PR 2 before the
+1. ~~Customer, question 1~~: answered 2026-10-09, option A, format change
+   approved.
+2. ~~**PO:**~~ done 2026-10-09 (AC 1, 1a, 2, 3, 15, 22a, 23, 28, 39, 47a reworded): reword AC 39 (grid wording above) and AC 28 (label). Rewrite AC 1
+   and 2 for the rail: always shown; greyed with fewer than two selected
+   objects or with a tool other than Select active; the open-path state of
+   AC 2 stays. AC 3 stands.
+3. ~~**ux-engineer:**~~ done 2026-10-09 (UX notes and design system updated): the rail command group (divider, tab order, greyed vs.
+   dimmed look, tooltip text for "select two or more objects with the Select
+   tool"), and the rail height at an 800 × 600 window with rulers (about
+   495 px of 546 px). Remove the "Boolean group" row from the Select bar
+   layout in `docs/design-system.md`.
+4. **`stroke-markers`:** needs a rule for markers on compound paths.
+5. **Risk:** AC 46/47 depend on Loro write cost; measured in PR 2 before the
    encoding merges.
