@@ -247,7 +247,13 @@ fn an_odd_list_draws_as_the_list_repeated_twice() {
 fn a_single_number_is_on_then_off_by_the_same_length() {
     let line = dashed_line(30.0, 1.0, &[3.0], LineCap::Butt);
     let list = art(&[line], 10.0);
-    for (x, on) in [(1.5, true), (4.5, false), (7.5, true), (10.5, false), (13.5, true)] {
+    for (x, on) in [
+        (1.5, true),
+        (4.5, false),
+        (7.5, true),
+        (10.5, false),
+        (13.5, true),
+    ] {
         assert_eq!(covered(&list, pt(x, 0.0)), on, "x = {x}");
     }
 }
@@ -264,7 +270,10 @@ fn odd_and_long_lists_cover_the_same_points_as_their_doubled_lists() {
     ] {
         for width in [0.5, 1.0, 2.0] {
             let a = art(&[dashed_line(200.0, width, &odd, LineCap::Butt)], 6.0);
-            let b = art(&[dashed_line(200.0, width, &doubled(&odd), LineCap::Butt)], 6.0);
+            let b = art(
+                &[dashed_line(200.0, width, &doubled(&odd), LineCap::Butt)],
+                6.0,
+            );
             assert_same_coverage(&a, &b, (0.0, 200.0, -1.0, 1.0));
         }
     }
@@ -272,10 +281,23 @@ fn odd_and_long_lists_cover_the_same_points_as_their_doubled_lists() {
 
 #[test]
 fn an_odd_list_rescales_with_the_width() {
-    let narrow = art(&[dashed_line(60.0, 1.0, &[1.0, 2.0, 4.0], LineCap::Butt)], 10.0);
-    let wide = art(&[dashed_line(60.0, 2.0, &[1.0, 2.0, 4.0], LineCap::Butt)], 10.0);
+    let narrow = art(
+        &[dashed_line(60.0, 1.0, &[1.0, 2.0, 4.0], LineCap::Butt)],
+        10.0,
+    );
+    let wide = art(
+        &[dashed_line(60.0, 2.0, &[1.0, 2.0, 4.0], LineCap::Butt)],
+        10.0,
+    );
     // Width 2: on 0..2, off 2..6, on 6..14, off 14..16, on 16..20, off 20..28.
-    for (x, on) in [(1.0, true), (4.0, false), (10.0, true), (15.0, false), (18.0, true), (24.0, false)] {
+    for (x, on) in [
+        (1.0, true),
+        (4.0, false),
+        (10.0, true),
+        (15.0, false),
+        (18.0, true),
+        (24.0, false),
+    ] {
         assert_eq!(covered(&wide, pt(x, 0.0)), on, "wide x = {x}");
     }
     assert!(covered(&narrow, pt(0.5, 0.0)));
@@ -284,7 +306,10 @@ fn an_odd_list_rescales_with_the_width() {
 
 #[test]
 fn an_odd_list_is_not_confused_with_the_even_list_that_drops_the_last_number() {
-    let odd = art(&[dashed_line(60.0, 1.0, &[1.0, 2.0, 4.0], LineCap::Butt)], 10.0);
+    let odd = art(
+        &[dashed_line(60.0, 1.0, &[1.0, 2.0, 4.0], LineCap::Butt)],
+        10.0,
+    );
     let even = art(&[dashed_line(60.0, 1.0, &[1.0, 2.0], LineCap::Butt)], 10.0);
     // Position 5.0 is on in the odd list (the 4 run) and off for 1 2 1 2.
     assert!(covered(&odd, pt(5.0, 0.0)));
@@ -307,7 +332,10 @@ fn a_zero_on_entry_with_round_caps_draws_a_dot_at_every_period() {
         assert!(covered(&list, pt(c, -0.8)), "dot below {c}");
         assert!(!covered(&list, pt(c + 1.3, 0.0)), "gap after {c}");
         assert!(!covered(&list, pt(c + 3.0, 0.0)), "gap middle after {c}");
-        assert!(!covered(&list, pt(c + 0.9, 0.9)), "a dot is round, not square");
+        assert!(
+            !covered(&list, pt(c + 0.9, 0.9)),
+            "a dot is round, not square"
+        );
     }
     assert!(covered(&list, pt(0.3, 0.0)), "the first dot at the start");
 }
@@ -403,7 +431,14 @@ fn extreme_lists_stay_finite_and_do_not_hang() {
     // A huge width times a huge multiple overflows to infinity: still finite.
     let doc = Document::new(1);
     let p = polyline(&doc, &[(0.0, 0.0), (100.0, 0.0)], false);
-    style(&doc, p, &[StyleEdit::StrokeWidth(mm(1000.0)), dash(&[1000.0, 1000.0, 1000.0])]);
+    style(
+        &doc,
+        p,
+        &[
+            StyleEdit::StrokeWidth(mm(1000.0)),
+            dash(&[1000.0, 1000.0, 1000.0]),
+        ],
+    );
     assert!(all_finite(&art(&[obj(&doc, p)], 1.0)));
 }
 
@@ -425,9 +460,19 @@ fn a_gradient_object_from_an_old_file_has_no_fill_and_nothing_inside() {
     let list = art(&objects, 6.0);
     assert!(all_finite(&list));
     // Linear path (0,0)-(30,0)-(30,20), open: stroke red 1.5 mm dashed, no fill.
-    assert!(!covered(&list, pt(25.0, 5.0)), "interior of the linear gradient object");
+    assert!(
+        !covered(&list, pt(25.0, 5.0)),
+        "interior of the linear gradient object"
+    );
     // Radial rectangle at (50,0) 40x20: stroke off and fill off: nothing at all.
-    for (x, y) in [(70.0, 10.0), (51.0, 1.0), (50.0, 10.0), (90.0, 10.0), (70.0, 0.0), (70.0, 20.0)] {
+    for (x, y) in [
+        (70.0, 10.0),
+        (51.0, 1.0),
+        (50.0, 10.0),
+        (90.0, 10.0),
+        (70.0, 0.0),
+        (70.0, 20.0),
+    ] {
         assert!(!covered(&list, pt(x, y)), "ink at ({x}, {y})");
     }
 }
