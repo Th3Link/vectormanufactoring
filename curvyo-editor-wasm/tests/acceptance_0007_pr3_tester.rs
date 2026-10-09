@@ -17,6 +17,32 @@ use curvyo_editor_wasm::{Session, Tool};
 use curvyo_render_core::DrawList;
 use curvyo_ui_core::{BarValue, DashChoice, StyleEntryError, StyleField};
 
+/// A colour-area tick for `color`, through the same call the panel makes.
+fn preview_colour(session: &mut Session, field: StyleField, color: Color) {
+    let hsv = curvyo_ui_core::rgb_to_hsv(color);
+    session.preview_style_hsv(field, hsv.hue.unwrap_or(0.0), hsv.saturation, hsv.value);
+}
+
+/// An opacity drag tick for `percent`, through the value-field call.
+fn preview_opacity(session: &mut Session, field: StyleField, percent: f64) {
+    let (value_field, scale) = match field {
+        StyleField::StrokeOpacity => (
+            curvyo_ui_core::ValueField::StrokeOpacity,
+            curvyo_ui_core::ValueScale::Opacity,
+        ),
+        StyleField::FillOpacity => (
+            curvyo_ui_core::ValueField::FillOpacity,
+            curvyo_ui_core::ValueScale::Opacity,
+        ),
+        _ => return,
+    };
+    session.preview_value_field(
+        value_field,
+        scale.position_of(percent),
+        curvyo_ui_core::Grid::Normal,
+    );
+}
+
 // ---------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------
@@ -190,7 +216,7 @@ fn a_colour_preview_on_an_off_stroke_is_drawn_and_commits_the_stroke_on() {
     let mut session = rectangles(1);
     session.set_stroke_paint(false);
     let off = session.draw_list();
-    session.preview_style_color(StyleField::StrokeColor, red());
+    preview_colour(&mut session, StyleField::StrokeColor, red());
     let previewed = session.draw_list();
     assert!(
         previewed.triangles.len() > off.triangles.len(),
@@ -323,7 +349,7 @@ fn an_edit_that_changes_nothing_records_no_operation() {
     session.set_fill_paint(false);
     assert_eq!(version(&session), v);
     // A drag that ends where it began writes nothing either.
-    session.preview_style_opacity(StyleField::StrokeOpacity, 100.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 100.0);
     session.commit_style_preview();
     assert_eq!(version(&session), v);
 }
@@ -528,8 +554,8 @@ fn an_empty_selection_and_the_pen_ignore_every_panel_control() {
         session.set_stroke_join(LineJoin::Round);
         session.set_stroke_cap(LineCap::Round);
         session.set_fill_paint(true);
-        session.preview_style_color(StyleField::StrokeColor, red());
-        session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+        preview_colour(&mut session, StyleField::StrokeColor, red());
+        preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
         assert_eq!(session.draw_list().triangles.len(), before.triangles.len());
         assert!(!has_alpha(&session.draw_list(), 102), "no preview drawn");
         session.commit_style_preview();
@@ -651,7 +677,7 @@ fn selecting_a_node_narrows_the_node_tool_to_the_path_that_owns_it() {
 fn a_canvas_press_that_changes_the_selection_does_not_retarget_a_pending_drag() {
     let mut session = rectangles(2);
     select_only(&mut session, 1);
-    session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
     // Press and release on the other rectangle while the drag is "pending".
     click_edge(&mut session, 0, false);
     session.commit_style_preview();
@@ -681,7 +707,7 @@ fn a_canvas_press_that_changes_the_selection_does_not_retarget_a_pending_drag() 
 fn the_preview_never_leaks_into_the_next_selection_or_the_saved_file() {
     let mut session = rectangles(2);
     select_only(&mut session, 1);
-    session.preview_style_color(StyleField::StrokeColor, red());
+    preview_colour(&mut session, StyleField::StrokeColor, red());
     assert!(
         styles(&session)
             .iter()
@@ -712,7 +738,7 @@ fn a_tool_switch_mid_drag_commits_once_to_the_started_objects_and_leaves_no_ghos
         Tool::PolygonStar,
     ] {
         let mut session = rectangles(1);
-        session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+        preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
         session.set_tool(tool);
         session.commit_style_preview();
         session.cancel_style_preview();
@@ -732,7 +758,7 @@ fn a_tool_switch_mid_drag_commits_once_to_the_started_objects_and_leaves_no_ghos
 #[test]
 fn a_discrete_edit_during_a_drag_keeps_both_and_leaves_the_state_consistent() {
     let mut session = rectangles(1);
-    session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
     session.set_stroke_cap(LineCap::Round);
     session.commit_style_preview();
     let s = &styles(&session)[0];
@@ -743,7 +769,7 @@ fn a_discrete_edit_during_a_drag_keeps_both_and_leaves_the_state_consistent() {
         s.stroke.opacity == pct(40),
         "no ghost preview after the release"
     );
-    session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
     session.commit_style_preview();
     assert_eq!(
         styles(&session)[0].stroke.opacity,
@@ -755,7 +781,7 @@ fn a_discrete_edit_during_a_drag_keeps_both_and_leaves_the_state_consistent() {
 #[test]
 fn a_typed_value_during_a_drag_does_not_lose_the_typed_value() {
     let mut session = rectangles(1);
-    session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
     session
         .set_style_text(StyleField::StrokeWidth, "4")
         .unwrap();
@@ -768,8 +794,12 @@ fn escape_during_a_drag_on_a_multi_selection_reverts_all_objects() {
     let mut session = rectangles(3);
     select_all(&mut session, 3);
     let before = session.draw_list();
-    session.preview_style_color(StyleField::StrokeColor, red());
-    session.preview_style_color(StyleField::StrokeColor, Color { r: 0, g: 0, b: 255 });
+    preview_colour(&mut session, StyleField::StrokeColor, red());
+    preview_colour(
+        &mut session,
+        StyleField::StrokeColor,
+        Color { r: 0, g: 0, b: 255 },
+    );
     session.cancel_style_preview();
     assert_eq!(
         session.draw_list().triangles.len(),
@@ -787,7 +817,7 @@ fn escape_during_a_drag_on_a_multi_selection_reverts_all_objects() {
     session.commit_style_preview();
     assert!(styles(&session).iter().all(|s| *s == Style::default()));
     // The next drag after the release works again.
-    session.preview_style_color(StyleField::StrokeColor, red());
+    preview_colour(&mut session, StyleField::StrokeColor, red());
     session.commit_style_preview();
     assert!(styles(&session).iter().all(|s| s.stroke.color == red()));
 }
@@ -796,7 +826,7 @@ fn escape_during_a_drag_on_a_multi_selection_reverts_all_objects() {
 fn out_of_range_and_non_finite_slider_ticks_store_a_valid_opacity() {
     for percent in [150.0, -20.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
         let mut session = rectangles(1);
-        session.preview_style_opacity(StyleField::FillOpacity, percent);
+        preview_opacity(&mut session, StyleField::FillOpacity, percent);
         session.commit_style_preview();
         let o = styles(&session)[0].fill.opacity.get();
         assert!(o.is_finite() && (0.0..=1.0).contains(&o), "{percent}: {o}");
@@ -809,8 +839,8 @@ fn out_of_range_and_non_finite_slider_ticks_store_a_valid_opacity() {
 fn a_colour_tick_in_the_opacity_field_or_the_other_way_round_is_ignored() {
     let mut session = rectangles(1);
     let v = version(&session);
-    session.preview_style_color(StyleField::StrokeWidth, red());
-    session.preview_style_opacity(StyleField::FillColor, 50.0);
+    preview_colour(&mut session, StyleField::StrokeWidth, red());
+    preview_colour(&mut session, StyleField::FillOpacity, red());
     session.commit_style_preview();
     assert_eq!(version(&session), v);
 }
@@ -819,7 +849,7 @@ fn a_colour_tick_in_the_opacity_field_or_the_other_way_round_is_ignored() {
 fn a_preview_for_a_deleted_object_commits_without_panic_or_damage() {
     let mut session = rectangles(2);
     select_all(&mut session, 2);
-    session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
     select_only(&mut session, 0);
     session.delete_selected();
     session.commit_style_preview();
@@ -957,7 +987,7 @@ fn choosing_the_pressed_fill_stroke_join_or_dash_again_records_no_operation() {
 fn a_press_on_empty_canvas_with_a_pending_drag_commits_it_to_the_started_objects() {
     let mut session = rectangles(2);
     select_all(&mut session, 2);
-    session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
     let empty = Point::new(900.0, 900.0);
     session.pointer_down(empty, false);
     session.pointer_up(empty, false, false);

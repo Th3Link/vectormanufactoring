@@ -12,6 +12,32 @@ use curvyo_editor_wasm::{Session, Tool};
 use curvyo_render_core::DrawList;
 use curvyo_ui_core::{BarValue, DashChoice, StyleEntryError, StyleField};
 
+/// A colour-area tick for `color`, through the same call the panel makes.
+fn preview_colour(session: &mut Session, field: StyleField, color: Color) {
+    let hsv = curvyo_ui_core::rgb_to_hsv(color);
+    session.preview_style_hsv(field, hsv.hue.unwrap_or(0.0), hsv.saturation, hsv.value);
+}
+
+/// An opacity drag tick for `percent`, through the value-field call.
+fn preview_opacity(session: &mut Session, field: StyleField, percent: f64) {
+    let (value_field, scale) = match field {
+        StyleField::StrokeOpacity => (
+            curvyo_ui_core::ValueField::StrokeOpacity,
+            curvyo_ui_core::ValueScale::Opacity,
+        ),
+        StyleField::FillOpacity => (
+            curvyo_ui_core::ValueField::FillOpacity,
+            curvyo_ui_core::ValueScale::Opacity,
+        ),
+        _ => return,
+    };
+    session.preview_value_field(
+        value_field,
+        scale.position_of(percent),
+        curvyo_ui_core::Grid::Normal,
+    );
+}
+
 /// A session with `n` 10 mm rectangles in a row, the last one selected.
 fn session_with_rectangles(n: u32) -> Session {
     let mut session = Session::new(1);
@@ -180,8 +206,8 @@ fn a_drag_previews_in_the_draw_list_and_writes_once_on_release() {
     let before = session.draw_list();
     assert!(!has_alpha(&before, 102));
 
-    session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
-    session.preview_style_opacity(StyleField::StrokeOpacity, 60.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 60.0);
     assert!(has_alpha(&session.draw_list(), 153), "drawn at 60%");
     assert_eq!(
         stored_styles(&session)[0].stroke.opacity,
@@ -202,9 +228,9 @@ fn a_drag_previews_in_the_draw_list_and_writes_once_on_release() {
 #[test]
 fn escape_during_a_drag_reverts_and_the_release_writes_nothing() {
     let mut session = session_with_rectangles(1);
-    session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
     session.cancel_style_preview();
-    session.preview_style_opacity(StyleField::StrokeOpacity, 30.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 30.0);
     session.commit_style_preview();
     assert_eq!(stored_styles(&session)[0], Style::default());
     assert!(!has_alpha(&session.draw_list(), 77));
@@ -215,7 +241,7 @@ fn a_pending_drag_commits_to_the_objects_it_started_on() {
     let mut session = session_with_rectangles(2);
     // The second rectangle is selected; start a drag on it, then the tool
     // changes before the release.
-    session.preview_style_opacity(StyleField::StrokeOpacity, 50.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 50.0);
     session.set_tool(Tool::Select);
     let styles = stored_styles(&session);
     assert_eq!(styles[0].stroke.opacity, Opacity::OPAQUE);
@@ -263,7 +289,7 @@ fn a_drag_of_many_ticks_records_what_one_typed_value_records() {
     let (n_dragged, n_typed) = (op_count(&dragged), op_count(&typed));
     let changes = change_count(&dragged);
     for percent in [90.0, 80.0, 70.0, 60.0, 50.0] {
-        dragged.preview_style_opacity(StyleField::StrokeOpacity, percent);
+        preview_opacity(&mut dragged, StyleField::StrokeOpacity, percent);
     }
     assert_eq!(op_count(&dragged), n_dragged, "ticks write nothing");
     dragged.commit_style_preview();
@@ -290,9 +316,9 @@ fn a_drag_of_many_ticks_records_what_one_typed_value_records() {
 fn escape_then_the_release_records_nothing() {
     let mut session = session_with_rectangles(1);
     let before = op_count(&session);
-    session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
     session.cancel_style_preview();
-    session.preview_style_opacity(StyleField::StrokeOpacity, 30.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 30.0);
     session.commit_style_preview();
     assert_eq!(op_count(&session), before);
 }
@@ -304,8 +330,16 @@ fn an_edit_over_three_objects_is_one_commit_of_three_writes() {
         select_first(&mut session, n);
         let (ops, changes) = (op_count(&session), change_count(&session));
         if drag {
-            session.preview_style_color(StyleField::StrokeColor, Color { r: 1, g: 2, b: 3 });
-            session.preview_style_color(StyleField::StrokeColor, Color { r: 4, g: 5, b: 6 });
+            preview_colour(
+                &mut session,
+                StyleField::StrokeColor,
+                Color { r: 1, g: 2, b: 3 },
+            );
+            preview_colour(
+                &mut session,
+                StyleField::StrokeColor,
+                Color { r: 4, g: 5, b: 6 },
+            );
             session.commit_style_preview();
         } else {
             session
@@ -323,5 +357,3 @@ fn an_edit_over_three_objects_is_one_commit_of_three_writes() {
     assert_eq!(written(3, false), 3 * one, "typed");
     assert_eq!(written(3, true), 3 * one, "dragged");
 }
-
-// ---- gradients (criteria 16 to 22, 34, 35) -------------------------------------

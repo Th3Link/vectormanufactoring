@@ -351,8 +351,6 @@ fn every_style_field_refuses_the_other_fields_kind_of_value() {
     assert_eq!(StyleField::from_name("stroke-dash"), None);
     assert_eq!(StyleField::from_name(""), None);
     assert_eq!(StyleField::from_name("Stroke-Width"), None);
-    assert!(StyleField::StrokeWidth.color_edit(Color::BLACK).is_none());
-    assert!(StyleField::StrokeColor.opacity_edit(50.0).is_none());
 }
 
 // ---------------------------------------------------------------------

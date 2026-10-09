@@ -146,10 +146,11 @@ fn pack_rgb(color: Color) -> u32 {
     u32::from(color.r) << 16 | u32::from(color.g) << 8 | u32::from(color.b)
 }
 
-fn map_value<T: Copy>(value: BarValue<T>, convert: impl Fn(T) -> f64) -> BarValue<f64> {
+/// The value of `value` in the unit of `scale`, `None` when mixed.
+fn uniform<T: Copy>(value: BarValue<T>, convert: impl Fn(T) -> f64) -> Option<f64> {
     match value {
-        BarValue::Uniform(v) => BarValue::Uniform(convert(v)),
-        BarValue::Mixed => BarValue::Mixed,
+        BarValue::Uniform(v) => Some(convert(v)),
+        BarValue::Mixed => None,
     }
 }
 
@@ -177,20 +178,6 @@ fn hex(value: BarValue<Rgba>) -> (bool, String) {
     }
 }
 
-/// `(text, bar, resettable)` of a value field: the text it shows, the share of
-/// its width the bar fills, and whether the reset icon shows (the value is
-/// mixed or not the default).
-fn value_field(scale: ValueScale, value: BarValue<f64>) -> (String, f64, bool) {
-    match value {
-        BarValue::Uniform(v) => (
-            scale.text(v),
-            scale.position_of(v),
-            (v - scale.default_value()).abs() > 1e-9,
-        ),
-        BarValue::Mixed => (String::new(), 0.0, true),
-    }
-}
-
 impl StylePanelView {
     /// The record for `state`, tagged with the key of the edited objects.
     #[must_use]
@@ -201,18 +188,11 @@ impl StylePanelView {
         let (fill_color_mixed, fill_color) = colour(state.fill.color);
         let (fill_hex_mixed, fill_hex) = hex(state.fill.rgba);
         let (fill_opacity_mixed, fill_opacity) = percent(state.fill.opacity);
-        let (stroke_width_text, stroke_width_bar, stroke_width_resettable) = value_field(
-            ValueScale::StrokeWidth,
-            map_value(state.stroke.width, Length::as_mm),
-        );
-        let (stroke_opacity_text, stroke_opacity_bar, stroke_opacity_resettable) = value_field(
-            ValueScale::Opacity,
-            map_value(state.stroke.opacity, |o| o.get() * 100.0),
-        );
-        let (fill_opacity_text, fill_opacity_bar, fill_opacity_resettable) = value_field(
-            ValueScale::Opacity,
-            map_value(state.fill.opacity, |o| o.get() * 100.0),
-        );
+        let width_shown = ValueScale::StrokeWidth.shown(uniform(state.stroke.width, Length::as_mm));
+        let stroke_opacity_shown =
+            ValueScale::Opacity.shown(uniform(state.stroke.opacity, |o| o.get() * 100.0));
+        let fill_opacity_shown =
+            ValueScale::Opacity.shown(uniform(state.fill.opacity, |o| o.get() * 100.0));
         let (stroke_width_mixed, stroke_width) = match state.stroke.width {
             BarValue::Uniform(width) => (false, width.as_mm()),
             BarValue::Mixed => (true, 0.0),
@@ -244,12 +224,12 @@ impl StylePanelView {
             stroke_opacity,
             stroke_width_mixed,
             stroke_width,
-            stroke_width_text,
-            stroke_width_bar,
-            stroke_width_resettable,
-            stroke_opacity_text,
-            stroke_opacity_bar,
-            stroke_opacity_resettable,
+            stroke_width_text: width_shown.text,
+            stroke_width_bar: width_shown.bar,
+            stroke_width_resettable: width_shown.resettable,
+            stroke_opacity_text: stroke_opacity_shown.text,
+            stroke_opacity_bar: stroke_opacity_shown.bar,
+            stroke_opacity_resettable: stroke_opacity_shown.resettable,
             stroke_dash,
             stroke_dash_text,
             stroke_join: word(state.stroke.join, |join| match join {
@@ -270,9 +250,9 @@ impl StylePanelView {
             fill_hex_mixed,
             fill_opacity_mixed,
             fill_opacity,
-            fill_opacity_text,
-            fill_opacity_bar,
-            fill_opacity_resettable,
+            fill_opacity_text: fill_opacity_shown.text,
+            fill_opacity_bar: fill_opacity_shown.bar,
+            fill_opacity_resettable: fill_opacity_shown.resettable,
             pick_target: String::new(),
             markers_shown: false,
             marker_start: "none".to_string(),
@@ -314,14 +294,11 @@ impl StylePanelView {
             MarkerPlace::AtNodes => "nodes",
         });
         self.marker_count_shown = markers.count_shown;
-        let scale = ValueScale::MarkerCount;
-        let (text, bar, resettable) = value_field(
-            scale,
-            map_value(markers.count, |count| f64::from(count.get())),
-        );
-        self.marker_count_text = text;
-        self.marker_count_bar = bar;
-        self.marker_count_resettable = resettable;
+        let count =
+            ValueScale::MarkerCount.shown(uniform(markers.count, |count| f64::from(count.get())));
+        self.marker_count_text = count.text;
+        self.marker_count_bar = count.bar;
+        self.marker_count_resettable = count.resettable;
         match markers.count {
             BarValue::Uniform(count) => {
                 self.marker_count = f64::from(count.get());
@@ -330,16 +307,6 @@ impl StylePanelView {
             BarValue::Mixed => self.marker_count_mixed = true,
         }
         self.marker_closed_note = markers.closed_note;
-    }
-
-    /// Shows `width` (millimetres) in the Width field, for a drag in flight.
-    pub fn show_width(&mut self, width: f64) {
-        self.stroke_width = width;
-        self.stroke_width_mixed = false;
-        self.stroke_width_text = ValueScale::StrokeWidth.text(width);
-        self.stroke_width_bar = ValueScale::StrokeWidth.position_of(width);
-        self.stroke_width_resettable =
-            (width - ValueScale::StrokeWidth.default_value()).abs() > 1e-9;
     }
 
     /// The record while there is nothing to edit: the host renders no Style

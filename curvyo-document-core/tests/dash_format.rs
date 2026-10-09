@@ -17,7 +17,9 @@ use zip::ZipArchive;
 /// The format version of the build that introduced odd dash lists. A later
 /// bump moves `CURRENT_FORMAT_VERSION` on and leaves this number and the
 /// golden alone: the golden is the file that build wrote, and every later build
-/// has to open it.
+/// has to open it. The next format bump moves the one literal pin on
+/// `CURRENT_FORMAT_VERSION` (the test below) to that feature's own test file;
+/// this constant and the golden stay as they are.
 const DASH_FORMAT_VERSION: u32 = 9;
 
 const GOLDEN: &str = "dash_v9.curvyo";

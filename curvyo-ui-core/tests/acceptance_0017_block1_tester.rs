@@ -268,9 +268,6 @@ fn the_hex_field_edit_kind_follows_the_digit_count() {
         StyleEdit::FillRgba(_, _)
     ));
     assert!(StyleField::FillColor.parse_text("F8").is_err());
-    // A colour field has no opacity edit and vice versa.
-    assert!(StyleField::StrokeColor.opacity_edit(50.0).is_none());
-    assert!(StyleField::StrokeOpacity.color_edit(Color::BLACK).is_none());
 }
 
 proptest! {

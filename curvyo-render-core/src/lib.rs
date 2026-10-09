@@ -16,6 +16,7 @@
 mod artwork;
 mod color;
 mod dash;
+mod dash_walk;
 mod decorations;
 mod document_area;
 mod fill;

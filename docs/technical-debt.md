@@ -1111,14 +1111,16 @@ box size; those tests count fans only (`white_count` in
   move the document by half the panel width. A resize that does not match the
   announcement is an ordinary window resize.
 - **Who writes the UI text.** Rust builds the Style panel's subject line
-  ("3 rectangles"); a refused typed value comes back as a code (`hex`, `hex8`,
-  `percent`, `width`) and the host owns the message. The rule from here on:
+  ("3 rectangles"); a refused typed value comes back as a code (`hex`,
+  `percent`, `width`, `dash`, `count`) and the host owns the message. The rule from here on:
   Rust sends codes and counts, the host owns all other strings, so a later
   localisation touches one layer. The subject line stays as the one exception
   until a localisation story moves it.
 
 **2026-10-08 (`stroke-and-fill-styling` PR 4):**
 
+- **`DrawList` and `Vertex` live in `glyphs.rs`**, a module about decoration
+  glyph geometry. Moving them to a `draw_list.rs` is the cleaner end state.
 - **`curvyo-ui-core/src/session/transform_entry.rs` is 548 lines**, over the
   500-line rule, and is not split by `multi-object-transform` (found in the
   2026-10-08 architect review). Split typed-entry parsing from the entry state

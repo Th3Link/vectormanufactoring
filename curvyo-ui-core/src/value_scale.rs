@@ -7,7 +7,7 @@
 
 use curvyo_document_core::{Length, MarkerCount, Opacity, Style, StyleEdit};
 
-use crate::style_entry::opacity_from_percent;
+use crate::style_entry::{MAX_STROKE_WIDTH_MM, opacity_from_percent};
 
 /// How fine a value is rounded: Shift is coarse, Ctrl (Cmd on macOS) is fine
 /// (criteria 38, 43, 47).
@@ -41,11 +41,21 @@ const WIDTH_BASE: f64 = 100.0;
 const OPACITY_MAX: f64 = 100.0;
 const OPACITY_BASE: f64 = 4.0;
 /// The largest value a typed width may hold, millimetres.
-const WIDTH_TYPED_MAX_MM: f64 = 1000.0;
 /// The marker count scale: `v = 1 + 49 p`, drag 1 to 50, typed 1 to 500.
 const COUNT_MIN: f64 = 1.0;
 const COUNT_DRAG_MAX: f64 = 50.0;
 const COUNT_TYPED_MAX: f64 = 500.0;
+
+/// What a value field shows (`ValueScale::shown`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FieldShown {
+    /// The value as text, without the unit; empty when mixed.
+    pub text: String,
+    /// The share of the field's width the bar is filled to, `0` to `1`.
+    pub bar: f64,
+    /// The reset icon shows.
+    pub resettable: bool,
+}
 
 /// A scale: the mapping of `p` in `[0, 1]` to a value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,7 +128,7 @@ impl ValueScale {
     #[must_use]
     pub const fn typed_max(self) -> f64 {
         match self {
-            Self::StrokeWidth => WIDTH_TYPED_MAX_MM,
+            Self::StrokeWidth => MAX_STROKE_WIDTH_MM,
             Self::Opacity => OPACITY_MAX,
             Self::MarkerCount => COUNT_TYPED_MAX,
         }
@@ -126,11 +136,37 @@ impl ValueScale {
 
     /// What a reset sets (criterion 61).
     #[must_use]
-    pub const fn default_value(self) -> f64 {
+    pub fn default_value(self) -> f64 {
         match self {
-            Self::StrokeWidth => 0.25,
+            // The stroke width every object is created with.
+            Self::StrokeWidth => Style::default().stroke.width.as_mm(),
             Self::Opacity => OPACITY_MAX,
             Self::MarkerCount => COUNT_MIN,
+        }
+    }
+
+    /// Whether `value` is the default a reset sets (to within float dust).
+    #[must_use]
+    pub fn is_default(self, value: f64) -> bool {
+        (value - self.default_value()).abs() <= 1e-9
+    }
+
+    /// What a field shows for `value` (`None` when the edited objects differ):
+    /// its text, the share of its width the bar fills, and whether the reset
+    /// icon shows (the value is mixed or not the default).
+    #[must_use]
+    pub fn shown(self, value: Option<f64>) -> FieldShown {
+        match value {
+            Some(v) => FieldShown {
+                text: self.text(v),
+                bar: self.position_of(v),
+                resettable: !self.is_default(v),
+            },
+            None => FieldShown {
+                text: String::new(),
+                bar: 0.0,
+                resettable: true,
+            },
         }
     }
 

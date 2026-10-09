@@ -216,28 +216,6 @@ impl StyleField {
             Self::MarkerCount => StyleEdit::MarkerCount(parse_marker_count(text)?),
         })
     }
-
-    /// The edit that sets a colour area's value, `None` for a field that is
-    /// not a colour.
-    #[must_use]
-    pub const fn color_edit(self, color: Color) -> Option<StyleEdit> {
-        match self {
-            Self::StrokeColor => Some(StyleEdit::StrokeColor(color)),
-            Self::FillColor => Some(StyleEdit::FillColor(color)),
-            _ => None,
-        }
-    }
-
-    /// The edit that sets an opacity slider's value (a whole percent), `None`
-    /// for a field that is not an opacity.
-    #[must_use]
-    pub fn opacity_edit(self, percent: f64) -> Option<StyleEdit> {
-        match self {
-            Self::StrokeOpacity => Some(StyleEdit::StrokeOpacity(opacity_from_percent(percent))),
-            Self::FillOpacity => Some(StyleEdit::FillOpacity(opacity_from_percent(percent))),
-            _ => None,
-        }
-    }
 }
 
 /// The edit a typed hex makes: the colour alone for the 3 and 6 digit forms,

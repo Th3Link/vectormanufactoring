@@ -3,11 +3,11 @@
 //! with the guards that keep a crafted pattern or width from exhausting memory
 //! or time (`adrs.md`, readiness check section 5).
 
-use std::borrow::Cow;
-
 use curvyo_document_core::{DashPattern, LineCap};
-use lyon::algorithms::measure::{PathMeasurements, SampleType};
+use lyon::algorithms::measure::PathMeasurements;
 use lyon::path::Path;
+
+use crate::dash_walk::{Walk, dash_outline, walked};
 
 /// The most dashes one object may draw. A pattern that would produce more
 /// draws solid instead.
@@ -37,16 +37,21 @@ impl DashBudget {
     }
 }
 
-/// The pattern as the renderer walks it: an odd list repeats once, so `1 2 4`
-/// draws as `1 2 4 1 2 4` and the second round starts with an off gap, as SVG
-/// defines it (`specs/0017-style-panel-rework`, criterion 32).
-fn walked(pattern: &DashPattern) -> Cow<'_, [f64]> {
-    let ratios = pattern.as_slice();
-    if ratios.len() % 2 == 1 {
-        Cow::Owned([ratios, ratios].concat())
-    } else {
-        Cow::Borrowed(ratios)
-    }
+/// Every outline with its length, or `None` when a length is not a number or no
+/// outline has any length.
+#[allow(clippy::cast_possible_truncation)]
+fn measure(outlines: &[Path], tolerance_mm: f64) -> Option<Vec<(PathMeasurements, f64)>> {
+    let measured: Vec<(PathMeasurements, f64)> = outlines
+        .iter()
+        .map(|path| {
+            let measurements = PathMeasurements::from_path(path, tolerance_mm as f32);
+            let length = f64::from(measurements.length());
+            (measurements, length)
+        })
+        .collect();
+    let usable = measured.iter().all(|(_, l)| l.is_finite() && *l >= 0.0)
+        && measured.iter().any(|(_, l)| *l > 0.0);
+    usable.then_some(measured)
 }
 
 /// The dashed version of each outline of **one object**: one open sub-path per on-interval,
@@ -100,21 +105,7 @@ pub(crate) fn dashed_object(
         .chunks(2)
         .filter(|pair| pair[0] > 0.0 || dots)
         .count();
-    let measured: Vec<(PathMeasurements, f64)> = outlines
-        .iter()
-        .map(|path| {
-            let measurements = PathMeasurements::from_path(path, tolerance_mm as f32);
-            let length = f64::from(measurements.length());
-            (measurements, length)
-        })
-        .collect();
-    if measured
-        .iter()
-        .any(|(_, length)| !length.is_finite() || *length < 0.0)
-        || measured.iter().all(|(_, length)| *length <= 0.0)
-    {
-        return None;
-    }
+    let measured = measure(outlines, tolerance_mm)?;
     let estimate: f64 = measured
         .iter()
         .filter(|(_, length)| *length > 0.0)
@@ -145,84 +136,6 @@ pub(crate) fn dashed_object(
         .collect();
     budget.remaining = budget.remaining.saturating_sub(drawn);
     Some(dashed)
-}
-
-/// What walking one object's pattern needs, the same for each of its outlines.
-struct Walk<'a> {
-    /// The pattern as walked (an odd list already doubled).
-    ratios: &'a [f64],
-    /// The document stroke width, millimetres, as `lyon` takes it.
-    width: f32,
-    /// The length of one round of the pattern, millimetres.
-    period_mm: f64,
-    /// How many "on" entries a round has that draw something.
-    on_intervals: usize,
-    /// A zero-length "on" entry draws a dot (a round or square cap).
-    dots: bool,
-}
-
-/// The dashes of one outline of positive `length`, and how many there are. The estimate of the
-/// dash count bounds the loop; the explicit step cap also stops it if float rounding ever failed
-/// to advance the distance.
-#[allow(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss
-)]
-fn dash_outline(
-    path: &Path,
-    measurements: &PathMeasurements,
-    length: f64,
-    walk: &Walk<'_>,
-) -> (Path, usize) {
-    let Walk {
-        ratios,
-        width,
-        period_mm,
-        on_intervals,
-        dots,
-    } = *walk;
-    let length = length as f32;
-    let outline_estimate = (f64::from(length) / period_mm).ceil() * on_intervals as f64;
-    let mut sampler = measurements.create_sampler(path, SampleType::Distance);
-    let mut builder = Path::builder();
-    let mut distance = 0.0_f32;
-    let mut drawn = 0_usize;
-    let max_steps = ratios.len() * (outline_estimate as usize + 2);
-    for step in 0..max_steps {
-        if distance >= length {
-            break;
-        }
-        let run = ratios[step % ratios.len()] as f32 * width;
-        if step % 2 == 0 {
-            if run > 0.0 {
-                sampler.split_range(distance..distance + run, &mut builder);
-                drawn += 1;
-            } else if dots {
-                // A zero-length dash: a segment of a thousandth of the stroke width along
-                // the outline's direction there, so a round or square cap draws the dot and
-                // the square follows the line. (`lyon` draws no cap on a sub-path of no
-                // length at all.)
-                let at = sampler.sample(distance).position();
-                // The direction from two points on the outline, not the sampler's tangent,
-                // which is not a number at the end of a degenerate curve (a corner anchor's
-                // zero handles).
-                let step = (width * 0.01).max(f32::EPSILON * length).min(length);
-                let ahead = sampler.sample((distance + step).min(length)).position();
-                let behind = sampler.sample((distance - step).max(0.0)).position();
-                let along = (ahead - behind).normalize();
-                if along.x.is_finite() && along.y.is_finite() {
-                    let half = along * (width * 0.001);
-                    builder.begin(at - half);
-                    builder.line_to(at + half);
-                    builder.end(false);
-                    drawn += 1;
-                }
-            }
-        }
-        distance += run;
-    }
-    (builder.build(), drawn)
 }
 
 #[cfg(test)]

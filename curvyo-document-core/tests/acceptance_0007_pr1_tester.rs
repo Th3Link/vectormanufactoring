@@ -675,10 +675,6 @@ fn duplicate_ids_in_a_batch_are_harmless() {
     assert_eq!(style_of(&doc, a).stroke.color, rgb(1, 2, 3));
 }
 
-// ------------------------------------------------- AC 13, 17: fill modes
-
-// ----------------------------------------------- AC 16-20: stop commands
-
 // ------------------------------------------------- AC 25: persistence
 
 // --------------------------------------------- open-file validation
@@ -990,7 +986,7 @@ fn closing_a_path_onto_itself_keeps_its_style() {
 }
 
 #[test]
-fn object_to_path_keeps_the_whole_style_including_stops() {
+fn object_to_path_keeps_the_whole_style() {
     let doc = Document::new(1);
     let r = rect(&doc);
     let e = ellipse(&doc);
@@ -1161,7 +1157,7 @@ impl Lcg {
     }
 }
 
-// ------------------------------------------- kept after the gradient removal
+// ------------------------------------------- more style cases
 
 #[test]
 fn a_long_random_command_sequence_keeps_every_invariant_and_survives_reopen() {

@@ -143,5 +143,5 @@ pub use transform_math::{
     resize_local_box, rotate_delta_angle, rotate_delta_for, rotate_pivot, scaled_and_floored,
     stroke_or_radius_factor,
 };
-pub use value_scale::{Grid, ValueField, ValueScale};
+pub use value_scale::{FieldShown, Grid, ValueField, ValueScale};
 pub use viewport::{DOCUMENT_INSET_PX, PX_PER_MM_AT_100, Viewport, Zoom};

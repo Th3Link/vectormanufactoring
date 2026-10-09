@@ -6,11 +6,11 @@
 //! holds only the open text, the invalid state and "Escape restores".
 
 use curvyo_document_core::{
-    Color, LineCap, LineJoin, MarkerPlace, MarkerShape, NodeId, ObjectSnapshot, StyleEdit,
+    LineCap, LineJoin, MarkerPlace, MarkerShape, NodeId, ObjectSnapshot, StyleEdit,
 };
 use curvyo_ui_core::{
-    BarValue, DashChoice, Grid, MarkerSlot, StyleEntryError, StyleField, StylePanelState,
-    StyleScope, StyleTool, ValueField, hsv_to_rgb, parse_dash_text, style_panel_state, style_scope,
+    DashChoice, Grid, MarkerSlot, StyleEntryError, StyleField, StylePanelState, StyleScope,
+    StyleTool, ValueField, hsv_to_rgb, parse_dash_text, style_panel_state, style_scope,
 };
 
 use super::style_view::StylePanelView;
@@ -55,6 +55,7 @@ impl Session {
         let mut shown = committed.clone();
         self.style.apply_to(&mut shown);
         style_panel_state(&committed, &shown, &scope)
+            .map(|state| state.with_pending(self.style.pending_edit()))
     }
 
     /// [`Session::style_panel_state`] as the flat record the host reads.
@@ -71,9 +72,6 @@ impl Session {
         view.pick_target = self
             .colour_pick_target()
             .map_or_else(String::new, |target| target.name().to_string());
-        if let Some(StyleEdit::StrokeWidth(width)) = self.style.pending_edit() {
-            view.show_width(width.as_mm());
-        }
         view
     }
 
@@ -106,26 +104,18 @@ impl Session {
         Ok(self.apply_style_edit(&edit))
     }
 
-    /// A colour area's or hue slider's drag tick: shows `color` on the edited
-    /// objects without writing anything.
-    pub fn preview_style_color(&mut self, field: StyleField, color: Color) {
-        if let Some(edit) = field.color_edit(color) {
-            self.preview_style_edit(edit);
-        }
-    }
-
     /// A tick of a drag in the colour area or the hue slider: shows the colour
     /// of hue `hue` (degrees), saturation and value (`0` to `1`) without
-    /// writing. Only the colour changes; each object keeps its alpha.
+    /// writing. Only the colour changes; each object keeps its alpha. A field
+    /// that is not a colour is ignored.
     pub fn preview_style_hsv(&mut self, field: StyleField, hue: f64, saturation: f64, value: f64) {
-        self.preview_style_color(field, hsv_to_rgb(hue, saturation, value));
-    }
-
-    /// An opacity slider's drag tick (a percent): shows it without writing.
-    pub fn preview_style_opacity(&mut self, field: StyleField, percent: f64) {
-        if let Some(edit) = field.opacity_edit(percent) {
-            self.preview_style_edit(edit);
-        }
+        let color = hsv_to_rgb(hue, saturation, value);
+        let edit = match field {
+            StyleField::StrokeColor => StyleEdit::StrokeColor(color),
+            StyleField::FillColor => StyleEdit::FillColor(color),
+            _ => return,
+        };
+        self.preview_style_edit(edit);
     }
 
     fn preview_style_edit(&mut self, edit: StyleEdit) {
@@ -170,23 +160,8 @@ impl Session {
         let Some(state) = self.style_panel_state() else {
             return;
         };
-        let shown = match field {
-            ValueField::StrokeWidth => match state.stroke.width {
-                BarValue::Uniform(width) => width.as_mm(),
-                BarValue::Mixed => return,
-            },
-            ValueField::StrokeOpacity => match state.stroke.opacity {
-                BarValue::Uniform(opacity) => opacity.get() * 100.0,
-                BarValue::Mixed => return,
-            },
-            ValueField::FillOpacity => match state.fill.opacity {
-                BarValue::Uniform(opacity) => opacity.get() * 100.0,
-                BarValue::Mixed => return,
-            },
-            ValueField::MarkerCount => match state.stroke.markers.map(|m| m.count) {
-                Some(BarValue::Uniform(count)) => f64::from(count.get()),
-                _ => return,
-            },
+        let Some(shown) = state.value_of(field) else {
+            return;
         };
         self.preview_style_edit(field.edit(field.scale().step(shown, steps, grid)));
     }

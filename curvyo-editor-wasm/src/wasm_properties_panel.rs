@@ -46,20 +46,6 @@ impl WasmSession {
         }
     }
 
-    /// A colour area or hue slider tick: shows `rgb` (`0xRRGGBB`) on the edited
-    /// objects without writing. `field_name` is `"stroke-color"` or
-    /// `"fill-color"`.
-    pub fn preview_style_color(&mut self, field_name: &str, rgb: u32) {
-        if let Some(field) = field(field_name) {
-            let color = Color {
-                r: ((rgb >> 16) & 0xFF) as u8,
-                g: ((rgb >> 8) & 0xFF) as u8,
-                b: (rgb & 0xFF) as u8,
-            };
-            self.session.preview_style_color(field, color);
-        }
-    }
-
     /// A tick of a drag in the colour area or the hue slider: shows the colour
     /// of hue `hue` (degrees), saturation and value (`0` to `1`) on the edited
     /// objects without writing. `field_name` is `"stroke-color"` or
@@ -68,14 +54,6 @@ impl WasmSession {
         if let Some(field) = field(field_name) {
             self.session
                 .preview_style_hsv(field, hue, saturation, value);
-        }
-    }
-
-    /// An opacity slider tick (percent): shows it without writing.
-    /// `field_name` is `"stroke-opacity"` or `"fill-opacity"`.
-    pub fn preview_style_opacity(&mut self, field_name: &str, percent: f64) {
-        if let Some(field) = field(field_name) {
-            self.session.preview_style_opacity(field, percent);
         }
     }
 

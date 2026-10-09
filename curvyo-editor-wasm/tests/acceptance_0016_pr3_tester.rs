@@ -47,6 +47,12 @@ use curvyo_document_core::{
 use curvyo_editor_wasm::{BooleanOutcome, DoubleClickHint, KeyInput, Session, Tool};
 use curvyo_ui_core::{BooleanAvailability, BooleanOp, BooleanRefusal};
 
+/// A colour-area tick for `color`, through the same call the panel makes.
+fn preview_colour(session: &mut Session, field: curvyo_ui_core::StyleField, color: Color) {
+    let hsv = curvyo_ui_core::rgb_to_hsv(color);
+    session.preview_style_hsv(field, hsv.hue.unwrap_or(0.0), hsv.saturation, hsv.value);
+}
+
 const ALL_OPS: [BooleanOp; 5] = [
     BooleanOp::Union,
     BooleanOp::Difference,
@@ -2186,7 +2192,7 @@ fn a_style_preview_in_flight_does_not_corrupt_the_result() {
     stylize(&d, a, 1);
     let mut s = session_of(&d);
     marquee(&mut s, pt(-5.0, -5.0), pt(40.0, 40.0), false);
-    s.preview_style_color(StyleField::FillColor, Color { r: 1, g: 2, b: 3 });
+    preview_colour(&mut s, StyleField::FillColor, Color { r: 1, g: 2, b: 3 });
     let out = s.apply_boolean(BooleanOp::Union);
     s.commit_style_preview();
     let ids = reread(&s).object_ids();

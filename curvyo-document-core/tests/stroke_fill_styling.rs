@@ -341,14 +341,6 @@ fn join_and_cap_are_stored_and_read_back() {
 }
 
 // ---------------------------------------------------------------------
-// AC 13, 14: fill modes keep what they do not use
-// ---------------------------------------------------------------------
-
-// ---------------------------------------------------------------------
-// AC 16 to 20: stops
-// ---------------------------------------------------------------------
-
-// ---------------------------------------------------------------------
 // AC 24: one property, each object independently
 // ---------------------------------------------------------------------
 
@@ -626,7 +618,7 @@ fn a_peer_turning_the_stroke_off_does_not_lose_a_concurrent_colour_edit() {
     assert_eq!(style.stroke.color, blue());
 }
 
-// ---- kept after the gradient removal
+// ---- more fill and copy cases
 
 #[test]
 fn ac1_ac2_the_same_edit_works_on_paths_and_primitives_and_keeps_shape_parameters() {

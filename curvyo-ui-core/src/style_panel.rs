@@ -5,12 +5,13 @@
 
 use curvyo_document_core::{
     Color, DashPattern, Length, LineCap, LineJoin, MarkerCount, MarkerPlace, MarkerShape,
-    ObjectSnapshot, Opacity, PathSnapshot, Style,
+    ObjectSnapshot, Opacity, PathSnapshot, Style, StyleEdit,
 };
 
 use crate::dash_text::dash_text;
 use crate::select_bar::BarValue;
 use crate::style_scope::StyleScope;
+use crate::value_scale::ValueField;
 
 /// Two stroke widths closer than this are one value, millimetres.
 const WIDTH_EQUAL_EPSILON_MM: f64 = 1e-9;
@@ -173,6 +174,48 @@ pub struct StylePanelState {
     pub stroke: StrokePanel,
     /// The fill rows.
     pub fill: FillPanel,
+}
+
+impl StylePanelState {
+    /// The state with a width being dragged shown as the drag has it: a width
+    /// previewed at 0 reads 0 although its preview style keeps the last width
+    /// (the stroke is off), so the field follows the drag (criterion 8).
+    #[must_use]
+    pub fn with_pending(mut self, pending: Option<&StyleEdit>) -> Self {
+        if let Some(StyleEdit::StrokeWidth(width)) = pending {
+            self.stroke.width = BarValue::Uniform(*width);
+        }
+        self
+    }
+
+    /// The value of a value field in the scale's unit, `None` while the edited
+    /// objects differ (or the field has nothing to show).
+    #[must_use]
+    pub fn value_of(&self, field: ValueField) -> Option<f64> {
+        let uniform = |value: BarValue<f64>| match value {
+            BarValue::Uniform(v) => Some(v),
+            BarValue::Mixed => None,
+        };
+        match field {
+            ValueField::StrokeWidth => uniform(map_bar(self.stroke.width, Length::as_mm)),
+            ValueField::StrokeOpacity => uniform(map_bar(self.stroke.opacity, percent_of)),
+            ValueField::FillOpacity => uniform(map_bar(self.fill.opacity, percent_of)),
+            ValueField::MarkerCount => uniform(map_bar(self.stroke.markers.as_ref()?.count, |c| {
+                f64::from(c.get())
+            })),
+        }
+    }
+}
+
+fn percent_of(opacity: Opacity) -> f64 {
+    opacity.get() * 100.0
+}
+
+fn map_bar<T: Copy>(value: BarValue<T>, convert: impl Fn(T) -> f64) -> BarValue<f64> {
+    match value {
+        BarValue::Uniform(v) => BarValue::Uniform(convert(v)),
+        BarValue::Mixed => BarValue::Mixed,
+    }
 }
 
 /// The one value of `values` if they all agree, else `Mixed`. The caller
