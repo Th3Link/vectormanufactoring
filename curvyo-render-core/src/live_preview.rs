@@ -1,5 +1,5 @@
 //! The "new" half of blue-new, black-old
-//! (`specs/unified-object-editing/specification.md`, criteria 10 to 15): the
+//! (`specs/0009-unified-object-editing/specification.md`, criteria 10 to 15): the
 //! geometry a release would commit, drawn as a hollow `--preview-new` outline
 //! of constant screen width over the unchanged committed objects. The
 //! committed objects are not touched here; "black old" is the absence of a

@@ -112,7 +112,7 @@ impl Document {
     }
 
     /// Copies every named object, displaced by `offset`, in **one commit**
-    /// (`specs/edit-interaction-polish/adrs.md`, decision 2), and returns the
+    /// (`specs/0010-edit-interaction-polish/adrs.md`, decision 2), and returns the
     /// new ids in source order. The copy takes **every key of its source's
     /// meta map** as it is (a register a later story adds, or one a newer
     /// build wrote that this build does not know, comes along with no change

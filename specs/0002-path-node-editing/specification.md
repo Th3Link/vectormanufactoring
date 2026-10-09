@@ -12,7 +12,7 @@ node/handle/segment mental model I already have from Inkscape, so that I can
 produce or correct my own vector geometry without learning a different tool
 or dropping back to Inkscape for anything beyond the simplest shape.
 
-This is the foundation every later editing slice builds on (`specs/index.md`):
+This is the foundation every later editing slice builds on (`specs/README.md`):
 primitive shapes become editable paths over this same node/handle surface
 (slice 3), styling attaches to the paths drawn here (slice 4), undo wraps the
 interactions defined here (slice 5), and booleans operate on the closed paths
@@ -66,7 +66,7 @@ as independent, well-defined actions.
    canvas, then it shows a 0.25 mm solid black stroke and no fill regardless
    of its node types or curvature — this is this slice's stated placeholder
    default; stroke and fill the maker can change are `stroke-and-fill-
-   styling` (slice 4, `specs/index.md`), not this one.
+   styling` (slice 4, `specs/README.md`), not this one.
 
 ### Selecting and moving nodes and handles
 

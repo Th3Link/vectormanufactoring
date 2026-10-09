@@ -51,7 +51,7 @@ const HINT_LINES: Record<string, string[]> = {
 };
 
 /** The notes a corner knob's hint can open with
- * (`specs/rectangle-corner-radii/` criterion 23): muted, and not the title. */
+ * (`specs/0013-rectangle-corner-radii/` criterion 23): muted, and not the title. */
 function isNote(line: string): boolean {
   return (
     line.startsWith("Limited by the size.") ||
@@ -71,7 +71,7 @@ interface HandleHintChipProps {
 }
 
 /**
- * The hover hint for a transform handle (`specs/object-transform-
+ * The hover hint for a transform handle (`specs/0008-object-transform-
  * refinements/specification.md` criterion 54; `docs/design-system.md`,
  * "Transform handle hint chip"): text only, shown after the pointer has
  * rested on a handle for 600 ms, anchored once at the pointer (12 px up and

@@ -1,4 +1,4 @@
-//! Session-level tests of PR 1 of `specs/unified-object-editing/
+//! Session-level tests of PR 1 of `specs/0009-unified-object-editing/
 //! specification.md`, written from the specification's own arithmetic (the
 //! radius handle's position rule `p = 15 + ρ·L(s)`, the stored fields, the
 //! blue-new/black-old frames) and driven through `Session`'s public API

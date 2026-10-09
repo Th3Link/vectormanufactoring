@@ -1,5 +1,5 @@
 //! Independent tester tests for the marquee and lasso overlay of
-//! `specs/advanced-selection/` (UX notes: 12 % fill, 1.5 px border, green and
+//! `specs/0014-advanced-selection/` (UX notes: 12 % fill, 1.5 px border, green and
 //! red, dashed 4/3 green lasso).
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]

@@ -1,6 +1,6 @@
 //! Writing a resolved gesture to the document, and refusing a result that is
 //! not finite and sane (`specs/0005-object-transform/adrs.md`; extended by
-//! `specs/object-transform-refinements/adrs.md`): one commit per drag or
+//! `specs/0008-object-transform-refinements/adrs.md`): one commit per drag or
 //! confirmed entry, dispatched on the gesture's handle. Split out of
 //! [`crate::transform_drag`], which resolves the gestures.
 
@@ -168,7 +168,7 @@ pub(crate) fn is_sane(object: &ObjectSnapshot) -> bool {
 /// Two snapshots of one object are the same within 1e-9 mm and 1e-12 rad: a
 /// resolved edit that equals the committed object is no edit at all, so it
 /// shows no preview and writes nothing (criterion 12 of
-/// `specs/unified-object-editing/`).
+/// `specs/0009-unified-object-editing/`).
 pub(crate) fn same_within_tolerance(a: &ObjectSnapshot, b: &ObjectSnapshot) -> bool {
     let ((xs, ra), (ys, rb)) = (numbers_of(a), numbers_of(b));
     xs.len() == ys.len()

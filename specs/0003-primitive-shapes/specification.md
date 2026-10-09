@@ -16,7 +16,7 @@ matching how Inkscape itself separates "shape tool" from "node tool" and
 makes converting between them an explicit choice rather than something that
 happens automatically underneath the maker.
 
-Per `specs/index.md`'s ordering note, this slice is a thin layer over
+Per `specs/README.md`'s ordering note, this slice is a thin layer over
 `path-node-editing` (slice 2), not a parallel implementation: it reuses that
 slice's tool rail, selection/hover conventions, hit-testing tolerances and
 command/commit model, and "object to path" converts into exactly the

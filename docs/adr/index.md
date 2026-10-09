@@ -20,7 +20,7 @@ them and was accepted by the architect — see its own preamble for why
 (file extension) in ADRs 0001–0012, whose text keeps the old names.
 
 A decision too small for a full ADR gets a short dated note in that feature's
-`specs/<feature-slug>/adrs.md` instead.
+`specs/<NNNN-feature-slug>/adrs.md` instead.
 
 | ADR | Title | Scope | Status |
 |---|---|---|---|
@@ -106,7 +106,7 @@ unawareness. Reversing either needs a new ADR, not an edit:
   tie-broken on `#![forbid(unsafe_code)]` (vs. internal `unsafe` in the other
   two) and on being the Clipper2 algorithms directly rather than `geo`'s wrapper
   over an older, pinned `i_overlay`. Recorded as the dated note ADR 0003 §3 asks
-  for, written there (not in a `specs/<feature-slug>/adrs.md`, since slice 6
+  for, written there (not in a `specs/<NNNN-feature-slug>/adrs.md`, since slice 6
   doesn't exist as a story yet). This reopens the §4 offsetting question below —
   still pending the customer, not resolved by this spike.
 - **Offsetting may reopen ADR 0003 §4 (customer decision, not yet asked).** Now

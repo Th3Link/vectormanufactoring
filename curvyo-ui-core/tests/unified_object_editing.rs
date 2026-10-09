@@ -1,5 +1,5 @@
 //! Tests of `curvyo-ui-core`'s share of PR 1 of
-//! `specs/unified-object-editing/specification.md`: the parameter handles
+//! `specs/0009-unified-object-editing/specification.md`: the parameter handles
 //! next to the transform handles (criteria 1 to 9), the press order (35),
 //! the stored fields (24). Session-level behaviour (commit counts, cursors,
 //! readouts, the bar) is in `curvyo-editor-wasm/tests/unified_object_editing.rs`.

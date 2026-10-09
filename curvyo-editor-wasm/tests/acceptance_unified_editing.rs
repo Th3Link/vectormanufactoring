@@ -1,5 +1,5 @@
 //! Independent tester acceptance tests for PR 1 of
-//! `specs/unified-object-editing/specification.md` (criteria 1-24, 21a, 35
+//! `specs/0009-unified-object-editing/specification.md` (criteria 1-24, 21a, 35
 //! without the advanced-selection clauses, 37, 38). Written from the
 //! specification before the implementation was read. Everything goes through
 //! `Session`'s public API. Expected values come from the specification's own

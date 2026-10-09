@@ -1,5 +1,5 @@
 //! `Session`'s shape-creation glue (`specs/0003-primitive-shapes/
-//! specification.md`, acceptance criteria 1, 2, 7, 8, 10-12; `specs/unified-
+//! specification.md`, acceptance criteria 1, 2, 7, 8, 10-12; `specs/0009-unified-
 //! object-editing/`, criteria 25 to 30): dispatching pointer events to
 //! whichever of the three creation tools is active, the polygon/star settings
 //! for the next shape, and the live preview and readout of a create-drag. The

@@ -1,5 +1,5 @@
 //! Tests of `curvyo-ui-core`'s share of
-//! `specs/object-transform-refinements/specification.md`: the handle set and
+//! `specs/0008-object-transform-refinements/specification.md`: the handle set and
 //! its one hit rule, the pivot rule, the 3 px dead zone, the centre handle,
 //! the double-click dispatch, the typed numeric entry (including "a typed
 //! value and a dragged value never disagree"), and path skew. Session-level

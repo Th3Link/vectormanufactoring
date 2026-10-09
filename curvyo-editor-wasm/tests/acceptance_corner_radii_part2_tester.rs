@@ -1,4 +1,4 @@
-//! Independent black-box tests of PART 2 of `specs/rectangle-corner-radii/`
+//! Independent black-box tests of PART 2 of `specs/0013-rectangle-corner-radii/`
 //! through `Session`'s public API: the Link switch and its lifetime, Shift as
 //! an exclusive-or, per-corner drags and their commits, readouts, followers,
 //! the typed entry, the bar's Radius field, Remove rounding, the Scale-corner-

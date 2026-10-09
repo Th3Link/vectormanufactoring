@@ -1,5 +1,5 @@
 //! Independent black-box tests of `curvyo-ui-core`'s share of PART 1 of
-//! `specs/rectangle-corner-radii/` (criteria 1, 11, 16, 21, 22 for the data
+//! `specs/0013-rectangle-corner-radii/` (criteria 1, 11, 16, 21, 22 for the data
 //! layer; "no visible change for equal radii"): hit tests, bounds, handle
 //! positions, and the linked radius write, all against oracles taken from
 //! `origin/main` (single radius) or computed analytically.

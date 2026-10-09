@@ -11,7 +11,7 @@ pub struct Modifiers {
     /// Ctrl (or Cmd) is down.
     pub ctrl: bool,
     /// Alt (or Option) is down. Only the Select tool reads it
-    /// (`specs/advanced-selection/`): the shape tools ignore it.
+    /// (`specs/0014-advanced-selection/`): the shape tools ignore it.
     pub alt: bool,
 }
 

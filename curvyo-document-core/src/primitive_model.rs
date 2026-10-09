@@ -328,7 +328,7 @@ impl ObjectSnapshot {
     }
 
     /// The angle shown and typed for this object
-    /// (`specs/edit-interaction-polish/` criterion 1, `adrs.md` decision 1):
+    /// (`specs/0010-edit-interaction-polish/` criterion 1, `adrs.md` decision 1):
     /// for a polygon or star the clockwise angle of its first outer vertex
     /// from straight right, `StarFrame.angle + rotation` wrapped into
     /// `(-π, π]` (the same sum [`crate::outline_of_rotated`] draws); for every

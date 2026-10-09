@@ -1,4 +1,4 @@
-//! `Session`-level tests of Parts D and F of `specs/edit-interaction-polish/
+//! `Session`-level tests of Parts D and F of `specs/0010-edit-interaction-polish/
 //! specification.md` for PR 1: the Escape cascade of every tool (criteria 42
 //! to 49, 60), the key gate and key table (criteria 54, 55, 57, 60, 61), and
 //! Split's selection (criteria 50 to 52). Driven through `Session`'s public

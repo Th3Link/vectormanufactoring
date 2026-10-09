@@ -1,6 +1,6 @@
 //! Where a selected primitive's parameter handles sit, and which handle sets
 //! a box of a given on-screen size draws
-//! (`specs/unified-object-editing/specification.md`, criteria 1, 2, 4, 6-8
+//! (`specs/0009-unified-object-editing/specification.md`, criteria 1, 2, 4, 6-8
 //! and the UX notes, section 1; `adrs.md`, second-pass note).
 //!
 //! A parameter handle changes a primitive's own parameter: the four corner
@@ -8,7 +8,7 @@
 //! the corners are linked) and a star's
 //! inner-radius handle. They are laid out in the primitive's local frame and
 //! mapped to document space through its [`OrientedBox`], like every other
-//! handle; `specs/ellipse-arcs-and-shaping/` adds its own variants here.
+//! handle; `specs/0021-ellipse-arcs-and-shaping/` adds its own variants here.
 
 pub use curvyo_document_core::Corner;
 use curvyo_document_core::{
@@ -127,7 +127,7 @@ pub fn radius_gain(shorter_side_mm: f64, tolerances: &TransformHandleTolerances)
 /// its corner, `ρ' = min(ρ, max(1, Σ − ρ_partner))` with
 /// `Σ = 2 + √2·(S − s)/L(s)` (`s` and `S` the shorter and the longer side of
 /// the box, `L` the travel, [`radius_travel`]), so that two diagonal knobs
-/// never overlap (`specs/rectangle-corner-radii/` criterion 1). Only the drawn
+/// never overlap (`specs/0013-rectangle-corner-radii/` criterion 1). Only the drawn
 /// position changes, never a radius: a knob at or below `ρ = 1` is always at its
 /// own radius, and one corner alone can still reach 2. On a square `Σ = 2`.
 #[must_use]

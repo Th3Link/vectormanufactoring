@@ -1,5 +1,5 @@
 //! The Select tool's marquee, lasso and Alt-click cycle
-//! (`specs/advanced-selection/specification.md`, criteria 3 to 20) at the
+//! (`specs/0014-advanced-selection/specification.md`, criteria 3 to 20) at the
 //! `SelectTool` level: presses, moves and releases with explicit modifiers.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]

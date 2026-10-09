@@ -1,7 +1,7 @@
 //! Resolves a resize, rotate or skew gesture into the object's resulting
 //! snapshot (`specs/0005-object-transform/adrs.md`: "a resize rewrites
 //! geometry... preview and commit share one implementation"; extended by
-//! `specs/object-transform-refinements/adrs.md`, "one resolving function
+//! `specs/0008-object-transform-refinements/adrs.md`, "one resolving function
 //! per gesture"). `SelectTool`'s live preview, its commit on release and
 //! the typed numeric entry all go through [`TransformDrag::resolve`]'s
 //! building blocks ([`resize_by_local_delta`], [`rotate_by`],
@@ -51,7 +51,7 @@ pub enum StrokeScaling {
 }
 
 /// Whether a resize of a rectangle also scales its corner radius, the
-/// "Scale corner radius" switch (`specs/unified-object-editing/`, criterion
+/// "Scale corner radius" switch (`specs/0009-unified-object-editing/`, criterion
 /// 23; customer decision 2026-10-06). An enum, not a `bool`, for the same
 /// reason as [`StrokeScaling`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -67,7 +67,7 @@ pub enum CornerRadiusScaling {
 
 /// Whether a corner radius handle changes all four radii or only its own
 /// corner: the Select bar's "Link corners" switch
-/// (`specs/rectangle-corner-radii/` criteria 2 and 3). Session state of the
+/// (`specs/0013-rectangle-corner-radii/` criteria 2 and 3). Session state of the
 /// class of [`ScaleModes`], not part of it: it acts on the corner handles, not
 /// on a resize. An enum, not a `bool`, for the same reason as
 /// [`StrokeScaling`].
@@ -127,7 +127,7 @@ pub(crate) struct DragOrigin {
     passed: bool,
     /// Whether Shift was held at the press. It reveals the four side rotate
     /// handles, a set frozen for the whole drag (criterion 6), and later
-    /// inverts a corner-radius link (`specs/rectangle-corner-radii/`).
+    /// inverts a corner-radius link (`specs/0013-rectangle-corner-radii/`).
     pub(crate) shift_at_press: bool,
 }
 
@@ -191,7 +191,7 @@ pub(crate) struct TransformDrag {
 }
 
 /// What the live readout of a corner radius drag needs beyond the resolved
-/// object (who follows is [`crate::SelectTool::corner_drag_changes_all`]) (`specs/rectangle-corner-radii/` criteria 4, 7,
+/// object (who follows is [`crate::SelectTool::corner_drag_changes_all`]) (`specs/0013-rectangle-corner-radii/` criteria 4, 7,
 /// 23).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ParamDragInfo {

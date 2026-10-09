@@ -1,4 +1,4 @@
-//! The Select bar's `wasm-bindgen` surface (`specs/unified-object-editing`,
+//! The Select bar's `wasm-bindgen` surface (`specs/0009-unified-object-editing`,
 //! criteria 21 to 23): a second `impl WasmSession` block, so `wasm_api.rs`
 //! does not grow. Strings and scalars only (ADR 0001 §5); every method is a
 //! direct pass-through to `Session`, which holds the orchestration, over
@@ -123,7 +123,7 @@ impl WasmSession {
         self.session.set_scale_corner_radius(on);
     }
 
-    /// The Select tool's "Link corners" switch (`specs/rectangle-corner-radii/`
+    /// The Select tool's "Link corners" switch (`specs/0013-rectangle-corner-radii/`
     /// criterion 2). On in every new session; not persisted.
     #[must_use]
     pub fn link_corners(&self) -> bool {

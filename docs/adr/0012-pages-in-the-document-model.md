@@ -18,7 +18,7 @@ Today a document is one root map (`format_version`, `size_width_mm`,
 `size_height_mm`) and one Loro tree whose root nodes are the objects. Sibling
 order among them is z-order (ADR 0002 §5). The customer asked for several
 pages in one project, each with its own size and its own objects, switched
-one at a time (`specs/document-size-rulers-and-pages/specification.md`).
+one at a time (`specs/0015-document-size-and-rulers/specification.md`).
 
 Three storage options were considered:
 

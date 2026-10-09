@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { placeReadout } from "@/lib/readoutPlacement";
 
 /** How long the hint stays, unless a press, a key or the pointer leaving
- * dismisses it first (`specs/unified-object-editing/` criterion 32). */
+ * dismisses it first (`specs/0009-unified-object-editing/` criterion 32). */
 const EDIT_HINT_MS = 3000;
 
 /** The chip's constant offset from the pointer, up and to the right: the

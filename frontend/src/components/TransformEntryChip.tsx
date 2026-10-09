@@ -40,7 +40,7 @@ interface TransformEntryChipProps {
 }
 
 /**
- * The typed numeric entry chip (`specs/object-transform-refinements/
+ * The typed numeric entry chip (`specs/0008-object-transform-refinements/
  * specification.md` criteria 18-32; `docs/design-system.md`, "Transform
  * entry chip"): a DOM text overlay next to the double-clicked handle,
  * upright whatever the object's rotation. It holds only the text, the caret

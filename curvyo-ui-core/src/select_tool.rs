@@ -1,7 +1,7 @@
 //! The Select tool's state machine (`specs/0004-canvas-navigation-and-
 //! selection/specification.md`, acceptance criteria 14-23; extended by
 //! `specs/0005-object-transform/specification.md` and
-//! `specs/object-transform-refinements/specification.md`): click/shift-
+//! `specs/0008-object-transform-refinements/specification.md`): click/shift-
 //! toggle selection over [`hit_test_object`], a drag-to-move tracked as a
 //! screen-independent document-space offset, Delete/Backspace, the double-
 //! click handoff outcome — and, for a single-object selection only, the
@@ -58,7 +58,7 @@ enum SelectDrag {
     Moving(MoveDrag),
     /// A resize, rotate or skew drag in progress.
     Transforming(TransformDrag),
-    /// A marquee in progress (`specs/advanced-selection/`): armed by a press
+    /// A marquee in progress (`specs/0014-advanced-selection/`): armed by a press
     /// on empty canvas with Alt up.
     Marquee(MarqueeDrag),
     /// A lasso in progress: armed by a press with Alt down, anywhere. Never a
@@ -75,12 +75,12 @@ pub enum SelectPointerDownOutcome {
     /// because it was already part of one (so the whole group can be
     /// dragged, acceptance criterion 18) — and a move-drag began.
     Selected,
-    /// Nothing was hit; a marquee is armed (`specs/advanced-selection/`
+    /// Nothing was hit; a marquee is armed (`specs/0014-advanced-selection/`
     /// criterion 8). The selection is untouched until the release: a click
     /// there clears it (acceptance criterion 15 of slice 4) unless Shift or
     /// Ctrl is held, a drag combines the box's result with it.
     Marquee,
-    /// Alt was held: a lasso is armed (`specs/advanced-selection/`
+    /// Alt was held: a lasso is armed (`specs/0014-advanced-selection/`
     /// criteria 16, 17); nothing changed yet. Released without movement it is
     /// one step of the Alt-click cycle.
     Lasso,
@@ -98,7 +98,7 @@ pub enum SelectDoubleClickOutcome {
     Miss,
     /// This path was hit (its outline, or inside its selected box): the
     /// caller (`Session`) selects it and hands off to the Node tool
-    /// (`specs/unified-object-editing/` criterion 31; criterion 22 of slice
+    /// (`specs/0009-unified-object-editing/` criterion 31; criterion 22 of slice
     /// 4, criterion 3 of `object-transform-refinements`).
     Hit(ObjectSnapshot),
     /// A primitive was hit (its outline, its body or the centre handle): no
@@ -122,7 +122,7 @@ pub enum SelectDoubleClickOutcome {
 pub struct SelectTool {
     drag: SelectDrag,
     modes: ScaleModes,
-    /// The "Link corners" switch (`specs/rectangle-corner-radii/` criterion 2).
+    /// The "Link corners" switch (`specs/0013-rectangle-corner-radii/` criterion 2).
     corner_linking: CornerLinking,
     entry: Option<OpenEntry>,
     /// The Select bar's slider edit in flight (a Points or Ratio drag):
@@ -134,7 +134,7 @@ pub struct SelectTool {
     /// that is not selected yet (whose handles appear after the first click)
     /// still hands off.
     last_press_handle: Option<EditHandle>,
-    /// The Alt-click cycle (`specs/advanced-selection/`, criteria 3 to 7):
+    /// The Alt-click cycle (`specs/0014-advanced-selection/`, criteria 3 to 7):
     /// begun by a plain click that acted on an object, dropped by anything
     /// else that is not an Alt-click on the same point.
     cycle: Option<ClickCycle>,
@@ -157,7 +157,7 @@ impl SelectTool {
     }
 
     /// Whether resizes scale a rectangle's corner radius — the "Scale corner
-    /// radius" switch (`specs/unified-object-editing/`, criterion 23). Tool
+    /// radius" switch (`specs/0009-unified-object-editing/`, criterion 23). Tool
     /// state, never written to the document; the default is
     /// [`CornerRadiusScaling::Keep`] and every new session starts there.
     #[must_use]
@@ -165,7 +165,7 @@ impl SelectTool {
         self.modes.radius
     }
 
-    /// The "Link corners" switch (`specs/rectangle-corner-radii/` criterion 2):
+    /// The "Link corners" switch (`specs/0013-rectangle-corner-radii/` criterion 2):
     /// whether a corner radius handle sets all four radii
     /// ([`CornerLinking::Linked`], the default) or only its own corner. Tool
     /// state, never written to the document; every new session starts linked.
@@ -225,7 +225,7 @@ impl SelectTool {
     /// closes an open numeric entry (the press itself is processed as
     /// usual, criterion 20).
     ///
-    /// With Alt down (`specs/advanced-selection/` criteria 16, 17) the press
+    /// With Alt down (`specs/0014-advanced-selection/` criteria 16, 17) the press
     /// arms a lasso wherever it lands, before any of the above is tried
     /// ([`classify_press`]). On empty canvas without Alt it arms a marquee (criterion 8) and changes no
     /// selection until the release, so Shift or Ctrl pressed during the drag

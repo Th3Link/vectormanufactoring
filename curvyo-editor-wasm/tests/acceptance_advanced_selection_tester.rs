@@ -1,4 +1,4 @@
-//! Independent tester acceptance tests for `specs/advanced-selection/` at the
+//! Independent tester acceptance tests for `specs/0014-advanced-selection/` at the
 //! `Session` level: hit area in screen pixels at several zooms, the cycle
 //! through the session, marquee and lasso through the cached modifiers, the
 //! legend, the overlay colours, the cursor, the minus badge, Escape, tool

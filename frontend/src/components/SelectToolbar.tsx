@@ -10,11 +10,11 @@ export interface SelectToolbarProps {
   onSetScaleStrokeWidth: (on: boolean) => void;
   scaleCornerRadius: boolean;
   onSetScaleCornerRadius: (on: boolean) => void;
-  /** The "Link corners" switch (`specs/rectangle-corner-radii/` criterion 2). */
+  /** The "Link corners" switch (`specs/0013-rectangle-corner-radii/` criterion 2). */
   linkCorners: boolean;
   onSetLinkCorners: (on: boolean) => void;
   /** What the bar shows for the current selection (rule of
-   * `specs/unified-object-editing/` criteria 21, 21a, 22). */
+   * `specs/0009-unified-object-editing/` criteria 21, 21a, 22). */
   bar: SelectBarState;
   /** Enter in "Radius": `"committed"`, `"unchanged"`, `"invalid:number"` or
    * `"invalid:negative"`. */
@@ -97,7 +97,7 @@ interface RadiusFieldProps {
 }
 
 /**
- * The bar's "Radius" field (`specs/unified-object-editing/` criterion 21a):
+ * The bar's "Radius" field (`specs/0009-unified-object-editing/` criterion 21a):
  * the effective radius of the selected rectangles, always enabled. Enter
  * commits once; Escape or a press elsewhere restores the shown value and
  * writes nothing (a typo never reaches a machine job by blur); an empty,
@@ -348,7 +348,7 @@ interface LinkCornersToggleProps {
 }
 
 /**
- * The "Link corners" toggle (`specs/rectangle-corner-radii/` criteria 2 and 3;
+ * The "Link corners" toggle (`specs/0013-rectangle-corner-radii/` criteria 2 and 3;
  * `docs/design-system.md`, row "Link corners toggle"): a 28 px icon button, no
  * label, between the Radius field and "Remove rounding". On (the default) the
  * glyph is a closed chain on the active fill, off a broken chain on no fill, so
@@ -399,7 +399,7 @@ function LinkCornersToggle({ linked, onLinkedChange }: LinkCornersToggleProps) {
 
 /**
  * The Select tool's contextual bar (`docs/design-system.md`, "Select bar
- * layout"; `specs/unified-object-editing/` criteria 21 to 23): left-aligned
+ * layout"; `specs/0009-unified-object-editing/` criteria 21 to 23): left-aligned
  * after the tool rail so the switches never move. Left to right: the two
  * switches ("Scale stroke width", "Scale corner radius"), shown with or
  * without a selection and never disabled or dimmed; the kind groups, each

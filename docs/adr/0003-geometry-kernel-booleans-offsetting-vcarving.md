@@ -55,7 +55,7 @@ foundation.
    accepted here is "flattened polygons, a pure-Rust crate, chosen by spike";
    the spike picks between the named candidates and does not reopen it, so its
    result is recorded as a dated feature-local decision in that story's
-   `specs/<feature-slug>/adrs.md` rather than by editing this ADR. A result
+   `specs/<NNNN-feature-slug>/adrs.md` rather than by editing this ADR. A result
    rejecting *all* candidates would need a new ADR superseding this one.
 
    > **Note 2026-10-02 (candidate list only, decision unchanged):** the
@@ -122,7 +122,7 @@ foundation.
    > This decision is `vecmanf-geometry-core`'s to apply once slice 6
    > (`boolean-operations`) exists as a story; this note is the dated
    > feature-local record the ADR's own text asks for, written here because
-   > no `specs/<feature-slug>/adrs.md` exists yet for that slice.
+   > no `specs/<NNNN-feature-slug>/adrs.md` exists yet for that slice.
 4. **Offsetting** is built on the same two pieces: expand each contour and
    union the pieces (`kurbo` stroke expansion for the geometry, the boolean
    crate for the union), with a dedicated module and golden-file tests.

@@ -1,4 +1,4 @@
-//! Independent test for `specs/rectangle-corner-radii/` PART 1, "render
+//! Independent test for `specs/0013-rectangle-corner-radii/` PART 1, "render
 //! unchanged for equal radii": the stroke of a rectangle with four equal radii
 //! is vertex-for-vertex the stroke of a closed path built from the single-radius
 //! outline of `origin/main` (copied below as the oracle).

@@ -1,4 +1,4 @@
-//! Session-level tests of PR 2 of `specs/rectangle-corner-radii/`: the "Link
+//! Session-level tests of PR 2 of `specs/0013-rectangle-corner-radii/`: the "Link
 //! corners" switch and its lifetime, per-corner drags with Shift, the live
 //! readout texts, the typed entry's scope row, accessible names and "max"
 //! notice, the knob hint lines and the bar's "Mixed" data. The pure rules are

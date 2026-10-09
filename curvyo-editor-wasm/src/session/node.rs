@@ -22,7 +22,7 @@ impl Session {
     /// unmodified outside the node tool, with no drag in flight, or with
     /// the pointer off the canvas (`self.pointer_position` is `None`). The
     /// Select tool's live edit is not substituted here: its blue outline is
-    /// drawn over the committed paths (`specs/unified-object-editing`).
+    /// drawn over the committed paths (`specs/0009-unified-object-editing`).
     pub(super) fn live_node_drag_paths_in(
         &self,
         objects: &[ObjectSnapshot],

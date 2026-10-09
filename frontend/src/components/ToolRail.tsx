@@ -14,7 +14,7 @@ interface ToolRailProps {
   tool: Tool;
   /** How many objects are selected; with the Select tool active and one or
    * more selected the plain letters R and S act on the selection, so the
-   * Rectangle tool is reached by "Esc, R" (`specs/edit-interaction-polish/`
+   * Rectangle tool is reached by "Esc, R" (`specs/0010-edit-interaction-polish/`
    * criterion 62). */
   selectionCount: number;
   onSelect: (tool: Tool) => void;

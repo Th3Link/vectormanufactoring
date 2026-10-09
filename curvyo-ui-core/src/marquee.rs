@@ -1,4 +1,4 @@
-//! The marquee's box arithmetic (`specs/advanced-selection/specification.md`,
+//! The marquee's box arithmetic (`specs/0014-advanced-selection/specification.md`,
 //! acceptance criteria 9 to 11): which mode a drag has and which objects a
 //! rectangle selects in each mode. Pure functions of points and snapshots;
 //! the gesture state is in `select_tool`.

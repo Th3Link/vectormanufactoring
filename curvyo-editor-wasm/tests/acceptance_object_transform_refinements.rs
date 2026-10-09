@@ -1,4 +1,4 @@
-//! `Session`-level tests of `specs/object-transform-refinements/
+//! `Session`-level tests of `specs/0008-object-transform-refinements/
 //! specification.md`: commit counts (one per drag or confirmed entry, none
 //! for a wobble under the 3 px dead zone), Shift reveal without pointer
 //! movement, the double-click dispatch and the typed entry's lifecycle,

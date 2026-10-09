@@ -65,7 +65,7 @@ the lead"). No acceptance criterion conflicts with an ADR.
   Live drags cross the wasm boundary as typed arrays.
 - [ADR 0004 §9](../../docs/adr/0004-persistence-and-cross-machine-sync.md):
   forces the `format_version` bump below.
-- [`specs/0002-path-node-editing/adrs.md`](../path-node-editing/adrs.md): the
+- [`specs/0002-path-node-editing/adrs.md`](../0002-path-node-editing/adrs.md): the
   anchor schema (decisions 1–3), "commands carry resolved geometry", the
   path/node crate boundary, and "a press and release with no pointer movement
   writes nothing". All four apply here unchanged.

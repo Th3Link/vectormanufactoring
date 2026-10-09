@@ -1,5 +1,5 @@
 //! Tester acceptance tests for the double-click dispatch of
-//! `specs/object-transform-refinements` (criteria 3, 18, 22, 23, 49) and of
+//! `specs/0008-object-transform-refinements` (criteria 3, 18, 22, 23, 49) and of
 //! slice 4 (22, 23), driven the way the browser host drives `Session`: the
 //! first press and release reach the session, the second press is withheld,
 //! and its release becomes one `double_click` at the second press's position

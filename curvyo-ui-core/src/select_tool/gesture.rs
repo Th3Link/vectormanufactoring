@@ -1,4 +1,4 @@
-//! The Select tool's two selection gestures (`specs/advanced-selection/
+//! The Select tool's two selection gestures (`specs/0014-advanced-selection/
 //! specification.md`): the marquee a press on empty canvas arms (criteria
 //! 8 to 15) and the lasso a press with Alt held arms (criteria 16 to 20). The
 //! kind is chosen once, at the press, and is the variant of `SelectDrag`, so

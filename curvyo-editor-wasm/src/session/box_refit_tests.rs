@@ -1,4 +1,4 @@
-//! Session-level tests of `specs/polygon-star-box-refit/`: the box a polygon
+//! Session-level tests of `specs/0012-polygon-star-box-refit/`: the box a polygon
 //! or star shows, hit-tests and drags is the square turned by its shown angle.
 //! They read the box from the decoration input the draw list is built from, so
 //! "drawn" and "tested" are checked against the same function. Expected values

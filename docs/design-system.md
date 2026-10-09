@@ -712,8 +712,8 @@ values, not an implementation site, for those four rows.
 
 Sizes, tokens and component rules for the right-docked `PropertiesPanel` and its
 first section, "Style". The decisions and reasoning are in
-`specs/style-panel-rework/specification.md`, "UX notes" (and
-`specs/stroke-markers/specification.md` for the Markers block); this section is
+`specs/0017-style-panel-rework/specification.md`, "UX notes" (and
+`specs/0018-stroke-markers/specification.md` for the Markers block); this section is
 the reference an implementer builds from. It replaces the `0007` version: there
 is no colour popover, no dash dropdown, no gradient bar or stop list, and no
 disabled control any more. The history of those is in git.

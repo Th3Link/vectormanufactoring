@@ -1,5 +1,5 @@
 //! `Session`'s glue for the typed numeric entry
-//! (`specs/object-transform-refinements/specification.md`, acceptance
+//! (`specs/0008-object-transform-refinements/specification.md`, acceptance
 //! criteria 18-32): the entry's view for the DOM chip, the linked-field
 //! text, commit and cancel. All rules (parser, validation, linking,
 //! resolution) live in `curvyo_ui_core::transform_entry`; the DOM holds only
@@ -42,7 +42,7 @@ pub struct EntryView {
     /// Whether the two fields are linked (a chain glyph between them).
     pub linked: bool,
     /// The muted second row of a corner radius entry, "All four corners" or
-    /// "This corner only" (`specs/rectangle-corner-radii/` criterion 6); `None`
+    /// "This corner only" (`specs/0013-rectangle-corner-radii/` criterion 6); `None`
     /// for every other entry.
     pub scope: Option<&'static str>,
     /// The grabbed handle, in document space.
