@@ -1,8 +1,10 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
+import { DocumentSection } from "@/components/DocumentSection";
 import { StyleSection } from "@/components/StyleSection";
 import { Tooltip, TooltipProvider } from "@/components/ui/tooltip";
+import type { DocumentPanelApi } from "@/hooks/useDocumentPanel";
 import type { EditorSession } from "@/hooks/useEditorSession";
 import { useStylePanel } from "@/hooks/useStylePanel";
 
@@ -11,6 +13,7 @@ export const PANEL_WIDTH_PX = 280;
 
 interface PropertiesPanelProps {
   editor: EditorSession;
+  document: DocumentPanelApi;
 }
 
 /**
@@ -23,7 +26,7 @@ interface PropertiesPanelProps {
  * `Shift+Ctrl+F` expands the panel and moves focus to its first enabled
  * control; it never collapses it and is ignored during a canvas drag.
  */
-export function PropertiesPanel({ editor }: PropertiesPanelProps) {
+export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps) {
   const [open, setOpen] = useState(true);
   const panelId = useId();
   const asideRef = useRef<HTMLElement>(null);
@@ -153,11 +156,15 @@ export function PropertiesPanel({ editor }: PropertiesPanelProps) {
           }}
           className="properties-panel h-full w-[280px] border-l border-[color-mix(in_srgb,var(--toolbar-icon)_25%,transparent)] bg-[var(--panel-bg)] p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--editor-accent)]"
         >
-          <StyleSection
-            panel={panel}
-            closeKey={`${panel.view.scopeKey}|${editor.tool}`}
-            onReturnFocus={returnFocus}
-          />
+          {doc.view.content === "document" ? (
+            <DocumentSection document={doc} onReturnFocus={returnFocus} />
+          ) : doc.view.content === "style" ? (
+            <StyleSection
+              panel={panel}
+              closeKey={`${panel.view.scopeKey}|${editor.tool}`}
+              onReturnFocus={returnFocus}
+            />
+          ) : null}
         </aside>
       </div>
     </TooltipProvider>

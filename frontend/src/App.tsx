@@ -11,7 +11,7 @@ import { StatusBar } from "@/components/StatusBar";
 import { ToolRail } from "@/components/ToolRail";
 import type { EditorSession } from "@/hooks/useEditorSession";
 import { useEditorSession } from "@/hooks/useEditorSession";
-import { useSessionStatus } from "@/hooks/useSessionStatus";
+import { useDocumentPanel } from "@/hooks/useDocumentPanel";
 import type {
   OpenBytesPayload,
   OpenErrorPayload,
@@ -49,7 +49,7 @@ async function openBytes(
 function App() {
   const [cursorMm, setCursorMm] = useState({ x: 0, y: 0 });
   const editor = useEditorSession(setCursorMm);
-  const status = useSessionStatus(editor);
+  const documentPanel = useDocumentPanel(editor);
   const [openErrorMessage, setOpenErrorMessage] = useState<string | null>(
     null,
   );
@@ -153,7 +153,7 @@ function App() {
             gridTemplateRows: `${RULER_THICKNESS_PX}px minmax(0, 1fr)`,
           }}
         >
-        <Rulers editor={editor} unit={status.unit} />
+        <Rulers editor={editor} unit={documentPanel.view.unit} />
         {/* The viewport: the rail and the bars' overlay row are anchored to
          * it, not to the window, so no bar is ever drawn under the
          * properties panel on its right (`0007` criterion 39) or over a
@@ -223,11 +223,11 @@ function App() {
         </div>
         </div>
         </div>
-        <PropertiesPanel editor={editor} />
+        <PropertiesPanel editor={editor} document={documentPanel} />
       </div>
       <StatusBar
-        cursorText={status.cursorText(cursorMm.x, cursorMm.y)}
-        sizeText={status.sizeText}
+        cursorText={documentPanel.cursorText(cursorMm.x, cursorMm.y)}
+        sizeText={documentPanel.view.sizeText}
         zoomPercent={editor.zoomPercent}
       />
       <ErrorDialog

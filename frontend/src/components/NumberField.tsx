@@ -26,6 +26,10 @@ export interface NumberFieldProps {
   firstFocus?: boolean;
   /** 12 px text and a narrower unit gutter, for the rows of the stop list. */
   compact?: boolean;
+  /** Leaving the field with edited text commits it, as Enter does (the
+   * Document section's size fields, criterion 15); a refused value stays in
+   * the field with its message. Otherwise leaving restores. */
+  commitOnBlur?: boolean;
 }
 
 /**
@@ -51,6 +55,7 @@ export function NumberField({
   onReturnFocus,
   firstFocus = false,
   compact = false,
+  commitOnBlur = false,
 }: NumberFieldProps) {
   const messageId = useId();
   const display = mixed ? "" : shown;
@@ -115,7 +120,20 @@ export function NumberField({
           setText(event.target.value);
           setInvalid(null);
         }}
-        onBlur={restore}
+        onBlur={() => {
+          if (!(commitOnBlur && touched.current)) {
+            restore();
+            return;
+          }
+          const outcome = onSubmit(text);
+          editing.current = false;
+          if (outcome.startsWith("invalid:")) {
+            // The text stays, with its message, until the next keystroke.
+            setInvalid(outcome.slice("invalid:".length));
+          } else {
+            touched.current = false;
+          }
+        }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
