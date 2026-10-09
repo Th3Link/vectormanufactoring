@@ -16,8 +16,10 @@
 mod anchor_id_minter;
 mod angle_snap;
 mod boolean;
+mod break_apart;
 mod close_path;
 mod closing_join;
+mod combine;
 mod conversion;
 mod display_unit_text;
 mod document_fit;
@@ -66,8 +68,15 @@ pub use angle_snap::{MAX_SKEW_SNAP_DEG, snap_angle, snap_skew_angle};
 pub use boolean::{
     BooleanAvailability, BooleanOp, BooleanPlan, BooleanRefusal, boolean_availability, plan_boolean,
 };
+pub use break_apart::{
+    BREAK_APART_COMMIT_LABEL, BreakApartPlan, BreakApartRefusal, Piece, plan_break_apart,
+};
 pub use close_path::{ClosePlan, closable_counts, plan_close_paths};
 pub use closing_join::{JoinType, resolve_closing_node};
+pub use combine::{
+    COMBINE_COMMIT_LABEL, CombinePlan, CombineRefusal, PathAvailability, path_availability,
+    plan_combine,
+};
 pub use conversion::build_primitive_conversions;
 pub use display_unit_text::{
     content_too_large_message, document_side_message, format_cursor, format_field_length,

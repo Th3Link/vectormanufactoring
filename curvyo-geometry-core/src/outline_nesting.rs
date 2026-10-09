@@ -81,3 +81,22 @@ fn distance_to_polyline(point: Point, flat: &Flat) -> f64 {
 pub fn outline_area_mm2(outline: &Outline<'_>) -> f64 {
     signed_area_mm2(&Flat::of(outline).points)
 }
+
+/// Whether `outline` encloses any area at all: the areas of the triangles of a fan from its first
+/// point, taken without sign, add up to more than 1e-6 mm² (one grid cell). Unlike
+/// [`outline_area_mm2`] this is not fooled by a figure eight whose two lobes cancel.
+#[must_use]
+pub fn outline_has_area(outline: &Outline<'_>) -> bool {
+    let points = Flat::of(outline).points;
+    let Some(&first) = points.first() else {
+        return false;
+    };
+    let doubled: f64 = points
+        .windows(2)
+        .map(|pair| {
+            let (a, b) = (pair[0], pair[1]);
+            ((a.x - first.x) * (b.y - first.y) - (b.x - first.x) * (a.y - first.y)).abs()
+        })
+        .sum();
+    doubled / 2.0 > 1e-6
+}

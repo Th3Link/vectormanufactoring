@@ -15,7 +15,9 @@ mod common;
 use std::time::{Duration, Instant};
 
 use common::{Anchors, circle, polygon, rect};
-use curvyo_geometry_core::{Outline, outline_area_mm2, outline_nesting, touching_outlines};
+use curvyo_geometry_core::{
+    Outline, outline_area_mm2, outline_has_area, outline_nesting, touching_outlines,
+};
 
 fn outlines(all: &[Anchors]) -> Vec<Outline<'_>> {
     all.iter()
@@ -161,4 +163,24 @@ fn five_hundred_nested_squares() {
     let nesting = outline_nesting(&list);
     assert!(nesting.iter().enumerate().all(|(i, n)| n.depth == i));
     assert_eq!(nesting[499].parent, Some(498));
+}
+
+/// Criterion 11: a line encloses no area; a figure eight whose lobes cancel does.
+#[test]
+fn only_a_flat_outline_has_no_area() {
+    use curvyo_document_core::{Point, Vec2};
+    let corner = |x: f64, y: f64| (Point::new(x, y), Vec2::ZERO, Vec2::ZERO);
+    let line: Anchors = vec![corner(0.0, 0.0), corner(5.0, 0.0), corner(9.0, 0.0)];
+    let eight: Anchors = vec![
+        corner(0.0, 0.0),
+        corner(10.0, 10.0),
+        corner(10.0, 0.0),
+        corner(0.0, 10.0),
+    ];
+    assert!(!outline_has_area(&Outline::new(&line, true)));
+    assert!(outline_has_area(&Outline::new(&eight, true)));
+    assert!(outline_has_area(&Outline::new(
+        &rect(0.0, 0.0, 1.0, 1.0),
+        true
+    )));
 }
