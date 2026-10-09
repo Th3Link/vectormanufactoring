@@ -16,6 +16,8 @@
 mod anchor_id_minter;
 mod angle_snap;
 mod conversion;
+mod display_unit_text;
+mod document_fit;
 mod ellipse_tool;
 mod hit_test;
 mod hit_test_object;
@@ -55,6 +57,11 @@ mod viewport;
 pub use anchor_id_minter::AnchorIdMinter;
 pub use angle_snap::{MAX_SKEW_SNAP_DEG, snap_angle, snap_skew_angle};
 pub use conversion::build_primitive_conversions;
+pub use display_unit_text::{
+    content_too_large_message, document_side_message, format_cursor, format_field_length,
+    format_size, format_status_length, parse_document_side,
+};
+pub use document_fit::fit_document_to_content;
 pub use ellipse_tool::EllipseTool;
 pub use hit_test::{Hit, hit_test};
 pub use hit_test_object::{hit_test_object, hit_test_objects, hit_test_objects_along};
@@ -65,7 +72,7 @@ pub use node_tool::{
     HitTolerances, LiveNodeDrag, NodeTool, NodeToolbarState,
     PointerDownOutcome as NodePointerDownOutcome, PointerUpOutcome as NodePointerUpOutcome,
 };
-pub use object_bounds::{object_bounds, object_outline_bounds};
+pub use object_bounds::{content_bounds, object_bounds, object_outline_bounds};
 pub use object_selection::{ObjectSelection, SelectionCombine};
 pub use oriented_box::{OrientedBox, oriented_bounds};
 pub use param_edit::{

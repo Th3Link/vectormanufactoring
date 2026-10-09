@@ -10,7 +10,7 @@
 //! passes handle positions.
 
 use curvyo_document_core::{
-    ObjectSnapshot, PathSnapshot, Point, Vec2, outline_of_rotated, shape_frame_bounds,
+    Document, ObjectSnapshot, PathSnapshot, Point, Vec2, outline_of_rotated, shape_frame_bounds,
 };
 use curvyo_geometry_core::segment_bounds;
 
@@ -78,6 +78,26 @@ pub fn object_outline_bounds(object: &ObjectSnapshot) -> (Point, Point) {
             anchors_bounds(&anchors, true)
         }
     }
+}
+
+/// The box around the outlines of every object of `document`, on the
+/// pasteboard or not: the union of [`object_outline_bounds`] (curve extremes,
+/// rotated outlines, no stroke width). `None` for a document without objects.
+/// The reference of Fit to content (`specs/0015-document-size-and-rulers/`
+/// criterion 23).
+#[must_use]
+pub fn content_bounds(document: &Document) -> Option<(Point, Point)> {
+    document
+        .object_ids()
+        .into_iter()
+        .filter_map(|id| document.object(id))
+        .map(|object| object_outline_bounds(&object))
+        .reduce(|(min, max), (other_min, other_max)| {
+            (
+                Point::new(min.x.min(other_min.x), min.y.min(other_min.y)),
+                Point::new(max.x.max(other_max.x), max.y.max(other_max.y)),
+            )
+        })
 }
 
 #[cfg(test)]

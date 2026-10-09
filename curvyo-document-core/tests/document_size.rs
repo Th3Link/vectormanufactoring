@@ -97,7 +97,7 @@ fn a_file_with_a_stored_display_unit_opens_and_round_trips() {
 #[test]
 fn document_json_carries_the_display_unit_and_the_format_stays_7() {
     let document = Document::new(1);
-    document.set_display_unit(DisplayUnit::Cm);
+    assert!(document.set_display_unit(DisplayUnit::Cm));
     let json: serde_json::Value = serde_json::from_slice(&document.export_json().unwrap()).unwrap();
     assert_eq!(json["display_unit"], "cm");
     assert_eq!(json["format_version"], 7);
@@ -124,7 +124,7 @@ fn resize_and_fit_survive_save_and_reopen() {
     reopened
         .fit_to_content((Point::new(55.0, 61.5), Point::new(105.0, 111.5)))
         .unwrap();
-    reopened.set_display_unit(DisplayUnit::Cm);
+    assert!(reopened.set_display_unit(DisplayUnit::Cm));
     let again = unpack(3, &pack(&reopened, "0.1.0").unwrap()).unwrap();
     assert_eq!(again.size(), DocumentSize::from_mm(50.0, 50.0));
     assert_eq!(rect_origin(&again, id), Point::new(0.0, 0.0));

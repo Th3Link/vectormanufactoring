@@ -43,15 +43,28 @@ pub enum DocumentSizeError {
 }
 
 /// Checks one side against the limits (with 1e-9 mm of tolerance) and clamps a
-/// value within that tolerance onto the limit.
-fn validated_side(mm: f64) -> Result<f64, DocumentSizeError> {
+/// value within that tolerance onto the limit. The one place a typed size is
+/// validated: [`Document::resize`] calls it, and so does the parser of the
+/// Width and Height fields, so a field never accepts what the document
+/// refuses (criterion 16).
+///
+/// # Errors
+/// [`DocumentSizeError::NotFinite`] for an infinite or NaN length,
+/// [`DocumentSizeError::OutOfRange`] for one outside
+/// [`MIN_DOCUMENT_MM`]`..=`[`MAX_DOCUMENT_MM`] by more than 1e-9 mm.
+pub fn validated_document_side(side: Length) -> Result<Length, DocumentSizeError> {
+    let mm = side.as_mm();
     if !mm.is_finite() {
         return Err(DocumentSizeError::NotFinite);
     }
     if mm < MIN_DOCUMENT_MM - EQUAL_EPSILON_MM || mm > MAX_DOCUMENT_MM + EQUAL_EPSILON_MM {
         return Err(DocumentSizeError::OutOfRange);
     }
-    Ok(mm.clamp(MIN_DOCUMENT_MM, MAX_DOCUMENT_MM))
+    Ok(Length::from_mm(mm.clamp(MIN_DOCUMENT_MM, MAX_DOCUMENT_MM)))
+}
+
+fn validated_side(mm: f64) -> Result<f64, DocumentSizeError> {
+    validated_document_side(Length::from_mm(mm)).map(Length::as_mm)
 }
 
 impl Document {
@@ -162,6 +175,11 @@ impl Document {
     /// Sets the unit lengths are shown in, as one commit labelled
     /// `set_display_unit` that moves nothing (criteria 36 and 38). Returns
     /// `false` and writes nothing if `unit` is already the display unit.
+    ///
+    /// # Panics
+    /// Does not panic in practice: it inserts a plain string into the
+    /// attached root map.
+    #[must_use]
     pub fn set_display_unit(&self, unit: DisplayUnit) -> bool {
         if self.display_unit() == unit {
             return false;

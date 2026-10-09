@@ -60,12 +60,12 @@ PR 3 (panel, later): `ui-core` `panel_content`, `Viewport::pan_by_document_offse
 - [x] 7. Golden fixtures: v7 file with damaged size values opens at A4; v7
   file with `display_unit = "in"` round-trips; existing goldens open at
   210 x 297 mm (AC 13, 36, 38, 39).
-- [ ] 8. `ui-core::display_unit_text`: parse a typed length in a unit into a
+- [x] 8. `ui-core::display_unit_text`: parse a typed length in a unit into a
   `Length` (decimal point or comma, spaces, no unit text, limits with 1e-9
   tolerance and clamping), format a length per unit (3 decimals mm, 4 cm and
   in, no trailing zeros), status-bar formats (fixed decimals 1, 2, 3), and the
   validation message with limits rounded inward (AC 15, 16, 21, 35).
-- [ ] 9. `ui-core::content_bounds`: union of `object_outline_bounds` over all
+- [x] 9. `ui-core::content_bounds`: union of `object_outline_bounds` over all
   objects of a document (curve extremes, rotated outlines, no stroke width)
   (AC 23).
 
