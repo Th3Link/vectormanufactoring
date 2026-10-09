@@ -198,6 +198,10 @@ Left: "x: 12.3  y: 45.6" followed by the unit once, "mm", fixed decimals so the 
 
 - **PR 1 (model), 2026-10-09.** Resize and fit are atomic for one editor. Between collaborating peers they merge field by field (width, height and each object position are separate registers), so two concurrent resizes of different axes can leave the objects centred on neither peer's intent. Accepted as a collaboration limit while sync is not built; tracked in `docs/technical-debt.md` ("Resize and fit merge per field across peers").
 - **Retyping shown text (criteria 16 and 35).** The text a field shows for a limit is accepted when typed back and clamped onto the limit. This matters in inches only: the largest size shows as "3937.0079" in, 0.0007 mm over 100 000 mm. Any other value past a limit is refused as criterion 16 says (1e-9 mm tolerance).
+- **PR 2 (rulers and pasteboard), 2026-10-09.**
+  - **11a:** a window resize keeps the document's top-left corner until the first pan or zoom; this amends `0004` criterion 10 for an untouched view. Measured in the browser: without it, a resize of a fresh view moves the corner to wherever keeping the centre puts it (a window shown, maximised or resized after the project was created does this). The size reports at attach do not drift: `attach_canvas` records the laid-out size.
+  - **7:** the major step leaves the widest label plus 4 px (criterion 5); labels thin to every 2nd or 5th major tick when the spacing is below the widest label plus 8 px, so a label never touches the next major tick. The wording "labels wider than the major spacing" reads as "label plus 8 px wider".
+  - **2:** the rulers repaint in the same task as the canvas on a window resize and on a Properties panel toggle (the editor session's view-resized hook), and in the animation frame for pan, zoom, pointer and unit changes.
 
 ## Links
 

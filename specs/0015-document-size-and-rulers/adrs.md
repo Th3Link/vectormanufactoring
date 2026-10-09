@@ -206,6 +206,27 @@ root register that older builds read correctly by ignoring it (decision 1).
     and the fit test (AC 23). If booleans goes first, this feature only
     rebases. No version number has to change in either order.
 
+## Dated notes from PR 2 (2026-10-09, implementer; the architect confirms)
+
+- **Decision 7 (view):** the default view of a new or opened project is
+  `Viewport::with_document_inset` (72 px, AC 11a), applied in
+  `WasmSession::new` and `open`, not in `Session::new`, so headless tests keep
+  the `0004` view. A flag keeps its origin through window resizes until the
+  first pan, zoom or drag-pan; it ends there, and `0004` criterion 10 applies
+  again. Browser check: without the flag a window resize of a fresh view moves
+  the corner; the early size reports at attach do not. PR 3's
+  `pan_by_document_offset` must say in a test whether it ends the flag
+  (recommendation: it does not).
+- **Decision 9 (ruler):** the step follows AC 5 (label plus 4 px); labels thin
+  below label plus 8 px (UX notes), so the end of a label never touches the
+  next major tick. The PO rewords AC 7 accordingly. The layout returns an empty
+  layout for a non-finite view or strip and for a view that would hold more
+  than 4096 majors.
+- **Decision 11 (draw list):** the document area is prepended in
+  `Session::frame_draw_list`; `Session::draw_list` stays the artwork and
+  overlay for headless tests. A future raster, thumbnail or export path must
+  use `frame_draw_list`.
+
 ## Flagged to the lead and the PO
 
 1. **AC 38:** the display unit needs no `format_version` bump (decision 1).

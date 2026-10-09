@@ -78,8 +78,8 @@ PR 3 (panel, later): `ui-core` `panel_content`, `Viewport::pan_by_document_offse
 - [x] 12. Frontend ruler strips (Canvas2D, same frame as the canvas), corner,
   pointer marker, viewport shrink, press swallowing, wheel forwarding, 72 px
   initial offset, 800 x 600 layout (AC 1, 2, 8, 9, 10, 10a, 11, 11a). The
-  initial offset lives in `Viewport::with_document_inset` and survives the
-  host's first size reports until the first pan or zoom.
+  initial offset lives in `Viewport::with_document_inset` and survives window
+  resizes until the first pan or zoom (as-built note in the specification).
 - [x] 13. Status bar size readout from the session; remove `size_mm` from the
   host (AC 12, 21).
 - [x] 14. Drawing and editing on the pasteboard with all tools (AC 29, 30
@@ -96,7 +96,9 @@ PR 3 (panel, later): `ui-core` `panel_content`, `Viewport::pan_by_document_offse
   `Ok(false)` both for "already fits" and for "no objects": show "Already
   fits the content." only if `content_bounds` is `Some`, never on `Ok(false)`
   alone.
-- [ ] 17. Status bar units and decimals; save, close and open round trip
+- [ ] 17. Move the status texts and the unit read (`session/ruler.rs`, `wasm_ruler.rs`) to the new
+  `session/document.rs` and read them in `syncFromSession`, deleting
+  `useSessionStatus`'s loop (debt entry); status bar units and decimals; save, close and open round trip
   (AC 21, 34, 36, 39).
 
 ## Validation
