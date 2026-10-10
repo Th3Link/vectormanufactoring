@@ -6,9 +6,13 @@
 //! snapshot with it, and refuses the whole result if any object would end up
 //! invalid.
 
-use curvyo_document_core::{Angle, Document, NodeId, ObjectSnapshot, Point};
+use curvyo_document_core::{Angle, Document, NodeId, ObjectSnapshot, PathSnapshot, Point};
 
 use super::{SelectDrag, SelectTool};
+use crate::anchor_id_minter::AnchorIdMinter;
+use crate::conversion::{
+    ConversionCounts, converted_counts, converted_paths, with_fresh_anchor_ids,
+};
 use crate::group_box::GroupSelection;
 use crate::group_transform::{GroupMap, commit_group, group_map, group_pivot, map_all};
 use crate::object_selection::ObjectSelection;
@@ -27,9 +31,14 @@ pub(super) struct GroupDrag {
     pub(super) handle: EditHandle,
     /// The tool's switches as of the press (criterion 24).
     pub(super) modes: ScaleModes,
-    /// The selection can only be scaled proportionally (criterion 21): a corner
-    /// drag then always keeps one factor.
-    pub(super) uniform_only: bool,
+    /// The selection holds a shape a stretch would convert: a corner drag then
+    /// always keeps one factor (criterion 19, lead decision E).
+    pub(super) proportional_corners: bool,
+    /// For a resize handle, beside each start, the path it becomes if the drag ends
+    /// as a stretch (criterion 53); `None` for an object that keeps its kind. Built
+    /// once, at the press, so that the preview and the commit are the same
+    /// snapshots (criterion 32).
+    pub(super) converted: Vec<Option<PathSnapshot>>,
 }
 
 impl GroupDrag {
@@ -43,7 +52,7 @@ impl GroupDrag {
             self.handle,
             (self.origin.down_at, current),
             (shift, ctrl),
-            self.uniform_only,
+            self.proportional_corners,
         )
     }
 
@@ -52,7 +61,7 @@ impl GroupDrag {
     /// all or nothing).
     pub(super) fn resolve(&self, current: Point, shift: bool, ctrl: bool) -> Vec<ObjectSnapshot> {
         match self.map_at(current, shift, ctrl) {
-            Some(map) => map_all(&self.starts, &map, self.modes),
+            Some(map) => map_all(&self.starts, &self.converted, &map, self.modes),
             None => self.starts.clone(),
         }
     }
@@ -64,9 +73,15 @@ impl GroupDrag {
 
     /// Writes `results` (from [`GroupDrag::resolve`]) as one commit
     /// (criterion 31). A width the document refuses costs the maker nothing
-    /// else: the write is repeated without widths.
-    pub(super) fn commit(&self, document: &Document, results: &[ObjectSnapshot]) {
-        commit_group(document, results, self.modes.stroke);
+    /// else: the write is repeated without widths. The shapes the commit turned
+    /// into paths, or `None` if the document took nothing.
+    pub(super) fn commit(
+        &self,
+        document: &Document,
+        results: &[ObjectSnapshot],
+    ) -> Option<ConversionCounts> {
+        commit_group(document, results, self.modes.stroke)
+            .then(|| converted_counts(&self.starts, results))
     }
 }
 
@@ -101,18 +116,45 @@ impl SelectTool {
         handle: EditHandle,
     ) -> GroupDrag {
         let selected: std::collections::HashSet<NodeId> = selection.ids().iter().copied().collect();
+        let starts: Vec<ObjectSnapshot> = objects
+            .iter()
+            .filter(|object| selected.contains(&object.id()))
+            .cloned()
+            .collect();
+        let converted = if matches!(handle, EditHandle::Resize(_)) {
+            converted_paths(&starts)
+        } else {
+            Vec::new()
+        };
         GroupDrag {
             origin,
-            starts: objects
-                .iter()
-                .filter(|object| selected.contains(&object.id()))
-                .cloned()
-                .collect(),
+            starts,
             start_box: *group.bounds(),
             handle,
             modes: self.modes,
-            uniform_only: group.uniform_only(),
+            proportional_corners: group.proportional_corners(),
+            converted,
         }
+    }
+
+    /// The shapes the group drag in flight would turn into paths if a release
+    /// at `current` committed it: counted by kind, empty while the preview is not
+    /// a stretch, before the dead zone is left, or for no group drag (the readout's
+    /// second line, criterion 23).
+    #[must_use]
+    pub fn live_conversion_counts(
+        &self,
+        current: Point,
+        shift: bool,
+        ctrl: bool,
+    ) -> ConversionCounts {
+        let SelectDrag::GroupTransforming(drag) = &self.drag else {
+            return ConversionCounts::default();
+        };
+        if !drag.origin.is_active_at(current) {
+            return ConversionCounts::default();
+        }
+        converted_counts(&drag.starts, &drag.resolve(current, shift, ctrl))
     }
 
     /// The angle a rotate drag of the group has turned by, with the pointer at
@@ -161,5 +203,26 @@ impl SelectTool {
     #[must_use]
     pub const fn group_drag_in_flight(&self) -> bool {
         matches!(self.drag, SelectDrag::GroupTransforming(_))
+    }
+}
+
+impl SelectTool {
+    /// Gives the paths a drag or an entry in flight would convert shapes into the
+    /// session's own anchor ids, minted from `minter`: called by the session right
+    /// after a press or an entry opens, so that what is previewed and what is
+    /// written carry real ids. Ids minted for a drag that ends as a uniform scale
+    /// or is cancelled are never written, and a burnt counter costs nothing.
+    pub fn mint_conversion_ids(&mut self, minter: &mut AnchorIdMinter) {
+        let paths: &mut [Option<PathSnapshot>] = match &mut self.drag {
+            SelectDrag::GroupTransforming(drag) => &mut drag.converted,
+            SelectDrag::Transforming(drag) => std::slice::from_mut(&mut drag.converted),
+            _ => match &mut self.entry {
+                Some(entry) => entry.converted_paths_mut(),
+                None => return,
+            },
+        };
+        for path in paths.iter_mut().flatten() {
+            with_fresh_anchor_ids(path, minter);
+        }
     }
 }

@@ -65,7 +65,9 @@ pub use angle_snap::{MAX_SKEW_SNAP_DEG, snap_angle, snap_skew_angle};
 pub use boolean::{
     BooleanAvailability, BooleanOp, BooleanPlan, BooleanRefusal, boolean_availability, plan_boolean,
 };
-pub use conversion::build_primitive_conversions;
+pub use conversion::{
+    ConversionCounts, ConvertingKind, build_primitive_conversions, primitive_as_path,
+};
 pub use display_unit_text::{
     content_too_large_message, document_side_message, format_cursor, format_field_length,
     format_size, format_status_length, parse_document_side,
@@ -73,8 +75,7 @@ pub use display_unit_text::{
 pub use document_fit::fit_document_to_content;
 pub use ellipse_tool::EllipseTool;
 pub use group_box::{
-    GroupBoxShape, GroupSelection, group_handles, hit_group_handle, is_aligned_primitive,
-    is_drawn_group_handle,
+    GroupBoxShape, GroupSelection, group_handles, hit_group_handle, is_drawn_group_handle,
 };
 pub use group_entry::GroupEntry;
 pub use hit_test::{Hit, hit_test};

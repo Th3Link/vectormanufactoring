@@ -6,9 +6,10 @@
 //! the caret and the focus. The single object's counterparts are
 //! [`crate::TransformEntry`] and [`crate::SkewEntry`].
 
-use curvyo_document_core::{Angle, Document, NodeId, ObjectSnapshot, Point};
+use curvyo_document_core::{Angle, Document, NodeId, ObjectSnapshot, PathSnapshot, Point};
 
 use crate::ResizeDirection;
+use crate::conversion::{ConversionCounts, converted_counts, converted_paths};
 use crate::group_box::GroupSelection;
 use crate::group_transform::{GroupMap, commit_group, group_pivot, map_all_checked};
 use crate::oriented_box::OrientedBox;
@@ -53,6 +54,9 @@ pub struct GroupEntry {
     pivot: Point,
     fields: Vec<EntryField>,
     axes: Vec<Axis>,
+    /// For a size entry, beside each start, the path it becomes if the typed size
+    /// is a stretch (criterion 53); built when the entry opens.
+    converted: Vec<Option<PathSnapshot>>,
 }
 
 fn field(label: &'static str, name: &'static str, prefill: String, editable: bool) -> EntryField {
@@ -89,7 +93,8 @@ impl GroupEntry {
     /// A size entry for resize handle `direction` (criterion 34): "W" and "H"
     /// prefilled with the group box size, one of them for an edge handle.
     /// `modifiers` are Shift (the centre is the fixed point) and Ctrl (linked
-    /// fields) at the second press; a uniform-only selection always links them.
+    /// fields, one factor) at the second press; the two fields are otherwise
+    /// independent, whatever the selection holds (criterion 34).
     #[must_use]
     pub fn for_resize(
         members: &[ObjectSnapshot],
@@ -123,9 +128,7 @@ impl GroupEntry {
             ResizeDirection::N | ResizeDirection::S => vec![height],
             _ => vec![width, height],
         };
-        let linked = fields.len() == 2
-            && fields.iter().all(|(_, f)| f.editable)
-            && (ctrl || group.uniform_only());
+        let linked = fields.len() == 2 && fields.iter().all(|(_, f)| f.editable) && ctrl;
         let mut entry = Self::new(
             EntryKind::Size,
             members,
@@ -135,6 +138,7 @@ impl GroupEntry {
         );
         entry.linked = linked;
         entry.modes = modes;
+        entry.converted = converted_paths(&entry.starts);
         entry
     }
 
@@ -189,6 +193,7 @@ impl GroupEntry {
                 .unwrap_or_else(|| start_box.to_document(start_box.local_center())),
             fields,
             axes,
+            converted: Vec::new(),
         }
     }
 
@@ -364,7 +369,7 @@ impl GroupEntry {
                     kv,
                 }))
             }
-            EntryKind::OuterRadius | EntryKind::CornerRadius | EntryKind::InnerRatio => Ok(None),
+            EntryKind::CornerRadius | EntryKind::InnerRatio => Ok(None),
         }
     }
 
@@ -394,6 +399,23 @@ impl GroupEntry {
         }
     }
 
+    /// The paths this entry would convert shapes into (`None` per object that keeps
+    /// its kind), for the session to give real anchor ids.
+    pub(crate) fn converted_mut(&mut self) -> &mut [Option<PathSnapshot>] {
+        &mut self.converted
+    }
+
+    /// The shapes the typed values would turn into paths, counted by kind: empty
+    /// unless the typed size is a stretch (criterion 55's note under the fields,
+    /// "Turns 2 shapes into paths.") or a text is refused.
+    #[must_use]
+    pub fn conversion_counts(&self, texts: [&str; 2], last_edited: usize) -> ConversionCounts {
+        match self.resolve(texts, last_edited) {
+            Ok(Some(results)) => converted_counts(&self.starts, &results),
+            _ => ConversionCounts::default(),
+        }
+    }
+
     /// The objects after applying the typed values, `Ok(None)` if nothing would
     /// change, or the first refused field. Pure: the snapshots a drag to the same
     /// value with the same handle and modifiers would produce.
@@ -409,8 +431,8 @@ impl GroupEntry {
         let Some(map) = self.map_of(texts, last_edited)? else {
             return Ok(None);
         };
-        let results =
-            map_all_checked(&self.starts, &map, self.modes).ok_or((0, InvalidReason::TooLarge))?;
+        let results = map_all_checked(&self.starts, &self.converted, &map, self.modes)
+            .ok_or((0, InvalidReason::TooLarge))?;
         let unchanged = results
             .iter()
             .zip(&self.starts)
@@ -428,19 +450,40 @@ impl GroupEntry {
         texts: [&str; 2],
         last_edited: usize,
     ) -> EntryOutcome {
+        self.commit_counting(document, texts, last_edited).0
+    }
+
+    /// [`GroupEntry::commit`], and the shapes the commit turned into paths (empty
+    /// unless it was committed and converted something).
+    #[must_use]
+    pub fn commit_counting(
+        &self,
+        document: &Document,
+        texts: [&str; 2],
+        last_edited: usize,
+    ) -> (EntryOutcome, ConversionCounts) {
         let current = self
             .starts
             .iter()
             .all(|object| document.object(object.id()).as_ref() == Some(object));
         if !current {
-            return EntryOutcome::Unchanged;
+            return (EntryOutcome::Unchanged, ConversionCounts::default());
         }
         match self.resolve(texts, last_edited) {
-            Err((field, reason)) => EntryOutcome::Invalid { field, reason },
-            Ok(None) => EntryOutcome::Unchanged,
+            Err((field, reason)) => (
+                EntryOutcome::Invalid { field, reason },
+                ConversionCounts::default(),
+            ),
+            Ok(None) => (EntryOutcome::Unchanged, ConversionCounts::default()),
             Ok(Some(results)) => {
-                commit_group(document, &results, self.modes.stroke);
-                EntryOutcome::Committed
+                if commit_group(document, &results, self.modes.stroke) {
+                    (
+                        EntryOutcome::Committed,
+                        converted_counts(&self.starts, &results),
+                    )
+                } else {
+                    (EntryOutcome::Unchanged, ConversionCounts::default())
+                }
             }
         }
     }

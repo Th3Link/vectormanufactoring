@@ -7,11 +7,11 @@
 //! it with its own frame (`adrs.md`, forward note).
 
 use curvyo_document_core::{
-    Angle, Corner, Document, EllipseFrame, Length, ObjectEditError, ObjectSnapshot, Point,
-    PrimitiveSnapshot, RectBounds, Shape, StarFrame,
+    Angle, Corner, Document, EllipseFrame, Length, ObjectEditError, ObjectSnapshot, PathSnapshot,
+    Point, PrimitiveSnapshot, RectBounds, Shape, StarFrame,
 };
 
-use crate::group_box::is_circle;
+use crate::conversion::is_circle;
 use crate::oriented_box::OrientedBox;
 use crate::skew_math::{skew_angle, skew_factor, skew_frame};
 use crate::transform_commit::is_sane;
@@ -22,8 +22,15 @@ use crate::transform_math::{
     scaled_and_floored, stroke_or_radius_factor,
 };
 
-/// Two scale factors closer than this are one factor.
-const UNIFORM_EPSILON: f64 = 1e-12;
+/// Two scale factors whose difference is below this fraction of the larger are one
+/// factor (`specs/0019-multi-object-transform/` Terms, "Stretch").
+const UNIFORM_EPSILON: f64 = 1e-9;
+
+/// Whether a scale by `(sx, sy)` is a stretch: the factors differ. A scale with
+/// equal factors, or one that is the identity, is not, and converts nothing.
+pub(crate) fn is_stretch(sx: f64, sy: f64) -> bool {
+    (sx - sy).abs() > UNIFORM_EPSILON * sx.abs().max(sy.abs())
+}
 
 /// What a group gesture does to every selected object, in the document axes.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -38,11 +45,21 @@ pub(crate) enum GroupMap {
 }
 
 /// `object` after `map`; `modes` decide whether a scale also scales the stroke
-/// width and the corner radii. The kind never changes. A skew leaves a primitive
-/// as it is (the handles are not offered for one, criterion 40).
-pub(crate) fn apply(object: &ObjectSnapshot, map: &GroupMap, modes: ScaleModes) -> ObjectSnapshot {
+/// width and the corner radii. A move, a rotate and a uniform scale never change
+/// the kind; a stretch (unequal factors) turns an object that has a `converted`
+/// path (a polygon, a star, a rectangle or ellipse off the axes) into that path,
+/// scaled (criterion 53). A skew leaves a primitive as it is (the handles are not
+/// offered for one, criterion 40).
+pub(crate) fn apply(
+    object: &ObjectSnapshot,
+    map: &GroupMap,
+    modes: ScaleModes,
+    converted: Option<&PathSnapshot>,
+) -> ObjectSnapshot {
     match *map {
-        GroupMap::Scale { pivot, sx, sy } => scale_object(object, pivot, sx, sy, modes),
+        GroupMap::Scale { pivot, sx, sy } => {
+            scale_object(object, pivot, (sx, sy), modes, converted)
+        }
         GroupMap::Rotate { pivot, delta } => object.rotated(pivot, delta),
         GroupMap::Shear { fixed, ku, kv } => match object {
             ObjectSnapshot::Path(path) => {
@@ -56,14 +73,18 @@ pub(crate) fn apply(object: &ObjectSnapshot, map: &GroupMap, modes: ScaleModes) 
 fn scale_object(
     object: &ObjectSnapshot,
     pivot: Point,
-    sx: f64,
-    sy: f64,
+    (sx, sy): (f64, f64),
     modes: ScaleModes,
+    converted: Option<&PathSnapshot>,
 ) -> ObjectSnapshot {
     let factor = stroke_or_radius_factor(sx, sy);
+    let axes = Angle::from_radians(0.0);
     let mut scaled = match object {
-        ObjectSnapshot::Path(path) => {
-            ObjectSnapshot::Path(path.scaled_along(pivot, sx, sy, Angle::from_radians(0.0)))
+        ObjectSnapshot::Path(path) => ObjectSnapshot::Path(path.scaled_along(pivot, sx, sy, axes)),
+        ObjectSnapshot::Primitive(_) if converted.is_some() && is_stretch(sx, sy) => {
+            // invariant: `converted` is `Some` in this arm.
+            #[allow(clippy::unwrap_used)]
+            ObjectSnapshot::Path(converted.unwrap().scaled_along(pivot, sx, sy, axes))
         }
         ObjectSnapshot::Primitive(primitive) => {
             ObjectSnapshot::Primitive(scale_primitive(primitive, pivot, (sx, sy), modes.radius))
@@ -89,7 +110,7 @@ fn swaps_axes(rotation: Angle) -> bool {
 /// and the rotation it ends with (criterion 20, second and third rows).
 fn extent_factors(primitive: &PrimitiveSnapshot, (sx, sy): (f64, f64)) -> ((f64, f64), Angle) {
     let rotation = primitive.rotation;
-    if (sx - sy).abs() <= UNIFORM_EPSILON {
+    if !is_stretch(sx, sy) {
         return ((sx, sx), rotation);
     }
     if let Shape::Ellipse { frame } = &primitive.shape
@@ -199,7 +220,7 @@ pub(crate) fn group_map(
     handle: EditHandle,
     (down_at, current): (Point, Point),
     (shift, ctrl): (bool, bool),
-    uniform_only: bool,
+    proportional_corners: bool,
 ) -> Option<GroupMap> {
     match handle {
         EditHandle::Resize(direction) => {
@@ -214,7 +235,7 @@ pub(crate) fn group_map(
                 direction,
                 delta,
                 shift,
-                ctrl || uniform_only,
+                ctrl || proportional_corners,
             );
             let anchor =
                 resize_anchor_local_position(start_box.min, start_box.max, direction, shift);
@@ -255,12 +276,21 @@ pub(crate) fn group_map(
 /// (criterion 22: all or nothing).
 pub(crate) fn map_all_checked(
     starts: &[ObjectSnapshot],
+    converted: &[Option<PathSnapshot>],
     map: &GroupMap,
     modes: ScaleModes,
 ) -> Option<Vec<ObjectSnapshot>> {
     let mapped: Vec<ObjectSnapshot> = starts
         .iter()
-        .map(|object| apply(object, map, modes))
+        .enumerate()
+        .map(|(index, object)| {
+            apply(
+                object,
+                map,
+                modes,
+                converted.get(index).and_then(Option::as_ref),
+            )
+        })
         .collect();
     mapped.iter().all(is_sane).then_some(mapped)
 }
@@ -268,10 +298,11 @@ pub(crate) fn map_all_checked(
 /// [`map_all_checked`], or `starts` unchanged if a result is not sane.
 pub(crate) fn map_all(
     starts: &[ObjectSnapshot],
+    converted: &[Option<PathSnapshot>],
     map: &GroupMap,
     modes: ScaleModes,
 ) -> Vec<ObjectSnapshot> {
-    map_all_checked(starts, map, modes).unwrap_or_else(|| starts.to_vec())
+    map_all_checked(starts, converted, map, modes).unwrap_or_else(|| starts.to_vec())
 }
 
 /// The point a group gesture on `handle` holds fixed (the pivot marker): the
@@ -289,14 +320,20 @@ pub(crate) fn group_pivot(box_: &OrientedBox, handle: EditHandle, shift: bool) -
 }
 
 /// Writes a resolved group gesture with `transform_objects`; a stroke width the
-/// document refuses is left out and the geometry still lands.
-pub(crate) fn commit_group(document: &Document, results: &[ObjectSnapshot], stroke: StrokeScaling) {
+/// document refuses is left out and the geometry still lands. `true` if the
+/// document took the write (an object that is gone refuses it all).
+pub(crate) fn commit_group(
+    document: &Document,
+    results: &[ObjectSnapshot],
+    stroke: StrokeScaling,
+) -> bool {
     let with_width = stroke == StrokeScaling::Proportional;
     let outcome = document.transform_objects(results, with_width);
     if with_width && outcome == Err(ObjectEditError::InvalidStrokeWidth) {
         // Anything else means an object is gone: nothing is left to write.
-        let _ = document.transform_objects(results, false);
+        return document.transform_objects(results, false).is_ok();
     }
+    outcome.is_ok()
 }
 
 #[cfg(test)]
@@ -351,7 +388,7 @@ mod tests {
     fn a_rectangle_is_stretched_along_the_document_axes() {
         let document = Document::new(1);
         let object = rect(&document, 20.0, 0.0, 10.0, 10.0);
-        let result = apply(&object, &scale(2.0, 3.0), ScaleModes::default());
+        let result = apply(&object, &scale(2.0, 3.0), ScaleModes::default(), None);
         let b = bounds_of(&result);
         assert_eq!((b.origin.x, b.origin.y), (40.0, 0.0));
         assert_eq!((b.width.as_mm(), b.height.as_mm()), (20.0, 30.0));
@@ -369,7 +406,7 @@ mod tests {
             height: Length::from_mm(10.0),
         });
         let object = turned(&document, id, 90.0);
-        let result = apply(&object, &scale(2.0, 3.0), ScaleModes::default());
+        let result = apply(&object, &scale(2.0, 3.0), ScaleModes::default(), None);
         let b = bounds_of(&result);
         assert!((b.width.as_mm() - 60.0).abs() < 1e-9, "width times sy");
         assert!((b.height.as_mm() - 20.0).abs() < 1e-9, "height times sx");
@@ -387,7 +424,7 @@ mod tests {
             ry: Length::from_mm(5.0),
         });
         let object = turned(&document, id, 30.0);
-        let result = apply(&object, &scale(2.0, 3.0), ScaleModes::default());
+        let result = apply(&object, &scale(2.0, 3.0), ScaleModes::default(), None);
         let ObjectSnapshot::Primitive(PrimitiveSnapshot {
             shape: Shape::Ellipse { frame },
             rotation,
@@ -399,7 +436,7 @@ mod tests {
         assert!((frame.rx.as_mm() - 10.0).abs() < 1e-9 && (frame.ry.as_mm() - 15.0).abs() < 1e-9);
         assert_eq!(rotation.as_radians(), 0.0);
         // The same factor twice keeps the rotation: a circle stays a circle.
-        let kept = apply(&object, &scale(2.0, 2.0), ScaleModes::default());
+        let kept = apply(&object, &scale(2.0, 2.0), ScaleModes::default(), None);
         assert_eq!(kept.rotation(), object.rotation());
     }
 
@@ -418,7 +455,7 @@ mod tests {
             InnerRatio::new(0.4).expect("ratio"),
         );
         let object = document.object(id).expect("exists");
-        let result = apply(&object, &scale(2.0, 2.0), ScaleModes::default());
+        let result = apply(&object, &scale(2.0, 2.0), ScaleModes::default(), None);
         let ObjectSnapshot::Primitive(PrimitiveSnapshot {
             shape:
                 Shape::Star {
@@ -453,7 +490,7 @@ mod tests {
             .expect("radius");
         let mut object = document.object(id).expect("exists");
         object.style_mut().stroke.width = Length::from_mm(1.0);
-        let off = apply(&object, &scale(4.0, 1.0), ScaleModes::default());
+        let off = apply(&object, &scale(4.0, 1.0), ScaleModes::default(), None);
         assert_eq!(off.style().stroke.width.as_mm(), 1.0);
         let ObjectSnapshot::Primitive(PrimitiveSnapshot {
             shape: Shape::Rect { corner_radii, .. },
@@ -470,6 +507,7 @@ mod tests {
                 stroke: StrokeScaling::Proportional,
                 radius: CornerRadiusScaling::Proportional,
             },
+            None,
         );
         assert!((on.style().stroke.width.as_mm() - 2.0).abs() < 1e-9);
         let ObjectSnapshot::Primitive(PrimitiveSnapshot {
@@ -498,7 +536,8 @@ mod tests {
         let ObjectSnapshot::Path(before) = &object else {
             panic!("a path");
         };
-        let ObjectSnapshot::Path(after) = apply(&object, &scale(2.0, 3.0), ScaleModes::default())
+        let ObjectSnapshot::Path(after) =
+            apply(&object, &scale(2.0, 3.0), ScaleModes::default(), None)
         else {
             panic!("a path");
         };
@@ -523,6 +562,7 @@ mod tests {
                 delta: Angle::from_radians(0.7),
             },
             ScaleModes::default(),
+            None,
         );
         assert!((there.rotation().as_radians() - 0.7).abs() < 1e-12);
         let back = apply(
@@ -532,6 +572,7 @@ mod tests {
                 delta: Angle::from_radians(-0.7),
             },
             ScaleModes::default(),
+            None,
         );
         let (a, b) = (bounds_of(&object), bounds_of(&back));
         assert!((a.origin.x - b.origin.x).abs() < 1e-9 && (a.origin.y - b.origin.y).abs() < 1e-9);
@@ -562,6 +603,7 @@ mod tests {
                 kv: 0.0,
             },
             ScaleModes::default(),
+            None,
         );
         let ObjectSnapshot::Path(path) = result else {
             panic!("a path");

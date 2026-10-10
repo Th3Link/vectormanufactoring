@@ -7,24 +7,20 @@
 
 use std::collections::HashSet;
 
-use curvyo_document_core::{
-    Angle, EllipseFrame, NodeId, ObjectSnapshot, Point, PrimitiveSnapshot, Shape,
-};
+use curvyo_document_core::{Angle, NodeId, ObjectSnapshot, Point};
 
 use crate::ResizeDirection;
+use crate::conversion::{ConversionCounts, converting_kind};
 use crate::object_bounds::object_outline_bounds;
 use crate::oriented_box::OrientedBox;
 use crate::transform_handle_layout::{
-    ALL_EIGHT, CORNERS_FOUR, EditHandle, HandleSpec, TransformHandleTolerances, at_least,
+    ALL_EIGHT, EditHandle, HandleSpec, TransformHandleTolerances, at_least,
     hit_transform_handle_for_side, transform_handles,
 };
 
-/// The tolerance (millimetres) of the group box's own tests: two radii closer
-/// than this make a circle, and an extent below it is "zero".
+/// The tolerance (millimetres) of the group box's own tests: an extent below it is
+/// "zero".
 pub(crate) const GEOMETRIC_TOLERANCE_MM: f64 = 1e-6;
-
-/// A rotation within this (radians) of a multiple of 90 degrees is one.
-const QUARTER_TURN_TOLERANCE_RAD: f64 = 1e-9;
 
 /// The shape of a group box on screen: a box, one line when one axis has no
 /// extent, or a single point (criteria 8 and 13).
@@ -38,111 +34,13 @@ pub enum GroupBoxShape {
     Point,
 }
 
-/// A kind of primitive that cannot be stretched, for the hint of criterion 21.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Cause {
-    Polygon,
-    Star,
-    RotatedRectangle,
-    RotatedEllipse,
-}
-
-/// The causes in the order the hint names them, with their words.
-const CAUSES: [(Cause, &str); 4] = [
-    (Cause::Polygon, "a polygon"),
-    (Cause::Star, "a star"),
-    (Cause::RotatedRectangle, "a rotated rectangle"),
-    (Cause::RotatedEllipse, "a rotated ellipse"),
-];
-
-/// Which of the [`CAUSES`] the selection holds.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-struct UniformCause {
-    present: [bool; 4],
-}
-
 /// What a multi-selection is, as far as its group box and handles go.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GroupSelection {
     box_: OrientedBox,
     count: usize,
     all_paths: bool,
-    uniform_only: bool,
-    cause: UniformCause,
-}
-
-/// Whether `rotation` is a multiple of 90 degrees (criterion "aligned primitive").
-fn is_quarter_turn(rotation: Angle) -> bool {
-    let quarters = rotation.as_radians() / std::f64::consts::FRAC_PI_2;
-    (quarters - quarters.round()).abs() * std::f64::consts::FRAC_PI_2 <= QUARTER_TURN_TOLERANCE_RAD
-}
-
-/// Whether `object` is a rectangle or ellipse whose outline can be stretched
-/// along the document axes without becoming something else: a rotation that is a
-/// multiple of 90 degrees, or an ellipse whose radii are equal (a circle, whatever
-/// its rotation). A polygon or star never is (criterion "Aligned primitive").
-#[must_use]
-pub fn is_aligned_primitive(object: &ObjectSnapshot) -> bool {
-    match object {
-        ObjectSnapshot::Primitive(PrimitiveSnapshot {
-            shape: Shape::Rect { .. },
-            rotation,
-            ..
-        }) => is_quarter_turn(*rotation),
-        ObjectSnapshot::Primitive(PrimitiveSnapshot {
-            shape: Shape::Ellipse { frame },
-            rotation,
-            ..
-        }) => is_quarter_turn(*rotation) || is_circle(frame),
-        _ => false,
-    }
-}
-
-/// Whether an ellipse frame is a circle: the one test the handles and the scale
-/// of a group share, so that a circle never has edge handles yet stretches in
-/// its own turned frame.
-pub(crate) fn is_circle(frame: &EllipseFrame) -> bool {
-    (frame.rx.as_mm() - frame.ry.as_mm()).abs() < GEOMETRIC_TOLERANCE_MM
-}
-
-/// Whether `object` is a primitive that can only be scaled proportionally.
-fn is_uniform_only_member(object: &ObjectSnapshot) -> bool {
-    matches!(object, ObjectSnapshot::Primitive(_)) && !is_aligned_primitive(object)
-}
-
-impl UniformCause {
-    fn note(&mut self, object: &ObjectSnapshot) {
-        if let ObjectSnapshot::Primitive(primitive) = object
-            && !is_aligned_primitive(object)
-        {
-            let cause = match primitive.shape {
-                Shape::Polygon { .. } => Cause::Polygon,
-                Shape::Star { .. } => Cause::Star,
-                Shape::Rect { .. } => Cause::RotatedRectangle,
-                Shape::Ellipse { .. } => Cause::RotatedEllipse,
-            };
-            if let Some(index) = CAUSES.iter().position(|(c, _)| *c == cause) {
-                self.present[index] = true;
-            }
-        }
-    }
-
-    /// "Holds a star and a rotated rectangle": only the kinds present, in the
-    /// order polygon, star, rotated rectangle, rotated ellipse, each with "a",
-    /// joined by commas and "and" (criterion 21).
-    fn line(self) -> Option<String> {
-        let names: Vec<&str> = CAUSES
-            .iter()
-            .zip(self.present)
-            .filter_map(|((_, name), present)| present.then_some(*name))
-            .collect();
-        let (last, rest) = names.split_last()?;
-        Some(if rest.is_empty() {
-            format!("Holds {last}")
-        } else {
-            format!("Holds {} and {last}", rest.join(", "))
-        })
-    }
+    converting: ConversionCounts,
 }
 
 impl GroupSelection {
@@ -157,24 +55,21 @@ impl GroupSelection {
         let (mut min, mut max) = object_outline_bounds(first);
         let mut count = 1;
         let mut all_paths = matches!(first, ObjectSnapshot::Path(_));
-        let mut uniform_only = is_uniform_only_member(first);
-        let mut cause = UniformCause::default();
-        cause.note(first);
+        let mut converting = ConversionCounts::default();
+        note_converting(&mut converting, first);
         for object in members {
             let (low, high) = object_outline_bounds(object);
             min = Point::new(min.x.min(low.x), min.y.min(low.y));
             max = Point::new(max.x.max(high.x), max.y.max(high.y));
             count += 1;
             all_paths &= matches!(object, ObjectSnapshot::Path(_));
-            uniform_only |= is_uniform_only_member(object);
-            cause.note(object);
+            note_converting(&mut converting, object);
         }
         (count >= 2).then(|| Self {
             box_: axis_aligned_box(min, max),
             count,
             all_paths,
-            uniform_only,
-            cause,
+            converting,
         })
     }
 
@@ -198,23 +93,20 @@ impl GroupSelection {
         self.all_paths
     }
 
-    /// Whether the selection can only be scaled proportionally: it holds a
-    /// polygon, a star, or a rectangle or ellipse that is not an aligned
-    /// primitive (criterion 21).
+    /// How many shapes of each kind a stretch of the selection would turn into
+    /// paths (criteria 53 and 55); empty when nothing would convert.
     #[must_use]
-    pub const fn uniform_only(&self) -> bool {
-        self.uniform_only
+    pub const fn converting(&self) -> ConversionCounts {
+        self.converting
     }
 
-    /// The cause line of the hint of a corner handle of a uniform-only
-    /// selection ("Holds a star and a rotated rectangle"); `None` for any other.
+    /// Whether a corner drag is proportional (criterion 19, lead decision E): the
+    /// selection holds a shape a stretch would convert, so that the most common
+    /// gesture never converts by accident. Only an edge handle and a typed size
+    /// stretch it.
     #[must_use]
-    pub fn uniform_cause_line(&self) -> Option<String> {
-        if self.uniform_only {
-            self.cause.line()
-        } else {
-            None
-        }
+    pub const fn proportional_corners(&self) -> bool {
+        !self.converting.is_empty()
     }
 
     /// Whether the box has no extent in its x axis (width under the tolerance).
@@ -249,6 +141,14 @@ impl GroupSelection {
     }
 }
 
+/// Counts `object` in `converting` if a stretch along the document axes would turn
+/// it into a path.
+fn note_converting(converting: &mut ConversionCounts, object: &ObjectSnapshot) {
+    if let Some(kind) = converting_kind(object, Angle::from_radians(0.0)) {
+        converting.add(kind);
+    }
+}
+
 /// The angle-0 box with corners `min` and `max`. Its pivot is its centre, as
 /// the box of a primitive has.
 fn axis_aligned_box(min: Point, max: Point) -> OrientedBox {
@@ -268,19 +168,13 @@ const HORIZONTAL_EDGES: [ResizeDirection; 2] = [ResizeDirection::E, ResizeDirect
 const VERTICAL_EDGES: [ResizeDirection; 2] = [ResizeDirection::N, ResizeDirection::S];
 
 impl GroupSelection {
-    /// The resize handles the group offers (criteria 12 and 21): the four corners
-    /// and four edges; only the corners for a uniform-only selection, whose edge
-    /// handles are not drawn and have no hit area; and, for a box flat in one
-    /// axis, only what changes the other axis (nothing for a uniform-only
-    /// selection, whose corners change both).
+    /// The resize handles the group offers (criteria 12 and 18): the four corners
+    /// and four edges for every selection, whatever it holds; for a box flat in
+    /// one axis, only what changes the other axis.
     fn resize_directions(&self) -> &'static [ResizeDirection] {
         let (flat_x, flat_y) = (self.flat_x(), self.flat_y());
         if flat_x && flat_y {
             return &[];
-        }
-        if self.uniform_only {
-            // The corners change both axes; a flat box has no axis to stretch.
-            return if flat_x || flat_y { &[] } else { &CORNERS_FOUR };
         }
         match (flat_x, flat_y) {
             (false, true) => &HORIZONTAL_EDGES,
@@ -475,11 +369,11 @@ mod tests {
         assert_eq!(point.side_mm(), 0.0);
     }
 
-    /// Criterion 21 and D3: polygons, stars and misaligned rectangles and
-    /// ellipses hold the selection to proportional scaling; a circle never does;
-    /// the cause line lists only what is present, in order.
+    /// Criteria 19, 53 and 55 and D3: polygons, stars and misaligned rectangles and
+    /// ellipses are the shapes a stretch converts and make the corners
+    /// proportional; a circle and a path never do; the counts are by kind.
     #[test]
-    fn uniform_only_follows_the_aligned_primitive_rule() {
+    fn the_converting_shapes_are_counted_by_kind() {
         let document = Document::new(1);
         let plain = rect(&document, 0.0, 0.0, 10.0, 10.0);
         let path = line_path(&document, 1, Point::new(0.0, 0.0), Point::new(5.0, 5.0));
@@ -511,34 +405,21 @@ mod tests {
             .rotated(Point::new(70.0, 0.0), Angle::from_radians(0.4));
         document.rotate_object(&turned_circle).expect("rotates");
 
+        let counts = |ids: &[NodeId]| group_of(&document, ids).expect("g").converting();
+        assert!(counts(&[plain, path]).is_empty());
+        assert!(
+            counts(&[plain, circle]).is_empty(),
+            "a circle never converts"
+        );
+        let g = group_of(&document, &[plain, star, turned]).expect("g");
+        assert!(g.proportional_corners());
+        assert_eq!(g.converting().as_array(), [0, 1, 1, 0]);
+        assert_eq!(counts(&[polygon, star, turned]).as_array(), [1, 1, 1, 0]);
+        assert_eq!(counts(&[path, star]).as_array(), [0, 1, 0, 0]);
         assert!(
             !group_of(&document, &[plain, path])
                 .expect("g")
-                .uniform_only()
-        );
-        assert!(
-            !group_of(&document, &[plain, circle])
-                .expect("g")
-                .uniform_only()
-        );
-        let g = group_of(&document, &[plain, star, turned]).expect("g");
-        assert!(g.uniform_only());
-        assert_eq!(
-            g.uniform_cause_line().as_deref(),
-            Some("Holds a star and a rotated rectangle")
-        );
-        let g = group_of(&document, &[polygon, star, turned]).expect("g");
-        assert_eq!(
-            g.uniform_cause_line().as_deref(),
-            Some("Holds a polygon, a star and a rotated rectangle")
-        );
-        let g = group_of(&document, &[path, star]).expect("g");
-        assert_eq!(g.uniform_cause_line().as_deref(), Some("Holds a star"));
-        assert!(
-            group_of(&document, &[plain, path])
-                .expect("g")
-                .uniform_cause_line()
-                .is_none()
+                .proportional_corners()
         );
     }
 
@@ -647,9 +528,10 @@ mod tests {
         );
     }
 
-    /// Criterion 21: a uniform-only selection offers the corner handles only.
+    /// Criterion 18: every selection offers all eight resize handles, whatever it
+    /// holds.
     #[test]
-    fn a_uniform_only_selection_has_no_edge_handle() {
+    fn every_selection_has_the_edge_handles() {
         let document = Document::new(1);
         let star = document.create_star(
             StarFrame {
@@ -667,13 +549,13 @@ mod tests {
         let edges = handles.iter().filter(|(h, _)| {
             matches!(h, EditHandle::Resize(d) if !crate::transform_handle_layout::is_corner(*d))
         });
-        assert_eq!(edges.count(), 0);
+        assert_eq!(edges.count(), 4);
         assert_eq!(
             handles
                 .iter()
                 .filter(|(h, _)| matches!(h, EditHandle::Resize(_)))
                 .count(),
-            4
+            8
         );
     }
 

@@ -6,19 +6,17 @@
 //! (`adrs.md`, "one resolving function per gesture"). The DOM chip only
 //! holds the text, the caret and the focus; every rule lives here.
 
-use curvyo_document_core::{Angle, Document, ObjectSnapshot, Point, Shape};
+use curvyo_document_core::{Angle, Document, ObjectSnapshot, PathSnapshot, Point};
 
 use crate::ResizeDirection;
+use crate::conversion::converted_polygon_or_star;
 use crate::oriented_box::OrientedBox;
 use crate::transform_commit::{MAX_COORDINATE_MM, commit_gesture};
 use crate::transform_drag::{
     ResizeOptions, ScaleModes, pivot_for, resize_by_local_delta, rotate_by,
 };
 use crate::transform_handle_layout::{EditHandle, is_corner};
-use crate::transform_math::{
-    ANGLE_EQUAL_EPSILON_RAD, is_polygon_or_star, local_delta_for_radius, local_delta_for_size,
-};
-use curvyo_document_core::PrimitiveSnapshot;
+use crate::transform_math::{ANGLE_EQUAL_EPSILON_RAD, local_delta_for_size};
 
 /// A typed size within this (millimetres) of the current one is "equal":
 /// nothing is written (criteria 19, 31). The prefill is the readout's
@@ -48,11 +46,10 @@ pub enum EntryKind {
     /// One field: the absolute rotation in degrees (criteria 18, 19).
     Angle,
     /// One or two fields: the width and/or height along the object's own
-    /// axes, in millimetres (criterion 25).
+    /// axes, in millimetres (criterion 25; also a polygon's or star's, where a
+    /// size of another aspect ratio turns it into a path,
+    /// `specs/0019-multi-object-transform/` criterion 56).
     Size,
-    /// One field: a polygon or star's outer radius, in millimetres
-    /// (criterion 26).
-    OuterRadius,
     /// One field: a rectangle's corner radius, in millimetres
     /// (`specs/0009-unified-object-editing/`, criterion 18).
     CornerRadius,
@@ -146,6 +143,9 @@ pub struct TransformEntry {
     centre_chip: bool,
     pivot: Point,
     fields: Vec<EntryField>,
+    /// For a polygon or star, the path it becomes if the typed size is a stretch
+    /// (criterion 56), built when the entry opens.
+    converted: Option<PathSnapshot>,
 }
 
 /// `37.4°`, or `45°` when the value is whole (exact under Ctrl's snap):
@@ -233,6 +233,7 @@ impl TransformEntry {
                 editable: true,
                 axis: FieldAxis::Angle,
             }],
+            converted: None,
         }
     }
 
@@ -250,47 +251,29 @@ impl TransformEntry {
     ) -> Self {
         let (shift, ctrl) = modifiers;
         let handle = EditHandle::Resize(direction);
-        let radius_entry = is_polygon_or_star(object);
         let editable = |extent: f64| extent > SIZE_EQUAL_EPSILON_MM;
-        let (kind, fields) = if let Some(radius) = outer_radius(object).filter(|_| radius_entry) {
-            (
-                EntryKind::OuterRadius,
-                vec![EntryField {
-                    label: "r",
-                    accessible_name: "Outer radius",
-                    prefill: format_mm(radius),
-                    editable: editable(radius),
-                    axis: FieldAxis::Radius,
-                }],
-            )
-        } else {
-            let width = EntryField {
-                label: "W",
-                accessible_name: "Width",
-                prefill: format_mm(box_.width()),
-                editable: editable(box_.width()),
-                axis: FieldAxis::Width,
-            };
-            let height = EntryField {
-                label: "H",
-                accessible_name: "Height",
-                prefill: format_mm(box_.height()),
-                editable: editable(box_.height()),
-                axis: FieldAxis::Height,
-            };
-            let fields = match direction {
-                ResizeDirection::E | ResizeDirection::W => vec![width],
-                ResizeDirection::N | ResizeDirection::S => vec![height],
-                _ => vec![width, height],
-            };
-            (EntryKind::Size, fields)
+        let width = EntryField {
+            label: "W",
+            accessible_name: "Width",
+            prefill: format_mm(box_.width()),
+            editable: editable(box_.width()),
+            axis: FieldAxis::Width,
         };
-        let linked = ctrl
-            && kind == EntryKind::Size
-            && fields.len() == 2
-            && fields.iter().all(|f| f.editable);
+        let height = EntryField {
+            label: "H",
+            accessible_name: "Height",
+            prefill: format_mm(box_.height()),
+            editable: editable(box_.height()),
+            axis: FieldAxis::Height,
+        };
+        let fields = match direction {
+            ResizeDirection::E | ResizeDirection::W => vec![width],
+            ResizeDirection::N | ResizeDirection::S => vec![height],
+            _ => vec![width, height],
+        };
+        let linked = ctrl && fields.len() == 2 && fields.iter().all(|f| f.editable);
         Self {
-            kind,
+            kind: EntryKind::Size,
             start: object.clone(),
             start_box: *box_,
             handle,
@@ -302,7 +285,14 @@ impl TransformEntry {
             pivot: pivot_for(handle, object, box_, shift)
                 .unwrap_or_else(|| box_.to_document(box_.local_center())),
             fields,
+            converted: converted_polygon_or_star(object),
         }
+    }
+
+    /// The path this entry would turn a polygon or star into (`None` for any other
+    /// object), for the session to give real anchor ids.
+    pub(crate) fn converted_mut(&mut self) -> &mut [Option<PathSnapshot>] {
+        std::slice::from_mut(&mut self.converted)
     }
 
     /// What this entry edits.
@@ -397,7 +387,7 @@ impl TransformEntry {
             FieldAxis::Angle => self.start.orientation().as_radians().to_degrees(),
             FieldAxis::Width => self.start_box.width(),
             FieldAxis::Height => self.start_box.height(),
-            FieldAxis::Radius => outer_radius(&self.start).unwrap_or(0.0),
+            FieldAxis::Radius => 0.0,
         }
     }
 
@@ -482,17 +472,13 @@ impl TransformEntry {
                 )
             }
             EditHandle::Resize(direction) => {
-                let delta = if let Some(radius) = target(FieldAxis::Radius) {
-                    local_delta_for_radius(self.start_value(FieldAxis::Radius), direction, radius)
-                } else {
-                    local_delta_for_size(
-                        &self.start_box,
-                        direction,
-                        target(FieldAxis::Width),
-                        target(FieldAxis::Height),
-                        self.shift,
-                    )
-                };
+                let delta = local_delta_for_size(
+                    &self.start_box,
+                    direction,
+                    target(FieldAxis::Width),
+                    target(FieldAxis::Height),
+                    self.shift,
+                );
                 resize_by_local_delta(
                     &self.start,
                     &self.start_box,
@@ -502,6 +488,8 @@ impl TransformEntry {
                         shift: self.shift,
                         ctrl: self.linked,
                         modes: self.modes,
+                        typed: true,
+                        converted: self.converted.as_ref(),
                     },
                 )
             }
@@ -531,17 +519,6 @@ impl TransformEntry {
                 EntryOutcome::Committed
             }
         }
-    }
-}
-
-/// A polygon or star's outer radius, in millimetres.
-fn outer_radius(object: &ObjectSnapshot) -> Option<f64> {
-    match object {
-        ObjectSnapshot::Primitive(PrimitiveSnapshot {
-            shape: Shape::Polygon { frame, .. } | Shape::Star { frame, .. },
-            ..
-        }) => Some(frame.radius.as_mm()),
-        _ => None,
     }
 }
 

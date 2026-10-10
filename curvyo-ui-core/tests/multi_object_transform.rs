@@ -192,7 +192,8 @@ fn handles_that_are_not_drawn_have_no_hit_area() {
         "hit-testable under 24 px"
     );
 
-    // A star holds the selection to proportional scaling: no east edge handle.
+    // A star makes the corners proportional but the east edge handle exists
+    // (`0019` criteria 18, 19).
     let mut rig = Rig::new();
     let star = rig.document.create_star(
         StarFrame {
@@ -206,10 +207,10 @@ fn handles_that_are_not_drawn_have_no_hit_area() {
     let plain = rig.rect(60.0, 0.0, 40.0, 60.0);
     rig.select(&[star, plain]);
     let group = SelectTool::group_of(&rig.objects(), &rig.selection).unwrap();
-    assert!(group.uniform_only());
+    assert!(group.proportional_corners());
     let b = group.bounds();
     let east = pt(b.max.x, f64::midpoint(b.min.y, b.max.y));
-    assert_ne!(
+    assert_eq!(
         rig.target(east, NONE),
         PressTarget::Handle(EditHandle::Resize(ResizeDirection::E))
     );
@@ -219,10 +220,10 @@ fn handles_that_are_not_drawn_have_no_hit_area() {
     );
 }
 
-/// Criterion 21: a free corner drag and a Ctrl corner drag give a uniform-only
-/// selection the same result: one factor for both axes.
+/// Criterion 19: a free corner drag and a Ctrl corner drag give a selection that
+/// holds a star the same result: one factor for both axes, and nothing converts.
 #[test]
-fn a_uniform_only_selection_ignores_ctrl_and_keeps_one_factor() {
+fn a_proportional_corner_selection_ignores_ctrl_and_keeps_one_factor() {
     let build = || {
         let mut rig = Rig::new();
         let star = rig.document.create_star(
@@ -402,10 +403,10 @@ fn a_typed_angle_and_its_negative_restore_the_selection() {
 }
 
 /// Criterion 34: typed sizes are validated; zero is refused, a huge one is too
-/// large, an unedited Enter writes nothing; a uniform-only selection links the
-/// two fields at the box's aspect ratio.
+/// large, an unedited Enter writes nothing; the two fields are independent for any
+/// selection, also one that holds a star (criterion 34).
 #[test]
-fn the_size_entry_validates_and_links_a_uniform_only_selection() {
+fn the_size_entry_validates_and_its_fields_are_independent() {
     let (mut rig, a, b, _) = two_big_rects();
     rig.select(&[a, b]);
     let entry = group_entry_of(&rig, curvyo_ui_core::EntryKey::Size);
@@ -450,20 +451,20 @@ fn the_size_entry_validates_and_links_a_uniform_only_selection() {
     let plain = rig.rect(60.0, 0.0, 40.0, 40.0);
     rig.select(&[star, plain]);
     let entry = group_entry_of(&rig, curvyo_ui_core::EntryKey::Size);
-    assert!(entry.linked(), "uniform-only: the fields are linked");
-    let text = entry.linked_text(0, "200").expect("the other field");
-    let box_ = *SelectTool::group_of(&rig.objects(), &rig.selection)
-        .unwrap()
-        .bounds();
-    let expected = 200.0 * box_.height() / box_.width();
-    assert_eq!(text, format!("{expected:.1}"));
-    // The size is held: the group box becomes 200 wide.
+    assert!(!entry.linked(), "independent fields");
+    assert_eq!(entry.linked_text(0, "200"), None);
+    // Typing the width alone is a stretch: the star becomes a path, the rectangle
+    // stays one (criteria 34, 53).
+    let before = SelectTool::group_of(&rig.objects(), &rig.selection).unwrap();
+    let height = format!("{:.1}", before.bounds().height());
     assert_eq!(
-        entry.commit(&rig.document, ["200", &text], 0),
+        entry.commit(&rig.document, ["200", &height], 0),
         EntryOutcome::Committed
     );
     let after = SelectTool::group_of(&rig.objects(), &rig.selection).unwrap();
     assert!((after.bounds().width() - 200.0).abs() < 1e-6);
+    assert!(rig.document.path(star).is_some(), "the star became a path");
+    assert!(rig.document.primitive(plain).is_some());
 }
 
 /// Criteria 36 and 37: the skew entry exists for paths only and refuses 90 degrees.

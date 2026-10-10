@@ -490,11 +490,11 @@ fn ac40_primitives_in_the_selection_hide_skew() {
     }
 }
 
-/// Criterion 21: a polygon, a star, a rotated rectangle or a rotated (non-
-/// circular) ellipse makes the selection uniform-only: the edge resize handles
-/// are gone at every size; the corners remain.
+/// Criterion 18 (replacing the removed criterion 21): every selection shows all four
+/// edge resize handles and all four corners, whatever kinds it holds; the kinds a
+/// stretch converts change nothing about the handles.
 #[test]
-fn ac21_uniform_only_selections_have_no_edge_handles() {
+fn ac18_every_selection_has_all_eight_resize_handles() {
     let edge_count = |d: &Document| {
         handles(d, false)
             .iter()
@@ -508,7 +508,7 @@ fn ac21_uniform_only_selections_have_no_edge_handles() {
             .count()
     };
     type Add = fn(&Document);
-    let cases: [(&str, Add); 5] = [
+    let cases: [(&str, Add); 7] = [
         ("polygon", |d| {
             let _ = polygon(d, 20.0, 10.0, 3.0);
         }),
@@ -527,101 +527,50 @@ fn ac21_uniform_only_selections_have_no_edge_handles() {
             });
             rotate(d, e, pt(20.0, 10.0), 0.3);
         }),
-        ("rectangle at 91 degrees", |d| {
+        ("circle", |d| {
+            let c = circle(d, 20.0, 10.0, 4.0);
+            rotate(d, c, pt(20.0, 10.0), 30.0_f64.to_radians());
+        }),
+        ("aligned rectangle", |d| {
             let r = rect(d, 15.0, 5.0, 10.0, 6.0);
-            rotate(d, r, pt(20.0, 8.0), 91.0_f64.to_radians());
+            rotate(d, r, pt(20.0, 8.0), FRAC_PI_2);
+        }),
+        ("plain rectangle", |d| {
+            let _ = rect(d, 15.0, 5.0, 10.0, 6.0);
         }),
     ];
     for (name, add) in cases {
         let d = two_paths(0.0, 0.0, 40.0, 20.0);
         add(&d);
-        assert_eq!(edge_count(&d), 0, "{name}: no edge handle");
-        assert_eq!(corner_count(&d), 4, "{name}: corners stay");
+        assert_eq!(edge_count(&d), 4, "{name}");
+        assert_eq!(corner_count(&d), 4, "{name}");
     }
-    // Not uniform-only: an aligned rectangle (90, 180, -90 degrees), an axis-
-    // aligned ellipse, a circle at any rotation.
-    let aligned: [(&str, Add); 4] = [
-        ("rect 90", |d| {
-            let r = rect(d, 15.0, 5.0, 10.0, 6.0);
-            rotate(d, r, pt(20.0, 8.0), FRAC_PI_2);
-        }),
-        ("rect 180", |d| {
-            let r = rect(d, 15.0, 5.0, 10.0, 6.0);
-            rotate(d, r, pt(20.0, 8.0), std::f64::consts::PI);
-        }),
-        ("ellipse 0", |d| {
-            let _ = d.create_ellipse(EllipseFrame {
-                center: pt(20.0, 10.0),
-                rx: Length::from_mm(6.0),
-                ry: Length::from_mm(3.0),
-            });
-        }),
-        ("circle at 30 degrees", |d| {
-            let c = circle(d, 20.0, 10.0, 4.0);
-            rotate(d, c, pt(20.0, 10.0), 30.0_f64.to_radians());
-        }),
-    ];
-    for (name, add) in aligned {
-        let d = two_paths(0.0, 0.0, 40.0, 20.0);
-        add(&d);
-        assert_eq!(edge_count(&d), 4, "{name}: edge handles stay");
-    }
-    // A rotation within 1e-9 of 90 degrees is aligned; 1e-6 away is not.
-    let d = two_paths(0.0, 0.0, 40.0, 20.0);
-    let r = rect(&d, 15.0, 5.0, 10.0, 6.0);
-    rotate(&d, r, pt(20.0, 8.0), FRAC_PI_2 + 1e-10);
-    assert_eq!(edge_count(&d), 4, "within 1e-9 rad");
-    let d = two_paths(0.0, 0.0, 40.0, 20.0);
-    let r = rect(&d, 15.0, 5.0, 10.0, 6.0);
-    rotate(&d, r, pt(20.0, 8.0), FRAC_PI_2 + 1e-6);
-    assert_eq!(edge_count(&d), 0, "1e-6 rad off is not aligned");
 }
 
-/// Criterion 21: the cause line lists the kinds present in the order polygon,
-/// star, rotated rectangle, rotated ellipse; a circle never counts.
+/// Criteria 53 and 55 (replacing the cause line of the removed criterion 21): the
+/// shapes a stretch would convert are counted by kind in the order polygon, star,
+/// rotated rectangle, rotated ellipse; a circle never counts.
 #[test]
-fn ac21_cause_line_wording() {
-    let line_of = |d: &Document| {
+fn ac55_converting_kinds_are_counted() {
+    let counts_of = |d: &Document| {
         SelectTool::group_of(&snapshots(d), &selection(d))
             .unwrap()
-            .uniform_cause_line()
+            .converting()
+            .as_array()
     };
     let d = two_paths(0.0, 0.0, 40.0, 20.0);
+    assert_eq!(counts_of(&d), [0, 0, 0, 0]);
     let _ = star(&d, 10.0, 10.0, 3.0);
     let r = rect(&d, 15.0, 5.0, 10.0, 6.0);
     rotate(&d, r, pt(20.0, 8.0), 0.3);
-    assert_eq!(
-        line_of(&d).as_deref(),
-        Some("Holds a star and a rotated rectangle")
-    );
+    assert_eq!(counts_of(&d), [0, 1, 1, 0]);
     let _ = polygon(&d, 30.0, 10.0, 3.0);
-    assert_eq!(
-        line_of(&d).as_deref(),
-        Some("Holds a polygon, a star and a rotated rectangle")
-    );
-    let e = d.create_ellipse(EllipseFrame {
-        center: pt(34.0, 10.0),
-        rx: Length::from_mm(3.0),
-        ry: Length::from_mm(2.0),
-    });
-    rotate(&d, e, pt(34.0, 10.0), 0.4);
-    assert_eq!(
-        line_of(&d).as_deref(),
-        Some("Holds a polygon, a star, a rotated rectangle and a rotated ellipse")
-    );
-    // A circle never counts as rotated; and an ordinary selection has no line.
-    let d = two_paths(0.0, 0.0, 40.0, 20.0);
-    let c = circle(&d, 20.0, 10.0, 4.0);
-    rotate(&d, c, pt(20.0, 10.0), 0.4);
-    assert_eq!(line_of(&d), None);
-    let d = two_paths(0.0, 0.0, 40.0, 20.0);
-    let _ = polygon(&d, 20.0, 10.0, 3.0);
-    assert_eq!(line_of(&d).as_deref(), Some("Holds a polygon"));
+    assert_eq!(counts_of(&d), [1, 1, 1, 0]);
 }
 
-/// Criterion 14: a handle that is not drawn has no hit area: a uniform-only
-/// selection at a large size: the pointer on the north edge midpoint is not
-/// the N resize handle.
+/// Criterion 14: a handle that is not drawn has no hit area: the skew handle of a
+/// mixed selection is not there; the north edge handle is (every selection has the
+/// edge handles, criterion 18).
 #[test]
 fn ac14_a_handle_that_is_not_drawn_has_no_hit_area() {
     let d = two_paths(0.0, 0.0, 40.0, 20.0);
@@ -630,8 +579,7 @@ fn ac14_a_handle_that_is_not_drawn_has_no_hit_area() {
     let sel = selection(&d);
     let hit = SelectTool::group_handle_at(&objects, &sel, pt(20.0, 0.0), tol(), false, true)
         .map(|(_, e)| e);
-    assert_ne!(hit, Some(EditHandle::Resize(N)));
-    assert_eq!(hit, None);
+    assert_eq!(hit, Some(EditHandle::Resize(N)));
     // The skew handle of a mixed selection is not there either.
     let hit = SelectTool::group_handle_at(&objects, &sel, pt(20.0, -4.0), tol(), false, true)
         .map(|(_, e)| e);

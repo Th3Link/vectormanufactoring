@@ -5,11 +5,12 @@
 //! out of `select_tool.rs`; a child module, so it shares `SelectTool`'s
 //! private state.
 
-use curvyo_document_core::{Document, ObjectSnapshot, Point, Tolerance};
+use curvyo_document_core::{Document, ObjectSnapshot, PathSnapshot, Point, Tolerance};
 
 use super::{SelectDoubleClickOutcome, SelectDrag, SelectTool, sole_selected};
 use crate::ResizeDirection;
 use crate::anchor_id_minter::AnchorIdMinter;
+use crate::conversion::{ConversionCounts, converted_counts};
 use crate::group_entry::GroupEntry;
 use crate::hit_test_object::hit_test_object;
 use crate::move_entry::MoveEntry;
@@ -75,7 +76,26 @@ pub enum KeyEntryRefusal {
     SkewNeedsPath,
 }
 
+/// The shapes a commit of the one object `start` turned into paths: it was a
+/// primitive and the document holds a path under its id now.
+fn single_conversion(document: &Document, start: &ObjectSnapshot) -> ConversionCounts {
+    document
+        .object(start.id())
+        .map(|now| converted_counts(std::slice::from_ref(start), &[now]))
+        .unwrap_or_default()
+}
+
 impl OpenEntry {
+    /// The paths this entry would turn shapes into, for the session to give real
+    /// anchor ids ([`SelectTool::mint_conversion_ids`]).
+    pub(super) fn converted_paths_mut(&mut self) -> &mut [Option<PathSnapshot>] {
+        match self {
+            Self::Group(entry) => entry.converted_mut(),
+            Self::Transform(entry) => entry.converted_mut(),
+            Self::Param(_) | Self::Skew(_) | Self::Move(_) => &mut [],
+        }
+    }
+
     pub(super) fn handle(&self) -> EditHandle {
         match self {
             Self::Transform(entry) => entry.handle(),
@@ -171,17 +191,29 @@ impl SelectTool {
         let Some(entry) = self.entry.as_ref() else {
             return EntryOutcome::Unchanged;
         };
+        let mut converted = ConversionCounts::default();
         let outcome = match entry {
-            OpenEntry::Transform(entry) => entry.commit(document, texts, last_edited),
+            OpenEntry::Transform(entry) => {
+                let outcome = entry.commit(document, texts, last_edited);
+                if outcome == EntryOutcome::Committed {
+                    converted = single_conversion(document, entry.object());
+                }
+                outcome
+            }
             OpenEntry::Param(entry) => entry.commit(document, texts[0]),
             OpenEntry::Skew(entry) => entry.commit(document, texts[0]),
-            OpenEntry::Group(entry) => entry.commit(document, texts, last_edited),
+            OpenEntry::Group(entry) => {
+                let (outcome, counts) = entry.commit_counting(document, texts, last_edited);
+                converted = counts;
+                outcome
+            }
             // The typed move has its own commit: it needs the mode.
             OpenEntry::Move(_) => EntryOutcome::Unchanged,
         };
         if !matches!(outcome, EntryOutcome::Invalid { .. }) {
             self.entry = None;
         }
+        self.record_conversion(converted);
         outcome
     }
 
@@ -450,7 +482,7 @@ mod tests {
     /// The size entry of a polygon or star is the outer radius, as for the
     /// double-click route.
     #[test]
-    fn s_on_a_polygon_or_star_opens_the_outer_radius() {
+    fn s_on_a_polygon_or_star_opens_the_size_entry() {
         let document = Document::new(1);
         let frame = StarFrame {
             center: Point::new(0.0, 0.0),
@@ -467,8 +499,10 @@ mod tests {
             let (tool, result) = open(&document, &[id], EntryKey::Size);
             assert_eq!(result, Ok(()));
             let entry = tool.entry().expect("an entry");
-            assert_eq!(entry.kind(), EntryKind::OuterRadius);
-            assert_eq!(entry.fields()[0].prefill, "12.0");
+            // `0019` criterion 56: W and H of the frame square, not one radius.
+            assert_eq!(entry.kind(), EntryKind::Size);
+            assert_eq!(entry.fields()[0].prefill, "24.0");
+            assert_eq!(entry.fields()[1].prefill, "24.0");
         }
     }
 

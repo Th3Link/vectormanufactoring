@@ -256,7 +256,6 @@ impl Session {
             kind: match entry.kind() {
                 EntryKind::Angle => "angle",
                 EntryKind::Size => "size",
-                EntryKind::OuterRadius => "radius",
                 EntryKind::CornerRadius => "corner-radius",
                 EntryKind::InnerRatio => "inner-ratio",
                 EntryKind::Skew => "skew",

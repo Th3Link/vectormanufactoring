@@ -9,22 +9,23 @@
 //! resize arithmetic is in [`crate::transform_primitive`].
 
 use curvyo_document_core::{
-    Angle, Corner, Document, Length, ObjectSnapshot, Point, PrimitiveSnapshot, Shape, Vec2,
-    effective_corner_radii,
+    Angle, Corner, Document, Length, ObjectSnapshot, PathSnapshot, Point, PrimitiveSnapshot, Shape,
+    Vec2, effective_corner_radii,
 };
 
 use crate::ResizeDirection;
+use crate::group_transform::is_stretch;
 use crate::oriented_box::OrientedBox;
 use crate::param_edit::{PARAM_EQUAL_EPSILON, apply_param, radius_is_limited, value_from_pointer};
 use crate::param_handles::ParamHandle;
 use crate::skew_math::{skew_angle, skew_factor, skew_frame};
 use crate::transform_commit::{commit_gesture, sane_or};
-use crate::transform_handle_layout::{EditHandle, Side};
+use crate::transform_handle_layout::{EditHandle, Side, is_corner};
 use crate::transform_math::{
     is_polygon_or_star, resize_anchor_local_position, resize_local_box, rotate_delta_for,
     rotate_pivot, scaled_and_floored, stroke_or_radius_factor,
 };
-use crate::transform_primitive::resize_primitive;
+use crate::transform_primitive::{resize_primitive, scaled_star_frame};
 
 /// A resize/corner-radius drag can never drive a stroke width to zero
 /// or below (acceptance criterion 8 of `specs/0005-object-transform/
@@ -107,10 +108,16 @@ pub struct ScaleModes {
 /// AC 7), Ctrl (proportional, AC 5) and the [`ScaleModes`] captured at the
 /// press (AC 28).
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct ResizeOptions {
+pub(crate) struct ResizeOptions<'a> {
     pub(crate) shift: bool,
     pub(crate) ctrl: bool,
     pub(crate) modes: ScaleModes,
+    /// A typed size: a polygon's or star's corner then takes free W and H like a
+    /// rectangle's, where a corner drag keeps the diagonal rule.
+    pub(crate) typed: bool,
+    /// The path a polygon or star becomes if the resize is a stretch
+    /// (`specs/0019-multi-object-transform/` criterion 56).
+    pub(crate) converted: Option<&'a PathSnapshot>,
 }
 
 /// The press point of a Select-tool drag, its dead zone and the handle
@@ -188,6 +195,10 @@ pub(crate) struct TransformDrag {
     /// ([`CornerLinking::is_unlinked_with`]) and frozen for the whole drag.
     /// `false` for every other handle.
     pub(crate) unlinked: bool,
+    /// For an edge resize of a polygon or star, the path it becomes (criterion
+    /// 56), built at the press so that the preview and the commit are the same
+    /// snapshot.
+    pub(crate) converted: Option<PathSnapshot>,
 }
 
 /// What the live readout of a corner radius drag needs beyond the resolved
@@ -261,6 +272,8 @@ impl TransformDrag {
                         shift,
                         ctrl,
                         modes: self.modes,
+                        typed: false,
+                        converted: self.converted.as_ref(),
                     },
                 )
             }
@@ -331,7 +344,7 @@ pub(crate) fn pivot_for(
 ) -> Option<Point> {
     match handle {
         EditHandle::Resize(direction) => {
-            let local = if is_polygon_or_star(object) {
+            let local = if is_polygon_or_star(object) && is_corner(direction) {
                 box_.local_center()
             } else {
                 resize_anchor_local_position(box_.min, box_.max, direction, shift)
@@ -367,41 +380,119 @@ pub(crate) fn resize_by_local_delta(
     local_delta: Vec2,
     options: ResizeOptions,
 ) -> ObjectSnapshot {
-    let ResizeOptions { shift, ctrl, modes } = options;
-    let (mut resized, factor) = match start {
-        ObjectSnapshot::Primitive(primitive) => {
-            let (resized, factor) = resize_primitive(
-                primitive,
-                start_box,
-                direction,
-                local_delta,
-                (shift, ctrl),
-                modes.radius,
-            );
-            (ObjectSnapshot::Primitive(resized), factor)
-        }
-        ObjectSnapshot::Path(path) => {
-            let resized = resize_local_box(
-                start_box.min,
-                start_box.max,
-                direction,
-                local_delta,
-                shift,
-                ctrl,
-            );
-            let anchor_local =
-                resize_anchor_local_position(start_box.min, start_box.max, direction, shift);
-            let scaled = path.scaled(start_box.to_document(anchor_local), resized.sx, resized.sy);
-            (
-                ObjectSnapshot::Path(scaled),
-                stroke_or_radius_factor(resized.sx, resized.sy),
-            )
+    let ResizeOptions {
+        shift, ctrl, modes, ..
+    } = options;
+    let (mut resized, factor) = if let Some(stretched) =
+        polygon_star_stretch(start, start_box, direction, local_delta, &options)
+    {
+        stretched
+    } else {
+        match start {
+            ObjectSnapshot::Primitive(primitive) => {
+                let (resized, factor) = resize_primitive(
+                    primitive,
+                    start_box,
+                    direction,
+                    local_delta,
+                    (shift, ctrl),
+                    modes.radius,
+                );
+                (ObjectSnapshot::Primitive(resized), factor)
+            }
+            ObjectSnapshot::Path(path) => {
+                let resized = resize_local_box(
+                    start_box.min,
+                    start_box.max,
+                    direction,
+                    local_delta,
+                    shift,
+                    ctrl,
+                );
+                let anchor_local =
+                    resize_anchor_local_position(start_box.min, start_box.max, direction, shift);
+                let scaled =
+                    path.scaled(start_box.to_document(anchor_local), resized.sx, resized.sy);
+                (
+                    ObjectSnapshot::Path(scaled),
+                    stroke_or_radius_factor(resized.sx, resized.sy),
+                )
+            }
         }
     };
     if modes.stroke == StrokeScaling::Proportional {
         scale_stroke(&mut resized, factor);
     }
     sane_or(start, resized)
+}
+
+/// A polygon's or star's resize along its box axes (`specs/0019-multi-object-
+/// transform/` criterion 56): an edge drag, or a typed size, with the opposite side
+/// (or the centre under Shift; always the centre for a corner) fixed. Unequal
+/// factors are a stretch: the shape becomes its `converted` path, scaled along the
+/// box's axes. Equal factors are a uniform scale and keep the shape. `None` for any
+/// other object, and for a corner drag, which keeps the diagonal rule of
+/// [`resize_primitive`] (always proportional, `0005` criterion 11).
+fn polygon_star_stretch(
+    start: &ObjectSnapshot,
+    start_box: &OrientedBox,
+    direction: ResizeDirection,
+    local_delta: Vec2,
+    options: &ResizeOptions,
+) -> Option<(ObjectSnapshot, f64)> {
+    let ObjectSnapshot::Primitive(primitive) = start else {
+        return None;
+    };
+    if !is_polygon_or_star(start) || (is_corner(direction) && !options.typed) {
+        return None;
+    }
+    let resized = resize_local_box(
+        start_box.min,
+        start_box.max,
+        direction,
+        local_delta,
+        options.shift,
+        options.ctrl,
+    );
+    let (sx, sy) = (resized.sx, resized.sy);
+    if !is_stretch(sx, sy) {
+        let shape = match primitive.shape {
+            Shape::Polygon { frame, point_count } => Shape::Polygon {
+                frame: scaled_star_frame(frame, sx),
+                point_count,
+            },
+            Shape::Star {
+                frame,
+                point_count,
+                inner_ratio,
+            } => Shape::Star {
+                frame: scaled_star_frame(frame, sx),
+                point_count,
+                inner_ratio,
+            },
+            _ => return None,
+        };
+        return Some((
+            ObjectSnapshot::Primitive(PrimitiveSnapshot {
+                shape,
+                ..primitive.clone()
+            }),
+            sx,
+        ));
+    }
+    let Some(path) = options.converted else {
+        return Some((start.clone(), 1.0));
+    };
+    let pivot_local = if is_corner(direction) {
+        start_box.local_center()
+    } else {
+        resize_anchor_local_position(start_box.min, start_box.max, direction, options.shift)
+    };
+    let scaled = path.scaled_along(start_box.to_document(pivot_local), sx, sy, start_box.angle);
+    Some((
+        ObjectSnapshot::Path(scaled),
+        stroke_or_radius_factor(sx, sy),
+    ))
 }
 
 /// The object rotated by `delta` about `pivot` (criteria 12-17): the one
