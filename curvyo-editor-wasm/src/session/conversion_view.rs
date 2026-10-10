@@ -67,10 +67,9 @@ impl Session {
         if let Some(entry) = self.select.group_entry() {
             return total(entry.conversion_counts(texts, last_edited));
         }
-        self.select
-            .entry()
-            .map(|entry| total(entry.conversion_counts(texts, last_edited)))
-            .unwrap_or(0)
+        self.select.entry().map_or(0, |entry| {
+            total(entry.conversion_counts(texts, last_edited))
+        })
     }
 
     /// The shapes the last commit turned into paths, once (the notice of criterion

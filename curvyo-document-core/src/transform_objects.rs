@@ -92,16 +92,7 @@ impl Document {
         results: &[ObjectSnapshot],
         write_stroke_width: bool,
     ) -> Result<(), ObjectEditError> {
-        if write_stroke_width
-            && !results
-                .iter()
-                .all(|r| stroke_width_is_writable(Some(r.style().stroke.width)))
-        {
-            return Err(ObjectEditError::InvalidStrokeWidth);
-        }
-        if !results.iter().all(is_finite) {
-            return Err(ObjectEditError::NonFiniteGeometry);
-        }
+        check_numbers(results, write_stroke_width)?;
         let tree = self.loro().get_tree(OBJECTS_TREE);
         let planned = results
             .iter()
@@ -195,6 +186,25 @@ impl Document {
         self.commit_with_label("transform_objects");
         Ok(())
     }
+}
+
+/// The checks of the numbers of `results`, before anything else: the stroke widths
+/// (when they are written) and the finiteness of every coordinate and angle.
+fn check_numbers(
+    results: &[ObjectSnapshot],
+    write_stroke_width: bool,
+) -> Result<(), ObjectEditError> {
+    if write_stroke_width
+        && !results
+            .iter()
+            .all(|r| stroke_width_is_writable(Some(r.style().stroke.width)))
+    {
+        return Err(ObjectEditError::InvalidStrokeWidth);
+    }
+    if !results.iter().all(is_finite) {
+        return Err(ObjectEditError::NonFiniteGeometry);
+    }
+    Ok(())
 }
 
 impl Document {
