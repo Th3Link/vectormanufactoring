@@ -2,10 +2,13 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { DocumentSection } from "@/components/panel/DocumentSection";
+import { PanelTabStrip } from "@/components/panel/PanelTabStrip";
 import { StyleSection } from "@/components/panel/StyleSection";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Tooltip, TooltipProvider } from "@/components/ui/tooltip";
 import type { DocumentPanelApi } from "@/hooks/useDocumentPanel";
 import type { EditorSession } from "@/hooks/useEditorSession";
+import { useFormats } from "@/hooks/useFormats";
 import { useStylePanel } from "@/hooks/useStylePanel";
 
 /** The panel's width, px (`docs/design-system.md`, "Properties panel"). */
@@ -23,16 +26,25 @@ interface PropertiesPanelProps {
  * edge collapses it (state per session, default open). Collapsed, the content
  * is hidden and out of the tab order and the canvas region takes the width; the document does not move
  * on screen because the resize keeps the view's top-left origin.
- * `Shift+Ctrl+F` expands the panel and moves focus to its first control; it
- * never collapses it and is ignored during a canvas drag.
+ * `Shift+Ctrl+F` (Style, or Document with nothing selected) and `Shift+Ctrl+D`
+ * (Document) expand the panel, choose the tab and move focus to its first
+ * control; they never collapse it and are ignored during a canvas drag.
+ *
+ * The header row holds the strip of tabs and the subject line and does not
+ * scroll; the body below it does (`specs/0043-properties-tabs/` criteria 18,
+ * 19). Which tab is active, and when it switches, is the session's rule.
  */
 export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps) {
   const [open, setOpen] = useState(true);
   const panelId = useId();
   const asideRef = useRef<HTMLElement>(null);
-  const focusAfterOpen = useRef(false);
+  /** A shortcut asked for the first control: it is focused once the chosen
+   * tab's body has rendered (and the panel has opened). */
+  const focusAfterShortcut = useRef(false);
   const panel = useStylePanel(editor);
   const { getSession } = editor;
+  const formats = useFormats(getSession, doc);
+  const { shortcut } = doc;
   const returnFocus = () => editor.containerRef.current?.focus();
 
   const setOpenKeepingView = useCallback(
@@ -68,33 +80,30 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (
-        !(event.shiftKey && (event.ctrlKey || event.metaKey)) ||
-        event.key.toLowerCase() !== "f"
-      ) {
+      const key = event.key.toLowerCase();
+      if (!(event.shiftKey && (event.ctrlKey || event.metaKey)) || (key !== "f" && key !== "d")) {
         return;
       }
       event.preventDefault();
       if (getSession()?.pointer_is_down()) {
         return;
       }
-      if (open) {
-        focusFirstControl();
-      } else {
-        focusAfterOpen.current = true;
+      focusAfterShortcut.current = true;
+      shortcut(key === "f" ? "style" : "document");
+      if (!open) {
         setOpenKeepingView(true);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, getSession, focusFirstControl, setOpenKeepingView]);
+  }, [open, getSession, shortcut, setOpenKeepingView]);
 
   useEffect(() => {
-    if (open && focusAfterOpen.current) {
-      focusAfterOpen.current = false;
+    if (open && focusAfterShortcut.current) {
+      focusAfterShortcut.current = false;
       focusFirstControl();
     }
-  }, [open, focusFirstControl]);
+  }, [open, doc.view, focusFirstControl]);
 
   // A control that had keyboard focus can leave the tree when the selection or
   // the tool changes (the panel becomes empty or shows the Document section):
@@ -110,6 +119,12 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, panel.view.scopeKey]);
 
+  const subject =
+    doc.view.content === "document"
+      ? doc.view.presets.subject
+      : doc.view.content === "style"
+        ? panel.view.subject
+        : "";
   const label = open ? "Hide properties panel" : "Show properties panel";
   return (
     <TooltipProvider>
@@ -160,7 +175,11 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
             // A press on dead space (the heading, a label) must not leave the
             // focus on the panel, where the tool letters would do nothing: it
             // goes back to the canvas. A control keeps the press.
-            if (!(event.target as HTMLElement).closest("input, button, [role], select")) {
+            if (
+              !(event.target as HTMLElement).closest(
+                "input, button, [role]:not([role=tabpanel]), select",
+              )
+            ) {
               event.preventDefault();
               returnFocus();
             }
@@ -191,15 +210,47 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
               returnFocus();
             }
           }}
-          className="properties-panel h-full w-[280px] border-l border-[color-mix(in_srgb,var(--toolbar-icon)_25%,transparent)] bg-[var(--panel-bg)] p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--editor-accent)]"
+          className="properties-panel flex h-full w-[280px] flex-col overflow-hidden border-l border-[color-mix(in_srgb,var(--toolbar-icon)_25%,transparent)] bg-[var(--panel-bg)] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--editor-accent)]"
         >
-          {doc.view.content === "document" ? (
-            <DocumentSection document={doc} onReturnFocus={returnFocus} />
-          ) : doc.view.content === "style" ? (
-            <StyleSection panel={panel} onReturnFocus={returnFocus} />
-          ) : null}
+          <Tabs
+            value={doc.view.activeTab}
+            onValueChange={doc.pressTab}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <div className="flex h-7 shrink-0 items-center justify-between gap-2 px-3 pt-3 pb-2 box-content">
+              <PanelTabStrip tabs={doc.view.tabs} onReturnFocus={returnFocus} />
+              <PanelSubject text={subject} />
+            </div>
+            {/* Keyed on the tab: the scroll position starts at the top on every
+                tab change (criterion 19). */}
+            <div
+              key={doc.view.activeTab}
+              className="properties-panel-body min-h-0 flex-1 px-3 pb-3"
+            >
+              <TabsContent value={doc.view.activeTab} tabIndex={-1} className="outline-none">
+                {doc.view.content === "document" ? (
+                  <DocumentSection document={doc} formats={formats} onReturnFocus={returnFocus} />
+                ) : doc.view.content === "style" ? (
+                  <StyleSection panel={panel} onReturnFocus={returnFocus} />
+                ) : null}
+              </TabsContent>
+            </div>
+          </Tabs>
         </aside>
       </div>
     </TooltipProvider>
+  );
+}
+
+/** The subject line at the right of the header row: 12 px muted, one line, the
+ * full text in a tooltip. */
+function PanelSubject({ text }: { text: string }) {
+  if (text === "") {
+    return null;
+  }
+  return (
+    <Tooltip side="left" content={text}>
+      <p className="min-w-0 truncate text-xs text-[var(--panel-muted-fg)]">{text}</p>
+    </Tooltip>
   );
 }

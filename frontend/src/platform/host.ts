@@ -35,10 +35,66 @@ function download(bytes: number[]) {
   URL.revokeObjectURL(url);
 }
 
+/** Where the browser build keeps the text of the formats file
+ * (`specs/0045-document-formats-library/` criterion 31). Every access is
+ * guarded: a failure means the built-in formats only. */
+const FORMATS_KEY = "curvyo.document-formats";
+
+function readStored(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+/** Browser Import: a picked `.toml` file's name and text, or `null` when the
+ * picker was cancelled. */
+function pickTextFile(): Promise<{ name: string; text: string } | null> {
+  return new Promise((resolve, reject) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".toml";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) {
+        resolve(null);
+        return;
+      }
+      file.text().then((text) => resolve({ name: file.name, text }), reject);
+    };
+    input.addEventListener("cancel", () => resolve(null));
+    input.click();
+  });
+}
+
+function downloadText(name: string, text: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 const browserCommands: Record<string, (args?: Record<string, unknown>) => unknown> = {
   take_pending_open: () => null,
   confirm_project_opened: () => undefined,
   save_project_bytes: (args) => download(args?.bytes as number[]),
+  read_formats_file: () => readStored(FORMATS_KEY),
+  write_formats_file: (args) => window.localStorage.setItem(FORMATS_KEY, String(args?.text)),
+  set_formats_file_aside: () => {
+    const text = readStored(FORMATS_KEY);
+    if (text !== null) {
+      window.localStorage.setItem(`${FORMATS_KEY}.broken`, text);
+    }
+    window.localStorage.removeItem(FORMATS_KEY);
+  },
+  import_formats_file: () => pickTextFile(),
+  export_formats_file: (args) => {
+    downloadText("curvyo-formats.toml", String(args?.text));
+    return true;
+  },
 };
 
 /** Same contract as Tauri's `invoke`. */
@@ -50,9 +106,15 @@ export function invoke<T>(
     return tauriInvoke<T>(command, args);
   }
   const handler = browserCommands[command];
-  return handler
-    ? Promise.resolve(handler(args) as T)
-    : Promise.reject(new Error(`${command} is not available in the browser`));
+  if (!handler) {
+    return Promise.reject(new Error(`${command} is not available in the browser`));
+  }
+  try {
+    return Promise.resolve(handler(args) as T);
+  } catch (error) {
+    // A guarded storage access that fails is a rejected command, not a throw.
+    return Promise.reject(error);
+  }
 }
 
 /** Same contract as Tauri's `listen`. */

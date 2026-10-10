@@ -279,12 +279,14 @@ input[type="range"].select-bar-slider-mixed::-moz-range-thumb {
   opacity: 1;
 }
 
-/* The panel scrolls as a whole: one thin scrollbar, no scroll chaining. */
-.properties-panel {
+/* The body scrolls under the fixed header row (`0043`): one thin scrollbar, no
+   scroll chaining. */
+.properties-panel-body {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+  scroll-padding-block: 12px;
 }
 
 /* 0017 criterion 35: nothing in the panel selects or drags as text except a

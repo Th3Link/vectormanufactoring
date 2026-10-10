@@ -2,8 +2,19 @@ import { useCallback, useMemo, useState } from "react";
 
 import type { WasmSession } from "@/lib/editorSession";
 
-/** What the Properties panel shows (`curvyo-ui-core::panel_content`). */
+/** What the Properties panel's body shows (`curvyo-ui-core::panel_content`). */
 export type PanelContent = "document" | "style" | "empty";
+
+/** One tab of the panel's strip (`curvyo-ui-core::panel_tabs`). */
+export interface PanelTabView {
+  /** Sent back on a press: "document" or "style". */
+  name: string;
+  /** The accessible name. */
+  label: string;
+  tooltip: string;
+  /** False for the dimmed Style tab with nothing in scope. */
+  enabled: boolean;
+}
 
 /** The unit symbols the document stores (`DisplayUnit`). */
 export type UnitSymbol = "mm" | "cm" | "in";
@@ -43,6 +54,9 @@ export interface PresetsView {
  * text is formatted in Rust. */
 export interface DocumentView {
   content: PanelContent;
+  /** The active tab's name. */
+  activeTab: string;
+  tabs: PanelTabView[];
   unit: UnitSymbol;
   widthText: string;
   heightText: string;
@@ -58,6 +72,8 @@ export interface DocumentView {
  * formats live in Rust). */
 const INITIAL: DocumentView = {
   content: "document",
+  activeTab: "document",
+  tabs: [],
   unit: "mm",
   widthText: "",
   heightText: "",
@@ -92,12 +108,31 @@ function readPresets(session: WasmSession): PresetsView {
   return view;
 }
 
+function readPanel(session: WasmSession): Pick<DocumentView, "content" | "activeTab" | "tabs"> {
+  const raw = session.panel_view();
+  const enabled = raw.tab_enabled;
+  const labels = raw.tab_labels;
+  const tooltips = raw.tab_tooltips;
+  const panel = {
+    content: raw.content as PanelContent,
+    activeTab: raw.active,
+    tabs: Array.from(raw.tab_names, (name, index) => ({
+      name,
+      label: labels[index],
+      tooltip: tooltips[index],
+      enabled: enabled[index] === 1,
+    })),
+  };
+  raw.free();
+  return panel;
+}
+
 function readView(session: WasmSession | null): DocumentView {
   if (!session) {
     return INITIAL;
   }
   return {
-    content: session.panel_content() as PanelContent,
+    ...readPanel(session),
     unit: session.display_unit() as UnitSymbol,
     widthText: session.document_side_text("width"),
     heightText: session.document_side_text("height"),
@@ -121,6 +156,12 @@ export interface DocumentPanelApi {
   /** A press on an orientation item. */
   setOrientation: (orientation: "portrait" | "landscape") => void;
   fit: () => FitResult;
+  /** Re-reads the view after a command that did not go through this hook. */
+  refresh: () => void;
+  /** A press on a tab of the strip (also an arrow key on it). */
+  pressTab: (name: string) => void;
+  /** Shift+Ctrl+F or Shift+Ctrl+D: the tab the shortcut names. */
+  shortcut: (tab: "style" | "document") => void;
 }
 
 interface EditorHandle {
@@ -206,10 +247,31 @@ export function useDocumentPanel(editor: EditorHandle): DocumentPanelApi {
     return { kind: outcome as "fitted" | "already-fits" | "empty" | "blocked" };
   }, [getSession, refresh, refreshCursor]);
 
+  const pressTab = useCallback(
+    (name: string) => {
+      getSession()?.press_panel_tab(name);
+      refresh();
+    },
+    [getSession, refresh],
+  );
+
+  const shortcut = useCallback(
+    (tab: "style" | "document") => {
+      const session = getSession();
+      if (tab === "style") {
+        session?.panel_shortcut_style();
+      } else {
+        session?.panel_shortcut_document();
+      }
+      refresh();
+    },
+    [getSession, refresh],
+  );
+
   const cursorText = useCallback(
     (xMm: number, yMm: number) => getSession()?.cursor_text(xMm, yMm) ?? "",
     [getSession],
   );
 
-  return { view, cursorText, setSide, setUnit, pickPreset, setOrientation, fit };
+  return { view, cursorText, setSide, setUnit, pickPreset, setOrientation, fit, refresh, pressTab, shortcut };
 }

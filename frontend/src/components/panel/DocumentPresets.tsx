@@ -15,7 +15,7 @@ function tooltipOf(text: string) {
 }
 
 /** A page glyph: 9 x 12 portrait or 12 x 9 landscape, 16 px, 1.5 px stroke. */
-function PageGlyph({ landscape }: { landscape: boolean }) {
+export function PageGlyph({ landscape }: { landscape: boolean }) {
   return (
     <svg
       width="16"
