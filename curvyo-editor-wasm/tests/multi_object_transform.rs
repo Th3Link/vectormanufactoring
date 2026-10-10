@@ -209,7 +209,9 @@ fn a_selected_objects_outline_moves_the_selection() {
     let mut session = session();
     select_both(&mut session);
     let before = objects(&session);
-    drag(&mut session, pt(20.0, 50.0), pt(30.0, 50.0));
+    // On the left edge of the first rectangle, away from the edge handle at (20, 50)
+    // and the corner handle at (20, 20), which take a press first.
+    drag(&mut session, pt(20.0, 35.0), pt(30.0, 35.0));
     let after = objects(&session);
     for index in [0, 1] {
         assert_eq!(
