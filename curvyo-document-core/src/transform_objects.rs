@@ -18,6 +18,7 @@ use crate::shape_radii::checked;
 use crate::shapes::write_stroke_width_if_changed;
 use crate::style_codec::stroke_width_is_writable;
 use crate::subpath_codec::anchor_positions;
+use crate::units::Point;
 
 /// One object of the call, resolved against the document before any write.
 enum Planned<'a> {
@@ -69,7 +70,12 @@ impl Document {
     /// exists, or an object is no longer of the kind its result says;
     /// [`ObjectEditError::InvalidStrokeWidth`] for a width that is not finite and
     /// above zero (only when `write_stroke_width`);
-    /// [`ObjectEditError::InvalidRadius`] for a corner radius that is not finite.
+    /// [`ObjectEditError::InvalidRadius`] for a corner radius that is not finite;
+    /// [`ObjectEditError::NonFiniteGeometry`] for any other number of a result (a
+    /// position, size, handle or rotation) that is not finite: a NaN or an
+    /// infinity would be saved as `null`. The gesture layer already refuses such
+    /// results; this is the second guard (`docs/technical-debt.md`: the older
+    /// single-object writers have none).
     pub fn transform_objects(
         &self,
         results: &[ObjectSnapshot],
@@ -81,6 +87,9 @@ impl Document {
                 .all(|r| stroke_width_is_writable(Some(r.style().stroke.width)))
         {
             return Err(ObjectEditError::InvalidStrokeWidth);
+        }
+        if !results.iter().all(is_finite) {
+            return Err(ObjectEditError::NonFiniteGeometry);
         }
         let tree = self.loro().get_tree(OBJECTS_TREE);
         let planned = results
@@ -156,6 +165,46 @@ impl Document {
         }
         self.commit_with_label("transform_objects");
         Ok(())
+    }
+}
+
+/// Whether every number of `object`'s geometry (shape, rotation, anchors and
+/// handles; not the corner radii) is finite.
+fn is_finite(object: &ObjectSnapshot) -> bool {
+    let point = |p: Point| p.x.is_finite() && p.y.is_finite();
+    let rotation = object.rotation().as_radians().is_finite();
+    match object {
+        ObjectSnapshot::Primitive(primitive) => {
+            rotation
+                && match &primitive.shape {
+                    // The corner radii have their own refusal (`InvalidRadius`).
+                    Shape::Rect { bounds, .. } => {
+                        point(bounds.origin)
+                            && bounds.width.as_mm().is_finite()
+                            && bounds.height.as_mm().is_finite()
+                    }
+                    Shape::Ellipse { frame } => {
+                        point(frame.center)
+                            && frame.rx.as_mm().is_finite()
+                            && frame.ry.as_mm().is_finite()
+                    }
+                    Shape::Polygon { frame, .. } | Shape::Star { frame, .. } => {
+                        point(frame.center)
+                            && frame.radius.as_mm().is_finite()
+                            && frame.angle.as_radians().is_finite()
+                    }
+                }
+        }
+        ObjectSnapshot::Path(path) => {
+            rotation
+                && path.all_anchors().all(|a| {
+                    point(a.point)
+                        && a.handle_in.x.is_finite()
+                        && a.handle_in.y.is_finite()
+                        && a.handle_out.x.is_finite()
+                        && a.handle_out.y.is_finite()
+                })
+        }
     }
 }
 

@@ -7,7 +7,9 @@
 
 use std::collections::HashSet;
 
-use curvyo_document_core::{Angle, NodeId, ObjectSnapshot, Point, PrimitiveSnapshot, Shape};
+use curvyo_document_core::{
+    Angle, EllipseFrame, NodeId, ObjectSnapshot, Point, PrimitiveSnapshot, Shape,
+};
 
 use crate::ResizeDirection;
 use crate::object_bounds::object_outline_bounds;
@@ -17,8 +19,8 @@ use crate::transform_handle_layout::{
     hit_transform_handle_for_side, transform_handles,
 };
 
-/// Two lengths closer than this (millimetres) are equal, and an extent below it
-/// is "zero": the document's geometric tolerance of the group box rules.
+/// The tolerance (millimetres) of the group box's own tests: two radii closer
+/// than this make a circle, and an extent below it is "zero".
 pub(crate) const GEOMETRIC_TOLERANCE_MM: f64 = 1e-6;
 
 /// A rotation within this (radians) of a multiple of 90 degrees is one.
@@ -91,12 +93,16 @@ pub fn is_aligned_primitive(object: &ObjectSnapshot) -> bool {
             shape: Shape::Ellipse { frame },
             rotation,
             ..
-        }) => {
-            is_quarter_turn(*rotation)
-                || (frame.rx.as_mm() - frame.ry.as_mm()).abs() < GEOMETRIC_TOLERANCE_MM
-        }
+        }) => is_quarter_turn(*rotation) || is_circle(frame),
         _ => false,
     }
+}
+
+/// Whether an ellipse frame is a circle: the one test the handles and the scale
+/// of a group share, so that a circle never has edge handles yet stretches in
+/// its own turned frame.
+pub(crate) fn is_circle(frame: &EllipseFrame) -> bool {
+    (frame.rx.as_mm() - frame.ry.as_mm()).abs() < GEOMETRIC_TOLERANCE_MM
 }
 
 /// Whether `object` is a primitive that can only be scaled proportionally.

@@ -238,18 +238,11 @@ fn an_invalid_radius_refuses_all() {
     assert!(snapshot(&d) == before);
 }
 
-/// Defence in depth: non-finite geometry handed to the writer.
-///
-/// Ignored on purpose, not weakened: `transform_objects` stores a NaN or an
-/// infinity as `null` in the saved file, as its older siblings
-/// (`set_rect_bounds`, `move_anchors`, `translate_objects`, `rotate_object`)
-/// also do; the guard against non-finite numbers lives in the gesture layer
-/// (see the Session-level test `ac22_a_huge_or_non_finite_drag_*`). Run with
-/// `--run-ignored all` to see the gap. The call must
-/// either refuse (and write nothing) or leave every stored number finite; a
-/// NaN or infinity must never reach the saved file.
+/// Defence in depth: non-finite geometry handed to the writer is refused
+/// (`NonFiniteGeometry`) before any write. The gesture layer guards too (see the
+/// Session-level test `ac22_a_huge_or_non_finite_drag_*`); the older
+/// single-object writers have no such check (`docs/technical-debt.md`).
 #[test]
-#[ignore = "document layer has no finiteness check (pre-existing for every writer); reported to the lead"]
 fn non_finite_geometry_never_reaches_the_document() {
     type Poison = fn(&mut ObjectSnapshot);
     let poisons: [(&str, Poison); 6] = [

@@ -291,10 +291,19 @@ against.
   decision above; they record what the build chose where the text left room.
   - **Public API of `curvyo-document-core`.** Besides `Document::transform_objects`,
     `PathSnapshot::scaled_along` and `sheared_along` (decision 1), the build added
-    two variants to `ObjectEditError`, `InvalidStrokeWidth` and `InvalidRadius`,
-    because the command refuses a bad width or radius before it writes
-    (the `resize_*` commands refuse the same two with `ShapeEditError` and
-    `PathEditError`). `ui-core` retries once without widths, as decided.
+    three variants to `ObjectEditError`, `InvalidStrokeWidth`, `InvalidRadius`
+    and `NonFiniteGeometry`, because the command refuses a bad width or radius
+    before it writes (the `resize_*` commands refuse the same two with
+    `ShapeEditError` and `PathEditError`), and a position, size, handle or rotation
+    that is NaN or infinite (defence in depth: the gesture layer refuses those too;
+    the older single-object writers have no such check, see
+    `docs/technical-debt.md`). `ui-core` retries once without widths, as decided.
+  - **Field writers.** The per-command helpers of decision 1 were not extracted:
+    `transform_objects` calls the codec writers the single-object commands call
+    (`write_shape_frame`, `write_corner_radii_if_changed`, `write_rotation`,
+    `write_point`, `write_vec2`, `write_stroke_width_if_changed`), so each field
+    still has one writer and the single-object commands are untouched (criterion
+    52).
   - **Circles (criterion 20, D3).** A circle that is stretched (sx differs from sy)
     becomes an ellipse with `rotation` 0 whatever its rotation, as the table says;
     criterion 31's "not a multiple of 90 degrees" only names the case that goes

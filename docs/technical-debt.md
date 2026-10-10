@@ -699,13 +699,38 @@ criterion 48 allows 1.1) and a frame at 200 objects took 6.4 ms. Drawing a
 handle-less segment with `line_to` (`curvyo-render-core/src/stroke.rs`) cuts the
 triangles of the 200-object frame from 88,000 to 36,000, the frame to 4.3 ms,
 and makes scale, rotate and move equal. This also lowers the frame at rest; the
-draw-list cache above is still the larger item.
+draw-list cache above is still the larger item. Re-measured with the older
+benchmark (`unified_object_editing.rs`, release, same machine): the 200-object
+move frame is 7.1 ms (was 13.8 to 15.6 ms), so the architect's 8 ms budget of
+`unified-object-editing` criterion 15 is met now; a frame at rest is 15.0 ms.
 
 ## `curvyo-ui-core/src/transform_entry.rs` is past the size limit
 
 548 non-test lines (`CLAUDE.md` section 5: about 500). `multi-object-transform`
 did not grow it: its entries are in `group_entry.rs`. Split the number parser and
 `EntryField` from the entry state when the next story touches it.
+
+## The single-object writers accept NaN and infinity
+
+`Document::set_rect_bounds`, `move_anchors`, `translate_objects`, `rotate_object`
+and the `resize_*` commands do not check that the numbers they are given are
+finite: a NaN or an infinity is stored as `null` in the saved file. The gesture
+layer (`ui-core`'s `is_sane`) refuses such results, so no caller produces them
+today. `Document::transform_objects` (`multi-object-transform`) does check, and
+refuses the whole call with `ObjectEditError::NonFiniteGeometry` before it writes.
+Give the older writers the same check when one of them gets a second caller that
+does not go through the gesture layer (ADR 0004, "never write a value that reopens
+as damaged").
+
+## Notes for the second merger of the multi-object transform and the path tools
+
+- `curvyo-document-core/src/path_model.rs` is at 499 non-test lines after
+  `multi-object-transform` (`scaled_along`, `sheared_along`) and about 528 with the
+  path tools (#79). Whoever merges second splits it, for example the two `*_along`
+  methods into a `path_transform.rs`, or states the reason in the PR.
+- The cursor over a selected object's outline in a multi-selection stays
+  `default`: the single-object `move` cursor over a selection is not shown for
+  several (`select_cursor.rs`). Not a regression, a gap in criterion 46.
 
 ## One peer's delete refuses a whole multi-object commit
 

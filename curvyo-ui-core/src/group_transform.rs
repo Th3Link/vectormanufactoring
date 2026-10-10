@@ -11,7 +11,7 @@ use curvyo_document_core::{
     PrimitiveSnapshot, RectBounds, Shape, StarFrame,
 };
 
-use crate::group_box::GEOMETRIC_TOLERANCE_MM;
+use crate::group_box::is_circle;
 use crate::oriented_box::OrientedBox;
 use crate::skew_math::{skew_angle, skew_factor, skew_frame};
 use crate::transform_commit::is_sane;
@@ -92,8 +92,8 @@ fn extent_factors(primitive: &PrimitiveSnapshot, (sx, sy): (f64, f64)) -> ((f64,
     if (sx - sy).abs() <= UNIFORM_EPSILON {
         return ((sx, sx), rotation);
     }
-    if let Shape::Ellipse { frame } = primitive.shape
-        && (frame.rx.as_mm() - frame.ry.as_mm()).abs() < GEOMETRIC_TOLERANCE_MM
+    if let Shape::Ellipse { frame } = &primitive.shape
+        && is_circle(frame)
     {
         // A circle becomes an ellipse along the document axes, whatever its
         // rotation: the one write beyond a single object's resize (criterion 31).

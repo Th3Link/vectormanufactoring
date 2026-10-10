@@ -238,6 +238,10 @@ impl Session {
     /// (`specs/0019-multi-object-transform/` UX notes, section 13).
     #[must_use]
     pub fn selection_announcement(&self) -> String {
+        // Before the document read: this runs on every sync.
+        if self.tool != Tool::Select || self.selection.ids().len() < 2 {
+            return String::new();
+        }
         let objects = self.objects();
         let Some(group) = self.group_in(&objects) else {
             return String::new();

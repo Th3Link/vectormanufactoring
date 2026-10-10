@@ -839,9 +839,10 @@ The modifier indicators of `edit-interaction-polish` apply unchanged
 (`docs/design-system.md`, "Modifier indicators in a move").
 
 - **Copy (Ctrl):** the plus badge shows wherever a Ctrl press would start a copy
-  move, which is what criterion 43 step 4 says: over the outline or filled interior
-  of a **selected** object, and over the centre handle. Not over an unselected
-  object and not on empty canvas, where Ctrl is the remove marquee with its minus
+  move (`edit-interaction-polish` criterion 37): over the outline or filled
+  interior of a selected object, over the centre handle, and over an **unselected**
+  object, where the press copies that object alone and the selection becomes the
+  copy. Not on empty canvas, where Ctrl is the remove marquee with its minus
   badge. The badge uses the press test, so it never promises a copy the press would
   not start. "Copy" at the end of the readout. In a copy drag **the group box, its
   handles and the member boxes stay on the originals**; the blue outlines travel
@@ -1039,8 +1040,9 @@ By criterion number. 1 to 3, 6 to 12, 15, 17 to 20, 22 to 27, 29 to 32, 34, 36, 
 
 - **Question 3, criteria 14, 16, 43 to 46, "Changes to accepted behaviour" 4 and
   5, D6:** applied; the wording is the criteria's (43 steps 3 to 7, 44 removed,
-  45 and 46 as written). The Ctrl copy badge follows criterion 43 step 4: selected
-  objects and the centre handle only (section 5).
+  45 and 46 as written). The Ctrl copy badge follows the press test of
+  `edit-interaction-polish` criterion 37: selected objects, the centre handle and
+  an unselected object (which a Ctrl press copies alone), as built (section 5).
 - **4:** replace "a lighter style that the `ux-engineer` defines" with: 1 px
   dashed 4 / 3 in `--member-box`, edges on a group box edge not drawn, not drawn
   under 6 px or outside the viewport. **5:** "More than 500 selected objects"

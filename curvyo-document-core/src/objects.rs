@@ -53,6 +53,10 @@ pub enum ObjectEditError {
     /// nothing was written.
     #[error("a corner radius must be finite")]
     InvalidRadius,
+    /// A position, size, handle or rotation given to
+    /// [`Document::transform_objects`] is not finite: nothing was written.
+    #[error("every coordinate and angle must be finite")]
+    NonFiniteGeometry,
 }
 
 /// One object to duplicate with [`Document::duplicate_objects`], and the

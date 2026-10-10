@@ -279,13 +279,36 @@ fn shift_locks_a_group_move_to_one_axis() {
 fn ctrl_copies_the_whole_selection() {
     let mut session = session();
     select_both(&mut session);
-    let before = ids(&session).len();
+    let before = ids(&session);
     hold(&mut session, pt(140.0, 50.0), false, true);
     session.pointer_down(pt(140.0, 50.0), false);
     hold(&mut session, pt(140.0, 120.0), false, true);
     session.pointer_up(pt(140.0, 120.0), false, true);
-    assert_eq!(ids(&session).len(), before + 2);
+    let after = ids(&session);
+    assert_eq!(after.len(), before.len() + 2);
     assert_eq!(session.selected_object_count(), 2);
+    // Each copy sits directly above its own original (criterion 17).
+    let copies: Vec<NodeId> = after
+        .iter()
+        .copied()
+        .filter(|id| !before.contains(id))
+        .collect();
+    assert_eq!(copies.len(), 2);
+    let below: Vec<NodeId> = copies
+        .iter()
+        .map(|copy| {
+            let position = after.iter().position(|id| id == copy).unwrap();
+            assert!(position > 0, "a copy has an original below it");
+            after[position - 1]
+        })
+        .collect();
+    assert!(
+        below.iter().all(|id| before.contains(id)) && below[0] != below[1],
+        "each copy sits directly above its own, different original: {below:?}"
+    );
+    // The selection is exactly the copies: deleting it leaves the originals.
+    session.delete_selected();
+    assert_eq!(ids(&session), before);
 }
 
 /// Criterion 35: M opens the move chip; Absolute puts the top-left corner of
