@@ -702,6 +702,30 @@ object once and write one commit, so they do not need the cache: with 1000 circl
 touch and nesting kernel 16 ms for 1001 outlines. The Boolean busy state (two painted frames before
 the call) is shared by both cards of the rail.
 
+**Update 2026-10-10 (`0044-editing-quick-wins`, milestone 1): the first half of the cache is built.**
+`Session::objects()` now returns one shared read of every object, kept per `Document::version()`
+(`session/object_cache.rs`); a Select or Node-tool drag still keeps its first read. Every write
+and every merge changes the version, so the cache needs no other invalidation (`New` and `Open`
+build a new `Session`). Frame at rest, `Session::draw_list()`, release build, host CPU, half
+rectangles and half closed paths of eight nodes (`curvyo-editor-wasm/tests/draw_list_cache_budget.rs`,
+`#[ignore]`):
+
+| Objects | Nothing selected, before | after | All selected, before | after |
+|---:|---:|---:|---:|---:|
+| 200 | 2.8 ms | 1.5 ms | 5.0 ms | 3.9 ms |
+| 5,000 | 183 ms | 69 ms | 299 ms | 202 ms |
+| 10,000 | 529 ms | 155 ms | 790 ms | 477 ms |
+
+What is left of a frame at rest with 5,000 objects: about 66 ms tessellating the artwork
+(`build_artwork`, the second half of the cache: key it on version, scale and pixel ratio), and with
+all objects selected about 130 ms for one dashed box per selected object (`select_decoration_input_in`
+and `build_select_draw_list`). Ctrl+A with 5,000 objects is therefore drawn in about 205 ms
+before `0019`'s group box replaces the per-object boxes, which is above the 100 ms of `0044`
+criterion 5. **Measured again on top of the group box (#80, merged): Ctrl+A with 5,000 objects is
+drawn in 11.8 ms (key 0.14 ms plus first frame), a frame at rest with all selected costs 11.8 ms,
+so the artwork cache is not needed for criterion 5 and stays deferred.**
+
+
 **Measured 2026-10-10 (`multi-object-transform`, release build, same machine,
 `curvyo-editor-wasm/tests/multi_object_transform_budgets.rs`):** a straight
 segment (both handles zero) was sent to `lyon` as a cubic with its control
@@ -1265,6 +1289,43 @@ of the Select bar (click-through, 3 s or 8 s).
   past the frame budget further markers are skipped, never the stroke.
 - **A compound path applies its markers to each outline** (each outline is closed
   in practice, so only Middle shows); the spec does not say more.
+
+## Open points of `0044-editing-quick-wins` (select all and keyboard nudge)
+
+*2026-10-10 (architect review of #87).*
+
+- **A held nudge writes about 30 commits per second.** Until `0020` joins them into one step,
+  each key-repeat event is one `translate_objects` commit (ADR 0014 §2 is Proposed). With 1,000
+  objects selected one event costs 34 ms in a release build (`draw_list_cache_budget.rs`), more than
+  the 33 ms between two repeat events, so repeats can queue and the objects keep moving after the
+  key is released. The oplog also grows by one commit per event (see "Document files grow with
+  edit history"). **Resolution:** `0020` calls `Document::continue_step()` at the marked place in
+  `curvyo-ui-core/src/nudge.rs` (`nudge()`); if a selection of thousands still lags, coalesce the
+  repeat events of one frame in the frontend.
+- **The "Too far from the document. Nothing was changed." text uses the key hint chip.** The
+  canvas notice slot of `0020` (UX notes) does not exist yet. **Resolution:** move the text there
+  when `0020` builds the slot (`frontend/src/hooks/useEditorSession.ts`, `KEY_HINT_TEXT`).
+- **The object cache holds one full snapshot of every object for the life of a session**
+  (`session/object_cache.rs`, an `Arc<[ObjectSnapshot]>` that is replaced, not freed, when the
+  document changes). For 10,000 objects that is the size of the document twice while a frame
+  works on the previous read. Fine at today's sizes; the second half of the draw-list cache (the
+  tessellated artwork) should replace the snapshots with a cheaper index.
+- **After Ctrl+A with 5,000 objects the frontend's reads cost more than the frame.** Measured in
+  `draw_list_cache_budget.rs` (release): `select_bar_state` 126 ms, `style_panel_view` 141 ms,
+  `path_availability` 15 ms, `boolean_availability` 7 ms, against 11.8 ms for the key and the first
+  frame (after #80's group box; 135 to 210 ms before it). They run on every `syncFromSession`, so a selection of thousands makes each
+  key press and pointer event slow, whatever the draw list costs. Not fixed in `0044`.
+  **Resolution:** find the quadratic id lookups behind the two panel reads (`ids.contains` over all
+  objects) and cache the result per selection and document version, as the object read is.
+- **The nudge readout can cover a handle of a single small object** (UX review of #87): the chip,
+  16 px right of and below the centre, covers the bottom-right corner-radius knob of a 21 mm
+  rectangle for up to 800 ms. Cosmetic. **Resolution:** do not draw the parameter handles while a
+  nudge readout shows, or move the chip off the knob.
+- **The canvas has no visible focus ring** (`outline-none`), although Ctrl+A and the arrows depend
+  on canvas focus: after a click on a panel control they do nothing until the canvas is clicked or
+  tabbed to, with no cue. Existing behaviour, made more visible by `0044`. **Resolution:** a
+  separate story for a canvas focus indicator.
+
 
 ## The user formats file depends on the built-in list (0045)
 

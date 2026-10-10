@@ -41,6 +41,8 @@ mod move_entry;
 mod move_indicators;
 mod navigation;
 mod node;
+mod nudge;
+mod object_cache;
 mod open_error;
 mod panel_tabs;
 mod pen;
@@ -57,6 +59,8 @@ mod style;
 mod style_view;
 mod tolerances;
 mod transform_entry;
+
+use std::sync::Arc;
 
 use curvyo_document_core::{Document, NodeId, ObjectSnapshot, OpenError, Point, SaveError};
 use curvyo_ui_core::{
@@ -189,13 +193,10 @@ pub struct Session {
     /// of its own to read them from, and the lasso, the marquee's mode
     /// inversion and the cursor read Alt the same way (`advanced-selection`).
     held: Modifiers,
-    /// The objects as the document held them when a Select-tool drag began,
-    /// kept for the drag's life: a drag writes nothing until its release, so
-    /// the document cannot change under it, and reading every object out of
-    /// the document costs more than the rest of a frame with many objects
-    /// (`specs/0009-unified-object-editing` criterion 15). Cleared by the first
-    /// [`Session::objects`] after the drag ends.
-    drag_objects: std::cell::RefCell<Option<Vec<ObjectSnapshot>>>,
+    /// Every object as the document held it at its current version, read once and shared by every
+    /// frame and event until the document changes (`object_cache.rs`). A Select or Node-tool drag
+    /// keeps its first read for its whole life (`specs/0009-unified-object-editing` criterion 15).
+    object_cache: object_cache::ObjectCache,
     /// `window.devicePixelRatio` as of the last attach or resize, so the
     /// selection box can snap to whole device pixels
     /// (`edit-interaction-polish` criterion 65). Always positive and finite.
@@ -216,6 +217,8 @@ pub struct Session {
     command_refusal: Option<refusal::RefusalMarks>,
     /// The Pen's end-node cache and the target of the press in flight (`0034`).
     pen_cue: pen::PenCueState,
+    /// The arrow-key nudges of the held press that last moved the selection (`nudge.rs`).
+    nudge_run: Option<curvyo_ui_core::NudgeRun>,
 }
 
 impl Session {
@@ -253,12 +256,13 @@ impl Session {
             hovered_object: None,
             pointer_position: None,
             held: Modifiers::NONE,
-            drag_objects: std::cell::RefCell::new(None),
+            object_cache: object_cache::ObjectCache::default(),
             device_pixel_ratio: 1.0,
             button_down: false,
             limit_notice: None,
             command_refusal: None,
             pen_cue: pen::PenCueState::default(),
+            nudge_run: None,
         }
     }
 
@@ -293,12 +297,13 @@ impl Session {
             hovered_object: None,
             pointer_position: None,
             held: Modifiers::NONE,
-            drag_objects: std::cell::RefCell::new(None),
+            object_cache: object_cache::ObjectCache::default(),
             device_pixel_ratio: 1.0,
             button_down: false,
             limit_notice: None,
             command_refusal: None,
             pen_cue: pen::PenCueState::default(),
+            nudge_run: None,
         })
     }
 
@@ -376,30 +381,13 @@ impl Session {
     /// Every object in the document, any kind, in z-order — the Select
     /// tool's own counterpart to [`Session::paths`]/[`Session::
     /// primitives`]: both a path and a primitive are "any object" to
-    /// `hit_test_object`/`object_bounds`.
-    fn objects(&self) -> Vec<ObjectSnapshot> {
+    /// `hit_test_object`/`object_bounds`. Read once per document version.
+    fn objects(&self) -> Arc<[ObjectSnapshot]> {
         // A Select or Node-tool drag reuses one read of the document for all its frames: nothing
         // changes the document while it runs (`0031` criterion 17).
-        if (self.tool == Tool::Select && self.select.drag_in_flight())
-            || (self.tool == Tool::Node && self.node.drag_in_flight())
-        {
-            return self
-                .drag_objects
-                .borrow_mut()
-                .get_or_insert_with(|| self.read_objects())
-                .clone();
-        }
-        *self.drag_objects.borrow_mut() = None;
-        self.read_objects()
-    }
-
-    /// Reads every object out of the document, in z-order.
-    fn read_objects(&self) -> Vec<ObjectSnapshot> {
-        self.document
-            .object_ids()
-            .into_iter()
-            .filter_map(|id| self.document.object(id))
-            .collect()
+        let drag = (self.tool == Tool::Select && self.select.drag_in_flight())
+            || (self.tool == Tool::Node && self.node.drag_in_flight());
+        self.object_cache.get(&self.document, drag)
     }
 
     /// The pointer went down at `point` (document space).

@@ -512,4 +512,37 @@ mod tests {
         assert_eq!(value["format_version"], CURRENT_FORMAT_VERSION);
         assert!((value["size"]["width"].as_f64().unwrap() - 210.0).abs() < f64::EPSILON);
     }
+
+    /// Caches of the whole document (the Pen's end index, the session's object read) key on
+    /// `version()`: it must change on a local commit and on a merge from another replica, and
+    /// stay the same when nothing happened.
+    #[test]
+    fn the_version_changes_on_a_local_commit_and_on_a_remote_merge() {
+        let a = Document::new(1);
+        let first = a.version();
+        assert_eq!(a.version(), first, "reading is not a change");
+        let id = a.create_rect(crate::RectBounds {
+            origin: crate::Point::new(0.0, 0.0),
+            width: Length::from_mm(10.0),
+            height: Length::from_mm(10.0),
+        });
+        let after_local = a.version();
+        assert_ne!(after_local, first, "a local commit");
+
+        let b = Document::from_loro_snapshot(2, &a.export_loro_snapshot().expect("snapshot"))
+            .expect("peer B opens it");
+        assert_eq!(b.version(), after_local, "the same state, the same version");
+        b.translate_objects(&[id], crate::Vec2::new(5.0, 0.0))
+            .expect("B moves the rectangle");
+        assert_eq!(a.version(), after_local, "A has not seen it yet");
+
+        let from_b = b.loro().export(loro::ExportMode::all_updates()).expect("B");
+        a.loro().import(&from_b).expect("A merges B");
+        assert_ne!(a.version(), after_local, "a remote merge");
+        assert_eq!(
+            a.version(),
+            b.version(),
+            "both replicas hold the same state"
+        );
+    }
 }

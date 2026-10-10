@@ -403,6 +403,7 @@ fn modified_repeated_and_dom_blocked_letters_do_nothing() {
             alt,
             repeat,
             dom_blocked,
+            time_ms: 0.0,
         });
         assert_eq!(outcome, KeyOutcome::Ignored, "{k}");
         assert_eq!(session.tool(), Tool::Select);

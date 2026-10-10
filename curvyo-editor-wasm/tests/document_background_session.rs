@@ -12,7 +12,7 @@
 )]
 
 use curvyo_document_core::{BackgroundPaint, Color, Document, DocumentBackground, Point, unpack};
-use curvyo_editor_wasm::{DocumentSide, Session, SizeOutcome, Tool};
+use curvyo_editor_wasm::{DocumentSide, KeyInput, KeyOutcome, Session, SizeOutcome, Tool};
 use curvyo_render_core::{CHECKER_A, RgbaColor};
 use curvyo_ui_core::{Grid, PaintTarget};
 
@@ -476,4 +476,60 @@ fn resizing_keeps_the_background_and_writes_no_background_register() {
     s.fit_document();
     assert_eq!(stored(&s), want);
     assert_eq!(loro_registers(&s), registers);
+}
+
+// ---- criteria 40 and 44: Ctrl+A, nudge and Delete never see the background ------------------
+
+fn press(s: &mut Session, key: &str, ctrl: bool) -> KeyOutcome {
+    s.key_down(KeyInput {
+        key,
+        ctrl,
+        ..KeyInput::default()
+    })
+}
+
+#[test]
+fn ctrl_a_on_an_empty_document_selects_nothing_and_writes_nothing() {
+    let mut s = Session::new(1);
+    s.set_background_hex("FF0000FF").unwrap();
+    let before = ops(&s);
+    assert_eq!(press(&mut s, "a", true), KeyOutcome::SelectedAll);
+    assert_eq!(s.selected_object_count(), 0);
+    assert!(!s.has_objects(), "Fit to content stays absent");
+    assert_eq!(ops(&s), before);
+    assert_eq!(stored(&s).color, Color { r: 255, g: 0, b: 0 });
+}
+
+#[test]
+fn select_all_nudge_and_delete_touch_the_objects_and_never_the_background() {
+    let mut s = with_rect();
+    s.set_background_paint(BackgroundPaint::None);
+    let want = stored(&s);
+    let registers = |s: &Session| {
+        let loro = loro::LoroDoc::new();
+        loro.import(&doc_of(s).export_loro_snapshot().unwrap())
+            .unwrap();
+        let root = loro.get_map("root");
+        (
+            root.get("background_paint").map(|v| v.get_deep_value()),
+            root.get("background_color").map(|v| v.get_deep_value()),
+        )
+    };
+    let regs = registers(&s);
+    s.escape();
+    assert_eq!(press(&mut s, "a", true), KeyOutcome::SelectedAll);
+    assert_eq!(
+        s.selected_object_count(),
+        1,
+        "the rectangle, not the background"
+    );
+    press(&mut s, "ArrowRight", false);
+    assert_eq!(stored(&s), want);
+    assert_eq!(registers(&s), regs);
+    s.delete_selected();
+    assert!(!s.has_objects());
+    assert_eq!(stored(&s), want, "Delete left the background");
+    assert_eq!(registers(&s), regs);
+    assert_eq!(press(&mut s, "a", true), KeyOutcome::SelectedAll);
+    assert_eq!(s.selected_object_count(), 0);
 }

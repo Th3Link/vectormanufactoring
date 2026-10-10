@@ -11,6 +11,7 @@ circumstances get a new ADR that supersedes the old one, and the old one's
 Status line is updated to point at it. ADRs 0001–0011 below are accepted, so
 this rule is now live: every further change to any of these decisions is a new
 ADR. ADR 0012 was rejected before acceptance, so that rule never applied to it.
+ADRs 0013 and 0014 are accepted as well (0014 by the customer on 2026-10-10).
 (0001–0010 were accepted by customer sign-off; 0011 is downstream assembly of
 them and was accepted by the architect — see its own preamble for why
 `CLAUDE.md` §3 does not require a customer round for it.)
@@ -37,7 +38,7 @@ A decision too small for a full ADR gets a short dated note in that feature's
 | [0011](0011-workspace-and-crate-layout.md) | Workspace and crate layout | workspace | Accepted; §7 note 2026-10-10 (host gate on ubuntu for pull requests, Windows and macOS nightly only, customer decision 2026-10-09) |
 | [0012](0012-pages-in-the-document-model.md) | Pages in the document model | workspace | Rejected (2026-10-05, dropped from MVP) |
 | [0013](0013-rename-to-curvyo.md) | Rename the product to Curvyo (amends 0011 crate names, 0004 §1 file extension; [inventory](0013-rename-to-curvyo-inventory.md)) | workspace | Accepted |
-| [0014](0014-history-undo-and-branches.md) | History, undo and branches over the operation log (own restore engine on `diff` instead of Loro's `UndoManager`, step header with time in commit messages, deleted objects revived by an injected tree move under a pinned Loro, previews from the live document, wipe by shallow snapshot with an epoch, budgets by step size; amended 2026-10-10 after the Loro spike; supersedes one sentence of 0004 §2 on acceptance) | workspace | Proposed, `needs-customer` (7 questions, each with a default) |
+| [0014](0014-history-undo-and-branches.md) | History, undo and branches over the operation log (own restore engine on `diff` instead of Loro's `UndoManager`, step header with time in commit messages, deleted objects revived by an injected tree move under a pinned Loro, previews from the live document, wipe by shallow snapshot with an epoch, budgets by step size; amended 2026-10-10 after the Loro spike; supersedes one sentence of 0004 §2) | workspace | Accepted (customer, 2026-10-10; option A on all seven questions) |
 
 ## Customer sign-off, 2026-10-02
 
@@ -93,13 +94,9 @@ unawareness. Reversing either needs a new ADR, not an edit:
 - ~~`CLAUDE.md` §8's crate-suffix list needs a lead amendment~~ — done: §8 now
   names `-wasm` (0001 §3), `-server` (0004 §5) and the suffix-less plugin SDK
   (0005 §1) alongside `-core`/`-app`/`-io`, pointing at ADR 0011.
-- **Dangling cross-references in ADR 0004** (found while writing
-  `specs/0001-project-file-foundation/adrs.md`, 2026-10-02): lines citing "ADR 0002
-  §12" and "§12–§16" should point at ADR 0009, where peer-scoped undo and
-  concurrent-editing semantics actually live — 0002's decision list ends at
-  §11. Accepted decision text isn't edited, so this is a corrected pointer for
-  readers, not a substantive change; fix opportunistically whenever 0004 is
-  next touched for an unrelated reason.
+- ~~**Dangling cross-references in ADR 0004**~~ — done 2026-10-10 with the
+  ADR 0014 pointers: the citations of "ADR 0002 §12" and "§12–§16" carry a
+  reader's note pointing at ADR 0009.
 - ~~**Boolean-crate spike (`spike/booleans`).**~~ — done, 2026-10-04: all three
   candidates (`i_overlay`, `geo`'s boolean ops, `clipper2-rust`) handled every
   degenerate fixture and build for `wasm32-unknown-unknown`; the spike picked
@@ -126,6 +123,8 @@ unawareness. Reversing either needs a new ADR, not an edit:
 - **Reverting a collaborator's change.** ADR 0009 §1's option C — an explicit
   "revert this change" action in a read-only history view, able to target any
   past commit — is a story, not shipped behaviour, and is never bound to Ctrl+Z.
+  Specified since 2026-10-10 as object undo and go to version in
+  `specs/0041-object-history` and `0042-history-branches` (ADR 0014 Q6 A).
 - **Forward secrecy.** The one gap ADR 0008 names that ADR 0010 does not close:
   participants keep every epoch key they held, deliberately, so a disclosed key
   still opens that epoch's stored log. MLS (ADR 0008 option C) remains the

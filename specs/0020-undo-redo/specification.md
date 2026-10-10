@@ -1,6 +1,6 @@
 # Undo and redo: one step per interaction, per-user stacks, a document history with step ids
 
-Status: Draft until the customer accepts ADR 0014 (`docs/adr/0014-history-undo-and-branches.md`, Proposed, `needs-customer`). Ready to build milestones 0-3 of 0020 on the defaults of ADR 0014 once accepted (milestone 4, the wipe, builds on ADR 0014 Q3 A). `adrs.md` and the UX notes exist; the criteria are complete and testable.
+Status: Ready (2026-10-10). The customer accepted ADR 0014 (`docs/adr/0014-history-undo-and-branches.md`) and every default of the open questions below on 2026-10-10. `adrs.md` and the UX notes exist; the criteria are complete and testable. Milestone 3 needs `0043` (merged with #84).
 Priority: Must
 Origin: Customer (specification of 2026-10-10, final: per-user undo and redo in the session, a global history of the document, Ctrl+Z and Ctrl+Shift+Z, step hashes or a shorter form, the kind of operation visible, deletions visible, wipe of the document history). Requirements R-EDIT-008 (the confirmed MVP slice 8) and R-HIST-001, R-HIST-004. Everything marked **Proposal** is the product owner's idea and is not accepted until the customer says so. Object history, object undo and branches are the follow-up specs `0041-object-history` and `0042-history-branches`; the right-panel tabs this spec needs are `0043-properties-tabs`.
 
@@ -160,9 +160,9 @@ Tested with two document replicas A and B that merge in the test; no network is 
 
 53. Given a later spec adds a command, then it ships with an entry in the operation-name table, a test for "one interaction, one step", and the line "Undo: Ctrl+Z" in its acceptance criteria; the spec template of `specs/README.md` does not change.
 
-### What the engine must guarantee (ADR 0014, Proposed; testable)
+### What the engine must guarantee (ADR 0014, accepted; testable)
 
-These criteria pin the decisions of ADR 0014 that the maker or a tester can observe. They hold on the ADR's defaults (Questions 11, 12 and 17 below); a different customer answer changes them.
+These criteria pin the decisions of ADR 0014 that the maker or a tester can observe. They hold on the options the customer accepted (Questions 11, 12 and 17 below, option A).
 
 54. **A step is one commit with a header.** Given any gesture of the table, then its one commit carries the header `<label>;s=<seq>` in the commit message (ADR 0014 §2), and a step is all commits of one peer with the same header. A **continuation** commit repeats the header of the peer's last step and joins it; it is allowed only while the document version is still that step's last version, and refused (it becomes a new step) when anything was committed or merged since. Test: 11 continuation commits are one row and one stack entry; the same 11 with a merge between the 5th and the 6th are two steps. A commit message without `;` is a legacy label (criterion 36).
 55. **One stack machine.** Given a sequence of do, undo, redo and continuation events, then the undo stack, the redo stack, the status of every row ("Applied", "Undone", "On a branch" for `0042`) and the branches come from one pure transition function (ADR 0014 §6). The session feeds it its own actions; the History list feeds it the log. Test: a generated sequence of 1,000 events; after each event the live stacks equal the stacks and statuses derived from the log of the same sequence.
@@ -174,13 +174,13 @@ These criteria pin the decisions of ADR 0014 that the maker or a tester can obse
 
 ## Milestones (one branch, one PR)
 
-0. **Spike** `spike/loro-history-primitives` (ADR 0014 "Verification", S1 to S7), never merged. Done: S1 (restore a deleted node with its old id) fails through the handler API and works through an injected tree Move (ADR 0014 §11); the customer decides in Question 17 whether that is the way.
+0. **Spike** `spike/loro-history-primitives` (ADR 0014 "Verification", S1 to S7), never merged. Done: S1 (restore a deleted node with its old id) fails through the handler API and works through an injected tree Move (ADR 0014 §11); the customer chose that way (Question 17 A, 2026-10-10).
 1. **Engine:** step header and step time, the `new_document` commit, the commit-path audit with one test per row of the table (criteria 10, 41, 57, 58), `batch` where a gesture has several commits, the restore engine, the stack machine, keys, gate, conflict rules, selection, limits, the removal of the "no undo" text (criteria 1 to 31, 41, 52, 54 to 58). The slice that is the old MVP slice 8; Ctrl+Z works end to end here. The architect reviews the branch diff here (document model, public API).
 2. **Step data:** ids, time, author, kinds, old files, persistence (32 to 38, 59, 60).
 3. **History tab:** the list, hover link, keyboard, scale (39 to 46). Needs `0043`.
 4. **Wipe** (47 to 51). Builds on ADR 0014 Q3 A (unshared documents only).
 
-Milestones 0 to 3 start on the defaults of ADR 0014 once the customer accepts it. The PR merges only after the customer has answered or accepted the defaults.
+The customer accepted ADR 0014 and these defaults on 2026-10-10; no milestone waits for an answer.
 
 ## Notes for the architect (answered by ADR 0014 and `adrs.md`)
 
@@ -202,7 +202,9 @@ Milestones 0 to 3 start on the defaults of ADR 0014 once the customer accepts it
 - Names and colours of collaborators in the list (collaboration identity, ADR 0004).
 - A step count the maker can configure (YAGNI; a constant).
 
-## Open questions (customer; each has a default)
+## Open questions (decided: the customer accepted every default, 2026-10-10)
+
+Each question below is decided as its option A (or its stated default). The text stays as it was put.
 
 1. **Persisted history (R-HIST-001).** The file already carries the full log, so "the global history is saved" costs nothing and needs no format change. The consequence: whoever gets the `.curvyo` sees every step, including deleted objects. *A (default):* saved, with the line in the History tab (criterion 45) and the wipe (criteria 47 to 51). *B:* strip the history on every Save (the history lives only for the open session). Recommendation A: it is what the customer asked for. (Same as ADR 0014 Q1, Question 11 below.)
 2. **Ctrl+Y (criterion 3).** *A (default):* yes on Linux and Windows, not macOS. *B:* only Ctrl+Shift+Z. Recommendation A.
@@ -215,9 +217,9 @@ Milestones 0 to 3 start on the defaults of ADR 0014 once the customer accepts it
 9. **Sending a file with history.** *A (default):* the History tab says the history is in the file. *B:* the Save As dialog offers "without history". Recommendation A for now; B belongs to export and sharing.
 10. **Shortcuts for destructive commands** (Boolean, Combine, Break apart, Object to path, Close path had none "until undo exists"). *A (default):* decide in the Boolean-shortcut follow-up, not here. *B:* give them Inkscape's keys now. Recommendation A.
 
-### The seven questions of ADR 0014 (architect, `needs-customer`)
+### The seven questions of ADR 0014 (decided 2026-10-10: option A each)
 
-ADR 0014 is `Proposed`; the defaults below are the architect's recommendations and apply when the customer does not answer. They are the same seven questions in `0041` and `0042`.
+ADR 0014 is accepted; the customer took option A of every question below. They are the same seven questions in `0041` and `0042`.
 
 11. **History in the file (ADR 0014 Q1; Question 1 above).** *A (default):* keep it (it is there today), the History tab says so, a wipe is available. *B:* strip the history on every Save.
 12. **File-format footprint (ADR 0014 Q2).** *A (default):* no `format_version` bump; step headers in commit messages and three optional keys (`history_wiped`, `history_floor`, `clone_of`) that older builds ignore. *B:* bump the version at `0041`, so older builds refuse files that carry lineage keys.
@@ -326,5 +328,5 @@ All changes the ux-engineer requested (criteria 1, 9, 35, 39, 42, 43, 45, 47) we
 Requirements: R-EDIT-008, R-HIST-001, R-HIST-004
 Depends on: `0043-properties-tabs` (milestone 3)
 Follow-ups: `0041-object-history`, `0042-history-branches`
-ADRs: `adrs.md` (architect); ADR 0014 (Proposed, `needs-customer`); ADR 0002 §9, ADR 0004 §2, ADR 0009 §1 are the base
+ADRs: `adrs.md` (architect); ADR 0014 (accepted 2026-10-10); ADR 0002 §9, ADR 0004 §2, ADR 0009 §1 are the base
 PR: -

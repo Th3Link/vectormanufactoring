@@ -1,10 +1,10 @@
 # ADR 0014: History, undo and branches over the operation log
 
-**Status:** Proposed (2026-10-10, amended 2026-10-10 after the Loro spike), `needs-customer`
-(document model, persistence and sync, `CLAUDE.md` §3). Seven questions at the end; each has a
-default. On acceptance, one sentence of [ADR 0004](0004-persistence-and-cross-machine-sync.md) §2
-("Loro's peer-scoped undo manager is the mechanism") is superseded by §1 below, and 0004's Status
-line gets a pointer here.
+**Status:** Accepted (customer, 2026-10-10). Proposed 2026-10-10, amended the same day after the
+Loro spike. The customer took the recommended option of all seven questions (see "Customer
+decisions 2026-10-10" at the end). One sentence of
+[ADR 0004](0004-persistence-and-cross-machine-sync.md) §2 ("Loro's peer-scoped undo manager is the
+mechanism") is superseded by §1 below; 0004's Status line points here.
 
 ## Context
 
@@ -237,7 +237,27 @@ for nested containers of deleted nodes, through the op parent chain only (§5).
    commit there).
 10. The wipe: epoch written, a pre-wipe replica's updates refused, `pending` treated as an error.
 
-## Questions for the customer
+## Customer decisions 2026-10-10
+
+The customer read this ADR and accepted it with option A for every question below, and with the
+defaults of the open questions in `specs/0020-undo-redo`, `0041-object-history` and
+`0042-history-branches`:
+
+1. History stays in the file; the History tab says so; a wipe is available (Q1 A).
+2. No `format_version` bump: step headers in commit messages and three optional keys that older
+   builds ignore (Q2 A).
+3. No document wipe in a shared document until sharing exists (Q3 A).
+4. Object wipe hides and cuts; the data stays in the file and the confirmation says so (Q4 A).
+5. Authors are a random id per session, shown as "You" and "Earlier session" (Q5 A).
+6. Taking back someone else's step with Ctrl+U or go to version is allowed, as a named step that
+   Ctrl+Z takes back; Ctrl+Z stays own steps only (Q6 A).
+7. Undo of Delete revives the object with its `NodeId` through the injected tree move of §11;
+   `loro` stays pinned, the canary guards every upgrade, soft delete comes back to the customer
+   only if an upgrade we need breaks the canary (Q7 A).
+
+The questions as they were put follow unchanged.
+
+## Questions for the customer (answered above)
 
 1. **History in the file** (0020 Q1). It is already there today; this makes it visible, with
    times. *A (default, recommended):* keep it, the History tab says so, wipe available.
