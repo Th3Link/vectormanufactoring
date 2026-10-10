@@ -29,7 +29,7 @@ Where we do better: one command with a plain name, any number of paths at once, 
 
 ## Acceptance criteria
 
-1. Given any state of the app, then Cut is a command with a button that follows the rules of `0016` criteria 1, 1a, 2 and 3 (always rendered, dimmed when no object is selected or the tool is not Select, still focusable, three-line tooltip, no shortcut, never changes the tool). One selected path is enough (it can cross itself). It sits in the Path card of the left rail after Split (`0048-split-compound-path`); the exact place and glyph are the ux-engineer's decision. Tooltip: "Cut" / "Cuts paths open where they cross." / "Replaces the selection. No undo yet." The accessible name is "Cut"; the rule line is its description.
+1. Given any state of the app, then Cut is a command with a button that follows the rules of `0016` criteria 1, 1a, 2 and 3 (always rendered, dimmed when no object is selected or the tool is not Select, still focusable, three-line tooltip, no shortcut, never changes the tool). One selected path is enough (it can cross itself). It is the fourth and last button of the Path card of the left rail, after Break apart (the card reads Combine, Split, Break apart, Cut; `0048-split-compound-path`); the glyph is an X of four stubs with a gap at the crossing, never scissors. Tooltip: "Cut" / "Cuts paths open where they cross or touch." / "Pieces get no fill. Replaces the selection. No undo yet." The accessible name is "Cut"; the rule line is its description.
 2. Given operands with at least one cut point, when the maker activates the command, then every operand whose contour is divided (it has a cut point that is not at one of its ends, or, for a closed contour, any cut point) is replaced, at its stacking position and in order, by its pieces as separate open path objects, in the order along the contour. An operand that is not divided is left exactly as it is (same object, same id, same style). All pieces and all untouched operands are selected afterwards.
 3. Given a closed contour, then it is cut open: with m cut points (m of 1 or more) it gives m pieces; with one cut point it gives one open piece whose first and last node lie at the cut point. Given an open contour with m cut points that are not at its ends, it gives m + 1 pieces. A cut point at an end node adds no piece.
 4. Given a cut point inside a segment, then the segment is divided at that point on the exact curve (de Casteljau) and the two halves keep the curve: every point of both halves lies within 1e-6 mm of the original curve. Given a cut point at an existing node (within 0.001 mm), then that node is split into two end nodes as `0006` criterion 13 does (the first keeps the incoming handle, the second the outgoing one); no node is added.
@@ -71,7 +71,46 @@ Decided by the product owner (change if you disagree): all paths cut each other;
 
 ## UX notes
 
-(filled in by ux-engineer before Ready)
+By `ux-engineer`, 2026-10-10. Numbers and rows are in `docs/design-system.md`: "Path toolbox", "Path tooltips and notices", "Split, Break apart, Cut" (how the three are told apart), "Command glyphs", "Action notice", "Refusal outline". The rail rules are those of the Boolean toolbox and are not repeated here.
+
+### Name and glyph
+
+**Cut** stays (the customer's word, Question 5). It is also the clipboard's word, so three things keep the two apart: the glyph is an X of four stubs with a gap at the crossing and never scissors; the rule line says what it does ("Cuts paths open where they cross or touch."); Cut has no shortcut and Ctrl+X is untouched. If the demo shows confusion, "Cut open" is the reserve name (longer, accessible name and tooltip change, nothing else).
+
+### Placement and states
+
+Cut is the **fourth and last button of the Path card** (Combine, Split, Break apart, Cut), column B. The criterion 1 wording "after Split" is changed to name the order. It works on ordinary paths and primitives, so it is enabled where Split and Break apart are dimmed.
+
+| Situation | Cut |
+|---|---|
+| Select tool, no object selected | dimmed, "Select one or more paths." |
+| Another tool than Select | dimmed, adds "Use the Select tool." |
+| One or more objects selected | enabled (one path can cross itself) |
+| Only compound paths or groups selected | enabled; pressing refuses and names Split, Break apart or Ungroup, the offenders outlined in red |
+| Paths that do not cross | enabled; pressing refuses ("The selected paths do not cross each other or themselves. Nothing was changed."), no outline |
+
+Dimming is `aria-disabled="true"` at 40 % opacity, focusable, tooltip open, activation does nothing. Dimming only says "not available now"; whether anything crosses needs the kernel, so that case is a refusal on press.
+
+### Interaction
+
+One press, no dialog, no preview (the hover preview is "specified, not built"). Result, in the order the maker sees it: a notice beside the Path card, "Cut: 2 paths became 9 pieces." (`role="status"`, 3 s, level with Combine), and all pieces plus untouched paths selected, so the member boxes (up to 500 objects, row "Member box") show where the pieces are. **Weak point to watch at the demo:** the picture of lines looks unchanged after Cut (that is the point), so the notice, the boxes and the Node tool's end nodes are the proof. Closed shapes lose their fill (criterion 6) and that is visible; the tooltip note "Pieces get no fill." says so before the press. Picking a piece to delete is the Select tool's job: click selects one piece, Alt-click cycles the coincident pieces of a shared stretch (criterion 12, collinear lines). A maker who wants a ring cut open at a place draws a line across it, presses Cut, and deletes the pieces of the line.
+
+### Texts
+
+Tooltip: "Cut" / "Cuts paths open where they cross or touch." (42 characters) / note by state: "Select one or more paths." (with "Use the Select tool." for another tool) or "Pieces get no fill. Replaces the selection.". Success: "Cut: 2 paths became 9 pieces." Refusals are `role="alert"`, 8 s: the sentences of criteria 8 to 10. The wording of the criterion 1 tooltip is changed from "...where they cross." and "Replaces the selection." to the two lines above: touches and T-junctions count (criterion 2), and the fill change is the one surprise worth a line. "No undo yet." goes with `0020` criterion 52.
+
+### Keyboard, accessibility, contrast
+
+No shortcut. Tab reaches the Path toolbox as one stop; Up and Down move; Space or Enter presses; after a key press the focus stays on the button, after a mouse press it returns to the canvas. Accessible name "Cut", description the rule line. The red outline of a refused compound path or group is `--field-invalid` 2 px with a white casing (5.3:1 on the canvas), and the sentence says how many, so colour is not the only cue. The busy state for a slow result is `aria-busy` with the wait cursor.
+
+### At 800 x 600, large documents
+
+Nothing is added to the viewport: the button joins a card that already exists. 100 paths with 2,500 crossings (criterion 13) must stay under 2 s, so the busy cursor appears only once; 5,100 selected pieces draw the group box and no member boxes (above 500). The 10,000-piece refusal sentence is final text.
+
+### Questions for the customer
+
+1. **Fill None (Question 1).** From the interaction side A (Fill None) is right: pieces of a closed shape painted as closed arcs would look like a mistake. The tooltip note carries the warning. Default A.
+2. **The word Cut (Question 5).** Default stays "Cut". Say if the clipboard's meaning bothers you; "Cut open" is the one-line change.
 
 ## Links
 

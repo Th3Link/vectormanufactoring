@@ -73,7 +73,7 @@ As a maker I want to bind several parts into one group, move, scale and rotate i
 
 ## Where the commands live
 
-Group and Ungroup are buttons, not menu-only items. Proposal: a command section of the left tool rail below the Boolean section (`0016`), always rendered, dimmed when they do not apply, as the Boolean buttons are. The rail already holds 501 px of a 546 px viewport at 800 x 600 (`0016` Question 1), so it cannot take this and the other new command sections of `0035` to `0038` without a layout decision (two columns, a scrolling rail, or collapsible sections). That decision is the ux-engineer's and has to be made once for all of them; see `specs/README.md`. The Select bar is the fallback place.
+Group and Ungroup are buttons, not menu-only items: a card of two buttons, the second card of column A of the left tool rail, below the Tools card, always rendered and dimmed when they do not apply, as the Boolean buttons are. The rail layout (two columns, which card sits where, why) is decided in `docs/design-system.md`, row "Tool rail architecture"; the UX notes below give the Group card.
 
 ## Groups and layers
 
@@ -108,9 +108,44 @@ Decided by the product owner (change if you disagree): the group takes the place
 
 ## UX notes
 
-(filled in by ux-engineer before Ready)
+By `ux-engineer`, 2026-10-10. Numbers and rows are in `docs/design-system.md`: "Tool rail architecture", "Group toolbox", "Entered group", "Command glyphs", "Group selection box", "Rail tooltip and notice placement", "Canvas notice slot" (Interaction conventions), "Keyboard shortcuts established so far". The rail rules (toolbox cards, dimming, roving focus, commands that are not tools) are those of the Boolean toolbox and are not repeated here. Reference tools: Inkscape (groups behave as layers when entered, with a name in the status bar as the only sign), Illustrator (isolation mode: the rest dims, a bar names the path out), Affinity (double-click enters). Isolation mode is the model; the cues are the ones the criteria already ask for.
 
-For the ux-engineer: the group box and handles come from `0019` and are identical to a multi-selection's; the entered-group indicator is a canvas readout with buttons (the panel rule of no popups is about the Properties panel); the rail has no room (see above); the dim level is applied to everything outside the entered group while selection overlays stay full strength; double-click already opens the Node tool for a leaf path.
+### Group and Ungroup: the Group card
+
+- **Placement.** A card of two 40 px buttons, **Group** above **Ungroup**, the second card of column A, 8 px under the Tools card: 92 px high, ending 424 px below the viewport top. It replaces the plan "Group above Path in column B": column B is full (Path 4, Boolean 7), column A has 88 px free. If the Group release ships before the Pencil, the Tools card is 268 px and the Group card starts at 288 px; the Pencil release then moves it down 44 px, announced there. The Boolean card has to be in column B by this release (row "Tool rail architecture"; `0023` is one of the three releases that triggers the move). The "Where the commands live" section above is replaced by this.
+- **States.** Group: dimmed with fewer than two objects selected or a tool other than Select. Ungroup: dimmed when the selection holds no group or the tool is not Select; with groups and other objects it is enabled and ungroups the groups only (the rest stays selected, criterion 3). Dimming is `aria-disabled="true"` at 40 % opacity, focusable, tooltip open on a press, activation does nothing.
+- **Tooltips.** "Group (Ctrl+G)" / "Binds the selection into one group." / "Objects in between move below the group." (criterion 4: this is where the order change is shown); dimmed: "Select two or more objects." and, for another tool, "Use the Select tool.". "Ungroup (Ctrl+Shift+G)" / "Releases the objects of a group." / "One level only. Inner groups stay groups."; dimmed: "Select a group.". Cmd instead of Ctrl on macOS. These are the only rail tooltips with a chord, so the chord is written in the name line, not as a fourth line. "No undo yet." goes with `0020` criterion 52.
+- **Glyphs.** Group: a rounded frame around two small solid squares. Ungroup: the two squares apart, the frame reduced to corner ticks. The pair must read apart at 1x on the glyph sheet. There is no Enter-group button: entering is a double-click or Enter, and the rail has no room for a command the spec gives no criterion.
+- **Notices** go to the **canvas notice slot** (bottom centre) for the button and for Ctrl+G alike: "Grouped 3 objects." and "Ungrouped 2 groups into 7 objects." (3 s, `role="status"`); the depth refusal "Groups can be nested 32 levels deep. Nothing was changed." is an alert in the same slot, 8 s. A key and a button then produce one message in one place.
+- **Refusals of other commands** on a selection with a group read "<Command> does not work on groups. Ungroup first. Nothing was changed." (criterion 28); the offending group is outlined in red (row "Refusal outline"), and the Select bar's Offset button is hidden for a group alone.
+
+### Selecting, hovering, entering, leaving
+
+- **Click** selects the group; the selection shows only the group box and its handles (`0019`), no member boxes. **Hover** over a group draws its box in `--hover-box`, which is what a click would select. **Double-click** on a group enters it. **Enter** with exactly one group selected and the canvas focused enters it with nothing selected. A hint chip (600 ms of rest over a selected group's box, away from handles) reads "Double-click to open" / "Enter opens it" and is `aria-hidden`; the keyboard route is in the table below and in the "Open groups" indicator once inside.
+- **Entered state** (row "Entered group"): everything outside is drawn at 35 % strength, inert, with selection overlays at full strength; the indicator "Open groups" in the canvas notice slot shows `Document > Group > Group` as buttons, the last level as text, and a muted "Esc: leave". Dimmed black artwork is about 2.4:1 on the default canvas: it recedes and stays readable, and dimming is never the only cue.
+- **Leaving** has three routes of different cost: the crumb "Document" (one press, every level), a double-click on empty canvas (one level), Escape (one level, after the selection is cleared). Escape order in the Select tool: an open chip or bar field; a drag; the selection; one level up, selecting the group just left; at the root nothing. From a selection two levels deep that is four presses, so the crumb is the fast way and the indicator says so.
+- **Drawing inside** a group puts new objects on top of its children (criterion 19); the indicator makes the reason visible.
+- A pan, zoom or tool change keeps the context and the dimming (criterion 21). A deleted or removed entered group moves the context to the nearest ancestor and the indicator updates in the same frame.
+
+### Properties panel and Node tool
+
+The subject line reads "Group of 5 objects" or "2 groups" (criterion 11, the texts of `0017`). The Style section edits every leaf; a differing value shows "Mixed" with the usual hatch swatch or empty field. The Node tool shows the nodes of every path leaf (criterion 12): for a group of several thousand paths this is as heavy as selecting them one by one, and the Node tool's node and handle limits for large selections apply unchanged.
+
+### Keyboard, accessibility, contrast
+
+- **Chords:** Ctrl+G group, Ctrl+Shift+G ungroup (Cmd on macOS), once per press, ignored on key repeat and when a drag, a chip or an unfinished Pen path is active (`0010` criterion 55); `preventDefault` only when they act, since a browser binds Ctrl+G to "find next". Enter and double-click enter; Escape and the crumbs leave. Tab reaches the Grouping toolbox as one stop (Tab order: Tools, Group, Path, Boolean), then the canvas, the bars, and the indicator's buttons after the bars.
+- **Announcements** (hidden polite live region, not the notice slot): on entering "Inside group, 1 level. Escape leaves."; on leaving "Back at the document." or "Inside group, 1 level."; a selected group is announced by the selection announcer as "Group of 5 objects selected, 46.2 by 18.7 mm". Dimming alone tells a screen-reader user nothing, so these carry it.
+- **Contrast and targets:** indicator text `--toolbar-icon` on `--toolbar-bg` 8.3:1, the muted hint 5.0:1; crumb buttons 28 px high; rail buttons 40 px; focus rings 2 px `--editor-accent`. The 35 % dimming is deliberately below 3:1 for objects that are not operable.
+
+### At 800 x 600, large documents
+
+The Group card is 92 px in column A (ends 424 px of 546); nothing else in the viewport moves. The indicator is at most 480 px wide and about 230 px at three levels, inside the 496 px viewport; beyond three levels the middle collapses. Dimming is one more draw pass at 35 % opacity for the outside content and costs about what a normal redraw costs; the group box over thousands of leaves is computed from cached outlines (`0019`), and member boxes are not drawn above 500 objects.
+
+### Questions for the customer
+
+1. **Dimming strength (Question 7).** 35 % as written. It is a constant in the design system (`--context-dim`) and one line to change after the demo.
+2. **Shortcuts (Question 4).** Default in: Ctrl+G and Ctrl+Shift+G are what Inkscape, Illustrator and Affinity use. The cost is a `preventDefault` against the browser's "find next" in the browser build, only when the chord acts.
+3. **Boolean card moves to column B** when the first of Group, Pencil, Fracture and Flatten ships (row "Tool rail architecture"). It is asked under `0032`; this release is one of the three that can trigger it.
 
 ## Links
 

@@ -50,7 +50,7 @@ Tests simulate the device: pointer events built with `pointerType: "pen"`, `pres
 
 ### The Pencil tool
 
-6. Given the tool rail, then a Pencil tool exists next to the Pen (the place, the glyph and the key are the ux-engineer's decision; the key must be free in the shortcut table of `0010`). With the Pencil active, press, drag and release draws a stroke with a mouse or a pen. The cursor is a crosshair.
+6. Given the tool rail, then a Pencil tool exists next to the Pen (the seventh and last button of the Tools card, glyph Lucide `PencilLine`, key `P`; see the UX notes). With the Pencil active, press, drag and release draws a stroke with a mouse or a pen. The cursor is a crosshair.
 7. Given a stroke without pressure, when it is released, then one new **open path** is created. Its centre line is fitted to the samples within 0.1 mm (every sample lies within 0.1 mm of the path) and has few nodes. It gets the style a new Pen path gets today. Tests: 100 samples on a straight line give a path of 2 nodes; 200 samples on a half circle of radius 30 mm give a path of fewer than 10 nodes.
 8. Given a stroke with pressure, when it is released, then one new **closed path** is created: the outline of the centre line with the width of criterion 9, round ends, Fill set to the colour that a new Pen path has as stroke colour, stroke None. No model change and no format change (Question 2, A). The outline is a polyline within 0.02 mm of the exact variable-width outline of the centre line. Tests: constant pressure 1.0 along a straight line of 50 mm, Maximum 2 mm: a capsule of area 50 x 2 + π x 1 ≈ 103.1 mm² within 0.3 mm². Pressure rising linearly from 0 to 1 along 50 mm, Minimum 0.2 mm, Maximum 2 mm, curve Linear: the outline is 0.2 mm wide at the start (plus the round end) and 1.1 mm wide at x = 25 mm, within 0.05 mm.
 9. Given the samples of a pressure stroke, then pressure is smoothed first and the curve applied second. Smoothing: the pressure of a sample is the mean of its own pressure and that of the two samples before it (fewer at the start). Curve: Soft = p^0.5, Linear = p, Firm = p². Tests: pressures 0.2, 0.2, 1.0, 0.2, 0.2 smooth to 0.2, 0.2, 0.467, 0.467, 0.467 (±0.001); a smoothed 0.25 gives 0.5 with Soft, 0.25 with Linear and 0.0625 with Firm, so with Minimum 0.2 mm and Maximum 2 mm the widths are 1.1, 0.65 and 0.3125 mm.
@@ -102,9 +102,49 @@ Decided by the product owner (change if you disagree): the Pencil tool inside th
 
 ## UX notes
 
-(filled in by ux-engineer before Ready)
+By `ux-engineer`, 2026-10-10. Numbers and rows are in `docs/design-system.md`: "Tool rail architecture", "Pencil tool", "Pencil bar", "Live preview outline", "Keyboard shortcuts established so far". Reference tools: Inkscape (Pencil on `P`, "Use pressure input" in its bar), Affinity Designer (separate Pen and Pencil tools, pressure curve beside the brush), Illustrator (Pencil and Pen as separate tools). All three keep Pen and Pencil apart.
 
-For the ux-engineer: **the tools card has no room for a seventh tool at 800 x 600.** Column A ends 512 px below the viewport top of 546 px (`docs/design-system.md`, "Boolean toolbox"); a Pencil button adds 44 px and overshoots by about 10 px. Options: the Boolean card moves to column B, the Pencil shares a button with the Pen, or the Pencil sits elsewhere; the decision is yours. The Pencil bar holds nothing for a mouse (criterion 14) and, after a pen stroke, two value fields, a segmented group and the readout.
+### The seventh tool and the rail (the fix)
+
+The Pencil is a seventh button in the Tools card (312 px instead of 268). With the Boolean card under it, column A would end at 12 + 312 + 8 + 224 = 556 px in a 546 px viewport: 10 px too tall, and any 12 buttons in two cards are 544 px, so only a second button size or 2 px gaps would fit it, and both are rejected below. **Proposed fix: the Boolean card moves from column A to column B**, below the Path card; the Group card (`0023`) takes its place under the Tools card. At 800 x 600:
+
+| | Before (built) | With the Pencil, Group and all path commands |
+|---|---|---|
+| Column A | Tools 6 (268 px), Boolean 5 (224 px): ends 512 px | Tools 7 (312 px), Group 2 (92 px): ends 424 px, 88 px free |
+| Column B | Path 2 (92 px): ends 104 px | Path 4 (180 px), Boolean 7 (312 px): ends 512 px |
+
+Boolean is the only built card that moves, once, in the first release of `0023`, `0032` and `0037` to ship; every other change is an append (row "Tool rail architecture"). `--rail-right` stays 116 px, so the bars, notices and default view do not move. Rejected: Pen and Pencil on one button (a mode behind a glyph that changes; a tablet user wants the Pencil one press away), the Pencil in column B (a tool away from the tools), a second button size or 2 px gaps (a global change for 10 px, no margin left), a scrolling rail (hides dimmed commands). The Pencil is placed **last** in the Tools card, after Polygon/Star, because a new creation tool appends and no built tool changes slot (row "Pencil tool"); next to the Pen would have moved Node, Rectangle, Ellipse and Polygon/Star down by 44 px. The criterion 6 wording "the place, the glyph and the key are the ux-engineer's decision" is replaced by these.
+
+### The tool
+
+- **Button.** Lucide `PencilLine`, 20 px (not `Pencil`, which is the History tab's "Change" glyph; `PenTool` is the Pen). Name "Pencil tool", tooltip "Pencil tool (P)", and "Pencil tool (Esc, P)" while the Select tool has a selection, as the other letters. It is a tool: it takes the solid active ground.
+- **Key.** `P`, Inkscape's Pencil key. `N` is the Node tool here and `M`, `K`, `H`, `V` are reserved; `P` was free. A tool letter in every state, like `B`, `N`, `E`, `*`; ignored while a drag, a chip, a focused control or an unfinished Pen path is active.
+- **Cursor.** Crosshair (criterion 6), also for a pen in range but not touching, where hover and cursors behave as for a mouse (criterion 5).
+- **Escape.** The first press cancels a running stroke and writes nothing (criterion 12); the next leaves the tool, as for the Pen. Nothing else in the cascade changes.
+- **Input kinds.** Touch is ignored by the Pencil (criterion 4); the rail and the bars stay operable by touch. The eraser end and tilt are carried and unused; nothing in the UI mentions them until the customer decides (Question 3).
+- **Freehand is pointer-only by nature.** The Pen is the click-based way to draw a path; no keyboard route for the Pencil is claimed, and none of the bar's controls needs a pointer.
+
+### The stroke, live
+
+A stroke in progress is the blue preview (row "Live preview outline"): a 1.5 px line for a stroke without pressure, the hollow outline with its widths for a stroke with pressure, white casing, one update per frame up to 2,000 samples (criterion 11). The preview changes kind in the frame the first usable pressure arrives (criterion 3: the first sample that is neither 0 nor 0.5), which can be a few samples into the stroke; the line becomes an outline and its width follows from then on. On release the preview goes and the black object appears in the same frame, within 0.15 mm of what was shown. The new object is selected and the tool stays the Pencil, so the next stroke starts at once.
+
+### The Pencil bar
+
+Hidden, not disabled: while only a mouse has been used there is no bar. When a pen is first seen (in range), the bar appears in the overlay row with the readout "Pen: pressure 0.62, tilt 12° / −3°"; after the first stroke with pressure it adds **Min** and **Max** width and the **Curve** choice (Soft, Linear, Firm; Linear preselected). Value fields use the Select bar's field (row "Bar number field"): Max is never below Min and a value below it is raised and shown raised; a change applies from the next stroke; everything lives for the session and is never saved (criterion 14). The readout is muted, a fixed 232 px box with tabular figures so it does not jitter, not a live region, and is removed after the demo if the customer says so (Question 4). No device name, id or pointer id is shown or stored (criterion 16). At 800 x 600 (bar row 356 px) the groups wrap to three rows (108 px); the bar is for tablet users, and the wrap is accepted.
+
+### Keyboard, accessibility, contrast
+
+Rail button: Tab reaches the Tools card (own stops until the customer makes it one roving toolbar, row "Rail keyboard model"), Space or Enter picks the tool. Bar: Tab order Min, Max, Curve; arrows in Curve (`role="radiogroup"`, one Tab stop); field names "Minimum width" and "Maximum width"; the unit mm in the field. Readout `--panel-muted-fg` 5.0:1 on `--toolbar-bg`; blue preview 1.5 px with a white casing reads on every fill. Targets: the rail button is 40 px; bar controls are 28 px high, above the 24 px minimum, which matters with a stylus.
+
+### At 800 x 600, large documents
+
+The rail ends 512 px down (34 px clear) in column B and 424 px in column A. A 2,000-sample stroke previews per frame and finishes in under 200 ms (criterion 10), so the pointer never waits; the result of a long stroke is under 600 nodes. Many strokes add many small objects: selecting the last one only, as after any shape tool, keeps the selection overlays cheap.
+
+### Questions for the customer
+
+1. **The Boolean card moves from column A to column B** (the fix above, needed by the Pencil, Group, and Fracture and Flatten). *Default: yes.* *Option:* Pen and Pencil share one button, nothing moves, the Pencil sits behind a mode in the Pen's bar and its glyph changes with the last used mode; rejected by me because a tablet user wants the Pencil one press away.
+2. **Key `P` and the position at the bottom of the Tools card.** *Default: yes.* Illustrator uses `N` for the Pencil, but `N` is the Node tool here (Inkscape's key).
+3. **Demo checks for the readout** (Question 4): keep the readout in the bar until the platform question is settled; it appears only after a pen has been seen.
 
 ## Links
 

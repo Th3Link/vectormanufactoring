@@ -49,7 +49,7 @@ The offset runs on straight segments, as the Boolean operations of `0016` do. Fo
 
 ### Entry and the preview
 
-1. Given the Select tool and a selection of one or more operands, when the maker activates **Offset**, then an Offset entry opens with a Distance field (a typed or dragged value in mm, positive outward and negative inward, typed range −1000 to 1000, drag range −50 to 50, default 1 mm on first use and then the last value used in this session), a Join choice (Round, Miter, Bevel), a Cap choice shown only when an open path is selected, and the buttons Apply and Cancel. The entry is not a popup over other panel content: its widget (a chip at the selection box as the typed-value chips of `0010`, or a group in the Select bar) is the ux-engineer's decision. Where the command sits is also theirs (`specs/README.md`, rail capacity); proposal: a button "Offset" in the Select bar. Given no operand is selected, Offset is not offered.
+1. Given the Select tool and a selection of one or more operands, when the maker activates **Offset**, then an Offset entry opens with a Distance field (a typed or dragged value in mm, positive outward and negative inward, typed range −1000 to 1000, drag range −50 to 50, default 1 mm on first use and then the last value used in this session), a Join choice (Round, Miter, Bevel), a Cap choice shown only when an open path is selected, and the buttons Apply and Cancel. The entry is not a popup over other panel content: it is a section at the top of the Properties panel, opened by a text button "Offset" in the Select bar (UX notes). Given no operand is selected, Offset is not offered.
 2. Given the entry is open and the Distance is a valid non-zero number, then the result of Apply is shown as a blue (`--accent`) 1.5 px hollow outline over the canvas, with the original operands unchanged and black (the blue-new/black-old convention of `0009`). The preview shows every outline of the result, holes included; it is never stored, and a filled result shows no fill preview. It follows a dragged Distance at one update per animation frame, and a typed Distance after Enter or Tab (no preview while typing, as `0017` criterion 42). A change of Join or Cap updates it the same way.
 3. Given an operand of 200 nodes, then the preview updates within 50 ms of each change of the Distance, Join or Cap on the reference desktop in a release build. A larger operand may update later, but the pointer and the field never block, and what Apply writes is exactly what the last preview showed.
 4. Given the entry is open, when the maker presses Escape, Cancel, changes the tool or the selection, or presses on empty canvas, then the entry closes, the preview disappears and nothing is written. Escape is the first step of the cascade of `0010` criterion 42 (an open entry handles it).
@@ -105,9 +105,60 @@ Decided by the product owner (change if you disagree): the original is kept and 
 
 ## UX notes
 
-(filled in by ux-engineer before Ready)
+By `ux-engineer`, 2026-10-10. Numbers and rows are in `docs/design-system.md`: "Command with parameters", "Offset section", "Select bar layout", "Live preview outline", "Action notice", "Refusal outline". Reference tools: Illustrator's Offset Path dialog (distance, joins, miter limit, Preview check box), LightBurn's Offset Shapes, Inkscape's fixed-step Inset and Outset (no preview). We keep Illustrator's and LightBurn's choices and drop the dialog and the Preview check box: the preview is always on.
 
-For the ux-engineer: this is the first command with a parameter and a live preview; the typed-value chips of `0010` (open with a key or double-click, Enter applies, Escape cancels, blue preview) and the Select bar's fields are the two existing patterns; the value field of `0017` has no preview while typing; the rail has no free space (see `specs/README.md`), and the Path card is planned for seven buttons already.
+### Where it lives: a Select bar button that opens a panel section
+
+This is the first command with a value, so it needs a place for Distance, Join, Cap, Apply and Cancel. Decision: the entry is the text button **Offset** in the Select bar (shown while the selection holds an operand, hidden otherwise, which is criterion 1's "not offered"; hidden for a group alone), and it opens a **section at the top of the Properties panel**, above the Style area, with focus in Distance. The criterion 1 wording that left this open ("a chip at the selection box ... or a group in the Select bar") is replaced by this.
+
+Rejected: a rail button (the rail is full, and Offset would be dimmed with nothing selected where the spec says not offered); a chip at the selection box as in `0010` (a chip holds one or two fields; this has five controls and must not cover the preview); a group inside the Select bar (the bar wraps to three rows at 800 x 600 and would hold a field that previews while the bar's own fields do not); a dialog or popover (the panel has none, and a dialog covers the canvas where the preview is drawn). The cost is eye travel from the bar to the right panel; the section opening and the focus move are the cue, and the preview is on the canvas, which the panel does not cover.
+
+### The section
+
+Rows of 28 px, 8 px apart, the panel's own components (row "Offset section"):
+
+| Row | Control | Notes |
+|---|---|---|
+| Title | "Offset", 12 px semibold | `role="group"` named "Offset" |
+| Distance | the panel's value field, mm | typed -1000 to 1000, dragged -50 to 50, 1 mm first, then the last value of the session; a reserved 16 px caption below it |
+| Join | three icon items, 40 px each: Round, Miter, Bevel | the glyphs of the stroke Join; default Round |
+| Cap | three icon items: Round, Flat, Square | only while an open path is selected; default Round |
+| Buttons | Apply (filled, `--toolbar-icon-active-bg`, white label), Cancel (outline), 72 px wide each | last in Tab order |
+
+188 px high with Cap, 152 px without. It pushes the Style rows down while open, which is the one deliberate shift: the maker entered a mode, and the section is the first thing in the panel. The panel scrolls if the window is short.
+
+**The sign is the side.** The one command name "Offset" hides which way a minus goes, so the caption under Distance reads "Outset" for a positive value and "Inset" for a negative one (nothing at 0). The same slot carries the reason when the result would be empty or refused: "Nothing is left at -10 mm." (criterion 7) or "Needs closed paths: 1 of 2 selected is open." (criterion 8). It is a polite live region, muted, with the `--field-invalid` colour and an alert glyph for a refusal, and it has a fixed height so the section does not jump.
+
+### Opening, previewing, applying
+
+- Pressing Offset opens the section (expanding the panel if collapsed, activating the Style tab if another tab shows, as Shift+Ctrl+F does) and **shows the preview at once** with the remembered Distance, so the maker sees a result before touching anything. The button shows the open ground and `aria-expanded="true"`; pressing it again closes the section.
+- The preview is the blue hollow outline of the result over the unchanged originals (row "Live preview outline"), holes included, no fill. A dragged Distance previews once per frame; a typed value previews after Enter or Tab (criterion 2). **Enter in Distance works in two steps:** the first commits a typed value and shows its preview, the second applies (criterion 5, "with the value committed"). Join and Cap changes preview at once.
+- While a large operand's preview is being computed the caption reads "Updating..." and Apply is ignored until the preview for the current values is on screen, so what is written is exactly what was last shown (criterion 3). For 200 nodes this lasts under 50 ms and is never seen.
+- Close without writing: Escape (the first step of the cascade, criterion 4), Cancel, another tool, another selection, a press on empty canvas, or a Distance of 0 with Apply. Apply by mouse returns focus to the canvas; by key it returns to the Offset button.
+- After Apply the selection is the new shapes, the section closes, and the notice "Offset: added 2 shapes, 5 mm outward." (3 s, `role="status"`) sits 4 px under the Offset button. A refusal (criteria 7, 8, 14) is an alert chip 4 px under Apply, 8 s; the section stays open so the value can be changed.
+
+### States
+
+| Selection | Offset button | Section |
+|---|---|---|
+| Nothing, or only groups | not in the bar | cannot open |
+| One or more closed shapes, compound paths, primitives | shown | Join; no Cap |
+| An open path (alone or with closed shapes) | shown | Join and Cap; a negative Distance refuses the open ones (caption, then Apply) |
+| A group together with other objects | shown | Apply refuses with the group sentence (criterion 14), the group outlined |
+| Another tool than Select | the bar is not shown | an open section closes |
+
+### Keyboard, accessibility, contrast
+
+Tab reaches Offset in the Select bar; Space or Enter opens; focus lands in Distance; Tab order is Distance, Join, Cap, Apply, Cancel; arrows move inside Join and Cap (one Tab stop each, `role="radiogroup"`); Escape closes. Labels are visible ("Distance", "Join", "Cap"); the accessible name of the field is "Distance, millimetres". The value field's drag has the keyboard route of the panel's fields (arrows, Shift ten times, Ctrl a tenth). Apply white on `--toolbar-icon-active-bg` is 4.5:1; the outline Cancel and the muted caption (`--panel-muted-fg` 5.0:1) pass. Targets are 28 px high or more. Colour is never the only cue: the preview is also described by the caption, and a refusal has the alert glyph and the sentence.
+
+### At 800 x 600, large documents
+
+The section is 188 px of a panel about 546 px high; the Style rows below it scroll. The Select bar gains the Offset button, which comes last and wraps by whole groups; the number of rows at the narrowest width is measured at build (the settings group alone nearly fills the 356 px row, so Offset is likely to sit on a second row for any selection). The preview of 2,000 nodes may lag; the field and the pointer never block.
+
+### Questions for the customer
+
+1. **Keep or replace the original (Question 1).** The design works with A (keep, copy above). With B later, the switch is one more row in the section ("Delete original", off).
+2. **Name (Question 5).** One command "Offset" with the sign as side, made readable by the caption. Two buttons would cost a second bar button for nothing.
 
 ## Links
 
