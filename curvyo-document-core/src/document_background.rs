@@ -8,7 +8,7 @@
 //! [`validate`] is the strict check on open, and [`Document::set_background`]
 //! writes only the register that changed.
 
-use loro::{LoroDoc, LoroValue};
+use loro::{LoroDoc, LoroMap, LoroValue, ValueOrContainer};
 use serde::Serialize;
 
 use crate::document::{Document, ROOT_MAP};
@@ -137,13 +137,26 @@ fn paint_of(value: &LoroValue) -> Option<BackgroundPaint> {
     }
 }
 
+/// The plain value of a root register: `Ok(None)` when absent, `Err` when the key
+/// holds a Loro container, which no Curvyo writer produces and which peers could
+/// edit element by element (mixing the channels of the colour, criterion 45).
+fn plain(root: &LoroMap, key: &str) -> Result<Option<LoroValue>, ()> {
+    match root.get(key) {
+        None => Ok(None),
+        Some(ValueOrContainer::Value(value)) => Ok(Some(value)),
+        Some(ValueOrContainer::Container(_)) => Err(()),
+    }
+}
+
 /// Strict validation on open (criterion 7): every register that is present
-/// must be well formed. An absent register is valid.
+/// must be a well formed plain value. An absent register is valid.
 pub(crate) fn validate(loro: &LoroDoc) -> bool {
     let root = loro.get_map(ROOT_MAP);
-    let present = |key: &str| root.get(key).map(|value| value.get_deep_value());
-    present(KEY_PAINT).is_none_or(|value| paint_of(&value).is_some())
-        && present(KEY_COLOR).is_none_or(|value| colour_of(&value).is_some())
+    let ok = |key: &str, check: fn(&LoroValue) -> bool| {
+        plain(&root, key).is_ok_and(|value| value.as_ref().is_none_or(check))
+    };
+    ok(KEY_PAINT, |value| paint_of(value).is_some())
+        && ok(KEY_COLOR, |value| colour_of(value).is_some())
 }
 
 fn colour_value(color: Color, opacity: Opacity) -> LoroValue {
@@ -165,7 +178,7 @@ impl Document {
     #[must_use]
     pub fn background(&self) -> DocumentBackground {
         let root = self.loro().get_map(ROOT_MAP);
-        let read = |key: &str| root.get(key).map(|value| value.get_deep_value());
+        let read = |key: &str| plain(&root, key).ok().flatten();
         let default = DocumentBackground::DEFAULT;
         let paint = read(KEY_PAINT)
             .and_then(|value| paint_of(&value))

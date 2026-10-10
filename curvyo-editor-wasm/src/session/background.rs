@@ -107,7 +107,11 @@ impl Session {
     /// commit. Writes nothing after Escape, or when it equals the stored value.
     pub fn commit_background_preview(&mut self) {
         if let Some(preview) = self.background_preview.take() {
-            let _ = self.document.set_background(preview);
+            // Only the colour: the paint captured when the drag started is not written back.
+            let paint = self.document.background().paint;
+            let _ = self
+                .document
+                .set_background(DocumentBackground { paint, ..preview });
         }
     }
 

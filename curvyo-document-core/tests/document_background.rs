@@ -326,6 +326,33 @@ fn the_damaged_fixtures_are_refused_as_damaged() {
     }
 }
 
+/// A Loro list *container* where the format says a list value: peers could edit it element by
+/// element and mix the channels, so the file is refused.
+#[test]
+fn a_loro_container_where_a_plain_value_is_required_is_damaged() {
+    for (key, list_container) in [("background_color", true), ("background_paint", false)] {
+        let loro = loro_of(&Document::new(1));
+        loro.set_peer_id(1).unwrap();
+        let root = loro.get_map("root");
+        if list_container {
+            let list = root.insert_container(key, loro::LoroList::new()).unwrap();
+            for n in [1_i64, 2, 3] {
+                list.push(n).unwrap();
+            }
+            list.push(1.0_f64).unwrap();
+        } else {
+            let text = root.insert_container(key, loro::LoroText::new()).unwrap();
+            text.insert(0, "solid").unwrap();
+        }
+        loro.commit();
+        let bytes = container_from_loro(&loro.export(loro::ExportMode::Snapshot).unwrap());
+        assert!(
+            matches!(unpack(2, &bytes), Err(OpenError::Damaged)),
+            "{key}"
+        );
+    }
+}
+
 #[test]
 fn more_malformed_shapes_are_damaged_and_every_valid_edge_opens() {
     let i = LoroValue::I64;
@@ -445,6 +472,17 @@ fn every_older_fixture_opens_with_the_default_background() {
     ] {
         let bytes = std::fs::read(fixture_path(name)).unwrap();
         let document = unpack(2, &bytes).unwrap_or_else(|e| panic!("{name}: {e:?}"));
+        // Opening wrote nothing: the replica holds exactly the operations the file stored.
+        let mut archive = zip::ZipArchive::new(Cursor::new(&bytes)).unwrap();
+        let mut stored_bytes = Vec::new();
+        archive
+            .by_name("document.loro")
+            .unwrap()
+            .read_to_end(&mut stored_bytes)
+            .unwrap();
+        let stored = LoroDoc::new();
+        stored.import(&stored_bytes).unwrap();
+        assert_eq!(loro_of(&document).oplog_vv(), stored.oplog_vv(), "{name}");
         assert_eq!(document.background(), DocumentBackground::DEFAULT, "{name}");
         assert_eq!(root_value(&document, "background_paint"), None, "{name}");
         assert_eq!(root_value(&document, "background_color"), None, "{name}");
