@@ -1020,7 +1020,8 @@ fn ac57_r_and_s_open_exactly_the_double_click_entries_for_every_kind() {
     for (name, doc, grab, south_east) in kinds {
         for (k, kind) in [
             ("r", "angle"),
-            ("s", if name == "polygon" { "radius" } else { "size" }),
+            // `0019` criterion 56: W and H for a polygon or star too.
+            ("s", "size"),
         ] {
             let mut s = open_doc(&doc);
             click(&mut s, grab);

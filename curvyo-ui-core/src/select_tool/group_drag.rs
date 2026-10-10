@@ -137,7 +137,7 @@ impl SelectTool {
         }
     }
 
-    /// The shapes the group drag in flight would turn into paths if a release
+    /// The shapes the drag in flight (a group's or a single polygon's or star's) would turn into paths if a release
     /// at `current` committed it: counted by kind, empty while the preview is not
     /// a stretch, before the dead zone is left, or for no group drag (the readout's
     /// second line, criterion 23).
@@ -148,13 +148,16 @@ impl SelectTool {
         shift: bool,
         ctrl: bool,
     ) -> ConversionCounts {
-        let SelectDrag::GroupTransforming(drag) = &self.drag else {
-            return ConversionCounts::default();
-        };
-        if !drag.origin.is_active_at(current) {
-            return ConversionCounts::default();
+        match &self.drag {
+            SelectDrag::GroupTransforming(drag) if drag.origin.is_active_at(current) => {
+                converted_counts(&drag.starts, &drag.resolve(current, shift, ctrl))
+            }
+            SelectDrag::Transforming(drag) if drag.origin.is_active_at(current) => {
+                let result = drag.resolve(current, shift, ctrl);
+                converted_counts(std::slice::from_ref(&drag.start), &[result])
+            }
+            _ => ConversionCounts::default(),
         }
-        converted_counts(&drag.starts, &drag.resolve(current, shift, ctrl))
     }
 
     /// The angle a rotate drag of the group has turned by, with the pointer at

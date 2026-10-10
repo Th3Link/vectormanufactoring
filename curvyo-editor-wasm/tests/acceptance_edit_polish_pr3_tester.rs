@@ -2626,7 +2626,7 @@ fn c57_s_shrinks_about_the_centre_too_and_a_one_field_change_keeps_the_centre() 
 }
 
 #[test]
-fn c57_polygon_and_star_scale_about_the_centre_with_one_field_r_for_both_routes() {
+fn c57_polygon_and_star_scale_about_the_centre_with_w_and_h_for_both_routes() {
     for (name, d) in [
         ("polygon", polygon_doc(70.0, 60.0, 40.0, 5)),
         ("star", star_doc(70.0, 60.0, 40.0, 5, 0.5)),
@@ -2635,13 +2635,16 @@ fn c57_polygon_and_star_scale_about_the_centre_with_one_field_r_for_both_routes(
             let mut s = select_at(&d, pt(70.0, 20.0));
             let _ = th;
             assert_eq!(press(&mut s, "s"), KeyOutcome::EntryOpened);
-            assert_eq!(s.transform_entry().map(|e| e.kind), Some("radius"));
+            // `0019` criterion 56 replaces the one field "r" (`0008` criterion 26):
+            // W and H of the frame square; 120 x 120 is a radius of 60.
+            assert_eq!(s.transform_entry().map(|e| e.kind), Some("size"));
             let e = s.transform_entry().unwrap();
-            assert_eq!(e.fields.len(), 1, "{name}");
-            assert_eq!(e.fields[0].label, "r", "{name}");
+            assert_eq!(e.fields.len(), 2, "{name}");
+            assert_eq!(e.fields[0].label, "W", "{name}");
+            assert_eq!(e.fields[1].label, "H", "{name}");
             let o0 = obj_of(&s, 0);
             assert_eq!(
-                s.commit_transform_entry("60", "", 0),
+                s.commit_transform_entry("120", "120", 0),
                 EntryOutcome::Committed,
                 "{name}"
             );
@@ -2775,13 +2778,9 @@ fn c57a_double_click_on_a_resize_handle_keeps_the_dragged_handles_fixed_point() 
         }
         let at = found.unwrap_or_else(|| panic!("{name}: a corner resize handle exists"));
         dbl(&mut s, at, at, false, false);
+        assert_eq!(s.transform_entry().map(|e| e.kind), Some("size"), "{name}");
         assert_eq!(
-            s.transform_entry().map(|e| e.kind),
-            Some("radius"),
-            "{name}"
-        );
-        assert_eq!(
-            s.commit_transform_entry("60", "", 0),
+            s.commit_transform_entry("120", "120", 0),
             EntryOutcome::Committed,
             "{name}"
         );

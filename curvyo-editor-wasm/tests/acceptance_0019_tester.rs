@@ -2439,10 +2439,10 @@ fn ac34_the_size_chip() {
     assert!(bytes_of(&s) == before);
 }
 
-/// Criterion 34: for a uniform-only selection the two fields are linked, with
-/// the group box's aspect ratio; a typed size scales proportionally.
+/// Criterion 34 (as changed 2026-10-10): the two fields are independent for a
+/// selection that holds a star as for any other; typing one alone is a stretch.
 #[test]
-fn ac34_uniform_only_size_chip_is_linked() {
+fn ac34_a_size_chip_with_a_star_has_independent_fields() {
     let d = Document::new(1);
     let _ = d.create_path(&[anchor(1, 50.0, 50.0), anchor(2, 90.0, 50.0)], false);
     let _ = d.create_polygon(
@@ -2457,16 +2457,14 @@ fn ac34_uniform_only_size_chip_is_linked() {
     select_everything(&mut s);
     key(&mut s, "s", false);
     let v = s.transform_entry().unwrap();
-    assert!(v.linked, "uniform-only: linked fields");
+    assert!(!v.linked, "independent fields");
     let (w, h): (f64, f64) = (
         v.fields[0].prefill.parse().unwrap(),
         v.fields[1].prefill.parse().unwrap(),
     );
-    let other = s.transform_entry_linked(0, "80").expect("linked text");
-    let other: f64 = other.parse().unwrap();
-    assert!(near(other, h * 80.0 / w, 0.06), "{other}");
-    // And a double click on an edge: there is no edge handle, so no single-field
-    // entry opens from there.
+    assert_eq!(s.transform_entry_linked(0, "80"), None, "nothing is linked");
+    let other = h;
+    let _ = w;
     let mut s = open(&d);
     select_everything(&mut s);
     key(&mut s, "s", false);
@@ -2756,9 +2754,8 @@ fn ac38_hint_lines() {
     assert_eq!(
         l,
         [
-            "Resize selection, proportional only",
-            "Holds a star and a rotated rectangle",
-            "To stretch: Object to path first",
+            "Resize selection, proportional",
+            "Stretch with an edge handle",
             "Shift: from the centre",
             "Double-click or S: type a size"
         ]
@@ -3232,17 +3229,8 @@ fn ac21_uniform_only_corner_drag_is_proportional() {
     key(&mut s, "Escape", false);
     select_everything(&mut s);
     let g = GBox::new(&s, tl, pt(tl.x + w, tl.y + h));
-    // No edge resize handle: a press on the E edge handle spot is a marquee.
-    let before_bytes = bytes_of(&s);
-    drag(
-        &mut s,
-        g.mid(1.0, 0.0),
-        pt(g.mid(1.0, 0.0).x + 30.0, g.mid(1.0, 0.0).y),
-    );
-    assert!(
-        bytes_of(&s) == before_bytes,
-        "no edge handle on a uniform-only selection"
-    );
+    // (Criterion 18 gives this selection edge handles now: the east edge handle
+    // stretches and converts it, see `multi_object_transform_gestures`.)
     select_everything(&mut s);
     // A drag mostly in x: still one factor; sx dominated: f = (w + 50) / w.
     let f = (g.w() + 50.0) / g.w();
@@ -3532,11 +3520,10 @@ fn ac50_save_and_reopen() {
         v.fields[0].prefill.parse().unwrap(),
         v.fields[1].prefill.parse().unwrap(),
     );
-    let h2 = s
-        .transform_entry_linked(0, &format!("{}", w * 1.5))
-        .unwrap();
+    // The width alone: a stretch (`0019` criteria 34, 53), which turns the star into
+    // a path.
     assert_eq!(
-        s.commit_transform_entry(&format!("{}", w * 1.5), &h2, 0),
+        s.commit_transform_entry(&format!("{}", w * 1.5), &v.fields[1].prefill, 0),
         EntryOutcome::Committed
     );
     let _ = h;
@@ -3572,9 +3559,8 @@ fn ac50_save_and_reopen() {
     assert!(
         matches!(&live[2], ObjectSnapshot::Primitive(p) if matches!(p.shape, Shape::Ellipse { .. }))
     );
-    assert!(
-        matches!(&live[3], ObjectSnapshot::Primitive(p) if matches!(p.shape, Shape::Star { .. }))
-    );
+    // The star was stretched: a path, with the same id, kept through save and reopen.
+    assert!(matches!(&live[3], ObjectSnapshot::Path(_)));
     // No format change.
     let json_after: serde_json::Value =
         serde_json::from_slice(&doc_of(&s).export_json().unwrap()).unwrap();

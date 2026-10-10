@@ -23,6 +23,7 @@
 mod boolean;
 #[cfg(test)]
 mod box_refit_tests;
+mod conversion_view;
 mod corner_readout;
 mod document;
 mod draw;

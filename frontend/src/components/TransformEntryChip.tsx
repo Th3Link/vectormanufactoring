@@ -37,6 +37,9 @@ interface TransformEntryChipProps {
   onCommit: (first: string, second: string, lastEdited: number) => string;
   onCancel: () => void;
   onLinked: (field: number, text: string) => string | undefined;
+  /** The note while the typed size turns shapes into paths ("Turns 2 shapes into
+   * paths."), or `null`. */
+  onNote: (first: string, second: string, lastEdited: number) => string | null;
 }
 
 /**
@@ -56,6 +59,7 @@ export function TransformEntryChip({
   onCommit,
   onCancel,
   onLinked,
+  onNote,
 }: TransformEntryChipProps) {
   const chipRef = useRef<HTMLDivElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -63,6 +67,7 @@ export function TransformEntryChip({
   const messageId = useId();
   const [texts, setTexts] = useState<string[]>(() => entry.fields.map((f) => f.prefill));
   const [lastEdited, setLastEdited] = useState(0);
+  const [note, setNote] = useState<string | null>(null);
   const [invalid, setInvalid] = useState<{ field: number; reason: Reason } | null>(null);
   const [sizes, setSizes] = useState({
     chip: { width: 0, height: 0 },
@@ -173,6 +178,7 @@ export function TransformEntryChip({
       }
     }
     setTexts(next);
+    setNote(entry.kind === "size" ? onNote(next[0] ?? "", next[1] ?? "", index) : null);
   };
 
   // Cancel on a blur that leaves the chip (a press elsewhere, a tool switch,
@@ -277,6 +283,14 @@ export function TransformEntryChip({
           );
         })}
       </div>
+      {note !== null && invalid === null && (
+        // The size is a stretch that turns shapes into paths
+        // (`specs/0019-multi-object-transform/` criterion 34): muted, in the
+        // chip's own polite live region, never an error.
+        <div role="status" aria-live="polite" className="mt-1.5 px-1 text-xs opacity-70">
+          {note}
+        </div>
+      )}
       {entry.scope !== "" && (
         // The scope of a corner radius value, fixed when the field opened; the
         // field's accessible name carries it too, so this row is not read twice.

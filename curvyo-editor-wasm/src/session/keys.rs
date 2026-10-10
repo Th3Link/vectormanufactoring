@@ -281,7 +281,10 @@ impl Session {
                     .select
                     .open_entry_for_key(&objects, &self.selection, key)
                 {
-                    Ok(()) => KeyOutcome::EntryOpened,
+                    Ok(()) => {
+                        self.select.mint_conversion_ids(&mut self.minter);
+                        KeyOutcome::EntryOpened
+                    }
                     Err(KeyEntryRefusal::NothingSelected) => KeyOutcome::Hint(KeyHint::SelectFirst),
                     Err(KeyEntryRefusal::SkewNeedsPath) => KeyOutcome::Hint(KeyHint::PathOnly),
                 }

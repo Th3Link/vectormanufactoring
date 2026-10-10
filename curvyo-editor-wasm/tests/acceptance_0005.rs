@@ -407,7 +407,9 @@ fn ac1_closed_path_shows_eight_resize_handles_and_a_rotate_handle() {
 }
 
 #[test]
-fn ac1_polygon_and_star_have_corner_handles_only_plus_rotate_ac11() {
+/// `0019` criterion 56 supersedes `0005` criterion 11 here: a polygon or star shows
+/// the four edge resize handles too (they stretch it and turn it into a path).
+fn ac1_polygon_and_star_have_eight_resize_handles_plus_rotate_0019_c56() {
     for doc in [
         polygon_doc(30.0, 30.0, 10.0, 6),
         star_doc(30.0, 30.0, 10.0, 5, 0.5),
@@ -430,7 +432,7 @@ fn ac1_polygon_and_star_have_corner_handles_only_plus_rotate_ac11() {
             "move", // not a handle; a press here moves the object (`0007` 28)
             "pointer on outline mid is not a handle"
         );
-        assert_full_handle_set(&mut s, min.x, min.y, max.x, max.y, true);
+        assert_full_handle_set(&mut s, min.x, min.y, max.x, max.y, false);
     }
 }
 

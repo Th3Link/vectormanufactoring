@@ -260,7 +260,7 @@ fn a_scale_below_zero_stops_at_zero() {
 /// Criteria 10 and 21: a selection that holds a star scales proportionally
 /// only, its edge handles do not exist, and the corner hint names the cause.
 #[test]
-fn a_selection_with_a_star_scales_proportionally_and_says_why() {
+fn a_selection_with_a_star_scales_proportionally_at_a_corner_and_says_where_to_stretch() {
     let document = rects();
     let _ = document.create_star(
         curvyo_document_core::StarFrame {
@@ -288,21 +288,26 @@ fn a_selection_with_a_star_scales_proportionally_and_says_why() {
         })
         .unwrap();
     let group_box = (low.x, low.y, high.x, high.y);
-    // The east edge midpoint is not a handle: the cursor stays the arrow.
+    // The east edge midpoint is a handle (criterion 18), and the star counts for
+    // its hint line (criterion 55).
     hold(
         &mut session,
         pt(group_box.2, f64::midpoint(group_box.1, group_box.3)),
         false,
         false,
     );
-    assert_eq!(session.handle_hint(), "");
-    // The south-east corner is, with the cause line.
+    assert_eq!(session.handle_hint(), "group");
+    assert_eq!(session.hover_conversion_counts(), vec![0, 1, 0, 0]);
+    // The south-east corner is proportional and points to the edge handle.
     hold(&mut session, pt(group_box.2, group_box.3), false, false);
     assert_eq!(session.handle_hint(), "group");
+    assert!(
+        session.hover_conversion_counts().is_empty(),
+        "a corner never converts"
+    );
     let lines = session.corner_hint_lines();
-    assert_eq!(lines[0], "Resize selection, proportional only");
-    assert_eq!(lines[1], "Holds a star");
-    assert_eq!(lines[2], "To stretch: Object to path first");
+    assert_eq!(lines[0], "Resize selection, proportional");
+    assert_eq!(lines[1], "Stretch with an edge handle");
     // A free drag of the corner scales both axes by one factor.
     drag(
         &mut session,

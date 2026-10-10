@@ -137,6 +137,43 @@ impl WasmSession {
         self.session.corner_hint_lines()
     }
 
+    /// The shapes an edge stretch of the selection would turn into paths, while
+    /// the pointer rests on an edge resize handle, as `[polygons, stars, rotated
+    /// rectangles, rotated ellipses]`; empty otherwise. The host writes "Stretching
+    /// turns 2 shapes into paths" in the hint chip from it.
+    #[must_use]
+    pub fn hover_conversion_counts(&self) -> Vec<u32> {
+        self.session.hover_conversion_counts()
+    }
+
+    /// The shapes the drag in flight would turn into paths if released now, in the
+    /// order of [`WasmSession::hover_conversion_counts`]; empty when none: the
+    /// readout's second line.
+    #[must_use]
+    pub fn live_conversion_counts(&self) -> Vec<u32> {
+        self.session.live_conversion_counts()
+    }
+
+    /// The shapes the open size entry would turn into paths with the typed texts,
+    /// in the same order; empty when it is not a stretch: the note under its fields.
+    #[must_use]
+    pub fn entry_conversion_counts(
+        &self,
+        first: &str,
+        second: &str,
+        last_edited: usize,
+    ) -> Vec<u32> {
+        self.session
+            .entry_conversion_counts(first, second, last_edited)
+    }
+
+    /// The shapes the last commit turned into paths, once, in the same order;
+    /// empty when it converted nothing or the notice was taken: the host shows
+    /// "Stretching turned 2 shapes into paths. No undo yet." from it.
+    pub fn take_conversion_notice(&mut self) -> Vec<u32> {
+        self.session.take_conversion_notice()
+    }
+
     /// What a screen reader says about a multi-selection ("4 objects selected,
     /// 46.2 by 18.7 mm"); empty for fewer than two selected objects.
     #[must_use]

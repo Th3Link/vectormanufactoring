@@ -9,7 +9,7 @@
 use curvyo_document_core::{Angle, Document, ObjectSnapshot, PathSnapshot, Point};
 
 use crate::ResizeDirection;
-use crate::conversion::converted_polygon_or_star;
+use crate::conversion::{ConversionCounts, converted_counts, converted_polygon_or_star};
 use crate::oriented_box::OrientedBox;
 use crate::transform_commit::{MAX_COORDINATE_MM, commit_gesture};
 use crate::transform_drag::{
@@ -286,6 +286,16 @@ impl TransformEntry {
                 .unwrap_or_else(|| box_.to_document(box_.local_center())),
             fields,
             converted: converted_polygon_or_star(object),
+        }
+    }
+
+    /// The shapes the typed values would turn into paths: one for a polygon or star
+    /// typed to another aspect ratio, else none.
+    #[must_use]
+    pub fn conversion_counts(&self, texts: [&str; 2], last_edited: usize) -> ConversionCounts {
+        match self.resolve(texts, last_edited) {
+            Ok(Some(result)) => converted_counts(std::slice::from_ref(&self.start), &[result]),
+            _ => ConversionCounts::default(),
         }
     }
 

@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { stretchHoverLine } from "@/lib/conversionText";
 import { placeReadout } from "@/lib/readoutPlacement";
 
 /** How long the pointer must rest on a handle before the hint shows
@@ -68,6 +69,10 @@ interface HandleHintChipProps {
    * and all the lines of a group handle (`hint` is `"group"`, the text is
    * Rust's). Empty for any other handle, then the fixed lines of `hint` show. */
   cornerLines: string[];
+  /** The shapes an edge stretch would turn into paths, per kind; the line
+   * "Stretching turns 2 shapes into paths" goes after the title
+   * (`specs/0019-multi-object-transform/` criterion 55). */
+  conversionCounts: number[];
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -79,11 +84,22 @@ interface HandleHintChipProps {
  * right, the readout's placement and flipping), never following it, taking
  * no pointer events, gone on a press, on leaving the handle or on any key.
  */
-export function HandleHintChip({ hint, cornerLines, containerRef }: HandleHintChipProps) {
-  const lines =
+export function HandleHintChip({
+  hint,
+  cornerLines,
+  conversionCounts,
+  containerRef,
+}: HandleHintChipProps) {
+  const base =
     (hint === "param-radius" || hint === "group") && cornerLines.length > 0
       ? cornerLines
       : HINT_LINES[hint];
+  const conversion = stretchHoverLine(conversionCounts);
+  // Memoized: the hover timer below restarts whenever `lines` changes identity.
+  const lines = useMemo(
+    () => (base && conversion !== null ? [base[0] ?? "", conversion, ...base.slice(1)] : base),
+    [base, conversion],
+  );
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const chipRef = useRef<HTMLDivElement>(null);

@@ -787,7 +787,7 @@ fn ac07_spec_example_hexagon_r10_alpha30_dragged_5mm_along_the_diagonal() {
 }
 
 #[test]
-fn ac07_typed_radius_gives_the_same_result_as_the_drag_to_that_radius() {
+fn ac07_typed_size_gives_the_same_result_as_the_drag_to_that_radius() {
     let c = pt(100.0, 50.0);
     for (mode, start) in [(PolyStarMode::Polygon, 30.0), (PolyStarMode::Star, 78.7)] {
         let mut a = scene(mode, 6, 0.4, c, 30.0, start);
@@ -801,11 +801,13 @@ fn ac07_typed_radius_gives_the_same_result_as_the_drag_to_that_radius() {
         assert_eq!(
             b.key_down(key("s")),
             KeyOutcome::EntryOpened,
-            "S opens radius"
+            "S opens the size entry"
         );
+        // `0019` criterion 56: W and H of the frame square (twice the radius).
         let v = b.transform_entry().unwrap();
-        assert_eq!(v.kind, "radius");
-        let out = b.commit_transform_entry(&format!("{r_drag}"), "", 0);
+        assert_eq!(v.kind, "size");
+        let side = format!("{}", 2.0 * r_drag);
+        let out = b.commit_transform_entry(&side, &side, 0);
         assert_eq!(out, EntryOutcome::Committed);
         let (pa, pb) = (prim_of(&a, 0), prim_of(&b, 0));
         assert!((frame_of(&pa).radius.as_mm() - frame_of(&pb).radius.as_mm()).abs() < 1e-9);

@@ -125,6 +125,21 @@ pub(crate) fn converting_kind(object: &ObjectSnapshot, axes: Angle) -> Option<Co
     }
 }
 
+impl ConversionCounts {
+    /// What an edge stretch of the one object `object` turns into a path (criterion
+    /// 56): one polygon or one star, nothing for any other object.
+    #[must_use]
+    pub fn of_single(object: &ObjectSnapshot) -> Self {
+        let mut counts = Self::default();
+        if let Some(kind @ (ConvertingKind::Polygon | ConvertingKind::Star)) =
+            converting_kind(object, Angle::from_radians(0.0))
+        {
+            counts.add(kind);
+        }
+        counts
+    }
+}
+
 /// The path a primitive becomes: the outline "Object to path" gives it, under the
 /// same id and with the same style, its anchors minted by `minter`, one closed
 /// outline, and the shown angle (a polygon's or star's frame angle plus its

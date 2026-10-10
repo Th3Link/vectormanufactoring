@@ -176,16 +176,23 @@ impl Session {
                 "Shift: from the centre",
                 "Double-click or S: type a size",
             ],
-            EditHandle::Resize(_) if group.uniform_only() => {
-                let mut lines = vec!["Resize selection, proportional only".to_string()];
-                lines.extend(group.uniform_cause_line());
+            // A corner of a selection that holds a shape a stretch converts is
+            // always proportional (criterion 19); the line points to the edge
+            // handle, which only exists to point to while it is drawn.
+            EditHandle::Resize(_) if group.proportional_corners() => {
+                let tolerances = self.transform_handle_tolerances();
+                let edge_drawn = group_handles(&group, group.bounds(), &tolerances, false)
+                    .into_iter()
+                    .any(|(handle, _)| {
+                        matches!(handle, EditHandle::Resize(d) if !is_corner(d))
+                            && is_drawn_group_handle(handle, &group, &tolerances)
+                    });
+                let mut lines = vec!["Resize selection, proportional".to_string()];
+                if edge_drawn {
+                    lines.push("Stretch with an edge handle".to_string());
+                }
                 lines.extend(
-                    [
-                        "To stretch: Object to path first",
-                        "Shift: from the centre",
-                        "Double-click or S: type a size",
-                    ]
-                    .map(String::from),
+                    ["Shift: from the centre", "Double-click or S: type a size"].map(String::from),
                 );
                 return lines;
             }

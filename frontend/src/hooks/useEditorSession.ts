@@ -4,6 +4,12 @@ import { ModifierTracker } from "@/lib/keyModifiers";
 import { createSession, openSession } from "@/lib/editorSession";
 import type { WasmSession } from "@/lib/editorSession";
 import type { EditHint } from "@/components/EditHintChip";
+import {
+  CONVERSION_NOTICE_MS,
+  stretchEntryNote,
+  stretchNotice,
+  stretchReadoutLine,
+} from "@/lib/conversionText";
 import type { BooleanOp, BooleanResult } from "@/lib/booleanText";
 
 /** The canvas's backing-buffer (physical pixel) size for a given CSS
@@ -272,6 +278,19 @@ function readLiveReadout(
   return readout;
 }
 
+/** The live readout of the drag in flight with its second line when the live
+ * result turns shapes into paths ("2 shapes become paths", criterion 23). */
+function readReadout(session: WasmSession | null | undefined): LiveReadout | null {
+  const readout = readLiveReadout(session?.live_readout());
+  if (readout && session) {
+    const note = stretchReadoutLine(session.live_conversion_counts());
+    if (note !== null) {
+      readout.note = note;
+    }
+  }
+  return readout;
+}
+
 /** Reads a wasm-bindgen `DocumentPoint` instance once, immediately, so
  * it can be `free()`d rather than held onto — same reasoning as
  * `readToolbarState`. */
@@ -294,6 +313,8 @@ export interface LiveReadout {
   text: string;
   x: number;
   y: number;
+  /** A second line under the numbers ("2 shapes become paths"). */
+  note?: string;
 }
 
 /** One field of the typed numeric entry chip (`object-transform-
@@ -459,8 +480,12 @@ const NO_BADGES: MoveBadgeState = { copy: false, remove: false, lock: "", x: 0, 
  * (`specs/0010-edit-interaction-polish/` criterion 59). */
 export interface KeyHint {
   text: string;
-  /** Changes on every message, so the 2 s life restarts. */
+  /** Changes on every message, so the clock restarts. */
   id: number;
+  /** How long it stays, ms; the 2 s of a key hint when absent. The notice of a
+   * stretch that converted shapes stays 6 s and goes at the next press or key
+   * (`specs/0019-multi-object-transform/` criterion 54). */
+  ms?: number;
 }
 
 /** What `WasmSession.key_down` returns for a refused key. */
@@ -507,6 +532,10 @@ export interface EditorSession {
    * (they depend on the "Link corners" switch and on a limited corner, see
    * `Session::corner_hint_lines`); empty on any other handle. */
   cornerHintLines: string[];
+  /** The shapes an edge stretch would turn into paths, while the pointer rests on
+   * an edge resize handle: `[polygons, stars, rotated rectangles, rotated
+   * ellipses]`, empty otherwise (`Session::hover_conversion_counts`). */
+  conversionHoverCounts: number[];
   /** The typed numeric entry to show, or `null`. */
   transformEntry: TransformEntryState | null;
   /** The open typed move, if any. */
@@ -531,6 +560,9 @@ export interface EditorSession {
   cancelTransformEntry: () => void;
   /** For linked fields: the text the other field takes. */
   transformEntryLinked: (field: number, text: string) => string | undefined;
+  /** The note under a size entry's fields while the typed size turns shapes into
+   * paths ("Turns 2 shapes into paths."); `null` when it does not. */
+  entryConversionNote: (first: string, second: string, lastEdited: number) => string | null;
   /** Acceptance criterion 5's cursor cue: whether the live cursor is
    * over the in-progress pen path's own close target — `Canvas` swaps
    * to the "pen-with-small-circle" cursor variant while this is `true`. */
@@ -719,6 +751,7 @@ export function useEditorSession(
   const editHintCounter = useRef(0);
   const [handleHint, setHandleHint] = useState("");
   const [cornerHintLines, setCornerHintLines] = useState<string[]>([]);
+  const [conversionHoverCounts, setConversionHoverCounts] = useState<number[]>([]);
   const limitNoticeTimer = useRef<number | undefined>(undefined);
   const [transformEntry, setTransformEntry] = useState<TransformEntryState | null>(null);
   const [moveEntry, setMoveEntry] = useState<MoveEntryState | null>(null);
@@ -811,6 +844,12 @@ export function useEditorSession(
     setZoomPercent(session.zoom_percent());
     setSelectionCount(session.selection_count());
     setSelectionAnnouncement(session.selection_announcement());
+    // A commit that turned shapes into paths says so, once.
+    const notice = stretchNotice(session.take_conversion_notice());
+    if (notice !== null) {
+      keyHintCounter.current += 1;
+      setKeyHint({ text: notice, id: keyHintCounter.current, ms: CONVERSION_NOTICE_MS });
+    }
     setSyncRevision((revision) => revision + 1);
     syncEntry(session);
     syncBadges(session);
@@ -1182,6 +1221,8 @@ export function useEditorSession(
       if (releasePendingRef.current) {
         return;
       }
+      // The notice of a stretch goes at the next press or key (criterion 54).
+      setKeyHint((hint) => (hint?.ms === undefined ? hint : null));
       syncTrackedModifiers(event);
       // A press on the canvas takes the focus from a field of the panel, and a
       // field that commits when it is left (the Document size) must do so
@@ -1235,6 +1276,7 @@ export function useEditorSession(
         return;
       }
       setHandleHint("");
+    setConversionHoverCounts([]);
       // Capture the pointer for every tool, not only for panning: a
       // transform drag (a rotate swings the pointer in a wide arc) must
       // keep receiving moves and the release when the pointer leaves the
@@ -1293,10 +1335,11 @@ export function useEditorSession(
       setIsHoveringPenCloseTarget(
         session?.is_hovering_pen_close_target() ?? false,
       );
-      setLiveReadout(readLiveReadout(session?.live_readout()));
+      setLiveReadout(readReadout(session));
       setCursorHint(session?.cursor_hint() ?? "default");
       setHandleHint(session?.handle_hint() ?? "");
       setCornerHintLines(session?.corner_hint_lines() ?? []);
+      setConversionHoverCounts(Array.from(session?.hover_conversion_counts() ?? []));
       if (session) {
         syncBadges(session);
       }
@@ -1417,6 +1460,7 @@ export function useEditorSession(
     setLiveReadout(null);
     setCursorHint("default");
     setHandleHint("");
+    setConversionHoverCounts([]);
     lastPointerRef.current = null;
     setMoveBadges(NO_BADGES);
   }, []);
@@ -1436,8 +1480,9 @@ export function useEditorSession(
     const last = lastPointerRef.current;
     if (last) {
       session.pointer_hover(last.x, last.y, shift, ctrl, alt);
-      setLiveReadout(readLiveReadout(session.live_readout()));
+      setLiveReadout(readReadout(session));
       setHandleHint("");
+    setConversionHoverCounts([]);
     }
     setCursorHint(session.cursor_hint());
     syncBadges(session);
@@ -1511,6 +1556,7 @@ export function useEditorSession(
       if (isFormControl(event.target)) {
         return;
       }
+      setKeyHint((hint) => (hint?.ms === undefined ? hint : null));
       if (event.key === " ") {
         // Space+drag pans (acceptance criterion 4) — `preventDefault`
         // so it never activates a focused button
@@ -1543,7 +1589,7 @@ export function useEditorSession(
         keyHintCounter.current += 1;
         setKeyHint({ text: hint, id: keyHintCounter.current });
       }
-      setLiveReadout(readLiveReadout(session.live_readout()));
+      setLiveReadout(readReadout(session));
       setCursorHint(session.cursor_hint());
       syncFromSession();
     },
@@ -1555,7 +1601,7 @@ export function useEditorSession(
     if (!keyHint) {
       return undefined;
     }
-    const timer = window.setTimeout(() => setKeyHint(null), KEY_HINT_MS);
+    const timer = window.setTimeout(() => setKeyHint(null), keyHint.ms ?? KEY_HINT_MS);
     return () => window.clearTimeout(timer);
   }, [keyHint]);
 
@@ -1581,7 +1627,7 @@ export function useEditorSession(
       syncFromSession();
       // A typed corner radius past its limit is committed limited and says
       // "r 12.0 mm max" at the knob for 1.5 s: a limit is never silent.
-      const notice = readLiveReadout(session.live_readout());
+      const notice = readReadout(session);
       if (outcome === "committed" && notice) {
         setLiveReadout(notice);
         window.clearTimeout(limitNoticeTimer.current);
@@ -1617,6 +1663,14 @@ export function useEditorSession(
     syncFromSession();
   }, [syncFromSession]);
 
+  const entryConversionNote = useCallback(
+    (first: string, second: string, lastEdited: number): string | null =>
+      stretchEntryNote(
+        sessionRef.current?.entry_conversion_counts(first, second, lastEdited) ?? [],
+      ),
+    [],
+  );
+
   const transformEntryLinked = useCallback(
     (field: number, text: string): string | undefined =>
       sessionRef.current?.transform_entry_linked(field, text) ?? undefined,
@@ -1637,6 +1691,7 @@ export function useEditorSession(
     dismissEditHint,
     handleHint,
     cornerHintLines,
+    conversionHoverCounts,
     transformEntry,
     moveEntry,
     moveBadges,
@@ -1644,6 +1699,7 @@ export function useEditorSession(
     commitTransformEntry,
     cancelTransformEntry,
     transformEntryLinked,
+    entryConversionNote,
     onContainerBlur,
     isHoveringPenCloseTarget,
     zoomPercent,

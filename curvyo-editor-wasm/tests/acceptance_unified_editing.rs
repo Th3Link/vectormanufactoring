@@ -528,19 +528,19 @@ fn ac07_ellipse_tiers_edge_and_centre_but_no_parameter_handle() {
 #[test]
 fn ac07_polygon_tiers_no_edge_no_parameter_handle() {
     let series = decor_series(|s| star_scene(100, s / 2.0, 8, None, 0.0));
-    assert_tiers("polygon 8", &series, false, true, false);
+    assert_tiers("polygon 8", &series, true, true, false);
     let series = decor_series(|s| star_scene(300, s / 2.0, 12, None, 1.1));
-    assert_tiers("polygon 12 rotated", &series, false, true, false);
+    assert_tiers("polygon 12 rotated", &series, true, true, false);
 }
 
 #[test]
 fn ac07_star_tiers_inner_handle_from_72() {
     let series = decor_series(|s| star_scene(100, s / 2.0, 8, Some(0.9), 0.0));
-    assert_tiers("star 8", &series, false, true, true);
+    assert_tiers("star 8", &series, true, true, true);
     let series = decor_series(|s| star_scene(100, s / 2.0, 4, Some(0.99), 0.0));
-    assert_tiers("star 4 ratio .99", &series, false, true, true);
+    assert_tiers("star 4 ratio .99", &series, true, true, true);
     let series = decor_series(|s| star_scene(800, s / 2.0, 16, Some(0.6), 2.0));
-    assert_tiers("star 16 ratio .6 rotated 800%", &series, false, true, true);
+    assert_tiers("star 16 ratio .6 rotated 800%", &series, true, true, true);
 }
 
 // ---- Criterion 1/2: four knobs at radius 0, at the position rule ----
@@ -1404,15 +1404,17 @@ fn ac19_inner_ratio_field_labels_prefill_and_range() {
     }
 }
 
+/// `0019` criterion 56 replaces the outer radius entry: W and H of the frame square.
 #[test]
-fn ac19_outer_radius_entry_of_polygon_and_star_is_named_outer_radius() {
+fn ac19_size_entry_of_polygon_and_star_has_width_and_height() {
     for ratio in [None, Some(0.5)] {
         let mut sc = star_scene(100, 60.0, 8, ratio, 0.0);
         let h = sc.fr.corner(1.0, 1.0);
         let e = open_entry(&mut sc.s, h, false, false).expect("entry opens");
-        assert_eq!(e.kind, "radius");
-        assert_eq!(e.fields[0].label, "r");
-        assert_eq!(e.fields[0].accessible_name, "Outer radius");
+        assert_eq!(e.kind, "size");
+        assert_eq!(e.fields[0].label, "W");
+        assert_eq!(e.fields[0].accessible_name, "Width");
+        assert_eq!(e.fields[1].accessible_name, "Height");
     }
 }
 
@@ -1434,7 +1436,7 @@ fn ac19_three_accessible_names_never_collide_on_one_selected_kind() {
     }
     assert_eq!(
         names,
-        ["Corner radius, all corners", "Inner ratio", "Outer radius"]
+        ["Corner radius, all corners", "Inner ratio", "Width"]
     );
 }
 
@@ -2987,26 +2989,19 @@ fn ac37_delete_removes_every_selected_object_of_any_kind() {
 // Criteria 8 (N/E/S/W-free), 16, 17
 // =====================================================================
 
+/// `0019` criterion 56 supersedes `0009` criterion 8: the four side midpoints of a
+/// polygon's or star's frame square are edge resize handles now (they stretch it and
+/// turn it into a path).
 #[test]
-fn ac08_the_old_north_east_south_west_handles_of_polygon_and_star_are_gone() {
+fn ac08_the_side_midpoints_of_polygon_and_star_are_edge_resize_handles() {
     for ratio in [None, Some(0.5)] {
         let mut sc = star_scene(100, 60.0, 5, ratio, 0.0);
-        // the box of a pentagon is narrower than 2R: E and W lie outside it
         for a in [0.0, PI, -FRAC_PI_2 + PI, FRAC_PI_2 * 3.0] {
             let p = sc.fr.polar(60.0, a);
             let (cur, h) = hint(&mut sc.s, p);
-            assert!(!h.contains("resize") || a == 0.0 || a == PI, "{a}: {h}");
-            let _ = cur;
+            assert!(cur.starts_with("resize:"), "{a}: {cur}");
+            assert_eq!(h, "resize-edge", "{a}");
         }
-        // the E point: 3 px outside the pentagon's box: nothing there
-        let p = sc.fr.polar(60.0, 0.0);
-        let (cur, h) = hint(&mut sc.s, p);
-        assert_eq!(
-            (cur.as_str(), h.as_str()),
-            // Inside the polygon's square box, on no handle: a press moves it.
-            ("move", ""),
-            "E point of the outer circle"
-        );
     }
 }
 
@@ -3111,11 +3106,8 @@ fn ac16_primitives_get_centre_move_rotate_and_typed_entries() {
         let mut sc = mk(0.0);
         let h = sc.fr.corner(1.0, 1.0);
         let e = open_entry(&mut sc.s, h, false, false).expect("size entry");
-        assert_eq!(
-            e.kind,
-            if build >= 2 { "radius" } else { "size" },
-            "kind {build}"
-        );
+        // `0019` criterion 56: a polygon's or star's size entry has W and H too.
+        assert_eq!(e.kind, "size", "kind {build}");
     }
 }
 

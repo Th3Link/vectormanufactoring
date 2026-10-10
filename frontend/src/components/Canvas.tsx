@@ -132,6 +132,7 @@ export function Canvas({ editor }: CanvasProps) {
           onCommit={editor.commitTransformEntry}
           onCancel={editor.cancelTransformEntry}
           onLinked={editor.transformEntryLinked}
+          onNote={editor.entryConversionNote}
         />
       )}
       {editor.moveEntry && (
@@ -145,6 +146,7 @@ export function Canvas({ editor }: CanvasProps) {
       <HandleHintChip
         hint={editor.handleHint}
         cornerLines={editor.cornerHintLines}
+        conversionCounts={editor.conversionHoverCounts}
         containerRef={editor.containerRef}
       />
       <KeyHintChip hint={editor.keyHint} containerRef={editor.containerRef} />
@@ -159,6 +161,7 @@ export function Canvas({ editor }: CanvasProps) {
       {editor.liveReadout && (
         <ReadoutChip
           text={editor.liveReadout.text}
+          note={editor.liveReadout.note}
           x={editor.liveReadout.x}
           y={editor.liveReadout.y}
           containerRef={editor.containerRef}
@@ -199,6 +202,8 @@ interface ReadoutChipProps {
    * DOM positions... is returned already converted"). */
   x: number;
   y: number;
+  /** A second line under the numbers ("2 shapes become paths"). */
+  note?: string;
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -210,7 +215,7 @@ interface ReadoutChipProps {
  * render so it can be kept fully inside the canvas — flipped left or below
  * the pointer near the right and top edges — instead of vanishing there.
  */
-function ReadoutChip({ text, x, y, containerRef }: ReadoutChipProps) {
+function ReadoutChip({ text, x, y, note, containerRef }: ReadoutChipProps) {
   const chipRef = useRef<HTMLDivElement>(null);
   const [sizes, setSizes] = useState({
     chip: { width: 0, height: 0 },
@@ -244,7 +249,7 @@ function ReadoutChip({ text, x, y, containerRef }: ReadoutChipProps) {
         ? previous
         : next,
     );
-  }, [text, x, y, containerRef]);
+  }, [text, x, y, note, containerRef]);
 
   const placement = placeReadout(
     { x, y },
@@ -269,6 +274,7 @@ function ReadoutChip({ text, x, y, containerRef }: ReadoutChipProps) {
       }}
     >
       {text}
+      {note !== undefined && <div className="opacity-80">{note}</div>}
     </div>
   );
 }
