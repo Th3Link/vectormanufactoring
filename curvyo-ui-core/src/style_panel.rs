@@ -9,6 +9,7 @@ use curvyo_document_core::{
 };
 
 use crate::dash_text::dash_text;
+use crate::object_selection::objects_with_ids;
 use crate::select_bar::BarValue;
 use crate::style_scope::StyleScope;
 use crate::value_scale::ValueField;
@@ -232,10 +233,8 @@ fn shared<T: Copy + PartialEq>(values: &[T]) -> BarValue<T> {
 }
 
 fn styles_of<'a>(objects: &'a [ObjectSnapshot], scope: &StyleScope) -> Vec<&'a Style> {
-    scope
-        .ids
-        .iter()
-        .filter_map(|id| objects.iter().find(|object| object.id() == *id))
+    objects_with_ids(objects, &scope.ids)
+        .into_iter()
         .map(ObjectSnapshot::style)
         .collect()
 }
@@ -289,10 +288,8 @@ fn markers_panel(
     scope: &StyleScope,
     rows_shown: bool,
 ) -> Option<MarkersPanel> {
-    let paths: Vec<&PathSnapshot> = scope
-        .ids
-        .iter()
-        .filter_map(|id| shown.iter().find(|object| object.id() == *id))
+    let paths: Vec<&PathSnapshot> = objects_with_ids(shown, &scope.ids)
+        .into_iter()
         .filter_map(|object| match object {
             ObjectSnapshot::Path(path) => Some(path),
             ObjectSnapshot::Primitive(_) => None,

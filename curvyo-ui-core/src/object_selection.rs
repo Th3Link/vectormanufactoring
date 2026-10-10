@@ -21,6 +21,8 @@
 //! (path or which primitive) comes from `Document::object(id)` at the
 //! point of use — no stored kind here.
 
+use std::collections::HashMap;
+
 use curvyo_document_core::{NodeId, ObjectSnapshot};
 
 /// How the result of a marquee or lasso combines with the current selection
@@ -154,6 +156,30 @@ impl ObjectSelection {
         self.ids
             .retain(|&id| objects.iter().any(|object| object.id() == id));
     }
+}
+
+/// Up to this many ids are looked up with a scan of `objects`; more are looked up in an index.
+const SCAN_MAX_IDS: usize = 8;
+
+/// The objects named by `ids`, in the order of `ids`; an id no object holds is dropped, an id
+/// listed twice is found twice, and with two objects of one id the first wins. One pass over
+/// `objects` however many ids there are: a panel read with thousands selected must not scan all
+/// objects once per id.
+pub(crate) fn objects_with_ids<'a>(
+    objects: &'a [ObjectSnapshot],
+    ids: &[NodeId],
+) -> Vec<&'a ObjectSnapshot> {
+    if ids.len() <= SCAN_MAX_IDS {
+        return ids
+            .iter()
+            .filter_map(|id| objects.iter().find(|object| object.id() == *id))
+            .collect();
+    }
+    let mut index: HashMap<NodeId, &ObjectSnapshot> = HashMap::with_capacity(objects.len());
+    for object in objects {
+        index.entry(object.id()).or_insert(object);
+    }
+    ids.iter().filter_map(|id| index.get(id).copied()).collect()
 }
 
 #[cfg(test)]
@@ -309,5 +335,44 @@ mod tests {
             &[b],
             "the stale id must be dropped, the live one kept"
         );
+    }
+
+    fn ten_rects() -> (Vec<ObjectSnapshot>, Vec<NodeId>) {
+        let document = Document::new(1);
+        let ids: Vec<NodeId> = (0..10_u32)
+            .map(|i| {
+                document.create_rect(curvyo_document_core::RectBounds {
+                    origin: curvyo_document_core::Point::new(f64::from(i) * 20.0, 0.0),
+                    width: curvyo_document_core::Length::from_mm(1.0),
+                    height: curvyo_document_core::Length::from_mm(1.0),
+                })
+            })
+            .collect();
+        let objects = ids.iter().filter_map(|id| document.object(*id)).collect();
+        (objects, ids)
+    }
+
+    /// The scan (few ids) and the index (many ids) give the same objects in the same order: the
+    /// order of the ids, a stale id dropped, an id listed twice found twice.
+    #[test]
+    fn objects_with_ids_keeps_the_order_of_the_ids_with_few_ids_and_with_many() {
+        let (objects, ids) = ten_rects();
+        let stale = Document::new(2).create_rect(curvyo_document_core::RectBounds {
+            origin: curvyo_document_core::Point::new(0.0, 0.0),
+            width: curvyo_document_core::Length::from_mm(1.0),
+            height: curvyo_document_core::Length::from_mm(1.0),
+        });
+        let few = [ids[3], stale, ids[1], ids[3]];
+        let many: Vec<NodeId> = ids.iter().rev().copied().chain([stale, ids[0]]).collect();
+        assert!(few.len() <= SCAN_MAX_IDS && many.len() > SCAN_MAX_IDS);
+        let found = |ids: &[NodeId]| -> Vec<NodeId> {
+            objects_with_ids(&objects, ids)
+                .into_iter()
+                .map(ObjectSnapshot::id)
+                .collect()
+        };
+        assert_eq!(found(&few), vec![ids[3], ids[1], ids[3]]);
+        let expected: Vec<NodeId> = ids.iter().rev().copied().chain([ids[0]]).collect();
+        assert_eq!(found(&many), expected);
     }
 }
