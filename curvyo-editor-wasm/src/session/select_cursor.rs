@@ -117,7 +117,7 @@ impl Session {
     /// star's inner radius). Empty while a drag runs or an entry is open.
     #[must_use]
     pub fn handle_hint(&self) -> String {
-        if self.tool != Tool::Select {
+        if self.tool != Tool::Select || self.colour_pick_target().is_some() {
             return String::new();
         }
         let objects = self.objects();
