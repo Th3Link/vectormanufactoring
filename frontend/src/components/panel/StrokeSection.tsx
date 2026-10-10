@@ -73,8 +73,8 @@ export function StrokeSection({ panel, onReturnFocus }: StrokeSectionProps) {
             unit="%"
             valueNow={view.strokeOpacity}
             unitWords="percent"
-            typedMax={100}
-            defaultText="100 %"
+            typedMax={view.opacityTypedMax}
+            defaultText={view.opacityDefaultText}
             messages={PERCENT_MESSAGES}
             panel={panel}
             onReturnFocus={onReturnFocus}
@@ -90,8 +90,8 @@ export function StrokeSection({ panel, onReturnFocus }: StrokeSectionProps) {
             unit="mm"
             valueNow={view.strokeWidth}
             unitWords="millimetres"
-            typedMax={1000}
-            defaultText="0.25 mm"
+            typedMax={view.widthTypedMax}
+            defaultText={view.widthDefaultText}
             messages={WIDTH_MESSAGES}
             panel={panel}
             onReturnFocus={onReturnFocus}

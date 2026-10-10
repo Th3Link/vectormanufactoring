@@ -202,3 +202,31 @@ fn a_typed_count_is_a_whole_number_from_one_to_five_hundred() {
         Some(StyleField::MarkerCount)
     );
 }
+
+#[test]
+fn a_marker_edit_goes_to_the_paths_of_the_scope_and_any_other_edit_to_all_of_it() {
+    let document = Document::new(1);
+    let line = path(&document, 1, false);
+    let rect = square(&document);
+    let objects = objects(&document);
+    let mut selection = ObjectSelection::new();
+    selection.set(&[line, rect]);
+    let scope = style_scope(
+        StyleTool::Other,
+        &objects,
+        &selection,
+        &NodeSelection::new(),
+    );
+    let marker = StyleEdit::MarkerStart(MarkerShape::Arrow);
+    assert_eq!(scope.targets(&objects, &marker), vec![line]);
+    let width = StyleEdit::StrokeWidth(Length::from_mm(2.0));
+    assert_eq!(scope.targets(&objects, &width), vec![line, rect]);
+    selection.set(&[rect]);
+    let only_rect = style_scope(
+        StyleTool::Other,
+        &objects,
+        &selection,
+        &NodeSelection::new(),
+    );
+    assert_eq!(only_rect.targets(&objects, &marker), Vec::<NodeId>::new());
+}

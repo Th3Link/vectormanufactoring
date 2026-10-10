@@ -149,3 +149,15 @@ crates); the full gate runs before the PR is opened. Criteria are numbered as in
   spinbutton exposes `aria-valuemin/max/now/text` and `aria-keyshortcuts`; the Tab
   order is Paint, eyedropper, hex, area, hue, Opacity, Width, Dash group, Pattern,
   Join, Cap, Fill Paint; a right press ends picking. The UX review repeats this.
+- **Compound paths take markers per outline** (0018 criterion 33): each outline is
+  a closed path of its own, Start and End draw nothing, the 500 limit is per
+  outline.
+- **A marker edit goes to the paths of the scope** (`StyleScope::targets` in
+  `ui-core`); `Document::edit_style` still refuses a primitive (`NotAPath`).
+- **A spaced marker that lands on a node** takes the node's direction (the
+  bisector) instead of the chord of the flattened outline, which the curve
+  flattening skews at a corner. A stored Count above `u32::MAX` saturates.
+- **`toml` in the wasm bundle:** the release `curvyo_editor_wasm_bg.wasm` grows
+  from 7,835,394 to 8,053,374 bytes (+218 KB, +2.8 %; +74 KB gzipped), measured
+  before and after the presets commit with the same `wasm-bindgen` step and no
+  `wasm-opt`.

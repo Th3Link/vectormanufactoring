@@ -93,6 +93,13 @@ export interface StyleView {
   fillOpacityText: string;
   fillOpacityBar: number;
   fillOpacityResettable: boolean;
+  /** Limits and reset words of the value fields, from the Rust scales. */
+  widthTypedMax: number;
+  widthDefaultText: string;
+  opacityTypedMax: number;
+  opacityDefaultText: string;
+  countTypedMax: number;
+  countDefaultText: string;
 }
 
 const DISABLED_VIEW: StyleView = {
@@ -143,6 +150,12 @@ const DISABLED_VIEW: StyleView = {
   fillOpacityText: "100",
   fillOpacityBar: 1,
   fillOpacityResettable: false,
+  widthTypedMax: 0,
+  widthDefaultText: "",
+  opacityTypedMax: 0,
+  opacityDefaultText: "",
+  countTypedMax: 0,
+  countDefaultText: "",
 };
 
 /** Reads the wasm-bindgen `StylePanelView` once, immediately, so the instance
@@ -200,6 +213,12 @@ function readView(session: WasmSession | null): StyleView {
     fillOpacityText: raw.fill_opacity_text,
     fillOpacityBar: raw.fill_opacity_bar,
     fillOpacityResettable: raw.fill_opacity_resettable,
+    widthTypedMax: raw.width_typed_max,
+    widthDefaultText: raw.width_default_text,
+    opacityTypedMax: raw.opacity_typed_max,
+    opacityDefaultText: raw.opacity_default_text,
+    countTypedMax: raw.count_typed_max,
+    countDefaultText: raw.count_default_text,
   };
   raw.free();
   return view;

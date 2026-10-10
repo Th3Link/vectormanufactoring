@@ -67,8 +67,6 @@ impl Session {
             .map_or_else(StylePanelView::empty, |state| {
                 StylePanelView::new(&state, key)
             });
-        // A width dragged to 0 previews as a stroke that is off with its last
-        // width kept; the field shows the 0 the drag is at (criterion 8).
         view.pick_target = self
             .colour_pick_target()
             .map_or_else(String::new, |target| target.name().to_string());
@@ -177,22 +175,9 @@ impl Session {
         self.apply_style_edit(&field.reset_edit())
     }
 
-    /// The objects `edit` goes to: the style scope, or for a marker edit the
-    /// paths of it (a primitive has no markers, `0018` criterion 22).
+    /// The objects `edit` goes to (the rule lives in `StyleScope::targets`).
     fn edit_ids(&self, edit: &StyleEdit) -> Vec<NodeId> {
-        let scope = self.style_scope().ids;
-        if !edit.is_marker_edit() {
-            return scope;
-        }
-        let objects = self.objects();
-        scope
-            .into_iter()
-            .filter(|id| {
-                objects
-                    .iter()
-                    .any(|o| o.id() == *id && matches!(o, ObjectSnapshot::Path(_)))
-            })
-            .collect()
+        self.style_scope().targets(&self.objects(), edit)
     }
 
     /// A marker slot choice (`specs/0018-stroke-markers` criteria 1 and 22):

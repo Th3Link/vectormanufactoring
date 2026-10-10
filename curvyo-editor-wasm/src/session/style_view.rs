@@ -133,6 +133,21 @@ pub struct StylePanelView {
     pub fill_opacity_bar: f64,
     /// The reset icon of the fill opacity shows.
     pub fill_opacity_resettable: bool,
+    /// The largest width that may be typed, millimetres.
+    pub width_typed_max: f64,
+    /// The width reset target as the tooltip words it.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub width_default_text: String,
+    /// The largest opacity that may be typed, percent.
+    pub opacity_typed_max: f64,
+    /// The opacity reset target as the tooltip words it.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub opacity_default_text: String,
+    /// The largest marker count that may be typed.
+    pub count_typed_max: f64,
+    /// The marker count reset target as the tooltip words it.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub count_default_text: String,
 }
 
 fn word<T: Copy>(value: BarValue<T>, name: impl Fn(T) -> &'static str) -> String {
@@ -253,6 +268,12 @@ impl StylePanelView {
             fill_opacity_text: fill_opacity_shown.text,
             fill_opacity_bar: fill_opacity_shown.bar,
             fill_opacity_resettable: fill_opacity_shown.resettable,
+            width_typed_max: ValueScale::StrokeWidth.typed_max(),
+            width_default_text: ValueScale::StrokeWidth.default_text(),
+            opacity_typed_max: ValueScale::Opacity.typed_max(),
+            opacity_default_text: ValueScale::Opacity.default_text(),
+            count_typed_max: ValueScale::MarkerCount.typed_max(),
+            count_default_text: ValueScale::MarkerCount.default_text(),
             pick_target: String::new(),
             markers_shown: false,
             marker_start: "none".to_string(),
@@ -348,6 +369,12 @@ impl StylePanelView {
             fill_opacity_text: "100".to_string(),
             fill_opacity_bar: 1.0,
             fill_opacity_resettable: false,
+            width_typed_max: ValueScale::StrokeWidth.typed_max(),
+            width_default_text: ValueScale::StrokeWidth.default_text(),
+            opacity_typed_max: ValueScale::Opacity.typed_max(),
+            opacity_default_text: ValueScale::Opacity.default_text(),
+            count_typed_max: ValueScale::MarkerCount.typed_max(),
+            count_default_text: ValueScale::MarkerCount.default_text(),
             pick_target: String::new(),
             markers_shown: false,
             marker_start: "none".to_string(),

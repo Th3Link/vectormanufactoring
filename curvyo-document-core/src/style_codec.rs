@@ -178,10 +178,10 @@ fn read_markers(meta: &LoroMap) -> Markers {
         // A count below 1 or not a whole number reads as 1 (lenient: only a
         // merged document can hold one; open validation refuses a file's).
         mid_count: match read_value(meta, KEY_MARKER_MID_COUNT) {
-            Some(LoroValue::I64(n)) => u32::try_from(n)
-                .ok()
-                .and_then(|n| MarkerCount::new(n).ok())
-                .unwrap_or(MarkerCount::ONE),
+            // A count above `u32::MAX` saturates (criterion 29 draws 500).
+            Some(LoroValue::I64(n)) if n >= 1 => {
+                MarkerCount::new(u32::try_from(n).unwrap_or(u32::MAX)).unwrap_or(MarkerCount::ONE)
+            }
             _ => MarkerCount::ONE,
         },
     }

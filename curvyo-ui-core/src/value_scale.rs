@@ -40,7 +40,6 @@ const WIDTH_BASE: f64 = 100.0;
 /// The opacity scale: `v = 100 (4^p - 1) / 3`, 0 to 100 percent.
 const OPACITY_MAX: f64 = 100.0;
 const OPACITY_BASE: f64 = 4.0;
-/// The largest value a typed width may hold, millimetres.
 /// The marker count scale: `v = 1 + 49 p`, drag 1 to 50, typed 1 to 500.
 const COUNT_MIN: f64 = 1.0;
 const COUNT_DRAG_MAX: f64 = 50.0;
@@ -142,6 +141,17 @@ impl ValueScale {
             Self::StrokeWidth => Style::default().stroke.width.as_mm(),
             Self::Opacity => OPACITY_MAX,
             Self::MarkerCount => COUNT_MIN,
+        }
+    }
+
+    /// The default as the reset tooltip words it ("0.25 mm", "100 %", "1").
+    #[must_use]
+    pub fn default_text(self) -> String {
+        let text = self.text(self.default_value());
+        match self {
+            Self::StrokeWidth => format!("{text} mm"),
+            Self::Opacity => format!("{text} %"),
+            Self::MarkerCount => text,
         }
     }
 
@@ -251,7 +261,7 @@ pub enum ValueField {
 
 impl ValueField {
     /// The field named by the host (`"stroke-width"`, `"stroke-opacity"`,
-    /// `"fill-opacity"`).
+    /// `"fill-opacity"`, `"marker-count"`).
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
@@ -451,6 +461,9 @@ mod tests {
         assert_eq!(count.text(3.0), "3");
         assert_eq!(count.default_value(), 1.0);
         assert_eq!(count.typed_max(), 500.0);
+        assert_eq!(count.default_text(), "1");
+        assert_eq!(ValueScale::StrokeWidth.default_text(), "0.25 mm");
+        assert_eq!(ValueScale::Opacity.default_text(), "100 %");
         assert_eq!(count.scale_start(), 1.0);
         assert_eq!(
             ValueField::MarkerCount.edit(7.4),

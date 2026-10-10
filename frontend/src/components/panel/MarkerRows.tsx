@@ -72,8 +72,8 @@ export function MarkerRows({ panel, onReturnFocus }: MarkerRowsProps) {
           valueNow={view.markerCount}
           unitWords="markers"
           valueMin={1}
-          typedMax={500}
-          defaultText="1"
+          typedMax={view.countTypedMax}
+          defaultText={view.countDefaultText}
           messages={COUNT_MESSAGES}
           panel={panel}
           onReturnFocus={onReturnFocus}

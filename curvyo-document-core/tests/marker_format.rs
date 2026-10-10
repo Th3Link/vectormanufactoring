@@ -409,6 +409,18 @@ fn a_count_above_five_hundred_opens_and_is_kept_as_stored() {
 }
 
 #[test]
+fn a_count_beyond_the_largest_whole_number_saturates_instead_of_reading_as_one() {
+    let document = open_with(|meta| {
+        meta.insert("stroke_marker_mid", "dot").unwrap();
+        meta.insert("stroke_marker_mid_count", 5_000_000_000_i64)
+            .unwrap();
+    })
+    .unwrap();
+    let id = document.object_ids()[0];
+    assert_eq!(markers_of(&document, id).mid_count.get(), u32::MAX);
+}
+
+#[test]
 fn every_older_fixture_opens_with_every_slot_none() {
     for name in [
         "legacy_gradient_v7.curvyo",

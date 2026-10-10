@@ -65,8 +65,8 @@ export function FillSection({ panel, onReturnFocus }: FillSectionProps) {
             unit="%"
             valueNow={view.fillOpacity}
             unitWords="percent"
-            typedMax={100}
-            defaultText="100 %"
+            typedMax={view.opacityTypedMax}
+            defaultText={view.opacityDefaultText}
             messages={PERCENT_MESSAGES}
             panel={panel}
             onReturnFocus={onReturnFocus}
