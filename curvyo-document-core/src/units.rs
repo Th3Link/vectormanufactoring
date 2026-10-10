@@ -125,6 +125,16 @@ impl DocumentSize {
     pub const fn from_mm(width: f64, height: f64) -> Self {
         Self::new(Length::from_mm(width), Length::from_mm(height))
     }
+
+    /// Whether `point` lies in the closed document rectangle from (0, 0) to
+    /// (width, height), edges included, with no tolerance
+    /// (`specs/0040-document-background` criterion 34). A NaN coordinate is
+    /// outside.
+    #[must_use]
+    pub fn contains(self, point: Point) -> bool {
+        (0.0..=self.width.as_mm()).contains(&point.x)
+            && (0.0..=self.height.as_mm()).contains(&point.y)
+    }
 }
 
 /// An absolute position in document space: millimetres, Y-down (ADR 0002
@@ -329,6 +339,34 @@ impl ViewTransform {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Criterion 34 of `0040-document-background`: closed rectangle, no tolerance.
+    #[test]
+    fn the_document_rectangle_is_closed_and_has_no_tolerance() {
+        let size = DocumentSize::from_mm(100.0, 50.0);
+        for inside in [
+            (0.0, 0.0),
+            (100.0, 50.0),
+            (0.0, 50.0),
+            (100.0, 0.0),
+            (40.0, 20.0),
+        ] {
+            assert!(size.contains(Point::new(inside.0, inside.1)), "{inside:?}");
+        }
+        for outside in [
+            (-1e-9, 10.0),
+            (100.000_001, 10.0),
+            (10.0, -1e-9),
+            (10.0, 50.000_001),
+        ] {
+            assert!(
+                !size.contains(Point::new(outside.0, outside.1)),
+                "{outside:?}"
+            );
+        }
+        assert!(!size.contains(Point::new(f64::NAN, 1.0)));
+        assert!(!size.contains(Point::new(1.0, f64::INFINITY)));
+    }
 
     #[test]
     fn length_round_trips_through_mm() {

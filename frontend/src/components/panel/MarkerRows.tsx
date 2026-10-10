@@ -63,7 +63,6 @@ export function MarkerRows({ panel, onReturnFocus }: MarkerRowsProps) {
         <ValueField
           label="Count"
           name="Marker count"
-          field="marker-count"
           text={view.markerCountText}
           bar={view.markerCountBar}
           mixed={view.markerCountMixed}
@@ -75,7 +74,10 @@ export function MarkerRows({ panel, onReturnFocus }: MarkerRowsProps) {
           typedMax={view.countTypedMax}
           defaultText={view.countDefaultText}
           messages={COUNT_MESSAGES}
-          panel={panel}
+          onPreview={(p, grid) => panel.previewValue("marker-count", p, grid)}
+          onStep={(steps, grid) => panel.stepValue("marker-count", steps, grid)}
+          onReset={() => panel.resetValue("marker-count")}
+          onSubmit={(text) => panel.setText("marker-count", text)}
           onReturnFocus={onReturnFocus}
         />
       )}

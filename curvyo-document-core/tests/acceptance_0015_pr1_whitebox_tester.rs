@@ -286,6 +286,13 @@ fn older_files_export_exactly_what_the_previous_build_exported() {
         let mut now: serde_json::Value = serde_json::from_slice(&d.export_json().unwrap()).unwrap();
         let unit = now.as_object_mut().unwrap().remove("display_unit");
         assert_eq!(unit, Some(serde_json::json!("mm")), "{name}");
+        // `0040-document-background` adds the `background` member; an older file has the default.
+        let background = now.as_object_mut().unwrap().remove("background");
+        assert_eq!(
+            background,
+            Some(serde_json::json!({ "paint": "solid", "color": [232, 232, 235, 1.0] })),
+            "{name}"
+        );
         // The export names the build's version, which moves with every
         // format bump; everything else is what the previous build exported.
         let version = now.as_object_mut().unwrap().remove("format_version");

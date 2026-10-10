@@ -78,11 +78,13 @@ impl Session {
         self.button_down
     }
 
-    /// Commits a panel drag still pending, against the objects it started on,
-    /// before anything that can change the selection or the tool (a release
-    /// outside the control never fires the control's own).
+    /// Commits a panel drag still pending, against the objects it started on
+    /// (and a Background block drag, `0040` criterion 23), before anything that can
+    /// change the selection or the tool (a release outside the control never fires
+    /// the control's own).
     pub(super) fn flush_style_preview(&mut self) {
         let _ = self.style.commit(&self.document);
+        self.commit_background_preview();
     }
 
     /// Enter or Tab in a typed field: `Ok(true)` after one commit for every

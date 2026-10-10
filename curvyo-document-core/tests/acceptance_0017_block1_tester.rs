@@ -491,10 +491,14 @@ fn a_garbage_fill_stops_value_is_ignored_not_fatal() {
 
 #[test]
 fn the_format_version_is_nine_and_new_files_say_so() {
-    assert_eq!(CURRENT_FORMAT_VERSION, 9);
+    // Version 9 is where this story took it; later bumps (`0040`) move the constant.
+    const _: () = assert!(CURRENT_FORMAT_VERSION >= 9);
     let doc = Document::new(1);
     let _ = rect(&doc, 0.0);
-    assert_eq!(manifest_version(&pack(&doc, "t").unwrap()), 9);
+    assert_eq!(
+        manifest_version(&pack(&doc, "t").unwrap()),
+        u64::from(CURRENT_FORMAT_VERSION)
+    );
 }
 
 #[test]
@@ -518,6 +522,11 @@ fn every_older_fixture_still_opens_with_the_styles_it_stored() {
         "size_damaged_v7.resaved_by_v7_reader.curvyo",
         "baseline_pre_0015_export.json",
         "rect_outline_mixed_radii.json",
+        // The damaged-background files of `0040-document-background`.
+        "background_paint_unknown_v10.curvyo",
+        "background_color_three_v10.curvyo",
+        "background_color_range_v10.curvyo",
+        "background_color_type_v10.curvyo",
     ];
     let mut opened = 0;
     for entry in std::fs::read_dir(dir).unwrap() {

@@ -558,6 +558,8 @@ fn the_selection_box_ignores_the_markers() {
 fn the_eyedropper_does_not_pick_from_a_marker() {
     let mut s = path_with_big_markers();
     s.escape();
+    // A None background: the empty page is a miss for the eyedropper (as before `0040`).
+    s.set_background_paint(curvyo_document_core::BackgroundPaint::None);
     s.begin_colour_pick(PaintTarget::Stroke);
     s.pointer_hover(pt(132.0, 100.0), false, false);
     assert_eq!(s.colour_pick_hover(), None, "on the dot only");

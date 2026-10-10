@@ -15,6 +15,8 @@ export interface ToggleOption<T extends string> {
 interface ToggleGroupProps<T extends string> {
   /** The accessible name of the group ("Stroke join"). */
   label: string;
+  /** A longer description for assistive technology, when the tooltip is short. */
+  description?: string;
   options: readonly ToggleOption<T>[];
   /** The pressed item; `null` shows none (mixed, or a value without a button). */
   value: T | null;
@@ -44,6 +46,7 @@ const BORDER = "border-[color-mix(in_srgb,var(--toolbar-icon)_60%,transparent)]"
  */
 export function ToggleGroup<T extends string>({
   label,
+  description,
   options,
   value,
   onChange,
@@ -59,6 +62,7 @@ export function ToggleGroup<T extends string>({
       // one it remembers): a new group starts over.
       key={value === null ? "none" : "set"}
       aria-label={label}
+      aria-description={description}
       orientation="horizontal"
       disabled={disabled}
       value={value ?? ""}

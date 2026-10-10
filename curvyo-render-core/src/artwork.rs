@@ -31,7 +31,7 @@ fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
 }
 
 /// `color` at `opacity`, as a draw-list colour.
-fn paint(color: curvyo_document_core::Color, opacity: Opacity) -> RgbaColor {
+pub(crate) fn paint(color: curvyo_document_core::Color, opacity: Opacity) -> RgbaColor {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let alpha = (opacity.get() * 255.0).round() as u8;
     RgbaColor::from(color).with_alpha(alpha)

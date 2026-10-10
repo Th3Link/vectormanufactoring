@@ -3,22 +3,24 @@ import { Pipette } from "lucide-react";
 import { EntryField } from "@/components/panel/EntryField";
 import { Swatch } from "@/components/panel/Swatch";
 import { Tooltip } from "@/components/ui/tooltip";
-import type { StylePanelApi } from "@/hooks/useStylePanel";
 
 const HEX_MESSAGES = { hex: "Enter 3, 4, 6 or 8 hex digits" } as const;
 
 interface ColourBlockProps {
-  /** "Stroke" or "Fill": prefixes the accessible names. */
+  /** "Stroke", "Fill" or "Background": prefixes the accessible names. */
   name: string;
-  /** `"stroke-color"` or `"fill-color"`: the field `set_style_text` takes. */
-  field: "stroke-color" | "fill-color";
   rgb: number;
   hex: string;
   /** The edited objects differ in colour or alpha. */
   hexMixed: boolean;
   /** Opacity percent, for the swatch. */
   opacity: number;
-  panel: StylePanelApi;
+  /** The eyedropper is picking for this colour. */
+  picking: boolean;
+  /** The eyedropper button. */
+  onPick: () => void;
+  /** Enter or Tab in the hex field: `"committed"`, `"unchanged"` or `"invalid:hex"`. */
+  onSubmitHex: (text: string) => string;
   onReturnFocus: () => void;
 }
 
@@ -30,16 +32,15 @@ interface ColourBlockProps {
  */
 export function ColourBlock({
   name,
-  field,
   rgb,
   hex,
   hexMixed,
   opacity,
-  panel,
+  picking,
+  onPick,
+  onSubmitHex,
   onReturnFocus,
 }: ColourBlockProps) {
-  const paint = field === "stroke-color" ? "stroke" : "fill";
-  const picking = panel.view.pickTarget === paint;
   return (
     <div className="flex h-7 items-center gap-1">
       <Swatch rgb={rgb} opacity={opacity} mixed={hexMixed} />
@@ -50,7 +51,7 @@ export function ColourBlock({
           aria-label={`Pick ${name.toLowerCase()} color from the drawing`}
           aria-pressed={picking}
           onClick={(event) => {
-            panel.beginPick(paint);
+            onPick();
             // `detail` is 0 for keyboard activation, 1 or more for a click. A
             // click goes on to the canvas, where the pick happens.
             if (event.detail > 0) {
@@ -68,7 +69,7 @@ export function ColourBlock({
         mixed={hexMixed}
         width={176}
         align="left"
-        onSubmit={(text) => panel.setText(field, text)}
+        onSubmit={onSubmitHex}
         messages={HEX_MESSAGES}
         onReturnFocus={onReturnFocus}
       />

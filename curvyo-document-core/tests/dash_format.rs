@@ -86,12 +86,9 @@ fn golden_document() -> Document {
     document
 }
 
-/// The one literal pin on the format version: it fails if the number moves by
-/// accident.
-#[test]
-fn the_current_format_version_is_the_one_odd_dash_lists_introduced() {
-    assert_eq!(CURRENT_FORMAT_VERSION, DASH_FORMAT_VERSION);
-}
+/// The pin on the version that introduced odd lists: a later bump (`0040` took 10) keeps it
+/// readable, and the number never goes back.
+const _: () = assert!(CURRENT_FORMAT_VERSION >= DASH_FORMAT_VERSION);
 
 #[test]
 fn the_golden_declares_the_version_that_introduced_odd_lists_and_reads_back() {

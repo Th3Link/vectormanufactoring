@@ -24,6 +24,10 @@ interface ColourPickChipProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
+/** How long a pick's sentence stays in the status region, ms: long enough to be
+ * spoken, short enough that the same sentence after the next pick is a change. */
+const ANNOUNCEMENT_MS = 4000;
+
 /** `#RRGGBBAA` as the packed colour and alpha percent the swatch takes. */
 function parseHex(hex: string): { rgb: number; opacity: number } {
   const rgb = Number.parseInt(hex.slice(1, 7), 16);
@@ -38,6 +42,12 @@ function parseHex(hex: string): { rgb: number; opacity: number } {
  * "No paint here". It is the existing readout surface: text and a swatch, no
  * control, no focus, no pointer events. The colour is read from the session at
  * most once per animation frame, after the canvas has processed the move.
+ *
+ * Where the pick would be the document background (`specs/0040-document-
+ * background` criterion 35) the chip reads swatch, the muted word "Background",
+ * then the stored colour; for an object's paint it is the colour, then the muted
+ * "stroke" or "fill". A pick that ended picking is said once in the polite status
+ * region (criterion 39).
  */
 export function ColourPickChip({
   active,
@@ -47,6 +57,8 @@ export function ColourPickChip({
 }: ColourPickChipProps) {
   const chipRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<Hover | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const announceTimer = useRef(0);
   const [sizes, setSizes] = useState({
     chip: { width: 0, height: 0 },
     canvas: { width: Number.POSITIVE_INFINITY, height: Number.POSITIVE_INFINITY },
@@ -68,13 +80,31 @@ export function ColourPickChip({
     const leave = () => {
       pointer.current = null;
     };
+    // A press that picked a colour has a sentence for the status region; one that did not
+    // (a cancel, a press with picking off) has none. Read after the canvas handled the press.
+    let frame = 0;
+    const announce = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const sentence = getSession()?.take_colour_pick_announcement() ?? "";
+        if (sentence !== "") {
+          setAnnouncement(sentence);
+          window.clearTimeout(announceTimer.current);
+          announceTimer.current = window.setTimeout(() => setAnnouncement(""), ANNOUNCEMENT_MS);
+        }
+      });
+    };
     container.addEventListener("pointermove", track, true);
     container.addEventListener("pointerleave", leave);
+    container.addEventListener("pointerup", announce);
     return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(announceTimer.current);
       container.removeEventListener("pointermove", track, true);
       container.removeEventListener("pointerleave", leave);
+      container.removeEventListener("pointerup", announce);
     };
-  }, [containerRef]);
+  }, [containerRef, getSession]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -134,12 +164,20 @@ export function ColourPickChip({
     );
   }, [hover, containerRef]);
 
+  const status = (
+    <div role="status" aria-live="polite" className="sr-only">
+      {announcement}
+    </div>
+  );
   if (!active || !hover) {
-    return null;
+    return status;
   }
   const placement = placeReadout(hover, sizes.chip, sizes.canvas, OFFSET_PX);
   const colour = hover.hex ? parseHex(hover.hex) : null;
+  const background = hover.paint === "background";
   return (
+    <>
+      {status}
     <div
       ref={chipRef}
       aria-hidden
@@ -155,12 +193,16 @@ export function ColourPickChip({
       {colour ? (
         <>
           <Swatch rgb={colour.rgb} opacity={colour.opacity} mixed={false} size={16} />
-          <span>{hover.hex}</span>
-          <span className="text-[var(--panel-muted-fg)]">{hover.paint}</span>
+          <span className="flex gap-1">
+            {background && <span className="text-[var(--panel-muted-fg)]">Background</span>}
+            <span>{hover.hex}</span>
+            {!background && <span className="text-[var(--panel-muted-fg)]">{hover.paint}</span>}
+          </span>
         </>
       ) : (
         <span>No paint here</span>
       )}
     </div>
+    </>
   );
 }

@@ -5,7 +5,7 @@
 //! the press. Pan and zoom are navigation and keep working. The state is
 //! ephemeral: a tool change, Escape, a right press or the host ends it.
 
-use curvyo_document_core::{Point, StyleEdit};
+use curvyo_document_core::{BackgroundPaint, DocumentBackground, Point, StyleEdit};
 use curvyo_ui_core::{PaintTarget, PickedColour, hex_text, pick_colour};
 
 use super::Session;
@@ -19,6 +19,8 @@ pub(super) struct ColourPick {
     hover: Option<PickedColour>,
     /// The release that follows a pick belongs to no gesture.
     swallow_release: bool,
+    /// What the status region says about the pick just made, until the host takes it.
+    announcement: Option<String>,
 }
 
 impl Session {
@@ -34,10 +36,17 @@ impl Session {
         self.colour_pick.hover = None;
     }
 
+    /// The sentence the status region says after a pick ("Background color set to
+    /// #E8E8EBFF"), once: empty when there is nothing new.
+    pub fn take_colour_pick_announcement(&mut self) -> String {
+        self.colour_pick.announcement.take().unwrap_or_default()
+    }
+
     /// Ends picking and writes nothing.
     pub fn end_colour_pick(&mut self) {
         self.colour_pick = ColourPick {
             swallow_release: self.colour_pick.swallow_release,
+            announcement: self.colour_pick.announcement.take(),
             ..ColourPick::default()
         };
     }
@@ -67,15 +76,47 @@ impl Session {
             return false;
         };
         self.colour_pick.swallow_release = true;
-        if let Some(picked) = pick_colour(&self.objects(), point, self.object_tolerance()) {
-            let edit = match target {
-                PaintTarget::Stroke => StyleEdit::StrokeRgba(picked.color, picked.opacity),
-                PaintTarget::Fill => StyleEdit::FillRgba(picked.color, picked.opacity),
+        if let Some(picked) = self.pick_at(point) {
+            let hex = hex_text(picked.color, picked.opacity);
+            let applied = match target {
+                PaintTarget::Stroke => {
+                    self.apply_style_edit(&StyleEdit::StrokeRgba(picked.color, picked.opacity))
+                }
+                PaintTarget::Fill => {
+                    self.apply_style_edit(&StyleEdit::FillRgba(picked.color, picked.opacity))
+                }
+                // The colour controls exist only while the paint is Solid, so a pick
+                // keeps it (or makes it) Solid (`0040` criterion 37). A pick equal to
+                // the stored value writes nothing and still ends picking.
+                PaintTarget::Background => {
+                    let _ = self.document.set_background(DocumentBackground {
+                        paint: BackgroundPaint::Solid,
+                        color: picked.color,
+                        opacity: picked.opacity,
+                    });
+                    true
+                }
             };
-            self.apply_style_edit(&edit);
             self.end_colour_pick();
+            // Said once through the status region (`0040` criterion 39).
+            if applied {
+                self.colour_pick.announcement =
+                    Some(format!("{} color set to {hex}", target.title()));
+            }
         }
         true
+    }
+
+    /// What a press at `point` would take: an object's paint first, else the stored
+    /// background. The stored one, not a drag's preview: `begin_colour_pick` flushed it.
+    fn pick_at(&self, point: Point) -> Option<PickedColour> {
+        pick_colour(
+            &self.objects(),
+            point,
+            self.object_tolerance(),
+            self.document.size(),
+            self.document.background(),
+        )
     }
 
     /// The pointer moved while picking: remembers what a click would take.
@@ -84,7 +125,7 @@ impl Session {
         if self.colour_pick.target.is_none() {
             return false;
         }
-        self.colour_pick.hover = pick_colour(&self.objects(), point, self.object_tolerance());
+        self.colour_pick.hover = self.pick_at(point);
         true
     }
 

@@ -26,6 +26,8 @@ mod gpu_pipeline;
 #[cfg(target_arch = "wasm32")]
 mod wasm_api;
 #[cfg(target_arch = "wasm32")]
+mod wasm_background;
+#[cfg(target_arch = "wasm32")]
 mod wasm_boolean;
 #[cfg(target_arch = "wasm32")]
 mod wasm_combine;
