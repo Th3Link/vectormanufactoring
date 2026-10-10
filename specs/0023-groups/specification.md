@@ -1,6 +1,6 @@
 # Groups: group, nest, enter and leave, ungroup
 
-Status: Draft (the criteria are complete and testable; becomes Ready when `adrs.md` exists, with its document-model ADR accepted by the customer, and the UX notes are in, `CLAUDE.md` §4)
+Status: Draft (the criteria are complete and testable; the customer accepted the document-model change on 2026-10-10 (Question 1: yes), so the ADR can be accepted on that; becomes Ready when `adrs.md` exists and the UX notes are in, `CLAUDE.md` §4)
 Priority: Must
 Origin: Customer (groups, nested groups, entering a group, ungrouping; request of 2026-10-09, with the wish that the UX be much better than Inkscape's). Requirement R-EDIT-009 (grouping and layers) is in the customer-confirmed MVP; this spec is its **grouping half**. Layers are a separate, later entry (`0039`, see "Groups and layers"). The decisions marked in "Decided by the product owner" are my proposals.
 
@@ -61,13 +61,13 @@ As a maker I want to bind several parts into one group, move, scale and rotate i
 22. Given a group selected, then it has the group box and the handles of `0019-multi-object-transform` (move, resize, rotate, centre handle, skew when every leaf is a path, typed values), computed over all leaf outlines. A transform is applied to every leaf, exactly as it would be for a multi-selection of those leaves (`0019`). The group does not remember a rotation: after a rotate the box is again the axis-aligned bounds of the leaves (the answer to the "persistent orientation" question: none in this version, Question 2). A single group selected with the Select tool shows only the group box, not one box per leaf.
 23. Given a transform of a group, then it is one commit (`0019` criteria for the commit) and no leaf is restyled, and a "Scale stroke width" off setting leaves all stroke widths as they are.
 24. Given Fit to content (`0015`), the rulers and the status bar, then groups are transparent: the bounds are those of all leaves.
-25. Given the document model, then a group is a node of the document tree (ADR 0002 §5: a tree whose sibling order is z-order) with no style register and no transform register: a style edit on a group is an edit of every leaf below it (criterion 26), and there is no style inheritance. The architect confirms in `adrs.md`; a group node that carries a transform is a later extension (Question 2). **This is a document-model and file-format change: it needs the customer's decision (`CLAUDE.md` §3), marked `needs-customer`.**
+25. Given the document model, then a group is a node of the document tree (ADR 0002 §5: a tree whose sibling order is z-order) with no style register and no transform register: a style edit on a group is an edit of every leaf below it (criterion 26), and there is no style inheritance. The architect confirms in `adrs.md`; a group node that carries a transform is a later extension (Question 2). **This is a document-model and file-format change (`CLAUDE.md` §3). The customer decided yes on 2026-10-10 (Question 1).**
 26. Given a style edit (stroke, fill, dash, markers, opacity) with a group selected, then it applies to every leaf descendant, recursively, in one commit. A value that differs between leaves shows "Mixed" (`0017` criteria 9 and 14). A leaf that cannot have the style (a marker on a compound path, `0016` criterion 38b) is skipped, as in a multi-selection.
 27. Given a project saved with groups and reopened, then the tree, the order, every leaf and its style are as before. `format_version` goes to the next free number at merge (`specs/README.md`, "`format_version` plan"); a file with a group opened by an earlier build is refused with the "saved by a newer version" message; a file from an earlier build opens unchanged. A file with a group nested deeper than 32 or with a cycle is refused as damaged and does not crash.
 
 ### Interplay with the operations of other specs
 
-28. Given Boolean operations (`0016`), Combine, Fracture, Flatten, Split and Offset (`0035`, `0036`, `0037`, `0038`) and a selection that contains a group, then the command is refused with "<Operation> does not work on groups. Ungroup first. Nothing was changed." (the refusal style of `0016` criterion 15). A later spec may let them look through groups; this one does not.
+28. Given Boolean operations (`0016`), Combine, Break apart, Split, Cut, Fracture, Flatten and Offset (`0035`, `0048`, `0036`, `0037`, `0038`) and a selection that contains a group, then the command is refused with "<Operation> does not work on groups. Ungroup first. Nothing was changed." (the refusal style of `0016` criterion 15). A later spec may let them look through groups; this one does not.
 29. Given Object to path with a group selected, then it is not offered (Question 5).
 30. Given the Pen's continue and connect targets (`0034-pen-path-extension`), then only open paths that are children of the context are targets.
 
@@ -94,9 +94,9 @@ Layers (named, with visible and locked flags, MVP slice 10, R-EDIT-009) are a se
 
 ## Open questions
 
-Each has a default; nothing blocks, except that the document-model ADR needs the customer.
+Each has a default; nothing blocks. The document-model question is decided (yes, 2026-10-10).
 
-1. **Document model (criteria 25, 27).** A group as a tree node with children, no style, no transform, a `format_version` bump. Needs the customer's yes (`needs-customer`, ADR in `adrs.md`). Default: yes; the alternative is no groups.
+1. **Document model (criteria 25, 27).** A group as a tree node with children, no style, no transform, a `format_version` bump. **Decided: yes (customer, 2026-10-10).** The ADR in `adrs.md` records it. The alternative was no groups.
 2. **Group transform (criterion 22).** *A (default):* none; transforms are applied to the leaves and the box is axis-aligned, as `0019` does for a multi-selection. *B:* a group keeps a rotation register so its box stays oriented like a single rotated object's (`0005`), which needs a transform on the group node (ADR 0002 §5 allows it) and every leaf's geometry to be resolved through the chain. B is a larger model change and is the source of the "baked transform" confusion in Inkscape. Recommendation: A.
 3. **Moving into and out of groups.** Default: not in this slice. Option: a "Move out of group" command (one level up) and drag-and-drop into a group in a later Objects panel.
 4. **Shortcuts (criterion 7).** Default: Ctrl+G and Ctrl+Shift+G are in. Option: none, like the Booleans (`0016` Question 3).
@@ -118,5 +118,5 @@ Requirements: R-EDIT-009 (`docs/requirements.md`); related R-EDIT-012
 Builds on: `specs/0019-multi-object-transform/` (the group box and its handles; must be built first), `specs/0014-advanced-selection/` (hit rules, Alt-click cycle, marquee), `specs/0010-edit-interaction-polish/` (Escape cascade, shortcut gating), `specs/0017-style-panel-rework/` (Style area, subject line, Mixed)
 Amends: `specs/0016-boolean-operations/` (refusal for groups, criterion 28), `specs/0034-pen-path-extension/` (targets, criterion 30)
 Related: `docs/adr/0002-document-model-units-and-svg-round-trip.md` §5 (tree, no inheritance), `specs/0039` (layers, placeholder in `specs/README.md`), `specs/0020` (undo, reserved)
-ADRs: `adrs.md` (architect, to come; document model, `needs-customer`)
+ADRs: `adrs.md` (architect, to come; document model, accepted by the customer on 2026-10-10)
 PR: TBD

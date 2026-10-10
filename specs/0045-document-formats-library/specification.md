@@ -1,8 +1,8 @@
 # Document formats library: formats, groups and favourites the maker can change
 
-Status: Ready for the rectangular part (criteria 1 to 34; `adrs.md` and the UX notes exist). Where the maker's formats are stored is decided on the default of Question 1, A: a per-user file `document-formats.toml` in the data directory; the customer may veto it, and B (inside the project) would change Part F. Shapes are `0046-document-shapes`. Build after `0040` and `0043` merge (milestone 1, the loader in `document-core`, may start earlier, `adrs.md`).
+Status: Ready for the rectangular part (criteria 1 to 34; `adrs.md` and the UX notes exist). Where the maker's formats are stored is decided: a per-user file `document-formats.toml` in the data directory (customer, 2026-10-10, Question 1). Shapes are `0046-document-shapes`. Build after `0040` and `0043` merge (milestone 1, the loader in `document-core`, may start earlier, `adrs.md`).
 Priority: Should
-Origin: Customer (request of 2026-10-10, final: the format list must be customisable, built-in defaults with A0 to A6 on, groups, favourites with a star, a full list inline, a way to add custom formats, an inline add and save, import for sharing is the product owner's addition). The place where user formats are stored is a proposal (Question 1). Follow-up of the merged `0030-document-size-presets`. Non-rectangular formats (circle, outline from a file) are `0046-document-shapes`.
+Origin: Customer (request of 2026-10-10, final: the format list must be customisable, built-in defaults with A0 to A6 on, groups, favourites with a star, a full list inline, a way to add custom formats, an inline add and save, import for sharing is the product owner's addition). The place where user formats are stored was my proposal and is decided (Question 1). Follow-up of the merged `0030-document-size-presets`. Non-rectangular formats (circle, outline from a file) are `0046-document-shapes`.
 
 ## User value
 
@@ -130,11 +130,11 @@ Sizes in millimetres unless a criterion names a unit. The rules of `0030` (orien
 
 ## Open questions (customer; each has a default)
 
-1. **Where do the maker's formats live?**
+1. **Where do the maker's formats live? Decided by the customer on 2026-10-10: A, a per-user file.**
    *A (default, recommended):* in a per-user file `document-formats.toml` in the **data directory** of ADR 0004 (the folder that also holds the machine and material records, configurable, folder-synced, cloud-synced later). One list for every project on this computer; a collaborator does not need it, because a project stores only its size. Core parses and validates; a platform crate reads and writes. It is a settings file: the browser build keeps it in browser storage later.
    *B:* inside the project file. The list travels with the project and a team sees the same formats, but every project has its own list and its own stars, the document model and the CRDT carry settings that are not part of the drawing, and a new project starts with an empty list.
    *C:* both (a user file plus a copy in every project). Rejected as speculative.
-   Recommendation A. If unanswered, A.
+   Recommendation A. Decided: A. Caveat (customer, 2026-10-10): this holds for now and may change when collaboration arrives. A list shared by a team, or one that travels with a shared project, would point to B or to a team-level list. The loader in `document-core` takes the user text as an argument, so another home changes the platform layer only.
 2. **Which first-party formats ship beyond A0 to A6 and the three slides?** The customer named key rings, breakfast boards, cork and slate coasters, leather labels and an embroidery hoop. *Default:* none; the maker adds his own, and no size is invented here. *B:* the customer sends his real list (for example hoop diameters, coaster sizes) and each becomes one block in the built-in file, in new built-in groups ("Laser", "Embroidery"); circle shapes wait for `0046`.
 3. **Slides.** *A (default):* the group is present and off, its three formats are favourites, so turning it on brings back the `0030` strip. *B:* Slides on by default as in `0030`. The customer said A0 to A6 stay on by default; the slides were left open.
 4. **Same size twice (criterion 5).** *A (default):* refused with "Same size as <name>", so the selected state stays unique. *B:* allowed; the first in list order is shown as selected. Recommendation A; revisit when shapes exist (a circle and a square of one bounding box are different formats, `0046`).
@@ -219,5 +219,5 @@ Requirements: R-EDIT-027
 Builds on: `specs/0030-document-size-presets/`, `specs/0015-document-size-and-rulers/`, `specs/0017-style-panel-rework/` (panel rule), ADR 0004 §6, §7 (data directory, atomic writes, folder sync)
 Follow-up: `specs/0046-document-shapes/`
 Panel placement: `specs/0043-properties-tabs/` (the Document tab)
-ADRs: `adrs.md` (architect): no new ADR; one new written file format (the user file, `format = 1`) and the `toml` writer feature; where the file lives is Question 1 (`needs-customer`, default A)
+ADRs: `adrs.md` (architect): no new ADR; one new written file format (the user file, `format = 1`) and the `toml` writer feature; where the file lives is decided (Question 1, A)
 PR: -

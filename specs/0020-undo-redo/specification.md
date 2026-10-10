@@ -74,8 +74,8 @@ The names are the user-facing form of the commit labels on `main` on 2026-10-10 
 | Node tool: drag nodes, drag a handle, change kind, insert, delete, segment line or curve, bend | `move_anchors`, `set_handle`, `convert_anchor_kind`, `insert_anchor`, `delete_anchors`, `set_segment_line`, `set_segment_curve`, `bend_segment` | Move nodes, Move handle, Change node type, Add node, Delete nodes, Straighten segment, Curve segment, Bend segment |
 | Node tool: join, split | `join_endpoints`, `split_at_anchor` | Join nodes, Split path |
 | Boolean toolbox | `boolean_union`, `boolean_difference`, `boolean_intersection`, `boolean_exclusion`, `boolean_reverse_difference` | Union, Difference, Intersection, Exclusion, Reverse difference |
-| Path toolbox | `combine_paths`, `break_apart` | Combine, Break apart |
-| Later specs | `group`, `ungroup` (`0023`); the background (`0040`); fracture, flatten, split, offset (`0036`, `0037`, `0038`) | Group, Ungroup, Change background, Fracture, Flatten, Split at crossings, Offset |
+| Path toolbox | `combine_paths`, `break_apart`, `split` | Combine, Break apart, Split |
+| Later specs | `group`, `ungroup` (`0023`); the background (`0040`); `cut_at_crossings` (`0036`); fracture, flatten, offset (`0037`, `0038`); the pencil stroke `pencil_stroke` (`0032`) | Group, Ungroup, Change background, Cut, Fracture, Flatten, Offset, Pencil stroke |
 
 New, New project, Open and Save are not steps (criteria 25, 26). Selection, tool, pan, zoom, entered group and the panel's tab are view state: never a step (ADR 0009 §2).
 

@@ -1,6 +1,6 @@
 # Fracture and Flatten: cut overlapping shapes into pieces, or remove the hidden parts
 
-Status: Draft (the criteria are complete and testable; becomes Ready when `adrs.md` and the UX notes exist, `CLAUDE.md` §4)
+Status: Draft (the criteria are complete and testable; no customer question blocks (Flatten means trim to the visible part, decided 2026-10-10); becomes Ready when `adrs.md` and the UX notes exist, `CLAUDE.md` §4)
 Priority: Should
 Origin: Customer asked for "Fracture" (cut overlapping shapes into non-overlapping pieces, like Affinity's Divide) and "Flatten" (request of 2026-10-09), and left the exact meaning to me. **The definitions below are my proposals** (Question 1 asks about Flatten in particular).
 
@@ -50,7 +50,7 @@ Both are one idea. Take all outlines of the selected shapes and cut the plane al
 
 ### Result geometry and robustness
 
-15. Given an operand with curves, then a trimmed or cut part of it is straight segments within 0.01 mm of the true result and with the node budget of `0016` criteria 25 and 26 (this is the cost of using the boolean kernel; Combine, Break apart and Split at crossings keep curves). All nodes of a result are Corner nodes without handles, no two consecutive nodes are closer than 0.001 mm, and no node lies on the straight line between its neighbours (`0016` criterion 24). Winding follows `0016` criterion 41.
+15. Given an operand with curves, then a trimmed or cut part of it is straight segments within 0.01 mm of the true result and with the node budget of `0016` criteria 25 and 26 (this is the cost of using the boolean kernel; Combine, Break apart, Split and Cut keep curves). All nodes of a result are Corner nodes without handles, no two consecutive nodes are closer than 0.001 mm, and no node lies on the straight line between its neighbours (`0016` criterion 24). Winding follows `0016` criterion 41.
 16. Given the same objects at the same stacking positions, then the result is node for node the same however they were selected, and the same on every platform to 1e-6 mm (`0016` criterion 43).
 17. Given the fixtures (in `tests/fixtures/`, golden): (a) 20 squares of side 10 mm at x = 5 i for i = 0 to 19, each overlapping its left neighbour by 5 mm, (b) 2,000 such squares, (c) the fixtures (a) to (i) of `0016` criterion 40, then each command completes in under 2 s without panic or hang and gives a valid result or one of the refusals. Expected for (a), with the highest index on top: Fracture gives 21 pieces of 5 x 10 mm (the 5 mm columns, owner the upper square; the left-most and right-most columns have one covering square); Flatten gives 19 objects of 5 x 10 mm and the top square unchanged (10 x 10 mm). Expected for (b): Fracture 2,001 pieces.
 18. Given a result, then the Node tool edits each piece like any path; a piece with holes is a compound path whose nodes the Node tool does not edit yet (`0016` criterion 38).
@@ -70,7 +70,7 @@ Both are one idea. Take all outlines of the selected shapes and cut the plane al
 
 Each has a default; nothing blocks.
 
-1. **What Flatten means.** *A (default):* trim every shape to its visible part (criterion 10). *B:* "flatten hierarchy": ungroup everything recursively (needs `0023-groups`). *C:* merge shapes of the same colour that touch. Please say if you meant B or C; A needs no groups and is what a laser maker asks for. If you meant Illustrator's "Flatten Transparency", that has no meaning here (no transparency effects exist).
+1. **What Flatten means. Decided by the customer on 2026-10-10: A.** *A (default):* trim every shape to its visible part (criterion 10). *B:* "flatten hierarchy": ungroup everything recursively (needs `0023-groups`). *C:* merge shapes of the same colour that touch. Please say if you meant B or C; A needs no groups and is what a laser maker asks for. If you meant Illustrator's "Flatten Transparency", that has no meaning here (no transparency effects exist).
 2. **Fill None hides.** *A (default):* an operand hides whatever is below it whatever its paint, because regions are geometry (`0016`). *B:* operands whose Fill is None do not hide anything. Reason for B: a drawing of fill-less cut lines would not lose its lower lines. Reason for A: one rule for all geometry commands, and the lower line is a second cut of the same area. Recommendation: A, since Flatten is a geometry command.
 3. **Order of pieces in the stacking order (criterion 8).** Default: at the owner's place. Option: all at the topmost operand's place.
 4. **Limit of 5,000 objects.** Default as written.
@@ -86,6 +86,6 @@ Decided by the product owner (change if you disagree): cells and owners as defin
 
 Requirements: R-EDIT-023 (`docs/requirements.md`); related R-EDIT-003
 Builds on: `specs/0016-boolean-operations/` (the kernel, compound paths, region, refusals, determinism; must be merged first)
-Related: `specs/0035-combine-and-break-apart/`, `specs/0036-split-at-crossings/`, `specs/0038-path-offset/`, `specs/0023-groups/`
+Related: `specs/0035-combine-and-break-apart/`, `specs/0036-cut-at-crossings/`, `specs/0048-split-compound-path/`, `specs/0038-path-offset/`, `specs/0023-groups/`
 ADRs: `adrs.md` (architect, to come; whether Flatten and Fracture are built from the pairwise kernel operations of `0016` or from a planar-arrangement routine)
 PR: TBD

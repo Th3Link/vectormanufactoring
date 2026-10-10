@@ -4,6 +4,8 @@ Status: Ready (`adrs.md` and the UX notes exist, both 2026-10-10)
 Priority: Should
 Origin: Customer (Combine, and Break apart "into separate paths: what happens to the holes", request of 2026-10-09, with the wish that the UX be much better than Inkscape's). The hole rule, the refusals, the names and the defaults are my proposals, marked in "Decided by the product owner".
 
+Amendment pending (customer decision of 2026-10-10, `specs/0048-split-compound-path/`): the command specified here as Break apart, which keeps holes with their piece, is the customer's **Split**; Break apart is to become the command that gives every outline its own object (Question 2, option B, promoted). Criteria 13 to 18 and Question 2 change with it once `0048` Question 1 is confirmed; until then the text below stands.
+
 ## User value
 
 As a maker I want to select the outline of a plate and the circles of its mounting holes and make them **one object with holes**, and to take such an object apart again without losing its holes, so that the laser cuts one clean job, the holes are real holes, and I never have to run a Boolean difference just to get a plate with holes.
@@ -73,7 +75,7 @@ As a maker I want to select the outline of a plate and the circles of its mounti
 - **Combining open paths** into one object. A compound path holds closed outlines only (`0016`); open subpaths are a model change (Question 1).
 - **Crossing or overlapping outlines.** Use Union, Exclusion or Fracture (`0037`).
 - **Releasing the holes** of a compound path as their own objects (Question 2).
-- **Splitting a path at a node** (`0006`, the Node tool) and **at crossings** (`0036-split-at-crossings`).
+- **Splitting a path at a node** (`0006`, the Node tool) and **at crossings** (`0036-cut-at-crossings`, now called Cut).
 - **Combine and Break apart through groups** (`0023-groups` criterion 28).
 - **Changing the fill rule.** The fill is nonzero and the winding encodes the holes.
 - **A shortcut** for either command, as for the Boolean operations (`0016` Question 3).
@@ -178,6 +180,6 @@ Milestone M4 of the path-tools slice (the four milestones of `adrs.md`), deliver
 
 Requirements: R-EDIT-023 (`docs/requirements.md`); related R-EDIT-003
 Builds on: `specs/0016-boolean-operations/` (compound path, winding rule, rail commands, refusal notices; must be merged first)
-Related: `specs/0023-groups/` (refusal for groups), `specs/0036-split-at-crossings/`, `specs/0037-fracture-and-flatten/`, `specs/0006-path-merge-split-and-node-types/` (node-level Join and Split)
+Related: `specs/0023-groups/` (refusal for groups), `specs/0048-split-compound-path/`, `specs/0036-cut-at-crossings/`, `specs/0037-fracture-and-flatten/`, `specs/0006-path-merge-split-and-node-types/` (node-level Join and Split)
 ADRs: `adrs.md` (architect, 2026-10-10)
 PR: TBD (shared path-tools PR)
