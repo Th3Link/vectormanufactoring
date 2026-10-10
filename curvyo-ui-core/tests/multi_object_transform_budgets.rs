@@ -132,10 +132,10 @@ fn the_group_box_of_200_objects_takes_under_1_ms() {
     let document = build(100, 50, 100);
     let objects = read(&document);
     let selection = selection_of(&objects);
-    let took = mean(200, || SelectTool::group_of(&objects, &selection));
-    println!("group box of 200 objects: {took:?}");
+    let elapsed = mean(200, || SelectTool::group_of(&objects, &selection));
+    println!("group box of 200 objects: {elapsed:?}");
     if !cfg!(debug_assertions) {
-        assert!(took < Duration::from_millis(1), "{took:?}");
+        assert!(elapsed < Duration::from_millis(1), "{elapsed:?}");
     }
 }
 
@@ -145,12 +145,12 @@ fn the_group_box_of_10000_objects_takes_under_20_ms() {
     let document = build(5000, 20, 5000);
     let objects = read(&document);
     let selection = selection_of(&objects);
-    let took = mean(10, || {
+    let elapsed = mean(10, || {
         GroupSelection::from_objects(&objects, selection.ids())
     });
-    println!("group box of 10,000 objects: {took:?}");
+    println!("group box of 10,000 objects: {elapsed:?}");
     if !cfg!(debug_assertions) {
-        assert!(took < Duration::from_millis(20), "{took:?}");
+        assert!(elapsed < Duration::from_millis(20), "{elapsed:?}");
     }
 }
 
@@ -181,15 +181,15 @@ fn one_preview_step_of_10000_objects_takes_under_50_ms() {
             Modifiers::NONE,
         );
         tool.pointer_moved(to, Modifiers::NONE, &mut selection);
-        let took = mean(5, || {
+        let elapsed = mean(5, || {
             let live = tool
                 .live_edit(&objects, &selection, to, false, false)
                 .expect("a live edit");
             SelectTool::group_of(&live.objects, &selection)
         });
-        println!("{name}: one preview step of 10,000 objects: {took:?}");
+        println!("{name}: one preview step of 10,000 objects: {elapsed:?}");
         if !cfg!(debug_assertions) {
-            assert!(took < Duration::from_millis(50), "{name}: {took:?}");
+            assert!(elapsed < Duration::from_millis(50), "{name}: {elapsed:?}");
         }
         tool.escape();
     }
@@ -232,8 +232,14 @@ fn the_commits_of_10000_objects_finish_within_5_s() {
                 Modifiers::NONE,
             ),
         };
-        let took = gesture(&document, &objects, &mut selection, press, to, modifiers);
-        results.push((gesture_name, took));
+        let size_before = document.export_loro_snapshot().unwrap().len();
+        let elapsed = gesture(&document, &objects, &mut selection, press, to, modifiers);
+        let size_after = document.export_loro_snapshot().unwrap().len();
+        println!(
+            "{gesture_name}: the saved file grows by {} bytes",
+            size_after.saturating_sub(size_before)
+        );
+        results.push((gesture_name, elapsed));
     }
     let after = document.export_loro_snapshot().unwrap().len();
     // Skew exists for paths only: 5,000 paths with 20 nodes each.
@@ -251,10 +257,10 @@ fn the_commits_of_10000_objects_finish_within_5_s() {
         Modifiers::NONE,
     );
     results.push(("skew (5,000 paths)", skew));
-    for (name, took) in &results {
-        println!("commit of {name}: {took:?}");
+    for (name, elapsed) in &results {
+        println!("commit of {name}: {elapsed:?}");
         if !cfg!(debug_assertions) && *name != "copy" {
-            assert!(*took < Duration::from_secs(5), "{name}: {took:?}");
+            assert!(*elapsed < Duration::from_secs(5), "{name}: {elapsed:?}");
         }
     }
     println!("saved file: {before} bytes before, {after} bytes after the four commits");

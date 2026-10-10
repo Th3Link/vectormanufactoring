@@ -29,7 +29,7 @@ pub type SelectionBox = [Point; 4];
 /// object's own box (plural — a heterogeneous multi-select shows each
 /// object's own real box simultaneously, `docs/design-system.md`'s
 /// "Mixed-state display on multi-select" extension; the group box around a
-/// multi-selection is drawn on top of these by [`crate::group_box`], which
+/// multi-selection is drawn on top of these by the `group_box` module, which
 /// `multi-object-transform` added), plus a hovered-but-not-yet-selected
 /// object's box.
 #[derive(Debug, Clone, Default)]
