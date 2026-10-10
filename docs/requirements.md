@@ -56,6 +56,7 @@ to it instead of restating it.
 | R-EDIT-021 | Stroke brushes: a stroke can be drawn by a brush (width profile, stamp, pattern along the path), chosen inline in the Stroke section, customizable; custom brushes are added by the maker as data files, or later as plugins; brush strokes are expanded to paths for jobs. After the MVP. Sketch: `specs/0033-stroke-brushes/` | Could | Customer |
 | R-EDIT-022 | Pen path extension: with the Pen, continue an existing open path from either end, connect two paths by drawing from one end onto the other, choose a sharp or smooth closing node when closing a path, and close a selected open path with a command. `specs/0034-pen-path-extension/` | Should | Customer |
 | R-EDIT-023 | Path operations beyond booleans, as plain commands: Combine and Break apart compound paths (holes kept), Split paths at their crossings, Fracture overlapping shapes into pieces, Flatten a stack to its visible parts. `specs/0035-combine-and-break-apart/`, `specs/0036-split-at-crossings/`, `specs/0037-fracture-and-flatten/` | Should | Customer |
+| R-EDIT-024 | Document background: the document (page) has a fill, a solid colour with alpha or none (none is drawn as a checkerboard), set in a Background block of the Document section with the same inline colour block as object fills; the default is today's document colour; the eyedropper can pick the background colour (when no painted object is under the pointer) and the Background block has its own eyedropper. Export and print of the background come later. Status: spec Ready (2026-10-10), build after PRs #79 and #80 merge. `specs/0040-document-background/` | Should | Customer |
 
 ## 3. Vectorization (raster-to-vector)
 
@@ -191,7 +192,7 @@ provide.
 |---|---|---|---|
 | R-INP-001 | Pen tablet input: pressure (and tilt, and the eraser end) from a drawing tablet changes the width of freehand strokes and erases objects, on desktop first, with a mouse unaffected. "Later, not now" (customer, 2026-10-09). Needs a freehand drawing tool first, a per-platform check that the webview delivers pressure (Linux in particular), and a document-model decision on how a variable width is stored. Sketch: `specs/0032-pen-tablet-input/` | Could | Customer |
 
-R-EDIT-019 to R-EDIT-023 and R-INP-001 are not in the MVP list below, which stays as confirmed; the customer schedules them (build order proposal in `specs/README.md`).
+R-EDIT-019 to R-EDIT-024 and R-INP-001 are not in the MVP list below, which stays as confirmed; the customer schedules them (build order proposal in `specs/README.md`).
 
 ---
 

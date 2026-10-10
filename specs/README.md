@@ -3,7 +3,8 @@
 The list of all features comes first, then the convention for writing them.
 State of this list: 2026-10-10 (the customer renumbered every folder on
 2026-10-09, see "Numbering" below; the customer requests of 2026-10-09 added
-0030 to 0039 and gave the groups half of 0023 its spec).
+0030 to 0039 and gave the groups half of 0023 its spec; 0040 was added for the
+customer request of 2026-10-10).
 
 Spec-driven development, adapted from
 [spec-driven-dev-kit](https://github.com/trojava/spec-driven-dev-kit) for
@@ -72,6 +73,7 @@ order, dependencies and conflicts are in "Proposed build order" below.
 | [0036](0036-split-at-crossings/) | `split-at-crossings` | Cut the selected paths into separate open pieces wherever they cross or touch each other or themselves, on the exact curves. The customer's word "Split" is interpreted; see its Question 1. | Draft (criteria complete; ADRs and UX notes pending) | Should | R-EDIT-023 | - |
 | [0037](0037-fracture-and-flatten/) | `fracture-and-flatten` | Fracture: cut overlapping shapes into the pieces the overlaps make. Flatten: trim every shape to its visible part and remove hidden shapes. | Draft (criteria complete; ADRs and UX notes pending) | Should | R-EDIT-023 | - |
 | [0038](0038-path-offset/) | `path-offset` | Outset and Inset by a typed distance in mm with Round, Miter or Bevel corners, open paths grow into a closed outline, live blue/black preview, the original kept. Needs a kernel decision (ADR 0003 §4). | Draft (criteria complete; ADRs and UX notes pending) | Should | R-EDIT-007 | - |
+| [0040](0040-document-background/) | `document-background` | The document has a background fill: solid colour with alpha or none (drawn as a checkerboard), default today's #E8E8EB; a Background block in the Document section with the inline colour block of 0017; the eyedropper picks the background where no painted object is under the pointer, and the Background block has its own eyedropper. Needs a format version bump. Builds on 0017 and 0030 (same PR #78). | Ready (spec, `adrs.md` and UX notes exist; one PR, four milestones, starts after #79 and #80 merge) | Should | R-EDIT-024 | - |
 
 ### Specified but not built
 
@@ -109,7 +111,7 @@ deferred past the laser MVP on 2026-10-02 (multi-OS parity and sync, fonts,
 asset management, collaboration, the asset connector, plugins, other machine
 families). They are tracked in `docs/requirements.md` ("MVP (confirmed)" and
 "Explicitly deferred past MVP") and get a number here once the customer
-prioritises them. The next free number is 0040.
+prioritises them. The next free number is 0041.
 
 ## Proposed build order (product owner, 2026-10-10)
 
@@ -125,6 +127,7 @@ For 0023 and 0030 to 0038, with the fixed points 0016 (done), 0017, 0018, 0019 a
 | 0036 `split-at-crossings` | `geometry-core` (new curve-intersection module), rail button | 0016 merged; the rail layout decision | 0037, 0038 (same crate) |
 | 0037 `fracture-and-flatten` | `geometry-core` (kernel use), rail buttons | 0016 merged; the rail layout decision | 0036, 0038 (same crate) |
 | 0038 `path-offset` | `geometry-core` (offset, maybe a new dependency), an entry widget, `render-core` preview | 0016 merged; the kernel check of ADR 0003 §4 | 0036, 0037 (same crate) |
+| 0040 `document-background` | `document-core` (two registers, format), `ui-core` Document view and eyedropper hit test, `render-core` document rectangle and checkerboard, `editor-wasm`, the Document section of `PropertiesPanel.tsx` | 0017 and 0030 merged (PR #78): it reuses their colour block, eyedropper and Document section | 0023 (format version, document root); 0031 and 0034 are disjoint |
 | 0032 `pen-tablet-input` | pointer input in `frontend` and `editor-wasm`, possibly the Tauri host; the stroke width model | a freehand tool (no spec yet), the platform spike | 0033 (width model) |
 | 0033 `stroke-brushes` | style model, `render-core`, `geometry-core` generators, panel row, plugin host | 0017, 0018, the plugin host | 0018, 0032 (style and width model) |
 
@@ -217,6 +220,7 @@ a reader refuses a file with a higher number ("saved by a newer version").
 | 9 | 0017 `style-panel-rework` (odd dash lists) and 0018 `stroke-markers`, one PR | In progress (`story/style-panel-rework`) |
 | none | 0015 `document-size-and-rulers` | No bump (its `adrs.md`, decision 1) |
 | next free at merge | 0023 `groups` (a group node with children) | Planned; a document-model change that needs the customer |
+| next free at merge | 0040 `document-background` (background paint and colour registers in the document root) | Ready; 10 if nothing else merges first, otherwise the next free number after 0023 or 0033 (not built in parallel with 0023) |
 | next free at merge | 0033 `stroke-brushes` (brush reference and embedded definition) | Draft, after the MVP |
 | none | 0030, 0031, 0034, 0035, 0036, 0037, 0038 | No bump: they write existing object kinds (0035 to 0037 use the compound path of 0016) |
 
