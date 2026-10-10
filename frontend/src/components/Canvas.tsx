@@ -4,6 +4,7 @@ import { EditHintChip } from "@/components/EditHintChip";
 import { HandleHintChip } from "@/components/HandleHintChip";
 import { KeyHintChip } from "@/components/KeyHintChip";
 import { MoveBadges } from "@/components/MoveBadges";
+import { NudgeReadout } from "@/components/NudgeReadout";
 import { NodeContextMenu } from "@/components/NodeToolbar";
 import { MoveEntryChip } from "@/components/MoveEntryChip";
 import { SelectionAnnouncer } from "@/components/SelectionAnnouncer";
@@ -159,6 +160,7 @@ export function Canvas({ editor }: CanvasProps) {
         containerRef={editor.containerRef}
       />
       <KeyHintChip hint={editor.keyHint} containerRef={editor.containerRef} />
+      <NudgeReadout feedback={editor.nudgeFeedback} containerRef={editor.containerRef} />
       <SelectionAnnouncer text={editor.selectionAnnouncement} />
       <EditHintChip
         hint={editor.editHint}

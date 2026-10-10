@@ -67,9 +67,12 @@ impl LiveReadout {
 impl LiveReadout {
     /// Converts a document-space [`crate::session::LiveReadout`] to this
     /// screen-pixel-anchored mirror, via `view`'s own
-    /// `document_to_screen` — [`WasmSession::live_readout`] is the one
-    /// caller, and the one place this conversion happens.
-    fn from_document_space(readout: crate::session::LiveReadout, view: ViewTransform) -> Self {
+    /// `document_to_screen` — the one place this conversion happens, for
+    /// [`WasmSession::live_readout`] and `WasmSession::nudge_readout`.
+    pub(crate) fn from_document_space(
+        readout: crate::session::LiveReadout,
+        view: ViewTransform,
+    ) -> Self {
         let (anchor_x, anchor_y) = view.document_to_screen(readout.anchor);
         Self {
             text: readout.text,

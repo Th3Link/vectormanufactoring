@@ -285,7 +285,7 @@ impl Session {
                 }
                 let objects = self.objects();
                 let live = self.select_live_edit_in(&objects);
-                let live_objects = Self::live_objects_in(objects, live.as_ref());
+                let live_objects = Self::live_objects_in(&objects, live.as_ref());
                 let group = SelectTool::group_of(&live_objects, &self.selection)?;
                 format!(
                     "{:.1} mm \u{d7} {:.1} mm",

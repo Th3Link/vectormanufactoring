@@ -18,6 +18,7 @@ import {
 } from "@/components/railCard";
 import type { RailCommands } from "@/hooks/useRailCommands";
 import type { Tool } from "@/hooks/useEditorSession";
+import { SELECT_KEYS_TOOLTIP } from "@/lib/nudgeText";
 
 interface ToolRailProps {
   tool: Tool;
@@ -42,6 +43,8 @@ interface ToolButtonProps {
   shortcut: string;
   /** An optional second tooltip line (the modifiers of the tool). */
   hint?: string;
+  /** An optional muted last line (the keys that act on the tool's selection). */
+  keys?: string;
   icon: React.ReactNode;
   onSelect: (tool: Tool) => void;
   onReturnFocus: () => void;
@@ -58,6 +61,7 @@ function ToolButton({
   label,
   shortcut,
   hint,
+  keys,
   icon,
   onSelect,
   onReturnFocus,
@@ -95,6 +99,7 @@ function ToolButton({
             {label} ({shortcut})
           </div>
           {hint && <div>{hint}</div>}
+          {keys && <div className="text-muted-foreground">{keys}</div>}
         </Tooltip.Content>
       </Tooltip.Portal>
     </Tooltip.Root>
@@ -134,6 +139,7 @@ export function ToolRail({
               label="Select tool"
               shortcut="S or Esc"
               hint="Drag a box. Shift: add. Ctrl: remove. Alt: invert, lasso, cycle"
+              keys={SELECT_KEYS_TOOLTIP}
               icon={<SelectIcon size={20} />}
               onSelect={onSelect}
               onReturnFocus={onReturnFocus}

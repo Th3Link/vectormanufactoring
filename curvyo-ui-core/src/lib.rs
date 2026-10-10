@@ -39,6 +39,7 @@ mod marquee;
 mod modifiers;
 mod move_entry;
 mod node_tool;
+mod nudge;
 mod object_bounds;
 mod object_selection;
 mod oriented_box;
@@ -119,6 +120,9 @@ pub use move_entry::MoveEntry;
 pub use node_tool::{
     HitTolerances, LiveNodeDrag, NodeTool, NodeToolbarState,
     PointerDownOutcome as NodePointerDownOutcome, PointerUpOutcome as NodePointerUpOutcome,
+};
+pub use nudge::{
+    Arrow, CONTINUATION_WINDOW_MS, NudgeEvent, NudgeOutcome, NudgeRun, nudge, selection_centre,
 };
 pub use object_bounds::{content_bounds, object_bounds, object_outline_bounds};
 pub use object_selection::{ObjectSelection, SelectionCombine};

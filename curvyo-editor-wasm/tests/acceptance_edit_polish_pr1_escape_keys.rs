@@ -1430,7 +1430,7 @@ fn ac55_the_modifier_keys_themselves_and_unknown_keys_are_ignored_without_effect
         "CapsLock",
         " ",
         "Tab",
-        "ArrowLeft",
+        "PageDown",
         "F5",
         "",
         "Dead",
@@ -1623,6 +1623,7 @@ fn hostile_random_sequences_never_panic_and_ignored_keys_change_nothing() {
                         alt: rng.next().is_multiple_of(8),
                         repeat: rng.next().is_multiple_of(6),
                         dom_blocked: rng.next().is_multiple_of(8),
+                        time_ms: 0.0,
                     };
                     let before = bundle(&s);
                     let o = s.key_down(input);

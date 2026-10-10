@@ -564,6 +564,7 @@ fn ac38a_compound_plus_ordinary_path_in_the_node_tool_only_the_ordinary_one_has_
             alt: false,
             repeat: false,
             dom_blocked: false,
+            time_ms: 0.0,
         }
     }
     let _ = s.key_down(key("a", true));
