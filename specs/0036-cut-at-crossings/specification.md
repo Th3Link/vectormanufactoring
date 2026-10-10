@@ -1,6 +1,6 @@
 # Cut at crossings: cut paths open wherever they cross
 
-Status: Draft (the criteria are complete and testable; the customer's naming of 2026-10-10 settles what the command is called; becomes Ready when `adrs.md` and the UX notes exist, `CLAUDE.md` §4)
+Status: Ready (2026-10-10: `adrs.md` and the UX notes exist; the customer's naming of 2026-10-10 settles what the command is called)
 Priority: Should
 Origin: Customer. He asked for "Split" on 2026-10-09 without saying what it splits. On 2026-10-10 he decided that **Split** is Inkscape's Split Path (`0048-split-compound-path`) and that this operation, cutting the paths where they cross or touch, is called **Cut**. The folder was `0036-split-at-crossings` until then; the number stays. The rules below are my proposals as before.
 

@@ -1,6 +1,6 @@
 # Groups: group, nest, enter and leave, ungroup
 
-Status: Draft (the criteria are complete and testable; the customer accepted the document-model change on 2026-10-10 (Question 1: yes), so the ADR can be accepted on that; becomes Ready when `adrs.md` exists and the UX notes are in, `CLAUDE.md` §4)
+Status: Ready (2026-10-10: `adrs.md` and the UX notes exist; the customer accepted the document-model change on 2026-10-10 (Question 1: yes); criterion 27 reworded the same day)
 Priority: Must
 Origin: Customer (groups, nested groups, entering a group, ungrouping; request of 2026-10-09, with the wish that the UX be much better than Inkscape's). Requirement R-EDIT-009 (grouping and layers) is in the customer-confirmed MVP; this spec is its **grouping half**. Layers are a separate, later entry (`0039`, see "Groups and layers"). The decisions marked in "Decided by the product owner" are my proposals.
 
@@ -63,7 +63,7 @@ As a maker I want to bind several parts into one group, move, scale and rotate i
 24. Given Fit to content (`0015`), the rulers and the status bar, then groups are transparent: the bounds are those of all leaves.
 25. Given the document model, then a group is a node of the document tree (ADR 0002 §5: a tree whose sibling order is z-order) with no style register and no transform register: a style edit on a group is an edit of every leaf below it (criterion 26), and there is no style inheritance. The architect confirms in `adrs.md`; a group node that carries a transform is a later extension (Question 2). **This is a document-model and file-format change (`CLAUDE.md` §3). The customer decided yes on 2026-10-10 (Question 1).**
 26. Given a style edit (stroke, fill, dash, markers, opacity) with a group selected, then it applies to every leaf descendant, recursively, in one commit. A value that differs between leaves shows "Mixed" (`0017` criteria 9 and 14). A leaf that cannot have the style (a marker on a compound path, `0016` criterion 38b) is skipped, as in a multi-selection.
-27. Given a project saved with groups and reopened, then the tree, the order, every leaf and its style are as before. `format_version` goes to the next free number at merge (`specs/README.md`, "`format_version` plan"); a file with a group opened by an earlier build is refused with the "saved by a newer version" message; a file from an earlier build opens unchanged. A file with a group nested deeper than 32 or with a cycle is refused as damaged and does not crash.
+27. Given a project saved with groups and reopened, then the tree, the order, every leaf and its style are as before. `format_version` goes to the next free number at merge (`specs/README.md`, "`format_version` plan"); a file with a group opened by an earlier build is refused with the "saved by a newer version" message; a file from an earlier build opens unchanged. A file with a group nested deeper than 32 is refused as damaged and does not crash. (A cycle cannot occur: the object tree of the file format cannot hold one, so only the depth limit is tested; reworded 2026-10-10, `adrs.md`.)
 
 ### Interplay with the operations of other specs
 

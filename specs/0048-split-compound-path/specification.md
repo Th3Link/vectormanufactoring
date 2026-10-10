@@ -1,6 +1,6 @@
 # Split: separate the unconnected parts of a compound path, holes stay with their part
 
-Status: Draft (criteria complete; the customer's decision of 2026-10-10 settles what Split means; one question about Break apart has a default, see Question 1; becomes Ready when `adrs.md` and the UX notes exist, `CLAUDE.md` §4)
+Status: Ready (2026-10-10: `adrs.md` and the UX notes exist; the customer's decision of 2026-10-10 settles what Split means; built on the default of Question 1: the built Break apart is renamed Split, and Break apart becomes the every-outline command, unless the customer vetoes)
 Priority: Should
 Origin: Customer (2026-10-10: "Split works like Inkscape's Split Path: it separates the parts that are not connected or overlapping; an outer outline with the holes inside it stays one object. Break apart separates every subpath, including holes. The operation that cuts paths where they cross is Cut."). The texts, numbers and tests are mine.
 
