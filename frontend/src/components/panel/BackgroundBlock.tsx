@@ -10,7 +10,8 @@ import type { BackgroundPanelApi } from "@/hooks/useBackgroundPanel";
 
 const PERCENT_MESSAGES = { percent: "Enter a number from 0 to 100" } as const;
 
-const PAINT_TOOLTIP =
+const PAINT_TOOLTIP = "Document fill. None shows a checkerboard. Not an object.";
+const PAINT_DESCRIPTION =
   "Fill of the whole document. None shows a checkerboard. The background is not an object; it cannot be selected or moved.";
 
 const PAINT_OPTIONS: readonly ToggleOption<"none" | "solid">[] = [
@@ -45,6 +46,7 @@ export function BackgroundBlock({ background, onReturnFocus }: BackgroundBlockPr
         </h3>
         <ToggleGroup
           label="Background"
+          description={PAINT_DESCRIPTION}
           options={PAINT_OPTIONS}
           value={view.paint}
           onChange={background.setPaint}

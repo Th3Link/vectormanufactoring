@@ -58,6 +58,8 @@ function readView(session: WasmSession | null): BackgroundView {
 
 export interface BackgroundPanelApi {
   view: BackgroundView;
+  /** The wasm session exists. Before it, `hsvOf` and `rgbOf` are placeholders. */
+  ready: boolean;
   /** A press on the Paint group: one commit. */
   setPaint: (paint: "none" | "solid") => void;
   /** Enter or Tab in the hex field. */
@@ -115,21 +117,28 @@ export function useBackgroundPanel(editor: EditorHandle): BackgroundPanelApi {
     [getSession, refresh],
   );
 
+  // The block is the first thing shown, so it renders before the session exists. The
+  // converters change identity when the session appears, which makes the picker read the
+  // colour again and repaint its canvases (UX review B1).
+  const ready = getSession() !== null;
   const hsvOf = useCallback(
     (rgb: number): HsvTriple => {
-      const [hue, saturation, value] = getSession()?.colour_hsv(rgb) ?? [-1, 0, 0];
+      const [hue, saturation, value] = (ready ? getSession()?.colour_hsv(rgb) : null) ?? [
+        -1, 0, 0,
+      ];
       return [hue, saturation, value];
     },
-    [getSession],
+    [getSession, ready],
   );
   const rgbOf = useCallback(
     (hue: number, saturation: number, value: number) =>
-      getSession()?.hsv_colour(hue, saturation, value) ?? 0,
-    [getSession],
+      (ready ? getSession()?.hsv_colour(hue, saturation, value) : null) ?? 0,
+    [getSession, ready],
   );
 
   return {
     view,
+    ready,
     setPaint: (paint) => act((s) => s.set_background_paint(paint), false),
     setHex: (text) => act((s) => s.set_background_hex(text), "unchanged"),
     previewHsv: (hue, saturation, value) =>

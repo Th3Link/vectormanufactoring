@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 
 import type { HsvTriple } from "@/hooks/useStylePanel";
+import { type PickerSeen, pickerStep } from "@/lib/pickerSync";
 
 const WIDTH = 244;
 const AREA_HEIGHT = 96;
@@ -103,18 +104,20 @@ export function ColourPicker({
   onPreview,
 }: ColourPickerProps) {
   const [hsv, setHsv] = useState<Hsv>({ h: 0, s: 1, v: 1 });
-  // The colour the picker last sent, and the one it last read from outside.
-  const [seen, setSeen] = useState<number | null>(null);
+  // The colour the picker last read from outside (and the converter that read it), and the one
+  // it last sent.
+  const [seen, setSeen] = useState<PickerSeen>({ rgb: null, source: null });
   const [own, setOwn] = useState<number | null>(null);
   const areaCanvas = useRef<HTMLCanvasElement>(null);
   const hueCanvas = useRef<HTMLCanvasElement>(null);
 
-  if (!mixed && seen !== rgb && own !== rgb) {
-    const [hue, saturation, value] = hsvOf(rgb);
-    setSeen(rgb);
-    setHsv((previous) => ({ h: hue < 0 ? previous.h : hue, s: saturation, v: value }));
-  } else if (!mixed && seen !== rgb) {
-    setSeen(rgb);
+  const read = pickerStep(seen, rgb, own, hsvOf, mixed);
+  if (read !== "keep") {
+    setSeen({ rgb, source: hsvOf });
+    if (read === "derive") {
+      const [hue, saturation, value] = hsvOf(rgb);
+      setHsv((previous) => ({ h: hue < 0 ? previous.h : hue, s: saturation, v: value }));
+    }
   }
 
   useEffect(() => {

@@ -193,9 +193,11 @@ export function ColourPickChip({
       {colour ? (
         <>
           <Swatch rgb={colour.rgb} opacity={colour.opacity} mixed={false} size={16} />
-          {background && <span className="text-[var(--panel-muted-fg)]">Background</span>}
-          <span>{hover.hex}</span>
-          {!background && <span className="text-[var(--panel-muted-fg)]">{hover.paint}</span>}
+          <span className="flex gap-1">
+            {background && <span className="text-[var(--panel-muted-fg)]">Background</span>}
+            <span>{hover.hex}</span>
+            {!background && <span className="text-[var(--panel-muted-fg)]">{hover.paint}</span>}
+          </span>
         </>
       ) : (
         <span>No paint here</span>

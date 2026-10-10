@@ -1294,4 +1294,4 @@ built-in list.
   let a screen reader announce the count (UX N13).
 - **`session/mod.rs` is over 500 lines** (537 non-test lines before the slice); split the glue calls out
   when the next slice touches it.
-
+- **The Select bar overlaps the properties panel below about 600 px window width** (UX review of `0040`, found at 420 px; below the 800 x 600 minimum, so not fixed there).
