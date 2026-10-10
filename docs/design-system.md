@@ -680,8 +680,8 @@ values, not an implementation site, for those four rows.
     `0006`), H and V (flip), `?`. A new tool letter must not be M, K, H or V,
     and any later selection action takes a letter from that list before it
     takes one from the tool letters. Specified, not yet built: Ctrl+Z,
-    Ctrl+Shift+Z, Ctrl+Y, Ctrl+U, Ctrl+Shift+U (`0020`, `0041`); Ctrl+A and
-    the arrow nudge (`0044`).
+    Ctrl+Shift+Z, Ctrl+Y, Ctrl+U, Ctrl+Shift+U (`0020`, `0041`). Built in
+    `0044`: Ctrl+A and the arrow nudge.
 - **Modifier indicators in a move** (`edit-interaction-polish`; rows "Modifier
   badge" and "Move axis guide"). Ctrl and Shift may be held before the press,
   pressed or released at any moment of the drag, and the result follows the
@@ -1201,8 +1201,8 @@ Decisions: `specs/0045-document-formats-library/specification.md`, "UX notes". I
 | Undo | `Ctrl+Z` (`Cmd+Z`) | `0020`; chord class of the key concept; acts on every repeat event; ignored during a drag, with a chip open, in a typing field, during a long operation, with an unfinished Pen path (hint "Finish the path (Enter) or cancel it (Esc) first."). Notice "Undid: Move (3 paths)." in the canvas notice slot. Native Edit menu item "Undo <name>" |
 | Redo | `Ctrl+Shift+Z` (`Cmd+Shift+Z`); `Ctrl+Y` on Linux and Windows as a hidden alias | `0020`; as Undo. The tooltips and the menu name Ctrl+Shift+Z only |
 | Undo or redo one object's step | `Ctrl+U` and `Ctrl+Shift+U` (`Cmd` on macOS), Select or Node tool, exactly one object selected | `0041`; gated as Undo; "Select one object." otherwise. Edit menu items "Undo Step of Selected Object" and "Redo Step of Selected Object" are the fallback if a platform eats Ctrl+Shift+U |
-| Select all | `Ctrl+A` (`Cmd+A`), Select tool | `0044`; chord, once per press; replaces the selection; ignored in other tools without `preventDefault`; a typing field keeps its own select-all. Edit menu "Select All" |
-| Nudge | Arrow = 1 mm, `Shift+Arrow` = 10 mm in document millimetres (Select tool, selection, canvas focused) | `0044`; every repeat event moves once more, a held run is one step; Ctrl, Cmd, Alt: ignored; move readout "Δ 3.0, 0.0 mm" beside the selection box; page never scrolls on a handled key |
+| Select all | `Ctrl+A` (`Cmd+A`), Select tool | Built in `0044`; chord, once per press; replaces the selection; ignored in other tools without `preventDefault`; a typing field keeps its own select-all. A hidden live region says "Selected 5 objects.". Edit menu "Select All" comes with the native menu of `0020` |
+| Nudge | Arrow = 1 mm, `Shift+Arrow` = 10 mm in document millimetres (Select tool, selection, canvas focused) | Built in `0044`; every repeat event moves once more and is one `translate_objects` commit (a held run becomes one step when `0020` exists); Ctrl, Cmd, Alt: ignored; move readout "Δ 3.0, 0.0 mm" beside the selection box, 800 ms after the last move; a hidden live region says "Moved 11 mm right." when the step ends; past the coordinate limit the key hint chip says "Too far from the document. Nothing was changed." until the canvas notice slot of `0020` exists; page never scrolls on a handled key |
 | Show the History tab | `Shift+Ctrl+H` (`Cmd`) | `0043`, `0020`; Inkscape's Undo History key. Expands the panel, activates History, focus on the list. Ignored during a drag |
 | Show the Document tab | `Shift+Ctrl+D` (`Cmd`) | `0043`; Inkscape's Document Properties key. Expands the panel, activates Document, focus on its first control, also with a selection |
 | Switch tab | Left and Right on the focused strip | `0043`; activates at once; Home and End; a dimmed Style tab is skipped |

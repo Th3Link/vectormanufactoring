@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { type NudgeFeedback, useNudgeFeedback } from "@/hooks/useNudgeFeedback";
 import { ModifierTracker } from "@/lib/keyModifiers";
+import { TOO_FAR_HINT } from "@/lib/nudgeText";
 import { createSession, openSession } from "@/lib/editorSession";
 import type { WasmSession } from "@/lib/editorSession";
 import type { EditHint } from "@/components/EditHintChip";
@@ -460,6 +462,7 @@ const KEY_HINT_TEXT: Record<string, string> = {
   "hint-select-one": "Select one object to type a value",
   "hint-select-first": "Select an object first",
   "hint-path-only": "Skew works on paths only",
+  "hint-too-far": TOO_FAR_HINT,
 };
 
 /** How long a key hint stays. */
@@ -543,6 +546,8 @@ export interface EditorSession {
   /** The one-line message of a key that could not act ("Select one object to
    * type a value"), or `null`; it clears itself after 2 s. */
   keyHint: KeyHint | null;
+  /** The move readout and hidden announcements of a nudge and of select all. */
+  nudgeFeedback: NudgeFeedback;
   convertSelected: (kind: "corner" | "symmetric" | "asymmetric") => void;
   makeLine: () => void;
   makeCurve: () => void;
@@ -736,6 +741,8 @@ export function useEditorSession(
   const [selectionCount, setSelectionCount] = useState(0);
   const [keyHint, setKeyHint] = useState<KeyHint | null>(null);
   const keyHintCounter = useRef(0);
+  const nudgeFeedback = useNudgeFeedback();
+  const { onNudge, onSelectAll, onKeyUp: onNudgeKeyUp } = nudgeFeedback;
 
   /** Re-reads the typed entry (position follows zoom, pan and resize; it
    * closes on a tool switch or a selection change). */
@@ -1551,11 +1558,17 @@ export function useEditorSession(
         event.altKey,
         event.repeat,
         event.nativeEvent.isComposing || isSpaceHeld,
+        event.timeStamp,
       );
       if (outcome === "ignored") {
         return;
       }
       event.preventDefault();
+      if (outcome === "select-all") {
+        onSelectAll(session.selection_count());
+      } else if (outcome === "nudge" || outcome === "nudge-new") {
+        onNudge(session, outcome === "nudge-new");
+      }
       const hint = KEY_HINT_TEXT[outcome];
       if (hint !== undefined) {
         keyHintCounter.current += 1;
@@ -1565,7 +1578,7 @@ export function useEditorSession(
       setCursorHint(session.cursor_hint());
       syncFromSession();
     },
-    [isSpaceHeld, syncFromSession],
+    [isSpaceHeld, syncFromSession, onNudge, onSelectAll],
   );
 
   // A key hint clears itself after 2 s; a newer message restarts the clock.
@@ -1585,8 +1598,9 @@ export function useEditorSession(
       if (event.key === " ") {
         setIsSpaceHeld(false);
       }
+      onNudgeKeyUp(event.key);
     },
-    [],
+    [onNudgeKeyUp],
   );
 
   const commitTransformEntry = useCallback(
@@ -1670,6 +1684,7 @@ export function useEditorSession(
     deleteSelected,
     selectionCount,
     keyHint,
+    nudgeFeedback,
     convertSelected,
     makeLine,
     makeCurve,
