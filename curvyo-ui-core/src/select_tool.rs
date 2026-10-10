@@ -31,6 +31,9 @@ mod bar;
 mod cycle;
 mod entry;
 mod gesture;
+mod group_drag;
+mod group_entry;
+mod group_handles;
 mod handles;
 mod move_drag;
 mod press;
@@ -39,6 +42,7 @@ mod preview;
 use cycle::ClickCycle;
 use entry::OpenEntry;
 use gesture::{LassoDrag, MarqueeDrag};
+use group_drag::GroupDrag;
 use handles::sole_selected;
 
 pub use entry::{EntryKey, KeyEntryRefusal, MoveEntryMode, double_click};
@@ -58,6 +62,9 @@ enum SelectDrag {
     Moving(MoveDrag),
     /// A resize, rotate or skew drag in progress.
     Transforming(TransformDrag),
+    /// A resize, rotate or skew drag on the group box of a multi-selection
+    /// (`specs/0019-multi-object-transform/`).
+    GroupTransforming(GroupDrag),
     /// A marquee in progress (`specs/0014-advanced-selection/`): armed by a press
     /// on empty canvas with Alt up.
     Marquee(MarqueeDrag),
@@ -213,8 +220,10 @@ impl SelectTool {
             // (`edit-interaction-polish`, UX review of PR 4).
             SelectDrag::Moving(_) | SelectDrag::Marquee(_) | SelectDrag::Lasso(_) => false,
             SelectDrag::Transforming(drag) => drag.origin.shift_at_press,
+            SelectDrag::GroupTransforming(drag) => drag.origin.shift_at_press,
             SelectDrag::None => match &self.entry {
                 Some(OpenEntry::Transform(entry)) => entry.side_rotate_revealed(),
+                Some(OpenEntry::Group(entry)) => entry.side_rotate_revealed(),
                 // No other chip owns a side rotate handle, and none may sit
                 // on one (criterion 59).
                 Some(OpenEntry::Param(_) | OpenEntry::Skew(_) | OpenEntry::Move(_)) => false,
@@ -359,6 +368,19 @@ impl SelectTool {
                 let result = drag.resolve(point, modifiers.shift, modifiers.ctrl);
                 if !same_within_tolerance(&result, &drag.start) {
                     drag.commit(document, &result);
+                }
+            }
+            SelectDrag::GroupTransforming(drag) => {
+                if !drag.origin.is_active_at(point) {
+                    return;
+                }
+                let results = drag.resolve(point, modifiers.shift, modifiers.ctrl);
+                let unchanged = results
+                    .iter()
+                    .zip(&drag.starts)
+                    .all(|(new, old)| same_within_tolerance(new, old));
+                if !unchanged {
+                    drag.commit(document, &results);
                 }
             }
             SelectDrag::Marquee(drag) => {

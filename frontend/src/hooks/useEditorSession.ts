@@ -330,6 +330,9 @@ export interface TransformEntryState {
    * does, instead of outward from the handle: the key S, whose fixed point is
    * the centre (`edit-interaction-polish` criterion 59). */
   atCentre: boolean;
+  /** The chip edits a multi-selection (`specs/0019-multi-object-transform/`):
+   * the size chip is named "Resize selection". */
+  selection: boolean;
 }
 
 /** Reads the wasm-bindgen `TransformEntryView` once, immediately, so it can
@@ -351,6 +354,7 @@ function readTransformEntry(
         center_y: number;
         glyph_reach: number;
         at_centre: boolean;
+        selection: boolean;
         free(): void;
       }
     | undefined,
@@ -376,6 +380,7 @@ function readTransformEntry(
     center: { x: raw.center_x, y: raw.center_y },
     glyphReach: raw.glyph_reach,
     atCentre: raw.at_centre,
+    selection: raw.selection,
   };
   raw.free();
   return entry;
@@ -397,6 +402,9 @@ export interface MoveEntryState {
   absolute: [string, string];
   /** Whether the Copy check opens on (Ctrl at the second press). */
   copyPreset: boolean;
+  /** The chip moves a multi-selection: Absolute measures from the top-left
+   * corner of the group box (`specs/0019-multi-object-transform/` criterion 35). */
+  selection: boolean;
 }
 
 /** Reads the wasm-bindgen `MoveEntryChip` once, immediately, so it can be
@@ -409,6 +417,7 @@ function readMoveEntry(
         relative_prefill(axis: number): string;
         absolute_prefill(axis: number): string;
         copy_preset(): boolean;
+        selection(): boolean;
         free(): void;
       }
     | undefined,
@@ -421,6 +430,7 @@ function readMoveEntry(
     relative: [raw.relative_prefill(0), raw.relative_prefill(1)],
     absolute: [raw.absolute_prefill(0), raw.absolute_prefill(1)],
     copyPreset: raw.copy_preset(),
+    selection: raw.selection(),
   };
   raw.free();
   return entry;

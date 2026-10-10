@@ -20,6 +20,9 @@ mod conversion;
 mod display_unit_text;
 mod document_fit;
 mod ellipse_tool;
+mod group_box;
+mod group_entry;
+mod group_transform;
 mod hit_test;
 mod hit_test_object;
 mod marquee;
@@ -69,6 +72,11 @@ pub use display_unit_text::{
 };
 pub use document_fit::fit_document_to_content;
 pub use ellipse_tool::EllipseTool;
+pub use group_box::{
+    GroupBoxShape, GroupSelection, group_handles, hit_group_handle, is_aligned_primitive,
+    is_drawn_group_handle,
+};
+pub use group_entry::GroupEntry;
 pub use hit_test::{Hit, hit_test};
 pub use hit_test_object::{hit_test_object, hit_test_objects, hit_test_objects_along};
 pub use marquee::{MarqueeMode, objects_in_marquee};

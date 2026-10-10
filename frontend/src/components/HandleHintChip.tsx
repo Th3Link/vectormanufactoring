@@ -64,8 +64,9 @@ function isNote(line: string): boolean {
 interface HandleHintChipProps {
   /** `curvyo-editor-wasm`'s `handle_hint()`: which handle the pointer is on. */
   hint: string;
-  /** `corner_hint_lines()`: the state-dependent lines of a corner radius knob
-   * (empty for any other handle, then the fixed lines of `hint` show). */
+  /** `corner_hint_lines()`: the state-dependent lines of a corner radius knob,
+   * and all the lines of a group handle (`hint` is `"group"`, the text is
+   * Rust's). Empty for any other handle, then the fixed lines of `hint` show. */
   cornerLines: string[];
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -80,7 +81,9 @@ interface HandleHintChipProps {
  */
 export function HandleHintChip({ hint, cornerLines, containerRef }: HandleHintChipProps) {
   const lines =
-    hint === "param-radius" && cornerLines.length > 0 ? cornerLines : HINT_LINES[hint];
+    (hint === "param-radius" || hint === "group") && cornerLines.length > 0
+      ? cornerLines
+      : HINT_LINES[hint];
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const chipRef = useRef<HTMLDivElement>(null);

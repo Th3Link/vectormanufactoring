@@ -196,14 +196,18 @@ export function TransformEntryChip({
   const fieldWidth = isSkew ? 120 : isAngle ? 80 : isRatio ? 96 : 100;
   const groupName =
     entry.kind === "angle"
-      ? "Rotation"
+      ? entry.selection
+        ? "Rotate selection"
+        : "Rotation"
       : entry.kind === "skew"
         ? "Skew"
         : entry.kind === "corner-radius"
         ? "Corner radius"
         : isRatio
           ? "Inner ratio"
-          : "Size";
+          : entry.selection
+            ? "Resize selection"
+            : "Size";
 
   return (
     <div

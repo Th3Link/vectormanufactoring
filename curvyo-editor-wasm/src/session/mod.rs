@@ -27,6 +27,7 @@ mod corner_readout;
 mod document;
 mod draw;
 mod frame;
+mod group_view;
 mod keys;
 mod move_entry;
 mod move_indicators;

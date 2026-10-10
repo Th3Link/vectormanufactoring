@@ -10,6 +10,7 @@ use curvyo_document_core::{Document, ObjectSnapshot, Point, Tolerance};
 use super::{SelectDoubleClickOutcome, SelectDrag, SelectTool, sole_selected};
 use crate::ResizeDirection;
 use crate::anchor_id_minter::AnchorIdMinter;
+use crate::group_entry::GroupEntry;
 use crate::hit_test_object::hit_test_object;
 use crate::move_entry::MoveEntry;
 use crate::object_selection::ObjectSelection;
@@ -33,6 +34,8 @@ pub(super) enum OpenEntry {
     Skew(SkewEntry),
     /// A typed move (relative or absolute).
     Move(MoveEntry),
+    /// An angle, size or skew of a multi-selection.
+    Group(GroupEntry),
 }
 
 /// How the move chip reads its two fields at Enter: its mode switch and its
@@ -80,6 +83,7 @@ impl OpenEntry {
             Self::Transform(entry) => entry.handle(),
             Self::Param(entry) => entry.handle(),
             Self::Skew(entry) => entry.handle(),
+            Self::Group(entry) => entry.handle(),
             Self::Move(_) => EditHandle::Move,
         }
     }
@@ -143,7 +147,11 @@ impl SelectTool {
     /// handle is highlighted (`edit-interaction-polish` criterion 59).
     #[must_use]
     pub fn centre_chip_open(&self) -> bool {
-        matches!(&self.entry, Some(OpenEntry::Transform(entry)) if entry.centre_chip())
+        match &self.entry {
+            Some(OpenEntry::Transform(entry)) => entry.centre_chip(),
+            Some(OpenEntry::Group(entry)) => entry.centre_chip(),
+            _ => false,
+        }
     }
 
     /// Closes the numeric entry without writing (criterion 20): idempotent.
@@ -169,6 +177,7 @@ impl SelectTool {
             OpenEntry::Transform(entry) => entry.commit(document, texts, last_edited),
             OpenEntry::Param(entry) => entry.commit(document, texts[0]),
             OpenEntry::Skew(entry) => entry.commit(document, texts[0]),
+            OpenEntry::Group(entry) => entry.commit(document, texts, last_edited),
             // The typed move has its own commit: it needs the mode.
             OpenEntry::Move(_) => EntryOutcome::Unchanged,
         };
@@ -228,7 +237,11 @@ impl SelectTool {
         let object = match selection.ids() {
             [] => return Err(KeyEntryRefusal::NothingSelected),
             [_] => sole_selected(objects, selection).ok_or(KeyEntryRefusal::NothingSelected)?,
-            _ => return Err(KeyEntryRefusal::SeveralSelected),
+            _ => {
+                let group =
+                    Self::group_of(objects, selection).ok_or(KeyEntryRefusal::NothingSelected)?;
+                return self.open_group_entry_for_key(objects, selection, &group, key);
+            }
         };
         let box_ = oriented_bounds(object);
         let skew = |side| {
@@ -283,6 +296,16 @@ impl SelectTool {
     ) -> SelectDoubleClickOutcome {
         let (shift, ctrl) = modifiers;
         self.drag = SelectDrag::None;
+        // A multi-selection: its group handles (criterion 47); anywhere else the
+        // double-click is the one of an object.
+        if selection.ids().len() >= 2 {
+            if let Some(outcome) =
+                self.group_double_click(objects, selection, point, handle_tolerances, modifiers)
+            {
+                return outcome;
+            }
+            return double_click(objects, point, tolerance);
+        }
         // Kept (not consumed): a rapid third press is another double-click on
         // the same handle and keeps its entry.
         let first_press_handle = self.last_press_handle;

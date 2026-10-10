@@ -124,9 +124,14 @@ impl Session {
         })
     }
 
-    /// The centre of the box around the selected objects' oriented boxes as
-    /// they are committed: the centre handle's position for one object.
+    /// The centre of the box around the selected objects as they are
+    /// committed: the centre handle's position.
     fn selection_centre(&self, objects: &[ObjectSnapshot]) -> Option<Point> {
+        // A multi-selection: the centre of the group box, where its centre
+        // handle is (`specs/0019-multi-object-transform/` criterion 17).
+        if let Some(centre) = self.group_centre(objects) {
+            return Some(centre);
+        }
         let corners: Vec<Point> = objects
             .iter()
             .filter(|object| self.selection.contains(object.id()))

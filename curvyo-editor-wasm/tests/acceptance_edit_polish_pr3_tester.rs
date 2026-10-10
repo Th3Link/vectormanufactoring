@@ -2129,8 +2129,12 @@ fn c25_a_committed_move_keeps_selection_and_tool_and_survives_save_and_reopen() 
     assert!(pnear(p.anchors[0].point, pt(10.0, 20.0), 1e-9));
 }
 
+/// Superseded by `multi-object-transform` (criteria 35 and 37, "Changes to
+/// accepted behaviour" 3): the typed move works for a selection, over the group
+/// box; skew still needs paths only, and says so; "Select one object to type a
+/// value" no longer exists.
 #[test]
-fn c25_the_typed_move_exists_only_for_a_single_selection() {
+fn c25_the_typed_move_works_for_a_selection_and_skew_needs_paths() {
     let d = Document::new(1);
     let _ = d.create_rect(bounds(0.0, 0.0, 120.0, 80.0));
     let _ = d.create_rect(bounds(300.0, 0.0, 120.0, 80.0));
@@ -2141,21 +2145,18 @@ fn c25_the_typed_move_exists_only_for_a_single_selection() {
     s.pointer_up(pt(360.0, 0.0), true, false);
     assert_eq!(s.selected_object_count(), 2);
     let before = snapshot_bytes(&s);
-    assert_eq!(press(&mut s, "m"), KeyOutcome::Hint(KeyHint::SelectOne));
-    assert_eq!(press(&mut s, "k"), KeyOutcome::Hint(KeyHint::SelectOne));
+    assert_eq!(press(&mut s, "k"), KeyOutcome::Hint(KeyHint::PathOnly));
     assert_eq!(
         press_shift(&mut s, "K"),
-        KeyOutcome::Hint(KeyHint::SelectOne)
+        KeyOutcome::Hint(KeyHint::PathOnly)
     );
     assert!(s.move_entry().is_none());
     assert_eq!(snapshot_bytes(&s), before);
     assert_eq!(s.selected_object_count(), 2);
     assert_eq!(s.tool(), Tool::Select);
-    // a double-click in the union box centre opens nothing
-    let c = pt(210.0, 40.0);
-    dbl(&mut s, c, c, false, false);
-    assert!(s.move_entry().is_none());
-    assert_eq!(snapshot_bytes(&s), before);
+    assert_eq!(press(&mut s, "m"), KeyOutcome::EntryOpened);
+    assert!(s.move_entry().is_some(), "the move chip of the selection");
+    assert_eq!(snapshot_bytes(&s), before, "opening writes nothing");
 }
 
 // ---------------------------------------------------------------------

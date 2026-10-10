@@ -689,7 +689,10 @@ fn ac12_13_modifiers_are_read_at_release_not_at_press() {
 fn ac13_ctrl_never_adds_an_unselected_object() {
     let (mut rig, [a, b, c, d]) = scene();
     rig.select(&[c, d]);
-    rig.drag(pt(25.0, 15.0), pt(-5.0, -5.0), NONE, CTRL); // touches A and B only
+    // Starts on empty canvas inside the group box of C and D, clear of its centre
+    // handle at (25, 15), which takes a press first (`multi-object-transform`
+    // criterion 43, step 2).
+    rig.drag(pt(31.0, 15.0), pt(-5.0, -5.0), NONE, CTRL); // touches A and B only
     assert_eq!(
         rig.sel(),
         sorted(vec![c, d]),

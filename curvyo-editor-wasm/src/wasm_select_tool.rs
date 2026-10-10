@@ -30,6 +30,8 @@ pub struct TransformEntryView {
     pub glyph_reach: f64,
     /// The chip goes by the box centre instead of outward from the handle.
     pub at_centre: bool,
+    /// The chip edits a multi-selection.
+    pub selection: bool,
 }
 
 #[wasm_bindgen]
@@ -110,6 +112,7 @@ impl TransformEntryView {
             center_y,
             glyph_reach: entry.glyph_reach_px,
             at_centre: entry.at_centre,
+            selection: entry.selection,
         }
     }
 }

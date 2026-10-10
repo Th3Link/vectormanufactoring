@@ -470,8 +470,16 @@ fn ac02_every_shape_of_a_multi_selection_draws_its_own_turned_box() {
     assert_eq!(rect.selected_object_count(), 2);
     rect.pointer_leave();
 
-    let dp = decoration(&poly);
-    let dr = decoration(&rect);
+    // `multi-object-transform` adds the group box around a multi-selection (the
+    // bounds of the outlines: not the same for a hexagon and a turned square).
+    // Each shape's own box is the lighter member box (`--accent` at 60%).
+    let own = |deco: Deco| -> Deco {
+        deco.into_iter()
+            .filter(|vertex| vertex.contains("r: 47, g: 111, b: 238, a: 153"))
+            .collect()
+    };
+    let dp = own(decoration(&poly));
+    let dr = own(decoration(&rect));
     assert!(!dp.is_empty());
     let missing: Vec<_> = dp.difference(&dr).take(5).collect();
     assert!(

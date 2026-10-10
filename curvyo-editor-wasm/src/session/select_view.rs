@@ -93,10 +93,14 @@ impl Session {
         if self.tool != Tool::Select {
             return SelectDecorationInput::default();
         }
+        // A multi-selection draws its member boxes with the group box
+        // (`group_view.rs`), not here.
+        let multi = self.selection.ids().len() >= 2;
         let selected = self
             .selection
             .ids()
             .iter()
+            .filter(|_| !multi)
             .filter_map(|&id| {
                 objects
                     .iter()
@@ -127,7 +131,9 @@ impl Session {
     /// The skew fixed-line guide of the drag in flight, if it is a skew drag:
     /// drawn by the transform overlay, and the box leaves its own dashes off
     /// the edge it covers.
-    fn skew_guide_now(&self) -> Option<(curvyo_document_core::Point, curvyo_document_core::Point)> {
+    pub(super) fn skew_guide_now(
+        &self,
+    ) -> Option<(curvyo_document_core::Point, curvyo_document_core::Point)> {
         self.select
             .skew_guide(self.held.shift, SKEW_GUIDE_EXTEND_PX / self.view().scale())
     }
@@ -188,7 +194,7 @@ impl Session {
         let hovered = hover.as_ref().map(|(_, _, handle)| *handle);
         let side_rotate = self.select.side_rotate_revealed(self.held.shift);
         let [only] = self.selection.ids() else {
-            return TransformDecorationInput::default();
+            return self.group_transform_decoration_input_in(objects);
         };
         let Some(object) = objects.iter().find(|o| o.id() == *only) else {
             return TransformDecorationInput::default();
@@ -267,7 +273,10 @@ impl Session {
 
 /// The glyph a handle draws; a skew glyph's arrows run along its side's axis
 /// in the box's own rotated frame.
-fn glyph_kind(handle: EditHandle, box_: &curvyo_ui_core::OrientedBox) -> TransformGlyphKind {
+pub(super) fn glyph_kind(
+    handle: EditHandle,
+    box_: &curvyo_ui_core::OrientedBox,
+) -> TransformGlyphKind {
     let (sin, cos) = box_.angle.as_radians().sin_cos();
     match handle {
         EditHandle::Resize(_) => TransformGlyphKind::Resize,

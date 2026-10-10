@@ -402,9 +402,11 @@ fn the_entry_keys_open_their_entries_for_any_size() {
 }
 
 /// Criterion 59: nothing selected and several selected refuse M, K and
-/// Shift+K and open nothing.
+/// Nothing selected opens nothing; several objects: M opens the move entry of
+/// the selection, K and Shift+K refuse a selection that holds a non-path
+/// (`multi-object-transform` criteria 35 and 37).
 #[test]
-fn the_entry_keys_refuse_nothing_or_several_selected() {
+fn the_entry_keys_refuse_nothing_or_a_selection_that_cannot_act() {
     for key in [EntryKey::Move, EntryKey::SkewX, EntryKey::SkewY] {
         let mut rig = Rig::new(Kind::Path, 100.0);
         rig.selection.clear();
@@ -420,11 +422,14 @@ fn the_entry_keys_refuse_nothing_or_several_selected() {
             .iter()
             .map(|id| rig.document.object(*id).unwrap())
             .collect();
-        assert_eq!(
-            rig.tool.open_entry_for_key(&objects, &rig.selection, key),
-            Err(KeyEntryRefusal::SeveralSelected)
-        );
-        assert!(!rig.tool.has_entry());
+        let opened = rig.tool.open_entry_for_key(&objects, &rig.selection, key);
+        if key == EntryKey::Move {
+            assert_eq!(opened, Ok(()));
+            assert!(rig.tool.has_entry());
+        } else {
+            assert_eq!(opened, Err(KeyEntryRefusal::SkewNeedsPath));
+            assert!(!rig.tool.has_entry());
+        }
     }
 }
 

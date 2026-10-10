@@ -16,6 +16,9 @@ impl Session {
     /// the one under the pointer.
     fn select_cursor_handle(&self, objects: &[ObjectSnapshot]) -> Option<EditHandle> {
         self.select.dragging_handle().or_else(|| {
+            if self.selection.ids().len() >= 2 {
+                return self.group_hovered_handle(objects).map(|(_, handle)| handle);
+            }
             self.select_hovered_handle(objects)
                 .map(|(_, _, handle)| handle)
         })
@@ -115,6 +118,13 @@ impl Session {
             return String::new();
         }
         let objects = self.objects();
+        if self.selection.ids().len() >= 2 {
+            return if self.group_hovered_handle(&objects).is_some() {
+                "group".to_string()
+            } else {
+                String::new()
+            };
+        }
         let Some((object, _, handle)) = self.select_hovered_handle(&objects) else {
             return String::new();
         };

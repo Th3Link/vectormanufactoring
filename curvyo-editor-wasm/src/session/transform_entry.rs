@@ -10,8 +10,8 @@
 
 use curvyo_document_core::Point;
 use curvyo_ui_core::{
-    EditHandle, EntryField, EntryKind, EntryOutcome, ParamDragInfo, ParamEntry, SelectTool,
-    SkewEntry, TransformEntry, entry_anchor,
+    EditHandle, EntryField, EntryKind, EntryOutcome, GroupEntry, ParamDragInfo, ParamEntry,
+    SelectTool, SkewEntry, TransformEntry, entry_anchor,
 };
 
 use super::corner_readout::param_readout;
@@ -58,6 +58,9 @@ pub struct EntryView {
     /// move chip does) instead of outward from the handle: the key S, whose
     /// fixed point is the centre (`edit-interaction-polish` criterion 59).
     pub at_centre: bool,
+    /// The chip edits a multi-selection (`multi-object-transform` criteria 33,
+    /// 34, 36): the size chip is named "Resize selection".
+    pub selection: bool,
 }
 
 impl EntryFieldView {
@@ -109,6 +112,7 @@ impl Session {
             center: box_.to_document(box_.local_center()),
             glyph_reach_px: 6.0,
             at_centre: false,
+            selection: false,
         }
     }
 
@@ -147,13 +151,70 @@ impl Session {
             center: box_.to_document(box_.local_center()),
             glyph_reach_px: 6.0,
             at_centre: false,
+            selection: false,
+        })
+    }
+
+    /// The open group entry, with the same checks: the Select tool is active
+    /// and its objects are still the selection.
+    fn open_group_entry(&self) -> Option<&GroupEntry> {
+        if self.tool != Tool::Select {
+            return None;
+        }
+        let entry = self.select.group_entry()?;
+        (self.selection.ids() == entry.ids()).then_some(entry)
+    }
+
+    /// The chip of an open group entry (an angle, a size or a skew of a
+    /// multi-selection), placed as a single object's chip of the same handle is,
+    /// from the group box.
+    fn group_entry_view(&self, entry: &GroupEntry) -> Option<EntryView> {
+        let box_ = entry.start_box();
+        let tolerances = self.transform_handle_tolerances();
+        let handle = if entry.centre_chip() {
+            box_.to_document(box_.local_center())
+        } else {
+            entry_anchor(box_, entry.handle(), &tolerances)?
+        };
+        // An edge resize handle with a skew arrow on its side: the arrow sits 16
+        // px out and is 12 px deep, so the glyphs reach 22 px.
+        let drawn = SelectTool::group_handle_positions(
+            &self.objects(),
+            &self.selection,
+            tolerances,
+            entry.side_rotate_revealed(),
+        );
+        let skew_beyond = matches!(
+            entry.handle(),
+            EditHandle::Resize(direction)
+                if drawn.iter().any(|(h, _)| matches!(
+                    h, EditHandle::Skew(side) if side.direction() == direction
+                ))
+        );
+        Some(EntryView {
+            kind: match entry.kind() {
+                EntryKind::Angle => "angle",
+                EntryKind::Size => "size",
+                _ => "skew",
+            },
+            fields: entry.fields().iter().map(EntryFieldView::of).collect(),
+            linked: entry.linked(),
+            scope: None,
+            handle,
+            center: box_.to_document(box_.local_center()),
+            glyph_reach_px: if skew_beyond { 22.0 } else { 6.0 },
+            at_centre: entry.centre_chip(),
+            selection: true,
         })
     }
 
     /// The numeric entry to show, or `None` (criteria 18, 25, 26; 18, 19 of
-    /// `unified-object-editing`).
+    /// `unified-object-editing`; 33, 34, 36 of `multi-object-transform`).
     #[must_use]
     pub fn transform_entry(&self) -> Option<EntryView> {
+        if let Some(entry) = self.open_group_entry() {
+            return self.group_entry_view(entry);
+        }
         if let Some(entry) = self.open_param_entry() {
             return self.param_entry_view(entry);
         }
@@ -207,6 +268,7 @@ impl Session {
             center: box_.to_document(box_.local_center()),
             glyph_reach_px: if skew_beyond { 22.0 } else { 6.0 },
             at_centre: entry.centre_chip(),
+            selection: false,
         })
     }
 
@@ -215,6 +277,9 @@ impl Session {
     /// linked or `text` is not a positive number yet.
     #[must_use]
     pub fn transform_entry_linked(&self, field: usize, text: &str) -> Option<String> {
+        if let Some(entry) = self.open_group_entry() {
+            return entry.linked_text(field, text);
+        }
         self.open_entry()?.linked_text(field, text)
     }
 
@@ -232,6 +297,7 @@ impl Session {
         if self.open_entry().is_none()
             && self.open_param_entry().is_none()
             && self.open_skew_entry().is_none()
+            && self.open_group_entry().is_none()
         {
             self.select.cancel_entry();
             return EntryOutcome::Unchanged;

@@ -453,7 +453,7 @@ pub(crate) fn skewed_unchecked(
 }
 
 /// Scales `object`'s stroke width by `factor`, floored above zero.
-fn scale_stroke(object: &mut ObjectSnapshot, factor: f64) {
+pub(crate) fn scale_stroke(object: &mut ObjectSnapshot, factor: f64) {
     let floor = Length::from_mm(MIN_STROKE_WIDTH_MM);
     match object {
         ObjectSnapshot::Primitive(p) => {

@@ -40,6 +40,9 @@ impl Session {
         if self.select.move_in_flight() {
             return self.move_readout();
         }
+        if self.select.group_drag_in_flight() {
+            return self.group_live_readout();
+        }
         let Some(handle) = self.select.dragging_handle() else {
             // No drag: the "max" notice of a limited typed radius, if any.
             return self.limit_notice.clone();
@@ -83,7 +86,7 @@ impl Session {
 
 /// `Skew x +12.5°`: the axis (x for the top and bottom handles, y for left
 /// and right), the sign (a real minus, U+2212) and one decimal at most.
-fn skew_readout(side: Side, degrees: f64) -> String {
+pub(super) fn skew_readout(side: Side, degrees: f64) -> String {
     let axis = if side.skews_along_u() { 'x' } else { 'y' };
     let magnitude = format_degrees(degrees.abs());
     let sign = if magnitude == "0°" {

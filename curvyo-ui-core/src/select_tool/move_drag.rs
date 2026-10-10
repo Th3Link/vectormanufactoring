@@ -125,6 +125,7 @@ impl SelectTool {
                 }
             }
             SelectDrag::Transforming(drag) => drag.origin.note(point),
+            SelectDrag::GroupTransforming(drag) => drag.origin.note(point),
             SelectDrag::Marquee(_) | SelectDrag::Lasso(_) => self.gesture_pointer_moved(point),
             SelectDrag::None => {}
         }
@@ -143,6 +144,7 @@ impl SelectTool {
             }
             SelectDrag::Moving(_)
             | SelectDrag::Transforming(_)
+            | SelectDrag::GroupTransforming(_)
             | SelectDrag::Marquee(_)
             | SelectDrag::Lasso(_)
             | SelectDrag::None => None,
