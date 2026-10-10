@@ -47,7 +47,9 @@ impl Session {
         // interleaved, each with its fill then its stroke
         // (`specs/0007-stroke-and-fill-styling` criterion 26). The Node
         // tool's live drag reshapes the paths it moves.
-        let mut artwork_objects = if self.tool == Tool::Node {
+        // A segment bend leaves the artwork as committed ("black old"): its blue outline is
+        // drawn over it below, and only the decorations read the live paths.
+        let mut artwork_objects = if self.tool == Tool::Node && self.live_bend().is_none() {
             Cow::Owned(Self::with_paths(&objects, &paths))
         } else {
             Cow::Borrowed(&objects[..])
@@ -58,6 +60,14 @@ impl Session {
             self.style.apply_to(artwork_objects.to_mut());
         }
         let mut list = build_artwork(&artwork_objects, view);
+        // The blue half of a segment bend, over the artwork and under the nodes and handles.
+        let bend_preview = self.bend_preview_objects(&objects);
+        if !bend_preview.is_empty() {
+            list.extend(curvyo_render_core::build_live_edit_preview(
+                &bend_preview,
+                view,
+            ));
+        }
         // A compound path shows no node, handle or segment (`0016-boolean-operations` criterion 38).
         let editable: Vec<_> = paths
             .iter()
@@ -135,10 +145,17 @@ impl Session {
             });
             list.extend(build_pen_preview(
                 nodes,
-                self.pointer_position,
+                self.pen_rubber_band_end(),
                 pending.as_ref(),
                 view,
-                self.is_hovering_pen_close_target(),
+                self.document.size(),
+            ));
+        }
+        // What a press would continue, join or close onto, before the click (`0034`).
+        if self.tool == Tool::Pen {
+            list.extend(curvyo_render_core::build_pen_cue(
+                &self.pen_cue_data(),
+                view,
                 self.document.size(),
             ));
         }

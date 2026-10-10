@@ -22,6 +22,13 @@ pub enum Hovered {
     Node(NodeId, curvyo_document_core::AnchorId),
     /// One of a node's handles is hovered.
     Handle(NodeId, curvyo_document_core::AnchorId, HandleSlot),
+    /// A segment a press would bend is hovered (`0031-segment-drag-bending` criterion 15): its
+    /// path and its two end anchors in path order.
+    Segment(
+        NodeId,
+        curvyo_document_core::AnchorId,
+        curvyo_document_core::AnchorId,
+    ),
 }
 
 /// What to decorate, built from `curvyo-ui-core`'s selection by whoever
@@ -44,6 +51,9 @@ pub struct DecorationInput {
     )>,
     /// What is currently under the pointer, if anything.
     pub hovered: Option<Hovered>,
+    /// Nodes whose handles are drawn in the idle look without the node being selected: the two
+    /// ends of a segment being bent (`0031` criterion 16).
+    pub handle_nodes: Vec<(NodeId, curvyo_document_core::AnchorId)>,
 }
 
 impl DecorationInput {
@@ -51,6 +61,14 @@ impl DecorationInput {
         self.selected_nodes
             .iter()
             .any(|&(p, a)| p == path && a == anchor)
+    }
+
+    fn shows_handles(&self, path: NodeId, anchor: curvyo_document_core::AnchorId) -> bool {
+        self.is_node_selected(path, anchor)
+            || self
+                .handle_nodes
+                .iter()
+                .any(|&(p, a)| p == path && a == anchor)
     }
 }
 
@@ -89,6 +107,12 @@ pub fn build(paths: &[PathSnapshot], view: ViewTransform, input: &DecorationInpu
     let sizes = Sizes::at(view);
     let mut list = DrawList::default();
     let drawn_paths = if input.show_nodes { paths } else { &[] };
+    // The hover band lies over the path's stroke and under every node and handle.
+    if input.show_nodes
+        && let Some(band) = hovered_segment_band(paths, view, input)
+    {
+        list.extend(band);
+    }
     // Unselected nodes first, then selected ones: where two nodes lie on the
     // same spot (after a Split) the selected glyph is drawn above the other
     // and its accent fill stays visible (`specs/0010-edit-interaction-polish/`
@@ -121,7 +145,7 @@ fn push_node(
     anchor: &curvyo_document_core::AnchorSnapshot,
     selected: bool,
 ) {
-    if selected {
+    if input.shows_handles(path, anchor.id) {
         for (slot, handle) in [
             (HandleSlot::Out, anchor.handle_out),
             (HandleSlot::In, anchor.handle_in),
@@ -193,6 +217,34 @@ fn push_node(
             theme::ACCENT_HOVER,
         ));
     }
+}
+
+/// The hover band of the hovered segment (`0031` criterion 15), or `None` when no segment is
+/// hovered, the hovered one is the selected one (it keeps the selected look) or it no longer
+/// resolves.
+fn hovered_segment_band(
+    paths: &[PathSnapshot],
+    view: ViewTransform,
+    input: &DecorationInput,
+) -> Option<DrawList> {
+    let Some(Hovered::Segment(path, start, end)) = input.hovered else {
+        return None;
+    };
+    if input.selected_segment == Some((path, start, end)) {
+        return None;
+    }
+    let snapshot = paths.iter().find(|p| p.id == path)?;
+    let start_anchor = snapshot.anchors.iter().find(|a| a.id == start)?;
+    let end_anchor = snapshot.anchors.iter().find(|a| a.id == end)?;
+    Some(crate::stroke::segment_band(
+        start_anchor.point,
+        start_anchor.handle_out,
+        end_anchor.handle_in,
+        end_anchor.point,
+        screen_px_to_mm(view, theme::SEGMENT_HOVER_WIDTH_PX),
+        theme::SEGMENT_HOVER,
+        screen_px_to_mm(view, theme::DISPLAY_TOLERANCE_PX),
+    ))
 }
 
 /// The selected-segment overlay (acceptance criterion 14), or `None`

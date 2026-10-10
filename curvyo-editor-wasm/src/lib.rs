@@ -28,6 +28,8 @@ mod wasm_api;
 #[cfg(target_arch = "wasm32")]
 mod wasm_boolean;
 #[cfg(target_arch = "wasm32")]
+mod wasm_combine;
+#[cfg(target_arch = "wasm32")]
 mod wasm_document;
 #[cfg(target_arch = "wasm32")]
 mod wasm_keys;
@@ -39,6 +41,8 @@ mod wasm_move_entry;
 mod wasm_navigation;
 #[cfg(target_arch = "wasm32")]
 mod wasm_node_tool;
+#[cfg(target_arch = "wasm32")]
+mod wasm_pen;
 #[cfg(target_arch = "wasm32")]
 mod wasm_properties_panel;
 #[cfg(target_arch = "wasm32")]
@@ -53,8 +57,9 @@ mod wasm_select_tool;
 mod wasm_shape_tools;
 
 pub use session::{
-    BooleanOutcome, DocumentPresetsRecord, DocumentSide, DoubleClickHint, EscapeStep, FitOutcome,
-    KeyHint, KeyInput, KeyOutcome, MoveIndicators, Session, SizeOutcome, Tool,
+    BooleanOutcome, BreakApartOutcome, ClosePathOutcome, ClosePathState, CombineOutcome,
+    DocumentPresetsRecord, DocumentSide, DoubleClickHint, EscapeStep, FitOutcome, KeyHint,
+    KeyInput, KeyOutcome, MoveIndicators, Session, SizeOutcome, Tool,
 };
 
 #[cfg(target_arch = "wasm32")]

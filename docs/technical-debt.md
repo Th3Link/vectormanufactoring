@@ -681,6 +681,23 @@ is below the 25 ms line the architect set (readiness check, section 5), so the
 draw-list cache stays deferred for now; PR 2 adds fills and dashes, which are
 tessellated every frame, and measures again.
 
+**Update 2026-10-10 (`0031-segment-drag-bending` and `0034-pen-path-extension`).** The "cheap document
+version" the cache needs now exists: `Document::version()` (an opaque marker that changes exactly
+when something is committed or merged). The Pen's index of path ends uses it (`Session::with_end_index`
+rebuilds only when the version changes: 45 ms for 5000 open paths, 0.1 ms warm,
+`curvyo-editor-wasm/tests/pen_target_budget.rs`). The draw-list cache itself is still not built. A
+Node-tool drag now keeps the snapshot it started with, like a Select drag (`Session::objects`): a bend
+frame on a path of 5000 nodes costs about 7.6 ms after the first frame
+(`curvyo-editor-wasm/tests/segment_bend_budget.rs`). The same assumption holds: no remote merge and no
+undo may run during a Node-tool drag.
+
+**Update 2026-10-10 (`0035-combine-and-break-apart`).** Combine and Break apart read every selected
+object once and write one commit, so they do not need the cache: with 1000 circles in a rectangle,
+2000 disjoint squares, 500 nested squares or a compound path of 5000 squares a command takes 11 to
+373 ms in a release build (budget 2 s, `curvyo-editor-wasm/tests/combine_interactivity.rs`), and the
+touch and nesting kernel 16 ms for 1001 outlines. The Boolean busy state (two painted frames before
+the call) is shared by both cards of the rail.
+
 ## The canvas does not react to a `devicePixelRatio` change with no resize event
 
 The fix below sizes the backing store once, at attach and on every
@@ -1132,6 +1149,33 @@ box size; those tests count fans only (`white_count` in
   separate `chore/` and a precondition for any interactive 10 fps target above
   a few thousand objects. `multi-object-transform` gates only the group box
   (under 20 ms at 10,000 objects) and reports the rest.
+
+## The rail's width is written in three places, and `node_tool.rs` is past the size limit
+
+*2026-10-10 (`path-tools`, architect review).* The width of the two rail columns exists as
+`--rail-right: 116px` (`frontend/src/index.css`), as the tooltip offsets 66 and 10
+(`frontend/src/components/railCard.ts`) and as `DOCUMENT_INSET_PX` 128
+(`curvyo-ui-core/src/viewport.rs`). `frontend/tests/railWidth.test.ts` pins the three against each
+other, so a third column (`0023`, `0036` to `0038`) fails a test instead of drifting. A single
+source would have to cross the Rust and TypeScript boundary (a build step or a value passed from the
+session); not worth it for one number.
+
+`curvyo-ui-core/src/node_tool.rs` has about 825 non-test lines (781 before `0031-segment-drag-bending`,
+which added the bend drag, 44 lines). It already held the node drag, the handle drag, the marquee
+and the segment selection. The Pen's commit planning moved out of `pen_tool.rs` into
+`pen_tool/commit.rs` in the same slice (`pen_tool.rs` is now about 390 non-test lines). Splitting the
+Node tool's drag kinds into submodules is mechanical and belongs to the next slice that touches
+`node_tool.rs`.
+
+*2026-10-10 (`path-tools`, UX review).* Two places where the specs are ahead of the code or the code
+reads differently from the notes: (1) `0035` criterion 15 and its UX notes describe a group selection
+box with handles around the pieces after Break apart; `0019-multi-object-transform` is not built, so
+a multi-selection shows only the dashed member boxes (note for the PO: reword the sentence or ship
+`0019` first). (2) The Properties panel's subject line says "2 paths" for a compound path plus an open
+path (a compound path counts as a path); the notes expect "2 objects" for a mix. Cosmetic; the rule
+lives in `ui-core/src/panel_content.rs`. Also accepted as specified: Path notices cover the first row
+of the Select bar (click-through, 3 s or 8 s).
+
 
 **2026-10-09 (`0017-style-panel-rework`):**
 

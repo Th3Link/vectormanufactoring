@@ -26,18 +26,23 @@ mod document;
 mod document_presets;
 mod document_size;
 mod error;
+mod junction;
 mod legacy_fill;
 mod objects;
 mod path_codec;
+mod path_extend;
 mod path_model;
+mod path_reverse;
 mod path_topology;
 mod paths;
 mod primitive_model;
 mod primitive_outline;
 mod replace;
+mod segment_bend;
 mod shape_codec;
 mod shape_radii;
 mod shapes;
+mod smooth_handles;
 mod style_codec;
 mod style_model;
 mod style_validation;
@@ -48,7 +53,7 @@ mod units;
 pub use container::{CURRENT_LORO_SNAPSHOT_VERSION, pack, unpack};
 pub use corner_radii::{Corner, CornerRadii, SHARP_CORNER_EPSILON_MM, effective_corner_radii};
 pub use display_unit::DisplayUnit;
-pub use document::{CURRENT_FORMAT_VERSION, Document};
+pub use document::{CURRENT_FORMAT_VERSION, Document, DocumentVersion};
 pub use document_presets::{
     AuthoredSize, DocumentPreset, Orientation, PRESET_MATCH_TOLERANCE, PresetError, PresetGroup,
     PresetList, PresetReason, PresetSubject, PresetUnit,
@@ -57,11 +62,14 @@ pub use document_size::{
     DocumentSizeError, MAX_DOCUMENT_MM, MIN_DOCUMENT_MM, validated_document_side,
 };
 pub use error::{OpenError, SaveError};
+pub use junction::{COINCIDENT_MM, interior_handle, merged_junction};
 pub use objects::{CopySource, ObjectEditError};
+pub use path_extend::{PathEnd, PathGrowth};
 pub use path_model::{
     AnchorId, AnchorKind, AnchorSnapshot, Color, HandleSlot, NewAnchor, NodeId, PathEditError,
     PathSnapshot, SubpathRef, SubpathSnapshot,
 };
+pub use path_reverse::reversed_anchors;
 pub use paths::resolve_handle_pair;
 pub use primitive_model::{
     EllipseFrame, InnerRatio, ObjectSnapshot, PointCount, PrimitiveSnapshot, RectBounds, Shape,
@@ -72,6 +80,7 @@ pub use primitive_outline::{
     rect_outline, star_outline,
 };
 pub use shapes::ShapeEditError;
+pub use smooth_handles::smooth_corner_handles;
 pub use style_model::{
     DashPattern, Fill, LineCap, LineJoin, MarkerCount, MarkerPlace, MarkerShape, Markers, Opacity,
     Stroke, Style, StyleParamError,

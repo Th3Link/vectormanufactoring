@@ -94,6 +94,63 @@ pub fn segment_bounds(
     (Point::new(bbox.x0, bbox.y0), Point::new(bbox.x1, bbox.y1))
 }
 
+/// A handle shorter than this (millimetres) is a retracted handle: a segment whose two handles
+/// are both within it is a straight line (`specs/0031-segment-drag-bending` criterion 7).
+const LINE_HANDLE_TOLERANCE: Tolerance = Tolerance::from_mm(1e-9);
+
+/// The grab parameter is clamped to this range so the handles never run away when the maker
+/// grabs next to a node (`0031` criterion 10): `k` is then at most 2.4.
+const GRAB_T_MIN: f64 = 1.0 / 6.0;
+const GRAB_T_MAX: f64 = 5.0 / 6.0;
+
+/// The two handles a bend writes, each relative to its own anchor
+/// (`specs/0031-segment-drag-bending` criterion 8).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BentHandles {
+    /// The start anchor's new outgoing handle.
+    pub start_handle_out: Vec2,
+    /// The end anchor's new incoming handle.
+    pub end_handle_in: Vec2,
+}
+
+/// The new handles of a segment dragged by `displacement` from the point at parameter `grab_t`
+/// (`specs/0031-segment-drag-bending` criteria 7 to 11).
+///
+/// A segment whose two handles are both retracted is a line and is treated as the cubic with its
+/// control points at a third and two thirds of the chord (the same shape). With `t` the grab
+/// parameter clamped to `[1/6, 5/6]` and `k = 1 / (3 t (1 - t))`, both control points move by
+/// `k * displacement`, so no node moves, and the curve point at `grab_t` is carried by the
+/// displacement when `grab_t` lies in the clamped range.
+///
+/// `None` for a zero-length line (both handles retracted and the endpoints coincident): it has no
+/// grab point.
+#[must_use]
+pub fn bend_segment_handles(
+    start: Point,
+    start_handle_out: Vec2,
+    end_handle_in: Vec2,
+    end: Point,
+    grab_t: f64,
+    displacement: Vec2,
+) -> Option<BentHandles> {
+    let retracted = |handle: Vec2| handle.length() <= LINE_HANDLE_TOLERANCE.as_mm();
+    let chord = start.vector_to(end);
+    let (out, handle_in) = if retracted(start_handle_out) && retracted(end_handle_in) {
+        if chord.length() <= LINE_HANDLE_TOLERANCE.as_mm() {
+            return None;
+        }
+        (chord.scaled(1.0 / 3.0), chord.scaled(-1.0 / 3.0))
+    } else {
+        (start_handle_out, end_handle_in)
+    };
+    let t = grab_t.clamp(GRAB_T_MIN, GRAB_T_MAX);
+    let push = displacement.scaled(1.0 / (3.0 * t * (1.0 - t)));
+    Some(BentHandles {
+        start_handle_out: out + push,
+        end_handle_in: handle_in + push,
+    })
+}
+
 /// The caller-resolved geometry of splitting one segment at a parameter —
 /// acceptance criterion 12; every field is already relative to its own
 /// anchor, ready to pass straight into

@@ -20,15 +20,16 @@ fn default_viewport_is_100_percent_at_the_document_origin() {
     assert_eq!(viewport.screen_to_document(0.0, 0.0), Point::new(0.0, 0.0));
 }
 
-/// Criterion 11a: the document's corner is 72 px in from the canvas's
-/// corner on both axes, at 100 %.
+/// Criterion 11a: the document's corner is 128 px in from the canvas's
+/// corner on both axes, at 100 % (128 px since the second rail column,
+/// `0035` criterion 1a).
 #[test]
-fn a_new_view_puts_the_document_corner_72_px_in() {
+fn a_new_view_puts_the_document_corner_128_px_in() {
     let viewport = Viewport::with_document_inset();
     assert_eq!(viewport.zoom_percent(), 100);
     let (x, y) = viewport.view().document_to_screen(Point::new(0.0, 0.0));
     assert!(
-        (x - 72.0).abs() < 1e-9 && (y - 72.0).abs() < 1e-9,
+        (x - 128.0).abs() < 1e-9 && (y - 128.0).abs() < 1e-9,
         "{x} {y}"
     );
 }
@@ -43,14 +44,14 @@ fn the_inset_survives_resizes_until_the_first_pan_or_zoom() {
     viewport.resize(650.0, 480.0);
     let (x, y) = viewport.view().document_to_screen(Point::new(0.0, 0.0));
     assert!(
-        (x - 72.0).abs() < 1e-9 && (y - 72.0).abs() < 1e-9,
+        (x - 128.0).abs() < 1e-9 && (y - 128.0).abs() < 1e-9,
         "{x} {y}"
     );
 
     viewport.pan_by_screen_delta(0.0, 0.0);
     viewport.resize(850.0, 480.0);
     let (x, _) = viewport.view().document_to_screen(Point::new(0.0, 0.0));
-    assert!((x - 172.0).abs() < 1e-9, "centre kept after a pan: {x}");
+    assert!((x - 228.0).abs() < 1e-9, "centre kept after a pan: {x}");
 }
 
 #[test]
@@ -271,7 +272,7 @@ fn a_document_offset_does_not_end_the_untouched_view() {
     viewport.resize(900.0, 600.0);
     let (x, _) = viewport.view().document_to_screen(Point::new(10.0, 10.0));
     assert!(
-        (x - 72.0).abs() < 1e-9,
+        (x - 128.0).abs() < 1e-9,
         "origin kept through the resize: {x}"
     );
 }

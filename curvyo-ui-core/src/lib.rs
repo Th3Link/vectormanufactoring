@@ -16,8 +16,12 @@
 mod anchor_id_minter;
 mod angle_snap;
 mod boolean;
+mod break_apart;
+mod close_path;
+mod closing_join;
 mod colour_hsv;
 mod colour_pick;
+mod combine;
 mod conversion;
 mod dash_text;
 mod display_unit_text;
@@ -37,11 +41,13 @@ mod panel_content;
 mod param_edit;
 mod param_entry;
 mod param_handles;
+mod pen_target;
 mod pen_tool;
 mod poly_star_tool;
 mod rectangle_tool;
 mod resize_direction;
 mod ruler;
+mod segment_bend;
 mod select_bar;
 mod select_tool;
 mod selection;
@@ -66,8 +72,17 @@ pub use angle_snap::{MAX_SKEW_SNAP_DEG, snap_angle, snap_skew_angle};
 pub use boolean::{
     BooleanAvailability, BooleanOp, BooleanPlan, BooleanRefusal, boolean_availability, plan_boolean,
 };
+pub use break_apart::{BreakApartPlan, BreakApartRefusal, Piece, plan_break_apart};
+pub use close_path::{
+    ClosableCounts, ClosePlan, closable_counts, close_path_set, plan_close_paths,
+};
+pub use closing_join::{JoinType, resolve_closing_node};
 pub use colour_hsv::{Hsv, hsv_to_rgb, rgb_to_hsv};
 pub use colour_pick::{PaintTarget, PickedColour, pick_colour};
+pub use combine::{
+    COMBINE_COMMIT_LABEL, CombinePlan, CombineRefusal, PathAvailability, path_availability,
+    plan_combine,
+};
 pub use conversion::build_primitive_conversions;
 pub use dash_text::{MAX_DASH_NUMBER, MAX_DASH_NUMBERS, dash_text, parse_dash_text};
 pub use display_unit_text::{
@@ -102,11 +117,15 @@ pub use param_handles::{
     PARAM_MIN_SIDE_PX, ParamHandle, centre_drawn, corner_local_position, handle_tiers, knob_rho,
     param_handles, radius_gain, radius_travel,
 };
-pub use pen_tool::{PenTool, PointerUpOutcome as PenPointerUpOutcome};
+pub use pen_target::{EndNode, EndNodeIndex, PenTarget, continuation_of, pen_target};
+pub use pen_tool::{
+    ClosingPreview, Continuation, PenTool, PointerUpOutcome as PenPointerUpOutcome, PressAction,
+};
 pub use poly_star_tool::{PolyStarMode, PolygonStarTool};
 pub use rectangle_tool::RectangleTool;
 pub use resize_direction::ResizeDirection;
 pub use ruler::{RulerAxis, RulerLabel, RulerLayout, RulerMajor, ruler_layout};
+pub use segment_bend::{BendResolution, segment_is_bendable};
 pub use select_bar::{
     BarPreview, BarValue, ObjectKind, SelectBarState, ids_of_kind, select_bar_state,
 };

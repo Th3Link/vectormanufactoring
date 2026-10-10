@@ -139,7 +139,7 @@ fn ac11a_default_view_survives_resizes_until_first_pan_or_zoom() {
         s.resize_viewport(w, h);
         let (x, y) = corner(&s);
         assert!(
-            (x - 72.0).abs() < 1e-9 && (y - 72.0).abs() < 1e-9,
+            (x - 128.0).abs() < 1e-9 && (y - 128.0).abs() < 1e-9,
             "{w}x{h}: ({x}, {y})"
         );
     }
@@ -161,7 +161,7 @@ fn ac11a_reopening_also_gets_the_default_view_only_when_the_host_asks() {
     s.wheel(30.0, 40.0, 10.0, 10.0, false, false);
     s.show_default_view();
     let (x, y) = corner(&s);
-    assert!((x - 72.0).abs() < 1e-9 && (y - 72.0).abs() < 1e-9);
+    assert!((x - 128.0).abs() < 1e-9 && (y - 128.0).abs() < 1e-9);
     assert_eq!(s.zoom_percent(), 100);
 }
 
@@ -210,15 +210,15 @@ fn ac3_default_view_has_the_origin_tick_72px_in_and_labels_0() {
     s.resize_viewport(1000.0, 700.0);
     for axis in [RulerAxis::Horizontal, RulerAxis::Vertical] {
         let l = s.ruler_layout(axis, 900.0, 7.0, 7.0);
-        assert!((l.origin_px.unwrap() - 72.0).abs() < 1e-9);
+        assert!((l.origin_px.unwrap() - 128.0).abs() < 1e-9);
         assert!(
             l.labels
                 .iter()
-                .any(|x| x.text == "0" && (x.tick_px - 72.0).abs() < 1e-9)
+                .any(|x| x.text == "0" && (x.tick_px - 128.0).abs() < 1e-9)
         );
     }
     // mm at 100 %: majors every 20 mm
-    let h = s.ruler_layout(RulerAxis::Horizontal, 900.0, 7.0, 7.0);
+    let h = s.ruler_layout(RulerAxis::Horizontal, 1000.0, 7.0, 7.0);
     assert!((h.step() - 20.0).abs() < 1e-12);
     assert!(h.labels.iter().any(|x| x.text == "200"));
 }
@@ -354,7 +354,10 @@ fn ac31_pen_close_target_works_for_a_first_node_on_the_pasteboard() {
         s.pointer_up(p, false, false);
     }
     s.pointer_hover(pt(-50.0, -50.0), false, false);
-    assert!(s.is_hovering_pen_close_target());
+    assert!(matches!(
+        s.pen_target(),
+        Some(curvyo_ui_core::PenTarget::Close { .. })
+    ));
     let colours: Vec<_> = s.draw_list().triangles.iter().map(|v| v.color).collect();
     assert!(colours.contains(&PASTEBOARD_BG) && !colours.contains(&CANVAS_BG));
     s.pointer_down(pt(-50.0, -50.0), false);

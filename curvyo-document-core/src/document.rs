@@ -12,6 +12,10 @@ use crate::document_size::{MAX_DOCUMENT_MM, MIN_DOCUMENT_MM};
 use crate::error::{OpenError, SaveError};
 use crate::units::{DocumentSize, Length};
 
+/// An opaque marker of a document's state, see [`Document::version`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocumentVersion(loro::Frontiers);
+
 /// The container `format_version` this build writes and the newest it
 /// accepts on read (ADR 0004 §9).
 ///
@@ -253,6 +257,15 @@ impl Document {
     /// methods only — never exposed outside this crate (ADR 0004 §3).
     pub(crate) const fn loro(&self) -> &LoroDoc {
         &self.loro
+    }
+
+    /// An opaque marker of the document's current state: it differs from an earlier one exactly
+    /// when something was committed (or merged) in between. For caches built from the whole
+    /// document, such as the Pen's index of path ends (`specs/0034-pen-path-extension`
+    /// criterion 24).
+    #[must_use]
+    pub fn version(&self) -> DocumentVersion {
+        DocumentVersion(self.loro.state_frontiers())
     }
 
     /// Commits the pending auto-commit transaction with `label` as its

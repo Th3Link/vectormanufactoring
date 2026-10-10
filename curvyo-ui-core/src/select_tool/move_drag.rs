@@ -57,6 +57,25 @@ pub(super) struct MoveDrag {
     pub(super) last_axis: Option<Axis>,
 }
 
+/// `displacement` limited to the axis on which it is larger, chosen again on every call (no
+/// latch, no hysteresis); an exact tie keeps `last_axis`, x if there was none. The one rule of
+/// an axis-locked move and of an axis-locked segment bend (`0031` criterion 13).
+pub(crate) fn lock_axis(displacement: Vec2, last_axis: Option<Axis>) -> (Vec2, Axis) {
+    let (across_x, across_y) = (displacement.x.abs(), displacement.y.abs());
+    let axis = if (across_x - across_y).abs() <= AXIS_TIE_EPSILON_MM {
+        last_axis.unwrap_or(Axis::X)
+    } else if across_x > across_y {
+        Axis::X
+    } else {
+        Axis::Y
+    };
+    let locked = match axis {
+        Axis::X => Vec2::new(displacement.x, 0.0),
+        Axis::Y => Vec2::new(0.0, displacement.y),
+    };
+    (locked, axis)
+}
+
 impl MoveDrag {
     /// A move pressed at `origin`.
     pub(super) const fn new(origin: DragOrigin, from_center: bool) -> Self {
@@ -78,18 +97,7 @@ impl MoveDrag {
     pub(super) fn resolve(&self, current: Point, modifiers: Modifiers) -> MoveResolution {
         let displacement = self.origin.down_at.vector_to(current);
         let (offset, axis) = if modifiers.shift {
-            let (across_x, across_y) = (displacement.x.abs(), displacement.y.abs());
-            let axis = if (across_x - across_y).abs() <= AXIS_TIE_EPSILON_MM {
-                self.last_axis.unwrap_or(Axis::X)
-            } else if across_x > across_y {
-                Axis::X
-            } else {
-                Axis::Y
-            };
-            let locked = match axis {
-                Axis::X => Vec2::new(displacement.x, 0.0),
-                Axis::Y => Vec2::new(0.0, displacement.y),
-            };
+            let (locked, axis) = lock_axis(displacement, self.last_axis);
             (locked, Some(axis))
         } else {
             (displacement, None)

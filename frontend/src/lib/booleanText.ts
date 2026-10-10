@@ -67,7 +67,7 @@ const EMPTY_TEXTS: Record<BooleanOp, string> = {
   reverse_difference: "Reverse difference is empty: the top object is covered completely.",
 };
 
-const NOTHING_CHANGED = "Nothing was changed.";
+export const NOTHING_CHANGED = "Nothing was changed.";
 
 /** The operation's name; also its accessible name. */
 export function operationName(op: BooleanOp): string {
@@ -94,7 +94,7 @@ export function tooltipNote(availability: BooleanAvailabilityState, selectTool: 
   return "Replaces the selection. No undo yet.";
 }
 
-function plural(count: number, one: string, many: string): string {
+export function plural(count: number, one: string, many: string): string {
   return count === 1 ? `1 ${one}` : `${count} ${many}`;
 }
 
@@ -107,28 +107,39 @@ export function successText(op: BooleanOp, result: BooleanResult): string | null
   return `${NAMES[op]}: ${result.count} objects became ${became}. No undo yet.`;
 }
 
-/** The notice after a refusal (criteria 15 to 17), or `null` for a result
- * that is no refusal (`applied`, `ignored`, `needs_two`). */
-export function refusalText(op: BooleanOp, result: BooleanResult): string | null {
-  const name = NAMES[op];
+/** The refusals every rail command that needs closed shapes shares (`0016` criteria 15 to 17,
+ * `0035` criterion 11): open paths, no area, out of range. `name` is the command's name. `null`
+ * for any other result. */
+export function sharedRefusalText(
+  name: string,
+  result: { kind: string; count: number; of: number },
+): string | null {
+  const objects = plural(result.of, "selected object", "selected objects");
   switch (result.kind) {
     case "open_paths": {
       const verb = result.count === 1 ? "is" : "are";
-      return `${name} needs closed paths. ${result.count} of ${plural(result.of, "selected object", "selected objects")} ${verb} open. ${NOTHING_CHANGED}`;
+      return `${name} needs closed paths. ${result.count} of ${objects} ${verb} open. ${NOTHING_CHANGED}`;
     }
     case "no_area": {
       const verb = result.count === 1 ? "has" : "have";
-      return `${name} needs shapes that enclose an area. ${result.count} of ${plural(result.of, "selected object", "selected objects")} ${verb} no area. ${NOTHING_CHANGED}`;
+      return `${name} needs shapes that enclose an area. ${result.count} of ${objects} ${verb} no area. ${NOTHING_CHANGED}`;
     }
-    case "empty":
-      return `${EMPTY_TEXTS[op]} ${NOTHING_CHANGED}`;
     case "out_of_range": {
       const verb = result.count === 1 ? "reaches" : "reach";
-      return `${name} works only within 10 km of the point 0, 0. ${result.count} of ${plural(result.of, "selected object", "selected objects")} ${verb} further. ${NOTHING_CHANGED}`;
+      return `${name} works only within 10 km of the point 0, 0. ${result.count} of ${objects} ${verb} further. ${NOTHING_CHANGED}`;
     }
     default:
       return null;
   }
+}
+
+/** The notice after a refusal (criteria 15 to 17), or `null` for a result
+ * that is no refusal (`applied`, `ignored`, `needs_two`). */
+export function refusalText(op: BooleanOp, result: BooleanResult): string | null {
+  if (result.kind === "empty") {
+    return `${EMPTY_TEXTS[op]} ${NOTHING_CHANGED}`;
+  }
+  return sharedRefusalText(NAMES[op], result);
 }
 
 /** Whether a refusal outlines objects on the canvas (criteria 15 and 16). */

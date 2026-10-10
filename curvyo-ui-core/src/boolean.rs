@@ -81,7 +81,7 @@ pub enum BooleanAvailability {
 }
 
 /// Which selected objects the document still holds, in stacking order (bottom first).
-fn operands_in_order<'a>(
+pub(crate) fn operands_in_order<'a>(
     objects: &'a [ObjectSnapshot],
     selection: &ObjectSelection,
 ) -> Vec<&'a ObjectSnapshot> {
@@ -91,7 +91,7 @@ fn operands_in_order<'a>(
         .collect()
 }
 
-fn is_open(object: &ObjectSnapshot) -> bool {
+pub(crate) fn is_open(object: &ObjectSnapshot) -> bool {
     match object {
         ObjectSnapshot::Path(path) => path.subpaths().any(|subpath| !subpath.closed),
         ObjectSnapshot::Primitive(_) => false,

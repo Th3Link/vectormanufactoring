@@ -9,6 +9,8 @@ import { MoveEntryChip } from "@/components/MoveEntryChip";
 import { TransformEntryChip } from "@/components/TransformEntryChip";
 import type { EditorSession } from "@/hooks/useEditorSession";
 import { ColourPickChip } from "@/components/ColourPickChip";
+import { PenHintChip } from "@/components/PenHintChip";
+import { usePenCue } from "@/hooks/usePenCue";
 import { cursorForHint } from "@/lib/cursors";
 import { type Rect, placeReadout } from "@/lib/readoutPlacement";
 
@@ -20,7 +22,7 @@ const READOUT_OFFSET_PX = 12;
 
 /** The tool rail's clearance from the canvas's left edge, px: the readout is
  * never drawn under it. */
-const TOOL_RAIL_CLEAR_PX = 64;
+const TOOL_RAIL_CLEAR_PX = 120;
 /** The properties panel's collapse tab sits on the canvas's right edge: a chip
  * never reaches into the last 14 px, so it cannot cover the tab when the
  * pointer leaves the canvas over the panel. */
@@ -43,6 +45,7 @@ interface CanvasProps {
  * precedent, reaffirmed by `docs/design-system.md`).
  */
 export function Canvas({ editor }: CanvasProps) {
+  const penCue = usePenCue(editor);
   return (
     <div
       ref={editor.containerRef}
@@ -69,9 +72,13 @@ export function Canvas({ editor }: CanvasProps) {
           : editor.isSpaceHeld
             ? "cursor-grab"
             : editor.tool === "pen"
-              ? editor.isHoveringPenCloseTarget
+              ? penCue.kind === "close"
                 ? "canvas-cursor-pen-close"
-                : "canvas-cursor-pen"
+                : penCue.kind === "continue"
+                  ? "canvas-cursor-pen-continue"
+                  : penCue.kind === "join"
+                    ? "canvas-cursor-pen-join"
+                    : "canvas-cursor-pen"
               : editor.tool === "rectangle" ||
                   editor.tool === "ellipse" ||
                   editor.tool === "polygon-star"
@@ -155,6 +162,7 @@ export function Canvas({ editor }: CanvasProps) {
         containerRef={editor.containerRef}
         onDismiss={editor.dismissEditHint}
       />
+      <PenHintChip cue={penCue} containerRef={editor.containerRef} />
       <MoveBadges badges={editor.moveBadges} containerRef={editor.containerRef} />
       <ColourPickChip
         active={editor.cursorHint === "eyedropper"}

@@ -146,8 +146,8 @@ fn pen_drag_preview_matches_the_pending_anchor_some_branch_not_the_none_branch()
     let view = session.view();
 
     let size = curvyo_document_core::DocumentSize::default();
-    let with_pending = build_pen_preview(&nodes, Some(cursor), pending.as_ref(), view, false, size);
-    let without_pending = build_pen_preview(&nodes, Some(cursor), None, view, false, size);
+    let with_pending = build_pen_preview(&nodes, Some(cursor), pending.as_ref(), view, size);
+    let without_pending = build_pen_preview(&nodes, Some(cursor), None, view, size);
 
     assert_ne!(
         with_pending.triangle_count(),

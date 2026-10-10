@@ -5,8 +5,9 @@ import type { TransformEntryState } from "@/hooks/useEditorSession";
 import { placeEntryChip, placeMoveChip } from "@/lib/readoutPlacement";
 
 /** The tool rail's clearance from the canvas's left edge, px (`App.tsx`'s
- * `left-[72px]` for the contextual bars). */
-const TOOL_RAIL_CLEAR_PX = 72;
+ * `left-[calc(var(--rail-right)+12px)]` for the contextual bars: `--rail-right` + 12 = 128px with two
+ * rail columns). */
+const TOOL_RAIL_CLEAR_PX = 128;
 
 /** Height of the message card plus its gap, in px. */
 const MESSAGE_CARD_PX = 28;
