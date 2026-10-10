@@ -654,7 +654,7 @@ fn an_edge_stretch_counts_converts_and_notices_once() {
     assert_eq!(session.live_conversion_counts(), vec![0, 1, 0, 0]);
     assert_eq!(session.escape(), EscapeStep::CancelledDrag);
     session.pointer_up(to, false, false);
-    assert!(session.take_conversion_notice().is_empty());
+    assert_eq!(session.take_conversion_notice(), Vec::<u32>::new());
     assert!(
         objects(&session)
             .iter()
@@ -669,5 +669,5 @@ fn an_edge_stretch_counts_converts_and_notices_once() {
     ));
     assert_eq!(session.take_conversion_notice(), vec![0, 1, 0, 0]);
     assert!(session.take_conversion_notice().is_empty(), "taken once");
-    assert!(session.live_conversion_counts().is_empty());
+    assert_eq!(session.live_conversion_counts(), Vec::<u32>::new());
 }

@@ -343,7 +343,7 @@ impl SelectTool {
             // always proportional, criterion 56).
             converted: match handle {
                 EditHandle::Resize(direction) if !is_corner(direction) => {
-                    converted_polygon_or_star(object)
+                    converted_polygon_or_star(object).map(Box::new)
                 }
                 _ => None,
             },

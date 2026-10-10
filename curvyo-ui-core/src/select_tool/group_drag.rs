@@ -218,7 +218,12 @@ impl SelectTool {
     pub fn mint_conversion_ids(&mut self, minter: &mut AnchorIdMinter) {
         let paths: &mut [Option<PathSnapshot>] = match &mut self.drag {
             SelectDrag::GroupTransforming(drag) => &mut drag.converted,
-            SelectDrag::Transforming(drag) => std::slice::from_mut(&mut drag.converted),
+            SelectDrag::Transforming(drag) => {
+                if let Some(path) = drag.converted.as_deref_mut() {
+                    with_fresh_anchor_ids(path, minter);
+                }
+                return;
+            }
             _ => match &mut self.entry {
                 Some(entry) => entry.converted_paths_mut(),
                 None => return,

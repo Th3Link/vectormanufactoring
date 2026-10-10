@@ -198,7 +198,7 @@ pub(crate) struct TransformDrag {
     /// For an edge resize of a polygon or star, the path it becomes (criterion
     /// 56), built at the press so that the preview and the commit are the same
     /// snapshot.
-    pub(crate) converted: Option<PathSnapshot>,
+    pub(crate) converted: Option<Box<PathSnapshot>>,
 }
 
 /// What the live readout of a corner radius drag needs beyond the resolved
@@ -273,7 +273,7 @@ impl TransformDrag {
                         ctrl,
                         modes: self.modes,
                         typed: false,
-                        converted: self.converted.as_ref(),
+                        converted: self.converted.as_deref(),
                     },
                 )
             }
