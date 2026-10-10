@@ -72,15 +72,18 @@ Facts from the specs listed under Links; the state is `main` plus
   midpoints** are the points the handles and pivots below refer to. `s` is its
   shorter side in screen pixels.
 - **Aligned primitive**: a rectangle or ellipse whose `rotation` is a multiple
-  of 90° within 1e-9 rad, or an ellipse whose `rx` and `ry` differ by less than
-  the geometric tolerance (a circle, whatever its rotation). A polygon or star is
-  never aligned.
+  of 90° within 1e-9 rad (the distance to the nearest multiple, in radians), or an
+  ellipse whose `rx` and `ry` differ by less than 1e-6 mm (a circle, whatever its
+  rotation). A polygon or star is never aligned. These two constants are the ones
+  the code uses (`QUARTER_TURN_TOLERANCE_RAD` and the circle test in
+  `curvyo-ui-core/src/conversion.rs`); criterion 53.8 tests them.
 - **Converting object**: a polygon, a star, or a rectangle or ellipse that is not
   an aligned primitive. It cannot show a stretch along the document axes as the
   same kind by the rule of criterion 20: a polygon or star stores one radius, a
   turned rectangle would become a parallelogram, and a turned ellipse is converted
   by default D9 (criterion 53).
-- **Stretch**: a scale whose factors differ, |sx − sy| > 1e-9 · max(|sx|, |sy|)
+- **Stretch**: a scale whose factors differ by more than a relative 1e-9,
+  |sx − sy| > 1e-9 · max(|sx|, |sy|) (`UNIFORM_EPSILON` in `group_transform.rs`)
   (a drag of an edge handle, a corner drag without Ctrl of a selection that holds
   no converting object, or a typed size of another aspect ratio). A scale with
   equal factors is **uniform**; a scale with both factors 1 within that tolerance
@@ -142,6 +145,10 @@ user-visible changes of accepted behaviour.
    "W" and "H"), and the polygon/star rows of `unified-object-editing` (no edge
    resize handles). If the customer answers no to question 5, the single-object
    rules stay as they are today and criterion 56 is dropped.
+10. "Object to path" of a polygon or star now keeps its shown angle: the path's
+    `rotation` is the angle the polygon or star showed (`orientation()`), where
+    `0012` documented that the angle was not carried. This changes "Object to path"
+    itself for every polygon and star, not only the stretch (criterion 53.3).
 
 ## Acceptance criteria
 
@@ -509,9 +516,9 @@ relative; every other entry has the same fixed point as the drag.
     | Handle | Lines |
     |---|---|
     | Corner resize | "Resize selection" / "Shift: from the centre" / "Ctrl: keep proportions" / "Double-click or S: type a size" |
-    | Corner resize, proportional-corner selection | "Resize selection" / "Shift: from the centre" / "Double-click or S: type a size" (no Ctrl line: the corner is always proportional, criterion 19; no conversion line, a corner never converts) |
+    | Corner resize, proportional-corner selection | "Resize selection, proportional" / "Stretch with an edge handle" / "Shift: from the centre" / "Double-click or S: type a size" (no Ctrl line: the corner is always proportional, criterion 19; the stretch line only while edge handles are drawn, `s` of 24 px or more; no conversion line, a corner never converts) |
     | Edge resize | the same as the corner row without the Ctrl line |
-    | Edge resize, selection holds a converting object | the edge row plus one line after the title, "Stretching turns " + the kinds present + " into paths" (criterion 55; for example "Stretching turns stars into paths"), at most four lines in all |
+    | Edge resize, selection holds a converting object | the edge row plus one line after the title, "Stretching turns N shapes into paths" (criterion 55; for example "Stretching turns 2 shapes into paths", "Stretching turns 1 shape into a path"), at most four lines in all |
     | Corner rotate | "Rotate selection" / "Shift: pivot at opposite corner" / "Ctrl: snap" / "Double-click or R: type an angle" |
     | Side rotate | "Rotate selection" / "Pivot: opposite side" / "Ctrl: snap" / "Double-click or R: type an angle" |
     | Skew | "Skew selection" / "Shift: from the centre line" / "Ctrl: snap" / "Double-click or K: type an angle" (left and right handles: "Shift+K") |
@@ -689,10 +696,11 @@ relative; every other entry has the same fixed point as the drag.
        paths (tight, in the direction of its `rotation` register,
        `polygon-star-box-refit` criterion 16). Its `rotation` register is the one
        "Object to path" gives it today, then unchanged by the stretch (criterion 20,
-       first row). The shown angle of a polygon or star (frame angle plus
-       `rotation`) is not carried into the path (the known limit of `0012`, out of
-       scope there); the angle readout and the angle entry for it are gone with the
-       kind, the outline does not change.
+       first row). For a polygon or star it is the shown angle (`orientation()`,
+       frame angle plus `rotation`), as "Object to path" now writes it (the old limit of
+       `0012` is fixed, see Changes to accepted behaviour item 10), then unchanged by
+       the stretch. The angle readout and the angle entry for it are gone with the
+       kind; the outline and the box's direction do not change.
     4. **Only a stretch converts.** Move, rotate, uniform scale and a typed size of
        the same aspect ratio never convert (criterion 20); a stretch dragged back
        to equal factors, or to factors of 1, before the release converts nothing;
@@ -704,6 +712,12 @@ relative; every other entry has the same fixed point as the drag.
     6. **Atomic and all or nothing.** The conversion is part of the one commit of
        criterion 31. If any object of the selection makes the resolution invalid
        (criterion 22), nothing is scaled and nothing is converted.
+    8. **Boundaries (the tolerances of the Terms, testable).** A rectangle or
+       ellipse whose `rotation` is 90° within 1e-10 rad stays a rectangle or ellipse
+       under an edge stretch; at 90° + 1e-6 rad it converts. Factors (2, 2 + 1e-10 · 2)
+       are uniform and convert nothing; factors (2, 2 + 1e-6 · 2) are a stretch and
+       convert. An ellipse with rx = 5 and ry = 5 + 1e-7 mm is a circle (stays an
+       ellipse at any rotation); with ry = 5 + 1e-5 mm turned by 30° it converts.
     7. **Preview.** During the drag a converting object is shown as the blue
        outline of its path (criterion 32); the group box follows that outline
        (criterion 29). Nothing is converted before the release.
@@ -731,13 +745,13 @@ relative; every other entry has the same fixed point as the drag.
     state are the count and that there is no undo.
 55. Given the pointer rests for 600 ms on an **edge** resize handle of a
     selection that holds at least one converting object, then the hint chip of
-    criterion 38 has the extra line, after its title, "Stretching turns " + the
-    kinds present + " into paths", where the kinds are those present among polygons,
-    stars, rotated rectangles and rotated ellipses, in that order, in plural,
-    joined by commas and "and" (examples: "Stretching turns stars into paths",
-    "Stretching turns polygons, stars and rotated rectangles into paths"). A circle
-    never counts as rotated. The line does not count objects. A selection without a
-    converting object shows no extra line. With no undo yet, this line is the maker's
+    criterion 38 has the extra line, after its title, with N the number of
+    converting objects in the selection (as plain digits): N = 1: "Stretching turns 1
+    shape into a path"; N ≥ 2: "Stretching turns N shapes into paths" (example: a
+    star and a polygon in the selection: "Stretching turns 2 shapes into paths").
+    The line does not name kinds. A circle, an aligned rectangle or ellipse and a
+    path are not counted. A selection without a converting object shows no extra
+    line. With no undo yet, this line is the maker's
     warning before the press; the preview during the drag (criterion 32) is the
     second one.
 56. **Proposal, default yes (question 5; built unless the customer says no).** Given
@@ -757,7 +771,7 @@ relative; every other entry has the same fixed point as the drag.
     ratio rules of `0005` criterion 11. A single rectangle, ellipse or path is
     unchanged: it already stretches along its own axes and keeps its kind. The
     hint chip of an edge handle gains the line of criterion 55 ("Stretching
-    turns polygons into paths"); the corner chip keeps today's lines. If the
+    turns 1 shape into a path"); the corner chip keeps today's lines. If the
     customer answers no to question 5, this criterion is dropped and a single
     polygon or star keeps corner handles only and the uniform scale, exactly as
     today (`0005` criterion 11).
