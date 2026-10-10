@@ -2242,7 +2242,12 @@ fn compound_path_and_boolean_result_in_a_converting_stretch() {
         .filter_map(|i| d.object(i))
         .collect();
     let otp = otp_reference(&d);
-    let mut s = open(&d);
+    // A second session needs its own peer id: sessions of one project never share
+    // one (anchor ids are `(peer, counter)`), and the Boolean result above holds the
+    // ids the first session minted.
+    let mut s = Session::open(3, &pack(&d, "0.1.0").unwrap()).unwrap();
+    s.set_tool(Tool::Select);
+    s.resize_viewport(1600.0, 1000.0);
     select_everything(&mut s);
     assert_eq!(s.selected_object_count(), 3);
     let g = GBox::of(&s);
