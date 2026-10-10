@@ -1,8 +1,7 @@
 //! `Session`'s Close path command (`specs/0034-pen-path-extension` criteria 18 to 21): which paths
 //! the Node bar's buttons act on, what they would do, and the one commit that does it.
 
-use curvyo_document_core::{NodeId, PathSnapshot};
-use curvyo_ui_core::{JoinType, closable_counts, plan_close_paths};
+use curvyo_ui_core::{JoinType, closable_counts, close_path_set, plan_close_paths};
 
 use super::{Session, Tool};
 
@@ -12,8 +11,10 @@ use super::{Session, Tool};
 pub struct ClosePathState {
     /// Open ordinary paths with three or more nodes.
     pub closable: usize,
-    /// Open ordinary paths with fewer than three nodes.
+    /// Open ordinary paths with fewer than three nodes, or three whose ends coincide.
     pub skipped: usize,
+    /// How many of the skipped paths are of the second kind.
+    pub same_ends: usize,
 }
 
 /// What a press of a Close path button did.
@@ -23,40 +24,25 @@ pub struct ClosePathOutcome {
     pub closed: usize,
     /// How many open paths were skipped.
     pub skipped: usize,
+    /// How many of the skipped paths have three nodes with coinciding ends.
+    pub same_ends: usize,
 }
 
 impl Session {
-    /// The paths the buttons act on: the paths the maker works on, which are those of the node
-    /// selection (nodes or a segment) and the selected objects. Which nodes are selected within
-    /// them does not matter (`0034` criterion 18). Compound paths never appear: the Node tool has
-    /// no editable paths among them.
-    fn close_path_set(&self) -> Vec<PathSnapshot> {
-        let selection = self.node.selection();
-        let mut wanted: Vec<NodeId> = selection
-            .node_pairs()
-            .iter()
-            .map(|&(path, _)| path)
-            .collect();
-        if let Some((path, _, _)) = selection.segment_with_path() {
-            wanted.push(path);
-        }
-        wanted.extend(self.selection.ids().iter().copied());
-        self.paths()
-            .into_iter()
-            .filter(|path| wanted.contains(&path.id))
-            .collect()
-    }
-
     /// What the Close path buttons would do right now; zero outside the Node tool.
     #[must_use]
     pub fn close_path_state(&self) -> ClosePathState {
         if self.tool != Tool::Node {
             return ClosePathState::default();
         }
-        let set = self.close_path_set();
-        let refs: Vec<&PathSnapshot> = set.iter().collect();
-        let (closable, skipped) = closable_counts(&refs);
-        ClosePathState { closable, skipped }
+        let paths = self.paths();
+        let set = close_path_set(&paths, self.node.selection(), &self.selection);
+        let counts = closable_counts(&set);
+        ClosePathState {
+            closable: counts.closable,
+            skipped: counts.skipped,
+            same_ends: counts.same_ends,
+        }
     }
 
     /// Closes every open ordinary path of the set with three or more nodes, the first node
@@ -66,19 +52,21 @@ impl Session {
         if self.tool != Tool::Node {
             return ClosePathOutcome::default();
         }
-        let set = self.close_path_set();
-        let refs: Vec<&PathSnapshot> = set.iter().collect();
-        let plan = plan_close_paths(&refs, join);
+        let paths = self.paths();
+        let set = close_path_set(&paths, self.node.selection(), &self.selection);
+        let plan = plan_close_paths(&set, join);
         if plan.growths.is_empty() {
             return ClosePathOutcome {
                 closed: 0,
                 skipped: plan.skipped,
+                same_ends: plan.same_ends,
             };
         }
         match self.document.close_paths(&plan.growths) {
             Ok(()) => ClosePathOutcome {
                 closed: plan.closed,
                 skipped: plan.skipped,
+                same_ends: plan.same_ends,
             },
             Err(_) => ClosePathOutcome::default(),
         }

@@ -145,7 +145,6 @@ fn in_progress_pen_preview_stroke_is_non_empty_for_axis_aligned_segments() {
         None,
         None,
         curvyo_document_core::ViewTransform::identity(),
-        false,
         curvyo_document_core::DocumentSize::default(),
     );
     let with_segment_list = build_pen_preview(
@@ -153,7 +152,6 @@ fn in_progress_pen_preview_stroke_is_non_empty_for_axis_aligned_segments() {
         None,
         None,
         curvyo_document_core::ViewTransform::identity(),
-        false,
         curvyo_document_core::DocumentSize::default(),
     );
     assert!(

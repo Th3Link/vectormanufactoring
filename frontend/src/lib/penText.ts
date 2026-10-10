@@ -88,16 +88,41 @@ export const CHIP_REST_MS = 600;
 export interface ClosePathResult {
   closed: number;
   skipped: number;
+  /** How many of the skipped paths have three nodes whose first and last coincide. */
+  sameEnds?: number;
 }
 
 /** What the Close path buttons would do (`WasmSession.close_path_state`). */
 export interface ClosePathState {
   closable: number;
   skipped: number;
+  /** How many of the skipped paths have three nodes whose first and last coincide. */
+  sameEnds?: number;
 }
 
 function paths(count: number): string {
   return count === 1 ? "1 path" : `${count} paths`;
+}
+
+/** Why paths were skipped, in the notice: fewer than 3 nodes, or a start and end on one point. */
+function skippedSentences(skipped: number, sameEnds: number): string {
+  const few = skipped - sameEnds;
+  const parts: string[] = [];
+  if (few > 0) {
+    parts.push(
+      `${paths(few)} ${few === 1 ? "has" : "have"} fewer than 3 nodes and ${
+        few === 1 ? "was" : "were"
+      } not closed.`,
+    );
+  }
+  if (sameEnds > 0) {
+    parts.push(
+      `${paths(sameEnds)} ${sameEnds === 1 ? "starts" : "start"} and ${
+        sameEnds === 1 ? "ends" : "end"
+      } on the same point and ${sameEnds === 1 ? "was" : "were"} not closed.`,
+    );
+  }
+  return parts.join(" ");
 }
 
 /** The notice after a press (criterion 20), or `null` if nothing was closed. */
@@ -109,10 +134,7 @@ export function closeNoticeText(result: ClosePathResult): string | null {
   if (result.skipped === 0) {
     return `${closed} No undo yet.`;
   }
-  const verb = result.skipped === 1 ? "has" : "have";
-  return `${closed} ${paths(result.skipped)} ${verb} fewer than 3 nodes and ${
-    result.skipped === 1 ? "was" : "were"
-  } not closed. No undo yet.`;
+  return `${closed} ${skippedSentences(result.skipped, result.sameEnds ?? 0)} No undo yet.`;
 }
 
 /** How long that notice stays: 3 s, or 5 s when the sentence is longer than 70 characters. */
@@ -129,9 +151,18 @@ export function closeTooltipNote(state: ClosePathState): string {
     return `Closes ${paths(state.closable).replace(" path", " open path")}. No undo yet.`;
   }
   const total = state.closable + state.skipped;
-  return `Closes ${state.closable} of ${total} open paths. ${
-    state.skipped === 1 ? "1 has" : `${state.skipped} have`
-  } fewer than 3 nodes. No undo yet.`;
+  const sameEnds = state.sameEnds ?? 0;
+  const few = state.skipped - sameEnds;
+  const reasons: string[] = [];
+  if (few > 0) {
+    reasons.push(`${few === 1 ? "1 has" : `${few} have`} fewer than 3 nodes.`);
+  }
+  if (sameEnds > 0) {
+    reasons.push(
+      `${sameEnds === 1 ? "1 starts and ends" : `${sameEnds} start and end`} on one point.`,
+    );
+  }
+  return `Closes ${state.closable} of ${total} open paths. ${reasons.join(" ")} No undo yet.`;
 }
 
 /** The two buttons: the visible word, the accessible name, the join code and the tooltip. */

@@ -160,32 +160,12 @@ fn ac28_area_follows_pan_and_zoom() {
     assert!((max_x(&a) - 210.0).abs() < 0.5 && (max_x(&b) - 210.0).abs() < 0.5);
 }
 
-fn knockout_colours(
-    x: f64,
-    y: f64,
-    size: DocumentSize,
-    hovering: bool,
-    as_pending: bool,
-) -> Vec<RgbaColor> {
+fn knockout_colours(x: f64, y: f64, size: DocumentSize, as_pending: bool) -> Vec<RgbaColor> {
     let anchor = NewAnchor::corner(AnchorId::new(1, 1), Point::new(x, y));
     let list = if as_pending {
-        build_pen_preview(
-            &[],
-            None,
-            Some(&anchor),
-            ViewTransform::identity(),
-            hovering,
-            size,
-        )
+        build_pen_preview(&[], None, Some(&anchor), ViewTransform::identity(), size)
     } else {
-        build_pen_preview(
-            &[anchor],
-            None,
-            None,
-            ViewTransform::identity(),
-            hovering,
-            size,
-        )
+        build_pen_preview(&[anchor], None, None, ViewTransform::identity(), size)
     };
     list.triangles.iter().map(|v| v.color).collect()
 }
@@ -194,13 +174,13 @@ fn knockout_colours(
 fn ac31_pen_knockout_matches_the_colour_behind_it() {
     let size = DocumentSize::from_mm(100.0, 100.0);
     for pending in [false, true] {
-        for hovering in [false, true] {
+        {
             // inside
             for (x, y) in [(50.0, 50.0), (0.0, 0.0), (100.0, 100.0), (99.9, 0.1)] {
-                let c = knockout_colours(x, y, size, hovering, pending);
+                let c = knockout_colours(x, y, size, pending);
                 assert!(
                     c.contains(&CANVAS_BG) && !c.contains(&PASTEBOARD_BG),
-                    "({x},{y}) pending {pending} hover {hovering}"
+                    "({x},{y}) pending {pending}"
                 );
             }
             // pasteboard: left, above, right, below, far
@@ -211,10 +191,10 @@ fn ac31_pen_knockout_matches_the_colour_behind_it() {
                 (50.0, 130.0),
                 (-5e5, 7e5),
             ] {
-                let c = knockout_colours(x, y, size, hovering, pending);
+                let c = knockout_colours(x, y, size, pending);
                 assert!(
                     c.contains(&PASTEBOARD_BG) && !c.contains(&CANVAS_BG),
-                    "({x},{y}) pending {pending} hover {hovering}"
+                    "({x},{y}) pending {pending}"
                 );
             }
         }
@@ -225,8 +205,8 @@ fn ac31_pen_knockout_matches_the_colour_behind_it() {
 fn ac31_knockout_follows_a_resized_document() {
     // The same point is pasteboard in a small document and document in a large one.
     let p = (150.0, 150.0);
-    let small = knockout_colours(p.0, p.1, DocumentSize::from_mm(100.0, 100.0), false, false);
-    let large = knockout_colours(p.0, p.1, DocumentSize::from_mm(300.0, 400.0), false, false);
+    let small = knockout_colours(p.0, p.1, DocumentSize::from_mm(100.0, 100.0), false);
+    let large = knockout_colours(p.0, p.1, DocumentSize::from_mm(300.0, 400.0), false);
     assert!(small.contains(&PASTEBOARD_BG) && !small.contains(&CANVAS_BG));
     assert!(large.contains(&CANVAS_BG) && !large.contains(&PASTEBOARD_BG));
 }
@@ -238,7 +218,6 @@ fn ac31_pen_preview_with_no_nodes_is_empty_whatever_the_size() {
         None,
         None,
         ViewTransform::identity(),
-        false,
         DocumentSize::from_mm(1.0, 1.0),
     );
     assert_eq!(list.triangles.len(), 0);

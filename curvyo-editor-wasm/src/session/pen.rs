@@ -51,24 +51,6 @@ impl Session {
         }
     }
 
-    /// Acceptance criterion 5's cursor cue (`specification.md`'s
-    /// "Cursors": "cursor swaps to a pen-with-small-circle... variant"):
-    /// whether the live cursor is currently over the in-progress pen
-    /// path's own close target. The host uses this to pick the cursor
-    /// class; `false` outside the pen tool, with no path in progress, or
-    /// before the pointer has ever moved over the canvas.
-    #[must_use]
-    pub fn is_hovering_pen_close_target(&self) -> bool {
-        if self.tool != Tool::Pen {
-            return false;
-        }
-        let Some(point) = self.pointer_position else {
-            return false;
-        };
-        self.pen
-            .is_hovering_close_target(point, self.point_tolerance_as_length())
-    }
-
     /// Runs `f` on the index of the end nodes of open ordinary paths, rebuilding it first if the
     /// document changed since it was built.
     pub(super) fn with_end_index<R>(&self, f: impl FnOnce(&EndNodeIndex) -> R) -> R {

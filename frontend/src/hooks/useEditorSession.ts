@@ -524,10 +524,6 @@ export interface EditorSession {
   cancelTransformEntry: () => void;
   /** For linked fields: the text the other field takes. */
   transformEntryLinked: (field: number, text: string) => string | undefined;
-  /** Acceptance criterion 5's cursor cue: whether the live cursor is
-   * over the in-progress pen path's own close target — `Canvas` swaps
-   * to the "pen-with-small-circle" cursor variant while this is `true`. */
-  isHoveringPenCloseTarget: boolean;
   /** The current zoom level's integer percentage read-out (acceptance
    * criterion 9) — `StatusBar`'s new center segment. */
   zoomPercent: number;
@@ -699,8 +695,6 @@ export function useEditorSession(
   const [polyStarMode, setPolyStarModeState] = useState<PolyStarMode>("polygon");
   const [polyStarPointCount, setPolyStarPointCountState] = useState(6);
   const [polyStarRatio, setPolyStarRatioState] = useState(0.5);
-  const [isHoveringPenCloseTarget, setIsHoveringPenCloseTarget] =
-    useState(false);
   const [liveReadout, setLiveReadout] = useState<LiveReadout | null>(null);
   const [scaleStrokeWidth, setScaleStrokeWidthState] = useState(false);
   const [scaleCornerRadius, setScaleCornerRadiusState] = useState(false);
@@ -789,7 +783,6 @@ export function useEditorSession(
     }
     setToolState(session.tool() as Tool);
     setNodeToolbarState(readToolbarState(session.node_toolbar_state()));
-    setIsHoveringPenCloseTarget(session.is_hovering_pen_close_target());
     setPolyStarModeState(session.poly_star_mode() as PolyStarMode);
     setPolyStarPointCountState(session.poly_star_point_count());
     setPolyStarRatioState(session.poly_star_ratio());
@@ -1143,9 +1136,13 @@ export function useEditorSession(
       const raw = sessionRef.current?.close_path(join);
       syncFromSession();
       if (!raw) {
-        return { closed: 0, skipped: 0 };
+        return { closed: 0, skipped: 0, sameEnds: 0 };
       }
-      const result = { closed: raw.closed, skipped: raw.skipped };
+      const result = {
+        closed: raw.closed,
+        skipped: raw.skipped,
+        sameEnds: raw.same_ends,
+      };
       raw.free();
       return result;
     },
@@ -1323,9 +1320,6 @@ export function useEditorSession(
         event.ctrlKey || event.metaKey,
         event.altKey,
       );
-      setIsHoveringPenCloseTarget(
-        session?.is_hovering_pen_close_target() ?? false,
-      );
       setLiveReadout(readLiveReadout(session?.live_readout()));
       setCursorHint(session?.cursor_hint() ?? "default");
       setHandleHint(session?.handle_hint() ?? "");
@@ -1427,7 +1421,6 @@ export function useEditorSession(
 
   const onPointerLeave = useCallback(() => {
     sessionRef.current?.pointer_leave();
-    setIsHoveringPenCloseTarget(false);
     setLiveReadout(null);
     setCursorHint("default");
     setHandleHint("");
@@ -1659,7 +1652,6 @@ export function useEditorSession(
     cancelTransformEntry,
     transformEntryLinked,
     onContainerBlur,
-    isHoveringPenCloseTarget,
     zoomPercent,
     isPanning,
     isSpaceHeld,

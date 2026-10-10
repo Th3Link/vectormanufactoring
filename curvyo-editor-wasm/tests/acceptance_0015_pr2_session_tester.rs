@@ -354,7 +354,10 @@ fn ac31_pen_close_target_works_for_a_first_node_on_the_pasteboard() {
         s.pointer_up(p, false, false);
     }
     s.pointer_hover(pt(-50.0, -50.0), false, false);
-    assert!(s.is_hovering_pen_close_target());
+    assert!(matches!(
+        s.pen_target(),
+        Some(curvyo_ui_core::PenTarget::Close { .. })
+    ));
     let colours: Vec<_> = s.draw_list().triangles.iter().map(|v| v.color).collect();
     assert!(colours.contains(&PASTEBOARD_BG) && !colours.contains(&CANVAS_BG));
     s.pointer_down(pt(-50.0, -50.0), false);

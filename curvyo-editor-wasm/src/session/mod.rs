@@ -746,56 +746,9 @@ mod tests {
         );
     }
 
-    /// Acceptance criterion 5's cursor cue: hovering near the
-    /// in-progress path's own first node, with enough nodes placed,
-    /// reports the close target; the node tool, idle pen tool, and
-    /// hovering elsewhere all report `false`.
-    ///
-    /// 2026-10-05 (node-size round): the second node moved from (10, 0)
-    /// to (50, 0) — at the identity view used here, 1 document mm is 1
-    /// screen px, and `POINT_TOLERANCE_PX` doubling to 16 means the old
-    /// 10mm separation would have put "hovering the last node" (distance
-    /// 10 from the first) *inside* the now-16mm close tolerance, turning
-    /// this into a false positive unrelated to what the test actually
-    /// guards. 50mm stays unambiguously outside tolerance regardless.
-    #[test]
-    fn is_hovering_pen_close_target_matches_the_real_close_decision() {
-        let mut session = Session::new(1);
-        session.set_tool(Tool::Pen);
-        assert!(!session.is_hovering_pen_close_target(), "idle: no path yet");
-
-        session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false, false);
-        session.pointer_down(Point::new(50.0, 0.0), false);
-        session.pointer_up(Point::new(50.0, 0.0), false, false);
-
-        // Two nodes are not enough to close (`0034` criterion 13: a closed path of two nodes is
-        // refused); the third makes the first node a close target.
-        session.pointer_hover(Point::new(0.1, 0.1), false, false);
-        assert!(!session.is_hovering_pen_close_target());
-        session.pointer_down(Point::new(50.0, 50.0), false);
-        session.pointer_up(Point::new(50.0, 50.0), false, false);
-
-        session.pointer_hover(Point::new(0.1, 0.1), false, false);
-        assert!(session.is_hovering_pen_close_target());
-
-        session.pointer_hover(Point::new(50.0, 50.0), false, false);
-        assert!(
-            !session.is_hovering_pen_close_target(),
-            "near the last node, not the first"
-        );
-
-        session.set_tool(Tool::Node);
-        session.pointer_hover(Point::new(0.1, 0.1), false, false);
-        assert!(
-            !session.is_hovering_pen_close_target(),
-            "the node tool never shows a pen cursor"
-        );
-    }
-
     /// Resets `session`'s viewport to an identity-equivalent view (1
     /// screen px per document mm, origin at the document origin) — these
-    /// two tests were written and pinned against `ViewTransform::
+    /// tests were written and pinned against `ViewTransform::
     /// identity()`, back when `Session`'s only view was a bare,
     /// never-defaulted-to-100%-zoom `ViewTransform`. `canvas-navigation-
     /// and-selection` gives `Session` a real `Viewport` defaulting to
@@ -984,9 +937,7 @@ mod tests {
     fn join_selected_closes_an_open_path_through_the_session() {
         // Far enough apart that the third click does not land inside the
         // (doubled, 16px/mm at this identity view) close-path tolerance
-        // around the first node — the same pitfall
-        // `is_hovering_pen_close_target_matches_the_real_close_decision`'s
-        // own doc comment already names for this exact reason.
+        // around the first node.
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);

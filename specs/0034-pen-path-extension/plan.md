@@ -48,6 +48,13 @@ what was built in which crate.
 - **Added ids are checked against the two paths of a growth, not the whole document:** the Pen mints
   them (`AnchorIdMinter`), so a collision cannot arise in a session; a document-wide scan on every
   Pen commit was not worth its cost.
+- **A three-node path whose ends coincide** closes to two nodes, which a closed path cannot have, so
+  Close path skips it; the notice and tooltip say "starts and ends on the same point" for it and
+  keep "fewer than 3 nodes" for paths of one or two nodes (`ClosableCounts::same_ends`).
+- **One close decision.** The old hover test (`is_hovering_close_target` and its getters) is
+  deleted: the cursor, the chip and the ring all come from `pen_target`. `build_pen_preview` lost
+  its always-false hover argument. `PenTool::pointer_down` stays for the ui-core tests.
+- **Which paths Close path acts on** is `ui-core`'s `close_path_set`, not session code.
 
 ## Validation
 

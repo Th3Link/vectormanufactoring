@@ -28,6 +28,6 @@ export const COLUMN_A_TOOLTIP_OFFSET_PX = 66;
 /** The same for a button of column B, whose right edge is 112px from the viewport edge. */
 export const COLUMN_B_TOOLTIP_OFFSET_PX = 10;
 
-/** Height of the Path card in px (2 buttons: 2 x 40, one gap of 4, 2 x 4 padding). The notice of
- * a Path command is anchored level with its first button, 4px below the top of the column. */
+/** The top of the first button of the Path card in px, the 4px padding of the card: a Path
+ * notice is anchored level with it (the card itself is 92px high: 2 x 40, one gap of 4, 2 x 4). */
 export const PATH_CARD_TOP_PX = 4;

@@ -108,7 +108,7 @@
        recolor every future shadcn menu/dropdown hover too. Same values,
        collision-free name — see docs/design-system.md's own note. */
     /* The tool rail (docs/design-system.md, rows "Tool rail architecture" and "Toolbox card"):
-       inset from the viewport edge and the rail's right edge (one 48px column). Bars start at
+       inset from the viewport edge, and the rail's right edge (two 48px columns 8px apart). Bars start at
        --rail-right + 12; notices and tooltips open from it. 60px with one column; 116px since the Path card
        (column B) ships. */
     --rail-inset: 12px;
@@ -196,17 +196,10 @@
    needs rules. The hotspot (2 2) sits at the nib's drawing tip in both
    SVGs below, matching where a click would land.
 
-   Two pen-tool cursors: the plain nib for idle/placing/mid-drag, and a
-   "pen-with-small-circle" variant — public/cursors/pen-close.svg, the
-   plain nib plus one added ring badge at the same hotspot — while
-   hovering the in-progress path's own first node (acceptance criterion
-   5's close target). `useEditorSession`'s `WasmSession.
-   is_hovering_pen_close_target()` decides which class applies; the
-   first node's own hover ring (a second, independent cue the UX notes
-   ask for alongside the cursor swap) is a separate, still-open gap in
-   curvyo-render-core's pen preview (it always rings the most-recently-
-   placed node, never conditionally the first one), not something this
-   cursor rule can provide on its own. */
+   Pen cursors: the plain nib for idle/placing/mid-drag, and one variant each for what a press
+   would do (`specs/0034-pen-path-extension/`): close (`pen-close.svg`, the nib plus a ring
+   badge), continue and join. `usePenCue` (the session's `pen_cue`, decided in `pen_target`)
+   picks the class. The ring on the target node is drawn by `curvyo-render-core`'s pen cue. */
 .canvas-cursor-pen {
   cursor: url("/cursors/pen.svg") 2 2, crosshair;
 }

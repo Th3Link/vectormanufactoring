@@ -5,10 +5,35 @@
 //! disagree.
 
 use curvyo_document_core::{
-    AnchorSnapshot, COINCIDENT_MM, HandleSlot, PathEnd, PathGrowth, PathSnapshot, merged_junction,
+    AnchorSnapshot, COINCIDENT_MM, HandleSlot, NodeId, PathEnd, PathGrowth, PathSnapshot,
+    merged_junction,
 };
 
 use crate::closing_join::{JoinType, resolve_closing_node};
+use crate::object_selection::ObjectSelection;
+use crate::selection::NodeSelection;
+
+/// The paths the Close path buttons act on, in the order of `paths`: those holding a selected node
+/// or the selected segment, and the selected objects. Which nodes are selected within them does not
+/// matter (`0034` criterion 18). The Node tool draws and hit-tests every path, so there is no
+/// "editing set" to take; `paths` are the ones it can edit (compound paths are left out by the
+/// caller).
+#[must_use]
+pub fn close_path_set<'a>(
+    paths: &'a [PathSnapshot],
+    nodes: &NodeSelection,
+    objects: &ObjectSelection,
+) -> Vec<&'a PathSnapshot> {
+    let mut wanted: Vec<NodeId> = nodes.node_pairs().iter().map(|&(path, _)| path).collect();
+    if let Some((path, _, _)) = nodes.segment_with_path() {
+        wanted.push(path);
+    }
+    wanted.extend(objects.ids().iter().copied());
+    paths
+        .iter()
+        .filter(|path| wanted.contains(&path.id))
+        .collect()
+}
 
 /// What the command does to a set of paths.
 #[derive(Debug, Clone, PartialEq)]
@@ -17,8 +42,24 @@ pub struct ClosePlan {
     pub growths: Vec<PathGrowth>,
     /// How many paths are closed.
     pub closed: usize,
-    /// How many open ordinary paths are skipped for having fewer than three nodes.
+    /// How many open ordinary paths are skipped for having fewer than three nodes, or three nodes
+    /// whose first and last coincide (see [`ClosableCounts::same_ends`]).
     pub skipped: usize,
+    /// How many of the skipped paths are of the second kind.
+    pub same_ends: usize,
+}
+
+/// What the buttons and the notice say about a set of paths (`0034` criteria 19 to 21).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ClosableCounts {
+    /// Open ordinary paths that would be closed.
+    pub closable: usize,
+    /// Open ordinary paths skipped: fewer than three nodes, or three whose first and last node
+    /// coincide, which would be merged and leave two.
+    pub skipped: usize,
+    /// How many of the skipped paths have three nodes with coinciding ends: the notice says so in
+    /// its own words, "fewer than 3 nodes" would be wrong for them.
+    pub same_ends: usize,
 }
 
 /// Whether a path is an open ordinary path (a candidate): not closed, not compound.
@@ -42,21 +83,20 @@ fn nodes_when_closed(path: &PathSnapshot) -> usize {
     path.anchors.len() - usize::from(merges_ends(path))
 }
 
-/// `(closable, skipped)` among `paths`: open ordinary paths that would be closed, and those
-/// skipped for having fewer than three nodes. Closed paths, compound paths and anything else are
-/// not counted (criterion 21).
+/// The counts among `paths`: open ordinary paths that would be closed, and those skipped. Closed
+/// paths, compound paths and anything else are not counted (criterion 21).
 #[must_use]
-pub fn closable_counts(paths: &[&PathSnapshot]) -> (usize, usize) {
-    let mut closable = 0;
-    let mut skipped = 0;
+pub fn closable_counts(paths: &[&PathSnapshot]) -> ClosableCounts {
+    let mut counts = ClosableCounts::default();
     for path in paths.iter().filter(|path| is_open_ordinary(path)) {
         if nodes_when_closed(path) >= 3 {
-            closable += 1;
+            counts.closable += 1;
         } else {
-            skipped += 1;
+            counts.skipped += 1;
+            counts.same_ends += usize::from(path.anchors.len() >= 3);
         }
     }
-    (closable, skipped)
+    counts
 }
 
 /// Closes every open ordinary path of `paths` with three or more nodes: one segment from its last
@@ -64,8 +104,8 @@ pub fn closable_counts(paths: &[&PathSnapshot]) -> (usize, usize) {
 /// [`resolve_closing_node`]. A path whose first and last node coincide has them merged first.
 #[must_use]
 pub fn plan_close_paths(paths: &[&PathSnapshot], join: JoinType) -> ClosePlan {
-    let (closed, skipped) = closable_counts(paths);
-    let mut growths = Vec::with_capacity(closed);
+    let counts = closable_counts(paths);
+    let mut growths = Vec::with_capacity(counts.closable);
     for path in paths.iter().filter(|path| is_open_ordinary(path)) {
         if nodes_when_closed(path) < 3 {
             continue;
@@ -95,8 +135,9 @@ pub fn plan_close_paths(paths: &[&PathSnapshot], join: JoinType) -> ClosePlan {
     }
     ClosePlan {
         growths,
-        closed,
-        skipped,
+        closed: counts.closable,
+        skipped: counts.skipped,
+        same_ends: counts.same_ends,
     }
 }
 
@@ -141,7 +182,14 @@ mod tests {
         assert_eq!(plan.skipped, 1);
         assert_eq!(plan.growths.len(), 1);
         assert_eq!(plan.growths[0].path, a.id);
-        assert_eq!(closable_counts(&[&b, &c]), (0, 1));
+        assert_eq!(
+            closable_counts(&[&b, &c]),
+            ClosableCounts {
+                closable: 0,
+                skipped: 1,
+                same_ends: 0
+            }
+        );
     }
 
     /// Criterion 19: Smooth makes the first node Asymmetric along the tangent from the last node to
@@ -181,6 +229,11 @@ mod tests {
         assert_eq!(closed.anchors.len(), 3);
         // Fewer than three distinct nodes after the merge: skipped.
         let b = open(&document, 10, &[(0.0, 0.0), (20.0, 0.0), (0.0, 0.0)], false);
-        assert_eq!(closable_counts(&[&b]), (0, 1));
+        let counts = closable_counts(&[&b]);
+        assert_eq!(
+            (counts.closable, counts.skipped, counts.same_ends),
+            (0, 1, 1),
+            "skipped, and not for having fewer than three nodes"
+        );
     }
 }

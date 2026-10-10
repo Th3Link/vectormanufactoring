@@ -69,7 +69,7 @@ export function usePenCue(editor: EditorSession): PenCue {
   return tool === "pen" ? cue : NO_PEN_CUE;
 }
 
-const NO_CLOSE_STATE: ClosePathState = { closable: 0, skipped: 0 };
+const NO_CLOSE_STATE: ClosePathState = { closable: 0, skipped: 0, sameEnds: 0 };
 
 /** What the Node bar's Close path buttons would do now: how many open paths they close and skip. */
 export function useClosePathState(editor: EditorSession): ClosePathState {
@@ -82,7 +82,11 @@ export function useClosePathState(editor: EditorSession): ClosePathState {
     if (!raw) {
       return NO_CLOSE_STATE;
     }
-    const state = { closable: raw.closable, skipped: raw.skipped };
+    const state = {
+      closable: raw.closable,
+      skipped: raw.skipped,
+      sameEnds: raw.same_ends,
+    };
     raw.free();
     return state;
     // eslint-disable-next-line react-hooks/exhaustive-deps

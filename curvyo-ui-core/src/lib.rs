@@ -69,7 +69,9 @@ pub use boolean::{
     BooleanAvailability, BooleanOp, BooleanPlan, BooleanRefusal, boolean_availability, plan_boolean,
 };
 pub use break_apart::{BreakApartPlan, BreakApartRefusal, Piece, plan_break_apart};
-pub use close_path::{ClosePlan, closable_counts, plan_close_paths};
+pub use close_path::{
+    ClosableCounts, ClosePlan, closable_counts, close_path_set, plan_close_paths,
+};
 pub use closing_join::{JoinType, resolve_closing_node};
 pub use combine::{
     COMBINE_COMMIT_LABEL, CombinePlan, CombineRefusal, PathAvailability, path_availability,

@@ -71,7 +71,7 @@ export function Canvas({ editor }: CanvasProps) {
           : editor.isSpaceHeld
             ? "cursor-grab"
             : editor.tool === "pen"
-              ? editor.isHoveringPenCloseTarget || penCue.kind === "close"
+              ? penCue.kind === "close"
                 ? "canvas-cursor-pen-close"
                 : penCue.kind === "continue"
                   ? "canvas-cursor-pen-continue"

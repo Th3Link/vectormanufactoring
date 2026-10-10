@@ -77,8 +77,8 @@ fn regions_of(outlines: &[SubpathRef<'_>]) -> Vec<Vec<usize>> {
     }
     for (index, nest) in nesting.iter().enumerate() {
         if nest.depth % 2 == 1 {
-            // invariant: a hole's parent is the enclosing outline of depth one less, an even one,
-            // which was given a region above.
+            // A hole's parent is the innermost enclosing outline, normally an even one that was
+            // given a region above; if not, the hole joins no region (see `plan_break_apart`).
             if let Some(region) = nest
                 .parent
                 .map(|parent| region_of[parent])
@@ -120,7 +120,11 @@ pub fn plan_break_apart(
         }
         let outlines: Vec<SubpathRef<'_>> = path.subpaths().collect();
         let regions = regions_of(&outlines);
-        if regions.len() < 2 {
+        // A hole whose parent has no region (outlines that touch at a vertex can make the depth
+        // count differ from the enclosure chain) would be lost by a break: leave the compound
+        // path as it is rather than drop geometry.
+        let covered: usize = regions.iter().map(Vec::len).sum();
+        if regions.len() < 2 || covered != outlines.len() {
             kept.push(object.id());
             left_alone += 1;
             continue;

@@ -150,8 +150,6 @@ impl Session {
                 self.pen_rubber_band_end(),
                 pending.as_ref(),
                 view,
-                // The cue below rings the closing node itself.
-                false,
                 self.document.size(),
             ));
         }

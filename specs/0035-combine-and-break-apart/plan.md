@@ -49,6 +49,12 @@ what was built in which crate.
 - **The default view inset moves from 72 to 128 px** on both axes (criterion 1a); the three tests
   that pinned 72 px (`viewport/tests.rs`, `session/ruler.rs`,
   `acceptance_0015_pr2_session_tester.rs`) changed their number, nothing else.
+- **Zero-length sides are no self-touch.** Two chords of one outline are neighbours when the
+  polyline between them is at most 0.002 mm long (not only when adjacent), so a slot, a fully
+  rounded square or a duplicated node combines (`outline_touch.rs`, final review).
+- **Break apart never drops a hole.** If the regions of a compound path do not add up to all its
+  outlines (overlapping outlines can make the depth count differ from the enclosure chain), the
+  compound path is left as it is and reported as one piece.
 
 ## Validation
 

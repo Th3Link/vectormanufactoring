@@ -1206,3 +1206,20 @@ box size; those tests count fans only (`white_count` in
   separate `chore/` and a precondition for any interactive 10 fps target above
   a few thousand objects. `multi-object-transform` gates only the group box
   (under 20 ms at 10,000 objects) and reports the rest.
+
+## The rail's width is written in three places, and `node_tool.rs` is past the size limit
+
+*2026-10-10 (`path-tools`, architect review).* The width of the two rail columns exists as
+`--rail-right: 116px` (`frontend/src/index.css`), as the tooltip offsets 66 and 10
+(`frontend/src/components/railCard.ts`) and as `DOCUMENT_INSET_PX` 128
+(`curvyo-ui-core/src/viewport.rs`). `frontend/tests/railWidth.test.ts` pins the three against each
+other, so a third column (`0023`, `0036` to `0038`) fails a test instead of drifting. A single
+source would have to cross the Rust and TypeScript boundary (a build step or a value passed from the
+session); not worth it for one number.
+
+`curvyo-ui-core/src/node_tool.rs` has about 825 non-test lines (781 before `0031-segment-drag-bending`,
+which added the bend drag, 44 lines). It already held the node drag, the handle drag, the marquee
+and the segment selection. The Pen's commit planning moved out of `pen_tool.rs` into
+`pen_tool/commit.rs` in the same slice (`pen_tool.rs` is now about 390 non-test lines). Splitting the
+Node tool's drag kinds into submodules is mechanical and belongs to the next slice that touches
+`node_tool.rs`.

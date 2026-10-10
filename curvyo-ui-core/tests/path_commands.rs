@@ -463,3 +463,40 @@ fn a_plate_with_slots_and_a_rounded_square_combine() {
     let all = objects(&document);
     assert!(plan_combine(&all, &select(&[plate, doubled]), &mut minter()).is_ok());
 }
+
+/// Overlapping outlines can make the depth count differ from the enclosure chain; whatever the
+/// plan does, no outline may be lost: every outline is in a piece, or the compound is left alone.
+#[test]
+fn break_apart_never_drops_an_outline() {
+    let document = Document::new(1);
+    let base = rect(&document, 0.0, 0.0, 1.0);
+    let square = |first: u64, x: f64, size: f64| {
+        let anchors: Vec<NewAnchor> = [(x, x), (x + size, x), (x + size, x + size), (x, x + size)]
+            .iter()
+            .enumerate()
+            .map(|(k, &(px, py))| NewAnchor::corner(AnchorId::new(3, first + k as u64), pt(px, py)))
+            .collect();
+        (anchors, true)
+    };
+    // A holds B; C overlaps A; X lies inside A, B and C.
+    let outlines = vec![
+        square(10, 0.0, 100.0),
+        square(20, 40.0, 30.0),
+        square(30, 50.0, 100.0),
+        square(40, 55.0, 5.0),
+    ];
+    let compound = document
+        .replace_with_path(&[base], base, &outlines, "combine_paths")
+        .unwrap();
+    let all = objects(&document);
+    match plan_break_apart(&all, &select(&[compound]), &mut minter()) {
+        Ok(plan) => {
+            let lost = plan
+                .parts
+                .iter()
+                .any(|(_, pieces)| pieces.iter().map(Vec::len).sum::<usize>() != outlines.len());
+            assert!(!lost, "a break must keep every outline");
+        }
+        Err(refusal) => assert_eq!(refusal, BreakApartRefusal::OnePiece { compounds: 1 }),
+    }
+}

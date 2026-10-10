@@ -49,8 +49,10 @@ fn join_code(join: JoinType) -> String {
 pub struct ClosePathStateView {
     /// Open ordinary paths with three or more nodes.
     pub closable: u32,
-    /// Open ordinary paths with fewer than three nodes.
+    /// Open ordinary paths with fewer than three nodes, or three whose ends coincide.
     pub skipped: u32,
+    /// How many of the skipped paths have three nodes with coinciding ends.
+    pub same_ends: u32,
 }
 
 /// What a Close path press did.
@@ -61,6 +63,8 @@ pub struct ClosePathResultView {
     pub closed: u32,
     /// How many open paths were skipped.
     pub skipped: u32,
+    /// How many of the skipped paths have three nodes with coinciding ends.
+    pub same_ends: u32,
 }
 
 fn count(n: usize) -> u32 {
@@ -118,6 +122,7 @@ impl WasmSession {
         ClosePathStateView {
             closable: count(state.closable),
             skipped: count(state.skipped),
+            same_ends: count(state.same_ends),
         }
     }
 
@@ -135,6 +140,7 @@ impl WasmSession {
         Ok(ClosePathResultView {
             closed: count(outcome.closed),
             skipped: count(outcome.skipped),
+            same_ends: count(outcome.same_ends),
         })
     }
 }

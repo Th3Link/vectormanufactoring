@@ -92,3 +92,22 @@ test("the Close path tooltip note by state", () => {
     "Closes 2 of 3 open paths. 1 has fewer than 3 nodes. No undo yet.",
   );
 });
+
+test("a path whose three nodes start and end on one point has its own words", () => {
+  assert.equal(
+    closeNoticeText({ closed: 1, skipped: 1, sameEnds: 1 }),
+    "Closed 1 path. 1 path starts and ends on the same point and was not closed. No undo yet.",
+  );
+  assert.equal(
+    closeNoticeText({ closed: 1, skipped: 3, sameEnds: 2 }),
+    "Closed 1 path. 1 path has fewer than 3 nodes and was not closed. 2 paths start and end on the same point and were not closed. No undo yet.",
+  );
+  assert.equal(
+    closeTooltipNote({ closable: 1, skipped: 1, sameEnds: 1 }),
+    "Closes 1 of 2 open paths. 1 starts and ends on one point. No undo yet.",
+  );
+  assert.equal(
+    closeTooltipNote({ closable: 2, skipped: 2, sameEnds: 1 }),
+    "Closes 2 of 4 open paths. 1 has fewer than 3 nodes. 1 starts and ends on one point. No undo yet.",
+  );
+});

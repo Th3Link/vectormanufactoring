@@ -484,8 +484,9 @@ pub enum PathEditError {
     /// `Document::close_paths` refused: the closed result would have fewer than three anchors.
     #[error("a closed path needs at least three nodes")]
     TooFewToClose,
-    /// A path command carried an anchor id that is used twice, or already used by an object of the
-    /// document: anchor ids are unique across the whole document.
+    /// A path command carried an added anchor id that is used twice, or is already an id of one of
+    /// the paths it changes. Only those paths are checked: the caller mints ids (`AnchorIdMinter`),
+    /// so a clash with an unrelated object cannot arise in a session.
     #[error("an anchor id is used twice")]
     DuplicateAnchorId,
 }
