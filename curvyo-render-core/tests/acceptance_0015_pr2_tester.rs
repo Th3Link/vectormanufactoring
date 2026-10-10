@@ -6,7 +6,9 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::too_many_lines, clippy::cast_precision_loss)]
 
-use curvyo_document_core::{AnchorId, DocumentSize, NewAnchor, Point, ViewTransform};
+use curvyo_document_core::{
+    AnchorId, DocumentBackground, DocumentSize, NewAnchor, Point, ViewTransform,
+};
 use curvyo_render_core::{
     CANVAS_BG, PASTEBOARD_BG, RgbaColor, background_at, build_document_area, build_pen_preview,
 };
@@ -38,9 +40,18 @@ fn ac28_colours_are_the_specified_hex_values() {
 #[test]
 fn ac28_background_at_inside_edge_outside() {
     let size = DocumentSize::from_mm(210.0, 297.0);
-    assert_eq!(background_at(size, Point::new(105.0, 148.0)), CANVAS_BG);
-    assert_eq!(background_at(size, Point::new(0.0, 0.0)), CANVAS_BG);
-    assert_eq!(background_at(size, Point::new(210.0, 297.0)), CANVAS_BG);
+    assert_eq!(
+        background_at(size, DocumentBackground::DEFAULT, Point::new(105.0, 148.0)),
+        CANVAS_BG
+    );
+    assert_eq!(
+        background_at(size, DocumentBackground::DEFAULT, Point::new(0.0, 0.0)),
+        CANVAS_BG
+    );
+    assert_eq!(
+        background_at(size, DocumentBackground::DEFAULT, Point::new(210.0, 297.0)),
+        CANVAS_BG
+    );
     for p in [
         Point::new(-0.001, 10.0),
         Point::new(10.0, -0.001),
@@ -49,15 +60,23 @@ fn ac28_background_at_inside_edge_outside() {
         Point::new(-500.0, -500.0),
         Point::new(1e9, 1e9),
     ] {
-        assert_eq!(background_at(size, p), PASTEBOARD_BG, "{p:?}");
+        assert_eq!(
+            background_at(size, DocumentBackground::DEFAULT, p),
+            PASTEBOARD_BG,
+            "{p:?}"
+        );
     }
     // a degenerate point must not pick the document colour
     assert_eq!(
-        background_at(size, Point::new(f64::NAN, 5.0)),
+        background_at(size, DocumentBackground::DEFAULT, Point::new(f64::NAN, 5.0)),
         PASTEBOARD_BG
     );
     assert_eq!(
-        background_at(size, Point::new(5.0, f64::INFINITY)),
+        background_at(
+            size,
+            DocumentBackground::DEFAULT,
+            Point::new(5.0, f64::INFINITY)
+        ),
         PASTEBOARD_BG
     );
 }
@@ -84,7 +103,7 @@ fn ac28_area_is_one_flat_rect_snapped_to_device_pixels() {
             ] {
                 for dpr in [1.0, 1.25, 1.5, 2.0, 3.0] {
                     let v = view(pct, ox, oy);
-                    let list = build_document_area(size, v, dpr);
+                    let list = build_document_area(size, DocumentBackground::DEFAULT, v, dpr);
                     assert_eq!(list.triangles.len(), 6, "two triangles");
                     assert!(list.triangles.iter().all(|vx| vx.color == CANVAS_BG));
                     assert!(
@@ -147,8 +166,18 @@ fn ac28_area_is_one_flat_rect_snapped_to_device_pixels() {
 #[test]
 fn ac28_area_follows_pan_and_zoom() {
     let size = DocumentSize::from_mm(210.0, 297.0);
-    let a = build_document_area(size, view(100.0, 0.0, 0.0), 1.0);
-    let b = build_document_area(size, view(100.0, -50.0, 0.0), 1.0);
+    let a = build_document_area(
+        size,
+        DocumentBackground::DEFAULT,
+        view(100.0, 0.0, 0.0),
+        1.0,
+    );
+    let b = build_document_area(
+        size,
+        DocumentBackground::DEFAULT,
+        view(100.0, -50.0, 0.0),
+        1.0,
+    );
     // the document rectangle is in document space, the view moves: the
     // document-space rectangle is the same, only the snapping may differ
     let max_x = |l: &curvyo_render_core::DrawList| {
@@ -163,9 +192,23 @@ fn ac28_area_follows_pan_and_zoom() {
 fn knockout_colours(x: f64, y: f64, size: DocumentSize, as_pending: bool) -> Vec<RgbaColor> {
     let anchor = NewAnchor::corner(AnchorId::new(1, 1), Point::new(x, y));
     let list = if as_pending {
-        build_pen_preview(&[], None, Some(&anchor), ViewTransform::identity(), size)
+        build_pen_preview(
+            &[],
+            None,
+            Some(&anchor),
+            ViewTransform::identity(),
+            size,
+            DocumentBackground::DEFAULT,
+        )
     } else {
-        build_pen_preview(&[anchor], None, None, ViewTransform::identity(), size)
+        build_pen_preview(
+            &[anchor],
+            None,
+            None,
+            ViewTransform::identity(),
+            size,
+            DocumentBackground::DEFAULT,
+        )
     };
     list.triangles.iter().map(|v| v.color).collect()
 }
@@ -219,6 +262,7 @@ fn ac31_pen_preview_with_no_nodes_is_empty_whatever_the_size() {
         None,
         ViewTransform::identity(),
         DocumentSize::from_mm(1.0, 1.0),
+        DocumentBackground::DEFAULT,
     );
     assert_eq!(list.triangles.len(), 0);
 }

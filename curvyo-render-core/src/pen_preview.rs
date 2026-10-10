@@ -11,7 +11,9 @@
 //! ephemeral `curvyo-ui-core::PenTool` state, not a document node), and
 //! `NodeId` has no public constructor outside `curvyo-document-core`.
 
-use curvyo_document_core::{AnchorKind, AnchorSnapshot, DocumentSize, Point, Vec2, ViewTransform};
+use curvyo_document_core::{
+    AnchorKind, AnchorSnapshot, DocumentBackground, DocumentSize, Point, Vec2, ViewTransform,
+};
 
 use crate::document_area::background_at;
 use crate::glyphs::{self, DrawList};
@@ -57,10 +59,10 @@ fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
 /// straight line precisely because releasing now places a corner node,
 /// not a curved one.
 ///
-/// `document_size` is only for the hollow nodes' knockout: each is filled with
-/// the colour behind it, the document's over the document and the
-/// pasteboard's beyond its edge (`specs/0015-document-size-and-rulers/`
-/// criterion 31).
+/// `document_size` and `background` are only for the hollow nodes' knockout: each
+/// is filled with the colour behind it, the document background over the document
+/// and the pasteboard's beyond its edge (`specs/0015-document-size-and-rulers/`
+/// criterion 31, `specs/0040-document-background` criterion 46).
 #[must_use]
 pub fn build_pen_preview(
     nodes: &[AnchorSnapshot],
@@ -68,6 +70,7 @@ pub fn build_pen_preview(
     pending: Option<&AnchorSnapshot>,
     view: ViewTransform,
     document_size: DocumentSize,
+    background: DocumentBackground,
 ) -> DrawList {
     let mut list = DrawList::default();
     if nodes.is_empty() && pending.is_none() {
@@ -107,7 +110,7 @@ pub fn build_pen_preview(
         list.extend(glyph(
             anchor.point,
             (node_size - 2.0 * node_outline).max(0.0),
-            background_at(document_size, anchor.point),
+            background_at(document_size, background, anchor.point),
         ));
     }
 
@@ -185,7 +188,7 @@ pub fn build_pen_preview(
         list.extend(glyph(
             pending.point,
             (node_size - 2.0 * node_outline).max(0.0),
-            background_at(document_size, pending.point),
+            background_at(document_size, background, pending.point),
         ));
     } else if let (Some(last), Some(cursor)) = (nodes.last(), cursor) {
         // Rubber-band preview: a line from the last placed node to the
@@ -220,6 +223,7 @@ mod tests {
             None,
             ViewTransform::identity(),
             DocumentSize::default(),
+            DocumentBackground::DEFAULT,
         );
         assert_eq!(list.triangles.len(), 0);
     }
@@ -233,6 +237,7 @@ mod tests {
             None,
             ViewTransform::identity(),
             DocumentSize::default(),
+            DocumentBackground::DEFAULT,
         );
         let without_cursor = build_pen_preview(
             &nodes,
@@ -240,6 +245,7 @@ mod tests {
             None,
             ViewTransform::identity(),
             DocumentSize::default(),
+            DocumentBackground::DEFAULT,
         );
         assert!(
             !without_cursor.triangles.is_empty(),
@@ -263,6 +269,7 @@ mod tests {
             None,
             ViewTransform::identity(),
             DocumentSize::default(),
+            DocumentBackground::DEFAULT,
         );
         let two_nodes = build_pen_preview(
             &nodes,
@@ -270,6 +277,7 @@ mod tests {
             None,
             ViewTransform::identity(),
             DocumentSize::default(),
+            DocumentBackground::DEFAULT,
         );
         assert!(
             two_nodes.triangle_count() > one_node.triangle_count(),
@@ -304,6 +312,7 @@ mod tests {
             None,
             ViewTransform::identity(),
             DocumentSize::default(),
+            DocumentBackground::DEFAULT,
         );
         let dragging = build_pen_preview(
             &nodes,
@@ -311,6 +320,7 @@ mod tests {
             Some(&pending),
             ViewTransform::identity(),
             DocumentSize::default(),
+            DocumentBackground::DEFAULT,
         );
         assert!(
             dragging.triangle_count() > hovering_only.triangle_count(),
@@ -338,6 +348,7 @@ mod tests {
             Some(&pending),
             ViewTransform::identity(),
             DocumentSize::default(),
+            DocumentBackground::DEFAULT,
         );
         assert!(
             !dragging.triangles.is_empty(),
@@ -360,6 +371,7 @@ mod tests {
             Some(&pending),
             ViewTransform::identity(),
             DocumentSize::default(),
+            DocumentBackground::DEFAULT,
         );
         // Only C's own node glyph (hollow square: outline + fill, 2
         // quads each) should draw — no handle lines, no handle endpoints.
@@ -386,6 +398,7 @@ mod tests {
             Some(&pending),
             ViewTransform::identity(),
             DocumentSize::default(),
+            DocumentBackground::DEFAULT,
         );
 
         let smooth_pending = NewAnchor {
@@ -401,6 +414,7 @@ mod tests {
             Some(&smooth_pending),
             ViewTransform::identity(),
             DocumentSize::default(),
+            DocumentBackground::DEFAULT,
         );
 
         assert!(
@@ -418,12 +432,54 @@ mod tests {
         let anchor = |x: f64| NewAnchor::corner(AnchorId::new(1, 1), Point::new(x, 10.0));
         let size = DocumentSize::from_mm(100.0, 100.0);
         let colours = |x: f64| {
-            let list = build_pen_preview(&[anchor(x)], None, None, ViewTransform::identity(), size);
+            let list = build_pen_preview(
+                &[anchor(x)],
+                None,
+                None,
+                ViewTransform::identity(),
+                size,
+                DocumentBackground::DEFAULT,
+            );
             list.triangles.iter().map(|v| v.color).collect::<Vec<_>>()
         };
         let inside = colours(50.0);
         assert!(inside.contains(&theme::CANVAS_BG) && !inside.contains(&theme::PASTEBOARD_BG));
         let outside = colours(150.0);
         assert!(outside.contains(&theme::PASTEBOARD_BG) && !outside.contains(&theme::CANVAS_BG));
+    }
+
+    /// `0040` criterion 46: over a coloured document the hole is that colour, over a
+    /// None background it is the first checkerboard tone.
+    #[test]
+    fn the_knockout_follows_the_document_background() {
+        use curvyo_document_core::{BackgroundPaint, Color, Opacity};
+
+        let anchor = NewAnchor::corner(AnchorId::new(1, 1), Point::new(50.0, 10.0));
+        let size = DocumentSize::from_mm(100.0, 100.0);
+        let colours = |background: DocumentBackground| {
+            build_pen_preview(
+                &[anchor],
+                None,
+                None,
+                ViewTransform::identity(),
+                size,
+                background,
+            )
+            .triangles
+            .iter()
+            .map(|v| v.color)
+            .collect::<Vec<_>>()
+        };
+        let red = DocumentBackground {
+            paint: BackgroundPaint::Solid,
+            color: Color { r: 255, g: 0, b: 0 },
+            opacity: Opacity::OPAQUE,
+        };
+        assert!(colours(red).contains(&crate::color::RgbaColor::opaque(255, 0, 0)));
+        let none = DocumentBackground {
+            paint: BackgroundPaint::None,
+            ..red
+        };
+        assert!(colours(none).contains(&theme::CHECKER_A));
     }
 }

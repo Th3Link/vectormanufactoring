@@ -3,14 +3,29 @@
 //! place that turns those token *values* into actual draw-list geometry;
 //! nothing else in the workspace hardcodes a decoration color or size.
 
+use curvyo_document_core::DocumentBackground;
+
 use crate::color::RgbaColor;
 
-/// `--canvas-bg` (`docs/design-system.md`): used as the pen tool's
-/// in-progress node glyphs' inner cutout, so they read as hollow/
-/// outline-only rather than filled (`specification.md`'s UX notes) —
-/// the committed-path idle glyph uses white instead (`decorations.rs`),
+/// `--canvas-bg` (`docs/design-system.md`): the default document background
+/// (`curvyo_document_core::DocumentBackground::DEFAULT`, the one place `#E8E8EB`
+/// is written), and the pen tool's in-progress node glyphs' inner cutout, so
+/// they read as hollow/outline-only rather than filled (`specification.md`'s UX
+/// notes) — the committed-path idle glyph uses white instead (`decorations.rs`),
 /// since this is the one place that distinction matters.
-pub const CANVAS_BG: RgbaColor = RgbaColor::opaque(0xE8, 0xE8, 0xEB);
+pub const CANVAS_BG: RgbaColor = {
+    let default = DocumentBackground::DEFAULT.color;
+    RgbaColor::opaque(default.r, default.g, default.b)
+};
+
+/// `--checker-a` (`docs/design-system.md`): the first tone of the checkerboard
+/// that means "transparency shows through" — under a translucent swatch and, since
+/// `0040-document-background`, in the document area of a background that is
+/// None or not opaque. The cell at the document corner has this tone.
+pub const CHECKER_A: RgbaColor = RgbaColor::opaque(0xFF, 0xFF, 0xFF);
+
+/// `--checker-b`: the second tone of the checkerboard.
+pub const CHECKER_B: RgbaColor = RgbaColor::opaque(0xC9, 0xC9, 0xCE);
 
 /// `--pasteboard-bg` (`docs/design-system.md`): everything outside the
 /// document rectangle, which the GPU clears to and the document area
