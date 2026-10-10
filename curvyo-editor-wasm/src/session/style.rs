@@ -50,7 +50,7 @@ impl Session {
         if !self.style.is_active() {
             return style_panel_state(&committed, &committed, &scope);
         }
-        let mut shown = committed.clone();
+        let mut shown = committed.to_vec();
         self.style.apply_to(&mut shown);
         style_panel_state(&committed, &shown, &scope)
             .map(|state| state.with_pending(self.style.pending_edit()))

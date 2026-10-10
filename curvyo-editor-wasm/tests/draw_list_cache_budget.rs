@@ -1,0 +1,96 @@
+//! The cost of a frame at rest with many objects (`specs/0044-editing-quick-wins/` criterion 5
+//! and `docs/technical-debt.md`, "Canvas performance on Linux/WebKitGTK"). `#[ignore]`d: the
+//! numbers are for a release build on the host CPU:
+//!
+//! ```text
+//! cargo test --release -p curvyo-editor-wasm --test draw_list_cache_budget -- --ignored --nocapture
+//! ```
+//!
+//! Half the objects are rectangles, half are closed paths of eight nodes. The frame at rest is
+//! `Session::draw_list()` with nothing changed since the previous frame.
+
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation
+)]
+
+use std::time::{Duration, Instant};
+
+use curvyo_document_core::{AnchorId, Document, Length, NewAnchor, Point, RectBounds, pack};
+use curvyo_editor_wasm::{Session, Tool};
+
+const COLUMNS: usize = 100;
+const PITCH_MM: f64 = 20.0;
+
+fn pt(x: f64, y: f64) -> Point {
+    Point::new(x, y)
+}
+
+fn session_with(count: usize) -> Session {
+    let document = Document::new(1);
+    let mut anchor = 0_u64;
+    for i in 0..count {
+        let (x, y) = (
+            (i % COLUMNS) as f64 * PITCH_MM,
+            (i / COLUMNS) as f64 * PITCH_MM,
+        );
+        if i % 2 == 0 {
+            let _ = document.create_rect(RectBounds {
+                origin: pt(x, y),
+                width: Length::from_mm(10.0),
+                height: Length::from_mm(10.0),
+            });
+        } else {
+            let anchors: Vec<NewAnchor> = (0..8_u32)
+                .map(|n| {
+                    let angle = f64::from(n) / 8.0 * std::f64::consts::TAU;
+                    anchor += 1;
+                    NewAnchor::corner(
+                        AnchorId::new(1, anchor),
+                        pt(x + 5.0 + 5.0 * angle.cos(), y + 5.0 + 5.0 * angle.sin()),
+                    )
+                })
+                .collect();
+            let _ = document.create_path(&anchors, true);
+        }
+    }
+    let mut session = Session::open(2, &pack(&document, "0.1.0").unwrap()).unwrap();
+    session.resize_viewport(1600.0, 900.0);
+    session.set_tool(Tool::Select);
+    session
+}
+
+/// The mean time of `frames` consecutive `draw_list` calls.
+fn frame_at_rest(session: &Session, frames: u32) -> Duration {
+    let started = Instant::now();
+    for _ in 0..frames {
+        let _ = session.draw_list();
+    }
+    started.elapsed() / frames
+}
+
+#[test]
+#[ignore = "a timing report for release builds; run on purpose"]
+fn frame_at_rest_by_object_count() {
+    for count in [200, 5000, 10_000] {
+        let session = session_with(count);
+        let first = Instant::now();
+        let _ = session.draw_list();
+        let first = first.elapsed();
+        let rest = frame_at_rest(&session, 5);
+        println!("{count:>6} objects, nothing selected: first frame {first:?}, at rest {rest:?}");
+        let mut session = session;
+        let edge = (COLUMNS as f64 + 1.0) * PITCH_MM;
+        session.pointer_down(pt(-5.0, -5.0), false);
+        session.pointer_hover(pt(edge, edge * 100.0), false, false);
+        session.pointer_up(pt(edge, edge * 100.0), false, false);
+        assert_eq!(session.selected_object_count(), count);
+        let first = Instant::now();
+        let _ = session.draw_list();
+        let first = first.elapsed();
+        let rest = frame_at_rest(&session, 5);
+        println!("{count:>6} objects, all selected: first frame {first:?}, at rest {rest:?}");
+    }
+}

@@ -698,6 +698,28 @@ object once and write one commit, so they do not need the cache: with 1000 circl
 touch and nesting kernel 16 ms for 1001 outlines. The Boolean busy state (two painted frames before
 the call) is shared by both cards of the rail.
 
+**Update 2026-10-10 (`0044-editing-quick-wins`, milestone 1): the first half of the cache is built.**
+`Session::objects()` now returns one shared read of every object, kept per `Document::version()`
+(`session/object_cache.rs`); a Select or Node-tool drag still keeps its first read. Every write
+and every merge changes the version, so the cache needs no other invalidation (`New` and `Open`
+build a new `Session`). Frame at rest, `Session::draw_list()`, release build, host CPU, half
+rectangles and half closed paths of eight nodes (`curvyo-editor-wasm/tests/draw_list_cache_budget.rs`,
+`#[ignore]`):
+
+| Objects | Nothing selected, before | after | All selected, before | after |
+|---:|---:|---:|---:|---:|
+| 200 | 2.8 ms | 1.5 ms | 5.0 ms | 3.9 ms |
+| 5,000 | 183 ms | 69 ms | 299 ms | 202 ms |
+| 10,000 | 529 ms | 155 ms | 790 ms | 477 ms |
+
+What is left of a frame at rest with 5,000 objects: about 66 ms tessellating the artwork
+(`build_artwork`, the second half of the cache: key it on version, scale and pixel ratio), and with
+all objects selected about 130 ms for one dashed box per selected object (`select_decoration_input_in`
+and `build_select_draw_list`). Ctrl+A with 5,000 objects is therefore drawn in about 205 ms
+before `0019`'s group box replaces the per-object boxes, which is above the 100 ms of `0044`
+criterion 5; the artwork cache stays deferred until that number is measured again on top of the
+group box.
+
 ## The canvas does not react to a `devicePixelRatio` change with no resize event
 
 The fix below sizes the backing store once, at attach and on every

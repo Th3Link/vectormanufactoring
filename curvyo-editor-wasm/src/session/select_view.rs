@@ -6,6 +6,8 @@
 //! the pointer, and the live numeric readout of a drag. Split out of
 //! `session/select.rs`, which dispatches the events.
 
+use std::borrow::Cow;
+
 use curvyo_document_core::{Angle, ObjectSnapshot, Shape, Vec2};
 use curvyo_render_core::{
     SelectDecorationInput, TransformDecorationInput, TransformGlyphKind, TransformHandleGlyph,
@@ -49,22 +51,24 @@ impl Session {
     /// geometry enters, and only for the decorations (the boxes, handles,
     /// pivot marker and readout follow the new geometry). The objects
     /// themselves are always drawn as committed, so the old geometry stays on
-    /// screen under the blue outline; a copy substitutes nothing. Takes the committed objects by value:
-    /// the caller has read them for this one use.
-    pub(super) fn live_objects_in(
-        mut objects: Vec<ObjectSnapshot>,
+    /// screen under the blue outline; a copy substitutes nothing. Without a
+    /// substitution the committed objects are borrowed, not copied.
+    pub(super) fn live_objects_in<'a>(
+        objects: &'a [ObjectSnapshot],
         live: Option<&LiveEdit>,
-    ) -> Vec<ObjectSnapshot> {
+    ) -> Cow<'a, [ObjectSnapshot]> {
         // In a copy the blue outline travels alone: the boxes, handles and the
         // pivot stay on the originals (`edit-interaction-polish` criterion 33).
-        if let Some(live) = live.filter(|live| !live.copy) {
-            for new in &live.objects {
-                if let Some(slot) = objects.iter_mut().find(|o| o.id() == new.id()) {
-                    *slot = new.clone();
-                }
+        let Some(live) = live.filter(|live| !live.copy) else {
+            return Cow::Borrowed(objects);
+        };
+        let mut objects = objects.to_vec();
+        for new in &live.objects {
+            if let Some(slot) = objects.iter_mut().find(|o| o.id() == new.id()) {
+                *slot = new.clone();
             }
         }
-        objects
+        Cow::Owned(objects)
     }
 
     /// Builds the Select tool's decoration input for this frame: every
@@ -79,7 +83,7 @@ impl Session {
     pub(super) fn select_decoration_input(&self) -> SelectDecorationInput {
         let objects = self.objects();
         let live = self.select_live_edit_in(&objects);
-        self.select_decoration_input_in(&Self::live_objects_in(objects, live.as_ref()))
+        self.select_decoration_input_in(&Self::live_objects_in(&objects, live.as_ref()))
     }
 
     /// [`Session::select_decoration_input`] over the live objects the caller
@@ -169,7 +173,7 @@ impl Session {
     pub(super) fn select_transform_decoration_input(&self) -> TransformDecorationInput {
         let objects = self.objects();
         let live = self.select_live_edit_in(&objects);
-        self.select_transform_decoration_input_in(&Self::live_objects_in(objects, live.as_ref()))
+        self.select_transform_decoration_input_in(&Self::live_objects_in(&objects, live.as_ref()))
     }
 
     /// [`Session::select_transform_decoration_input`] over the live objects
