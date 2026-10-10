@@ -4,8 +4,8 @@ The object timeline is a filtered view of the step log. Object undo, object redo
 history use the restore engine of `0020` with a different write rule. Two optional keys on an
 object carry the wipe floor and the clone origin. **No new crate, no new dependency, no
 `format_version` bump** (ADR 0014 Q2 and Q7, default A). The keys, the object wipe and reverting
-other people's steps are [ADR 0014](../../docs/adr/0014-history-undo-and-branches.md), `Proposed`,
-`needs-customer`. Builds on `0020` merged.
+other people's steps are [ADR 0014](../../docs/adr/0014-history-undo-and-branches.md), accepted
+2026-10-10 (option A on all seven questions). Builds on `0020` merged.
 
 **Amended 2026-10-10 after the Loro spike** (`docs/spikes/loro-history-primitives.md`, PR #85):
 decisions 1, 2 and 6 and the risks changed.
@@ -88,9 +88,8 @@ Criteria 18 and 27 (groups) join the branch when `0023` has merged, or move to a
 
 ## What can start now and what waits
 
-Nothing before `0020` milestone 2 merges. Milestones 1 and 2 need no customer answer beyond
-ADR 0014 Q6 and Q7 (defaults A). Milestones 3 and 4 write the keys: they run on ADR 0014 Q2 A and
-Q4 A and merge only with those answered or the defaults accepted. Ctrl+Shift+U on WebKitGTK (spec
+Nothing before `0020` milestone 2 merges. No milestone waits for a customer answer: ADR 0014 Q2,
+Q4, Q6 and Q7 are accepted as A (2026-10-10). Milestones 3 and 4 write the keys. Ctrl+Shift+U on WebKitGTK (spec
 Q5) is checked by hand in milestone 2.
 
 ## Risks

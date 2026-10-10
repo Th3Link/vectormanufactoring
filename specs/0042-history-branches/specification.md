@@ -1,6 +1,6 @@
 # History branches: undone steps as a branch, versions to look at or go to, clone of any state
 
-Status: Draft until the customer accepts ADR 0014 (`docs/adr/0014-history-undo-and-branches.md`, Proposed, `needs-customer`). Ready to build on the defaults of ADR 0014 once accepted and once `0020` and `0041` have merged (milestones 1 and 2 need no customer answer; milestone 3 runs on Question 2 A and ADR 0014 Q6 A). `adrs.md` and the UX notes exist; the criteria are complete and testable.
+Status: Ready (2026-10-10). The customer accepted ADR 0014 (`docs/adr/0014-history-undo-and-branches.md`) and every default of the open questions below on 2026-10-10 (Preview by default, Question 2 A). `adrs.md` and the UX notes exist; the criteria are complete and testable. The build starts once `0020` and `0041` have merged.
 Priority: Should
 Origin: Customer (specification of 2026-10-10, final: steps carry ids like git; undo two steps and then do something makes the undone steps a branch, no linear redo until the conflicting step is taken back; branches shown in the history; a clone of the state at any point; clicking back and forth to change the version of an object, or a preview in the history window, perhaps a slider between live and preview; in live mode a switch to restore the state from before the clicking). Requirement R-HIST-003. The customer is not sure about live versus preview; the choices below are my proposals and are marked.
 
@@ -64,7 +64,7 @@ All terms of `0020-undo-redo` and `0041-object-history`. In addition:
 
 27. Given a row, a notice or a tooltip that names a version, then it uses the step id of `0020` criterion 33 (7 characters or more, the same on every machine). Typing an id anywhere is not a feature. The id in a row is selectable text (a double-click selects it) so a maker can copy one into a message to a colleague; a tooltip cannot be selected because it closes with the pointer, so it is not the way to copy.
 
-### What is derived and what is stored (ADR 0014, Proposed; testable on its defaults)
+### What is derived and what is stored (ADR 0014, accepted; testable)
 
 28. **Branches are derived from the log.** Given the one stack machine of `0020` criterion 55 run over one peer's steps (Document scope) or one object's timeline (Object scope), then a do step that arrives while the redo side holds steps leaves those steps as a branch; the fork point is the top of the undo side at that moment. Redo at a fork brings back the most recently left branch (criterion 2). Test: the same sequence fed live and read back from the log after Save and Open gives the same branches.
 29. **Order of concurrent steps.** Given steps by two peers that were made concurrently, then every replica shows them in the same main-line order, by (Lamport timestamp, peer id), not by wall-clock time. The times in the rows may therefore look out of order by a few seconds; the same order on every replica matters more (ADR 0014 §6). Test: two replicas merge, the id sequence of the list is equal.
@@ -90,7 +90,9 @@ All terms of `0020-undo-redo` and `0041-object-history`. In addition:
 - "Amend" in criterion 11 is a list and stack rule, not a log rewrite: it is the continuation of criterion 31.
 - Risks the architect measures: the first-frame cost of a checkout read against the budgets of criterion 21 (ADR 0014 §13), and checkout distance for old rows at 10,000 steps.
 
-## Open questions (customer; each has a default)
+## Open questions (decided: the customer accepted every default, 2026-10-10)
+
+Each question below is decided as its option A (or its stated default). The text stays as it was put.
 
 1. **Redo at a fork (criterion 2).** After undo, undo, a new step, and then undoing the new step: *A (default, recommended):* Ctrl+Shift+Z brings back the newest branch (the new step); the older branch is reached through the list. *B:* Ctrl+Shift+Z does nothing while two branches hang from the fork point; the list highlights both and the maker picks one. *C:* time order: brings back the older branch first. The customer wrote "you can no longer redo linearly until you take back the conflict step"; A matches that.
 2. **Live and preview (the customer is unsure).** *A (default, recommended):* the two-position switch of criterion 14, Preview by default. A click in the list never changes the document by accident, and in a shared document looking costs the others nothing; Live is one press of the switch away, and its Restore button is the "switch to restore the state from before the clicking" the customer asked for. *B:* Live only: a click always changes the object, the Restore button is always visible after the first click; fewer concepts, more accidents. *C:* Preview only in a preview pane inside the tab (a small picture of the version, no change on the canvas); safest, but you cannot see it at scale or in place. Recommendation A.
@@ -99,9 +101,9 @@ All terms of `0020-undo-redo` and `0041-object-history`. In addition:
 5. **Groups (criterion 25).** *A (default):* no Clone for a group version in this version. *B:* clone the group's whole subtree at that version. Larger; wanted when groups are common.
 6. **Collapsing "Go to" steps (criterion 11).** *A (default):* consecutive go-to steps are one stack entry and one row. *B:* every press is its own step; the list fills during a browse and Restore needs several Ctrl+Z. Recommendation A.
 
-### The seven questions of ADR 0014 (architect, `needs-customer`)
+### The seven questions of ADR 0014 (decided 2026-10-10: option A each)
 
-ADR 0014 is `Proposed`; the defaults below are the architect's recommendations and apply when the customer does not answer. The same seven questions stand in `0020` (Questions 11 to 17) and `0041`. For this spec Q6 decides criterion 15 (go to over another peer's later steps) and Q2 the file footprint of clone version.
+ADR 0014 is accepted; the customer took option A of every question below. The same seven questions stand in `0020` (Questions 11 to 17) and `0041`. For this spec Q6 decides criterion 15 (go to over another peer's later steps) and Q2 the file footprint of clone version.
 
 7. **History in the file (ADR 0014 Q1).** *A (default):* keep it (it is there today), the History tab says so, a wipe is available. *B:* strip the history on every Save.
 8. **File-format footprint (ADR 0014 Q2).** *A (default):* no `format_version` bump; step headers in commit messages and three optional keys (`history_wiped`, `history_floor`, `clone_of`) that older builds ignore. *B:* bump the version at `0041`, so older builds refuse files that carry lineage keys.
@@ -184,5 +186,5 @@ All changes the ux-engineer requested (criteria 4, 8, 9, 12, 14, 17, 18, 19, 21,
 Requirements: R-HIST-003
 Depends on: `specs/0020-undo-redo/`, `specs/0041-object-history/`, `specs/0043-properties-tabs/`
 Related: ADR 0009 §1 (option C), ADR 0002 §9, the blue-and-black preview rule of `specs/0009-unified-object-editing/`
-ADRs: `adrs.md` (architect); ADR 0014 (Proposed, `needs-customer`: how branches and previews are derived, what Live means in a shared document)
+ADRs: `adrs.md` (architect); ADR 0014 (accepted 2026-10-10: how branches and previews are derived, what Live means in a shared document)
 PR: -

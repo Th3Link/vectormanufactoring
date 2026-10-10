@@ -109,5 +109,5 @@ All changes the ux-engineer requested (criteria 4, 9, 10 and the new tooltip cri
 Requirements: R-EDIT-026
 Builds on: `specs/0004-canvas-navigation-and-selection/`, `specs/0010-edit-interaction-polish/` (keyboard concept, gate), `specs/0019-multi-object-transform/`
 Interacts with: `specs/0020-undo-redo/` (step coalescing), `specs/0023-groups/` (context), `specs/0039` layers (hidden and locked)
-ADRs: `adrs.md` (architect): no new ADR; the held nudge uses the continuation of ADR 0014 §2 (Proposed)
+ADRs: `adrs.md` (architect): no new ADR; the held nudge uses the continuation of ADR 0014 §2 (accepted 2026-10-10)
 PR: -

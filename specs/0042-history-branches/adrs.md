@@ -4,7 +4,7 @@ Branches are not stored: they fall out of the `0020` stack machine run over the 
 the live document under a short guarded checkout and keeps plain copies; Live and Clone are
 restore-engine writes. **No new crate, no new
 dependency, no new register, no `format_version` bump.** The persisted parts it relies on are
-[ADR 0014](../../docs/adr/0014-history-undo-and-branches.md) (`Proposed`, `needs-customer`). Builds
+[ADR 0014](../../docs/adr/0014-history-undo-and-branches.md) (accepted 2026-10-10). Builds
 on `0020` and `0041` merged.
 
 **Amended 2026-10-10 after the Loro spike** (`docs/spikes/loro-history-primitives.md`, PR #85):
@@ -80,8 +80,8 @@ lanes, switch, Restore, Clone buttons.
 
 ## What can start now and what waits
 
-Nothing before `0041` merges. Milestones 1 and 2 need no customer answer. Milestone 3 runs on the
-spec's Q2 A (Preview default, Live by switch) and ADR 0014 Q6 A. The Document scope gets no Live
+Nothing before `0041` merges. No milestone waits for a customer answer (accepted 2026-10-10).
+Milestone 3 runs on the spec's Q2 A (Preview default, Live by switch) and ADR 0014 Q6 A. The Document scope gets no Live
 mode (spec Q3 A) because a document-wide go-to would be `revert_to`, which reverts every peer.
 
 ## Risks

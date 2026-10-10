@@ -1,6 +1,6 @@
 # Object history: the steps of one object, object undo and redo, clones that keep their history, wipe
 
-Status: Draft until the customer accepts ADR 0014 (`docs/adr/0014-history-undo-and-branches.md`, Proposed, `needs-customer`). Ready to build on the defaults of ADR 0014 once accepted and once `0020` milestone 2 has merged (milestones 3 and 4 write the optional keys of ADR 0014 §7). `adrs.md` and the UX notes exist; the criteria are complete and testable.
+Status: Ready (2026-10-10). The customer accepted ADR 0014 (`docs/adr/0014-history-undo-and-branches.md`) and every default of the open questions below on 2026-10-10. `adrs.md` and the UX notes exist; the criteria are complete and testable. The build starts once `0020` milestone 2 has merged; criteria 18 and 27 (groups) wait for `0023`.
 Priority: Should
 Origin: Customer (specification of 2026-10-10, final: the history of single objects with undo and redo there, Ctrl+U and Ctrl+Shift+U, an object undo is an editing step that user undo can take back, a clone duplicates the history, a wipe for one object, deletions visible in the global history). Requirements R-HIST-002 and R-HIST-004 (object part). Everything marked **Proposal** is the product owner's idea and is not accepted until the customer says so.
 
@@ -79,12 +79,12 @@ All terms of `0020-undo-redo` (step, undo stack, global history, operation name,
 
 35. Given a timeline, then the Object scope opens within 100 ms for an object with 1,000 steps in a document with 20,000 steps once the index exists (ADR 0014 §13; release build, desktop; the tests assert four times the figure). The index of steps per object is built in one pass the first time it is asked for, behind the long-operation state of `0016` §9 (up to 300 ms cold at 25,000 steps), and is then extended per commit or import by that change's operations only, at most 1 ms per commit.
 
-### What is stored (ADR 0014, Proposed; testable on its defaults)
+### What is stored (ADR 0014, accepted; testable)
 
 36. **A timeline is derived.** Given an object, then its timeline is computed from the step log by filtering the steps that touched it; the per-object index is built in one pass on the first request of the Object scope and then extended by one append per commit and per import. Nothing about the timeline is stored except the two optional keys of criteria 37 and 38. A step that touched N objects is in N timelines (criterion 21).
 37. **Clone origin.** Given Duplicate or the Ctrl-copy move, then each copy gets the optional key `clone_of` = `<source id>@<version>` (the source's `NodeId` and the document version at the duplication), written in the same commit as the copy. A copy never takes over the source's `history_floor` or `clone_of`: a clone of a clone points at its direct source, and criterion 26 follows the chain. Inherited rows (criterion 24) are computed on request from the source's steps in the causal past of that version and are never copied into the clone, so later steps of either object cannot appear in the other. A value that cannot be read means "no origin" and never makes the file unreadable.
 38. **Floor.** Given a wipe (criterion 30), then the step writes the optional key `history_floor` on the object = the document version at the wipe. The timeline hides every step in the causal past of the floor; a step by a peer that was concurrent with the wipe stays visible. The key is the one write of the wipe step, so a wipe is one commit and one step.
-39. **No format bump.** Given a file with `clone_of` or `history_floor`, then `format_version` is unchanged (ADR 0014 Q2 A, the default). A build that does not know the keys ignores them and draws the same drawing; an older build that duplicates an object copies `clone_of` as it is, which shows a wrong lineage in a newer build and never a wrong drawing.
+39. **No format bump.** Given a file with `clone_of` or `history_floor`, then `format_version` is unchanged (ADR 0014 Q2 A, accepted). A build that does not know the keys ignores them and draws the same drawing; an older build that duplicates an object copies `clone_of` as it is, which shows a wrong lineage in a newer build and never a wrong drawing.
 40. **Object undo is a restore, not an inverse.** Given an object undo, a go to version or a clone, then the engine reads the object at the step's before and after versions and writes fields (criterion 7); this is the same engine as `0020` and has no stored inverse. Given an object undo of a step that deleted the object, then the object comes back with the same id, through an injected tree Move (`0020` criterion 23, ADR 0014 §11, Question 13 below; with option C the object gets a new id).
 41. **Latest applied and redoable come from the stack machine.** Given an object's timeline, then which step Ctrl+U takes back and which step Ctrl+Shift+U brings back are the output of the one stack machine of `0020` criterion 55, run over this object's timeline with the object-undo and object-redo marks. A new do step on the object clears its redo side (criterion 11). With ADR 0014 Q6 B (own steps only) the machine runs over the current peer's steps of the object.
 
@@ -106,7 +106,9 @@ All terms of `0020-undo-redo` (step, undo stack, global history, operation name,
 - State at a version is a read of the live document at a past version, then a write as one commit (ADR 0014 §1); an inverted operation cannot serve the inherited rows, because the original's operations are on another container.
 - Ctrl+Shift+U on Linux is the GTK and IBus chord for Unicode input in text widgets. Verify by hand in milestone 2 that it reaches the page on WebKitGTK; the Edit menu items of criterion 5 are the fallback.
 
-## Open questions (customer; each has a default)
+## Open questions (decided: the customer accepted every default, 2026-10-10)
+
+Each question below is decided as its option A (or its stated default). The text stays as it was put.
 
 1. **Whose steps can an object undo take back?** *A (default, recommended):* any author's latest step on the object, with the author named in the notice and the row, and itself undoable by Ctrl+Z (this is ADR 0009 option C, which that ADR deferred to a history view). *B:* only my own steps; the others are listed but cannot be taken back. A fits the customer's "go into the history and do undo and redo there"; B is the safe choice in a shared document. In a single-user file there is no difference.
 2. **Does the result of a Boolean (or Combine) inherit a history?** *A (default):* no, it starts with "Created by Union from 3 objects". *B:* it inherits the bottom operand's history, because it keeps that object's look. *C:* it inherits all operands' histories side by side. Recommendation A: B and C make "whose story is this?" unclear.
@@ -115,9 +117,9 @@ All terms of `0020-undo-redo` (step, undo stack, global history, operation name,
 5. **Ctrl+U and Ctrl+Shift+U (criterion 5).** Ctrl+U is "view source" in desktop browsers and Ctrl+Shift+U starts Unicode entry in GTK text widgets. In the desktop web view neither is a problem unless the test shows otherwise. *Default:* the customer's keys. *Fallback if a platform eats a key:* the buttons of criterion 16 stay, and the architect names an alternative with the customer.
 6. **History of a group (criterion 18).** *A (default):* the group's list includes steps on any descendant. *B:* only steps on the group node itself (group, ungroup, reorder). Recommendation A: moving or styling a group is what the maker does.
 
-### The seven questions of ADR 0014 (architect, `needs-customer`)
+### The seven questions of ADR 0014 (decided 2026-10-10: option A each)
 
-ADR 0014 is `Proposed`; the defaults below are the architect's recommendations and apply when the customer does not answer. The same seven questions stand in `0020` (Questions 11 to 17) and `0042`.
+ADR 0014 is accepted; the customer took option A of every question below. The same seven questions stand in `0020` (Questions 11 to 17) and `0042`.
 
 7. **History in the file (ADR 0014 Q1).** *A (default):* keep it (it is there today), the History tab says so, a wipe is available. *B:* strip the history on every Save.
 8. **File-format footprint (ADR 0014 Q2).** *A (default):* no `format_version` bump; step headers in commit messages and three optional keys (`history_wiped`, `history_floor`, `clone_of`) that older builds ignore. *B:* bump the version at this spec, so older builds refuse files that carry lineage keys.
@@ -193,5 +195,5 @@ Requirements: R-HIST-002, R-HIST-004
 Depends on: `specs/0020-undo-redo/`, `specs/0043-properties-tabs/`
 Follow-up: `specs/0042-history-branches/`
 Related: `specs/0023-groups/` (criterion 18), `specs/0016-boolean-operations/`, ADR 0009 §1 (option C)
-ADRs: `adrs.md` (architect); ADR 0014 (Proposed, `needs-customer`: the floor and origin keys, the object wipe, taking back other people's steps)
+ADRs: `adrs.md` (architect); ADR 0014 (accepted 2026-10-10: the floor and origin keys, the object wipe, taking back other people's steps)
 PR: -
