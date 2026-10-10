@@ -1,6 +1,6 @@
 # ADR 0011: Workspace and crate layout
 
-**Status:** Accepted (architect, 2026-10-02 — no customer sign-off required); crate and directory names amended by [ADR 0013](0013-rename-to-curvyo.md) (`vecmanf-*` is now `curvyo-*`)
+**Status:** Accepted (architect, 2026-10-02 — no customer sign-off required); crate and directory names amended by [ADR 0013](0013-rename-to-curvyo.md) (`vecmanf-*` is now `curvyo-*`); §7 CI note of 2026-10-10 (Windows and macOS host gate nightly only, customer decision 2026-10-09)
 
 This ADR invents no architecture. ADRs 0001–0010 each authorized the crates
 their own decision needed, in the ADR that needed them; this one pulls those
@@ -220,6 +220,17 @@ for the cost of one `lib.rs`: doing it now is a speculative crate
    platform-specific. `vecmanf-plugin` and the ADR 0005 §1 example plugin build
    for the wasm component target and must keep compiling. `cargo deny` and
    `cargo doc` run once over the workspace.
+
+   > **Note 2026-10-10 (CI schedule, customer decision 2026-10-09):** on pull
+   > requests and pushes to main the host gate runs on ubuntu only. Windows
+   > and macOS run it nightly (`schedule`, 02:30 UTC) and on
+   > `workflow_dispatch`. Windows and macOS must not be required status checks
+   > in branch protection: they never report on a pull request, so a required
+   > check would block every merge. The host gate also runs over the whole
+   > workspace, not only `curvyo-app`'s dependency closure. Details:
+   > `.github/workflows/ci.yml` (header comment) and `docs/technical-debt.md`,
+   > "Windows and macOS tests run nightly only". The crate layout of this ADR
+   > is unchanged.
 
 8. **No crate is created here that no accepted ADR named.** Three slots are
    deliberately left empty, so their absence reads as a decision rather than an

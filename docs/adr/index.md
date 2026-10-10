@@ -26,7 +26,7 @@ A decision too small for a full ADR gets a short dated note in that feature's
 |---|---|---|---|
 | [0001](0001-ui-framework-and-canvas-rendering.md) | UI framework and canvas rendering | workspace | Accepted |
 | [0002](0002-document-model-units-and-svg-round-trip.md) | Internal document model, units and SVG round-trip | workspace | Accepted |
-| [0003](0003-geometry-kernel-booleans-offsetting-vcarving.md) | Geometry kernel, boolean operations, offsetting and V-carving | workspace | Accepted; §3 amendment 2026-10-09 proposed (`i_overlay` replaces `clipper2-rust`, takes effect with PR #69) |
+| [0003](0003-geometry-kernel-booleans-offsetting-vcarving.md) | Geometry kernel, boolean operations, offsetting and V-carving | workspace | Accepted; §3 amendment 2026-10-09 in effect since PR #69 merged (`i_overlay` `=9.0.1` replaces `clipper2-rust`) |
 | [0004](0004-persistence-and-cross-machine-sync.md) | Persistence, collaboration and cross-machine sync | workspace | Accepted |
 | [0005](0005-extension-and-plugin-model.md) | Extension and plugin model | workspace | Accepted |
 | [0006](0006-license.md) | License | workspace | Accepted |
@@ -34,7 +34,7 @@ A decision too small for a full ADR gets a short dated note in that feature's
 | [0008](0008-end-to-end-encryption-of-sync-and-collaboration.md) | End-to-end encryption of sync and collaboration | workspace | Accepted |
 | [0009](0009-concurrent-editing-semantics.md) | Concurrent editing semantics — undo, ephemeral state and merge granularity | workspace | Accepted |
 | [0010](0010-document-keyring-admins-and-revocation.md) | Document keyring — participants, admins and key revocation | workspace | Accepted |
-| [0011](0011-workspace-and-crate-layout.md) | Workspace and crate layout | workspace | Accepted |
+| [0011](0011-workspace-and-crate-layout.md) | Workspace and crate layout | workspace | Accepted; §7 note 2026-10-10 (host gate on ubuntu for pull requests, Windows and macOS nightly only, customer decision 2026-10-09) |
 | [0012](0012-pages-in-the-document-model.md) | Pages in the document model | workspace | Rejected (2026-10-05, dropped from MVP) |
 | [0013](0013-rename-to-curvyo.md) | Rename the product to Curvyo (amends 0011 crate names, 0004 §1 file extension; [inventory](0013-rename-to-curvyo-inventory.md)) | workspace | Accepted |
 | [0014](0014-history-undo-and-branches.md) | History, undo and branches over the operation log (own restore engine on `diff` instead of Loro's `UndoManager`, step header with time in commit messages, deleted objects revived by an injected tree move under a pinned Loro, previews from the live document, wipe by shallow snapshot with an epoch, budgets by step size; amended 2026-10-10 after the Loro spike; supersedes one sentence of 0004 §2 on acceptance) | workspace | Proposed, `needs-customer` (7 questions, each with a default) |
@@ -103,8 +103,8 @@ unawareness. Reversing either needs a new ADR, not an edit:
 - ~~**Boolean-crate spike (`spike/booleans`).**~~ — done, 2026-10-04: all three
   candidates (`i_overlay`, `geo`'s boolean ops, `clipper2-rust`) handled every
   degenerate fixture and build for `wasm32-unknown-unknown`; the spike picked
-  `clipper2-rust` on a tie-breaker. **Amended 2026-10-09 (proposed, takes
-  effect with PR #69):** the kernel's property tests found wrong areas from
+  `clipper2-rust` on a tie-breaker. **Amended 2026-10-09 (in effect since
+  PR #69 merged the same day):** the kernel's property tests found wrong areas from
   `clipper2-rust` on lattice input and none from `i_overlay`, so the library is
   `i_overlay` `=9.0.1`. Recorded in ADR 0003 §3.
 - **Offsetting (ADR 0003 §4).** §4 stands as written (`kurbo` stroke expansion
