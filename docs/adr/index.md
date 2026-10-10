@@ -37,6 +37,7 @@ A decision too small for a full ADR gets a short dated note in that feature's
 | [0011](0011-workspace-and-crate-layout.md) | Workspace and crate layout | workspace | Accepted |
 | [0012](0012-pages-in-the-document-model.md) | Pages in the document model | workspace | Rejected (2026-10-05, dropped from MVP) |
 | [0013](0013-rename-to-curvyo.md) | Rename the product to Curvyo (amends 0011 crate names, 0004 §1 file extension; [inventory](0013-rename-to-curvyo-inventory.md)) | workspace | Accepted |
+| [0014](0014-history-undo-and-branches.md) | History, undo and branches over the operation log (own restore engine instead of Loro's `UndoManager`, step header in commit messages, wipe by shallow snapshot; supersedes one sentence of 0004 §2 on acceptance) | workspace | Proposed, `needs-customer` (6 questions, each with a default) |
 
 ## Customer sign-off, 2026-10-02
 
