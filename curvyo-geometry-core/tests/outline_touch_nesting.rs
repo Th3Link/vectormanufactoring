@@ -187,6 +187,7 @@ fn only_a_flat_outline_has_no_area() {
 
 /// A rectangle of eight nodes with corner arcs of `radius`, as `rect_outline` writes a rounded
 /// rectangle: when the radius is half a side, two nodes of a side coincide.
+#[allow(clippy::many_single_char_names)]
 fn rounded(x: f64, y: f64, width: f64, height: f64, radius: f64) -> Anchors {
     use curvyo_document_core::{Point, Vec2};
     let k = radius * 0.552_284_749_8;
@@ -217,7 +218,10 @@ fn zero_length_sides_are_no_self_touch() {
     let slot = rounded(10.0, 15.0, 30.0, 10.0, 5.0);
     let pill = rounded(0.0, 0.0, 20.0, 20.0, 10.0);
     let plate = rect(0.0, 0.0, 60.0, 40.0);
-    assert_eq!(touching_outlines(&outlines(&[slot.clone()])), Vec::new());
+    assert_eq!(
+        touching_outlines(&outlines(std::slice::from_ref(&slot))),
+        Vec::new()
+    );
     assert_eq!(touching_outlines(&outlines(&[pill])), Vec::new());
     assert_eq!(touching_outlines(&outlines(&[plate, slot])), Vec::new());
 }
