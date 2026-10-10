@@ -465,7 +465,6 @@ export interface KeyHint {
 
 /** What `WasmSession.key_down` returns for a refused key. */
 const KEY_HINT_TEXT: Record<string, string> = {
-  "hint-select-one": "Select one object to type a value",
   "hint-select-first": "Select an object first",
   "hint-path-only": "Skew works on paths only",
 };
@@ -552,6 +551,9 @@ export interface EditorSession {
   /** How many objects the session has selected: the rail's tooltips name
    * "Esc, R" while the Select tool has one (criterion 62). */
   selectionCount: number;
+  /** What a screen reader says about a multi-selection: the count and the group
+   * box size, empty for fewer than two objects. */
+  selectionAnnouncement: string;
   /** The one-line message of a key that could not act ("Select one object to
    * type a value"), or `null`; it clears itself after 2 s. */
   keyHint: KeyHint | null;
@@ -691,6 +693,10 @@ export function useEditorSession(
    * mirrored `isPanning` state below) so `onPointerMove`/`onPointerUp`
    * read the current value synchronously within the same event, not a
    * stale one from before the latest `setState` re-render. */
+  /** A heavy release is waiting for its `wait` cursor to paint: pointer events
+   * are ignored until the commit has run (`specs/0019-multi-object-transform/`
+   * criteria 28, 46, 49). */
+  const releasePendingRef = useRef(false);
   const panningRef = useRef(false);
 
   const [tool, setToolState] = useState<Tool>("select");
@@ -741,6 +747,7 @@ export function useEditorSession(
   const [isPanning, setIsPanning] = useState(false);
   const [isSpaceHeld, setIsSpaceHeld] = useState(false);
   const [selectionCount, setSelectionCount] = useState(0);
+  const [selectionAnnouncement, setSelectionAnnouncement] = useState("");
   const [keyHint, setKeyHint] = useState<KeyHint | null>(null);
   const keyHintCounter = useRef(0);
 
@@ -803,6 +810,7 @@ export function useEditorSession(
     setSelectBar((previous) => (sameSelectBar(previous, nextBar) ? previous : nextBar));
     setZoomPercent(session.zoom_percent());
     setSelectionCount(session.selection_count());
+    setSelectionAnnouncement(session.selection_announcement());
     setSyncRevision((revision) => revision + 1);
     syncEntry(session);
     syncBadges(session);
@@ -1171,6 +1179,9 @@ export function useEditorSession(
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
+      if (releasePendingRef.current) {
+        return;
+      }
       syncTrackedModifiers(event);
       // A press on the canvas takes the focus from a field of the panel, and a
       // field that commits when it is left (the Document size) must do so
@@ -1251,6 +1262,9 @@ export function useEditorSession(
 
   const onPointerMove = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
+      if (releasePendingRef.current) {
+        return;
+      }
       syncTrackedModifiers(event);
       const session = sessionRef.current;
       const { x, y } = canvasPoint(event);
@@ -1292,6 +1306,9 @@ export function useEditorSession(
 
   const onPointerUp = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
+      if (releasePendingRef.current) {
+        return;
+      }
       syncTrackedModifiers(event);
       const session = sessionRef.current;
       if (!session) {
@@ -1354,13 +1371,29 @@ export function useEditorSession(
           event.altKey,
         );
       } else {
-        session.pointer_up(
-          x,
-          y,
-          event.shiftKey,
-          event.ctrlKey || event.metaKey,
-          event.altKey,
-        );
+        const [shift, ctrl, alt] = [event.shiftKey, event.ctrlKey || event.metaKey, event.altKey];
+        if (session.release_is_slow()) {
+          // A move or transform of many objects: the commit can take seconds.
+          // Show the `wait` cursor with the preview unchanged, let it paint,
+          // and only then release (`specs/0019-multi-object-transform/`
+          // criteria 28, 46, 49). Pointer events are ignored meanwhile.
+          releasePendingRef.current = true;
+          setCursorHint("wait");
+          window.requestAnimationFrame(() => {
+            window.setTimeout(() => {
+              try {
+                session.pointer_up(x, y, shift, ctrl, alt);
+                setLiveReadout(null);
+                setCursorHint(session.cursor_hint());
+                syncFromSession();
+              } finally {
+                releasePendingRef.current = false;
+              }
+            }, 0);
+          });
+          return;
+        }
+        session.pointer_up(x, y, shift, ctrl, alt);
       }
       setLiveReadout(null);
       setCursorHint(session.cursor_hint());
@@ -1619,6 +1652,7 @@ export function useEditorSession(
     setTool,
     deleteSelected,
     selectionCount,
+    selectionAnnouncement,
     keyHint,
     convertSelected,
     makeLine,

@@ -71,9 +71,7 @@ pub enum EntryKey {
 pub enum KeyEntryRefusal {
     /// Nothing is selected.
     NothingSelected,
-    /// Several objects are selected; a typed value needs exactly one.
-    SeveralSelected,
-    /// K or Shift+K with one selected object that is not a path.
+    /// K or Shift+K with a selection that holds an object that is not a path.
     SkewNeedsPath,
 }
 
@@ -474,9 +472,10 @@ mod tests {
         }
     }
 
-    /// Criterion 59: nothing or several selected refuse and open nothing.
+    /// Criterion 59: nothing selected refuses and opens nothing; several selected
+    /// open the entry of the group box (`multi-object-transform` criteria 33, 34).
     #[test]
-    fn nothing_or_several_selected_refuse_and_open_nothing() {
+    fn nothing_selected_refuses_and_several_open_the_group_entry() {
         let document = Document::new(1);
         let a = rect_at(&document, 0.0, 10.0);
         let b = rect_at(&document, 20.0, 10.0);
@@ -485,8 +484,9 @@ mod tests {
             assert_eq!(result, Err(KeyEntryRefusal::NothingSelected));
             assert!(!tool.has_entry());
             let (tool, result) = open(&document, &[a, b], key);
-            assert_eq!(result, Err(KeyEntryRefusal::SeveralSelected));
-            assert!(!tool.has_entry());
+            assert_eq!(result, Ok(()));
+            assert!(tool.has_entry());
+            assert!(tool.group_entry().is_some());
         }
     }
 

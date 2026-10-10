@@ -3121,10 +3121,6 @@ fn x06_key_outcome_codes_for_the_new_hints() {
         "hint-select-first"
     );
     assert_eq!(KeyOutcome::Hint(KeyHint::PathOnly).code(), "hint-path-only");
-    assert_eq!(
-        KeyOutcome::Hint(KeyHint::SelectOne).code(),
-        "hint-select-one"
-    );
     assert_eq!(KeyOutcome::EntryOpened.code(), "entry");
 }
 

@@ -32,13 +32,11 @@ pub struct KeyInput<'a> {
 /// frontend owns the wording and shows it for 2 s.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyHint {
-    /// Several objects are selected: "Select one object to type a value".
-    SelectOne,
     /// Nothing is selected, or M or K was pressed outside the Select tool:
     /// "Select an object first".
     SelectFirst,
-    /// K or Shift+K with one selected object that is not a path: "Skew works
-    /// on paths only".
+    /// K or Shift+K with a selection that holds an object that is not a path:
+    /// "Skew works on paths only".
     PathOnly,
 }
 
@@ -79,7 +77,6 @@ impl KeyOutcome {
             Self::Escape(EscapeStep::ClearedState) => "escape-state",
             Self::Escape(EscapeStep::LeftTool) => "escape-tool",
             Self::Escape(EscapeStep::Nothing) => "escape-none",
-            Self::Hint(KeyHint::SelectOne) => "hint-select-one",
             Self::Hint(KeyHint::SelectFirst) => "hint-select-first",
             Self::Hint(KeyHint::PathOnly) => "hint-path-only",
         }
@@ -285,7 +282,6 @@ impl Session {
                     .open_entry_for_key(&objects, &self.selection, key)
                 {
                     Ok(()) => KeyOutcome::EntryOpened,
-                    Err(KeyEntryRefusal::SeveralSelected) => KeyOutcome::Hint(KeyHint::SelectOne),
                     Err(KeyEntryRefusal::NothingSelected) => KeyOutcome::Hint(KeyHint::SelectFirst),
                     Err(KeyEntryRefusal::SkewNeedsPath) => KeyOutcome::Hint(KeyHint::PathOnly),
                 }
@@ -725,7 +721,7 @@ mod tests {
             KeyOutcome::Escape(EscapeStep::ClearedState),
             KeyOutcome::Escape(EscapeStep::LeftTool),
             KeyOutcome::Escape(EscapeStep::Nothing),
-            KeyOutcome::Hint(KeyHint::SelectOne),
+            KeyOutcome::Hint(KeyHint::PathOnly),
         ];
         let mut codes: Vec<&str> = all.iter().map(|o| o.code()).collect();
         codes.sort_unstable();

@@ -137,6 +137,21 @@ impl WasmSession {
         self.session.corner_hint_lines()
     }
 
+    /// What a screen reader says about a multi-selection ("4 objects selected,
+    /// 46.2 by 18.7 mm"); empty for fewer than two selected objects.
+    #[must_use]
+    pub fn selection_announcement(&self) -> String {
+        self.session.selection_announcement()
+    }
+
+    /// Whether releasing the drag in flight may take long (a move or group
+    /// transform of many objects): the host shows the `wait` cursor and lets it
+    /// paint before it calls `pointer_up`.
+    #[must_use]
+    pub fn release_is_slow(&self) -> bool {
+        self.session.release_is_slow()
+    }
+
     /// The typed numeric entry to show, or `undefined` (criteria 18, 25, 26
     /// of `object-transform-refinements`). Call after every pointer release
     /// and tool or selection change.

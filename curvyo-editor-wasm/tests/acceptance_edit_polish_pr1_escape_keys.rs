@@ -18,7 +18,7 @@ use curvyo_document_core::{
     AnchorId, Angle, Document, InnerRatio, Length, NewAnchor, ObjectSnapshot, Point, PointCount,
     RectBounds, StarFrame, pack, unpack,
 };
-use curvyo_editor_wasm::{EscapeStep, KeyHint, KeyInput, KeyOutcome, Session, Tool};
+use curvyo_editor_wasm::{EscapeStep, KeyInput, KeyOutcome, Session, Tool};
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -967,8 +967,11 @@ fn ac54_r_and_s_depend_only_on_select_tool_with_a_selection() {
     assert_eq!(s.tool(), Tool::Rectangle);
 }
 
+/// Superseded by `multi-object-transform` (criteria 33, 34 and 37): R and S act on
+/// a selection of several objects too, over the group box; "Select one object to
+/// type a value" no longer exists.
 #[test]
-fn ac54_several_selected_objects_r_and_s_give_the_hint_and_change_nothing() {
+fn ac54_several_selected_objects_r_and_s_open_the_entries_of_the_selection() {
     let mut s = open_doc(&two_rects_doc());
     click(&mut s, pt(20.0, 0.0));
     s.pointer_hover(pt(120.0, 0.0), true, false);
@@ -976,17 +979,14 @@ fn ac54_several_selected_objects_r_and_s_give_the_hint_and_change_nothing() {
     s.pointer_up(pt(120.0, 0.0), true, false);
     assert_eq!(s.selected_object_count(), 2);
     let before = state_snapshot(&s);
-    for k in ["r", "s"] {
-        assert_eq!(
-            press(&mut s, k),
-            KeyOutcome::Hint(KeyHint::SelectOne),
-            "{k}"
-        );
+    for (k, kind) in [("r", "angle"), ("s", "size")] {
+        assert_eq!(press(&mut s, k), KeyOutcome::EntryOpened, "{k}");
         assert_eq!(s.tool(), Tool::Select);
         assert_eq!(s.selected_object_count(), 2);
-        assert!(s.transform_entry().is_none());
+        assert_eq!(s.transform_entry().expect("a chip").kind, kind);
+        s.cancel_transform_entry();
     }
-    assert_eq!(state_snapshot(&s), before);
+    assert_eq!(state_snapshot(&s), before, "opening writes nothing");
 }
 
 #[test]

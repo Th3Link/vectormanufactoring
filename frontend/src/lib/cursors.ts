@@ -25,6 +25,9 @@
  *   a lasso armed or running, or Alt held over the canvas (the next press
  *   arms one); hotspot at the arrow tip, `crosshair` where custom cursor
  *   images are ignored.
+ * - `"wait"`: the built-in `wait` cursor, from the release of a heavy gesture
+ *   until its commit is presented (`specs/0019-multi-object-transform/`
+ *   criteria 28, 46, 49).
  * - anything else: no override (the tool's normal cursor).
  */
 
@@ -105,6 +108,9 @@ export function cursorForHint(hint: string): string | undefined {
   }
   if (hint === "pointer") {
     return "pointer";
+  }
+  if (hint === "wait") {
+    return "wait";
   }
   if (hint.startsWith("skew:")) {
     const degrees = Number.parseFloat(hint.slice("skew:".length));

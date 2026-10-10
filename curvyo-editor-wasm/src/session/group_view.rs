@@ -20,6 +20,10 @@ use super::select_view::glyph_kind;
 use super::shapes::LiveReadout;
 use super::{Session, Tool};
 
+/// A release that moves or transforms at least this many selected objects may take
+/// long enough for the host to show a `wait` cursor first (criteria 28, 46, 49).
+const SLOW_RELEASE_OBJECTS: usize = 100;
+
 /// More selected objects than this and no member box is drawn (criterion 5): a
 /// count of the selection, so panning and zooming never change it.
 const PER_OBJECT_BOX_LIMIT: usize = 500;
@@ -215,6 +219,35 @@ impl Session {
             EditHandle::Param(_) => return Vec::new(),
         };
         lines.iter().map(ToString::to_string).collect()
+    }
+
+    /// Whether the release of the drag in flight is expected to be slow: a move
+    /// or a group resize, rotate or skew of many objects. The host then shows the
+    /// `wait` cursor, lets it paint, and only then releases, with the preview
+    /// still on screen (`specs/0019-multi-object-transform/` criteria 28, 46, 49).
+    #[must_use]
+    pub fn release_is_slow(&self) -> bool {
+        self.tool == Tool::Select
+            && (self.select.group_drag_in_flight() || self.select.move_in_flight())
+            && self.selection.ids().len() >= SLOW_RELEASE_OBJECTS
+    }
+
+    /// The sentence a screen reader gets when a multi-selection changes: the
+    /// count and the group box size ("4 objects selected, 46.2 by 18.7 mm"),
+    /// empty for fewer than two selected objects
+    /// (`specs/0019-multi-object-transform/` UX notes, section 13).
+    #[must_use]
+    pub fn selection_announcement(&self) -> String {
+        let objects = self.objects();
+        let Some(group) = self.group_in(&objects) else {
+            return String::new();
+        };
+        format!(
+            "{} objects selected, {:.1} by {:.1} mm",
+            group.count(),
+            group.bounds().width(),
+            group.bounds().height()
+        )
     }
 
     /// The centre of the group box, where the origin axes of an axis-locked
