@@ -39,10 +39,10 @@ Where #80 or 0020 land first, the seams are named in the tasks.
   `SelectedAll`, `Nudged`, `Hint(TooFar)`; table tests (AC 1-3, 6, 7, 11, 13).
 - [x] 8. Session: select all (view state, no commit), nudge through `commit_move`, the run state
   for the readout distance and the live-region text; session tests (AC 1, 2, 4, 8, 9, 10, 12).
-- [ ] 9. Benchmarks: 5,000 objects Ctrl+A drawn within 100 ms; nudge of 1,000 objects.
-  Both are in `draw_list_cache_budget.rs`. The nudge of 1,000 objects costs 34 ms per event. Ctrl+A
-  with 5,000 objects is drawn in 205 ms (66 ms artwork, 130 ms one dashed box per selected
-  object); the 100 ms assert holds only once `0019`'s group box replaces the per-object boxes.
+- [x] 9. Benchmarks: 5,000 objects Ctrl+A drawn within 100 ms; nudge of 1,000 objects.
+  Both are in `draw_list_cache_budget.rs`. On top of #80's group box Ctrl+A with 5,000 objects is
+  drawn in 11.8 ms; one nudge event with 1,000 objects costs 24 ms. The frontend's reads after
+  the key cost 260 ms (`select_bar_state`, `style_panel_view`; `technical-debt.md`).
 
 ### Milestone 3: the frontend (criteria 4, 9, 11, 14)
 

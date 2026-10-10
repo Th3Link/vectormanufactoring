@@ -721,8 +721,9 @@ What is left of a frame at rest with 5,000 objects: about 66 ms tessellating the
 all objects selected about 130 ms for one dashed box per selected object (`select_decoration_input_in`
 and `build_select_draw_list`). Ctrl+A with 5,000 objects is therefore drawn in about 205 ms
 before `0019`'s group box replaces the per-object boxes, which is above the 100 ms of `0044`
-criterion 5; the artwork cache stays deferred until that number is measured again on top of the
-group box.
+criterion 5. **Measured again on top of the group box (#80, merged): Ctrl+A with 5,000 objects is
+drawn in 11.8 ms (key 0.14 ms plus first frame), a frame at rest with all selected costs 11.8 ms,
+so the artwork cache is not needed for criterion 5 and stays deferred.**
 
 
 **Measured 2026-10-10 (`multi-object-transform`, release build, same machine,
@@ -1311,8 +1312,8 @@ of the Select bar (click-through, 3 s or 8 s).
   tessellated artwork) should replace the snapshots with a cheaper index.
 - **After Ctrl+A with 5,000 objects the frontend's reads cost more than the frame.** Measured in
   `draw_list_cache_budget.rs` (release): `select_bar_state` 126 ms, `style_panel_view` 141 ms,
-  `path_availability` 15 ms, `boolean_availability` 7 ms, against about 135 to 210 ms for the key
-  and the first frame. They run on every `syncFromSession`, so a selection of thousands makes each
+  `path_availability` 15 ms, `boolean_availability` 7 ms, against 11.8 ms for the key and the first
+  frame (after #80's group box; 135 to 210 ms before it). They run on every `syncFromSession`, so a selection of thousands makes each
   key press and pointer event slow, whatever the draw list costs. Not fixed in `0044`.
   **Resolution:** find the quadratic id lookups behind the two panel reads (`ids.contains` over all
   objects) and cache the result per selection and document version, as the object read is.
