@@ -6,7 +6,7 @@ State of this list: 2026-10-10 (the customer renumbered every folder on
 0030 to 0039 and gave the groups half of 0023 its spec; 0040 was added for the
 customer request of 2026-10-10; the customer's undo and history specification of
 2026-10-10 gave 0020 its folder and added 0041 to 0044, and his request for
-customisable document formats and shapes of the same day added 0045 and 0046).
+customisable document formats and shapes of the same day added 0045 and 0046; his three change requests on silent conversion, sliders and the typed move's reference point added 0047).
 
 Spec-driven development, adapted from
 [spec-driven-dev-kit](https://github.com/trojava/spec-driven-dev-kit) for
@@ -89,6 +89,7 @@ Their order, dependencies and conflicts are in "Proposed build order" below.
 | [0044](0044-editing-quick-wins/) | `editing-quick-wins` | Ctrl+A selects all objects of the context (Select tool); arrow keys nudge the selection by 1 mm, Shift+Arrow by 10 mm, a held key is one step. Collected from reviews; a Proposal until the customer accepts. | In progress (#87; the customer can veto at the demo) | Should | R-EDIT-026 | - |
 | [0045](0045-document-formats-library/) | `document-formats-library` | The format list of `0030` becomes user-extendable: formats and groups the maker adds, edits and deletes in an inline form, a star per format that puts it in the quick selection (the `0030` strips become the favourites), groups that can be switched off (Paper on, Slides off by default), the full list as an inline expandable list (no popup), import and export of a formats file, the maker's file laid over the built-in TOML. Customer request of 2026-10-10; where the user file lives needs the customer. | In progress for the rectangular part (#84, one PR with 0043; user-formats storage on default A, a per-user file in the data directory, the customer may veto) | Should | R-EDIT-027 | - |
 | [0046](0046-document-shapes/) | `document-shapes` | Non-rectangular document areas: ellipse and circle, rounded rectangle, and an outline loaded from SVG or DXF (key rings, labels, hoops); the size is the bounding box, the area is a guide and not a mask; a format is a name, a size and a shape. A sketch with open questions. Needs a document-model decision, `0045`, `0040`, the SVG import of `0024`, and a DXF importer nobody has specified. | Draft (sketch with `adrs.md` sketch and UX sketch; the document-model ADR is `needs-customer` and not yet written) | Should | R-EDIT-028 | - |
+| [0047](0047-transform-polish/) | `transform-polish` | Three customer change requests of 2026-10-10. (1) Skew and a stretch of a multi-selection convert the primitives that cannot represent the result to paths, with no warning, hint or refusal (reverses `0008` P1 and `0019` question 2). (2) Every slider (the Ratio sliders, the colour area, the hue slider): a click sets the value at the pointer, a double-click opens value entry, a drag is unchanged. (3) The typed move's Absolute mode measures from the centre of the true bounding box by default; the box is drawn pale red during a move drag and while the entry is open; in Absolute the four corners and the centre are red marks that can be clicked to choose the reference and execute the move; a Reference control in the chip gives the keyboard route. One PR, three milestones (conversion, sliders, reference box). | Ready (spec and `adrs.md` exist; the UX notes are the product owner's draft and the ux-engineer confirms them before the build; criteria marked Proposal are vetoable at the demo; runs alone, after #80) | Should | R-EDIT-029, R-EDIT-012, R-EDIT-015 | - |
 
 ### Specified but not built
 
@@ -126,7 +127,7 @@ deferred past the laser MVP on 2026-10-02 (multi-OS parity and sync, fonts,
 asset management, collaboration, the asset connector, plugins, other machine
 families). They are tracked in `docs/requirements.md` ("MVP (confirmed)" and
 "Explicitly deferred past MVP") and get a number here once the customer
-prioritises them. The next free number is 0047.
+prioritises them. The next free number is 0048.
 
 ## Proposed build order (product owner, 2026-10-10)
 
@@ -150,6 +151,7 @@ For 0023 and 0030 to 0038, with the fixed points 0016 (done), 0017, 0018, 0019 a
 | 0044 `editing-quick-wins` | `editor-wasm` `session/keys.rs`, `ui-core` selection, shortcut table, a per-version object cache | #80 merged (group box, multi-object move, key table). Without 0020 a held nudge writes one commit per event; with 0020 they form one step | 0020 and 0043 (the same key gate and panel files): not in parallel; any other slice is free |
 | 0045 `document-formats-library` | `document-core` (loader, schema 2, overlay), `curvyo-storage-io` (user file, atomic write), `curvyo-app` commands, `editor-wasm` view, the Document tab | 0030 merged; 0040 and 0043 merged for milestones 2 and 3 (milestone 1, the loader, may start earlier); the user-file place on default A unless the customer vetoes | 0040 and 0043 (the Document section file) |
 | 0046 `document-shapes` | `document-core` (shape register, format bump), `render-core` (area, edge), importers in `0024` (SVG) and an unspecified DXF reader, the Document tab | 0045, 0040, the customer and architect on the model; stage 2 needs 0024, stage 3 a DXF importer | 0023 (format version, document root), 0040 (background fill of the area) |
+| 0047 `transform-polish` | `ui-core` (skew and stretch conversion rule, `move_entry.rs` reference, new `reference_point.rs`), `document-core` (`transform_objects` with a conversion), `render-core` (reference box and marks), `editor-wasm` (move drag decoration, chip), `frontend` (four sliders, `MoveEntryChip.tsx`) | #80 merged (group box); #78 merged (picker) | `0044` and `0020` (key gate, commit labels, `MoveEntryChip.tsx`), `0043` and `0040` (`useEditorSession.ts`, panel files): not in parallel with them |
 | 0032 `pen-tablet-input` | pointer input in `frontend` and `editor-wasm`, possibly the Tauri host; the stroke width model | a freehand tool (no spec yet), the platform spike | 0033 (width model) |
 | 0033 `stroke-brushes` | style model, `render-core`, `geometry-core` generators, panel row, plugin host | 0017, 0018, the plugin host | 0018, 0032 (style and width model) |
 
@@ -248,7 +250,7 @@ a reader refuses a file with a higher number ("saved by a newer version").
 | next free at merge | 0033 `stroke-brushes` (brush reference and embedded definition) | Draft, after the MVP |
 | none by default (ADR 0014 Q2 A), or next free at merge (Q2 B) | 0041 `object-history` (the optional keys `history_floor` and `clone_of`, ADR 0014 §7) | Draft; the keys are additive and older builds ignore them (as 0015's `display_unit`); `needs-customer` (ADR 0014 Q2: B would bump the version so that older builds refuse files with lineage keys) |
 | next free at merge | 0046 `document-shapes` (the `page_shape` register; an older build would draw a rectangle where a key ring is) | Draft; `needs-customer` |
-| none | 0020, 0042, 0043, 0044, 0045 | 0020 saves the history that `document.loro` already holds (step headers in commit messages) and adds one optional root key, `history_wiped` (ADR 0014 §7); 0042 derives branches from the log; 0043 and 0044 write nothing; 0045 keeps formats in a user file outside the project. ADR 0014 Q7 B (soft delete instead of reviving deleted objects) would give 0020 a bump |
+| none | 0020, 0042, 0043, 0044, 0045, 0047 | 0020 saves the history that `document.loro` already holds (step headers in commit messages) and adds one optional root key, `history_wiped` (ADR 0014 §7); 0042 derives branches from the log; 0043 and 0044 write nothing; 0045 keeps formats in a user file outside the project. ADR 0014 Q7 B (soft delete instead of reviving deleted objects) would give 0020 a bump |
 | none | 0030, 0031, 0034, 0035, 0036, 0037, 0038 | No bump: they write existing object kinds (0035 to 0037 use the compound path of 0016) |
 
 A spec does not hard-code a version number it does not own; it says "next free
