@@ -50,6 +50,12 @@ against.
 - [`specs/0014-advanced-selection/adrs.md`](../0014-advanced-selection/adrs.md): Alt at
   the press wins over every target; Shift and Ctrl inside the box arm the
   marquee; modifiers reach the session through `Session::held`.
+- [`specs/0003-primitive-shapes/adrs.md`](../0003-primitive-shapes/adrs.md):
+  "object to path keeps the `NodeId`" and the closed-form outline
+  (`outline_of_rotated`); a stretch that converts (decision 8) writes exactly
+  what `convert_to_paths` writes.
+- [`specs/0012-polygon-star-box-refit/adrs.md`](../0012-polygon-star-box-refit/adrs.md):
+  `orientation()`; decision 8 writes it as the converted path's `rotation`.
 - [`specs/0007-stroke-and-fill-styling/`](../0007-stroke-and-fill-styling/)
   criterion 29 (option B): applies unchanged; it is not extended to a
   selection (question 3 decided (b), criterion 44 removed).
@@ -131,7 +137,8 @@ against.
     take the one factor on the outer radius. A circle (rx = ry within the
     tolerance) at a rotation that is not a multiple of 90° becomes an ellipse
     with `rotation` 0 when sx ≠ sy. That is the one new write (flag 4).
-  - **Kinds are preserved; no conversion.** Non-uniform scale of a
+  - **Kinds are preserved; no conversion.** *Superseded 2026-10-10 by
+    decision 8 (customer change: stretch converts).* Non-uniform scale of a
     uniform-only selection never reaches the per-object function: the edge
     handles are absent and a corner drag uses `polygon_star_resize_factor`.
     Skew never reaches a primitive: the skew handles are absent.
@@ -333,6 +340,108 @@ against.
   - **Selection announcement (UX U4).** Built: `Session::selection_announcement` and
     a visually hidden polite live region, settled for 500 ms before it speaks.
 
+- **2026-10-10: (8) a stretch converts what cannot follow it (customer change,
+  question 2 now (b)).** Supersedes "kinds are preserved" (decision 2) and the
+  uniform-only rule (decisions 1 and 7, criteria 21 and 29).
+  - **One predicate decides.** `stretch_keeps_kind(object, axes)` in
+    `ui-core/src/conversion.rs`: true for a path; for a rectangle or ellipse
+    whose `rotation` minus `axes` is a quarter turn (within the tolerance); for
+    a circle (it becomes an ellipse, decision 2, `rotation` = `axes`). False
+    for a polygon, a star, and a rectangle or ellipse at any other angle. The
+    group passes `axes` 0; a single object passes its box angle. A uniform map
+    (|sx − sy| ≤ `UNIFORM_EPSILON`), a rotate and a move never convert.
+  - **The conversion is built once, at the press, in `ui-core`.**
+    `conversion.rs` gains `primitive_as_path(primitive, minter) -> PathSnapshot`
+    (same id, style, `outline_of_rotated` anchors with fresh `AnchorIdMinter`
+    ids, `closed`, no extra subpaths, `rotation` = `orientation()`);
+    `build_primitive_conversions` ("Object to path") calls it too, so the two
+    conversions cannot differ. `GroupDrag` (and the group typed entry at open)
+    keeps `converted: Vec<Option<PathSnapshot>>` beside `starts`, filled only
+    for a resize handle and only where the predicate is false. Therefore
+    `SelectTool::pointer_down` and `open_entry_for_key` take `&mut
+    AnchorIdMinter` like `pointer_up` does. Ids minted for a drag that ends
+    uniform or is cancelled are never written; a burnt counter costs nothing.
+    Not minted per frame and not minted at release (the preview and the commit
+    must be the same snapshots, criterion 32).
+  - **Preview = commit.** `group_transform::apply` for a non-uniform `Scale` on
+    an object with a `converted` entry returns
+    `ObjectSnapshot::Path(converted.scaled_along(pivot, sx, sy, axes))` plus
+    the ordinary stroke rule. `resolve` stays the one function for preview,
+    release and entry; the blue overlay, the preview group box and the hit
+    rules see a path from the first non-uniform frame and the primitive again
+    if the drag returns to one factor.
+  - **Document: inside `transform_objects`, no pre-step, no new type.** A
+    pre-step `convert_to_paths` would be a second commit (criterion 31) and
+    would convert on drags that end uniform. A `ConvertToPath` result variant
+    was rejected: an `ObjectSnapshot::Path` result already says it. Rule: a
+    path result for a node that is a primitive now is a conversion
+    (`Planned::Convert`); any other kind mismatch still refuses. Validation
+    before the first write as today, plus: the result is one closed outline
+    with at least two anchors and ids unique within it, else the whole call
+    refuses with a new `ObjectEditError::InvalidConversion`. The write is
+    `strip_primitive_keys` + `write_converted_path_fields` (the
+    `convert_to_paths` writers, so one writer per key) and then the shared
+    `rotation` and stroke writes. One `commit_with_label("transform_objects")`;
+    one undo step restores the primitives. A repeated commit of the same
+    results finds a path with those anchor ids and writes nothing new.
+  - **Format: verified, no change.** The object model already changes kind in
+    place: `convert_to_paths` deletes the primitive keys and writes `closed`
+    and `anchors` under the same `NodeId` and tree position; this writes the
+    same keys with the same meaning, and `rotation` was already a path key.
+    `document.json` shows a path; `format_version` stays. Concurrency is that
+    of "Object to path": a peer's concurrent write to a deleted primitive key
+    can survive as a stray key on a path, which every reader ignores (no
+    shape tag means path).
+  - **Curve fidelity: exact, no tolerance to choose.** The renderer and the
+    hit test already draw a primitive as `outline_of_rotated` (cubic arcs
+    with `KAPPA`, radial error about 0.03 %), and an affine map of a cubic
+    Bézier is exact, so the converted path is the drawn shape, stretched.
+    Node counts are those of "Object to path": rectangle 4 to 8, ellipse 4,
+    polygon n, star 2n. No flattening.
+  - **Stroke, dash, radii.** Width times √(sx·sy) with "Scale stroke width"
+    on, as for every path; dash lengths unchanged as for every scale; the dash
+    phase does not jump because the path starts where the outline starts. An
+    aligned rectangle stays a rectangle and keeps the existing radius rule and
+    Select-bar switch (circular radii, flag 3). A rotated rounded rectangle is
+    converted, so its corners stretch exactly and the switch has no effect on
+    it.
+  - **Polygon and star angle (technical debt "Object to path drops the frame
+    angle").** Closed by this feature: `primitive_as_path` writes
+    `orientation()` as `rotation`, for the stretch and for "Object to path"
+    (`convert_to_paths` gains a rotation per conversion). The gradient re-fit
+    of a polygon or star (0007's known limit) stays and is visible at the
+    first non-uniform frame.
+  - **Single object, same rule, same milestone (proposal; default yes).**
+    Today a polygon or star shows corner handles only and a corner is always
+    uniform (`polygon_star_resize_factor`); a rotated rectangle or ellipse
+    already stretches as itself in its own box. With the rule: a polygon or
+    star shows all eight handles; an edge or a free corner stretches in the
+    box axes and converts through `transform_objects` with one result; Ctrl
+    on a corner keeps the diagonal rule and the kind. `handle_spec_for`
+    loses its polygon case. The `resize_star_frame` path stays for uniform
+    drags.
+  - **After the commit.** Ids and tree positions are kept, so the selection
+    is unchanged; the Select bar and panel read kinds from the objects and
+    show path fields. `SelectTool` keeps the last conversion's counts per
+    kind (polygon, star, rotated rectangle, rotated ellipse; from `starts`
+    against the committed results, only when `transform_objects` returned
+    `Ok`); `editor-wasm` hands them to the frontend, which writes the notice
+    text. No field on `Session` (decision 6). `uniform_only`, `UniformCause`
+    and the "proportional only / Object to path first" hint are deleted.
+  - **Cost.** Building the conversions at the press: 10,000 stars of 5 points
+    are 100,000 anchors of arithmetic, milliseconds. The commit writes about
+    five operations per new anchor plus up to 11 key deletes per object,
+    roughly 2.5 times a path scale of the same count. Budget unchanged: a
+    converting 10,000-object `transform_objects` within 5 s; add that case
+    (stars) to the ignored benchmarks and report its `document.loro` bytes.
+  - **Risks.** (a) A free corner drag is never exactly uniform, so it converts
+    every polygon and star in the selection; the kind change is visible in the
+    preview, the notice names it, Ctrl prevents it, undo reverts it. (b) A
+    single polygon's box is its frame square and the converted path's box is
+    tight, so the box shrinks on release. (c) Large point counts (up to 1,024)
+    make the conversion and the history large; covered by the same 5 s gate.
+    (d) Criteria 20, 21, 29 and 31 change wording; the PO owns that.
+
 ## Flagged to the lead
 
 *2026-10-08: flags 1 to 6 are applied to the criteria by the PO; flag 7 is
@@ -371,4 +480,7 @@ open for the lead.*
    delete refuses a whole multi-object commit" joins the `drag_objects` note
    under "Canvas performance".
 
-No question for the customer comes from the architecture.
+No question for the customer comes from the architecture. *2026-10-10:* the
+single-object part of decision 8 is a change to accepted behaviour (a polygon
+or star corner is no longer always uniform); it goes to the customer as a
+proposal with default yes.
