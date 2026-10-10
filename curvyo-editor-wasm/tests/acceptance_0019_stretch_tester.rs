@@ -1974,7 +1974,7 @@ fn ac56_single_polygon_and_star_eight_handles_and_edge_stretch_converts() {
                 );
                 assert_eq!(
                     s.hover_conversion_count(),
-                    if make == 0 { 1 } else { 1 },
+                    1,
                     "{what}: the hover names the kind"
                 );
             }
@@ -2042,11 +2042,7 @@ fn ac56_single_polygon_and_star_eight_handles_and_edge_stretch_converts() {
                 near(rotation_of(&o[0]), rotation_of(&otp[0]), 1e-9),
                 "{what}: rotation as Object to path"
             );
-            assert_eq!(
-                s.take_conversion_notice(),
-                if make == 0 { 1 } else { 1 },
-                "{what}: N = 1"
-            );
+            assert_eq!(s.take_conversion_notice(), 1, "{what}: N = 1");
             assert_eq!(s.selected_object_count(), 1);
             let bar = s.select_bar_state();
             assert!(
@@ -2455,7 +2451,7 @@ fn the_quarter_turn_tolerance_of_a_rectangle_is_1e_9_rad() {
         assert_eq!(is_path(&now[idx]), converts, "delta {delta}");
         assert_eq!(
             s.take_conversion_notice(),
-            if converts { 1 } else { 0 },
+            u32::from(converts),
             "delta {delta}"
         );
     }
@@ -2490,11 +2486,7 @@ fn a_nearly_round_rotated_ellipse_is_a_circle_a_clearly_oval_one_converts() {
         let g = GBox::of(&s);
         edge_drag(&mut s, &g, 1.0, 0.0, g.max.x + 20.0, false, false);
         assert_eq!(is_path(&objects(&s)[1]), converts, "ry {ry}");
-        assert_eq!(
-            s.take_conversion_notice(),
-            if converts { 1 } else { 0 },
-            "ry {ry}"
-        );
+        assert_eq!(s.take_conversion_notice(), u32::from(converts), "ry {ry}");
     }
 }
 
