@@ -154,7 +154,10 @@ fn a_self_crossing_outline_is_reported_as_touching_itself() {
     assert_eq!(touching_outlines(&outlines), vec![(0, 0)]);
     // A plain square is not.
     let sq = square(0.0, 0.0, 10.0, 10.0);
-    assert!(touching_outlines(&[Outline::new(&sq, true)]).is_empty());
+    assert_eq!(
+        touching_outlines(&[Outline::new(&sq, true)]),
+        Vec::<(usize, usize)>::new()
+    );
 }
 
 #[test]
@@ -193,7 +196,7 @@ fn criterion_19_touch_and_nesting_of_a_plate_with_1000_circles_take_under_500_ms
     let nesting = outline_nesting(&outlines);
     let ms = t.elapsed().as_secs_f64() * 1000.0;
     eprintln!("touch + nesting: {ms:.1} ms");
-    assert!(touching.is_empty());
+    assert_eq!(touching, Vec::<(usize, usize)>::new());
     assert_eq!(nesting.iter().filter(|n| n.depth == 1).count(), 1000);
     assert!(ms < 500.0, "{ms} ms");
 }
