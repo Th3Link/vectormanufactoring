@@ -9,7 +9,10 @@
 //! included) is reported, and no pair whose true curves are 0.003 mm or more apart is: a chord is
 //! within 0.0005 mm of its curve, so chords 0.002 mm apart or closer are curves within 0.003 mm,
 //! and curves within 0.001 mm have chords within 0.002 mm. Straight lines are exact: two squares
-//! 0.01 mm apart pass, and a shared edge is reported.
+//! 0.01 mm apart pass, and a shared edge is reported. An outline touches itself when two chords
+//! that are not neighbours are within reach; chords are neighbours when the polyline between them
+//! is at most 0.002 mm long, so zero-length segments (a clamped corner radius, a duplicated node)
+//! are no self-touch.
 
 use curvyo_document_core::Point;
 
@@ -124,12 +127,24 @@ fn pair_touches(a: &Flat, b: &Flat) -> bool {
     })
 }
 
-/// Whether two chords of the same outline that are not neighbours are within reach.
+/// Whether two chords of the same outline that are not neighbours are within reach. Two chords are
+/// neighbours when the polyline between them, the shorter way round, is no longer than
+/// [`CHORD_REACH_MM`]: adjacent chords, and chords separated only by a zero-length or tiny run (the
+/// two arcs of a slot meet at a point, a node dragged onto its neighbour). A real crossing has a
+/// longer loop between its chords.
 fn self_touches(flat: &Flat) -> bool {
     let count = flat.points.len();
     if count < 3 {
         return false;
     }
+    // `along[k]` is the length of the polyline from point 0 to point k; `along[count]` is the whole.
+    let mut along = Vec::with_capacity(count + 1);
+    along.push(0.0_f64);
+    for index in 0..count {
+        let (p, q) = flat.chord(index);
+        along.push(along[index] + (q.x - p.x).hypot(q.y - p.y));
+    }
+    let whole = along[count];
     let mut chords: Vec<(f64, f64, f64, f64, Point, Point, usize)> = (0..count)
         .map(|index| {
             let (p, q) = flat.chord(index);
@@ -143,8 +158,12 @@ fn self_touches(flat: &Flat) -> bool {
         active.retain(|&held| chords[held].1 >= chords[current].0);
         for &held in &active {
             let (left, right) = (&chords[held], &chords[current]);
-            let gap = left.6.abs_diff(right.6);
-            let neighbours = gap <= 1 || gap + 1 >= count;
+            let (low, high) = (left.6.min(right.6), left.6.max(right.6));
+            // From the end of chord `low` to the start of chord `high`, and from the end of `high`
+            // round to the start of `low`.
+            let forward = along[high] - along[low + 1];
+            let backward = whole - along[high + 1] + along[low];
+            let neighbours = forward.min(backward) <= CHORD_REACH_MM;
             if !neighbours
                 && left.2 <= right.3
                 && right.2 <= left.3

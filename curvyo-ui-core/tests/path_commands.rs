@@ -424,3 +424,42 @@ fn concentric_discs_paint_as_a_ring_with_an_island() {
         );
     }
 }
+
+/// A plate with slot holes (rounded rectangles whose radius is half a side, so two nodes of a side
+/// coincide) and a fully rounded square combine: zero-length sides are no self-touch.
+#[test]
+fn a_plate_with_slots_and_a_rounded_square_combine() {
+    let document = Document::new(1);
+    let plate = rect(&document, 0.0, 0.0, 100.0);
+    let slot = document.create_rect(RectBounds {
+        origin: pt(20.0, 20.0),
+        width: Length::from_mm(30.0),
+        height: Length::from_mm(10.0),
+    });
+    let pill = rect(&document, 20.0, 60.0, 20.0);
+    document
+        .set_corner_radius(&[slot], Length::from_mm(5.0))
+        .unwrap();
+    document
+        .set_corner_radius(&[pill], Length::from_mm(10.0))
+        .unwrap();
+    let all = objects(&document);
+    let plan = plan_combine(&all, &select(&[plate, slot, pill]), &mut minter()).unwrap();
+    assert_eq!(plan.holes, 2);
+    assert_eq!(plan.outlines.len(), 3);
+    // A duplicated node is no self-crossing either.
+    let doubled = poly(
+        &document,
+        500,
+        &[
+            (200.0, 0.0),
+            (210.0, 0.0),
+            (210.0, 0.0),
+            (210.0, 10.0),
+            (200.0, 10.0),
+        ],
+        true,
+    );
+    let all = objects(&document);
+    assert!(plan_combine(&all, &select(&[plate, doubled]), &mut minter()).is_ok());
+}

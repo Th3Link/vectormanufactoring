@@ -184,3 +184,58 @@ fn only_a_flat_outline_has_no_area() {
         true
     )));
 }
+
+/// A rectangle of eight nodes with corner arcs of `radius`, as `rect_outline` writes a rounded
+/// rectangle: when the radius is half a side, two nodes of a side coincide.
+fn rounded(x: f64, y: f64, width: f64, height: f64, radius: f64) -> Anchors {
+    use curvyo_document_core::{Point, Vec2};
+    let k = radius * 0.552_284_749_8;
+    let node = |px: f64, py: f64, hin: (f64, f64), hout: (f64, f64)| {
+        (
+            Point::new(x + px, y + py),
+            Vec2::new(hin.0, hin.1),
+            Vec2::new(hout.0, hout.1),
+        )
+    };
+    let (w, h, r) = (width, height, radius);
+    vec![
+        node(r, 0.0, (-k, 0.0), (0.0, 0.0)),
+        node(w - r, 0.0, (0.0, 0.0), (k, 0.0)),
+        node(w, r, (0.0, -k), (0.0, 0.0)),
+        node(w, h - r, (0.0, 0.0), (0.0, k)),
+        node(w - r, h, (k, 0.0), (0.0, 0.0)),
+        node(r, h, (0.0, 0.0), (-k, 0.0)),
+        node(0.0, h - r, (0.0, k), (0.0, 0.0)),
+        node(0.0, r, (0.0, 0.0), (0.0, -k)),
+    ]
+}
+
+/// A slot (30 x 10, radius 5) and a fully rounded square have zero-length sides; they do not touch
+/// themselves, and a plate with a slot hole shows no touch at all.
+#[test]
+fn zero_length_sides_are_no_self_touch() {
+    let slot = rounded(10.0, 15.0, 30.0, 10.0, 5.0);
+    let pill = rounded(0.0, 0.0, 20.0, 20.0, 10.0);
+    let plate = rect(0.0, 0.0, 60.0, 40.0);
+    assert_eq!(touching_outlines(&outlines(&[slot.clone()])), Vec::new());
+    assert_eq!(touching_outlines(&outlines(&[pill])), Vec::new());
+    assert_eq!(touching_outlines(&outlines(&[plate, slot])), Vec::new());
+}
+
+/// A duplicated node and an edge of 0.001 mm make no self-touch either; a real crossing still does.
+#[test]
+fn duplicated_nodes_and_tiny_edges_are_no_self_touch() {
+    let mut doubled = rect(0.0, 0.0, 10.0, 10.0);
+    doubled.insert(1, doubled[1]);
+    assert_eq!(touching_outlines(&outlines(&[doubled])), Vec::new());
+    let tiny = polygon(&[
+        (0.0, 0.0),
+        (10.0, 0.0),
+        (10.0, 10.0),
+        (0.001, 10.0),
+        (0.0, 10.0),
+    ]);
+    assert_eq!(touching_outlines(&outlines(&[tiny])), Vec::new());
+    let eight = polygon(&[(0.0, 0.0), (10.0, 10.0), (10.0, 0.0), (0.0, 10.0)]);
+    assert_eq!(touching_outlines(&outlines(&[eight])), vec![(0, 0)]);
+}
