@@ -120,6 +120,7 @@ fn gesture(
         tolerances,
         modifiers,
     );
+    tool.mint_conversion_ids(&mut minter);
     tool.pointer_moved(to, modifiers, selection);
     let began = Instant::now();
     tool.pointer_up(document, objects, selection, to, modifiers, &mut minter);
@@ -264,4 +265,81 @@ fn the_commits_of_10000_objects_finish_within_5_s() {
         }
     }
     println!("saved file: {before} bytes before, {after} bytes after the four commits");
+}
+
+/// Criterion 49, the converting variant: 5,000 paths with 20 nodes and 5,000 stars
+/// (every one converts on an east edge stretch). The commit, which includes the
+/// 5,000 conversions, finishes within 5 s; the preview step stays under 50 ms; the
+/// size of the saved file before and after is reported.
+#[test]
+#[ignore = "benchmark: run in release with --ignored --nocapture"]
+fn the_stretch_commit_of_5000_stars_and_5000_paths_finishes_within_5_s() {
+    let document = build(5000, 20, 0);
+    let columns = 100u32;
+    for i in 0..5000u32 {
+        let (cx, cy) = (
+            f64::from(i % columns) * 30.0,
+            1600.0 + f64::from(i / columns) * 30.0,
+        );
+        let _ = document.create_star(
+            curvyo_document_core::StarFrame {
+                center: pt(cx, cy),
+                radius: Length::from_mm(10.0),
+                angle: curvyo_document_core::Angle::from_radians(0.0),
+            },
+            curvyo_document_core::PointCount::new(5).unwrap(),
+            curvyo_document_core::InnerRatio::new(0.5).unwrap(),
+        );
+    }
+    let objects = read(&document);
+    let mut selection = selection_of(&objects);
+    let Spots { low, high } = spots(&objects, &selection);
+    let east = pt(high.x, f64::midpoint(low.y, high.y));
+    let to = pt(east.x + 500.0, east.y);
+    let before = document.export_loro_snapshot().unwrap().len();
+
+    // One preview step: resolving 10,000 objects including the conversions.
+    let tolerances = TransformHandleTolerances::at_scale(SCALE);
+    let mut tool = SelectTool::new();
+    tool.pointer_down(
+        &objects,
+        &mut selection,
+        east,
+        Tolerance::from_mm(2.0),
+        tolerances,
+        Modifiers::NONE,
+    );
+    tool.mint_conversion_ids(&mut AnchorIdMinter::new(9));
+    tool.pointer_moved(to, Modifiers::NONE, &mut selection);
+    let step = mean(5, || {
+        tool.live_edit(&objects, &selection, to, false, false)
+            .expect("a live edit")
+    });
+    println!("converting preview step of 10,000 objects: {step:?}");
+    tool.escape();
+
+    let elapsed = gesture(
+        &document,
+        &objects,
+        &mut selection,
+        east,
+        to,
+        Modifiers::NONE,
+    );
+    let after = document.export_loro_snapshot().unwrap().len();
+    println!(
+        "commit of a stretch converting 5,000 stars: {elapsed:?}; saved file {before} -> {after} bytes"
+    );
+    assert_eq!(
+        read(&document)
+            .iter()
+            .filter(|o| matches!(o, ObjectSnapshot::Path(_)))
+            .count(),
+        10_000,
+        "every star is a path"
+    );
+    if !cfg!(debug_assertions) {
+        assert!(step < Duration::from_millis(50), "{step:?}");
+        assert!(elapsed < Duration::from_secs(5), "{elapsed:?}");
+    }
 }

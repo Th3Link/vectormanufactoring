@@ -442,6 +442,33 @@ against.
     make the conversion and the history large; covered by the same 5 s gate.
     (d) Criteria 20, 21, 29 and 31 change wording; the PO owns that.
 
+- **2026-10-10: (8) notes from the build (implementer).** None changes decision 8.
+  - **Ids without a minter at the press.** `SelectTool::pointer_down` and
+    `open_entry_for_key` keep their signatures. The conversions are built at the press
+    with the ids of a local counter (unique within the drag) and the session calls
+    `SelectTool::mint_conversion_ids(&mut minter)` right after the press, a key or a
+    double-click that opens an entry, before the first preview: from then on preview
+    and commit carry the session's own ids, as decided. A caller that does not call it
+    (a unit test) commits the local ids, which are only unique within the drag.
+  - **Lead decision E.** A corner drag of a selection that holds a converting shape is
+    proportional (`GroupSelection::proportional_corners`), the typed size and the edge
+    handles stretch; the corner hint reads "Resize selection, proportional" / "Stretch
+    with an edge handle" (the latter only while an edge handle is drawn).
+  - **One object.** A polygon or star shows all eight handles; its corner drag is the
+    diagonal rule of `0005`, its edge drag and its typed W x H (box axes, about the
+    opposite side or the centre) stretch and convert through the same
+    `transform_objects` (`commit_resize` routes a path result for a primitive there).
+    `EntryKind::OuterRadius` and `local_delta_for_radius` are gone.
+  - **Texts.** Rust sends per-kind counts (`hover_conversion_counts`,
+    `live_conversion_counts`, `entry_conversion_counts`, `take_conversion_notice`); the
+    frontend (`lib/conversionText.ts`) writes the four sentences, the notice for 6 s on
+    the key-hint surface (criterion 54).
+  - **Tests changed because the spec changed:** the tests of the removed criterion 21
+    and of the single polygon's "r" entry and corner-only handles
+    (`acceptance_otr_tester`, `acceptance_unified_editing`, `acceptance_0005`,
+    `acceptance_polygon_star_box_refit`, `acceptance_edit_polish_*`, `acceptance_0019_*`)
+    now assert the new handles and the W x H entry.
+
 ## Flagged to the lead
 
 *2026-10-08: flags 1 to 6 are applied to the criteria by the PO; flag 7 is

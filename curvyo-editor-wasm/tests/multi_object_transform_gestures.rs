@@ -615,3 +615,59 @@ fn a_double_click_on_a_group_handle_opens_its_chip() {
     let view = session.transform_entry().expect("an angle chip");
     assert_eq!(view.kind, "angle");
 }
+
+/// Criteria 23, 53 and 54 through `Session`: an east edge drag of a rectangle and a
+/// star counts the star during the drag, turns it into a path on release, and the
+/// notice counts it once; Escape leaves none.
+#[test]
+fn an_edge_stretch_counts_converts_and_notices_once() {
+    let document = rects();
+    let star = document.create_star(
+        curvyo_document_core::StarFrame {
+            center: pt(140.0, 140.0),
+            radius: Length::from_mm(20.0),
+            angle: curvyo_document_core::Angle::from_radians(0.0),
+        },
+        curvyo_document_core::PointCount::new(5).unwrap(),
+        curvyo_document_core::InnerRatio::new(0.5).unwrap(),
+    );
+    let mut session = session_of(&document);
+    select_two(&mut session, pt(20.0, 50.0), pt(160.0, 140.0));
+    let all = objects(&session);
+    let (low, high) = [&all[0], &all[2]]
+        .iter()
+        .map(|o| curvyo_ui_core::object_outline_bounds(o))
+        .reduce(|(a, b), (c, d)| {
+            (
+                pt(a.x.min(c.x), a.y.min(c.y)),
+                pt(b.x.max(d.x), b.y.max(d.y)),
+            )
+        })
+        .unwrap();
+    let east = pt(high.x, f64::midpoint(low.y, high.y));
+    let to = pt(east.x + 60.0, east.y);
+
+    // Escape: nothing converts, no notice.
+    hold(&mut session, east, false, false);
+    session.pointer_down(east, false);
+    hold(&mut session, to, false, false);
+    assert_eq!(session.live_conversion_counts(), vec![0, 1, 0, 0]);
+    assert_eq!(session.escape(), EscapeStep::CancelledDrag);
+    session.pointer_up(to, false, false);
+    assert!(session.take_conversion_notice().is_empty());
+    assert!(
+        objects(&session)
+            .iter()
+            .all(|o| o.id() != star || matches!(o, ObjectSnapshot::Primitive(_)))
+    );
+
+    // Release: one path more, one notice.
+    drag_with(&mut session, east, to, false, false);
+    assert!(matches!(
+        objects(&session).iter().find(|o| o.id() == star).unwrap(),
+        ObjectSnapshot::Path(_)
+    ));
+    assert_eq!(session.take_conversion_notice(), vec![0, 1, 0, 0]);
+    assert!(session.take_conversion_notice().is_empty(), "taken once");
+    assert!(session.live_conversion_counts().is_empty());
+}

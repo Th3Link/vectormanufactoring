@@ -260,11 +260,11 @@ removed without a migration: the oriented box of a polygon or star turns by
 is the number in the readout. The two registers stay; `StarFrame.angle` plus
 `rotation` is still the stored form until the affine story. Two consequences stay
 open: in box-local coordinates the first outer vertex of a polygon or star is at
-angle 0 (handles never add `StarFrame.angle`), and "Object to path" drops the frame
-angle, so the converted path's `rotation` is the register alone and its readout
-and box direction can differ from the shape's before the conversion. Fix that
-with one more argument to `convert_to_paths` (write `orientation()` as the path's
-`rotation`) when someone asks. See `specs/0012-polygon-star-box-refit/adrs.md`.
+angle 0 (handles never add `StarFrame.angle`). The second one, "Object to path"
+dropping the frame angle, is fixed by `multi-object-transform` (2026-10-10):
+`Document::convert_to_paths` and the conversion of a stretch both write
+`orientation()` as the path's `rotation`, so its readout and box direction do not
+change. See `specs/0012-polygon-star-box-refit/adrs.md`.
 
 *2026-10-07 (architect, `0007-stroke-and-fill-styling`):* a gradient makes this
 visible. A polygon's or star's gradient box is its circumscribed square, a path's
