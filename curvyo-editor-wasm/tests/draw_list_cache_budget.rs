@@ -101,7 +101,13 @@ fn frame_at_rest_by_object_count() {
 /// Everything the frontend reads from the session after a key press (`syncFromSession`, the
 /// Style panel, the rail's command availability and the readouts), and what that took.
 fn reads_after_a_key(session: &Session) -> Duration {
+    reads_after_a_key_with_worst(session).0
+}
+
+/// The same reads: their total and the slowest single one.
+fn reads_after_a_key_with_worst(session: &Session) -> (Duration, Duration) {
     let mut total = Duration::ZERO;
+    let mut worst = Duration::ZERO;
     let mut time = |name: &str, read: &dyn Fn()| {
         let started = Instant::now();
         read();
@@ -110,6 +116,7 @@ fn reads_after_a_key(session: &Session) -> Duration {
             println!("    read {name}: {took:?}");
         }
         total += took;
+        worst = worst.max(took);
     };
     time("selected_object_count", &|| {
         let _ = session.selected_object_count();
@@ -153,7 +160,7 @@ fn reads_after_a_key(session: &Session) -> Duration {
     time("handle_hint", &|| {
         let _ = session.handle_hint();
     });
-    total
+    (total, worst)
 }
 
 const SELECT_ALL_BUDGET: Duration = Duration::from_millis(100);
@@ -221,4 +228,29 @@ fn one_nudge_event_with_a_thousand_objects_selected() {
     println!(
         "nudge of 1000 objects: worst key event {worst:?}, worst reads after it {reads:?}, worst frame after it {frame:?}"
     );
+}
+
+const READ_BUDGET: Duration = Duration::from_millis(16);
+
+/// With 5,000 selected objects no single read the frontend makes after a key press may cost a
+/// frame (`docs/technical-debt.md`, "After Ctrl+A with 5,000 objects the frontend's reads...").
+#[test]
+#[ignore = "a timing budget for release builds; run on purpose"]
+fn each_panel_read_stays_within_a_frame_with_five_thousand_selected_objects() {
+    let mut session = session_with(5000);
+    // The canvas draws a frame before any key: the object read is warm, as in the app.
+    let _ = session.draw_list();
+    let started = Instant::now();
+    let outcome = session.key_down(KeyInput {
+        key: "a",
+        ctrl: true,
+        ..KeyInput::default()
+    });
+    let key = started.elapsed();
+    assert_eq!(outcome, KeyOutcome::SelectedAll);
+    let (total, worst) = reads_after_a_key_with_worst(&session);
+    println!("Ctrl+A with 5000 objects: key {key:?}, reads {total:?} in total, slowest {worst:?}");
+    if !cfg!(debug_assertions) {
+        assert!(worst <= READ_BUDGET, "{worst:?} (budget {READ_BUDGET:?})");
+    }
 }
