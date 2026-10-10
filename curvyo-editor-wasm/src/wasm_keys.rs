@@ -24,7 +24,7 @@ impl WasmSession {
     /// `time_ms` is `KeyboardEvent.timeStamp`. The host prevents the page's
     /// default for every result except `"ignored"` and re-reads the session
     /// state for them.
-    #[allow(clippy::fn_params_excessive_bools)]
+    #[allow(clippy::fn_params_excessive_bools, clippy::too_many_arguments)] // one scalar per DOM fact
     pub fn key_down(
         &mut self,
         key: &str,

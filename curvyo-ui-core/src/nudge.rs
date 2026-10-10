@@ -179,7 +179,7 @@ pub enum NudgeOutcome {
 }
 
 /// Moves the selected objects by `event` with the typed move's own write
-/// ([`commit_move`], the commit `translate_objects`), one commit per event, and returns the run
+/// (`commit_move`, the commit `translate_objects`), one commit per event, and returns the run
 /// the event belongs to. `objects` is the document's current read; ids in `selected` that are
 /// not in it are skipped, so one stale id does not refuse the batch.
 ///
