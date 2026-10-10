@@ -34,6 +34,7 @@ mod path_extend;
 mod path_model;
 mod path_reverse;
 mod path_topology;
+mod path_transform;
 mod paths;
 mod primitive_model;
 mod primitive_outline;
