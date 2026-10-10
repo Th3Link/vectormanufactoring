@@ -29,7 +29,7 @@ fn mm(w: f64, h: f64) -> DocumentSize {
 
 fn nine_paper() -> PresetList {
     let mut s = String::from(
-        "format = 1\n[[group]]\nid = \"paper\"\nname = \"Paper\"\ndefault_orientation = \"portrait\"\n",
+        "format = 2\n[[group]]\nid = \"paper\"\nname = \"Paper\"\ndefault_orientation = \"portrait\"\n",
     );
     for i in 0..9_u32 {
         write!(
@@ -118,7 +118,7 @@ fn a_square_size_counts_as_portrait_inside_a_group() {
     // A group containing a square preset: a document of that square size is in
     // the group; the pick keeps "portrait" for a square.
     let l = list(
-        "format = 1\n[[group]]\nid = \"g\"\nname = \"G\"\ndefault_orientation = \"landscape\"\n\
+        "format = 2\n[[group]]\nid = \"g\"\nname = \"G\"\ndefault_orientation = \"landscape\"\n\
          [[group.preset]]\nid = \"sq\"\nname = \"Sq\"\nshort_side = 100\nlong_side = 100\nunit = \"mm\"\n\
          [[group.preset]]\nid = \"r\"\nname = \"R\"\nshort_side = 100\nlong_side = 150\nunit = \"mm\"\n",
     );
@@ -172,7 +172,7 @@ fn the_orientation_swap_rules() {
 #[test]
 fn tooltips_for_an_inch_authored_preset_and_a_note() {
     let l = list(
-        "format = 1\n[[group]]\nid = \"us\"\nname = \"US\"\ndefault_orientation = \"portrait\"\n\
+        "format = 2\n[[group]]\nid = \"us\"\nname = \"US\"\ndefault_orientation = \"portrait\"\n\
          [[group.preset]]\nid = \"letter\"\nname = \"Letter\"\nnote = \"8.5 x 11\"\nshort_side = 8.5\nlong_side = 11\nunit = \"in\"\n",
     );
     let v = presets_view(&l, mm(210.0, 297.0), DisplayUnit::Mm);

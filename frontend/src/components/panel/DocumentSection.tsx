@@ -3,10 +3,13 @@ import { useEffect, useRef, useState } from "react";
 
 import { DocumentPresets } from "@/components/panel/DocumentPresets";
 import { EntryField } from "@/components/panel/EntryField";
+import { FormatList } from "@/components/panel/FormatList";
+import { FormatsBrokenBlock } from "@/components/panel/FormatsBrokenBlock";
 import { StyleRow } from "@/components/panel/StyleRow";
 import { ToggleGroup, type ToggleOption } from "@/components/ui/toggle-group";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { DocumentPanelApi, UnitSymbol } from "@/hooks/useDocumentPanel";
+import type { FormatsApi } from "@/hooks/useFormats";
 
 const UNIT_TOOLTIP =
   "How lengths are shown on the rulers, here and in the status bar. Other fields stay in mm. Stored sizes are always mm.";
@@ -37,6 +40,7 @@ const REFUSAL_MS = 8000;
 
 interface DocumentSectionProps {
   document: DocumentPanelApi;
+  formats: FormatsApi;
   onReturnFocus: () => void;
 }
 
@@ -47,7 +51,7 @@ interface DocumentSectionProps {
  * and Fit to content. Every value and every rule comes from the session; this
  * holds the fields' text and the two short messages under the button.
  */
-export function DocumentSection({ document: doc, onReturnFocus }: DocumentSectionProps) {
+export function DocumentSection({ document: doc, formats, onReturnFocus }: DocumentSectionProps) {
   const { view } = doc;
   const messages = { number: view.sideMessage } as const;
   const [notice, setNotice] = useState<string | null>(null);
@@ -86,14 +90,10 @@ export function DocumentSection({ document: doc, onReturnFocus }: DocumentSectio
   };
 
   return (
-    <section aria-labelledby="document-heading" className="flex flex-col gap-2">
-      <div className="flex h-6 items-center justify-between gap-2">
-        <h2 id="document-heading" className="text-sm font-semibold text-[var(--toolbar-icon)]">
-          Document
-        </h2>
-        <p className="truncate text-xs text-[var(--panel-muted-fg)]">{view.presets.subject}</p>
-      </div>
+    <div className="flex flex-col gap-2">
+      <FormatsBrokenBlock formats={formats} />
       <DocumentPresets document={doc} onReturnFocus={onReturnFocus} />
+      <FormatList formats={formats} onReturnFocus={onReturnFocus} />
       <div
         aria-hidden
         className="my-1 h-px"
@@ -188,6 +188,6 @@ export function DocumentSection({ document: doc, onReturnFocus }: DocumentSectio
           )}
         </div>
       )}
-    </section>
+    </div>
   );
 }

@@ -1,0 +1,35 @@
+# A user file with every kind of entry: a state list, a group switched on, a new
+# group, and a format appended to a built-in group.
+format = 1
+favourites = ["a4", "a3", "u-coaster-90", "u-keyring"]
+enabled = { slides = true }
+
+[[group]]
+id = "u-laser"
+name = "Laser"
+default_orientation = "landscape"
+
+  [[group.preset]]
+  id = "u-keyring"
+  name = "Key ring"
+  short_side = 30
+  long_side = 50
+  unit = "mm"
+
+  [[group.preset]]
+  id = "u-coaster-90"
+  name = "Coaster"
+  note = "Cork"
+  short_side = 9
+  long_side = 9
+  unit = "cm"
+
+[[group]]
+id = "paper"
+
+  [[group.preset]]
+  id = "u-b5"
+  name = "B5"
+  short_side = 176
+  long_side = 250
+  unit = "mm"

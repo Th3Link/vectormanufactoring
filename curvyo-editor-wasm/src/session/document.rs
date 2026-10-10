@@ -8,8 +8,8 @@
 
 use curvyo_document_core::{DisplayUnit, Document, DocumentSize, DocumentSizeError, Length};
 use curvyo_ui_core::{
-    PanelContent, content_bounds, content_too_large_message, document_side_message, format_cursor,
-    format_field_length, format_size, panel_content, parse_document_side,
+    content_bounds, content_too_large_message, document_side_message, format_cursor,
+    format_field_length, format_size, parse_document_side,
 };
 
 use super::Session;
@@ -53,20 +53,10 @@ pub enum FitOutcome {
 }
 
 impl Session {
-    /// What the Properties panel shows (criterion 14a).
-    #[must_use]
-    pub fn panel_content(&self) -> PanelContent {
-        panel_content(
-            &self.selection,
-            self.pen_path_unfinished(),
-            !self.style_scope().ids.is_empty(),
-        )
-    }
-
     /// Whether the Pen holds an unfinished path, whichever tool is active. A
     /// resize or a fit moves the committed objects and would leave that path
     /// behind, so neither runs while it exists (criterion 14a).
-    fn pen_path_unfinished(&self) -> bool {
+    pub(super) fn pen_path_unfinished(&self) -> bool {
         self.pen.in_progress_nodes().is_some()
     }
 
@@ -196,6 +186,7 @@ impl Session {
 #[cfg(test)]
 mod tests {
     use curvyo_document_core::{Length, Point, RectBounds};
+    use curvyo_ui_core::PanelContent;
 
     use super::*;
 

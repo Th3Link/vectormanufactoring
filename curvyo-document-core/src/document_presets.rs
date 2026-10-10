@@ -1,14 +1,16 @@
-//! The document size presets: paper sizes and slide formats read from a small
-//! data file (`specs/0030-document-size-presets/`). The loader takes the file's
+//! The built-in document formats ("presets"): paper sizes and slide formats
+//! read from a small data file (`specs/0030-document-size-presets/`, schema 2
+//! since `specs/0045-document-formats-library/`). The loader takes the file's
 //! text and returns a validated list or an error that names the preset and the
 //! rule it breaks; it opens no file and starts nothing. The shipped file is
 //! `data/document-presets.toml`, compiled in; a test loads it, so a bad edit
-//! fails the quality gate.
+//! fails the quality gate. The entries and rules are shared with the user's
+//! formats file (`format_library_file.rs`).
 
 use serde::Deserialize;
 
-use crate::display_unit::DisplayUnit;
 use crate::document_size::{MAX_DOCUMENT_MM, MIN_DOCUMENT_MM};
+use crate::preset_units::{AuthoredSize, Orientation, PresetUnit};
 use crate::units::{DocumentSize, Length, Tolerance};
 
 /// Two sizes closer than this on each side are the same size: the tolerance of
@@ -20,86 +22,6 @@ const MAX_NAME_CHARS: usize = 24;
 
 /// The longest preset note, in characters.
 const MAX_NOTE_CHARS: usize = 60;
-
-/// Portrait or landscape.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Orientation {
-    /// Taller than wide.
-    Portrait,
-    /// Wider than tall.
-    Landscape,
-}
-
-impl Orientation {
-    /// The orientation of `size`: `None` for a square within
-    /// [`PRESET_MATCH_TOLERANCE`].
-    #[must_use]
-    pub fn of(size: DocumentSize) -> Option<Self> {
-        let (width, height) = (size.width.as_mm(), size.height.as_mm());
-        if (width - height).abs() <= PRESET_MATCH_TOLERANCE.as_mm() {
-            None
-        } else if width < height {
-            Some(Self::Portrait)
-        } else {
-            Some(Self::Landscape)
-        }
-    }
-}
-
-/// The unit a preset's size is written in. A pixel exists only here: it is
-/// 1/96 inch, and the document stores millimetres.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PresetUnit {
-    /// Millimetres.
-    Mm,
-    /// Inches.
-    In,
-    /// Pixels at 96 per inch.
-    Px,
-}
-
-impl PresetUnit {
-    /// The unit's symbol as written in the file.
-    #[must_use]
-    pub const fn symbol(self) -> &'static str {
-        match self {
-            Self::Mm => "mm",
-            Self::In => "in",
-            Self::Px => "px",
-        }
-    }
-
-    fn from_symbol(symbol: &str) -> Option<Self> {
-        match symbol {
-            "mm" => Some(Self::Mm),
-            "in" => Some(Self::In),
-            "px" => Some(Self::Px),
-            _ => None,
-        }
-    }
-
-    /// `value` in this unit, in millimetres: `mm` as is, `in` as
-    /// `value * 254 / 10`, `px` as `value * 254 / 960`.
-    fn to_length(self, value: f64) -> Length {
-        match self {
-            Self::Mm => Length::from_mm(value),
-            Self::In => Length::from_unit(value, DisplayUnit::In),
-            Self::Px => Length::from_mm(value * 254.0 / 960.0),
-        }
-    }
-}
-
-/// A preset's size as written in the file, kept for the tooltip ("1920 × 1080
-/// px"). Every comparison and every write uses the `Length` sides.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct AuthoredSize {
-    /// The shorter side, in `unit`.
-    pub short: f64,
-    /// The longer side, in `unit`.
-    pub long: f64,
-    /// The unit the numbers are in.
-    pub unit: PresetUnit,
-}
 
 /// One format.
 #[derive(Debug, Clone, PartialEq)]
@@ -116,6 +38,11 @@ pub struct DocumentPreset {
     pub long_side: Length,
     /// The size as written in the file.
     pub authored: AuthoredSize,
+    /// Shown in the quick selection (when its group is on).
+    pub favourite: bool,
+    /// The maker's own format (from the user file), which can be edited and
+    /// deleted; `false` for a built-in one.
+    pub user: bool,
 }
 
 /// A heading and its formats.
@@ -130,6 +57,11 @@ pub struct PresetGroup {
     pub default_orientation: Orientation,
     /// The formats, in file order.
     pub presets: Vec<DocumentPreset>,
+    /// Whether the group is on: its favourites are in the quick selection and
+    /// its formats name the subject line.
+    pub enabled: bool,
+    /// The maker's own group, which can be renamed and deleted.
+    pub user: bool,
 }
 
 /// The validated list of presets, in file order.
@@ -156,8 +88,9 @@ pub enum PresetReason {
     /// Not valid TOML, or a key the format does not define; carries the
     /// parser's message.
     Syntax(String),
-    /// `format` is missing or is not 1.
-    FormatNotOne,
+    /// `format` is missing or is not the schema this reader knows (2 for the
+    /// built-in file).
+    FormatNotSupported,
     /// A required field is missing.
     MissingField(&'static str),
     /// `default_orientation` is neither `portrait` nor `landscape`.
@@ -168,7 +101,7 @@ pub enum PresetReason {
     DuplicateGroupId,
     /// Two presets share an id.
     DuplicatePresetId,
-    /// `unit` is not `mm`, `in` or `px`.
+    /// `unit` is not `mm`, `cm`, `in` or `px`.
     UnknownUnit(String),
     /// A side is not a finite number above zero.
     SideNotPositive,
@@ -184,6 +117,18 @@ pub enum PresetReason {
     NoteTooLong,
     /// The preset has the same size as the preset with this id.
     SameSizeAs(String),
+    /// The user file's `format` is not 1 (`FormatNotSupported` is the built-in
+    /// file's): it was made by a newer version and is not read at all.
+    FormatNewer,
+    /// The user file is larger than 256 KiB.
+    FileTooLarge,
+    /// More than 200 user formats.
+    TooManyFormats,
+    /// More than 20 user groups.
+    TooManyGroups,
+    /// A user group that names a built-in group's id gives another `name` or
+    /// `default_orientation`.
+    GroupMismatch,
 }
 
 /// A preset file that failed validation, with what and why.
@@ -219,22 +164,30 @@ struct RawGroup {
     id: Option<String>,
     name: Option<String>,
     default_orientation: Option<String>,
+    enabled: Option<bool>,
     #[serde(default)]
     preset: Vec<RawPreset>,
 }
 
+/// One `[[group.preset]]` block as parsed. The user file's presets have the
+/// same fields without `favourite` (its favourites are a top-level list).
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RawPreset {
-    id: Option<String>,
-    name: Option<String>,
-    note: Option<String>,
-    short_side: Option<toml::Value>,
-    long_side: Option<toml::Value>,
-    unit: Option<String>,
+pub(crate) struct RawPreset {
+    pub(crate) id: Option<String>,
+    pub(crate) name: Option<String>,
+    pub(crate) note: Option<String>,
+    pub(crate) short_side: Option<toml::Value>,
+    pub(crate) long_side: Option<toml::Value>,
+    pub(crate) unit: Option<String>,
+    pub(crate) favourite: Option<bool>,
 }
 
-fn id_is_valid(id: &str) -> bool {
+/// The schema of the built-in file.
+const BUILT_IN_FORMAT: i64 = 2;
+
+/// Whether `id` is made of lower-case letters, digits and `-` only.
+pub(crate) fn id_is_valid(id: &str) -> bool {
     !id.is_empty()
         && id
             .chars()
@@ -272,10 +225,10 @@ impl PresetList {
                 PresetReason::Syntax(error.message().to_string()),
             )
         })?;
-        if raw.format != Some(1) {
+        if raw.format != Some(BUILT_IN_FORMAT) {
             return Err(PresetError::new(
                 PresetSubject::File,
-                PresetReason::FormatNotOne,
+                PresetReason::FormatNotSupported,
             ));
         }
         let mut list = Self::default();
@@ -293,21 +246,45 @@ impl PresetList {
         Ok(list)
     }
 
-    /// Every preset of every group, in file order.
+    /// Every preset of every group, in file order, whether the group is on or
+    /// not.
     pub fn presets(&self) -> impl Iterator<Item = (&PresetGroup, &DocumentPreset)> {
         self.groups
             .iter()
             .flat_map(|group| group.presets.iter().map(move |preset| (group, preset)))
     }
 
-    /// The preset `size` has, in either orientation: its shorter and longer
-    /// side equal the preset's within [`PRESET_MATCH_TOLERANCE`]. At most one
-    /// matches, because the file never holds two alike.
+    /// The first preset, in list order, of a group that is on that `size` has
+    /// in either orientation: its shorter and longer side equal the preset's
+    /// within [`PRESET_MATCH_TOLERANCE`]. At most one matches, because no two
+    /// presets share a size.
     #[must_use]
     pub fn matching(&self, size: DocumentSize) -> Option<(&PresetGroup, &DocumentPreset)> {
         let (short, long) = sides_of(size);
         self.presets()
-            .find(|(_, preset)| same_sides(preset, short, long))
+            .find(|(group, preset)| group.enabled && same_sides(preset, short, long))
+    }
+
+    /// The preset with the id `id`, with its group.
+    #[must_use]
+    pub fn find(&self, id: &str) -> Option<(&PresetGroup, &DocumentPreset)> {
+        self.presets().find(|(_, preset)| preset.id == id)
+    }
+
+    /// The preset of any group, on or off, that has the sides `short` and
+    /// `long` within [`PRESET_MATCH_TOLERANCE`], other than the one with id
+    /// `ignoring`.
+    #[must_use]
+    pub fn with_sides(
+        &self,
+        short: Length,
+        long: Length,
+        ignoring: Option<&str>,
+    ) -> Option<&DocumentPreset> {
+        let (short, long) = (short.as_mm(), long.as_mm());
+        self.presets()
+            .map(|(_, preset)| preset)
+            .find(|preset| Some(preset.id.as_str()) != ignoring && same_sides(preset, short, long))
     }
 
     fn check_presets_are_distinct(&self) -> Result<(), PresetError> {
@@ -338,7 +315,7 @@ fn sides_of(size: DocumentSize) -> (f64, f64) {
     (width.min(height), width.max(height))
 }
 
-fn same_sides(preset: &DocumentPreset, short: f64, long: f64) -> bool {
+pub(crate) fn same_sides(preset: &DocumentPreset, short: f64, long: f64) -> bool {
     let tolerance = PRESET_MATCH_TOLERANCE.as_mm();
     (preset.short_side.as_mm() - short).abs() <= tolerance
         && (preset.long_side.as_mm() - long).abs() <= tolerance
@@ -372,22 +349,32 @@ fn validate_group(position: usize, raw: RawGroup) -> Result<PresetGroup, PresetE
         .preset
         .into_iter()
         .enumerate()
-        .map(|(n, preset)| validate_preset(n, preset))
+        .map(|(n, preset)| validate_preset(n, preset, false))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(PresetGroup {
         id,
         name,
         default_orientation,
         presets,
+        enabled: raw.enabled.unwrap_or(true),
+        user: false,
     })
 }
 
-fn checked_name(name: &str) -> Option<String> {
+/// `name` trimmed, or `None` when it is empty or longer than 24 characters.
+#[must_use]
+pub fn checked_name(name: &str) -> Option<String> {
     let trimmed = name.trim();
     (!trimmed.is_empty() && trimmed.chars().count() <= MAX_NAME_CHARS).then(|| trimmed.to_string())
 }
 
-fn validate_preset(position: usize, raw: RawPreset) -> Result<DocumentPreset, PresetError> {
+/// Validates one `[[group.preset]]` block against the rules of `0030`
+/// criterion 6; `user` marks an entry of the user file.
+pub(crate) fn validate_preset(
+    position: usize,
+    raw: RawPreset,
+    user: bool,
+) -> Result<DocumentPreset, PresetError> {
     let subject = PresetSubject::Preset(raw.id.clone().unwrap_or_else(|| format!("#{position}")));
     let fail = |reason| PresetError::new(subject.clone(), reason);
     let id = raw
@@ -439,5 +426,7 @@ fn validate_preset(position: usize, raw: RawPreset) -> Result<DocumentPreset, Pr
         short_side,
         long_side,
         authored: AuthoredSize { short, long, unit },
+        favourite: raw.favourite.unwrap_or(true),
+        user,
     })
 }

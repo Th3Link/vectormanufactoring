@@ -1,0 +1,9 @@
+format = 1
+[[group]]
+id = "paper"
+[[group.preset]]
+id = "u-b5"
+name = "   "
+short_side = 176
+long_side = 250
+unit = "mm"

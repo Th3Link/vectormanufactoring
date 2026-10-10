@@ -348,7 +348,11 @@ between a major tick and the start of its label, because the tester's
 label start positions from `RulerView` instead of tick positions and delete
 the TypeScript copy together with that test's import.
 
-## `panel_content` needs the active tool when 0017 is built
+## `panel_content` needs the active tool when 0017 is built (Done)
+
+**Done (0043, 2026-10-10):** superseded by `panel_body(active, pen_unfinished, scope)` in
+`curvyo-ui-core/src/panel_content.rs` and the tab rule in `panel_tabs.rs`. The text below is the
+original entry.
 
 `curvyo-ui-core::panel_content` decides Document, Style or Empty from the
 object selection and the Pen's unfinished path only. `0017-style-panel-rework`
@@ -1261,3 +1265,33 @@ of the Select bar (click-through, 3 s or 8 s).
   past the frame budget further markers are skipped, never the stroke.
 - **A compound path applies its markers to each outline** (each outline is closed
   in practice, so only Middle shows); the spec does not say more.
+
+## The user formats file depends on the built-in list (0045)
+
+`document-formats.toml` is validated against the built-in formats (`0045` criteria 4c and 5:
+ids and sizes are unique across built-in and user entries). A later release that adds a
+built-in format with the id or the size of a maker's format, or removes a built-in group id that
+the file appends to, turns a valid user file into the broken-file state, and every edit is locked.
+Nothing triggers this today; `0045` Question 2 B (shipping a Laser or Embroidery group) and `0046`
+would. **Resolution (before the first built-in addition):** built-in group ids are never removed;
+decide with the product owner how the loader resolves a user and built-in collision (for example the
+user's duplicate is hidden with a notice and the built-in wins); add a test against a "future"
+built-in list.
+
+## 0043 and 0045 review leftovers (2026-10-10)
+
+- **Segmented groups do not select on the arrow keys** (the `ToggleGroup`s and the preset strips): the
+  arrows move focus and Space presses, while `0030` and `0015` say "arrows move and press". Same on
+  `main`; one decision for all groups (UX review N9).
+- **`describe_error` builds UI sentences in `curvyo-document-core`** (`format_library_file.rs`); `0045`
+  `adrs.md` decision 7 puts messages in `ui-core`. It moves next to `import_refusal` together with
+  "Could not save your formats: ..." (now composed in `useFormats.ts`). Not done in the slice because
+  the tester's tests import it from `document-core`; move it with those imports.
+- **Tab strip tooltips open to the left** over the other tab; `side="bottom"` would be kinder (UX N10).
+- **The list jumps by a strip height under the pointer** when a star or a Show switch changes the quick
+  selection with the panel at the top (UX N11); consider scroll anchoring.
+- **List semantics:** the formats list is a `group` with buttons; `role="list"` and `listitem` rows would
+  let a screen reader announce the count (UX N13).
+- **`session/mod.rs` is over 500 lines** (537 non-test lines before the slice); split the glue calls out
+  when the next slice touches it.
+

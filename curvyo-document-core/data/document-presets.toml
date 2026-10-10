@@ -1,13 +1,19 @@
-# Document size presets: the buttons of the Document section of the Properties
-# panel (`specs/0030-document-size-presets/`). Add a format by adding one
+# Built-in document formats: the buttons of the Document section of the
+# Properties panel (`specs/0030-document-size-presets/`,
+# `specs/0045-document-formats-library/`). Add a format by adding one
 # `[[group.preset]]` block to a group; nothing else needs changing. A test loads
-# this file, so a mistake fails the quality gate, not the maker's machine.
+# this file, so a mistake fails the quality gate, not the maker's machine. The
+# maker's own formats are a second file laid over this one (`document-formats.toml`).
 #
 # Sizes are given as `short_side` and `long_side`: a preset has no orientation of
 # its own (the group has a default, the document has a current one).
-# `unit` is `mm`, `in` or `px`; a pixel is 1/96 inch (25.4 / 96 mm).
+# `unit` is `mm`, `cm`, `in` or `px`; a pixel is 1/96 inch (25.4 / 96 mm).
+# A group has `enabled` (default true): a group that is off adds nothing to the
+# quick selection and its formats do not name the subject line. A preset has
+# `favourite` (default true): it is in the quick selection while its group is on.
+# Built-in ids never start with `u-`: that prefix is for the maker's formats.
 
-format = 1                      # schema version of this file; a reader refuses another
+format = 2                      # schema version of this file; a reader refuses another
 
 [[group]]
 id = "paper"
@@ -74,6 +80,7 @@ default_orientation = "portrait"
 id = "slides"
 name = "Slides"
 default_orientation = "landscape"
+enabled = false
 
   [[group.preset]]
   id = "slide-16-9"

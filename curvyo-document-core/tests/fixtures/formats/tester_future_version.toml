@@ -1,0 +1,15 @@
+# Made by a later version: new schema number and keys this version does not know.
+format = 2
+theme = "dark"
+
+[[group]]
+id = "u-round"
+name = "Round"
+default_orientation = "portrait"
+
+  [[group.preset]]
+  id = "u-coin"
+  name = "Coin"
+  shape = "circle"
+  diameter = 25
+  unit = "mm"

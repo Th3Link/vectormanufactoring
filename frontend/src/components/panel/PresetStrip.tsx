@@ -24,6 +24,8 @@ interface PresetStripProps {
   onPress: (id: string, keyboard: boolean) => void;
   /** After a mouse press the keyboard goes back to the canvas. */
   onReturnFocus: () => void;
+  /** The strip's width class: the panel column by default, `w-full` inside a form. */
+  width?: string;
 }
 
 const BORDER = "color-mix(in srgb, var(--toolbar-icon) 60%, transparent)";
@@ -37,7 +39,14 @@ const BORDER = "color-mix(in srgb, var(--toolbar-icon) 60%, transparent)";
  * press on the pressed cell is forwarded too, because Radix reports no change
  * for it.
  */
-export function PresetStrip({ labelledBy, cells, value, onPress, onReturnFocus }: PresetStripProps) {
+export function PresetStrip({
+  labelledBy,
+  cells,
+  value,
+  onPress,
+  onReturnFocus,
+  width = "w-[244px]",
+}: PresetStripProps) {
   return (
     <RadioGroup.Root
       aria-labelledby={labelledBy}
@@ -46,7 +55,7 @@ export function PresetStrip({ labelledBy, cells, value, onPress, onReturnFocus }
       // The press itself is the click handler below (it also covers the pressed
       // cell and the arrow keys, which Radix turns into a click).
       onValueChange={() => undefined}
-      className="flex w-[244px] flex-wrap gap-px overflow-hidden rounded-[5px] border"
+      className={`flex ${width} flex-wrap gap-px overflow-hidden rounded-[5px] border`}
       style={{ borderColor: BORDER, background: BORDER }}
     >
       {cells.map((cell) => (

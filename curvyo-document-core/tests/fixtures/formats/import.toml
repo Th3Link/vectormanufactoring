@@ -1,0 +1,85 @@
+# A colleague's file: a group that joins by id, a new group, a format that
+# appends to a built-in group under a built-in id, and duplicates.
+format = 1
+favourites = ["u-key-tag", "u-keyring", "u-coaster-90", "a4"]
+
+[[group]]
+id = "u-laser"
+name = "Laser"
+default_orientation = "landscape"
+
+  # Identical to the format the library has: skipped.
+  [[group.preset]]
+  id = "u-keyring"
+  name = "Key ring"
+  short_side = 30
+  long_side = 50
+  unit = "mm"
+
+  [[group.preset]]
+  id = "u-key-tag"
+  name = "Key tag"
+  short_side = 20
+  long_side = 60
+  unit = "mm"
+
+  # The id is taken by another content: added under a new id.
+  [[group.preset]]
+  id = "u-coaster-90"
+  name = "Round coaster"
+  short_side = 10
+  long_side = 10
+  unit = "cm"
+
+[[group]]
+id = "u-embroidery"
+name = "Embroidery"
+default_orientation = "portrait"
+
+  [[group.preset]]
+  id = "u-hoop-130"
+  name = "Hoop 130"
+  short_side = 130
+  long_side = 130
+  unit = "mm"
+
+  # A hand-written id that does not start with u-: added under a new u- id
+  # (criterion 32).
+  [[group.preset]]
+  id = "hoop-110"
+  name = "Hoop 110"
+  short_side = 110
+  long_side = 110
+  unit = "mm"
+
+[[group]]
+id = "paper"
+
+  # The id is a built-in one: added under a new id.
+  [[group.preset]]
+  id = "a4"
+  name = "Letter"
+  short_side = 8.5
+  long_side = 11
+  unit = "in"
+
+  # The size of A4: skipped.
+  [[group.preset]]
+  id = "u-a4-copy"
+  name = "A4 copy"
+  short_side = 210
+  long_side = 297
+  unit = "mm"
+
+# Joins "Laser" by its name.
+[[group]]
+id = "u-other"
+name = "laser"
+default_orientation = "portrait"
+
+  [[group.preset]]
+  id = "u-tag-again"
+  name = "Tag"
+  short_side = 20
+  long_side = 60
+  unit = "mm"

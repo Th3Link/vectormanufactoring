@@ -1,0 +1,75 @@
+# Import fixture, merged into the library LASER_PLUS of the test
+# (Laser: u-keyring 30 x 50 mm "Key ring", u-sign 60 x 80 mm "Sign").
+format = 1
+favourites = ["u-hoop100", "a4"]
+enabled = { slides = true, paper = false }
+
+[[group]]
+id = "u-laser"
+name = "Laser"
+default_orientation = "landscape"
+
+  # same id, same content: skipped
+  [[group.preset]]
+  id = "u-keyring"
+  name = "Key ring"
+  short_side = 30
+  long_side = 50
+  unit = "mm"
+
+  # same id, other content: added with a new generated id
+  [[group.preset]]
+  id = "u-sign"
+  name = "Placard"
+  short_side = 70
+  long_side = 90
+  unit = "mm"
+
+  # clash with the built-in id a4, another size: added with a new id
+  [[group.preset]]
+  id = "a4"
+  name = "Mine A4 id"
+  short_side = 100
+  long_side = 200
+  unit = "mm"
+
+  # the size of A4 exists: skipped
+  [[group.preset]]
+  id = "u-copy"
+  name = "Copy of A4"
+  short_side = 21
+  long_side = 29.7
+  unit = "cm"
+
+# another id, the name of an existing user group: joins that group
+[[group]]
+id = "u-laser-two"
+name = "Laser"
+default_orientation = "portrait"
+
+  [[group.preset]]
+  id = "u-tile"
+  name = "Tile"
+  short_side = 20
+  long_side = 20
+  unit = "mm"
+
+# a new group
+[[group]]
+id = "u-hoops"
+name = "Hoops"
+default_orientation = "portrait"
+
+  [[group.preset]]
+  id = "u-hoop100"
+  name = "Hoop 100"
+  short_side = 100
+  long_side = 100
+  unit = "mm"
+
+  [[group.preset]]
+  id = "u-hoop120"
+  name = "Hoop 120"
+  short_side = 120
+  long_side = 120
+  unit = "mm"

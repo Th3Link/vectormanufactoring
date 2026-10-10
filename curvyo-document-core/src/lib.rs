@@ -26,6 +26,10 @@ mod document;
 mod document_presets;
 mod document_size;
 mod error;
+mod format_edit;
+mod format_library;
+mod format_library_file;
+mod format_library_import;
 mod junction;
 mod legacy_fill;
 mod objects;
@@ -36,6 +40,7 @@ mod path_reverse;
 mod path_topology;
 mod path_transform;
 mod paths;
+mod preset_units;
 mod primitive_model;
 mod primitive_outline;
 mod replace;
@@ -57,13 +62,19 @@ pub use corner_radii::{Corner, CornerRadii, SHARP_CORNER_EPSILON_MM, effective_c
 pub use display_unit::DisplayUnit;
 pub use document::{CURRENT_FORMAT_VERSION, Document, DocumentVersion};
 pub use document_presets::{
-    AuthoredSize, DocumentPreset, Orientation, PRESET_MATCH_TOLERANCE, PresetError, PresetGroup,
-    PresetList, PresetReason, PresetSubject, PresetUnit,
+    DocumentPreset, PRESET_MATCH_TOLERANCE, PresetError, PresetGroup, PresetList, PresetReason,
+    PresetSubject, checked_name,
 };
 pub use document_size::{
     DocumentSizeError, MAX_DOCUMENT_MM, MIN_DOCUMENT_MM, validated_document_side,
 };
 pub use error::{OpenError, SaveError};
+pub use format_edit::{FormatError, FormatField, FormatReason, FormatSpec, GroupTarget};
+pub use format_library::FormatLibrary;
+pub use format_library_file::{
+    MAX_USER_FILE_BYTES, MAX_USER_FORMATS, MAX_USER_GROUPS, USER_FILE_FORMAT, describe_error,
+};
+pub use format_library_import::ImportReport;
 pub use junction::{COINCIDENT_MM, interior_handle, merged_junction};
 pub use objects::{CopySource, ObjectEditError};
 pub use path_extend::{PathEnd, PathGrowth};
@@ -73,6 +84,7 @@ pub use path_model::{
 };
 pub use path_reverse::reversed_anchors;
 pub use paths::resolve_handle_pair;
+pub use preset_units::{AuthoredSize, Orientation, PresetUnit};
 pub use primitive_model::{
     EllipseFrame, InnerRatio, ObjectSnapshot, PointCount, PrimitiveSnapshot, RectBounds, Shape,
     ShapeParamError, StarFrame, shape_center, shape_frame_bounds, translate_shape,

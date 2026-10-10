@@ -28,6 +28,8 @@ mod display_unit_text;
 mod document_fit;
 mod document_presets_view;
 mod ellipse_tool;
+mod format_form;
+mod format_list_view;
 mod group_box;
 mod group_entry;
 mod group_transform;
@@ -41,6 +43,7 @@ mod object_bounds;
 mod object_selection;
 mod oriented_box;
 mod panel_content;
+mod panel_tabs;
 mod param_edit;
 mod param_entry;
 mod param_handles;
@@ -99,6 +102,11 @@ pub use document_presets_view::{
     PresetEntry, PresetGroupView, PresetsView, orientation_swap, preset_pick_size, presets_view,
 };
 pub use ellipse_tool::EllipseTool;
+pub use format_form::{
+    FieldError, FormDraft, FormField, FormPrefill, add_prefill, added_notice, check_format_form,
+    edit_prefill, field_error, import_notice, import_refusal, saved_notice,
+};
+pub use format_list_view::{FormatGroupView, FormatListView, FormatRowView, format_list_view};
 pub use group_box::{
     GroupBoxShape, GroupSelection, group_handles, hit_group_handle, is_drawn_group_handle,
 };
@@ -115,7 +123,10 @@ pub use node_tool::{
 pub use object_bounds::{content_bounds, object_bounds, object_outline_bounds};
 pub use object_selection::{ObjectSelection, SelectionCombine};
 pub use oriented_box::{OrientedBox, oriented_bounds};
-pub use panel_content::{PanelContent, panel_content};
+pub use panel_content::{PanelContent, panel_body};
+pub use panel_tabs::{
+    PanelTab, PanelTabEntry, PanelTabs, StyleBlocker, tab_entries, tab_entries_for,
+};
 pub use param_edit::{
     MAX_INNER_RATIO, MIN_INNER_RATIO, ParamValue, apply_param, clamped_ratio, commit_param_batch,
     value_from_pointer,

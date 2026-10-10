@@ -11,6 +11,13 @@ use curvyo_document_core::{
 };
 use curvyo_editor_wasm::{Session, SizeOutcome, Tool};
 
+/// A new session with Slides switched on: they ship off since `0045`.
+fn slides_on_session(peer: u64) -> Session {
+    let mut s = Session::new(peer);
+    assert!(s.set_format_group_enabled("slides", true).ok);
+    s
+}
+
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)
 }
@@ -31,7 +38,9 @@ fn session_with_size(width: f64, height: f64) -> Session {
         width: Length::from_mm(50.0),
         height: Length::from_mm(50.0),
     });
-    Session::open(2, &pack(&document, "0.1.0").unwrap()).unwrap()
+    let mut s = Session::open(2, &pack(&document, "0.1.0").unwrap()).unwrap();
+    assert!(s.set_format_group_enabled("slides", true).ok);
+    s
 }
 
 fn reopened(session: &Session) -> Document {
@@ -166,7 +175,7 @@ fn the_orientation_items_swap_the_sides_around_the_centre() {
 /// as the fields.
 #[test]
 fn the_pressed_preset_and_the_subject_follow_a_pick_a_typed_size_and_a_fit() {
-    let mut s = Session::new(1);
+    let mut s = slides_on_session(1);
     assert_eq!(s.document_presets_view().subject, "A4, portrait");
     assert_eq!(pressed(&s), ["A4"]);
     s.set_document_side(curvyo_editor_wasm::DocumentSide::Width, "297");
@@ -183,7 +192,7 @@ fn the_pressed_preset_and_the_subject_follow_a_pick_a_typed_size_and_a_fit() {
 /// Criterion 17 in the display unit of the document.
 #[test]
 fn the_tooltips_follow_the_display_unit() {
-    let mut s = Session::new(1);
+    let mut s = slides_on_session(1);
     let tip = |s: &Session, n: usize| {
         s.document_presets_view().groups[0].entries[n]
             .tooltip
@@ -197,7 +206,7 @@ fn the_tooltips_follow_the_display_unit() {
 /// Criterion 18: a pick is ignored while the Pen has an unfinished path.
 #[test]
 fn a_pick_is_ignored_while_the_pen_has_an_unfinished_path() {
-    let mut s = Session::new(1);
+    let mut s = slides_on_session(1);
     s.set_tool(Tool::Pen);
     for point in [pt(10.0, 10.0), pt(50.0, 40.0)] {
         s.pointer_down(point, false);
@@ -223,7 +232,7 @@ fn an_unknown_id_is_invalid_and_writes_nothing() {
 /// project of another size opens with nothing selected and nothing written.
 #[test]
 fn a_pick_survives_save_and_open_and_the_file_holds_no_preset_id() {
-    let mut s = Session::new(1);
+    let mut s = slides_on_session(1);
     s.apply_document_preset("slide-16-9");
     let bytes = s.pack("0.1.0").unwrap();
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).unwrap();
@@ -235,7 +244,8 @@ fn a_pick_survives_save_and_open_and_the_file_holds_no_preset_id() {
             "{name}"
         );
     }
-    let reopened = Session::open(3, &bytes).unwrap();
+    let mut reopened = Session::open(3, &bytes).unwrap();
+    assert!(reopened.set_format_group_enabled("slides", true).ok);
     assert_eq!(pressed(&reopened), ["16:9"]);
     assert_eq!(
         reopened.side_text(curvyo_editor_wasm::DocumentSide::Width),

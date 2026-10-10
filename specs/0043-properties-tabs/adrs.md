@@ -115,3 +115,13 @@ generic.** Reference state: `main` at `52d4101`.
    `disabled` + `aria-disabled`).
 2. Criterion 6 says "selection"; the rule uses the tool's style scope
    (decision 2). Same result in the Select tool.
+
+## Notes added during the build (2026-10-10)
+
+- Decision 4 is built as `Session::panel_view(&self)` with the tab state in a `Cell` (not `&mut self`):
+  `observe` is idempotent and the state is `Copy`.
+- 0043 and 0045 shipped as one PR; the build order is 0043 + 0045, then 0040.
+- The single Tab stop follows the active tab: the strip is rebuilt when the active tab changes while focus is
+  outside it (Radix keeps the last focused tab as the stop otherwise).
+- The Style tab's tooltip names why it is dimmed (nothing selected, the Pen, or the Node tool without a path).
+
