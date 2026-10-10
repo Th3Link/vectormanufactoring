@@ -301,7 +301,7 @@ impl GroupEntry {
                     return Err(InvalidReason::NotPositive);
                 }
                 if value > MAX_COORDINATE_MM {
-                    return Err(InvalidReason::NotANumber);
+                    return Err(InvalidReason::TooLarge);
                 }
                 let start = if axis == Axis::Width {
                     self.start_box.width()

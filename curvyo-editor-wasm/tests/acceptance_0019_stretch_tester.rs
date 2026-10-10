@@ -1075,7 +1075,7 @@ fn ac18_corner_drag_without_converting_objects_stretches_and_converts_nothing() 
         s.corner_hint_lines(),
         vec![
             "Resize selection",
-            "Shift: from the centre",
+            "Shift: from the center",
             "Ctrl: keep proportions",
             "Double-click or S: type a size"
         ],
@@ -1707,7 +1707,7 @@ fn ac38_ac55_hover_counts_and_hints() {
             s.corner_hint_lines(),
             vec![
                 "Resize selection",
-                "Shift: from the centre",
+                "Shift: from the center",
                 "Double-click or S: type a size"
             ],
             "criterion 38, edge row (the conversion line is the host's, from the counts)"
@@ -1760,7 +1760,7 @@ fn ac38_the_corner_chip_of_a_proportional_corner_selection_has_the_four_spec_lin
         vec![
             "Resize selection, proportional",
             "Stretch with an edge handle",
-            "Shift: from the centre",
+            "Shift: from the center",
             "Double-click or S: type a size"
         ]
     );

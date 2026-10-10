@@ -131,7 +131,7 @@ against.
   - **Rotate** is `rotate_by` (`ObjectSnapshot::rotated`) for every kind, as
     today (criterion 26).
   - **Primitive scale** is a new function in `group_transform.rs`: frame
-    centre mapped about the pivot; a uniform factor multiplies every size; an
+    center mapped about the pivot; a uniform factor multiplies every size; an
     aligned rectangle or ellipse with sx ≠ sy takes sx on the dimension along
     document x and sy on the one along y (swapped at ±90°); polygon and star
     take the one factor on the outer radius. A circle (rx = ry within the
@@ -194,7 +194,7 @@ against.
   - **Press order (criteria 14, 16, 43, 45, 46; question 3 decided (b),
     2026-10-08).** The group box has no hit area of its own. `classify_press`
     for a multi-selection adds exactly one step to today's order: after Alt
-    (`PressTarget::Lasso`, unchanged), the drawn group handles and the centre
+    (`PressTarget::Lasso`, unchanged), the drawn group handles and the center
     handle (its hover region) map to `PressTarget::Handle` and
     `PressTarget::CentreHandle` from the group box. Everything after that is
     today's multi-selection path, unchanged: `hit_test_object` (8 px outline
@@ -266,11 +266,11 @@ against.
     changes with the group box.
   - **PR split, in order, each a `story/` PR after #61:**
     1. **Group box and move.** `ui-core` (`group_box.rs`, the group-handle
-       step of `classify_press`, centre handle), `render-core` (group box,
+       step of `classify_press`, center handle), `render-core` (group box,
        member boxes, the 500 cutoff), `editor-wasm`, frontend. Criteria 1 to
-       8, 14 (centre handle), 16, 17, 35, 37 (M), 43, 45 to 47, 50 to 52. No
-       handle other than the centre handle is drawn; the selection moves by
-       the centre handle and by its selected objects (criterion 16).
+       8, 14 (center handle), 16, 17, 35, 37 (M), 43, 45 to 47, 50 to 52. No
+       handle other than the center handle is drawn; the selection moves by
+       the center handle and by its selected objects (criterion 16).
     2. **Scale.** `document-core` (`transform_objects`, `scaled_along`),
        `group_transform.rs`, `group_drag.rs`, corner and edge handles.
        Criteria 9 to 15, 18 to 24, 29 to 32, 34, 37 (S), 38, 39, 48, 49 with
@@ -323,7 +323,7 @@ against.
   - **Flat boxes.** `transform_handle_layout::hit_transform_handle` gained a sibling
     `hit_transform_handle_for_side` that takes the "shorter side" `s` as a
     parameter (the old function calls it with the box's shorter side), because a
-    flat group box uses its other extent (criterion 12). The centre handle of a
+    flat group box uses its other extent (criterion 12). The center handle of a
     group is decided in `group_box.rs` with the group's own `s`.
   - **Press order.** `classify_press` adds the group handles as one early return
     for a selection of two or more; the objects, the marquee and the Alt cycle
@@ -456,7 +456,7 @@ against.
     with an edge handle" (the latter only while an edge handle is drawn).
   - **One object.** A polygon or star shows all eight handles; its corner drag is the
     diagonal rule of `0005`, its edge drag and its typed W x H (box axes, about the
-    opposite side or the centre) stretch and convert through the same
+    opposite side or the center) stretch and convert through the same
     `transform_objects` (`commit_resize` routes a path result for a primitive there).
     `EntryKind::OuterRadius` and `local_delta_for_radius` are gone.
   - **Texts.** Rust sends one count of shapes (`hover_conversion_count`,

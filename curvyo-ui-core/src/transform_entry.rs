@@ -87,8 +87,7 @@ pub struct EntryField {
 /// Why a field was refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InvalidReason {
-    /// Empty, letters, more than one separator, not finite, or out of
-    /// range ("Enter a number").
+    /// Empty, letters, more than one separator, or not finite ("Enter a number").
     NotANumber,
     /// A size of zero or less ("Must be above 0").
     NotPositive,
@@ -98,7 +97,7 @@ pub enum InvalidReason {
     RatioRange,
     /// A skew angle of 90° or more in size ("Must be between -90 and 90").
     SkewRange,
-    /// A skew that would pass the coordinate limit ("Too large").
+    /// A size above the coordinate limit, or a skew that would pass it ("Too large").
     TooLarge,
 }
 
@@ -421,7 +420,7 @@ impl TransformEntry {
             return Err(InvalidReason::NotPositive);
         }
         if value > MAX_COORDINATE_MM {
-            return Err(InvalidReason::NotANumber);
+            return Err(InvalidReason::TooLarge);
         }
         let equal = (value - self.start_value(field.axis)).abs() <= SIZE_EQUAL_EPSILON_MM;
         Ok((!equal).then_some(value))

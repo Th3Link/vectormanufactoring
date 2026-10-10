@@ -484,6 +484,9 @@ export interface KeyHint {
   text: string;
   /** Changes on every message, so the clock restarts. */
   id: number;
+  /** Where it appears (canvas pixels) instead of at the pointer: the place of the
+   * closed entry chip for the notice of a typed size. */
+  anchor?: { x: number; y: number };
   /** How long it stays, ms; the 2 s of a key hint when absent. The notice of a
    * stretch that converted shapes stays 6 s and goes at the next press or key
    * (`specs/0019-multi-object-transform/` criterion 54). */
@@ -556,7 +559,12 @@ export interface EditorSession {
    * or `"invalid:<field>:number|positive|negative|ratio-range|skew-range|too-large"`
    * (it stays
    * open). */
-  commitTransformEntry: (first: string, second: string, lastEdited: number) => string;
+  commitTransformEntry: (
+    first: string,
+    second: string,
+    lastEdited: number,
+    chipAnchor?: { x: number; y: number },
+  ) => string;
   /** Closes the entry without writing (Escape, blur). Idempotent. */
   cancelTransformEntry: () => void;
   /** For linked fields: the text the other field takes. */
@@ -785,6 +793,8 @@ export function useEditorSession(
   const [selectionAnnouncement, setSelectionAnnouncement] = useState("");
   const [keyHint, setKeyHint] = useState<KeyHint | null>(null);
   const keyHintCounter = useRef(0);
+  /** Where the closed entry chip was, for the notice of the commit it makes. */
+  const noticeAnchorRef = useRef<{ x: number; y: number } | null>(null);
 
   /** Re-reads the typed entry (position follows zoom, pan and resize; it
    * closes on a tool switch or a selection change). */
@@ -849,7 +859,12 @@ export function useEditorSession(
     const notice = stretchNotice(session.take_conversion_notice());
     if (notice !== null) {
       keyHintCounter.current += 1;
-      setKeyHint({ text: notice, id: keyHintCounter.current, ms: CONVERSION_NOTICE_MS });
+      setKeyHint({
+        text: notice,
+        id: keyHintCounter.current,
+        ms: CONVERSION_NOTICE_MS,
+        anchor: noticeAnchorRef.current ?? undefined,
+      });
     }
     setSyncRevision((revision) => revision + 1);
     syncEntry(session);
@@ -1678,13 +1693,20 @@ export function useEditorSession(
   );
 
   const commitTransformEntry = useCallback(
-    (first: string, second: string, lastEdited: number): string => {
+    (
+      first: string,
+      second: string,
+      lastEdited: number,
+      chipAnchor?: { x: number; y: number },
+    ): string => {
       const session = sessionRef.current;
       if (!session) {
         return "unchanged";
       }
       const outcome = session.commit_transform_entry(first, second, lastEdited);
+      noticeAnchorRef.current = chipAnchor ?? null;
       syncFromSession();
+      noticeAnchorRef.current = null;
       // A typed corner radius past its limit is committed limited and says
       // "r 12.0 mm max" at the knob for 1.5 s: a limit is never silent.
       const notice = readReadout(session);

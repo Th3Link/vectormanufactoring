@@ -26,7 +26,7 @@ per-object boxes that are drawn today. The "skew" is in brackets in the
 customer's sentence; the customer decided on 2026-10-08 to keep it for selections of paths only (question 4).
 
 **Field reference.** LightBurn treats a multi-object selection as one unit with
-the selection handles (scale, corner rotate handles about the selection centre,
+the selection handles (scale, corner rotate handles about the selection center,
 a numeric rotate field). Inkscape draws one axis-parallel box around a
 multi-selection with scale, rotate and skew handles. Illustrator keeps the
 rotated box after a rotate and has a "Reset Bounding Box" command; its box
@@ -47,7 +47,7 @@ Facts from the specs listed under Links; the state is `main` plus
 `advanced-selection`.
 
 - A multi-selection shows each object's own box and nothing else. No transform
-  handle, no centre handle, no parameter handle (`0005` criterion 2,
+  handle, no center handle, no parameter handle (`0005` criterion 2,
   `unified-object-editing` criterion 37).
 - A drag that starts on a selected object's outline (or, per `0007` criterion
   29, its filled interior) moves the whole selection. A press on empty canvas
@@ -68,7 +68,7 @@ Facts from the specs listed under Links; the state is `main` plus
 
 - **Multi-selection**: two or more objects selected in the Select tool. Exactly
   one object keeps every single-object rule, unchanged.
-- **Group box**: the box of criterion 1. Its **centre**, **corners** and **side
+- **Group box**: the box of criterion 1. Its **center**, **corners** and **side
   midpoints** are the points the handles and pivots below refer to. `s` is its
   shorter side in screen pixels.
 - **Aligned primitive**: a rectangle or ellipse whose `rotation` is a multiple
@@ -110,7 +110,7 @@ user-visible changes of accepted behaviour.
 1. `0005` criterion 2 and its out-of-scope entry "Multi-object transform", and
    `unified-object-editing` criterion 37 (first clause), no longer apply: a
    multi-selection has transform handles. Parameter handles stay absent.
-2. `object-transform-refinements` criterion 1 (last sentence, centre handle),
+2. `object-transform-refinements` criterion 1 (last sentence, center handle),
    criterion 53 and the out-of-scope lines "Typed entry or handles for multi-object
    selections" and "Skew of multi-object selections" are realised or superseded.
 3. `edit-interaction-polish` criterion 25 (typed move for one object only),
@@ -160,8 +160,8 @@ user-visible changes of accepted behaviour.
    For a path the bounds are curve-accurate; for a primitive they are the
    outline as drawn, after its rotation and corner radius (the bounds
    `edit-interaction-polish` criterion 21 uses for the typed absolute move).
-   Example: a rectangle 20 × 10 mm with centre (10, 5) and rotation 30°, and a
-   circle (rx = ry = 5) with centre (40, 5): the group box runs from x = -1.16 to
+   Example: a rectangle 20 × 10 mm with center (10, 5) and rotation 30°, and a
+   circle (rx = ry = 5) with center (40, 5): the group box runs from x = -1.16 to
    45.00 and y = -4.33 to 14.33 (W 46.16, H 18.66, to 0.01 mm).
 2. Given any selected object with a stroke, then the stroke width is not part of
    the group box, as it is not part of a single object's box. Changing a stroke
@@ -192,8 +192,8 @@ user-visible changes of accepted behaviour.
    committed geometry and is again axis-aligned. A rotate leaves no orientation
    behind: there is no stored or session group angle (question 1, decided (a)).
    Example: two 10 × 10 squares at (0, 0) and (20, 0), group box 30 × 10;
-   rotated by 90° about the centre, the box is 10 × 30 (from (10, -10) to
-   (20, 20)); rotated again by 45° about the new centre (15, 5), the box is the
+   rotated by 90° about the center, the box is 10 × 30 (from (10, -10) to
+   (20, 20)); rotated again by 45° about the new center (15, 5), the box is the
    axis-aligned bounds of the result, 28.28 × 28.28 (from (0.86, -9.14) to
    (29.14, 19.14)), not a turned 10 × 30 box.
 8. Given an axis (width or height) of the group box that is smaller than the
@@ -210,17 +210,17 @@ user-visible changes of accepted behaviour.
    (sizes live in `docs/design-system.md`; this spec does not restate numbers):
    four corner resize handles, four edge resize handles, four corner rotate
    handles, four side rotate handles while Shift is held and no drag runs, the
-   centre move handle, and (Part E) four skew handles. No parameter handle is
+   center move handle, and (Part E) four skew handles. No parameter handle is
    drawn for a multi-selection (`unified-object-editing` criterion 37, kept).
 10. Given `s` of the group box, then the tiers of `unified-object-editing`
     criterion 7 apply to it: under 24 px only corner resize and corner rotate;
-    24 to 47 plus the edge resize handles; 48 and up plus the centre handle. The
+    24 to 47 plus the edge resize handles; 48 and up plus the center handle. The
     edge resize handles of a box under 24 px are not drawn but stay hit-testable,
     as for a single object. Corner resize and corner rotate handles are never
     hidden by size.
-11. Given a press, a hover or a cursor query, then one nearest-centre test over all
+11. Given a press, a hover or a cursor query, then one nearest-center test over all
     drawn group handles decides, with the radii and the tie order (resize, skew,
-    rotate) of `specs/0008-object-transform-refinements/` criterion 9. The centre
+    rotate) of `specs/0008-object-transform-refinements/` criterion 9. The center
     handle is tested last and only inside its hover region
     (`edit-interaction-polish` criterion 16). Group handles never compete with
     any object.
@@ -235,9 +235,9 @@ user-visible changes of accepted behaviour.
     10 such a box uses its other, non-zero extent as `s`. Example: a selection of
     two horizontal lines at the same height, 80 px wide on screen, has a box of
     height 0; among the resize handles only the left and right edge handles are
-    drawn, and the centre handle is drawn.
+    drawn, and the center handle is drawn.
 13. Given a group box degenerate in both axes (all selected objects are the same
-    point), then it has `s` = 0 and shows no resize, rotate, skew or centre handle
+    point), then it has `s` = 0 and shows no resize, rotate, skew or center handle
     (a rotation about the only point is the identity, so there is no rotate
     gesture). Instead of the dashed box, a 6 px square outline (solid, 1 px,
     `--accent`, with casing) marks the point, so the selection is never invisible.
@@ -249,26 +249,26 @@ user-visible changes of accepted behaviour.
     although not drawn.
 15. Given handles that fall outside the viewport, then they are not pulled into
     it (the known gap of `specs/0008-object-transform-refinements/`, unchanged); the
-    centre handle is the one that stays reachable.
+    center handle is the one that stays reachable.
 
 ### Part C: move, scale and rotate
 
 #### Move
 
-16. Given a multi-selection, when the maker presses the centre move handle, or a
+16. Given a multi-selection, when the maker presses the center move handle, or a
     selected object's outline (within the 8 px tolerance) or filled interior
     (`0007` criterion 29), and drags, then the whole selection moves 1:1 with the
     pointer, after the 3 px dead zone, by the same operation as a drag on a
     selected object's outline today (a pure translation: sizes, rotations and
     parameters are unchanged), in one commit on release. Under 48 px, or whenever
-    the centre handle is not drawn, the objects themselves are the grip. The empty
+    the center handle is not drawn, the objects themselves are the grip. The empty
     interior of the group box does not move the selection (criterion 45). A press
     and release under the dead zone writes nothing. Press order is criterion 43.
 17. Given a move drag of a multi-selection, then Ctrl (copy of every selected
     object, plus badge, selection becomes the copies) and Shift (axis lock, lock
     badge) behave exactly as `edit-interaction-polish` criteria 26 to 38 define,
-    with the **origin axes** drawn through the group box centre at the press (the
-    position of the centre handle). Escape cancels, nothing is written.
+    with the **origin axes** drawn through the group box center at the press (the
+    position of the center handle). Escape cancels, nothing is written.
 
 #### Scale
 
@@ -285,20 +285,20 @@ user-visible changes of accepted behaviour.
     (60, 30).
 19. Given the same selection, then Ctrl on a corner handle scales both axes by one
     factor (the drag's dominant axis, `0005` criterion 5); Shift scales about the
-    group box centre instead of the opposite corner or side, and combines with
+    group box center instead of the opposite corner or side, and combines with
     Ctrl; an edge resize handle changes only the axis perpendicular to its side
-    (anchored at the opposite side, or the centre with Shift) and Ctrl has no
+    (anchored at the opposite side, or the center with Shift) and Ctrl has no
     effect on it. Shift and Ctrl may be pressed or released mid-drag and the
     result is always computed from the state at the press
     (`specs/0008-object-transform-refinements/` criterion 14). Given a
     **proportional-corner selection** (it holds a converting object), then a
     corner drag always scales both axes by one factor (the dominant axis of the
     drag) whatever Ctrl does, as a single polygon or star does today (`0005`
-    criterion 11); Shift (about the centre) still applies, and the dragged corner
+    criterion 11); Shift (about the center) still applies, and the dragged corner
     follows the pointer along the diagonal only (the pointer's off-diagonal part is
     ignored). Such a corner drag is always a uniform scale and never converts. The
     stretch of such a selection is an **edge handle** drag (one direction,
-    anchored at the opposite side or, with Shift, the centre) or a typed size
+    anchored at the opposite side or, with Shift, the center) or a typed size
     (criterion 34); both convert the converting objects (criterion 53). Example: a
     star and a rectangle: the bottom-right corner dragged from (45, 10) to
     (90, 12) scales both by 2 (dominant axis x), the star stays a star; the right
@@ -308,8 +308,8 @@ user-visible changes of accepted behaviour.
     | Kind | Result |
     |---|---|
     | path | every anchor point is mapped, every handle vector is scaled by (sx, sy) in the document axes; the curve is the exact image; `rotation` is unchanged |
-    | rectangle, ellipse, polygon, star, uniform factor s | frame centre mapped, both dimensions times s (a polygon's or star's outer radius times s, a star's inner radius with it), point count, ratio and `rotation` unchanged. Same kind |
-    | aligned rectangle, stretch | frame centre mapped; the dimension along the document x axis is multiplied by sx and the one along y by sy (rotation 0° or 180°: width by sx, height by sy; ±90°: width by sy, height by sx); `rotation` unchanged. Same kind: it stays a rectangle. Corner radii follow the single-object rules (`0005` criterion 9 and `rectangle-corner-radii`): with "Scale corner radius" on, each radius times √(sx·sy) and clamped; off, unchanged |
+    | rectangle, ellipse, polygon, star, uniform factor s | frame center mapped, both dimensions times s (a polygon's or star's outer radius times s, a star's inner radius with it), point count, ratio and `rotation` unchanged. Same kind |
+    | aligned rectangle, stretch | frame center mapped; the dimension along the document x axis is multiplied by sx and the one along y by sy (rotation 0° or 180°: width by sx, height by sy; ±90°: width by sy, height by sx); `rotation` unchanged. Same kind: it stays a rectangle. Corner radii follow the single-object rules (`0005` criterion 9 and `rectangle-corner-radii`): with "Scale corner radius" on, each radius times √(sx·sy) and clamped; off, unchanged |
     | aligned ellipse, stretch | the same dimension rule as the aligned rectangle (rx and ry), `rotation` unchanged. Same kind: it stays an ellipse. A circle (rx = ry within tolerance) with any rotation becomes an ellipse with rx times sx, ry times sy and `rotation` 0 (D3) |
     | polygon, star, rectangle or ellipse that is not aligned, stretch | becomes a path in the same commit (criterion 53) |
 
@@ -350,7 +350,7 @@ user-visible changes of accepted behaviour.
     during the drag cancels it (D5).
 23. Given a scale gesture, then a live readout shows the group box size at the
     pointer, "123.4 mm × 67.8 mm", and the pivot marker shows the fixed point
-    (opposite corner or side midpoint, the centre with Shift), as
+    (opposite corner or side midpoint, the center with Shift), as
     `0005` criteria 14 and the pivot marker rules define.
 24. Given "Scale stroke width" and "Scale corner radius" (the two switches of the
     Select bar, off at program start, read at the press that starts the drag),
@@ -369,7 +369,7 @@ user-visible changes of accepted behaviour.
 #### Rotate
 
 25. Given a multi-selection, when the maker drags a corner rotate handle with no
-    modifier, then every selected object turns by Δ about the group box centre.
+    modifier, then every selected object turns by Δ about the group box center.
     With Shift held, the pivot is the corner of the group box diagonally opposite
     the grabbed one; with Shift held while a side rotate handle is grabbed, the
     midpoint of the opposite side (`specs/0008-object-transform-refinements/` criteria
@@ -380,13 +380,13 @@ user-visible changes of accepted behaviour.
     | Kind | Result |
     |---|---|
     | path | every anchor point turned about the pivot, every handle vector turned by Δ, `rotation` increased by Δ (normalized to (-π, π]) |
-    | rectangle, ellipse, polygon, star | frame centre turned about the pivot, frame size and parameters unchanged, `rotation` increased by Δ (normalized); a polygon's or star's shown angle changes by Δ and its box turns with it (`polygon-star-box-refit`) |
+    | rectangle, ellipse, polygon, star | frame center turned about the pivot, frame size and parameters unchanged, `rotation` increased by Δ (normalized); a polygon's or star's shown angle changes by Δ and its box turns with it (`polygon-star-box-refit`) |
 
     The selection turns rigidly: the distance between any two points of any two
     selected objects is unchanged within the geometric tolerance, and rotating by
     Δ and then by -Δ restores every anchor and frame within the geometric
     tolerance and every `rotation` within 1e-9 rad. Example: the two squares of
-    criterion 7 rotated by 90° about the group box centre (15, 5): the left square
+    criterion 7 rotated by 90° about the group box center (15, 5): the left square
     ends at (10, -10) to (20, 0), the right one at (10, 10) to (20, 20), each with
     `rotation` 90°.
 27. Given a rotate drag with Ctrl held, then Δ snaps to the nearest stop of the
@@ -432,7 +432,7 @@ user-visible changes of accepted behaviour.
     no peer sees some objects transformed and others not. Each object receives the
     writes that the single-object gesture of the same kind writes for it
     (`specs/0005-object-transform/adrs.md`, merge granularity: a move or scale
-    writes frame or anchors, a rotate adds `rotation` and, off-centre, the frame).
+    writes frame or anchors, a rotate adds `rotation` and, off-center, the frame).
     Two writes go beyond the single-object gesture: a circle (rx = ry within
     tolerance) at a rotation that is not a multiple of 90° that is stretched
     (sx ≠ sy) becomes an ellipse with `rotation` 0 (criterion 20, D3), and every
@@ -467,8 +467,8 @@ relative; every other entry has the same fixed point as the drag.
     "H" labels of the size chip; a selection has no absolute angle, so the number
     must not look absolute), prefilled "0" and selected. Enter turns the selection by
     the typed Δ in one commit, about the pivot fixed when the chip opened (box
-    centre; opposite corner or side with Shift at the second press of the
-    double-click; R always the box centre), and the document ends as a drag of
+    center; opposite corner or side with Shift at the second press of the
+    double-click; R always the box center), and the document ends as a drag of
     that Δ would leave it. Typing 0, an unedited Enter and a value that turns by a
     multiple of 360° write nothing. A decimal comma, a point, U+2212 and a
     trailing "°" are accepted; a non-finite value keeps the chip open and marked
@@ -478,8 +478,8 @@ relative; every other entry has the same fixed point as the drag.
 34. Given a multi-selection, when the maker double-clicks a resize handle or
     presses S, then a size chip opens with "W" and "H" (accessible names "Width"
     and "Height", in mm), prefilled with the group box size. The fixed point is
-    what a drag of that handle would hold (opposite corner or side; the centre with
-    Shift at the second press) and for S always the box centre, shown by the pivot
+    what a drag of that handle would hold (opposite corner or side; the center with
+    Shift at the second press) and for S always the box center, shown by the pivot
     marker (`edit-interaction-polish` criterion 57a). Enter scales the selection
     to the typed size in one commit, with both switches read when the chip opens.
     The two fields are independent, whatever the selection holds (a size of
@@ -490,7 +490,7 @@ relative; every other entry has the same fixed point as the drag.
     beyond ±1e7 mm is invalid ("Too large"); an unedited Enter or a size equal to
     the current one writes nothing. A typed size whose factors are equal within
     the tolerance of "Stretch" (Terms) is a uniform scale and converts nothing.
-35. Given a multi-selection, when the maker double-clicks the centre move handle
+35. Given a multi-selection, when the maker double-clicks the center move handle
     (inside its hover region, criterion 11) or presses M, then the move chip of
     `edit-interaction-polish` criteria 15 to 25 opens, with the same Relative and
     Absolute modes, the same key order and the Copy check. Relative translates
@@ -515,14 +515,14 @@ relative; every other entry has the same fixed point as the drag.
 
     | Handle | Lines |
     |---|---|
-    | Corner resize | "Resize selection" / "Shift: from the centre" / "Ctrl: keep proportions" / "Double-click or S: type a size" |
-    | Corner resize, proportional-corner selection | "Resize selection, proportional" / "Stretch with an edge handle" / "Shift: from the centre" / "Double-click or S: type a size" (no Ctrl line: the corner is always proportional, criterion 19; the stretch line only while edge handles are drawn, `s` of 24 px or more; no conversion line, a corner never converts) |
+    | Corner resize | "Resize selection" / "Shift: from the center" / "Ctrl: keep proportions" / "Double-click or S: type a size" |
+    | Corner resize, proportional-corner selection | "Resize selection, proportional" / "Stretch with an edge handle" / "Shift: from the center" / "Double-click or S: type a size" (no Ctrl line: the corner is always proportional, criterion 19; the stretch line only while edge handles are drawn, `s` of 24 px or more; no conversion line, a corner never converts) |
     | Edge resize | the same as the corner row without the Ctrl line |
     | Edge resize, selection holds a converting object | the edge row plus one line after the title, "Stretching turns N shapes into paths" (criterion 55; for example "Stretching turns 2 shapes into paths", "Stretching turns 1 shape into a path"), at most four lines in all |
     | Corner rotate | "Rotate selection" / "Shift: pivot at opposite corner" / "Ctrl: snap" / "Double-click or R: type an angle" |
     | Side rotate | "Rotate selection" / "Pivot: opposite side" / "Ctrl: snap" / "Double-click or R: type an angle" |
-    | Skew | "Skew selection" / "Shift: from the centre line" / "Ctrl: snap" / "Double-click or K: type an angle" (left and right handles: "Shift+K") |
-    | Centre | "Move selection" / "Shift: keep one axis" / "Ctrl: copy" / "Double-click or M: type an offset" |
+    | Skew | "Skew selection" / "Shift: from the center line" / "Ctrl: snap" / "Double-click or K: type an angle" (left and right handles: "Shift+K") |
+    | Center | "Move selection" / "Shift: keep one axis" / "Ctrl: copy" / "Double-click or M: type an offset" |
 39. Given the Select bar with a multi-selection, then its content follows
     `unified-object-editing` criteria 21 to 23 unchanged (the two switches first,
     then the kind groups the selection contains, then "Object to path"); no
@@ -545,7 +545,7 @@ relative; every other entry has the same fixed point as the drag.
     of two paths. (Default D4.)
 41. Given a drag of a skew handle, then every path is sheared by the same linear
     map in the document axes: the line of the group box's opposite side stays
-    fixed (with Shift, the line through the box centre), every anchor moves along
+    fixed (with Shift, the line through the box center), every anchor moves along
     the side's direction in proportion to its distance from that line, and the
     skew angle is `atan(d / h)` with `h` the distance from the fixed line to the
     grabbed side at the press (`specs/0008-object-transform-refinements/` criteria 38
@@ -569,7 +569,7 @@ relative; every other entry has the same fixed point as the drag.
        criteria 16 and 17);
     2. a hit on a drawn group handle (criterion 11): that handle's drag; a Shift
        press on a visible side rotate handle starts a rotate, it does not toggle;
-       Shift or Ctrl on the centre handle is a move with modifiers
+       Shift or Ctrl on the center handle is a move with modifiers
        (`edit-interaction-polish` criterion 38);
     3. Shift held: an outline or filled-interior hit within the 8 px tolerance
        toggles that object (a click) or starts an axis-locked move (a drag past
@@ -600,11 +600,11 @@ relative; every other entry has the same fixed point as the drag.
     a drag starts the marquee (Alt the lasso, Shift adds, Ctrl removes, none of
     them needing Escape first) and a click clears the selection at release. The
     group box has no hit area of its own; the selection is moved only by the
-    centre handle or by a press on a selected object (criterion 16). Question 3,
+    center handle or by a press on a selected object (criterion 16). Question 3,
     decided (b).
 46. Given the pointer inside the group box, then the hover highlight is the one of
     today for the object under the pointer, and none on empty canvas. The cursor is
-    the Select tool's normal one inside the box, `move` over the centre handle, and
+    the Select tool's normal one inside the box, `move` over the center handle, and
     the handle cursors of a single object over the other handles. From the release
     of a gesture until its commit is presented, the cursor is `wait`.
 47. Given a double-click on a group handle, then criteria 33 to 36 apply; given a
@@ -759,7 +759,7 @@ relative; every other entry has the same fixed point as the drag.
     (four corner, four edge); a corner drag is proportional as today, Ctrl or not
     (`0005` criterion 11, the corner rule of criterion 19); an edge handle drag
     stretches along the axes of its box (the box turned by its shown angle,
-    `polygon-star-box-refit`), about the opposite side, or the centre with Shift
+    `polygon-star-box-refit`), about the opposite side, or the center with Shift
     (`0005` criterion 6); the typed size entry has "W" and "H" like a rectangle's (the
     box's size in its own axes), and a size of another aspect ratio is a stretch. A
     stretch with unequal factors (edge drag or typed size) turns the polygon or star
@@ -811,7 +811,7 @@ relative; every other entry has the same fixed point as the drag.
   objects or guides.
 - Select all (Ctrl+A) and other ways to make large selections; the 10,000-object
   case comes from marquee and lasso.
-- Per-object independent transforms (each object about its own centre), "distribute"
+- Per-object independent transforms (each object about its own center), "distribute"
   and "align".
 - Parameter handles (radius, ratio) on a multi-selection
   (`unified-object-editing` criterion 37); the bar's "Radius", "Points" and
@@ -855,7 +855,7 @@ kept for the reasons. Question 5 is open, with a default.
 3. **A press on empty canvas inside the group box.** Decided: (b). Today it
    clears a multi-selection (click) or starts a marquee (drag). (a) was: it moves
    the selection, as inside a single object's box, and a click there does not
-   clear it. (b), chosen: only the centre handle and the selected objects' own
+   clear it. (b), chosen: only the center handle and the selected objects' own
    outlines and filled interiors move the selection; the empty interior stays
    "clear or marquee", exactly as today (criteria 16, 43, 45). Reason (UX notes
    section 4): a group box is mostly empty space, and under (a) a press on an
@@ -1071,7 +1071,7 @@ both axes: no box dashes and no handle; a 6 px square outline in `--accent`, sol
 The same glyphs, offsets, hit caps and tie order as one object, in the group
 box's frame (always axis-aligned, so every glyph and cursor is at 0°). Tiers on
 `s`: under 24 corner resize and corner rotate; 24 to 47 plus edge resize; 48 and
-up plus the centre handle. There is no 72 px tier: a multi-selection has no
+up plus the center handle. There is no 72 px tier: a multi-selection has no
 parameter handles. Skew: per axis, 24 px lever rule, paths only (section 8). **Edge resize handles
 are drawn for every selection** at the tiers above, whatever it holds (2026-10-10);
 under 24 px they are hidden but hit-testable (criterion 10, unchanged). The handle
@@ -1081,7 +1081,7 @@ different glyph, so the handle vocabulary does not grow.
 
 Handles are drawn above all artwork, the member boxes and the blue preview. A
 group box is made of the objects' own extremes, so edge-midpoint handles and the
-centre handle often sit on an object; their white ground and the nearest-centre
+center handle often sit on an object; their white ground and the nearest-center
 test (criterion 11) win over the object, as they do for one object. The way to
 reach the object under a handle is to zoom in or to press outside the handle's
 cap. Rotate and skew handles stand 16 to 32 px outside the box and take a press
@@ -1090,7 +1090,7 @@ drawing it shows more often. The review checks a 40-part laser layout.
 
 The pivot marker (6 px, `--accent` at 60%) and the rule that a handle exactly at
 the pivot is not drawn are unchanged. For a group the default pivot is the group
-box centre, so the centre handle is hidden while a rotate (default pivot) or a
+box center, so the center handle is hidden while a rotate (default pivot) or a
 Shift scale runs, and the marker sits where it was.
 
 ### 4. Press model and cursors
@@ -1107,10 +1107,10 @@ its own. Reasons, kept because they are the test for any later change:
    moves the whole selection.
 3. A click on empty canvas deselects, as today, wherever the box is large.
 
-What moves the selection: the centre handle (its hover region, drawn from `s` of
+What moves the selection: the center handle (its hover region, drawn from `s` of
 48), a drag from the outline (8 px tolerance) or the filled interior (option B of
 `0007`) of a **selected** object, and the typed move. Under 48 px, or where the
-centre handle is hidden, the selected objects themselves are the grip. A press
+center handle is hidden, the selected objects themselves are the grip. A press
 where a handle is not drawn is an ordinary press. Order of a press: criterion 43.
 
 **Hover and cursor.** Inside the group box nothing is highlighted and the cursor
@@ -1122,7 +1122,7 @@ on empty canvas must look exactly like a pointer outside it.
 **Cursors** (same mechanism, no new assets). Resize: the four stock angles
 (`nwse`, `nesw`, `ns`, `ew`), since the box is axis-aligned. Rotate: the existing
 non-rotating arc cursor, all eight. Skew: the existing two-arrow cursor at 0°
-(top, bottom) and 90° (left, right). Centre handle: built-in `move`. Elsewhere:
+(top, bottom) and 90° (left, right). Center handle: built-in `move`. Elsewhere:
 the Select arrow. Modifiers never change a cursor. From release until the commit
 is presented, `wait` (section 12).
 
@@ -1133,7 +1133,7 @@ The modifier indicators of `edit-interaction-polish` apply unchanged
 
 - **Copy (Ctrl):** the plus badge shows wherever a Ctrl press would start a copy
   move (`edit-interaction-polish` criterion 37): over the outline or filled
-  interior of a selected object, over the centre handle, and over an **unselected**
+  interior of a selected object, over the center handle, and over an **unselected**
   object, where the press copies that object alone and the selection becomes the
   copy. Not on empty canvas, where Ctrl is the remove marquee with its minus
   badge. The badge uses the press test, so it never promises a copy the press would
@@ -1141,10 +1141,10 @@ The modifier indicators of `edit-interaction-polish` apply unchanged
   handles and the member boxes stay on the originals**; the blue outlines travel
   alone. On release the selection becomes the copies and the box moves to them in
   that frame.
-- **Axis lock (Shift):** the two origin axes pass through the group box centre at
-  the press, which is where the centre handle is drawn, whether or not the handle
+- **Axis lock (Shift):** the two origin axes pass through the group box center at
+  the press, which is where the center handle is drawn, whether or not the handle
   is drawn. Full-viewport lines, `--axis-guide` on the locked axis and
-  `--axis-guide-idle` on the other, 1 px, solid. If the centre is far outside the
+  `--axis-guide-idle` on the other, 1 px, solid. If the center is far outside the
   viewport the lines may not show; the lock badge and the readout ("Δ 30.0, 0.0
   mm") carry the same information and are the primary signals.
 - Readout: "Δ 12.5, −3.0 mm" as for one object.
@@ -1153,7 +1153,7 @@ The modifier indicators of `edit-interaction-polish` apply unchanged
 
 - **Readout:** "123.4 mm × 67.8 mm", the size of the group box in the preview,
   also when every object is a polygon or star (not "r R mm": there is no single radius). The
-  pivot marker shows the fixed point (opposite corner or side midpoint, centre
+  pivot marker shows the fixed point (opposite corner or side midpoint, center
   with Shift), as for one object.
 - **A stretch converts (customer, 2026-10-10; lead decision E).** An edge handle
   and a typed size of another aspect ratio stretch every selection; each converting
@@ -1179,9 +1179,10 @@ The modifier indicators of `edit-interaction-polish` apply unchanged
   outline as for every other object. Nothing marks the converting ones on the
   canvas (a per-object tint would be a second meaning for blue); the count line
   carries it. A rotated rectangle shows as the parallelogram it will be, a polygon as
-  its squashed outline. Its member box follows the box the commit gives it (the
-  axis-aligned bounds of the stretched outline, since a path has no turned frame), so
-  it changes from the turned box to the axis-aligned one in the first uneven frame.
+  its squashed outline. Its member box follows the box the commit gives it: tight, in the direction of
+  the path's `rotation` (criterion 53.3; a turned shape keeps its turned box, a
+  polygon's square box becomes the tight box of its outline in the first uneven
+  frame).
 - **One object (PO question 5 and criterion 56; lead decision G: yes).** A single
   polygon or star gets all eight handles at the usual tiers. Its corner drag stays
   proportional with the "r R mm" readout. An edge drag stretches it in its own frame
@@ -1219,7 +1220,7 @@ The modifier indicators of `edit-interaction-polish` apply unchanged
 
 Glyph, offsets, 24 px lever rule, hover, cursor and hit radius as for a path.
 Readout "Skew x +12.5°" / "Skew y −8.0°" ("22.5°" under Ctrl). The fixed-line guide
-runs along the group box side (or the line through the centre with Shift), 1 px,
+runs along the group box side (or the line through the center with Shift), 1 px,
 `--transform-guide`, dashed **2 / 2** (the single-object value, so it never looks
 like the 4 / 3 box); while a skew drag runs the group box does not draw its own
 dashes along the fixed edge (the guide replaces them: that side 2 / 2, the other
@@ -1237,7 +1238,7 @@ review checks a mixed selection screenshot with the skew handles absent.
 
 All chips are the "Transform entry chip" and "Move entry chip" surfaces, opened
 by double-click on the handle or by `M`, `R`, `S`, `K`, placed as for one object
-(a key places the chip where the handle would be, drawn or not; the box centre for
+(a key places the chip where the handle would be, drawn or not; the box center for
 M and S). A group box can be larger than the viewport; then the handle is off
 screen and the chip clamps at the canvas edge, which is the existing rule. The
 pivot marker shows the fixed point for as long as the chip is open.
@@ -1260,14 +1261,14 @@ selection. Up to five lines; the chip wraps at 240 px.
 
 | Handle | Lines |
 |---|---|
-| Corner resize | "Resize selection" / "Shift: from the centre" / "Ctrl: keep proportions" / "Double-click or S: type a size" |
+| Corner resize | "Resize selection" / "Shift: from the center" / "Ctrl: keep proportions" / "Double-click or S: type a size" |
 | Edge resize | the same without the Ctrl line |
-| Corner resize, selection with converting objects | "Resize selection, proportional" / "Stretch with an edge handle" / "Shift: from the centre" / "Double-click or S: type a size" (no Ctrl line, Ctrl changes nothing; the stretch line only while edge handles are drawn, `s` of 24 or more, so a tiny box does not point to a handle that is not there) |
-| Edge resize, selection with converting objects | "Resize selection" / "Stretching turns 2 shapes into paths" / "Shift: from the centre" / "Double-click or S: type a size" ("Stretching turns 1 shape into a path") |
+| Corner resize, selection with converting objects | "Resize selection, proportional" / "Stretch with an edge handle" / "Shift: from the center" / "Double-click or S: type a size" (no Ctrl line, Ctrl changes nothing; the stretch line only while edge handles are drawn, `s` of 24 or more, so a tiny box does not point to a handle that is not there) |
+| Edge resize, selection with converting objects | "Resize selection" / "Stretching turns 2 shapes into paths" / "Shift: from the center" / "Double-click or S: type a size" ("Stretching turns 1 shape into a path") |
 | Corner rotate | "Rotate selection" / "Shift: pivot at opposite corner" / "Ctrl: snap" / "Double-click or R: type an angle" |
 | Side rotate | "Rotate selection" / "Pivot: opposite side" / "Ctrl: snap" / "Double-click or R: type an angle" |
-| Skew | "Skew selection" / "Shift: from the centre line" / "Ctrl: snap" / "Double-click or K: type an angle" (left and right: "Shift+K") |
-| Centre | "Move selection" / "Shift: keep one axis" / "Ctrl: copy" / "Double-click or M: type an offset" |
+| Skew | "Skew selection" / "Shift: from the center line" / "Ctrl: snap" / "Double-click or K: type an angle" (left and right: "Shift+K") |
+| Center | "Move selection" / "Shift: keep one axis" / "Ctrl: copy" / "Double-click or M: type an offset" |
 
 The count is the number of converting objects in the selection (a polygon, a star,
 a rectangle or ellipse turned by something other than a multiple of 90°; a circle and
@@ -1331,9 +1332,9 @@ refreshed once, at the commit.
   the commit is presented the box refits (criterion 29), and **the Action notice**
   appears: "Stretching turned 2 shapes into paths. No undo yet." (1 shape: "Stretching
   turned 1 shape into a path. No undo yet."). Surface and rules are the row "Action
-  notice": `--toolbar-bg` ground, `role="status"`, `pointer-events: none`, 3 s (5 s
-  for a text over 70 characters; none of these is), or until a press, a key, a
-  selection change or a tool change. Anchor, because no control caused it: the
+  notice": `--toolbar-bg` ground, `role="status"`, `pointer-events: none`, **6 s**
+  (not the 3 s of the other notices: the change cannot be undone, criterion 54), or
+  until the next press or key. Anchor, because no control caused it: the
   readout's place, 12 px up and right of the pointer at release (flips and clamps like
   the readout), and for a typed size the place of the closed chip. It shows only when
   at least one object was converted: not after Escape, not for a factor of 1, not for
@@ -1400,7 +1401,7 @@ By criterion number. 1 to 3, 6 to 12, 15, 17 to 20, 22 to 27, 29 to 32, 34, 36, 
 - **Question 3, criteria 14, 16, 43 to 46, "Changes to accepted behaviour" 4 and
   5, D6:** applied; the wording is the criteria's (43 steps 3 to 7, 44 removed,
   45 and 46 as written). The Ctrl copy badge follows the press test of
-  `edit-interaction-polish` criterion 37: selected objects, the centre handle and
+  `edit-interaction-polish` criterion 37: selected objects, the center handle and
   an unselected object (which a Ctrl press copies alone), as built (section 5).
 - **4:** replace "a lighter style that the `ux-engineer` defines" with: 1 px
   dashed 4 / 3 in `--member-box`, edges on a group box edge not drawn, not drawn

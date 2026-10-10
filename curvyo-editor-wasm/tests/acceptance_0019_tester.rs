@@ -2656,7 +2656,7 @@ fn ac38_hint_lines() {
     select_all(&mut s);
     let g = two_squares_box(&s);
     let resize = |edge: bool| {
-        let mut v = vec!["Resize selection", "Shift: from the centre"];
+        let mut v = vec!["Resize selection", "Shift: from the center"];
         if !edge {
             v.push("Ctrl: keep proportions");
         }
@@ -2687,7 +2687,7 @@ fn ac38_hint_lines() {
         lines(&mut s, g.skew(0.0, -1.0), false),
         [
             "Skew selection",
-            "Shift: from the centre line",
+            "Shift: from the center line",
             "Ctrl: snap",
             "Double-click or K: type an angle"
         ]
@@ -2696,7 +2696,7 @@ fn ac38_hint_lines() {
         lines(&mut s, g.skew(1.0, 0.0), false),
         [
             "Skew selection",
-            "Shift: from the centre line",
+            "Shift: from the center line",
             "Ctrl: snap",
             "Double-click or Shift+K: type an angle"
         ]
@@ -2756,7 +2756,7 @@ fn ac38_hint_lines() {
         [
             "Resize selection, proportional",
             "Stretch with an edge handle",
-            "Shift: from the centre",
+            "Shift: from the center",
             "Double-click or S: type a size"
         ]
     );

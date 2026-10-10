@@ -65,7 +65,7 @@ export function DocumentPresets({ document: doc, onReturnFocus }: DocumentPreset
         <>
           <div>Taller than wide. Swaps width and height.</div>
           <div className="text-muted-foreground">
-            Objects keep their place relative to the centre; nothing rotates.
+            Objects keep their place relative to the center; nothing rotates.
           </div>
         </>
       ),
@@ -83,7 +83,7 @@ export function DocumentPresets({ document: doc, onReturnFocus }: DocumentPreset
         <>
           <div>Wider than tall. Swaps width and height.</div>
           <div className="text-muted-foreground">
-            Objects keep their place relative to the centre; nothing rotates.
+            Objects keep their place relative to the center; nothing rotates.
           </div>
         </>
       ),

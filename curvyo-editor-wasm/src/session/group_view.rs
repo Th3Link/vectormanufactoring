@@ -173,7 +173,7 @@ impl Session {
             ],
             EditHandle::Resize(direction) if !is_corner(direction) => &[
                 "Resize selection",
-                "Shift: from the centre",
+                "Shift: from the center",
                 "Double-click or S: type a size",
             ],
             // A corner of a selection that holds a shape a stretch converts is
@@ -192,13 +192,13 @@ impl Session {
                     lines.push("Stretch with an edge handle".to_string());
                 }
                 lines.extend(
-                    ["Shift: from the centre", "Double-click or S: type a size"].map(String::from),
+                    ["Shift: from the center", "Double-click or S: type a size"].map(String::from),
                 );
                 return lines;
             }
             EditHandle::Resize(_) => &[
                 "Resize selection",
-                "Shift: from the centre",
+                "Shift: from the center",
                 "Ctrl: keep proportions",
                 "Double-click or S: type a size",
             ],
@@ -218,7 +218,7 @@ impl Session {
                 let key = if side.skews_along_u() { "K" } else { "Shift+K" };
                 return vec![
                     "Skew selection".to_string(),
-                    "Shift: from the centre line".to_string(),
+                    "Shift: from the center line".to_string(),
                     "Ctrl: snap".to_string(),
                     format!("Double-click or {key}: type an angle"),
                 ];

@@ -614,3 +614,31 @@ fn converted_anchor_ids_come_from_the_session_minter() {
     // The session's counter moved on by the ten it minted.
     assert_eq!(minter.mint().to_hex()[16..], format!("{:016x}", 10));
 }
+
+/// Criterion 34: a typed width or height above 10,000,000 mm is "Too large", not
+/// "Enter a number", for one object and for a selection alike.
+#[test]
+fn a_typed_size_beyond_the_limit_is_too_large() {
+    use curvyo_ui_core::InvalidReason;
+    for ids in [1usize, 2] {
+        let mut rig = Rig::new();
+        let a = rig.rect(0.0, 0.0, 40.0, 20.0);
+        let b = rig.rect(60.0, 0.0, 40.0, 20.0);
+        let chosen = if ids == 1 { vec![a] } else { vec![a, b] };
+        rig.select(&chosen);
+        let objects = rig.objects();
+        rig.tool
+            .open_entry_for_key(&objects, &rig.selection, EntryKey::Size)
+            .unwrap();
+        for (texts, field) in [(["20000000", "20"], 0usize), (["40", "99999999"], 1)] {
+            assert_eq!(
+                rig.tool.commit_entry(&rig.document, texts, field),
+                EntryOutcome::Invalid {
+                    field,
+                    reason: InvalidReason::TooLarge
+                },
+                "{ids} object(s), {texts:?}"
+            );
+        }
+    }
+}

@@ -35,7 +35,12 @@ interface TransformEntryChipProps {
    * returns to. */
   containerRef: React.RefObject<HTMLDivElement | null>;
   /** Enter: `"committed"`, `"unchanged"` or `"invalid:<field>:<reason>"`. */
-  onCommit: (first: string, second: string, lastEdited: number) => string;
+  onCommit: (
+    first: string,
+    second: string,
+    lastEdited: number,
+    chipAnchor?: { x: number; y: number },
+  ) => string;
   onCancel: () => void;
   onLinked: (field: number, text: string) => string | undefined;
   /** The note while the typed size turns shapes into paths ("Turns 2 shapes into
@@ -136,7 +141,11 @@ export function TransformEntryChip({
   };
 
   const submit = () => {
-    const outcome = onCommit(texts[0] ?? "", texts[1] ?? "", lastEdited);
+    // The notice of a stretch appears where this chip is (its lower left corner).
+    const outcome = onCommit(texts[0] ?? "", texts[1] ?? "", lastEdited, {
+      x: placement.left,
+      y: placement.top + sizes.chip.height,
+    });
     if (outcome.startsWith("invalid:")) {
       const [, field, reason] = outcome.split(":");
       setInvalid({ field: Number(field), reason: asReason(reason) });
