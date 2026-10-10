@@ -1,6 +1,6 @@
 # Multi-object transform: one group box with the same handles as a single object
 
-Status: Ready
+Status: In progress
 Priority: Should
 Origin: Customer
 Depends on: `advanced-selection` merged (PR #61). Its press rules for Shift, Ctrl and Alt and its 8 px outline tolerance are part of the press order in criterion 43.

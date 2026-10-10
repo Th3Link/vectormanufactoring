@@ -689,6 +689,34 @@ tessellated every frame, and measures again. PR 4 adds gradient ramps, which
 are rebuilt and uploaded every frame as well (at most 1024 of them); a cache
 would cover them with the tessellation.
 
+**Measured 2026-10-10 (`multi-object-transform`, release build, same machine,
+`curvyo-editor-wasm/tests/multi_object_transform_budgets.rs`):** a straight
+segment (both handles zero) was sent to `lyon` as a cubic with its control
+points on its ends. `lyon` flattens such a degenerate curve into more pieces, and
+into a different number at another position, so the blue outline of a scaled or
+turned selection cost 1.4 times that of a moved one (the architect's
+criterion 48 allows 1.1) and a frame at 200 objects took 6.4 ms. Drawing a
+handle-less segment with `line_to` (`curvyo-render-core/src/stroke.rs`) cuts the
+triangles of the 200-object frame from 88,000 to 36,000, the frame to 4.3 ms,
+and makes scale, rotate and move equal. This also lowers the frame at rest; the
+draw-list cache above is still the larger item.
+
+## `curvyo-ui-core/src/transform_entry.rs` is past the size limit
+
+548 non-test lines (`CLAUDE.md` section 5: about 500). `multi-object-transform`
+did not grow it: its entries are in `group_entry.rs`. Split the number parser and
+`EntryField` from the entry state when the next story touches it.
+
+## One peer's delete refuses a whole multi-object commit
+
+`Document::transform_objects` resolves every object before it writes and refuses
+the whole call if one is gone (`ObjectEditError::NoSuchObject`), so a selection
+transformed while a peer deletes one of its objects is not transformed at all,
+and the maker's drag is lost. A Select drag holds the snapshot it started with
+and no merge runs during a drag today (the `Session.drag_objects` note above), so
+this cannot happen yet. When sync reaches the session, skip missing objects
+instead of refusing (`specs/0019-multi-object-transform/adrs.md`, decision 5).
+
 ## The canvas does not react to a `devicePixelRatio` change with no resize event
 
 The fix below sizes the backing store once, at attach and on every

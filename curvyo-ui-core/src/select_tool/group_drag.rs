@@ -150,6 +150,13 @@ impl SelectTool {
         })
     }
 
+    /// Whether a group resize, rotate or skew drag is in flight and has left its
+    /// dead zone at `current`: what a readout needs to show.
+    #[must_use]
+    pub fn group_drag_active_at(&self, current: Point) -> bool {
+        matches!(&self.drag, SelectDrag::GroupTransforming(drag) if drag.origin.is_active_at(current))
+    }
+
     /// Whether the multi-selection's group is being resized by a drag in flight.
     #[must_use]
     pub const fn group_drag_in_flight(&self) -> bool {

@@ -55,6 +55,15 @@ fn cubic_bezier_to(
     from: &AnchorSnapshot,
     to: &AnchorSnapshot,
 ) {
+    // A segment between two anchors with no handle is a straight line. Sent to
+    // `lyon` as a cubic with both control points on its ends it is a degenerate
+    // curve: the tessellator then flattens it into more pieces, and a different
+    // number for the same line at another position (`multi-object-transform`
+    // criterion 48 measured 1.4 times the frame of a move for a scaled selection).
+    if from.handle_out == Vec2::new(0.0, 0.0) && to.handle_in == Vec2::new(0.0, 0.0) {
+        builder.line_to(to_lyon(to.point));
+        return;
+    }
     let c1 = from.point.translated(from.handle_out);
     let c2 = to.point.translated(to.handle_in);
     builder.cubic_bezier_to(to_lyon(c1), to_lyon(c2), to_lyon(to.point));

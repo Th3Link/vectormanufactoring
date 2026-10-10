@@ -287,6 +287,43 @@ against.
   own frame. Nothing about the ad hoc group is stored, so
   `layers-and-grouping` chooses its own storage (ADR 0002 §5) freely.
 
+- **2026-10-10: (7) notes from the build (implementer).** None of them changes a
+  decision above; they record what the build chose where the text left room.
+  - **Public API of `curvyo-document-core`.** Besides `Document::transform_objects`,
+    `PathSnapshot::scaled_along` and `sheared_along` (decision 1), the build added
+    two variants to `ObjectEditError`, `InvalidStrokeWidth` and `InvalidRadius`,
+    because the command refuses a bad width or radius before it writes
+    (the `resize_*` commands refuse the same two with `ShapeEditError` and
+    `PathEditError`). `ui-core` retries once without widths, as decided.
+  - **Circles (criterion 20, D3).** A circle that is stretched (sx differs from sy)
+    becomes an ellipse with `rotation` 0 whatever its rotation, as the table says;
+    criterion 31's "not a multiple of 90 degrees" only names the case that goes
+    beyond a single object's write. A circle scaled by one factor keeps its
+    `rotation`.
+  - **Uniform-only corner drag.** `resize_local_box` with Ctrl forced on: both
+    factors come from the dominant axis of the drag, the same rule Ctrl gives a
+    free corner, so the dragged corner follows the pointer on that axis (criterion
+    29). A single polygon's diagonal rule is not used: a group has no one radius.
+  - **Flat boxes.** `transform_handle_layout::hit_transform_handle` gained a sibling
+    `hit_transform_handle_for_side` that takes the "shorter side" `s` as a
+    parameter (the old function calls it with the box's shorter side), because a
+    flat group box uses its other extent (criterion 12). The centre handle of a
+    group is decided in `group_box.rs` with the group's own `s`.
+  - **Press order.** `classify_press` adds the group handles as one early return
+    for a selection of two or more; the objects, the marquee and the Alt cycle
+    after it are the code of before.
+  - **Keys.** `KeyHint::SelectOne` and `KeyEntryRefusal::SeveralSelected` are gone
+    (criterion 37). K or Shift+K on a selection that holds a non-path is
+    `SkewNeedsPath`, as for one object.
+  - **Draw order.** Member boxes are drawn with the group box, above the blue
+    preview outlines (one `GroupDecorationInput`), not below them as UX notes
+    section 12 lists; they are a hairline at 60% and the difference is not visible.
+  - **`wait` cursor (decision 4).** `Session::release_is_slow` is true for a move or
+    group transform of 100 or more objects; only then does the host show `wait`,
+    yield one frame and release. Below that the release is immediate.
+  - **Selection announcement (UX U4).** Built: `Session::selection_announcement` and
+    a visually hidden polite live region, settled for 500 ms before it speaks.
+
 ## Flagged to the lead
 
 *2026-10-08: flags 1 to 6 are applied to the criteria by the PO; flag 7 is

@@ -269,6 +269,9 @@ impl Session {
         let (shift, ctrl) = (self.held.shift, self.held.ctrl);
         let text = match handle {
             EditHandle::Resize(_) => {
+                if !self.select.group_drag_active_at(anchor) {
+                    return None;
+                }
                 let objects = self.objects();
                 let live = self.select_live_edit_in(&objects);
                 let live_objects = Self::live_objects_in(objects, live.as_ref());
