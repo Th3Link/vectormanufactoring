@@ -1,13 +1,17 @@
-//! Where the eyedropper (`0017`) meets the path tools (`0031`, `0034`, `0035`): each test pins one
-//! rule that neither slice can test alone.
+//! Where the three slices that touch the same session meet: the eyedropper
+//! (`0017`), the path tools (`0031`, `0034`, `0035`) and the group box
+//! (`0019`). Each test pins one rule that no slice can test alone.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 
 use curvyo_document_core::{
-    AnchorId, Document, Length, NewAnchor, NodeId, Point, RectBounds, pack,
+    AnchorId, Document, Length, NewAnchor, NodeId, ObjectSnapshot, Point, RectBounds, pack, unpack,
 };
 use curvyo_editor_wasm::{BooleanOutcome, KeyInput, Session, Tool};
 use curvyo_ui_core::{BooleanOp, JoinType, PaintTarget, PanelContent, PenTarget};
+
+const ACCENT: (u8, u8, u8) = (0x2F, 0x6F, 0xEE);
+const MEMBER_ALPHA: u8 = 153;
 
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)
@@ -54,6 +58,24 @@ fn escape(session: &mut Session) {
         key: "Escape",
         ..KeyInput::default()
     });
+}
+
+fn count_colour(session: &Session, rgb: (u8, u8, u8), alpha: u8) -> usize {
+    session
+        .draw_list()
+        .triangles
+        .iter()
+        .filter(|v| (v.color.r, v.color.g, v.color.b, v.color.a) == (rgb.0, rgb.1, rgb.2, alpha))
+        .count()
+}
+
+fn objects(session: &Session) -> Vec<ObjectSnapshot> {
+    let document: Document = unpack(99, &session.pack("0.1.0").unwrap()).unwrap();
+    document
+        .object_ids()
+        .into_iter()
+        .filter_map(|id| document.object(id))
+        .collect()
 }
 
 /// Two squares and a third one overlapping the first, for Boolean and Combine.
@@ -154,14 +176,22 @@ fn escape_ends_picking_before_it_discards_a_continuation() {
     assert!(session.pen_in_progress().is_none(), "discarded");
 }
 
-/// The eyedropper cursor wins over the Pen's.
+/// The eyedropper cursor wins over the group handles and the Pen, and the group handle's hint
+/// chip stays away while picking.
 #[test]
-fn the_eyedropper_cursor_wins_over_the_pen() {
+fn the_eyedropper_cursor_wins_over_group_handles_and_the_pen() {
     let mut session = session_of(&squares(), Tool::Select);
     click(&mut session, pt(0.0, 20.0), false);
+    click(&mut session, pt(120.0, 20.0), true);
+    assert_eq!(session.selected_object_count(), 2);
+    // The centre of the group box (0, 0) to (160, 40).
+    session.pointer_hover(pt(80.0, 20.0), false, false);
+    assert_eq!(session.handle_hint(), "group");
+    assert_eq!(session.cursor_hint(), "move");
     session.begin_colour_pick(PaintTarget::Fill);
     session.pointer_hover(pt(80.0, 20.0), false, false);
     assert_eq!(session.cursor_hint(), "eyedropper");
+    assert_eq!(session.handle_hint(), "");
 
     session.set_tool(Tool::Pen);
     session.begin_colour_pick(PaintTarget::Fill);
@@ -187,4 +217,70 @@ fn a_pen_continuation_empties_the_panel() {
     click(&mut session, pt(100.0, 0.0), false);
     assert!(session.pen_in_progress().is_some());
     assert_eq!(session.panel_content(), PanelContent::Empty);
+}
+
+/// `0019` criterion 6 with `0035` criterion 15: Break apart into several parts shows the
+/// group box in the same frame, and Combine back to one drops it.
+#[test]
+fn break_apart_shows_the_group_box_and_combine_drops_it() {
+    let document = Document::new(1);
+    let _ = rect(&document, 0.0, 0.0, 40.0);
+    let _ = rect(&document, 100.0, 0.0, 40.0);
+    let mut session = session_of(&document, Tool::Select);
+    select_all(&mut session, pt(300.0, 100.0));
+    let _ = session.apply_combine();
+    assert_eq!(session.selected_object_count(), 1);
+    assert_eq!(count_colour(&session, ACCENT, MEMBER_ALPHA), 0);
+    let _ = session.apply_break_apart();
+    assert_eq!(session.selected_object_count(), 2);
+    assert!(
+        count_colour(&session, ACCENT, MEMBER_ALPHA) > 0,
+        "member boxes of the pieces"
+    );
+    let _ = session.apply_combine();
+    assert_eq!(session.selected_object_count(), 1);
+    assert_eq!(count_colour(&session, ACCENT, MEMBER_ALPHA), 0);
+}
+
+/// `0019` with `0035`: a compound path in a multi-selection moves and scales as one path, all
+/// its outlines together.
+#[test]
+fn a_compound_path_in_a_selection_transforms_as_one_path() {
+    let document = Document::new(1);
+    let _ = rect(&document, 0.0, 0.0, 40.0);
+    let _ = rect(&document, 100.0, 0.0, 40.0);
+    let _ = rect(&document, 0.0, 200.0, 40.0);
+    let mut session = session_of(&document, Tool::Select);
+    // Combine the first two (marquee over the top row), then select all three.
+    select_all(&mut session, pt(160.0, 100.0));
+    let _ = session.apply_combine();
+    select_all(&mut session, pt(300.0, 300.0));
+    assert_eq!(session.selected_object_count(), 2);
+    // Move by the centre handle: the group box is (0, 0) to (140, 240).
+    let from = pt(70.0, 120.0);
+    let to = pt(90.0, 150.0);
+    session.pointer_hover(from, false, false);
+    session.pointer_down(from, false);
+    session.pointer_hover(pt(80.0, 135.0), false, false);
+    session.pointer_hover(to, false, false);
+    session.pointer_up(to, false, false);
+    let moved: Vec<Vec<Point>> = objects(&session)
+        .iter()
+        .filter_map(|object| match object {
+            ObjectSnapshot::Path(path) => Some(
+                path.subpaths()
+                    .flat_map(|s| s.anchors.iter().map(|a| a.point).collect::<Vec<_>>())
+                    .collect(),
+            ),
+            ObjectSnapshot::Primitive(_) => None,
+        })
+        .collect();
+    assert_eq!(moved.len(), 1, "one compound path");
+    assert_eq!(moved[0].len(), 8, "both outlines");
+    assert!(
+        moved[0]
+            .iter()
+            .all(|p| p.x >= 20.0 - 1e-6 && p.y >= 30.0 - 1e-6),
+        "every outline moved by (20, 30)"
+    );
 }

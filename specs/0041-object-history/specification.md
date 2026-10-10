@@ -77,7 +77,7 @@ All terms of `0020-undo-redo` (step, undo stack, global history, operation name,
 
 ### Cost
 
-35. Given a timeline, then the Object scope opens within 100 ms for an object with 1,000 steps in a document with 20,000 steps. The index of steps per object is built when the file is opened or the first time it is asked for, not on every commit slower than 1 ms per commit.
+35. Given a timeline, then the Object scope opens within 100 ms for an object with 1,000 steps in a document with 20,000 steps once the index exists (ADR 0014 §13; release build, desktop; the tests assert four times the figure). The index of steps per object is built in one pass the first time it is asked for, behind the long-operation state of `0016` §9 (up to 300 ms cold at 25,000 steps), and is then extended per commit or import by that change's operations only, at most 1 ms per commit.
 
 ### What is stored (ADR 0014, Proposed; testable on its defaults)
 
@@ -85,7 +85,7 @@ All terms of `0020-undo-redo` (step, undo stack, global history, operation name,
 37. **Clone origin.** Given Duplicate or the Ctrl-copy move, then each copy gets the optional key `clone_of` = `<source id>@<version>` (the source's `NodeId` and the document version at the duplication), written in the same commit as the copy. A copy never takes over the source's `history_floor` or `clone_of`: a clone of a clone points at its direct source, and criterion 26 follows the chain. Inherited rows (criterion 24) are computed on request from the source's steps in the causal past of that version and are never copied into the clone, so later steps of either object cannot appear in the other. A value that cannot be read means "no origin" and never makes the file unreadable.
 38. **Floor.** Given a wipe (criterion 30), then the step writes the optional key `history_floor` on the object = the document version at the wipe. The timeline hides every step in the causal past of the floor; a step by a peer that was concurrent with the wipe stays visible. The key is the one write of the wipe step, so a wipe is one commit and one step.
 39. **No format bump.** Given a file with `clone_of` or `history_floor`, then `format_version` is unchanged (ADR 0014 Q2 A, the default). A build that does not know the keys ignores them and draws the same drawing; an older build that duplicates an object copies `clone_of` as it is, which shows a wrong lineage in a newer build and never a wrong drawing.
-40. **Object undo is a restore, not an inverse.** Given an object undo, a go to version or a clone, then the engine reads the object at the step's before and after versions and writes fields (criterion 7); this is the same engine as `0020` and has no stored inverse. Given an object undo of a step that deleted the object, then the object comes back with the same id (`0020` criterion 17 and the spike S1 of ADR 0014).
+40. **Object undo is a restore, not an inverse.** Given an object undo, a go to version or a clone, then the engine reads the object at the step's before and after versions and writes fields (criterion 7); this is the same engine as `0020` and has no stored inverse. Given an object undo of a step that deleted the object, then the object comes back with the same id, through an injected tree Move (`0020` criterion 23, ADR 0014 §11, Question 13 below; with option C the object gets a new id).
 41. **Latest applied and redoable come from the stack machine.** Given an object's timeline, then which step Ctrl+U takes back and which step Ctrl+Shift+U brings back are the output of the one stack machine of `0020` criterion 55, run over this object's timeline with the object-undo and object-redo marks. A new do step on the object clears its redo side (criterion 11). With ADR 0014 Q6 B (own steps only) the machine runs over the current peer's steps of the object.
 
 ## Out of scope
@@ -115,9 +115,9 @@ All terms of `0020-undo-redo` (step, undo stack, global history, operation name,
 5. **Ctrl+U and Ctrl+Shift+U (criterion 5).** Ctrl+U is "view source" in desktop browsers and Ctrl+Shift+U starts Unicode entry in GTK text widgets. In the desktop web view neither is a problem unless the test shows otherwise. *Default:* the customer's keys. *Fallback if a platform eats a key:* the buttons of criterion 16 stay, and the architect names an alternative with the customer.
 6. **History of a group (criterion 18).** *A (default):* the group's list includes steps on any descendant. *B:* only steps on the group node itself (group, ungroup, reorder). Recommendation A: moving or styling a group is what the maker does.
 
-### The six questions of ADR 0014 (architect, `needs-customer`)
+### The seven questions of ADR 0014 (architect, `needs-customer`)
 
-ADR 0014 is `Proposed`; the defaults below are the architect's recommendations and apply when the customer does not answer. The same six questions stand in `0020` (Questions 11 to 16) and `0042`.
+ADR 0014 is `Proposed`; the defaults below are the architect's recommendations and apply when the customer does not answer. The same seven questions stand in `0020` (Questions 11 to 17) and `0042`.
 
 7. **History in the file (ADR 0014 Q1).** *A (default):* keep it (it is there today), the History tab says so, a wipe is available. *B:* strip the history on every Save.
 8. **File-format footprint (ADR 0014 Q2).** *A (default):* no `format_version` bump; step headers in commit messages and three optional keys (`history_wiped`, `history_floor`, `clone_of`) that older builds ignore. *B:* bump the version at this spec, so older builds refuse files that carry lineage keys.
@@ -125,6 +125,7 @@ ADR 0014 is `Proposed`; the defaults below are the architect's recommendations a
 10. **Object wipe (ADR 0014 Q4; Question 3 above).** *A (default):* it hides and cuts, the data stays in the file, the confirmation says so. *B:* no object wipe.
 11. **Authors (ADR 0014 Q5).** *A (default):* a random id per session, shown as "You" and "Earlier session". *B:* one random id per installation in every step, so "You" survives reopening, but every file you share carries the same identifier. *C:* the OS user name in the file.
 12. **Taking back someone else's step (ADR 0014 Q6; Question 1 above).** With Ctrl+U or go to version, never with Ctrl+Z (ADR 0009 option C). *A (default):* allowed, as a named step that Ctrl+Z takes back. *B:* own steps only.
+13. **Undo of Delete (ADR 0014 Q7; criteria 12 and 40).** *A (default, recommended):* the object comes back with the **same id** through an injected Loro tree Move (ADR 0014 §11); no file-format change; Loro stays pinned and a canary test guards every upgrade; soft delete stays the fallback and comes back to the customer only if a Loro upgrade we need breaks the canary. *B:* soft delete now: deleted objects move into a hidden trash inside the file; public Loro API only, but a `format_version` bump (older builds refuse new files) and deleted objects stay in the file until a wipe. *C:* the object comes back under a **new id**: no risk, but selections, clone lineage and the object's timeline break at every undone delete. Not recommended.
 
 ## UX notes
 

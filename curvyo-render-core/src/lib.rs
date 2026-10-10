@@ -21,6 +21,7 @@ mod decorations;
 mod document_area;
 mod fill;
 mod glyphs;
+mod group_box;
 mod live_preview;
 mod marker_place;
 mod markers;
@@ -40,6 +41,7 @@ pub use color::RgbaColor;
 pub use decorations::{DecorationInput, Hovered};
 pub use document_area::{background_at, build_document_area};
 pub use glyphs::{DrawList, Vertex};
+pub use group_box::{GroupBoxKind, GroupDecorationInput};
 pub use live_preview::build_live_edit_preview;
 pub use marquee_overlay::{MarqueeOverlay, build_marquee_overlay};
 pub use move_axes::{LockedAxis, MoveAxes, build_move_axes};
@@ -76,6 +78,13 @@ pub fn build_decorations(
 #[must_use]
 pub fn build_select_draw_list(view: ViewTransform, input: &SelectDecorationInput) -> DrawList {
     select_box::build(view, input)
+}
+
+/// Builds the group box of a multi-selection with the lighter member boxes
+/// under it (`specs/0019-multi-object-transform/` criteria 1 to 8, 13).
+#[must_use]
+pub fn build_group_draw_list(view: ViewTransform, input: &GroupDecorationInput) -> DrawList {
+    group_box::build(view, input)
 }
 
 /// Builds the Select tool's own transform-handle overlay for this frame

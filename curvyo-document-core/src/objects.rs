@@ -45,6 +45,23 @@ pub enum ObjectEditError {
     /// without an anchor.
     #[error("a replacement path needs at least one outline, each with an anchor")]
     NoOutlines,
+    /// A stroke width given to [`Document::transform_objects`] is not finite
+    /// and above zero: nothing was written.
+    #[error("a stroke width must be finite and above zero")]
+    InvalidStrokeWidth,
+    /// A corner radius given to [`Document::transform_objects`] is not finite:
+    /// nothing was written.
+    #[error("a corner radius must be finite")]
+    InvalidRadius,
+    /// A position, size, handle or rotation given to
+    /// [`Document::transform_objects`] is not finite: nothing was written.
+    #[error("every coordinate and angle must be finite")]
+    NonFiniteGeometry,
+    /// A path result given to [`Document::transform_objects`] for an object that
+    /// is still a primitive is not one closed outline of at least two anchors with
+    /// different ids: nothing was written.
+    #[error("a converted shape must be one closed outline of two or more anchors")]
+    InvalidConversion,
 }
 
 /// One object to duplicate with [`Document::duplicate_objects`], and the

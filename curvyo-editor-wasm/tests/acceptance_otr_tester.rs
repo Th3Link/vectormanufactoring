@@ -827,17 +827,15 @@ fn ac07_polygon_and_star_have_all_eight_rotate_positions() {
             side_hits > 0,
             "side rotate handles exist on a polygon/star with Shift"
         );
-        // and no edge-resize or skew hint anywhere
+        // and no skew hint anywhere (`0019` criterion 56 gives a polygon or star
+        // edge resize handles)
         for i in 0..720 {
             let a = f64::from(i) * PI / 360.0;
             for r in [10.0, 15.0, 20.0, 25.0, 30.0, 40.0] {
                 let p = pt(b.c.x + r * a.cos(), b.c.y + r * a.sin());
                 s.pointer_hover(p, true, false);
                 let h = s.handle_hint();
-                assert!(
-                    h != "resize-edge" && !h.starts_with("skew"),
-                    "{h} on a polygon/star"
-                );
+                assert!(!h.starts_with("skew"), "{h} on a polygon/star");
             }
         }
     }
@@ -2418,7 +2416,7 @@ fn ac27_stroke_switch_value_is_honoured_and_corner_radius_scales() {
 }
 
 #[test]
-fn ac26_polygon_and_star_open_a_single_radius_field_and_scale_about_the_centre() {
+fn ac26_polygon_and_star_open_w_and_h_fields_and_scale_about_the_centre() {
     for star in [false, true] {
         for shift in [false, true] {
             let d = if star {
@@ -2431,17 +2429,19 @@ fn ac26_polygon_and_star_open_a_single_radius_field_and_scale_about_the_centre()
             let kk = k(&s);
             // frame-square box: corner Se at (50, 50)
             let h = pt(50.0, 50.0);
-            let e = open_entry(&mut s, h, shift, false).expect("radius entry");
-            assert_eq!(e.kind, "radius");
-            assert_eq!(e.fields.len(), 1);
+            // `0019` criterion 56 replaces the one field "r" (`0008` criterion 26) by
+            // W and H of the frame square; 60 x 60 is a radius of 30.
+            let e = open_entry(&mut s, h, shift, false).expect("size entry");
+            assert_eq!(e.kind, "size");
+            assert_eq!(e.fields.len(), 2);
             assert_eq!(
                 (e.fields[0].label, e.fields[0].accessible_name),
-                ("r", "Outer radius")
+                ("W", "Width")
             );
-            assert!(near(num(&e.fields[0].prefill), 20.0, 0.051));
+            assert!(near(num(&e.fields[0].prefill), 40.0, 0.051));
             assert!(!e.linked);
             assert_eq!(
-                s.commit_transform_entry("30", "", 0),
+                s.commit_transform_entry("60", "60", 0),
                 EntryOutcome::Committed
             );
             let doc = doc_of(&s);
@@ -4280,8 +4280,8 @@ fn ac27_every_size_entry_is_exactly_one_commit() {
             polygon_doc(30.0, 30.0, 20.0, 5),
             pt(30.0, 10.0),
             pt(50.0, 50.0),
-            "33",
-            "",
+            "66",
+            "66",
         ),
     ];
     for (i, (d, press, corner, a, b)) in cases.into_iter().enumerate() {

@@ -30,6 +30,8 @@ pub struct TransformEntryView {
     pub glyph_reach: f64,
     /// The chip goes by the box centre instead of outward from the handle.
     pub at_centre: bool,
+    /// The chip edits a multi-selection.
+    pub selection: bool,
 }
 
 #[wasm_bindgen]
@@ -110,6 +112,7 @@ impl TransformEntryView {
             center_y,
             glyph_reach: entry.glyph_reach_px,
             at_centre: entry.at_centre,
+            selection: entry.selection,
         }
     }
 }
@@ -132,6 +135,52 @@ impl WasmSession {
     #[must_use]
     pub fn corner_hint_lines(&self) -> Vec<String> {
         self.session.corner_hint_lines()
+    }
+
+    /// The shapes an edge stretch of the selection would turn into paths, while
+    /// the pointer rests on an edge resize handle, as a number of shapes; 0 otherwise. The host writes "Stretching
+    /// turns 2 shapes into paths" in the hint chip from it.
+    #[must_use]
+    pub fn hover_conversion_count(&self) -> u32 {
+        self.session.hover_conversion_count()
+    }
+
+    /// The shapes the drag in flight would turn into paths if released now, in the
+    /// order of [`WasmSession::hover_conversion_count`]; empty when none: the
+    /// readout's second line.
+    #[must_use]
+    pub fn live_conversion_count(&self) -> u32 {
+        self.session.live_conversion_count()
+    }
+
+    /// The shapes the open size entry would turn into paths with the typed texts,
+    /// as a number; 0 when it is not a stretch: the note under its fields.
+    #[must_use]
+    pub fn entry_conversion_count(&self, first: &str, second: &str, last_edited: usize) -> u32 {
+        self.session
+            .entry_conversion_count(first, second, last_edited)
+    }
+
+    /// The shapes the last commit turned into paths, once, as a number;
+    /// 0 when it converted nothing or the notice was taken: the host shows
+    /// "Stretching turned 2 shapes into paths. No undo yet." from it.
+    pub fn take_conversion_notice(&mut self) -> u32 {
+        self.session.take_conversion_notice()
+    }
+
+    /// What a screen reader says about a multi-selection ("4 objects selected,
+    /// 46.2 by 18.7 mm"); empty for fewer than two selected objects.
+    #[must_use]
+    pub fn selection_announcement(&self) -> String {
+        self.session.selection_announcement()
+    }
+
+    /// Whether releasing the drag in flight may take long (a move or group
+    /// transform of many objects): the host shows the `wait` cursor and lets it
+    /// paint before it calls `pointer_up`.
+    #[must_use]
+    pub fn release_is_slow(&self) -> bool {
+        self.session.release_is_slow()
     }
 
     /// The typed numeric entry to show, or `undefined` (criteria 18, 25, 26

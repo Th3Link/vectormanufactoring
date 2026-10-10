@@ -14,6 +14,9 @@ use curvyo_ui_core::{
 
 /// Screen scale 4 px/mm: the 3 px dead zone is 0.75 mm.
 const SCALE: f64 = 4.0;
+// Marquees start at (-2, -12): clear of the north-west rotate handle (about (-5.7, -5.7)) that
+// the group box of a multi-selection has, which takes a press first (`multi-object-transform`
+// criterion 43, step 2).
 const TOLERANCE_MM: f64 = 2.0;
 
 fn pt(x: f64, y: f64) -> Point {
@@ -136,11 +139,11 @@ fn a_leftward_drag_selects_every_object_it_touches() {
 #[test]
 fn a_rightward_drag_selects_only_what_it_contains() {
     let (mut rig, [a, b, _]) = Rig::new();
-    rig.drag(pt(-5.0, -5.0), pt(25.0, 15.0), NONE, NONE);
+    rig.drag(pt(-2.0, -12.0), pt(25.0, 15.0), NONE, NONE);
     assert_eq!(rig.selection.ids(), &[a], "b is only crossed");
     // Deselect first: a lone selected object has handles at its corners.
     rig.selection.clear();
-    rig.drag(pt(-5.0, -5.0), pt(35.0, 15.0), NONE, NONE);
+    rig.drag(pt(-2.0, -12.0), pt(35.0, 15.0), NONE, NONE);
     assert_eq!(rig.selection.ids(), &[a, b]);
 }
 
@@ -158,7 +161,7 @@ fn a_vertical_drag_counts_as_leftward() {
 fn alt_at_release_inverts_the_mode() {
     let (mut rig, [a, b, _]) = Rig::new();
     // Rightward would contain only `a`; inverted it touches `a` and `b`.
-    rig.press(pt(-5.0, -5.0), NONE);
+    rig.press(pt(-2.0, -12.0), NONE);
     rig.moved(pt(25.0, 15.0), ALT);
     rig.release(pt(25.0, 15.0), ALT);
     assert_eq!(rig.selection.ids(), &[a, b]);
@@ -169,7 +172,7 @@ fn alt_at_release_inverts_the_mode() {
 fn shift_adds_the_result_to_the_selection() {
     let (mut rig, [a, b, c]) = Rig::new();
     rig.select(&[c]);
-    rig.drag(pt(-5.0, -5.0), pt(15.0, 15.0), SHIFT, SHIFT);
+    rig.drag(pt(-2.0, -12.0), pt(15.0, 15.0), SHIFT, SHIFT);
     assert_eq!(rig.selection.ids(), &[c, a]);
     let _ = b;
 }
@@ -180,7 +183,7 @@ fn shift_adds_the_result_to_the_selection() {
 fn ctrl_removes_the_result_and_never_adds() {
     let (mut rig, [a, b, c]) = Rig::new();
     rig.select(&[a, c]);
-    rig.drag(pt(-5.0, -5.0), pt(25.0, 15.0), CTRL, CTRL);
+    rig.drag(pt(-2.0, -12.0), pt(25.0, 15.0), CTRL, CTRL);
     assert_eq!(rig.selection.ids(), &[c], "a removed, b not added");
     let _ = b;
 }
@@ -191,7 +194,7 @@ fn shift_with_ctrl_removes() {
     let (mut rig, [a, b, c]) = Rig::new();
     rig.select(&[a, b, c]);
     let both = Modifiers::new(true, true);
-    rig.drag(pt(-5.0, -5.0), pt(15.0, 15.0), both, both);
+    rig.drag(pt(-2.0, -12.0), pt(15.0, 15.0), both, both);
     assert_eq!(rig.selection.ids(), &[b, c]);
 }
 
@@ -200,7 +203,7 @@ fn shift_with_ctrl_removes() {
 fn the_combine_is_the_one_held_at_release() {
     let (mut rig, [a, b, c]) = Rig::new();
     rig.select(&[b, c]);
-    rig.press(pt(-5.0, -5.0), NONE);
+    rig.press(pt(-2.0, -12.0), NONE);
     rig.moved(pt(15.0, 15.0), SHIFT);
     rig.release(pt(15.0, 15.0), SHIFT);
     assert_eq!(rig.selection.ids(), &[b, c, a]);
@@ -271,7 +274,7 @@ fn the_live_gesture_follows_direction_and_modifiers() {
 fn a_marquee_never_moves_anything() {
     let (mut rig, _) = Rig::new();
     let before = rig.objects();
-    rig.drag(pt(-5.0, -5.0), pt(60.0, 15.0), NONE, NONE);
+    rig.drag(pt(-2.0, -12.0), pt(60.0, 15.0), NONE, NONE);
     assert_eq!(rig.objects(), before);
 }
 
@@ -280,7 +283,7 @@ fn a_marquee_never_moves_anything() {
 #[test]
 fn escape_cancels_a_marquee() {
     let (mut rig, [a, ..]) = Rig::new();
-    rig.press(pt(-5.0, -5.0), NONE);
+    rig.press(pt(-2.0, -12.0), NONE);
     rig.moved(pt(15.0, 15.0), NONE);
     assert!(rig.tool.drag_in_flight());
     rig.tool.escape();

@@ -16,6 +16,7 @@
 use curvyo_document_core::{Document, ObjectSnapshot, Point, Tolerance};
 
 use crate::anchor_id_minter::AnchorIdMinter;
+use crate::conversion::{ConversionCounts, converted_counts, converted_polygon_or_star};
 use crate::modifiers::Modifiers;
 use crate::object_selection::ObjectSelection;
 use crate::param_handles::{ParamHandle, radius_gain};
@@ -24,13 +25,16 @@ use crate::transform_commit::same_within_tolerance;
 use crate::transform_drag::{
     CornerLinking, CornerRadiusScaling, DragOrigin, ScaleModes, StrokeScaling, TransformDrag,
 };
-use crate::transform_handle_layout::EditHandle;
 pub use crate::transform_handle_layout::TransformHandleTolerances;
+use crate::transform_handle_layout::{EditHandle, is_corner};
 
 mod bar;
 mod cycle;
 mod entry;
 mod gesture;
+mod group_drag;
+mod group_entry;
+mod group_handles;
 mod handles;
 mod move_drag;
 mod press;
@@ -39,6 +43,7 @@ mod preview;
 use cycle::ClickCycle;
 use entry::OpenEntry;
 use gesture::{LassoDrag, MarqueeDrag};
+use group_drag::GroupDrag;
 use handles::sole_selected;
 
 pub use entry::{EntryKey, KeyEntryRefusal, MoveEntryMode, double_click};
@@ -59,6 +64,9 @@ enum SelectDrag {
     Moving(MoveDrag),
     /// A resize, rotate or skew drag in progress.
     Transforming(TransformDrag),
+    /// A resize, rotate or skew drag on the group box of a multi-selection
+    /// (`specs/0019-multi-object-transform/`).
+    GroupTransforming(GroupDrag),
     /// A marquee in progress (`specs/0014-advanced-selection/`): armed by a press
     /// on empty canvas with Alt up.
     Marquee(MarqueeDrag),
@@ -144,6 +152,9 @@ pub struct SelectTool {
     /// begun by a plain click that acted on an object, dropped by anything
     /// else that is not an Alt-click on the same point.
     cycle: Option<ClickCycle>,
+    /// The shapes the last commit turned into paths, until the host has taken the
+    /// notice of it ([`SelectTool::take_conversion_notice`]).
+    last_conversion: ConversionCounts,
 }
 
 impl SelectTool {
@@ -214,8 +225,10 @@ impl SelectTool {
             // (`edit-interaction-polish`, UX review of PR 4).
             SelectDrag::Moving(_) | SelectDrag::Marquee(_) | SelectDrag::Lasso(_) => false,
             SelectDrag::Transforming(drag) => drag.origin.shift_at_press,
+            SelectDrag::GroupTransforming(drag) => drag.origin.shift_at_press,
             SelectDrag::None => match &self.entry {
                 Some(OpenEntry::Transform(entry)) => entry.side_rotate_revealed(),
+                Some(OpenEntry::Group(entry)) => entry.side_rotate_revealed(),
                 // No other chip owns a side rotate handle, and none may sit
                 // on one (criterion 59).
                 Some(OpenEntry::Param(_) | OpenEntry::Skew(_) | OpenEntry::Move(_)) => false,
@@ -247,6 +260,8 @@ impl SelectTool {
     ) -> SelectPointerDownOutcome {
         self.entry = None;
         self.last_press_handle = None;
+        // A notice not yet taken belongs to the gesture before this one.
+        self.last_conversion = ConversionCounts::default();
         // `adrs.md`: "ui-core filters the selection against the current
         // snapshot first" — drops any id a prior action (this peer's own
         // edit in a different tool, or a collaborator) has since removed,
@@ -326,6 +341,14 @@ impl SelectTool {
             param_gain,
             unlinked: matches!(handle, EditHandle::Param(ParamHandle::CornerRadius(_)))
                 && self.corner_linking.is_unlinked_with(origin.shift_at_press),
+            // Only an edge handle stretches a polygon or star (a corner drag is
+            // always proportional, criterion 56).
+            converted: match handle {
+                EditHandle::Resize(direction) if !is_corner(direction) => {
+                    converted_polygon_or_star(object).map(Box::new)
+                }
+                _ => None,
+            },
         }
     }
 
@@ -360,6 +383,20 @@ impl SelectTool {
                 let result = drag.resolve(point, modifiers.shift, modifiers.ctrl);
                 if !same_within_tolerance(&result, &drag.start) {
                     drag.commit(document, &result);
+                    self.record_single_conversion(document, &drag.start);
+                }
+            }
+            SelectDrag::GroupTransforming(drag) => {
+                if !drag.origin.is_active_at(point) {
+                    return;
+                }
+                let results = drag.resolve(point, modifiers.shift, modifiers.ctrl);
+                let unchanged = results
+                    .iter()
+                    .zip(&drag.starts)
+                    .all(|(new, old)| same_within_tolerance(new, old));
+                if !unchanged && let Some(counts) = drag.commit(document, &results) {
+                    self.record_conversion(counts);
                 }
             }
             SelectDrag::Marquee(drag) => {
@@ -369,6 +406,30 @@ impl SelectTool {
                 self.finish_lasso(&drag, objects, selection, point, modifiers);
             }
         }
+    }
+
+    /// Remembers that a commit turned `counts` shapes into paths; nothing for an
+    /// empty count, so a later commit never clears a notice not yet shown.
+    pub(crate) fn record_conversion(&mut self, counts: ConversionCounts) {
+        if !counts.is_empty() {
+            self.last_conversion = counts;
+        }
+    }
+
+    /// [`SelectTool::record_conversion`] for a commit of one object: it counts when
+    /// `start` was a primitive and the document holds a path under its id now.
+    pub(crate) fn record_single_conversion(&mut self, document: &Document, start: &ObjectSnapshot) {
+        if let Some(now) = document.object(start.id()) {
+            self.record_conversion(converted_counts(std::slice::from_ref(start), &[now]));
+        }
+    }
+
+    /// The shapes the last commit turned into paths, by kind, once: empty when it
+    /// converted nothing or the host has already taken it. The host shows the
+    /// notice of criterion 54 ("Stretching turned 2 shapes into paths. No undo
+    /// yet.") from it.
+    pub fn take_conversion_notice(&mut self) -> ConversionCounts {
+        std::mem::take(&mut self.last_conversion)
     }
 
     /// Cancels whichever drag is in flight, writing nothing, and ends the
@@ -1499,7 +1560,8 @@ mod tests {
         let mut tool = SelectTool::new();
         // The Ne corner handle sits along the (1,-1) diagonal.
         let handles = SelectTool::transform_handles(&objects, &selection, HANDLE_TOLERANCES, false);
-        assert_eq!(handles.len(), 8, "4 corners + 4 corner rotate, no edges");
+        // `0019` criterion 56: a polygon or star shows the edge handles too.
+        assert_eq!(handles.len(), 12, "4 corners + 4 edges + 4 corner rotate");
         let (_, ne_position) = handles
             .iter()
             .find(|(h, _)| matches!(h, EditHandle::Resize(ResizeDirection::Ne)))

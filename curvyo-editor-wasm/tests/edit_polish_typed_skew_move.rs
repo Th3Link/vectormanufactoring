@@ -353,7 +353,7 @@ fn the_skew_chip_refuses_out_of_range_text_and_writes_nothing() {
 
 /// Criterion 59: the entry keys that cannot act show a hint and change
 /// nothing: nothing selected and M or K outside the Select tool "select
-/// first", several objects "select one", a non-path "paths only".
+/// first", a non-path "paths only" (several objects: see the end of the test).
 #[test]
 fn the_entry_keys_that_cannot_act_give_the_hints() {
     // Nothing selected.
@@ -401,12 +401,16 @@ fn the_entry_keys_that_cannot_act_give_the_hints() {
     session.pointer_down(pt(220.0, 20.0), true);
     session.pointer_up(pt(220.0, 20.0), true, false);
     assert_eq!(session.selected_object_count(), 2);
-    for (k, shift) in [("m", false), ("k", false), ("k", true)] {
+    // `multi-object-transform` criterion 37: M opens the move chip of the
+    // selection; K and Shift+K on rectangles say that skew works on paths only.
+    // "Select one object to type a value" no longer exists.
+    for (k, shift) in [("k", false), ("k", true)] {
         assert_eq!(
             key(&mut session, k, shift),
-            KeyOutcome::Hint(KeyHint::SelectOne)
+            KeyOutcome::Hint(KeyHint::PathOnly)
         );
     }
+    assert_eq!(key(&mut session, "m", false), KeyOutcome::EntryOpened);
 }
 
 /// Criterion 12 and 25: Escape closes the chip first and writes nothing; a

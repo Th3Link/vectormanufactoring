@@ -42,6 +42,7 @@ pub struct MoveEntryChip {
     relative: [String; 2],
     absolute: [String; 2],
     copy_preset: bool,
+    selection: bool,
 }
 
 #[wasm_bindgen]
@@ -60,6 +61,14 @@ impl MoveEntryChip {
     #[must_use]
     pub fn copy_preset(&self) -> bool {
         self.copy_preset
+    }
+
+    /// Whether the chip moves a multi-selection (criterion 35 of
+    /// `multi-object-transform`): "Absolute" says it measures from the top-left
+    /// corner of the selection.
+    #[must_use]
+    pub fn selection(&self) -> bool {
+        self.selection
     }
 
     /// The text X (`0`) or Y (`1`) shows in Absolute mode while untouched: the
@@ -85,6 +94,7 @@ impl WasmSession {
             relative_prefill,
             absolute_prefill,
             copy_preset,
+            selection,
         } = self.session.move_entry()?;
         let (center_x, center_y) = self.session.view().document_to_screen(center);
         Some(MoveEntryChip {
@@ -93,6 +103,7 @@ impl WasmSession {
             relative: relative_prefill,
             absolute: absolute_prefill,
             copy_preset,
+            selection,
         })
     }
 

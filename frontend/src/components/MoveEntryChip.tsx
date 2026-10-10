@@ -14,6 +14,8 @@ const MESSAGE_CARD_PX = 28;
 
 /** What "Absolute" measures from (criterion 21). */
 const ABSOLUTE_HINT = "Top-left corner of the object's bounds, measured from the page's top-left corner";
+/** The same, for a multi-selection (`multi-object-transform` criterion 35). */
+const ABSOLUTE_HINT_SELECTION = "Top-left corner of the selection";
 
 /** The labels and the accessible names of the two fields, per mode
  * (`edit-interaction-polish` criterion 18). */
@@ -66,6 +68,7 @@ export function MoveEntryChip({ entry, containerRef, onCommit, onCancel }: MoveE
     canvas: { width: Number.POSITIVE_INFINITY, height: Number.POSITIVE_INFINITY },
   });
 
+  const absoluteHint = entry.selection ? ABSOLUTE_HINT_SELECTION : ABSOLUTE_HINT;
   const prefill = (axis: 0 | 1, mode: boolean) => (mode ? entry.absolute[axis] : entry.relative[axis]);
   const textOf = (axis: 0 | 1) => (edited[axis] ? typed[axis] : prefill(axis, absolute));
 
@@ -245,8 +248,8 @@ export function MoveEntryChip({ entry, containerRef, onCommit, onCancel }: MoveE
           role="switch"
           aria-checked={absolute}
           aria-label="Absolute position"
-          aria-description={ABSOLUTE_HINT}
-          title={ABSOLUTE_HINT}
+          aria-description={absoluteHint}
+          title={absoluteHint}
           onClick={() => setAbsolute((previous) => !previous)}
           onKeyDown={onSwitchKeyDown}
           onBlur={onBlur}

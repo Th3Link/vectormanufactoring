@@ -50,14 +50,13 @@ fn committed_horizontal_path_stroke_is_non_empty() {
     let id = document.object_ids()[0];
     let snapshot = document.path(id).expect("exists");
     let list = draw(snapshot);
-    // Two node glyphs (outline+fill, 2 quads = 4 triangles each) account
-    // for 8 triangles on their own; the stroke itself must add strictly
-    // more than that, or the segment between them is contributing zero
-    // geometry.
+    // `build_artwork` draws no node glyphs: every triangle here is the stroke.
+    // A straight segment is one quad (two triangles; since `multi-object-transform`
+    // a segment with no handles is sent to `lyon` as a line, not as a degenerate
+    // curve that was cut into many pieces), so the invariant is "not zero".
     assert!(
-        list.triangle_count() > 8,
-        "a horizontal 0.25mm stroke must tessellate to visible geometry, not just the two \
-         node glyphs (triangle_count={})",
+        list.triangle_count() > 0,
+        "a horizontal 0.25mm stroke must tessellate to visible geometry (triangle_count={})",
         list.triangle_count()
     );
 }
@@ -70,9 +69,8 @@ fn committed_vertical_path_stroke_is_non_empty() {
     let snapshot = document.path(id).expect("exists");
     let list = draw(snapshot);
     assert!(
-        list.triangle_count() > 8,
-        "a vertical 0.25mm stroke must tessellate to visible geometry, not just the two node \
-         glyphs (triangle_count={})",
+        list.triangle_count() > 0,
+        "a vertical 0.25mm stroke must tessellate to visible geometry (triangle_count={})",
         list.triangle_count()
     );
 }
@@ -94,11 +92,11 @@ fn horizontal_and_diagonal_strokes_of_equal_length_tessellate_comparably() {
     let d_list = draw(diagonal.path(d_id).unwrap());
 
     assert!(
-        h_list.triangle_count() > 8,
+        h_list.triangle_count() > 0,
         "horizontal must have real stroke geometry"
     );
     assert!(
-        d_list.triangle_count() > 8,
+        d_list.triangle_count() > 0,
         "diagonal must have real stroke geometry"
     );
     // Not an exact-equality check (tessellation of a straight stroke can

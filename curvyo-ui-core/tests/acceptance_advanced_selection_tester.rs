@@ -28,6 +28,9 @@ use curvyo_ui_core::{
 use proptest::prelude::*;
 
 const SCALE: f64 = 4.0;
+// Marquees start at (-2, -12): clear of the north-west rotate handle (about (-5.7, -5.7)) that
+// the group box of a multi-selection has, which takes a press first (`multi-object-transform`
+// criterion 43, step 2).
 const TOL: f64 = 2.0;
 
 const NONE: Modifiers = Modifiers::NONE;
@@ -523,7 +526,7 @@ fn model_apply(initial: &[NodeId], result: &[NodeId], combine: SelectionCombine)
 #[test]
 fn ac9_to_14_the_full_modifier_table_for_a_marquee_drag() {
     // Box (-5,-5)..(25,15): crosses B, contains A only.
-    let corners = (pt(-5.0, -5.0), pt(25.0, 15.0));
+    let corners = (pt(-2.0, -12.0), pt(25.0, 15.0));
     for initial_ix in [vec![1, 2], vec![0, 2], vec![3], vec![]] {
         for (m, rightward, mode, combine) in table() {
             let (mut rig, ids) = scene();
@@ -592,7 +595,7 @@ fn ac10_no_horizontal_movement_is_touch() {
 #[test]
 fn ac11_alt_pressed_mid_drag_inverts_and_released_reverts() {
     let (mut rig, [a, b, ..]) = scene();
-    rig.press(pt(-5.0, -5.0), NONE);
+    rig.press(pt(-2.0, -12.0), NONE);
     rig.moved(pt(25.0, 15.0), NONE);
     let mode =
         |rig: &Rig, m: Modifiers| match rig.tool.live_gesture(pt(25.0, 15.0), m).unwrap().shape {
@@ -615,7 +618,7 @@ fn ac11_alt_pressed_mid_drag_inverts_and_released_reverts() {
 #[test]
 fn ac11_alt_pressed_then_released_before_release_applies_the_default() {
     let (mut rig, [a, ..]) = scene();
-    rig.press(pt(-5.0, -5.0), NONE);
+    rig.press(pt(-2.0, -12.0), NONE);
     rig.moved(pt(25.0, 15.0), ALT);
     rig.moved(pt(25.0, 15.0), NONE);
     rig.release(pt(25.0, 15.0), NONE);
@@ -650,7 +653,7 @@ fn ac12_13_modifiers_are_read_at_release_not_at_press() {
     // Shift at the press only: release is a replace.
     let (mut rig, [a, b, c, _]) = scene();
     rig.select(&[c]);
-    rig.press(pt(-5.0, -5.0), SHIFT);
+    rig.press(pt(-2.0, -12.0), SHIFT);
     rig.moved(pt(25.0, 15.0), NONE);
     rig.release(pt(25.0, 15.0), NONE);
     assert_eq!(
@@ -661,7 +664,7 @@ fn ac12_13_modifiers_are_read_at_release_not_at_press() {
     // Ctrl at the press only.
     let (mut rig, [a, _, c, _]) = scene();
     rig.select(&[a, c]);
-    rig.press(pt(-5.0, -5.0), CTRL);
+    rig.press(pt(-2.0, -12.0), CTRL);
     rig.moved(pt(25.0, 15.0), NONE);
     rig.release(pt(25.0, 15.0), NONE);
     assert_eq!(
@@ -672,7 +675,7 @@ fn ac12_13_modifiers_are_read_at_release_not_at_press() {
     // Shift only at release.
     let (mut rig, [a, _, c, _]) = scene();
     rig.select(&[c]);
-    rig.press(pt(-5.0, -5.0), NONE);
+    rig.press(pt(-2.0, -12.0), NONE);
     rig.moved(pt(25.0, 15.0), NONE);
     rig.release(pt(25.0, 15.0), SHIFT);
     assert_eq!(rig.sel(), sorted(vec![a, c]));
@@ -683,7 +686,10 @@ fn ac12_13_modifiers_are_read_at_release_not_at_press() {
 fn ac13_ctrl_never_adds_an_unselected_object() {
     let (mut rig, [a, b, c, d]) = scene();
     rig.select(&[c, d]);
-    rig.drag(pt(25.0, 15.0), pt(-5.0, -5.0), NONE, CTRL); // touches A and B only
+    // Starts on empty canvas inside the group box of C and D, clear of its centre
+    // handle at (25, 15), which takes a press first (`multi-object-transform`
+    // criterion 43, step 2).
+    rig.drag(pt(31.0, 15.0), pt(-2.0, -12.0), NONE, CTRL); // touches A and B only
     assert_eq!(
         rig.sel(),
         sorted(vec![c, d]),
@@ -696,7 +702,7 @@ fn ac13_ctrl_never_adds_an_unselected_object() {
 fn ac13_shift_and_ctrl_together_remove() {
     let (mut rig, [a, _, c, _]) = scene();
     rig.select(&[a, c]);
-    rig.drag(pt(-5.0, -5.0), pt(25.0, 15.0), NONE, SHIFT_CTRL);
+    rig.drag(pt(-2.0, -12.0), pt(25.0, 15.0), NONE, SHIFT_CTRL);
     assert_eq!(rig.selection.ids(), &[c]);
 }
 
@@ -767,7 +773,7 @@ fn ac15_a_marquee_started_over_a_far_object_never_moves_it_even_via_escape() {
 fn ac14_escape_cancels_a_marquee_and_keeps_the_selection() {
     let (mut rig, [a, b, ..]) = scene();
     rig.select(&[b]);
-    rig.press(pt(-5.0, -5.0), NONE);
+    rig.press(pt(-2.0, -12.0), NONE);
     rig.moved(pt(25.0, 15.0), NONE);
     assert!(rig.tool.live_gesture(pt(25.0, 15.0), NONE).is_some());
     rig.tool.escape();
@@ -996,7 +1002,7 @@ fn ac16_releasing_alt_mid_lasso_does_not_turn_it_into_a_box() {
 #[test]
 fn alt_pressed_after_a_box_started_does_not_make_it_a_lasso() {
     let (mut rig, ..) = scene();
-    rig.press(pt(-5.0, -5.0), NONE);
+    rig.press(pt(-2.0, -12.0), NONE);
     rig.moved(pt(25.0, 15.0), ALT);
     let live = rig.tool.live_gesture(pt(25.0, 15.0), ALT).unwrap();
     assert!(matches!(live.shape, GestureShape::Box { .. }));
@@ -1405,9 +1411,9 @@ fn a_stale_object_vanishing_mid_marquee_does_not_panic() {
     let (mut rig, [a, b, ..]) = scene();
     rig.select(&[a, b]);
     rig.press(pt(70.0, 70.0), SHIFT);
-    rig.moved(pt(-5.0, -5.0), SHIFT);
+    rig.moved(pt(-2.0, -12.0), SHIFT);
     rig.document.delete_objects(&[a]).ok();
-    rig.release(pt(-5.0, -5.0), SHIFT);
+    rig.release(pt(-2.0, -12.0), SHIFT);
     assert!(!rig.selection.ids().contains(&a) || rig.selection.ids().len() <= 4);
 }
 

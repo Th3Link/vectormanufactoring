@@ -27,9 +27,11 @@ pub type SelectionBox = [Point; 4];
 
 /// What the Select tool decorates this frame: every currently selected
 /// object's own box (plural — a heterogeneous multi-select shows each
-/// object's own real box simultaneously, never one merged box,
-/// `docs/design-system.md`'s "Mixed-state display on multi-select"
-/// extension), plus a hovered-but-not-yet-selected object's box.
+/// object's own real box simultaneously, `docs/design-system.md`'s
+/// "Mixed-state display on multi-select" extension; the group box around a
+/// multi-selection is drawn on top of these by the `group_box` module, which
+/// `multi-object-transform` added), plus a hovered-but-not-yet-selected
+/// object's box.
 #[derive(Debug, Clone, Default)]
 pub struct SelectDecorationInput {
     /// Selected objects, each with its own id and box.
@@ -133,7 +135,7 @@ pub(crate) fn snap_to_device(coord_px: f64, ratio: f64, line_device_px: f64) -> 
     ((coord_px * ratio - centre_offset).round() + centre_offset) / ratio
 }
 
-type Screen = (f64, f64);
+pub(crate) type Screen = (f64, f64);
 
 pub(crate) fn effective_ratio(ratio: f64) -> f64 {
     if ratio.is_finite() && ratio > 0.0 {
@@ -176,16 +178,16 @@ pub(crate) fn snap_guide_line(
 }
 
 /// A box in screen pixels, with the width its line is drawn at.
-struct ScreenBox {
-    corners: [Screen; 4],
-    width_px: f64,
+pub(crate) struct ScreenBox {
+    pub(crate) corners: [Screen; 4],
+    pub(crate) width_px: f64,
 }
 
 impl ScreenBox {
     /// `corners` in screen pixels. An axis-aligned box is snapped to the device
     /// pixel grid and takes a whole number of device pixels of width; a rotated
     /// one keeps its true corners and the 1 px width (it can be no crisper).
-    fn new(view: ViewTransform, corners: SelectionBox, ratio: f64) -> Self {
+    pub(crate) fn new(view: ViewTransform, corners: SelectionBox, ratio: f64) -> Self {
         let screen = corners.map(|corner| view.document_to_screen(corner));
         let axis_aligned = (0..4).all(|i| {
             let (a, b) = (screen[i], screen[(i + 1) % 4]);
@@ -260,7 +262,12 @@ fn cut_span_interval(spans: Vec<(f64, f64)>, (from, to): (f64, f64)) -> Vec<(f64
 /// Where the skew guide `guide` (screen pixels) covers the edge `from` to `to`:
 /// the interval of the guide along the edge, if both edge ends lie on the
 /// guide's line.
-fn guide_cover(from: Screen, to: Screen, guide: (Screen, Screen)) -> Option<(f64, f64)> {
+pub(crate) fn guide_cover(
+    from: Screen,
+    to: Screen,
+    guide: (Screen, Screen),
+    tolerance_px: f64,
+) -> Option<(f64, f64)> {
     let length = (to.0 - from.0).hypot(to.1 - from.1);
     let guide_length = (guide.1.0 - guide.0.0).hypot(guide.1.1 - guide.0.1);
     if length <= f64::EPSILON || guide_length <= f64::EPSILON {
@@ -273,9 +280,7 @@ fn guide_cover(from: Screen, to: Screen, guide: (Screen, Screen)) -> Option<(f64
     );
     // Perpendicular distance of a point from the guide's line.
     let distance = |p: Screen| ((p.0 - guide.0.0) * gy - (p.1 - guide.0.1) * gx).abs();
-    if distance(from) > theme::SELECTION_BOX_GUIDE_TOLERANCE_PX
-        || distance(to) > theme::SELECTION_BOX_GUIDE_TOLERANCE_PX
-    {
+    if distance(from) > tolerance_px || distance(to) > tolerance_px {
         return None;
     }
     let along = |p: Screen| (p.0 - from.0) * ux + (p.1 - from.1) * uy;
@@ -285,12 +290,12 @@ fn guide_cover(from: Screen, to: Screen, guide: (Screen, Screen)) -> Option<(f64
 
 /// One box edge `from` to `to` (screen pixels) as dashes, or one solid line,
 /// minus the interval `cut` along it where the skew guide draws instead.
-fn dashed_edge(
+pub(crate) fn dashed_edge(
     view: ViewTransform,
     from: Screen,
     to: Screen,
     width_px: f64,
-    cut: Option<(f64, f64)>,
+    cuts: &[(f64, f64)],
     color: RgbaColor,
     thickness_factor: f64,
 ) -> DrawList {
@@ -305,7 +310,7 @@ fn dashed_edge(
     // and is only thicker across.
     let width_mm = width_px * thickness_factor / view.scale();
     let mut spans = edge_spans(length, width_px);
-    if let Some(cut) = cut {
+    for &cut in cuts {
         spans = cut_span_interval(spans, cut);
     }
     for (start, end) in spans {
@@ -337,13 +342,16 @@ pub fn build(view: ViewTransform, input: &SelectDecorationInput) -> DrawList {
             let screen = ScreenBox::new(view, corners, ratio);
             for i in 0..4 {
                 let (from, to) = (screen.corners[i], screen.corners[(i + 1) % 4]);
-                let cut = guide.and_then(|g| guide_cover(from, to, g));
+                let cut: Vec<_> = guide
+                    .and_then(|g| guide_cover(from, to, g, theme::SELECTION_BOX_GUIDE_TOLERANCE_PX))
+                    .into_iter()
+                    .collect();
                 list.extend(dashed_edge(
                     view,
                     from,
                     to,
                     screen.width_px,
-                    cut,
+                    &cut,
                     color,
                     factor,
                 ));

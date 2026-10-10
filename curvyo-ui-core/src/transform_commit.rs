@@ -10,6 +10,7 @@ use curvyo_document_core::{
 };
 
 use crate::anchor_id_minter::AnchorIdMinter;
+use crate::group_transform::commit_group;
 use crate::param_edit::commit_param;
 use crate::transform_drag::{ScaleModes, StrokeScaling};
 use crate::transform_handle_layout::EditHandle;
@@ -119,6 +120,11 @@ pub(crate) fn commit_resize(
                 |w| document.resize_star_frame(id, frame, w),
             ),
         },
+        ObjectSnapshot::Path(_) if document.primitive(id).is_some() => {
+            // A path result for an object that is still a primitive is a
+            // conversion (`specs/0019-multi-object-transform/` criterion 56).
+            let _ = commit_group(document, std::slice::from_ref(result), stroke_scaling);
+        }
         ObjectSnapshot::Path(path) => {
             let anchors: Vec<(AnchorId, Point, Vec2, Vec2)> = path
                 .all_anchors()

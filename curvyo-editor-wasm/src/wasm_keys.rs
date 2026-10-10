@@ -18,7 +18,7 @@ impl WasmSession {
     /// held. Returns what happened: `"ignored"`, `"tool"`, `"entry"`,
     /// `"deleted"`, `"pen"`, `"escape-entry"`, `"escape-drag"`,
     /// `"escape-state"`, `"escape-tool"`, `"escape-none"`,
-    /// `"hint-select-one"`, `"hint-select-first"` or `"hint-path-only"`. The host prevents the page's default for every
+    /// `"hint-select-first"` or `"hint-path-only"`. The host prevents the page's default for every
     /// result except `"ignored"` and re-reads the session state for them.
     #[allow(clippy::fn_params_excessive_bools)]
     pub fn key_down(
