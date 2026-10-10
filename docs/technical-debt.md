@@ -1258,3 +1258,11 @@ of the Select bar (click-through, 3 s or 8 s).
   key press and pointer event slow, whatever the draw list costs. Not fixed in `0044`.
   **Resolution:** find the quadratic id lookups behind the two panel reads (`ids.contains` over all
   objects) and cache the result per selection and document version, as the object read is.
+- **The nudge readout can cover a handle of a single small object** (UX review of #87): the chip,
+  16 px right of and below the centre, covers the bottom-right corner-radius knob of a 21 mm
+  rectangle for up to 800 ms. Cosmetic. **Resolution:** do not draw the parameter handles while a
+  nudge readout shows, or move the chip off the knob.
+- **The canvas has no visible focus ring** (`outline-none`), although Ctrl+A and the arrows depend
+  on canvas focus: after a click on a panel control they do nothing until the canvas is clicked or
+  tabbed to, with no cue. Existing behaviour, made more visible by `0044`. **Resolution:** a
+  separate story for a canvas focus indicator.

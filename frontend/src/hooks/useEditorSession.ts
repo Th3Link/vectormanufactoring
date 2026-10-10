@@ -742,7 +742,7 @@ export function useEditorSession(
   const [keyHint, setKeyHint] = useState<KeyHint | null>(null);
   const keyHintCounter = useRef(0);
   const nudgeFeedback = useNudgeFeedback();
-  const { onNudge, onSelectAll, onKeyUp: onNudgeKeyUp } = nudgeFeedback;
+  const { onNudge, onSelectAll, onEscape, onKeyUp: onNudgeKeyUp } = nudgeFeedback;
 
   /** Re-reads the typed entry (position follows zoom, pan and resize; it
    * closes on a tool switch or a selection change). */
@@ -1568,6 +1568,8 @@ export function useEditorSession(
         onSelectAll(session.selection_count());
       } else if (outcome === "nudge" || outcome === "nudge-new") {
         onNudge(session, outcome === "nudge-new");
+      } else if (outcome.startsWith("escape")) {
+        onEscape();
       }
       const hint = KEY_HINT_TEXT[outcome];
       if (hint !== undefined) {
@@ -1578,7 +1580,7 @@ export function useEditorSession(
       setCursorHint(session.cursor_hint());
       syncFromSession();
     },
-    [isSpaceHeld, syncFromSession, onNudge, onSelectAll],
+    [isSpaceHeld, syncFromSession, onNudge, onSelectAll, onEscape],
   );
 
   // A key hint clears itself after 2 s; a newer message restarts the clock.

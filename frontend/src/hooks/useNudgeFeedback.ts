@@ -24,6 +24,8 @@ export interface NudgeFeedback {
   onNudge: (session: NudgeSource, newRun: boolean) => void;
   /** Ctrl+A selected `count` objects. */
   onSelectAll: (count: number) => void;
+  /** Escape was pressed: the readout goes at once, the step is still announced. */
+  onEscape: () => void;
   /** A key was released: an arrow key ends the step that is running. */
   onKeyUp: (key: string) => void;
 }
@@ -82,6 +84,11 @@ export function useNudgeFeedback(): NudgeFeedback {
     [announce],
   );
 
+  const onEscape = useCallback(() => {
+    window.clearTimeout(readoutTimer.current);
+    setReadout(null);
+  }, []);
+
   const onKeyUp = useCallback(
     (key: string) => {
       if (key.startsWith("Arrow")) {
@@ -99,5 +106,5 @@ export function useNudgeFeedback(): NudgeFeedback {
     [],
   );
 
-  return { readout, announcement, onNudge, onSelectAll, onKeyUp };
+  return { readout, announcement, onNudge, onSelectAll, onEscape, onKeyUp };
 }

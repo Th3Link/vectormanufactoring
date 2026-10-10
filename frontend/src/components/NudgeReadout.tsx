@@ -53,7 +53,7 @@ export function NudgeReadout({ feedback, containerRef }: NudgeReadoutProps) {
         <div
           ref={chipRef}
           aria-hidden="true"
-          className="pointer-events-none absolute z-40 rounded-lg px-2 py-1 text-xs whitespace-nowrap tabular-nums"
+          className="pointer-events-none absolute z-40 rounded-md px-1.5 py-0.5 text-xs whitespace-nowrap tabular-nums"
           style={{
             left: placement.left,
             top: placement.top,
