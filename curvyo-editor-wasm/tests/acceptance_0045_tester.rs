@@ -943,7 +943,8 @@ fn c28_the_project_stores_only_its_size_and_the_format_version_is_unchanged() {
     s.apply_document_preset("u-ring");
     let bytes = s.pack("0.1.0").unwrap();
     let d = unpack(9, &bytes).unwrap();
-    assert_eq!(CURRENT_FORMAT_VERSION, 9, "the project format did not move");
+    // Formats added no bump (version 9 was current then); later stories (`0040`) move it.
+    const _: () = assert!(CURRENT_FORMAT_VERSION >= 9);
     let _ = d;
     assert_eq!(
         container_format_version(&bytes),

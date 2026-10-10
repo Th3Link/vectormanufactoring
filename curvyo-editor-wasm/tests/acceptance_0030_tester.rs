@@ -557,7 +557,9 @@ fn a_file_with_another_size_opens_unchanged_with_nothing_pressed() {
 
 #[test]
 fn format_version_is_not_bumped_by_presets() {
-    assert_eq!(curvyo_document_core::CURRENT_FORMAT_VERSION, 9);
+    // Presets added no bump: nine is the version before them; later stories (`0040`) move it,
+    // and a preset press writes no other root key than the size (see the tests above).
+    const _: () = assert!(curvyo_document_core::CURRENT_FORMAT_VERSION >= 9);
 }
 
 // -------------------------------------------- extremes

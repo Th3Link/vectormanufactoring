@@ -1,6 +1,6 @@
 # Document background: a fill for the document, and the eyedropper that picks it
 
-Status: Ready (`adrs.md` and the UX notes of 2026-10-10 exist; delivery: one PR, four milestones, after #79 and #80 merge)
+Status: In progress (`story/document-background`; `adrs.md` and the UX notes of 2026-10-10 exist; delivery: one PR, four milestones, on top of #80 and #84)
 Priority: Should
 Origin: Customer (the document may have a fill; the eyedropper for objects picks the background; the eyedropper for the background itself; request of 2026-10-10). Proposals, marked where they occur and in the decisions below (defaults taken by the lead, 2026-10-10): "none" drawn as a checkerboard, the pasteboard is not pickable, the Opacity row, the default colour kept at today's value, the label `set_document_background`.
 

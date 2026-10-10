@@ -658,7 +658,8 @@ fn the_json_export_carries_the_markers() {
 
 #[test]
 fn the_format_version_is_nine() {
-    assert_eq!(CURRENT_FORMAT_VERSION, 9);
+    // Nine is where the markers took it; later bumps (`0040`) move the constant.
+    const _: () = assert!(CURRENT_FORMAT_VERSION >= 9);
 }
 
 #[test]
