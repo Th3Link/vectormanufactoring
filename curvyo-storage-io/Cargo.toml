@@ -14,5 +14,5 @@ thiserror.workspace = true
 
 [dev-dependencies]
 # Only the test that opening an older project writes nothing to its file (`0040` criterion 4).
-curvyo-document-core = { path = "../curvyo-document-core" }
+curvyo-document-core = { path = "../curvyo-document-core", version = "0.1.0" }
 tempfile = "3"
