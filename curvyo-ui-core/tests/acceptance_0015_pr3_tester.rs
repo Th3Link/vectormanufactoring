@@ -13,9 +13,9 @@ use curvyo_document_core::{
     DisplayUnit, Document, DocumentSize, Length, Point, RectBounds, Vec2, ViewTransform,
 };
 use curvyo_ui_core::{
-    ObjectSelection, PX_PER_MM_AT_100, PanelContent, Viewport, content_too_large_message,
-    document_side_message, format_cursor, format_field_length, format_size, panel_content,
-    parse_document_side,
+    ObjectSelection, PX_PER_MM_AT_100, PanelContent, PanelTabs, Viewport,
+    content_too_large_message, document_side_message, format_cursor, format_field_length,
+    format_size, panel_body, parse_document_side,
 };
 use proptest::prelude::*;
 
@@ -301,6 +301,20 @@ fn selection_of(n: usize) -> ObjectSelection {
     let mut selection = ObjectSelection::new();
     selection.set(&ids);
     selection
+}
+
+/// The body of a new session's panel (`0043`: the tab follows the scope until
+/// the maker presses one), which is what the 0015 criterion 14a describes.
+fn panel_content(
+    _selection: &ObjectSelection,
+    pen_path_unfinished: bool,
+    style_has_objects: bool,
+) -> PanelContent {
+    panel_body(
+        PanelTabs::new(style_has_objects).active(),
+        pen_path_unfinished,
+        style_has_objects,
+    )
 }
 
 #[test]

@@ -43,6 +43,12 @@ pub fn parse_document_side(text: &str, unit: DisplayUnit) -> Option<Length> {
 pub fn document_side_message(unit: DisplayUnit) -> String {
     let lowest = Length::from_mm(MIN_DOCUMENT_MM).in_unit(unit);
     let highest = Length::from_mm(MAX_DOCUMENT_MM).in_unit(unit);
+    range_message(lowest, highest)
+}
+
+/// "Enter a number from L to H" with `lowest` rounded up and `highest` rounded
+/// down to a hundredth, so it never promises a value the field refuses.
+pub(crate) fn range_message(lowest: f64, highest: f64) -> String {
     format!(
         "Enter a number from {} to {}",
         decimal_text(ceil_hundredths(lowest), 2),
@@ -145,7 +151,7 @@ fn fixed_text(value: f64, decimals: usize) -> String {
 }
 
 /// `value` with at most `decimals` decimals and no trailing zeros or point.
-fn decimal_text(value: f64, decimals: usize) -> String {
+pub(crate) fn decimal_text(value: f64, decimals: usize) -> String {
     let text = fixed_text(value, decimals);
     if text.contains('.') {
         text.trim_end_matches('0').trim_end_matches('.').to_string()

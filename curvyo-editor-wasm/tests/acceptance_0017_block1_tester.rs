@@ -139,15 +139,18 @@ fn nothing_selected_shows_the_document_section_and_no_style_area() {
 }
 
 #[test]
-fn the_pen_tool_and_the_node_tool_without_a_path_leave_the_body_empty() {
+fn the_pen_tool_and_the_node_tool_without_a_path_leave_the_style_tab_without_content() {
     let mut s = squares(1);
     select(&mut s, &[0]);
     assert_eq!(s.panel_content(), PanelContent::Style);
 
+    // Since `0043` the Style tab hands over to the Document tab when the tool's
+    // scope empties: the body is no longer empty for a selection the tool
+    // cannot style (`specs/0043-properties-tabs/adrs.md` decision 3).
     s.set_tool(Tool::Pen);
     assert_eq!(
         s.panel_content(),
-        PanelContent::Empty,
+        PanelContent::Document,
         "Pen with a rectangle selected"
     );
     assert!(s.style_panel_state().is_none());
@@ -156,7 +159,7 @@ fn the_pen_tool_and_the_node_tool_without_a_path_leave_the_body_empty() {
     s.set_tool(Tool::Node);
     assert_eq!(
         s.panel_content(),
-        PanelContent::Empty,
+        PanelContent::Document,
         "Node tool, a rectangle selected: no path, no style"
     );
     assert!(s.style_panel_state().is_none());

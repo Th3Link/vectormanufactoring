@@ -418,7 +418,7 @@ pub(crate) fn sides_in_range(short: Length, long: Length) -> bool {
 
 /// A human sentence for a failed file: the subject and the rule it breaks,
 /// without the quoting of the Debug form (criterion 6: "Your formats file could
-/// not be read: <reason>").
+/// not be read: REASON").
 #[must_use]
 pub fn describe_error(error: &PresetError) -> String {
     let rule = match &error.reason {

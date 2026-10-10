@@ -16,13 +16,17 @@ impl Session {
     /// size and display unit.
     #[must_use]
     pub fn document_presets_view(&self) -> PresetsView {
-        presets_view(&self.presets, self.document.size(), self.display_unit())
+        presets_view(
+            self.formats.list(),
+            self.document.size(),
+            self.display_unit(),
+        )
     }
 
     /// A press on the preset `id` (criteria 11 to 13): the preset's size in the
     /// orientation of the rule, as the typed resize applies it.
     pub fn apply_document_preset(&mut self, id: &str) -> SizeOutcome {
-        match preset_pick_size(&self.presets, self.document.size(), id) {
+        match preset_pick_size(self.formats.list(), self.document.size(), id) {
             Some(size) => self.resize_document_to(size),
             None => SizeOutcome::Invalid,
         }

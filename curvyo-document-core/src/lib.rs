@@ -26,6 +26,7 @@ mod document;
 mod document_presets;
 mod document_size;
 mod error;
+mod format_edit;
 mod format_library;
 mod format_library_file;
 mod format_library_import;
@@ -65,9 +66,8 @@ pub use document_size::{
     DocumentSizeError, MAX_DOCUMENT_MM, MIN_DOCUMENT_MM, validated_document_side,
 };
 pub use error::{OpenError, SaveError};
-pub use format_library::{
-    FormatError, FormatField, FormatLibrary, FormatReason, FormatSpec, GroupTarget,
-};
+pub use format_edit::{FormatError, FormatField, FormatReason, FormatSpec, GroupTarget};
+pub use format_library::FormatLibrary;
 pub use format_library_file::{
     MAX_USER_FILE_BYTES, MAX_USER_FORMATS, MAX_USER_GROUPS, USER_FILE_FORMAT, describe_error,
 };

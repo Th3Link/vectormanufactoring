@@ -6,6 +6,7 @@
 //! `curvyo-document-core` is deliberately not allowed to be.
 
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -40,6 +41,50 @@ pub enum FsError {
 pub fn read_to_vec(path: &Path) -> Result<Vec<u8>, FsError> {
     fs::read(path).map_err(|source| FsError::Read {
         path: path.display().to_string(),
+        source,
+    })
+}
+
+/// Reads an entire file into memory, or `None` when there is no such file.
+///
+/// # Errors
+/// Returns [`FsError::Read`] if the file exists but cannot be read.
+pub fn read_optional(path: &Path) -> Result<Option<Vec<u8>>, FsError> {
+    match fs::read(path) {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(source) if source.kind() == ErrorKind::NotFound => Ok(None),
+        Err(source) => Err(FsError::Read {
+            path: path.display().to_string(),
+            source,
+        }),
+    }
+}
+
+/// Creates the directory `path` lives in, and its parents, when they are
+/// missing (the first write of a settings file in the data directory).
+///
+/// # Errors
+/// Returns [`FsError::Write`] if a directory cannot be created.
+pub fn ensure_parent_dir(path: &Path) -> Result<(), FsError> {
+    match path.parent() {
+        Some(dir) if !dir.as_os_str().is_empty() => {
+            fs::create_dir_all(dir).map_err(|source| FsError::Write {
+                path: dir.display().to_string(),
+                source,
+            })
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Renames `from` to `to`, replacing `to` if it exists (a file set aside keeps
+/// only the newest copy).
+///
+/// # Errors
+/// Returns [`FsError::Write`] if the rename cannot be completed.
+pub fn rename_replacing(from: &Path, to: &Path) -> Result<(), FsError> {
+    fs::rename(from, to).map_err(|source| FsError::Write {
+        path: to.display().to_string(),
         source,
     })
 }
@@ -136,6 +181,49 @@ mod tests {
             .filter(|name| name.to_string_lossy().ends_with(".tmp"))
             .collect();
         assert!(leftovers.is_empty(), "left behind: {leftovers:?}");
+    }
+
+    #[test]
+    fn read_optional_tells_a_missing_file_from_a_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("document-formats.toml");
+
+        assert!(
+            read_optional(&path)
+                .expect("missing is not an error")
+                .is_none()
+        );
+        write_atomic(&path, b"format = 1\n").expect("write");
+        assert_eq!(
+            read_optional(&path).expect("read"),
+            Some(b"format = 1\n".to_vec())
+        );
+    }
+
+    #[test]
+    fn ensure_parent_dir_creates_missing_directories() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("a").join("b").join("file.toml");
+
+        ensure_parent_dir(&path).expect("create");
+        write_atomic(&path, b"x").expect("write");
+        assert!(path.exists());
+        ensure_parent_dir(&path).expect("again is fine");
+        ensure_parent_dir(Path::new("file.toml")).expect("no parent is fine");
+    }
+
+    #[test]
+    fn rename_replacing_replaces_an_older_copy() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let from = dir.path().join("document-formats.toml");
+        let to = dir.path().join("document-formats.toml.broken");
+
+        write_atomic(&to, b"old").expect("old copy");
+        write_atomic(&from, b"new").expect("file");
+        rename_replacing(&from, &to).expect("rename");
+
+        assert!(!from.exists());
+        assert_eq!(read_to_vec(&to).expect("read"), b"new");
     }
 
     #[test]

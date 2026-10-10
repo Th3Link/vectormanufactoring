@@ -1,93 +1,71 @@
-//! What the Properties panel shows (`specs/0015-document-size-and-rulers/`
-//! criterion 14a): the document's settings, the Style area, or nothing.
+//! What the body of the Properties panel shows for the active tab
+//! (`specs/0043-properties-tabs/` criteria 3, 10 and 23, `specs/0015-
+//! document-size-and-rulers/` criterion 14a): the document's settings, the
+//! Style area, or nothing.
 
-use crate::object_selection::ObjectSelection;
+use crate::panel_tabs::PanelTab;
 
 /// The panel's content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PanelContent {
-    /// The Document section: nothing is selected and the Pen has no
+    /// The Document section: the Document tab is active and the Pen has no
     /// unfinished path.
     Document,
     /// The Style area: the tool's scope holds objects to style.
     Style,
     /// Nothing: no heading, no text, no control (`specs/0017-style-panel-
-    /// rework` criterion 1). The Pen is active, or the Node tool has no path
-    /// to style, or the Pen has an unfinished path and nothing is selected, so
-    /// a resize would move the committed objects but not the path being drawn.
+    /// rework` criterion 1). The Document tab with an unfinished Pen path, so
+    /// a resize would not move the path being drawn, or the Style tab with
+    /// nothing in the tool's scope.
     Empty,
 }
 
-/// What the panel shows. `style_has_objects` is whether the active tool's
-/// style scope (`style_scope`) holds any object. The panel's width, the canvas
-/// and the rulers never change with it.
+/// What the body shows for `active`. `style_has_objects` is whether the active
+/// tool's style scope (`style_scope`) holds any object. The panel's width, the
+/// canvas and the rulers never change with it.
 ///
-/// With objects in scope the Style area shows. Otherwise, with nothing
-/// selected and no unfinished Pen path, the Document section shows; in every
-/// other case the body is empty (a selection the tool cannot style, the Pen
-/// tool, a Node tool without a path).
+/// Document shows the Document section unless the Pen has an unfinished path
+/// (criterion 10). Style shows the Style area when the scope holds objects and
+/// is empty otherwise, which only the Pen rule can cause (criterion 23).
 #[must_use]
-pub fn panel_content(
-    selection: &ObjectSelection,
+pub fn panel_body(
+    active: PanelTab,
     pen_path_unfinished: bool,
     style_has_objects: bool,
 ) -> PanelContent {
-    if style_has_objects {
-        PanelContent::Style
-    } else if selection.is_empty() && !pen_path_unfinished {
-        PanelContent::Document
-    } else {
-        PanelContent::Empty
+    match active {
+        PanelTab::Document if pen_path_unfinished => PanelContent::Empty,
+        PanelTab::Document => PanelContent::Document,
+        PanelTab::Style if style_has_objects => PanelContent::Style,
+        PanelTab::Style => PanelContent::Empty,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use PanelContent::{Document, Empty, Style};
 
+    /// Criteria 3, 10 and 23 as a table: (active tab, Pen path unfinished,
+    /// objects in scope) and the body.
     #[test]
-    fn objects_in_scope_show_style_whatever_the_selection_or_pen_say() {
-        use curvyo_document_core::{Document, Length, Point, RectBounds};
-
-        let document = Document::new(1);
-        let id = document.create_rect(RectBounds {
-            origin: Point::new(0.0, 0.0),
-            width: Length::from_mm(5.0),
-            height: Length::from_mm(5.0),
-        });
-        let mut selection = ObjectSelection::new();
-        selection.select_single(id);
-        assert_eq!(panel_content(&selection, false, true), PanelContent::Style);
-        assert_eq!(panel_content(&selection, true, true), PanelContent::Style);
-        // The Node tool with a selected node but no object selection.
-        assert_eq!(
-            panel_content(&ObjectSelection::new(), false, true),
-            PanelContent::Style
-        );
-    }
-
-    #[test]
-    fn a_selection_the_tool_cannot_style_leaves_the_body_empty() {
-        use curvyo_document_core::{Document, Length, Point, RectBounds};
-
-        let document = Document::new(1);
-        let id = document.create_rect(RectBounds {
-            origin: Point::new(0.0, 0.0),
-            width: Length::from_mm(5.0),
-            height: Length::from_mm(5.0),
-        });
-        let mut selection = ObjectSelection::new();
-        selection.select_single(id);
-        assert_eq!(panel_content(&selection, false, false), PanelContent::Empty);
-    }
-
-    #[test]
-    fn nothing_selected_shows_the_document_unless_the_pen_has_an_open_path() {
-        let nothing = ObjectSelection::new();
-        assert_eq!(
-            panel_content(&nothing, false, false),
-            PanelContent::Document
-        );
-        assert_eq!(panel_content(&nothing, true, false), PanelContent::Empty);
+    fn the_body_follows_the_active_tab_the_pen_and_the_scope() {
+        let rows = [
+            (PanelTab::Document, false, false, Document),
+            (PanelTab::Document, false, true, Document),
+            (PanelTab::Document, true, false, Empty),
+            (PanelTab::Document, true, true, Empty),
+            (PanelTab::Style, false, true, Style),
+            (PanelTab::Style, true, true, Style),
+            (PanelTab::Style, false, false, Empty),
+            (PanelTab::Style, true, false, Empty),
+        ];
+        for (tab, pen, scope, want) in rows {
+            assert_eq!(
+                panel_body(tab, pen, scope),
+                want,
+                "{tab:?} pen {pen} scope {scope}"
+            );
+        }
     }
 }
