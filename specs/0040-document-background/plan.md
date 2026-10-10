@@ -36,51 +36,53 @@ word order "Background #RRGGBBAA".
   comment on `CURRENT_FORMAT_VERSION`.
 
 ## Milestone 1: `document-core` (AC 1 to 8, 22, 40 to 45 model side)
-- [ ] 1. `DocumentSize::contains` (closed, tolerance zero) with tests (AC 34).
-- [ ] 2. `document_background.rs`: types, `DEFAULT`, read (lenient), `set_background` per
+- [x] 1. `DocumentSize::contains` (closed, tolerance zero) with tests (AC 34).
+- [x] 2. `document_background.rs`: types, `DEFAULT`, read (lenient), `set_background` per
   register with one commit `set_document_background`, equal value writes nothing (AC 1, 2, 3,
   17, 22).
-- [ ] 3. Strict `validate` on open; four damaged fixtures with a test each; absent keys valid
+- [x] 3. Strict `validate` on open; four damaged fixtures with a test each; absent keys valid
   (AC 4, 7).
-- [ ] 4. Format version 10, `document.json` gains `background`, comment paragraph on the
+- [x] 4. Format version 10, `document.json` gains `background`, comment paragraph on the
   constant, tests compare against `CURRENT_FORMAT_VERSION` (AC 5); `acceptance_0030` literal 9
   follows the constant.
-- [ ] 5. Golden `background_v10.curvyo`; round trip keeps every component and a None paint
+- [x] 5. Golden `background_v10.curvyo`; round trip keeps every component and a None paint
   keeps its colour (AC 6); older fixtures open with the default and byte-identical on disk
   in `storage-io` (AC 4).
-- [ ] 6. Resize, Fit, presets, display unit and copy write no background register (AC 42 to
+- [x] 6. Resize, Fit, presets, display unit and copy write no background register (AC 42 to
   44); two-peer merge keeps one complete colour; paint and colour from two peers both survive
   (AC 45).
 
 ## Milestone 2: `render-core` and the GPU (AC 9 to 14, 46, 47, 49)
-- [ ] 7. `DrawList` checkerboard prefix (`checker_end`, `extend` keeps self's prefix); theme
+- [x] 7. `DrawList` checkerboard prefix (`checker_end`, `extend` keeps self's prefix); theme
   tones (AC 12, 47).
-- [ ] 8. `checker_tone`, `checker_grid` (device cell `round(8 dpr)`, at least 1, corner snapped
+- [x] 8. `checker_tone`, `checker_grid` (device cell `round(8 dpr)`, at least 1, corner snapped
   as the area) and `build_document_area(size, background, view, dpr)`: opaque is one quad as
   before, None one checker quad, translucent checker quad plus colour quad (AC 9 to 13, 47).
-- [ ] 9. `background_at(size, background, point)` and the Pen call sites (AC 46).
-- [ ] 10. Shader `fs_checker`, third pipeline, uniform with corner, cell and tones, draw calls
-  in `Gpu::render`; wasm32 build and a naga validation of the WGSL (AC 12).
+- [x] 9. `background_at(size, background, point)` and the Pen call sites (AC 46).
+- [x] 10. Shader `fs_checker`, third pipeline, uniform with corner, cell and tones, draw calls
+  in `Gpu::render`; wasm32 build and a one-off naga 30.0.1 validation of the WGSL (AC 12). The
+  shader runs only in a browser; it has not been seen on a screen here.
 
 ## Milestone 3: `ui-core` and `editor-wasm` session (AC 14 to 39 session side, 40)
-- [ ] 11. `pick_colour` with the background source, `PaintTarget::Background` (AC 28 to 34, 48).
-- [ ] 12. `session/background.rs`: paint, hex, picker preview, Opacity (drag, key step, reset,
+- [x] 11. `pick_colour` with the background source, `PaintTarget::Background` (AC 28 to 34, 48).
+- [x] 12. `session/background.rs`: paint, hex, picker preview, Opacity (drag, key step, reset,
   type), commit and cancel, view record, preview read by `frame_draw_list` and `background_at`
   (AC 14 to 25 core part, 22, 23).
-- [ ] 13. Eyedropper for the background: button target, press writes one commit, equal value
+- [x] 13. Eyedropper for the background: button target, press writes one commit, equal value
   writes nothing and ends picking, chip hover text, status text (AC 29, 32 to 39).
-- [ ] 14. Not an object: Select all, click, marquee, Fit, Delete, Duplicate, clipboard and the
-  object count never see it (AC 40, 44); New and Open start without preview (AC 8).
-- [ ] 15. `wasm_background.rs` bindings.
+- [x] 14. Not an object: click, Fit and the object count never see it (AC 40, 44); New and Open
+  start without preview (AC 8). This build has no Select all for objects; the background is
+  not in the objects tree, so none can include it.
+- [x] 15. `wasm_background.rs` bindings.
 
 ## Milestone 4: frontend (AC 15 to 27, 35, 36, 39)
-- [ ] 16. Colour components take callbacks; Style section keeps working.
-- [ ] 17. `BackgroundBlock.tsx` and `useBackgroundPanel.ts`; block in `DocumentSection`
+- [x] 16. Colour components take callbacks; Style section keeps working.
+- [x] 17. `BackgroundBlock.tsx` and `useBackgroundPanel.ts`; block in `DocumentSection`
   (AC 15 to 27).
-- [ ] 18. Panel scroll rules (AC 15a) and focus rules (AC 25).
-- [ ] 19. Chip with the background source, announcement, cursor over the pasteboard
+- [x] 18. Panel scroll rules (AC 15a) and focus rules (AC 25). The scroll rules were already the panel's (one scroll, `scroll-padding-block: 12px`, body keyed on the tab); focus uses `useRowsFocus`. The 800 x 600 positions of 15a are not measured here (no browser): the UX review does that.
+- [x] 19. Chip with the background source, announcement, cursor over the pasteboard
   (AC 35, 36, 39).
-- [ ] 20. Docs: README table, spec status; frontend lint, typecheck, tests.
+- [x] 20. Docs: README table, spec status; frontend lint, typecheck, tests.
 
 ## Validation
 Core logic test first. Golden files for the file format (valid v10, four damaged, older

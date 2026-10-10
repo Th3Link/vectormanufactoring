@@ -146,6 +146,10 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
             aria-expanded={open}
             aria-controls={panelId}
             onClick={(event) => {
+              // A press on the collapse tab ends picking too (`0040` UX notes).
+              if (picking) {
+                endPick();
+              }
               setOpenKeepingView(!open);
               // `detail` is 0 for keyboard activation, 1 or more for a click.
               if (event.detail > 0) {
