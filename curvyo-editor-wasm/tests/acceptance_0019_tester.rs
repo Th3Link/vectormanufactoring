@@ -2956,13 +2956,13 @@ fn ac10_session_tiers_follow_the_zoom() {
 }
 
 // ---------------------------------------------------------------------
-// Filled objects, gradients, hit priority (criteria 43, 51; 0007 option B)
+// Filled objects, translucent fills, hit priority (criteria 43, 51; 0007 option B)
 // ---------------------------------------------------------------------
 
 /// Gives the object at `outline` a solid fill, leaving nothing selected.
 fn fill_object(s: &mut Session, outline: Point) {
     click(s, outline);
-    s.set_fill_mode(curvyo_document_core::FillMode::Solid);
+    s.set_fill_paint(true);
     key(s, "Escape", false);
 }
 
@@ -3009,14 +3009,16 @@ fn ac43_filled_interiors() {
     assert_eq!(s.selected_object_count(), 1);
 }
 
-/// Criterion 51: the style fields (fill mode, colour, gradient stops) are not
-/// written by a transform of a selection that holds a gradient-filled object.
+/// Criterion 51: the style fields (fill paint, colour, opacity) are not
+/// written by a transform of a selection that holds a translucent filled object.
 #[test]
 fn ac51_style_fields_are_untouched() {
     let d = wide_squares();
     let mut s = open(&d);
     click(&mut s, pt(60.0, 50.0));
-    s.set_fill_mode(curvyo_document_core::FillMode::Linear);
+    s.set_fill_paint(true);
+    s.set_style_text(curvyo_ui_core::StyleField::FillColor, "#0000FF80")
+        .unwrap();
     key(&mut s, "Escape", false);
     let styles = |s: &Session| -> Vec<String> {
         objects(s)
