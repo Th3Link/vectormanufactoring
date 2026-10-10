@@ -70,9 +70,9 @@ word order "Background #RRGGBBAA".
   (AC 14 to 25 core part, 22, 23).
 - [x] 13. Eyedropper for the background: button target, press writes one commit, equal value
   writes nothing and ends picking, chip hover text, status text (AC 29, 32 to 39).
-- [x] 14. Not an object: click, Fit and the object count never see it (AC 40, 44); New and Open
-  start without preview (AC 8). This build has no Select all for objects; the background is
-  not in the objects tree, so none can include it.
+- [x] 14. Not an object: click, Ctrl+A, nudge, Delete, Fit and the object count never see it (AC 40, 44);
+  New and Open start without preview (AC 8). There is no clipboard for objects yet, so AC 44 holds
+  structurally (the background is not in the objects tree).
 - [x] 15. `wasm_background.rs` bindings.
 
 ## Milestone 4: frontend (AC 15 to 27, 35, 36, 39)
