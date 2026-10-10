@@ -1,0 +1,20 @@
+# A file a maker edited by hand: comments, tabs, odd spacing, multi-line array.
+
+format   =   1   # schema
+favourites = [
+	"a4",   # daily
+	"u-ring",
+]
+
+[[group]]
+  id="u-misc"
+  name   = "Misc"
+	default_orientation = 'landscape'
+
+	[[group.preset]]
+		id = "u-ring"
+		name = "Ring"
+		note = "with a note"
+		short_side = 12.5
+		long_side = 2.5e1
+		unit = "mm"
