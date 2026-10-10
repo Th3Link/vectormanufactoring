@@ -3787,3 +3787,222 @@ fn ac47_double_clicks_on_the_other_handles() {
     double_click_at(&mut s, g.centre(), false, true);
     assert!(s.move_entry().expect("move chip").copy_preset);
 }
+
+/// Question 2 (a), the remedy: "Object to path" turns a uniform-only selection
+/// into one that stretches and skews; the selection survives the conversion.
+#[test]
+fn q2_object_to_path_lifts_the_restriction() {
+    let d = Document::new(1);
+    let _ = d.create_path(&[anchor(1, 50.0, 50.0), anchor(2, 150.0, 50.0)], false);
+    let _ = d.create_polygon(
+        StarFrame {
+            center: pt(100.0, 90.0),
+            radius: Length::from_mm(20.0),
+            angle: Angle::from_radians(-FRAC_PI_2),
+        },
+        PointCount::new(6).unwrap(),
+    );
+    let mut s = open(&d);
+    select_everything(&mut s);
+    key(&mut s, "k", false);
+    assert!(
+        s.transform_entry().is_none(),
+        "no skew with a polygon in it"
+    );
+    s.convert_selected_to_paths();
+    s.set_tool(Tool::Select);
+    assert_eq!(s.selected_object_count(), 2, "the selection survives");
+    assert!(
+        objects(&s)
+            .iter()
+            .all(|o| matches!(o, ObjectSnapshot::Path(_)))
+    );
+    // The box is now the paths' bounds: read it from the chips.
+    key(&mut s, "m", false);
+    let m = s.move_entry().unwrap();
+    let tl = pt(
+        m.absolute_prefill[0].parse().unwrap(),
+        m.absolute_prefill[1].parse().unwrap(),
+    );
+    key(&mut s, "Escape", false);
+    key(&mut s, "s", false);
+    let v = s.transform_entry().unwrap();
+    assert!(!v.linked, "free stretching is possible now");
+    let (w, h): (f64, f64) = (
+        v.fields[0].prefill.parse().unwrap(),
+        v.fields[1].prefill.parse().unwrap(),
+    );
+    key(&mut s, "Escape", false);
+    let g = GBox::new(&s, tl, pt(tl.x + w, tl.y + h));
+    let before = objects(&s);
+    // The south edge handle now exists: stretch y only by 2.
+    let e = g.mid(0.0, 1.0);
+    drag(&mut s, e, pt(e.x + 9.0, e.y + g.h()));
+    for (a, b) in objects(&s).iter().zip(&before) {
+        for (qa, qb) in path_points(a).iter().zip(path_points(b)) {
+            assert_pt(
+                *qa,
+                qb.x,
+                tl.y + (qb.y - tl.y) * 2.0,
+                1e-6,
+                "y doubled, x kept",
+            );
+        }
+    }
+    // And the skew handles are there.
+    let g2 = GBox::new(&s, tl, pt(tl.x + w, tl.y + 2.0 * h));
+    hold(&mut s, g2.skew(0.0, -1.0), false, false);
+    assert!(s.cursor_hint().starts_with("skew:"));
+}
+
+/// Criterion 34: Shift at the second press of a double-click fixes the centre
+/// as the fixed point, Ctrl links the fields.
+#[test]
+fn ac34_modifiers_at_the_second_press() {
+    let (d, _) = two_squares();
+    let g = {
+        let s = open(&d);
+        two_squares_box(&s)
+    };
+    let mut s = open(&d);
+    select_all(&mut s);
+    double_click_at(&mut s, g.corner(1.0, 1.0), false, true);
+    let v = s.transform_entry().unwrap();
+    assert!(v.linked, "Ctrl links W and H");
+    let mut s = open(&d);
+    select_all(&mut s);
+    double_click_at(&mut s, g.corner(1.0, 1.0), true, false);
+    s.commit_transform_entry("60", "30", 0);
+    // Doubled about the centre (65, 55): the left square x 50..60 -> 35..55.
+    let (b0, _) = rect_of(&objects(&s)[0]);
+    assert_pt(b0.origin, 35.0, 40.0, 1e-6, "about the centre");
+}
+
+// ---------------------------------------------------------------------
+// Regression: handle-less segments are drawn as lines (render-core change)
+// ---------------------------------------------------------------------
+
+fn extent_of_artwork(s: &Session) -> (Point, Point, usize) {
+    let list = s.draw_list();
+    let (mut lo, mut hi) = (pt(f64::MAX, f64::MAX), pt(f64::MIN, f64::MIN));
+    for v in &list.triangles {
+        let (x, y) = (f64::from(v.position.x), f64::from(v.position.y));
+        lo = pt(lo.x.min(x), lo.y.min(y));
+        hi = pt(hi.x.max(x), hi.y.max(y));
+    }
+    (lo, hi, list.triangles.len())
+}
+
+/// A stroked straight segment, horizontal, vertical or diagonal, covers exactly
+/// its length (butt caps) and half the stroke width on each side; a segment with
+/// a handle still bulges.
+#[test]
+fn stroked_straight_segments_have_the_exact_extent() {
+    let eps = 0.02;
+    for (a, b) in [
+        (pt(10.0, 10.0), pt(50.0, 10.0)),
+        (pt(10.0, 10.0), pt(10.0, 70.0)),
+        (pt(10.0, 10.0), pt(40.0, 50.0)),
+        (pt(40.0, 50.0), pt(10.0, 10.0)),
+    ] {
+        let d = Document::new(1);
+        let _ = d.create_path(&[anchor(1, a.x, a.y), anchor(2, b.x, b.y)], false);
+        let s = open(&d);
+        let (lo, hi, n) = extent_of_artwork(&s);
+        assert!(n > 0, "something is drawn");
+        // Butt caps, stroke width 0.25: half-width 0.125 across the line.
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let len = dx.hypot(dy);
+        let (nx, ny) = (-dy / len * 0.125, dx / len * 0.125);
+        let xs = [a.x + nx, a.x - nx, b.x + nx, b.x - nx];
+        let ys = [a.y + ny, a.y - ny, b.y + ny, b.y - ny];
+        let (ex0, ex1) = (
+            xs.iter().copied().fold(f64::MAX, f64::min),
+            xs.iter().copied().fold(f64::MIN, f64::max),
+        );
+        let (ey0, ey1) = (
+            ys.iter().copied().fold(f64::MAX, f64::min),
+            ys.iter().copied().fold(f64::MIN, f64::max),
+        );
+        assert!(
+            near(lo.x, ex0, eps) && near(hi.x, ex1, eps),
+            "x {lo:?} {hi:?} vs {ex0} {ex1}"
+        );
+        assert!(
+            near(lo.y, ey0, eps) && near(hi.y, ey1, eps),
+            "y {lo:?} {hi:?} vs {ey0} {ey1}"
+        );
+    }
+    // One straight and one curved segment: the curve still reaches its bulge.
+    let d = Document::new(1);
+    let mut a2 = anchor(2, 50.0, 10.0);
+    a2.handle_out = Vec2::new(0.0, 30.0);
+    let mut a3 = anchor(3, 90.0, 10.0);
+    a3.handle_in = Vec2::new(0.0, 30.0);
+    let _ = d.create_path(&[anchor(1, 10.0, 10.0), a2, a3], false);
+    let s = open(&d);
+    let (lo, hi, _) = extent_of_artwork(&s);
+    // The cubic (50,10) (50,40) (90,40) (90,10) peaks at y = 10 + 0.75 * 30 = 32.5.
+    assert!(near(hi.y, 32.5 + 0.125, 0.05), "curve bulge {hi:?}");
+    assert!(near(lo.x, 10.0, 0.05) && near(hi.x, 90.0 + 0.125, 0.05) || hi.x >= 90.0);
+}
+
+/// Criterion 1: the bounds are those of the outline as drawn, after rotation
+/// and corner radius: a 20 x 20 rectangle with radius 10 turned by 45 degrees is
+/// a circle (20 mm across, not 28.28), a turned ellipse has its analytic extent.
+#[test]
+fn ac1_bounds_follow_the_drawn_outline() {
+    let size_of = |d: &Document| {
+        let mut s = open(d);
+        select_everything(&mut s);
+        key(&mut s, "s", false);
+        let v = s.transform_entry().unwrap();
+        (
+            v.fields[0].prefill.parse::<f64>().unwrap(),
+            v.fields[1].prefill.parse::<f64>().unwrap(),
+        )
+    };
+    // Rounded square turned by 45 degrees; a small path beside it.
+    let d = Document::new(1);
+    let r = d.create_rect(rect_bounds(50.0, 50.0, 20.0, 20.0));
+    d.set_corner_radius(&[r], Length::from_mm(10.0)).unwrap();
+    rotate_about_centre(&d, r, PI / 4.0);
+    let _ = d.create_path(&[anchor(1, 100.0, 55.0), anchor(2, 110.0, 65.0)], false);
+    let (w, h) = size_of(&d);
+    assert!(near(w, 60.0, 0.06) && near(h, 20.0, 0.06), "{w} x {h}");
+    // A turned ellipse: half-height sqrt((rx sin a)^2 + (ry cos a)^2).
+    let d = Document::new(1);
+    let e = d.create_ellipse(EllipseFrame {
+        center: pt(60.0, 60.0),
+        rx: Length::from_mm(10.0),
+        ry: Length::from_mm(5.0),
+    });
+    rotate_about_centre(&d, e, 30.0_f64.to_radians());
+    let _ = d.create_path(&[anchor(1, 100.0, 58.0), anchor(2, 110.0, 62.0)], false);
+    let (w, h) = size_of(&d);
+    let half_h =
+        ((10.0_f64 * 0.5).powi(2) + (5.0_f64 * 30.0_f64.to_radians().cos()).powi(2)).sqrt();
+    let half_w =
+        ((10.0_f64 * 30.0_f64.to_radians().cos()).powi(2) + (5.0_f64 * 0.5).powi(2)).sqrt();
+    assert!(near(h, 2.0 * half_h, 0.06), "H {h} vs {}", 2.0 * half_h);
+    assert!(near(w, 110.0 - (60.0 - half_w), 0.06), "W {w}");
+    // A star: the outer vertices, not the radius circle.
+    let d = Document::new(1);
+    let _ = d.create_star(
+        StarFrame {
+            center: pt(60.0, 60.0),
+            radius: Length::from_mm(10.0),
+            angle: Angle::from_radians(-FRAC_PI_2),
+        },
+        PointCount::new(5).unwrap(),
+        curvyo_document_core::InnerRatio::new(0.5).unwrap(),
+    );
+    let _ = d.create_path(&[anchor(1, 100.0, 58.0), anchor(2, 110.0, 62.0)], false);
+    let (_, h) = size_of(&d);
+    // A five-pointed star with a vertex up: top 10 above the centre, bottom
+    // vertices at 10 cos(36 deg) below it.
+    assert!(
+        near(h, 10.0 + 10.0 * 36.0_f64.to_radians().cos(), 0.06),
+        "star H {h}"
+    );
+}
