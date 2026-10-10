@@ -51,7 +51,9 @@ new dependency, no trait, no generic.
    - its id, parent and depth;
    - its kind (layer, group or leaf with its `ObjectSnapshot`);
    - its own registers;
-   - its effective visible, effective locked and effective opacity;
+   - its effective visible, effective locked and effective opacity (for a `0049` clone: the
+     origin's `opacity` register times the clone's own ancestors', ADR 0015 §3 and criterion 28;
+     the origin is read in the same pass, so this costs nothing extra);
    - the nearest ancestor that hides or locks it, which the inherited-state description of
      criterion 22 needs.
 
@@ -72,11 +74,11 @@ new dependency, no trait, no generic.
    version (a local commit, an import or an undo), the session drops from the selection every node
    that is effectively hidden or locked. It does this in the same pass that applies `0023`'s
    context fallback, before the frame is drawn. The cost is O(selection) set lookups in the read.
-6. **2026-10-10: no `output_objects()` in this slice.** No exporter and no job generator exists
+6. **2026-10-10: no `output_objects()` in this slice (criterion 24 as fixed).** No exporter and no job generator exists
    yet. A core function whose only callers are tests is the speculative API that `CLAUDE.md` §5
    rules out. The decision "hidden is not output, locked is" is recorded in ADR 0015 §2 and here.
    `0024` and `0029` build their output from the read's effective flags (clones resolved,
-   `0049`) and carry the end-to-end test. Flagged below for criterion 24.
+   `0049`) and carry the end-to-end test. Criterion 24 is tested through that read.
 7. **2026-10-10: panel rows are a pure window over a cached flattening (criteria 48 to 52).**
    - `layer_rows(read, collapsed, selection)` in `curvyo-ui-core` flattens the visible rows once
      per document version and collapse change, and the session caches the result.
@@ -108,21 +110,29 @@ new dependency, no trait, no generic.
        descendant and every id (criterion 45).
      - It does **not** delete each descendant on its own. That would turn one undo into N
        revives.
-9. **2026-10-10: opacity per paint (criterion 27, Question 5 A).**
+9. **2026-10-10: Delete layer never confirms (criterion 36), and the Pen gate (criterion
+   53).** Delete layer is reversible by Ctrl+Z (decision 8), so it writes at once; there is no
+    confirm state in the session. Every panel action that writes or selects passes the
+    "Pen unfinished" check that `0020` already has for undo and redo (its notice table, the 2 s
+    hint). The check sits at the one place in `curvyo-editor-wasm` where panel actions enter the
+    session, not in each handler, and it runs before any write. Scrolling, expanding and
+    collapsing do not pass through it. One test per action listed in criterion 53, done as a
+    table.
+10. **2026-10-10: opacity per paint (criterion 27, Question 5 A).**
    - The render change is in `curvyo-render-core` `artwork.rs`: each paint's alpha is multiplied
      by the effective opacity.
    - The cost of option B is in ADR 0015's Consequences: one more render pass and texture per
      faded container per frame.
-10. **2026-10-10: the tree form of `document.json` (decided once for groups and layers).**
+11. **2026-10-10: the tree form of `document.json` (decided once for groups and layers).**
     `document.json` is the non-authoritative view of ADR 0004 §1.
     - Each node is written as `{ "id", "kind": "layer" | "group" | <leaf fields as today>,
       "name"?, "visible"?, "locked"?, "opacity"?, "children"? }`.
     - Registers at their defaults are omitted.
     - `0023` did not fix this form, so the first of `0023` and `0050` to merge writes it. `0023`
       leaves out the registers.
-11. **2026-10-10: duplicate.** `copy_map` copies every key, so a copy keeps its name and flags
-    (the product owner's default: the same name).
-12. **2026-10-10: concurrency.**
+12. **2026-10-10: duplicate.** `copy_map` copies every key, so a copy keeps its name and flags
+    (the product owner's default: the same name). Copied clones are relinked by `0049` decision 8.
+13. **2026-10-10: concurrency.**
     - Each register is last writer wins.
     - If one peer hides a layer while another moves an object into it, the object is hidden.
     - If one peer locks a node that another peer has selected, the other peer's next read drops
@@ -133,18 +143,18 @@ new dependency, no trait, no generic.
       vector. Lifting the node out needs the injected move of ADR 0014 §11, because a deleted
       node cannot be moved through the handler API. It is deferred to the sharing story
       (ADR 0015, Consequences), together with merged trees deeper than 32 levels.
-13. **2026-10-10: crate placement.**
+14. **2026-10-10: crate placement.**
     - `curvyo-document-core`: the codec and validation, the registers, the read pass with
       effective values, `move_nodes`, `new_layer`, `delete_layer`, the setters
       (`set_node_visible`, `set_node_locked`, `set_node_opacity`, `rename_node`; each takes many
-      ids and makes one commit), and the format bump.
+      ids and makes one commit; `set_node_opacity` skips clones, criterion 26), and the format bump.
     - `curvyo-ui-core`: `layer_rows`, `plan_move`, the selection filter and the transparent
       context.
     - `curvyo-render-core`: alpha.
     - `curvyo-editor-wasm`: the row window, the commands and the key gate (Shift+Ctrl+L, Alt+arrows
       and the Proposal keys of criterion 33).
     - `frontend`: the tab.
-14. **2026-10-10: format version.**
+15. **2026-10-10: format version.**
     - The next free number at merge: 12 if `0023` takes 11.
     - An older build checks the container's `format_version` per file, so it refuses **every**
       file saved by this build, with or without layers. A file from an earlier build opens
@@ -164,17 +174,10 @@ spec merges second adds the operation names of criterion 44 to `0020`'s table.
 
 ## Flagged for the product owner (defaults taken, no customer question)
 
-1. **Criterion 28 contradicts `0049` decisions 2 and 7.** It multiplies in the origin's own node
-   `opacity`. ADR 0015 §3 says a clone reads outline and style, and no node register. Remove
-   "times the origin's own `opacity`". The clone's alpha is then the origin's paint opacity times
-   the clone's own `opacity` times the opacities of the clone's ancestors.
-2. **Criterion 24.** Decision 6 builds no `output_objects()` now. The criterion should either be
-   tested through the read (the renderer's leaves are exactly the effectively visible ones, and
-   a locked leaf is among them) or move to `0024` and `0029`. Default: test it through the read.
-3. **Criterion 27, test sentence.** "and so is the stroke at its own 100 %, 25 %" does not parse.
-   It should read: "the stroke, at its own 100 %, is painted at 25 %".
-4. **Criterion 46, wording.** The earlier build refuses every file saved by this build, not only
+Resolved in the spec fixes of 2026-10-10: criteria 24, 26, 27, 28 and 36. Two points remain:
+
+1. **Criterion 46, wording.** The earlier build refuses every file saved by this build, not only
    files that use the new registers.
-5. **Criterion 47 and `0023` criterion 27.** "Deeper than 32 is damaged" stays for now. Under
+2. **Criterion 47 and `0023` criterion 27.** "Deeper than 32 is damaged" stays for now. Under
    sharing, two legal moves can merge into 33 levels. The sharing story relaxes the reader, which
    needs no change to any file.

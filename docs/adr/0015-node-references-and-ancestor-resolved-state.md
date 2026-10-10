@@ -60,7 +60,8 @@ ADR" (ADR 0014 superseding one sentence of 0004 §2 is the precedent). The 2026-
    false) and `opacity` (number in 0..=1, absent = 1). The effective values are:
    - visible: the node's own flag and every ancestor's must be on;
    - locked: the node's own flag or any ancestor's is on;
-   - opacity: the product of the node's value and its ancestors' values along the chain.
+   - opacity: the product of the node's value and its ancestors' values along the chain (for a
+     clone, the origin's value stands in for its own, §3).
 
    `name` is never inherited. Nothing is copied into children, and a child keeps its own
    registers, so showing an ancestor again restores the child exactly as it was.
@@ -69,8 +70,12 @@ ADR" (ADR 0014 superseding one sentence of 0004 §2 is the precedent). The 2026-
    - `clone_matrix`: one list value of six `f64`, written whole. It is a value, not a container,
      so a merge keeps one matrix and never mixes entries.
 
-   A clone reads exactly two things from its origin: the outline(s) and the `Style`. It reads none
-   of the node registers of §2, so a hidden, locked or faded origin leaves its clones unchanged.
+   A clone reads exactly three things from its origin, live: the outline(s), the `Style` and the
+   `opacity` register of §2. It has no `opacity` of its own, and no writer gives it one. Its
+   effective opacity is the origin's `opacity` times the `opacity` of every ancestor of the
+   clone; the origin's ancestors do not count. It reads neither `visible`, `locked` nor `name`
+   from the origin: those are the clone's own, so a hidden or locked origin leaves its clones
+   unchanged (`0049` decisions 2 and 7, criterion 49; `0050` criterion 28).
    A reference is one hop: the origin must be a live path or compound path and never a clone.
    Anything else makes the clone an **orphan**.
 4. **Readers tolerate merge residue.** Concurrent edits can leave a document that no single peer
@@ -117,10 +122,10 @@ ADR" (ADR 0014 superseding one sentence of 0004 §2 is the precedent). The 2026-
     is deleted with it (Loro tree semantics, accepted for groups in `0023`). The log can tell
     this case apart: the delete's version vector does not contain the move. The node can then be
     lifted out with the injected move of ADR 0014 §11.
-  - The orphan repair deletes a clone that one peer made while another peer deleted its origin.
-    `0049` criterion 31 would rather keep it as a path. The origin's tombstone still holds its
-    outline (ADR 0014 §11 relies on Loro keeping the containers), so the repair can unlink the
-    clone instead.
+  - The orphan repair deletes a clone that one peer made while another peer deleted its origin
+    (`0049` criterion 35). The origin's tombstone still holds its outline (ADR 0014 §11 relies
+    on Loro keeping the containers), so the sharing story may choose to unlink the clone
+    instead.
   - Two moves, each legal on its own peer, can merge into a tree deeper than 32 levels, which the
     `0023` reader refuses as damaged. Walkers are iterative, so the reader can accept any depth.
 - Named styles or style overrides on a clone need a new ADR. This one does not allow them.
@@ -133,6 +138,8 @@ Tests in `curvyo-document-core`:
 - a clone resolves to the same path as after Unlink, within 1e-9 mm, with an equal style;
 - two replicas repair the same orphans concurrently, merge, and have equal state;
 - every residue of §4 reads without an error;
+- a clone's effective opacity follows its origin's `opacity` and its own ancestors', not the
+  origin's ancestors';
 - 10,000 clones of a 100-node path read within the budget of `0049` criterion 43.
 
 ## Question for the customer

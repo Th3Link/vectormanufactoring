@@ -45,7 +45,8 @@ dependency, no trait, no generic.
    or not an id string, if `clone_matrix` is missing, is not six numbers, or has an entry that is
    not finite or lies beyond ±1e7, or if the clone node has children. Other keys on a clone node
    and `clone_*` keys on any other node are merge residue: they are ignored, not damaged
-   (ADR 0015 §4).
+   (ADR 0015 §4). That includes an `opacity` key on a clone: a clone has none (criterion 49), and
+   `set_node_opacity` of `0050` skips clones.
 2. **2026-10-10: the read is a new variant, not a path with an optional field.** The read is
    `ObjectSnapshot::Clone(CloneSnapshot { id, origin, matrix, resolved: PathSnapshot })`.
    `resolved` holds:
@@ -55,6 +56,10 @@ dependency, no trait, no generic.
    - the origin's `closed` state and extra outlines;
    - the origin's `Style`;
    - `rotation` 0.
+
+   The read of `0050` gives the clone an effective opacity of the origin's `opacity` register
+   times the `opacity` of the clone's own ancestors (ADR 0015 §3, criterion 49). `visible`,
+   `locked` and `name` are the clone's own registers.
 
    Readers that draw, hit, measure or feed the kernel reach `resolved` through the arm they
    already have for paths.
@@ -73,7 +78,9 @@ dependency, no trait, no generic.
    in memory. There is no cross-version cache per clone: 10,000 clones read less from Loro than
    10,000 copies do, and they hold the same memory (about 70 MB at 100 nodes each). Origins are
    resolved whatever their effective flags, because a hidden origin still feeds its clones
-   (`0050` criterion 25). `Document::object(id)` on one clone reads its origin as well. If
+   (`0050` criterion 25). The origin's `opacity` register is read in the same origin read, so
+   criterion 49 adds no cost; a change of it is a new document version and a re-read like any
+   other edit. `Document::object(id)` on one clone reads its origin as well. If
    criterion 43 fails, the next step is to share the origin's outline and transform it at
    tessellation. That would be measured first, not built ahead.
 4. **2026-10-10: one matrix type and one rule for transforming a set.** `curvyo-document-core`
@@ -96,6 +103,8 @@ dependency, no trait, no generic.
      - the resolved anchors with fresh ids;
      - `closed` and `extra_subpaths`;
      - a copy of the origin's style;
+     - a copy of the origin's `opacity` register once `0050` exists, so the path looks the same
+       (criterion 49; flagged for criterion 28 below);
      - and it removes `shape`, `clone_origin` and `clone_matrix`.
 
      This is the `Convert` case of `transform_objects` (`0047`) in another direction.
@@ -112,10 +121,12 @@ dependency, no trait, no generic.
    ends without a loop or recursion. It iterates in tree order and depends on nothing but the
    state, so two peers that repair concurrently delete the same nodes; deleting a node that is
    already deleted does nothing. The session calls it after Open and after `import_updates`, and
-   it is an ordinary history step. It deletes rather than unlinks (criterion 35 as written).
-   Today the only reachable orphans come from hostile or foreign files that have no origin at
-   all. Unlinking from the origin's tombstone after a merge is deferred to the sharing story
-   (ADR 0015, Consequences).
+   it is an ordinary history step. The function returns the count; the session shows the
+   criterion 35 notice ("Removed 2 clones whose original was not found.", 8 s) only when the
+   count is above 0. It deletes and never unlinks, as criterion 35 says: an orphan has no outline
+   to keep. Today the only reachable orphans come from foreign or hand-edited files. In the merge
+   case of the sharing story the origin's tombstone still holds an outline, so unlinking from it
+   instead is an option to decide then (ADR 0015, Consequences).
 7. **2026-10-10: merge cases.** These are the cases the tests should cover, in the
    `acceptance_0005_peers.rs` style:
    - *Peer A deletes the origin (and unlinks clone C), while peer B transforms C.* After the
@@ -130,11 +141,17 @@ dependency, no trait, no generic.
    - *Two peers transform the same clone.* One whole matrix wins (criterion 13).
    - *Peer A edits the origin, while peer B transforms the clone.* Both edits apply (criterion
      13).
-8. **2026-10-10: duplicate.** `copy_map` already copies every key, so a duplicate of a clone is a
-   clone of the same origin (criterion 19), with no change needed. A duplicate of an origin is a
-   path that no clone refers to. The deep duplicate of `0023` on a group that holds both an
-   origin and its clone gives a copied clone that still refers to the **original** origin
-   (flagged, see below).
+8. **2026-10-10: copying sets (criteria 19, 47, 48).** `copy_map` already copies every key, so
+   the copy of a clone starts as a clone of the same origin with the same matrix (criteria 19
+   and 48), and the copy of an origin is a path that no clone refers to. Criterion 47 needs one
+   more step. One crate-private helper, `relink_copied_clones(copies)`, gets the map from each
+   source id to its copy's id that the copy command builds anyway. For every copied clone whose
+   source origin is also in the map, it sets `clone_origin` to the origin's copy. For a Ctrl-copy
+   move by G, such a clone gets `clone_matrix_after(m, g, true)` (G·M·G⁻¹, decision 4), and any
+   other copied clone gets G·M. It runs in the same commit as the copy. Its callers are
+   `duplicate_objects`, `0023`'s deep duplicate, and later duplicate layer and paste within a
+   project, so no copy path can skip it. A clone outside the copied set is never touched. One
+   test per criterion 47 and 48 case, including the Ctrl-copy matrix.
 9. **2026-10-10: undo (criterion 36).** No engine change if ADR 0014 §1 already treats an absent
    key as a value: it deletes keys and containers that the step created and restores the
    removed ones. The `0047` conversion is the same case. This slice adds two tests in the `0020`
@@ -172,18 +189,15 @@ Build after `0023` and `0050`, as the product owner recommends. All three touch 
 spec and `0023` share the selection context. It runs alone among those three. The removers'
 helper is shared with `0023`'s `remove_emptied_groups`.
 
-## Flagged for the product owner (defaults taken, no customer question)
+## Flagged for the product owner
 
-1. **Criterion 35 vs. criterion 31.** After a merge, the repair deletes a clone that a peer made
-   while another peer deleted its origin. Criterion 31 promises that "nothing disappears". The
-   case cannot happen until sharing exists. Default: delete now, and unlink from the tombstone
-   in the sharing story. The PO may add that sentence to the out-of-scope list.
-2. **Group duplicate holding an origin and its clone.** Criterion 19 does not cover this.
-   Default: the copied clone follows the original origin, not the copied one. Inkscape's "relink
-   duplicated clones" would be a later option.
-3. **`0050` criterion 28 contradicts decisions 2 and 7 here.** It multiplies in the origin's own
-   node `opacity`, while decision 7 says the origin's node flags do not reach its clones.
-   ADR 0015 §3: a clone reads outline and style, and no node register. Criterion 28 should drop
-   "the origin's own `opacity`".
-4. **Criterion 37, wording.** "A file with a clone opened by an earlier build is refused" is true,
-   but too narrow: the earlier build refuses every file saved by this build.
+Resolved in the spec fixes of 2026-10-10: orphans (criterion 35), copying sets (criteria 47 and
+48), and the clone's opacity (criterion 49 and `0050` criterion 28). Two points remain, no
+customer question:
+
+1. **Criterion 28 (with criterion 49).** Unlink copies the style but says nothing about
+   opacity. Without a copy of the origin's `opacity`, an unlinked clone of a faded origin jumps
+   to 100 % and "the drawn outline before and after is the same" fails in look. Default (decision
+   5): copy it. The criterion should say so; criterion 31's unlink on removal follows.
+2. **Criterion 37.** "A file with a clone opened by an earlier build is refused" is true but too
+   narrow: the earlier build refuses every file saved by this build.
