@@ -4,8 +4,8 @@ Undo is our own restore engine over Loro versions, steps are delimited by a head
 message, the stacks come from one pure stack machine, and the history list is derived from the log
 `document.loro` already holds. **No new crate, no new dependency, no `format_version` bump** (with
 ADR 0014 Q7 A). The persisted parts (commit-message grammar, times, wipe epoch, revival of deleted
-objects) are [ADR 0014](../../docs/adr/0014-history-undo-and-branches.md), `Proposed`,
-`needs-customer`. Reference state: `main` at `798a8ad`.
+objects) are [ADR 0014](../../docs/adr/0014-history-undo-and-branches.md), accepted by the customer on
+2026-10-10 with option A on all seven questions. Reference state: `main` at `798a8ad`.
 
 **Amended 2026-10-10 after the Loro spike** (`docs/spikes/loro-history-primitives.md`, PR #85):
 decisions 1, 2, 3, 7, 9, 11, 12 changed; 13 to 15 are new; milestone 0 is done.
@@ -130,11 +130,11 @@ History tab (after `0043`).
 
 ## What can start now and what waits
 
-Milestones 1 to 3 can start on ADR 0014's defaults: Q1 A is today's behaviour, the header grammar
-and no-bump are Q2 A, authors are Q5 A, revival by injected op is Q7 A. Milestone 4 builds on Q3 A
-(unshared only). The PR merges only after the customer has answered or accepted the defaults. If
-the customer picks Q7 B (soft delete), milestone 1 replaces `revive.rs` by the trash node and
-carries the `format_version` bump with a migration test; nothing else changes.
+Everything can start: the customer accepted ADR 0014 on 2026-10-10. Q1 A is today's behaviour,
+the header grammar and no-bump are Q2 A, authors are Q5 A, revival by injected op is Q7 A,
+milestone 4 builds on Q3 A (unshared only). Milestone 3 needs `0043`. Soft delete (Q7 B) comes back
+to the customer only if a Loro upgrade we need breaks the canary; it would replace `revive.rs` by
+the trash node and carry a `format_version` bump with a migration test.
 
 ## Risks
 

@@ -18,7 +18,7 @@ on.
 - [`0019` adrs.md](../0019-multi-object-transform/adrs.md) (#80): the move of
   several objects is one `translate_objects` commit; the group box gives the
   selection's bounds.
-- [ADR 0014 §2](../../docs/adr/0014-history-undo-and-branches.md) (Proposed)
+- [ADR 0014 §2](../../docs/adr/0014-history-undo-and-branches.md) (accepted 2026-10-10)
   and [`0020` adrs.md](../0020-undo-redo/adrs.md) decision 2: a step is the
   commits of one peer with the same header `<label>;s=<seq>`; a continuation
   repeats the previous step's header and joins it, allowed only while the

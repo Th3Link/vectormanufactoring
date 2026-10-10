@@ -1,6 +1,6 @@
 # ADR 0004: Persistence, collaboration and cross-machine sync
 
-**Status:** Accepted (customer sign-off, 2026-10-02); file extension amended by [ADR 0013](0013-rename-to-curvyo.md) (`.vmf` is now `.curvyo`)
+**Status:** Accepted (customer sign-off, 2026-10-02); file extension amended by [ADR 0013](0013-rename-to-curvyo.md) (`.vmf` is now `.curvyo`); the undo mechanism sentence of §2 superseded by [ADR 0014](0014-history-undo-and-branches.md) §1 (accepted 2026-10-10), which also decides how the edit history held in the file is shown, wiped and kept
 
 Supersedes the "no sync engine of ours" decision in the first draft. The
 customer's direction: *"not just sync — cooperative work from the start,
@@ -136,6 +136,10 @@ SQLite remains available as a local, rebuildable *index*.
    mechanism. **ADR 0002 has been revised accordingly** — §9 (the CRDT
    operation log is the canonical history) and §12 (peer-scoped undo) — so the
    two ADRs no longer contradict each other.
+   *Reader's notes, 2026-10-10:* the mechanism sentence is superseded by
+   [ADR 0014](0014-history-undo-and-branches.md) §1 (our own restore engine over
+   versions, not Loro's undo manager). Peer-scoped undo lives in
+   [ADR 0009](0009-concurrent-editing-semantics.md) §1, not in ADR 0002 §12.
 3. **The CRDT is an implementation detail of `vecmanf-document-core`'s API, and
    that is enforced.** No Loro type appears in the crate's public interface, in
    `vecmanf-ui-core`, in the renderer or in the frontend. The exit path if Loro
@@ -285,8 +289,11 @@ questions).
 - **The document model carries CRDT metadata.** Documents grow with edit
   history, not just content; a long-lived file needs compaction (Loro shallow
   snapshots) and that needs a story and a measured threshold. Memory per open
-  document is higher than a plain arena.
-- **ADR 0002 has been revised to match** (§5, §9, §12–§16): undo is peer-scoped
+  document is higher than a plain arena. (*Reader's note, 2026-10-10:* how this
+  history is shown, kept in the file and wiped by a shallow snapshot is
+  [ADR 0014](0014-history-undo-and-branches.md) §7 and §9.)
+- **ADR 0002 has been revised to match** (§5, §9, §12–§16; *reader's note:* the
+  undo and concurrent-editing parts of that range are in ADR 0009): undo is peer-scoped
   and the command journal is the edit API and undo surface rather than the
   persisted history. The reconciliation also moved three things into 0002 that
   only a replicated model needs — ephemeral state kept out of the log, per-field
