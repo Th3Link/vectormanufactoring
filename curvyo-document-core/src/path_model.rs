@@ -376,5 +376,3 @@ pub enum PathEditError {
     #[error("an anchor id is used twice")]
     DuplicateAnchorId,
 }
-
-}
