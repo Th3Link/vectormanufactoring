@@ -24,6 +24,21 @@ pub(crate) use curvyo_geometry_core::MAX_COORDINATE_MM;
 /// A move offset within this (millimetres) of zero is no move.
 pub(crate) const MOVE_EQUAL_EPSILON_MM: f64 = 1e-9;
 
+/// Whether moving the span `low..=high` by `delta` (millimetres, one axis) keeps both edges within
+/// [`MAX_COORDINATE_MM`]: the one limit of a typed move and a nudge.
+pub(crate) fn axis_within_limit(low: f64, high: f64, delta: f64) -> bool {
+    [low + delta, high + delta]
+        .iter()
+        .all(|edge| edge.abs() <= MAX_COORDINATE_MM)
+}
+
+/// Whether moving objects whose tight bounds are `bounds` (`(min, max)` corners) by `offset`
+/// keeps every edge within [`MAX_COORDINATE_MM`].
+pub(crate) fn offset_within_limit(bounds: (Point, Point), offset: Vec2) -> bool {
+    let (min, max) = bounds;
+    axis_within_limit(min.x, max.x, offset.x) && axis_within_limit(min.y, max.y, offset.y)
+}
+
 /// Writes a gesture's resulting snapshot (shared by a drag's release and a
 /// typed entry's Enter).
 pub(crate) fn commit_gesture(

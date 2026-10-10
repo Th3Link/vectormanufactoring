@@ -36,6 +36,7 @@ mod move_entry;
 mod move_indicators;
 mod navigation;
 mod node;
+mod nudge;
 mod object_cache;
 mod open_error;
 mod pen;
@@ -196,6 +197,8 @@ pub struct Session {
     command_refusal: Option<refusal::RefusalMarks>,
     /// The Pen's end-node cache and the target of the press in flight (`0034`).
     pen_cue: pen::PenCueState,
+    /// The arrow-key nudges of the held press that last moved the selection (`nudge.rs`).
+    nudge_run: Option<curvyo_ui_core::NudgeRun>,
 }
 
 impl Session {
@@ -236,6 +239,7 @@ impl Session {
             limit_notice: None,
             command_refusal: None,
             pen_cue: pen::PenCueState::default(),
+            nudge_run: None,
         }
     }
 
@@ -273,6 +277,7 @@ impl Session {
             limit_notice: None,
             command_refusal: None,
             pen_cue: pen::PenCueState::default(),
+            nudge_run: None,
         })
     }
 

@@ -12,7 +12,9 @@ use crate::anchor_id_minter::AnchorIdMinter;
 
 use crate::object_bounds::object_outline_bounds;
 use crate::oriented_box::OrientedBox;
-use crate::transform_commit::{MAX_COORDINATE_MM, MOVE_EQUAL_EPSILON_MM, commit_move};
+use crate::transform_commit::{
+    MAX_COORDINATE_MM, MOVE_EQUAL_EPSILON_MM, axis_within_limit, commit_move,
+};
 use crate::transform_entry::{
     EntryField, EntryOutcome, InvalidReason, format_mm, parse_entry_number,
 };
@@ -131,8 +133,7 @@ impl MoveEntry {
             } else {
                 value
             };
-            let reaches = [origin[index] + offset[index], far[index] + offset[index]];
-            if reaches.iter().any(|edge| edge.abs() > MAX_COORDINATE_MM) {
+            if !axis_within_limit(origin[index], far[index], offset[index]) {
                 return Err((index, InvalidReason::NotANumber));
             }
         }

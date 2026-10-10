@@ -6,6 +6,9 @@
 //! cargo test --release -p curvyo-editor-wasm --test draw_list_cache_budget -- --ignored --nocapture
 //! ```
 //!
+//! `specs/0044-editing-quick-wins/` criterion 5: with 5,000 objects Ctrl+A is drawn within 100 ms.
+//! The nudge report is the cost of one arrow-key event with 1,000 objects selected.
+//!
 //! Half the objects are rectangles, half are closed paths of eight nodes. The frame at rest is
 //! `Session::draw_list()` with nothing changed since the previous frame.
 
@@ -19,7 +22,7 @@
 use std::time::{Duration, Instant};
 
 use curvyo_document_core::{AnchorId, Document, Length, NewAnchor, Point, RectBounds, pack};
-use curvyo_editor_wasm::{Session, Tool};
+use curvyo_editor_wasm::{KeyInput, KeyOutcome, Session, Tool};
 
 const COLUMNS: usize = 100;
 const PITCH_MM: f64 = 20.0;
@@ -93,4 +96,65 @@ fn frame_at_rest_by_object_count() {
         let rest = frame_at_rest(&session, 5);
         println!("{count:>6} objects, all selected: first frame {first:?}, at rest {rest:?}");
     }
+}
+
+const SELECT_ALL_BUDGET: Duration = Duration::from_millis(100);
+
+#[test]
+#[ignore = "a timing budget for release builds; run on purpose"]
+fn select_all_is_drawn_within_budget_with_five_thousand_objects() {
+    let mut session = session_with(5000);
+    let _ = session.draw_list();
+    let started = Instant::now();
+    let outcome = session.key_down(KeyInput {
+        key: "a",
+        ctrl: true,
+        ..KeyInput::default()
+    });
+    let key = started.elapsed();
+    let _ = session.draw_list();
+    let drawn = started.elapsed();
+    assert_eq!(outcome, KeyOutcome::SelectedAll);
+    assert_eq!(session.selected_object_count(), 5000);
+    println!("Ctrl+A with 5000 objects: key {key:?}, key and first frame {drawn:?}");
+    println!(
+        "all selected, frame at rest {:?}",
+        frame_at_rest(&session, 5)
+    );
+    if !cfg!(debug_assertions) {
+        assert!(
+            drawn <= SELECT_ALL_BUDGET,
+            "{drawn:?} (budget {SELECT_ALL_BUDGET:?})"
+        );
+    }
+}
+
+#[test]
+#[ignore = "a timing report for release builds; run on purpose"]
+fn one_nudge_event_with_a_thousand_objects_selected() {
+    let mut session = session_with(1000);
+    let _ = session.key_down(KeyInput {
+        key: "a",
+        ctrl: true,
+        ..KeyInput::default()
+    });
+    let _ = session.draw_list();
+    let mut worst = Duration::ZERO;
+    let mut frame = Duration::ZERO;
+    for step in 0..20_u32 {
+        let started = Instant::now();
+        let _ = session.key_down_at(
+            KeyInput {
+                key: "ArrowRight",
+                repeat: step > 0,
+                ..KeyInput::default()
+            },
+            f64::from(step) * 33.0,
+        );
+        worst = worst.max(started.elapsed());
+        let started = Instant::now();
+        let _ = session.draw_list();
+        frame = frame.max(started.elapsed());
+    }
+    println!("nudge of 1000 objects: worst key event {worst:?}, worst frame after it {frame:?}");
 }

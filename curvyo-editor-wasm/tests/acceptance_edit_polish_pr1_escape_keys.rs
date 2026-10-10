@@ -1429,7 +1429,7 @@ fn ac55_the_modifier_keys_themselves_and_unknown_keys_are_ignored_without_effect
         "CapsLock",
         " ",
         "Tab",
-        "ArrowLeft",
+        "PageDown",
         "F5",
         "",
         "Dead",
