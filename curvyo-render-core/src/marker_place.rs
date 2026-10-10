@@ -19,6 +19,9 @@ const MIN_LENGTH_MM: f64 = 0.001;
 /// A handle shorter than this has no direction, millimetres.
 const MIN_HANDLE_MM: f64 = 1e-9;
 
+/// A spaced marker this close to a node sits on it, millimetres.
+const NODE_SNAP_MM: f64 = 1e-3;
+
 /// Two tangents within this many degrees of opposite are a reversal.
 const REVERSAL_DEGREES: f64 = 1.0;
 
@@ -40,48 +43,59 @@ fn between(from: Point, to: Point) -> Vec2 {
     Vec2::new(to.x - from.x, to.y - from.y)
 }
 
+/// The control points met walking away from anchor `i` along the control
+/// polygon (forward: handle out, next handle in, next node, next handle out,
+/// ...; backward the mirror image), as far as the path goes. A closed path
+/// wraps around once.
+fn polygon_points(anchors: &[AnchorSnapshot], closed: bool, i: usize, forward: bool) -> Vec<Point> {
+    let n = anchors.len();
+    let own = &anchors[i];
+    let mut points = vec![if forward {
+        own.point.translated(own.handle_out)
+    } else {
+        own.point.translated(own.handle_in)
+    }];
+    for step in 1..n {
+        let j = if forward {
+            i + step
+        } else if step <= i || closed {
+            i + n - step
+        } else {
+            break;
+        };
+        if forward && !closed && j >= n {
+            break;
+        }
+        let j = j % n;
+        let a = &anchors[j];
+        let (near, far) = if forward {
+            (a.handle_in, a.handle_out)
+        } else {
+            (a.handle_out, a.handle_in)
+        };
+        points.push(a.point.translated(near));
+        points.push(a.point);
+        points.push(a.point.translated(far));
+    }
+    points
+}
+
 /// The outgoing tangent of anchor `i` (a unit vector), or `None` when every
 /// control point after it coincides with it. A zero-length handle uses the
 /// direction to the next control point or node that differs.
 fn outgoing(anchors: &[AnchorSnapshot], closed: bool, i: usize) -> Option<Vec2> {
-    let a = &anchors[i];
-    let mut candidates = vec![a.point.translated(a.handle_out)];
-    let n = anchors.len();
-    let next = if i + 1 < n {
-        Some(&anchors[i + 1])
-    } else if closed {
-        Some(&anchors[0])
-    } else {
-        None
-    };
-    if let Some(next) = next {
-        candidates.push(next.point.translated(next.handle_in));
-        candidates.push(next.point);
-    }
-    candidates
+    let origin = anchors[i].point;
+    polygon_points(anchors, closed, i, true)
         .into_iter()
-        .find_map(|target| unit(between(a.point, target)))
+        .find_map(|target| unit(between(origin, target)))
 }
 
 /// The incoming tangent of anchor `i`: the direction of travel arriving at it.
 fn incoming(anchors: &[AnchorSnapshot], closed: bool, i: usize) -> Option<Vec2> {
-    let a = &anchors[i];
-    let mut candidates = vec![a.point.translated(a.handle_in)];
-    let n = anchors.len();
-    let previous = if i > 0 {
-        Some(&anchors[i - 1])
-    } else if closed {
-        Some(&anchors[n - 1])
-    } else {
-        None
-    };
-    if let Some(previous) = previous {
-        candidates.push(previous.point.translated(previous.handle_out));
-        candidates.push(previous.point);
-    }
-    candidates
+    let target = anchors[i].point;
+    polygon_points(anchors, closed, i, false)
         .into_iter()
-        .find_map(|source| unit(between(source, a.point)))
+        .find_map(|source| unit(between(source, target)))
 }
 
 /// The direction of travel at an inner node: the bisector of the incoming and
@@ -210,13 +224,26 @@ pub(crate) fn marker_placements(
                 let at = length * fraction;
                 #[allow(clippy::cast_possible_truncation)]
                 let mut position_at = |distance: f64| {
-                    let p = sampler
-                        .sample(distance.clamp(0.0, length) as f32)
-                        .position();
+                    // A closed outline wraps, so the first marker looks back
+                    // along the closing segment and takes the bisector.
+                    let distance = if closed {
+                        distance.rem_euclid(length)
+                    } else {
+                        distance.clamp(0.0, length)
+                    };
+                    let p = sampler.sample(distance as f32).position();
                     Point::new(f64::from(p.x), f64::from(p.y))
                 };
                 let point = position_at(at);
-                let direction = unit(between(position_at(at - step), position_at(at + step)))
+                // A marker that lands on a node takes the node's direction
+                // (the bisector, criterion 14); the chord is skewed there by the
+                // flattening of the curve.
+                let on_node = anchors
+                    .iter()
+                    .position(|a| between(a.point, point).length() <= NODE_SNAP_MM);
+                let direction = on_node
+                    .and_then(|i| at_node(anchors, closed, i))
+                    .or_else(|| unit(between(position_at(at - step), position_at(at + step))))
                     .unwrap_or(Vec2::new(1.0, 0.0));
                 placements.push(MarkerPlacement {
                     shape: markers.mid,

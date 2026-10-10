@@ -1669,7 +1669,6 @@ fn compound_paths_get_markers_per_outline() {
 /// it, the marker is dropped instead of looking further along the path. Found
 /// by the tester; the test stays ignored until the implementer fixes it.
 #[test]
-#[ignore = "defect: a coincident neighbour node drops the Start/End/At nodes marker (criterion 14)"]
 fn duplicate_nodes_take_the_direction_to_the_next_differing_point() {
     // Start on a doubled first node: outgoing tangent toward (10, 0); the
     // Start arrow points outward, tip at x = -2.

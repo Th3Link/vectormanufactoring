@@ -364,9 +364,15 @@ fn a_closed_path_has_no_ends_and_spaced_markers_start_on_the_first_node() {
     let placed = arrows(&marker_vertices(&document, id));
     assert_eq!(placed.len(), 4);
     let corners = [(0.0, 0.0), (40.0, 0.0), (40.0, 40.0), (0.0, 40.0)];
-    for (marker, corner) in placed.iter().zip(corners) {
+    // A marker on a node faces the bisector of the corner (criteria 10, 14),
+    // the first one included: it looks back along the closing segment.
+    let s = std::f64::consts::FRAC_1_SQRT_2;
+    let bisectors = [(s, -s), (s, s), (-s, s), (-s, -s)];
+    for ((marker, corner), bisector) in placed.iter().zip(corners).zip(bisectors) {
         near(marker.0.x, corner.0, 0.1);
         near(marker.0.y, corner.1, 0.1);
+        near(marker.1.0, bisector.0, 1e-3);
+        near(marker.1.1, bisector.1, 1e-3);
     }
     // At nodes on a closed path: one on every node, the first included.
     set(
@@ -374,7 +380,12 @@ fn a_closed_path_has_no_ends_and_spaced_markers_start_on_the_first_node() {
         id,
         &[StyleEdit::MarkerPlace(MarkerPlace::AtNodes)],
     );
-    assert_eq!(arrows(&marker_vertices(&document, id)).len(), 4);
+    let at_nodes = arrows(&marker_vertices(&document, id));
+    assert_eq!(at_nodes.len(), 4);
+    for (marker, bisector) in at_nodes.iter().zip(bisectors) {
+        near(marker.1.0, bisector.0, 1e-9);
+        near(marker.1.1, bisector.1, 1e-9);
+    }
 }
 
 #[test]
