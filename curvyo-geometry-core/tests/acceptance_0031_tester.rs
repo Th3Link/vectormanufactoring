@@ -145,7 +145,8 @@ fn c10_grab_near_a_node_is_clamped() {
     assert!(near(r.start_handle_out.x, 30.0, 1e-9));
     assert!(near(r.start_handle_out.y, -24.0, 1e-9), "{r:?}");
     assert!(near(r.end_handle_in.y, -24.0, 1e-9), "{r:?}");
-    let (ox, oy) = eval(p0, Vec2::ZERO, Vec2::ZERO, p3, 0.1);
+    // The old line as the cubic with its control points at the thirds.
+    let (ox, oy) = eval(p0, v(30.0, 0.0), v(-30.0, 0.0), p3, 0.1);
     let (nx, ny) = eval(p0, r.start_handle_out, r.end_handle_in, p3, 0.1);
     let moved = ((nx - ox).powi(2) + (ny - oy).powi(2)).sqrt();
     assert!(near(moved, 0.648 * 10.0, 1e-3), "moved {moved}");
@@ -233,7 +234,7 @@ proptest! {
         prop_assert!(moved(r.start_handle_out, thirds) <= 2.4 * dl + 1e-9);
         prop_assert!(moved(r.end_handle_in, (-x3 / 3.0, 0.0)) <= 2.4 * dl + 1e-9);
         let t = t0.clamp(1.0 / 6.0, 5.0 / 6.0);
-        let (a, b) = eval(p0, Vec2::ZERO, Vec2::ZERO, p3, t0);
+        let (a, b) = eval(p0, v(x3 / 3.0, 0.0), v(-x3 / 3.0, 0.0), p3, t0);
         let (c, e) = eval(p0, r.start_handle_out, r.end_handle_in, p3, t0);
         let fraction = 3.0 * t0 * (1.0 - t0) / (3.0 * t * (1.0 - t));
         prop_assert!(near(c - a, fraction * dx, 1e-6));

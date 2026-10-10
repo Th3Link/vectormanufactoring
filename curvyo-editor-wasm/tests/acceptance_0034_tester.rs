@@ -1241,3 +1241,215 @@ fn v24_hover_over_5000_open_paths_costs_under_2_ms_warm() {
     eprintln!("warm hover: {per:.3} ms");
     assert!(per < 2.0, "{per} ms");
 }
+
+// ---------------------------------------------------------------------------------------------
+// Closing a continuation from P's FIRST node: the stored order is reversed, so the closing
+// segment leaves the closing node (criterion 15, "Applying Sharp")
+// ---------------------------------------------------------------------------------------------
+
+fn continue_from_first_and_close(last_kind: AnchorKind, shift: bool) -> PathSnapshot {
+    let d = Document::new(1);
+    let a = corner(0.0, 0.0);
+    let b = corner(40.0, 0.0);
+    let c = NewAnchor {
+        id: aid(),
+        point: pt(40.0, 40.0),
+        handle_in: if last_kind == AnchorKind::Corner {
+            Vec2::ZERO
+        } else {
+            v(0.0, -10.0)
+        },
+        handle_out: if last_kind == AnchorKind::Corner {
+            Vec2::ZERO
+        } else {
+            v(0.0, 10.0)
+        },
+        kind: last_kind,
+    };
+    let id = d.create_path(&[a, b, c], false);
+    let mut s = open_pen(&d);
+    click(&mut s, pt(0.0, 0.0)); // continue from the first node
+    click(&mut s, pt(0.0, 40.0)); // D
+    hover(&mut s, pt(40.0, 40.0), shift);
+    assert!(is_close(&s.pen_target()), "{:?}", s.pen_target());
+    if shift {
+        click_shift(&mut s, pt(40.0, 40.0));
+    } else {
+        click(&mut s, pt(40.0, 40.0));
+    }
+    let p = path_by_id(&s, id).expect("P survives");
+    assert!(p.closed);
+    assert_eq!(
+        xs(&p),
+        vec![(0.0, 40.0), (0.0, 0.0), (40.0, 0.0), (40.0, 40.0)]
+    );
+    p
+}
+
+#[test]
+fn c15_sharp_closing_a_continuation_from_the_first_node_retracts_the_outgoing_handle() {
+    let p = continue_from_first_and_close(AnchorKind::Symmetric, true);
+    let c = p.anchors[3];
+    assert_eq!(c.kind, AnchorKind::Corner);
+    assert_eq!(
+        c.handle_out,
+        Vec2::ZERO,
+        "the closing segment leaves C: out is retracted"
+    );
+    assert_eq!(c.handle_in, v(0.0, -10.0), "the other handle stays");
+}
+
+#[test]
+fn c15_smooth_closing_a_continuation_from_the_first_node_uses_the_stored_order_tangent() {
+    let p = continue_from_first_and_close(AnchorKind::Corner, true);
+    let c = p.anchors[3];
+    assert_eq!(c.kind, AnchorKind::Asymmetric);
+    // Tangent from B (40, 0) to D (0, 40): (-40, 40). out points to D, in points away.
+    let t = v(-40.0, 40.0);
+    assert!(
+        (c.handle_out.x * t.y - c.handle_out.y * t.x).abs() < 1e-6,
+        "{c:?}"
+    );
+    assert!(c.handle_out.x * t.x + c.handle_out.y * t.y > 0.0, "{c:?}");
+    assert!(
+        (c.handle_in.x * t.y - c.handle_in.y * t.x).abs() < 1e-6,
+        "{c:?}"
+    );
+    assert!(c.handle_in.x * t.x + c.handle_in.y * t.y < 0.0, "{c:?}");
+}
+
+#[test]
+fn c15_default_is_as_drawn_when_closing_a_continuation_onto_a_symmetric_node() {
+    let p = continue_from_first_and_close(AnchorKind::Symmetric, false);
+    let c = p.anchors[3];
+    assert_eq!(c.kind, AnchorKind::Symmetric, "unchanged");
+    assert_eq!(c.handle_in, v(0.0, -10.0));
+    assert_eq!(c.handle_out, v(0.0, 10.0));
+}
+
+// ---------------------------------------------------------------------------------------------
+// More edges
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn target_ties_go_to_the_topmost_object() {
+    let (d, ids) = doc_with(&[
+        (&[(0.0, 0.0), (10.0, 0.0)], false),
+        (&[(30.0, 30.0), (10.0, 0.0)], false),
+    ]);
+    let mut s = open_pen(&d);
+    hover(&mut s, pt(10.0, 0.0), false);
+    match s.pen_target() {
+        Some(PenTarget::Continue(end)) => assert_eq!(end.path, ids[1], "the topmost object"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn target_nearest_end_wins_when_both_ends_of_one_path_are_in_range() {
+    let (d, ids) = doc_with(&[
+        (&[(0.0, 0.0), (10.0, 0.0)], false),
+        (&[(100.0, 0.0), (100.5, 0.0)], false),
+    ]);
+    let mut s = open_pen(&d);
+    click(&mut s, pt(10.0, 0.0));
+    hover(&mut s, pt(100.4, 0.0), false);
+    match s.pen_target() {
+        Some(PenTarget::Join(end)) => {
+            assert_eq!(end.path, ids[1]);
+            assert_eq!(end.anchor.point, pt(100.5, 0.0), "the nearer end");
+        }
+        other => panic!("{other:?}"),
+    }
+    click(&mut s, pt(100.4, 0.0));
+    let ps = paths(&s);
+    assert_eq!(ps.len(), 1);
+    assert_eq!(
+        xs(&ps[0]),
+        vec![(0.0, 0.0), (10.0, 0.0), (100.5, 0.0), (100.0, 0.0)]
+    );
+}
+
+#[test]
+fn no_cue_outside_the_pen() {
+    let (d, _) = doc_with(&[(&[(0.0, 0.0), (10.0, 0.0)], false)]);
+    let mut s = open_pen(&d);
+    hover(&mut s, pt(10.0, 0.0), false);
+    assert!(s.pen_target().is_some());
+    s.set_tool(Tool::Select);
+    assert!(s.pen_target().is_none());
+    s.set_tool(Tool::Node);
+    assert!(s.pen_target().is_none());
+}
+
+#[test]
+fn a5_the_continued_path_keeps_its_selection() {
+    let (d, ids) = doc_with(&[(&[(0.0, 0.0), (10.0, 0.0)], false)]);
+    let mut s = open_pen(&d);
+    s.set_tool(Tool::Select);
+    click(&mut s, pt(5.0, 0.0));
+    assert_eq!(s.selected_object_count(), 1);
+    s.set_tool(Tool::Pen);
+    click(&mut s, pt(10.0, 0.0));
+    click(&mut s, pt(30.0, 0.0));
+    s.finish_pen();
+    s.set_tool(Tool::Select);
+    assert_eq!(path_by_id(&s, ids[0]).unwrap().anchors.len(), 3);
+    assert_eq!(s.selected_object_count(), 1, "P is still selected");
+}
+
+#[test]
+fn d19_a_three_node_path_whose_ends_coincide_would_close_to_two_nodes_and_is_skipped_alone() {
+    let d = Document::new(1);
+    let a = d.create_path(
+        &[corner(0.0, 0.0), corner(40.0, 0.0), corner(0.0, 0.0004)],
+        false,
+    );
+    let b = d.create_path(
+        &[corner(100.0, 0.0), corner(140.0, 0.0), corner(140.0, 40.0)],
+        false,
+    );
+    let mut s = open_pen(&d);
+    select_all_nodes_tool(&mut s, pt(-20.0, -20.0), pt(300.0, 100.0));
+    let out = s.close_paths(JoinType::Sharp);
+    assert_eq!(out.closed, 1, "the ordinary path still closes");
+    let pa = path_by_id(&s, a).unwrap();
+    assert!(!pa.closed, "no closed path of two nodes");
+    assert_eq!(pa.anchors.len(), 3, "and nothing was merged");
+    assert!(path_by_id(&s, b).unwrap().closed);
+}
+
+#[test]
+fn b9_a_merged_junction_keeps_each_sides_inward_handle_and_is_a_corner() {
+    let d = Document::new(1);
+    let p0 = corner(0.0, 0.0);
+    let e = NewAnchor {
+        id: aid(),
+        point: pt(10.0, 0.0),
+        handle_in: v(-3.0, 0.0),
+        handle_out: v(3.0, 4.0),
+        kind: AnchorKind::Symmetric,
+    };
+    let q0 = NewAnchor {
+        id: aid(),
+        point: pt(10.0, 0.0008),
+        handle_in: v(-2.0, 2.0),
+        handle_out: v(5.0, 0.0),
+        kind: AnchorKind::Asymmetric,
+    };
+    let q1 = corner(30.0, 0.0);
+    let p = d.create_path(&[p0, e], false);
+    d.create_path(&[q0, q1], false);
+    let mut s = open_pen(&d);
+    click(&mut s, pt(10.0, 0.0));
+    hover(&mut s, pt(10.0, 0.0008), false);
+    assert!(is_join(&s.pen_target()));
+    click(&mut s, pt(10.0, 0.0008));
+    let r = path_by_id(&s, p).unwrap();
+    assert_eq!(r.anchors.len(), 3);
+    let m = r.anchors[1];
+    assert!((m.point.y - 0.0004).abs() < 1e-9, "midpoint {m:?}");
+    assert_eq!(m.kind, AnchorKind::Corner);
+    assert_eq!(m.handle_in, v(-3.0, 0.0), "P's inward handle");
+    assert_eq!(m.handle_out, v(5.0, 0.0), "Q's inward (far side) handle");
+}

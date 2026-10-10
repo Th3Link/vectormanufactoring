@@ -1194,8 +1194,11 @@ fn c19_a_rectangle_with_1000_circles() {
     eprintln!("(a) break apart {t:.3} s");
     assert!(t < 2.0, "{t}");
     assert!(
-        matches!(out, BreakApartOutcome::Applied { pieces: 1, .. }),
-        "{out:?}"
+        matches!(
+            out,
+            BreakApartOutcome::Refused(BreakApartRefusal::OnePiece { compounds: 1 })
+        ),
+        "a plate with holes is one piece: {out:?}"
     );
 }
 
@@ -1286,4 +1289,132 @@ fn c19_a_compound_path_of_5000_tiny_squares_breaks_into_5000_paths() {
         "{out:?}"
     );
     assert_eq!(reread(&s).object_ids().len(), 5000);
+}
+
+// ---------------------------------------------------------------------------------------------
+// More edges
+// ---------------------------------------------------------------------------------------------
+
+/// A compound path built straight in the document from the given outlines (windings as given).
+fn compound(d: &Document, outlines: Vec<Vec<NewAnchor>>) -> NodeId {
+    let a = d.create_path(&square(-9000.0, -9000.0, 1.0), true);
+    let b = d.create_path(&square(-9100.0, -9100.0, 1.0), true);
+    let list: Vec<(Vec<NewAnchor>, bool)> = outlines.into_iter().map(|o| (o, true)).collect();
+    d.replace_with_path(&[a, b], a, &list, "test_compound")
+        .unwrap()
+}
+
+#[test]
+fn c10a_a_compound_path_whose_own_outlines_touch_is_refused_as_self_touching() {
+    let d = Document::new(1);
+    let c = compound(&d, vec![square(0.0, 0.0, 20.0), square(10.0, 10.0, 20.0)]);
+    d.create_path(&square(200.0, 0.0, 20.0), true);
+    let mut s = session_of(&d);
+    select_all(&mut s);
+    let before = json(&s);
+    match refused(&mut s) {
+        CombineRefusal::SelfTouching { offenders, of } => {
+            assert_eq!(of, 2);
+            assert_eq!(offenders, vec![c]);
+        }
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(json(&s), before);
+}
+
+#[test]
+fn c4_a_compound_operand_and_a_loose_shape_nest_together_by_depth() {
+    // Ring (hole r10) + a disc in the hole (island) + a tiny disc in the ring material.
+    let d = Document::new(1);
+    d.create_path(&circle(100.0, 100.0, 20.0, false), true);
+    d.create_path(&circle(100.0, 100.0, 10.0, true), true);
+    let mut s = session_of(&d);
+    select_all(&mut s);
+    s.apply_combine(); // the ring, one compound path
+    let ring = reread(&s).object_ids()[0];
+    // Add the island and the speck with the Pen is awkward; build a second document instead.
+    let d = Document::new(1);
+    let outer = circle(100.0, 100.0, 20.0, false);
+    let hole = circle(100.0, 100.0, 10.0, true);
+    compound(&d, vec![outer, hole]);
+    d.create_path(&circle(100.0, 100.0, 5.0, true), true); // island in the hole: depth 2
+    d.create_path(&circle(115.0, 100.0, 2.0, false), true); // speck in the material: depth 1
+    let mut s = session_of(&d);
+    select_all(&mut s);
+    let (n, holes, _) = applied_combine(&s.apply_combine());
+    assert_eq!(n, 3);
+    assert_eq!(holes, 2, "the old hole and the speck are odd depth");
+    let p = &paths(&s)[0];
+    assert_eq!(p.subpaths().count(), 4);
+    assert!(painted(p, 100.0, 100.0), "the island is painted");
+    assert!(!painted(p, 107.0, 100.0), "the old hole");
+    assert!(
+        !painted(p, 115.0, 100.0),
+        "the speck is a hole in the material"
+    );
+    assert!(painted(p, 118.0, 100.0), "material around the speck");
+    let _ = ring;
+}
+
+#[test]
+fn c10_two_identical_shapes_on_top_of_each_other_are_refused() {
+    let d = Document::new(1);
+    d.create_path(&square(0.0, 0.0, 20.0), true);
+    d.create_path(&square(0.0, 0.0, 20.0), true);
+    let mut s = session_of(&d);
+    select_all(&mut s);
+    assert!(matches!(refused(&mut s), CombineRefusal::Touching { .. }));
+}
+
+#[test]
+fn c3_combining_three_nested_squares_in_the_reverse_stacking_order_still_nests_by_depth() {
+    let d = Document::new(1);
+    // Smallest at the bottom, largest on top: depth does not depend on the stacking order.
+    d.create_path(&square(40.0, 40.0, 20.0), true);
+    d.create_path(&square(20.0, 20.0, 60.0), true);
+    d.create_path(&square(0.0, 0.0, 100.0), true);
+    let mut s = session_of(&d);
+    select_all(&mut s);
+    let (n, holes, _) = applied_combine(&s.apply_combine());
+    assert_eq!((n, holes), (3, 1));
+    let p = &paths(&s)[0];
+    assert!(painted(p, 50.0, 50.0), "depth 2 is a shape again");
+    assert!(!painted(p, 30.0, 50.0), "depth 1 is a hole");
+    assert!(painted(p, 10.0, 50.0));
+    // Outline order is the stacking order from the bottom: smallest first.
+    let first = p.subpaths().next().unwrap().anchors[0].point;
+    assert_eq!(first, pt(40.0, 40.0));
+}
+
+// ---------------------------------------------------------------------------------------------
+// M1: the Boolean card move changes no availability rule
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn m1_boolean_availability_is_unchanged_by_the_card_move_and_the_boolean_ops_still_run() {
+    use curvyo_ui_core::BooleanOp;
+    let d = Document::new(1);
+    d.create_path(&square(0.0, 0.0, 20.0), true);
+    d.create_path(&square(10.0, 10.0, 20.0), true);
+    d.create_path(&[corner(200.0, 0.0), corner(240.0, 0.0)], false);
+    let mut s = session_of(&d);
+    assert_eq!(s.boolean_availability(), BooleanAvailability::NeedsTwo);
+    marquee(&mut s, pt(-10.0, -10.0), pt(60.0, 60.0));
+    assert_eq!(s.boolean_availability(), BooleanAvailability::Ready);
+    assert_eq!(s.path_availability().combine, s.boolean_availability());
+    select_all(&mut s);
+    assert_eq!(
+        s.boolean_availability(),
+        BooleanAvailability::OpenPaths { open: 1, of: 3 }
+    );
+    assert_eq!(s.path_availability().combine, s.boolean_availability());
+    s.set_tool(Tool::Node);
+    assert_eq!(s.boolean_availability(), BooleanAvailability::NeedsTwo);
+    s.set_tool(Tool::Select);
+    // Union of the two overlapping squares still works (and Combine would refuse them).
+    marquee(&mut s, pt(-10.0, -10.0), pt(60.0, 60.0));
+    assert!(matches!(
+        s.apply_boolean(BooleanOp::Union),
+        curvyo_editor_wasm::BooleanOutcome::Applied { .. }
+    ));
 }

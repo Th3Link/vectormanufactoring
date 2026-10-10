@@ -925,3 +925,70 @@ fn c17_a_bend_on_a_5000_node_path_commits_correctly() {
     assert_ne!(p.anchors[0].handle_out, Vec2::ZERO);
     assert_eq!(bend_labels(&s), 1);
 }
+
+#[test]
+fn c2_a_double_click_on_a_segment_inserts_a_node_and_does_not_bend() {
+    let d = straight_path(&[AnchorKind::Corner, AnchorKind::Corner]);
+    let mut s = open_session(&d);
+    let two_px = px_to_mm(&s, 2.0);
+    click(&mut s, pt(45.0, 0.0));
+    // The second press 2 px away, released in place, then the host's double-click event.
+    press(&mut s, pt(45.0 + two_px, 0.0), false);
+    release(&mut s, pt(45.0 + two_px, 0.0), false);
+    s.double_click(pt(45.0 + two_px, 0.0), false, false);
+    let p = first_path(&s);
+    assert_eq!(p.anchors.len(), 3, "a node was inserted");
+    assert_eq!(bend_labels(&s), 0, "no bend happened");
+    for a in &p.anchors {
+        assert_eq!(a.handle_in, Vec2::ZERO);
+        assert_eq!(a.handle_out, Vec2::ZERO);
+    }
+}
+
+#[test]
+fn c13_a_shift_key_change_with_the_pointer_at_rest_re_evaluates_the_lock() {
+    let d = straight_path(&[AnchorKind::Corner, AnchorKind::Corner]);
+    let mut s = open_session(&d);
+    press(&mut s, pt(45.0, 0.0), false);
+    hover(&mut s, pt(55.0, -30.0), false);
+    assert_eq!(s.live_readout().unwrap().text, "Δ 10.0, −30.0 mm");
+    s.modifiers_changed(true, false, false);
+    assert_eq!(s.live_readout().unwrap().text, "Δ 0.0, −30.0 mm");
+    s.modifiers_changed(false, false, false);
+    assert_eq!(s.live_readout().unwrap().text, "Δ 10.0, −30.0 mm");
+    release(&mut s, pt(55.0, -30.0), false);
+}
+
+#[test]
+fn c13_an_exact_tie_keeps_the_previous_axis_and_starts_horizontal() {
+    let d = straight_path(&[AnchorKind::Corner, AnchorKind::Corner]);
+    let mut s = open_session(&d);
+    press(&mut s, pt(45.0, 0.0), false);
+    hover(&mut s, pt(60.0, -15.0), true); // exact tie, no previous axis: horizontal
+    assert_eq!(s.live_readout().unwrap().text, "Δ 15.0, 0.0 mm");
+    hover(&mut s, pt(50.0, -30.0), true); // vertical wins
+    assert_eq!(s.live_readout().unwrap().text, "Δ 0.0, −30.0 mm");
+    hover(&mut s, pt(60.0, -15.0), true); // tie again: the previous (vertical) axis is kept
+    assert_eq!(s.live_readout().unwrap().text, "Δ 0.0, −15.0 mm");
+    release(&mut s, pt(60.0, -15.0), true);
+}
+
+#[test]
+#[ignore = "release performance: cargo test --release -p curvyo-editor-wasm -- --ignored"]
+fn c17_a_bend_frame_on_a_5000_node_path_stays_under_20_ms() {
+    let mut s = open_session(&long_zigzag(5000));
+    s.resize_viewport(1600.0, 1000.0);
+    press(&mut s, pt(10.0, 7.5), false);
+    hover(&mut s, pt(10.0, 0.0), false);
+    let _first = s.draw_list(); // the first frame reads the document once
+    let frames = 100;
+    let t = Instant::now();
+    for i in 0..frames {
+        hover(&mut s, pt(10.0, -(f64::from(i) % 30.0) - 1.0), false);
+        let _ = s.draw_list();
+    }
+    let ms = t.elapsed().as_secs_f64() * 1000.0 / f64::from(frames);
+    eprintln!("bend frame: {ms:.2} ms");
+    release(&mut s, pt(10.0, -5.0), false);
+    assert!(ms < 20.0, "{ms} ms per frame");
+}
