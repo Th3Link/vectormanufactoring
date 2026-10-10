@@ -8,6 +8,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Tooltip, TooltipProvider } from "@/components/ui/tooltip";
 import type { DocumentPanelApi } from "@/hooks/useDocumentPanel";
 import type { EditorSession } from "@/hooks/useEditorSession";
+import { useBackgroundPanel } from "@/hooks/useBackgroundPanel";
 import { useFormats } from "@/hooks/useFormats";
 import { useStylePanel } from "@/hooks/useStylePanel";
 
@@ -42,10 +43,16 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
    * tab's body has rendered (and the panel has opened). */
   const focusAfterShortcut = useRef(false);
   const panel = useStylePanel(editor);
+  const background = useBackgroundPanel(editor);
   const { getSession } = editor;
   const formats = useFormats(getSession, doc);
   const { shortcut } = doc;
   const returnFocus = () => editor.containerRef.current?.focus();
+  const picking = panel.view.pickTarget !== "" || background.view.picking;
+  const endPick = () => {
+    panel.endPick();
+    background.endPick();
+  };
 
   const setOpenKeepingView = useCallback(
     (next: boolean) => {
@@ -187,11 +194,8 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
           onPointerDownCapture={(event) => {
             // A press anywhere in the panel other than the eyedropper button ends
             // picking and writes nothing (`0017` criterion 26).
-            if (
-              panel.view.pickTarget !== "" &&
-              !(event.target as HTMLElement).closest("[data-eyedropper]")
-            ) {
-              panel.endPick();
+            if (picking && !(event.target as HTMLElement).closest("[data-eyedropper]")) {
+              endPick();
             }
           }}
           onKeyDown={(event) => {
@@ -203,8 +207,8 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
             if (event.key === "Escape" && event.currentTarget.contains(event.target as Node)) {
               event.preventDefault();
               // Picking ends first and keeps the focus where it is.
-              if (panel.view.pickTarget !== "") {
-                panel.endPick();
+              if (picking) {
+                endPick();
                 return;
               }
               returnFocus();
@@ -233,7 +237,12 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
             >
               <TabsContent value={doc.view.activeTab} tabIndex={-1} className="outline-none">
                 {doc.view.content === "document" ? (
-                  <DocumentSection document={doc} formats={formats} onReturnFocus={returnFocus} />
+                  <DocumentSection
+                    document={doc}
+                    formats={formats}
+                    background={background}
+                    onReturnFocus={returnFocus}
+                  />
                 ) : doc.view.content === "style" ? (
                   <StyleSection panel={panel} onReturnFocus={returnFocus} />
                 ) : null}

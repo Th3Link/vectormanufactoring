@@ -22,7 +22,8 @@ interface SwatchProps {
  */
 export function Swatch({ rgb, opacity, mixed, size = 28 }: SwatchProps) {
   const id = useId();
-  const cell = 7;
+  // 7 px cells in the 28 px swatch, 4 px in the 16 px chip swatch (`docs/design-system.md`).
+  const cell = size <= 16 ? 4 : 7;
   return (
     <span
       aria-hidden

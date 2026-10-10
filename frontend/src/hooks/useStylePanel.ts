@@ -54,7 +54,7 @@ export interface StyleView {
   /** Start or End is set and every selected path is closed. */
   markerClosedNote: boolean;
   /** The paint the eyedropper is picking for, or empty. */
-  pickTarget: "stroke" | "fill" | "";
+  pickTarget: "stroke" | "fill" | "background" | "";
   /** Changes when the edited objects change. */
   scopeKey: string;
   strokePaint: "on" | "off" | "mixed";

@@ -5,7 +5,7 @@ import type { KeyboardEvent } from "react";
 import { EntryField } from "@/components/panel/EntryField";
 import { Tooltip } from "@/components/ui/tooltip";
 import { gridOf, useValueDrag } from "@/hooks/useValueDrag";
-import type { StylePanelApi, ValueFieldName } from "@/hooks/useStylePanel";
+import type { GridName } from "@/hooks/useStylePanel";
 
 const TOOLTIP_KEY = /Mac|iPhone|iPad/.test(navigator.platform) ? "Cmd" : "Ctrl";
 const TOOLTIP = `Drag to change, click to type. Shift: coarse. ${TOOLTIP_KEY}: fine. ${TOOLTIP_KEY}+Backspace: reset.`;
@@ -15,7 +15,6 @@ interface ValueFieldProps {
   label: string;
   /** The accessible name ("Stroke width"); contains the label. */
   name: string;
-  field: ValueFieldName;
   /** The value as shown, without the unit; ignored when mixed. */
   text: string;
   /** The share of the field's width the bar fills, 0 to 1. */
@@ -37,7 +36,14 @@ interface ValueFieldProps {
   defaultText: string;
   /** The message of a refused typed value. */
   messages: Readonly<Record<string, string>>;
-  panel: StylePanelApi;
+  /** A tick of a drag: position `p` (0 to 1) on the field's scale, rounded to `grid`. */
+  onPreview: (p: number, grid: GridName) => void;
+  /** An arrow key: `steps` steps from the shown value. */
+  onStep: (steps: number, grid: GridName) => void;
+  /** The reset icon or Ctrl+Backspace. */
+  onReset: () => void;
+  /** Enter or Tab in the typed field: `"committed"`, `"unchanged"` or `"invalid:<code>"`. */
+  onSubmit: (text: string) => string;
   onReturnFocus: () => void;
 }
 
@@ -56,7 +62,6 @@ const STARTS_TYPING = /^[0-9.,-]$/;
 export function ValueField({
   label,
   name,
-  field,
   text,
   bar,
   mixed,
@@ -68,7 +73,10 @@ export function ValueField({
   typedMax,
   defaultText,
   messages,
-  panel,
+  onPreview,
+  onStep,
+  onReset,
+  onSubmit,
   onReturnFocus,
 }: ValueFieldProps) {
   const [typing, setTyping] = useState<{ initial?: string } | null>(null);
@@ -76,7 +84,7 @@ export function ValueField({
   const { modifier, handlers } = useValueDrag({
     bar: mixed ? 0 : bar,
     mixed,
-    onTick: (p, grid) => panel.previewValue(field, p, grid),
+    onTick: onPreview,
     onClick: () => setTyping({}),
     onDragEnd: onReturnFocus,
   });
@@ -85,7 +93,7 @@ export function ValueField({
     const grid = gridOf(event);
     const step = (steps: number) => {
       event.preventDefault();
-      panel.stepValue(field, steps, grid);
+      onStep(steps, grid);
     };
     if (event.key === "ArrowRight" || event.key === "ArrowUp") {
       step(1);
@@ -93,10 +101,10 @@ export function ValueField({
       step(-1);
     } else if (event.key === "Home" || event.key === "End") {
       event.preventDefault();
-      panel.previewValue(field, event.key === "Home" ? 0 : 1, "normal");
+      onPreview(event.key === "Home" ? 0 : 1, "normal");
     } else if ((event.ctrlKey || event.metaKey) && event.key === "Backspace") {
       event.preventDefault();
-      panel.resetValue(field);
+      onReset();
     } else if (event.key === "Backspace" || event.key === "Delete") {
       // Never reset, never reach the canvas.
       event.preventDefault();
@@ -125,7 +133,7 @@ export function ValueField({
             width={244}
             autoFocus
             initialText={typing.initial}
-            onSubmit={(typed) => panel.setText(field, typed)}
+            onSubmit={onSubmit}
             messages={messages}
             onReturnFocus={onReturnFocus}
             onClose={() => setTyping(null)}
@@ -199,7 +207,7 @@ export function ValueField({
             tabIndex={-1}
             aria-label={`Reset ${name.toLowerCase()} to ${defaultText}`}
             onClick={(event) => {
-              panel.resetValue(field);
+              onReset();
               // `detail` is 0 for keyboard activation, 1 or more for a click.
               if (event.detail > 0) {
                 onReturnFocus();

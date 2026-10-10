@@ -39,25 +39,28 @@ export function FillSection({ panel, onReturnFocus }: FillSectionProps) {
         <div className="contents" {...rowsFocus}>
           <ColourBlock
             name="Fill"
-            field="fill-color"
             rgb={view.fillColor}
             hex={view.fillHex}
             hexMixed={view.fillHexMixed}
             opacity={view.fillOpacity}
-            panel={panel}
+            picking={view.pickTarget === "fill"}
+            onPick={() => panel.beginPick("fill")}
+            onSubmitHex={(text) => panel.setText("fill-color", text)}
             onReturnFocus={onReturnFocus}
           />
           <ColourPicker
             name="Fill"
-            field="fill-color"
             rgb={view.fillColor}
             mixed={view.fillColorMixed}
-            panel={panel}
+            hsvOf={panel.hsvOf}
+            rgbOf={panel.rgbOf}
+            onPreview={(hue, saturation, value) =>
+              panel.previewHsv("fill-color", hue, saturation, value)
+            }
           />
           <ValueField
             label="Opacity"
             name="Fill opacity"
-            field="fill-opacity"
             text={view.fillOpacityText}
             bar={view.fillOpacityBar}
             mixed={view.fillOpacityMixed}
@@ -68,7 +71,10 @@ export function FillSection({ panel, onReturnFocus }: FillSectionProps) {
             typedMax={view.opacityTypedMax}
             defaultText={view.opacityDefaultText}
             messages={PERCENT_MESSAGES}
-            panel={panel}
+            onPreview={(p, grid) => panel.previewValue("fill-opacity", p, grid)}
+            onStep={(steps, grid) => panel.stepValue("fill-opacity", steps, grid)}
+            onReset={() => panel.resetValue("fill-opacity")}
+            onSubmit={(text) => panel.setText("fill-opacity", text)}
             onReturnFocus={onReturnFocus}
           />
         </div>
