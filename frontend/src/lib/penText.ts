@@ -17,6 +17,10 @@ export interface PenCue {
   shift: boolean;
   /** For a join: the continued path and the target path differ in style. */
   styleDiffers: boolean;
+  /** For a close or join: the unit direction away from the path in progress, where the chip sits
+   * without covering the closing segment or handles; 0, 0 when unknown. */
+  awayX: number;
+  awayY: number;
 }
 
 export const NO_PEN_CUE: PenCue = {
@@ -26,6 +30,8 @@ export const NO_PEN_CUE: PenCue = {
   asDrawn: "",
   shift: false,
   styleDiffers: false,
+  awayX: 0,
+  awayY: 0,
 };
 
 /** The cue's kinds that show a hint chip. */

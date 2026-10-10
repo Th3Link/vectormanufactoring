@@ -333,3 +333,27 @@ fn the_close_path_buttons_are_idle_without_a_selection_or_outside_the_node_tool(
     session.set_tool(Tool::Pen);
     assert_eq!(session.close_path_state().closable, 0);
 }
+
+/// Over a close target the chip is placed on the side away from the path in progress: the
+/// direction from the other nodes toward the first node (unit, y down), zero elsewhere.
+#[test]
+fn the_cue_points_away_from_the_path_in_progress_at_a_close_target() {
+    let document = Document::new(1);
+    let mut session = pen_session(&document);
+    assert_eq!(session.pen_cue_away(), (0.0, 0.0), "nothing in progress");
+    for at in [pt(100.0, 100.0), pt(200.0, 100.0), pt(200.0, 200.0)] {
+        click(&mut session, at, false);
+    }
+    // Over the first node: the other two lie to the right and below, so away is up and left.
+    session.pointer_hover(pt(100.0, 100.0), false, false);
+    assert!(matches!(
+        session.pen_target(),
+        Some(PenTarget::Close { .. })
+    ));
+    let (x, y) = session.pen_cue_away();
+    assert!(x < 0.0 && y < 0.0, "({x}, {y})");
+    assert!((x.hypot(y) - 1.0).abs() < 1e-9);
+    // Away from the target: no hint.
+    session.pointer_hover(pt(400.0, 400.0), false, false);
+    assert_eq!(session.pen_cue_away(), (0.0, 0.0));
+}

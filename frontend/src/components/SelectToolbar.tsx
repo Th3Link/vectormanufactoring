@@ -156,7 +156,7 @@ function RadiusField({ bar, onSetRadius, onReturnFocus }: RadiusFieldProps) {
       <label htmlFor={`${messageId}-field`}>Radius</label>
       <Tooltip.Provider>
       <Tooltip.Root delayDuration={400}>
-      <div className="relative w-32">
+      <div className="relative w-24">
         <Tooltip.Trigger asChild>
         <input
           id={`${messageId}-field`}
@@ -514,7 +514,7 @@ export function SelectToolbar({
     >
       {/* The two switches wrap inside their group in a bar too narrow for both (the 356px row
        * of a window of 800px with the second rail column); the first row keeps its y. */}
-      <div className="flex min-h-9 flex-wrap content-start items-center gap-x-3 gap-y-0 py-1">
+      <div className="flex min-h-9 flex-wrap content-start items-center gap-x-1 gap-y-0 py-1">
         <ToolbarSwitch
           label="Scale stroke width"
           tooltip="Scale stroke width with the object. Off: a resize keeps the stroke thickness."

@@ -1223,3 +1223,13 @@ and the segment selection. The Pen's commit planning moved out of `pen_tool.rs` 
 `pen_tool/commit.rs` in the same slice (`pen_tool.rs` is now about 390 non-test lines). Splitting the
 Node tool's drag kinds into submodules is mechanical and belongs to the next slice that touches
 `node_tool.rs`.
+
+*2026-10-10 (`path-tools`, UX review).* Two places where the specs are ahead of the code or the code
+reads differently from the notes: (1) `0035` criterion 15 and its UX notes describe a group selection
+box with handles around the pieces after Break apart; `0019-multi-object-transform` is not built, so
+a multi-selection shows only the dashed member boxes (note for the PO: reword the sentence or ship
+`0019` first). (2) The Properties panel's subject line says "2 paths" for a compound path plus an open
+path (a compound path counts as a path); the notes expect "2 objects" for a mix. Cosmetic; the rule
+lives in `ui-core/src/panel_content.rs`. Also accepted as specified: Path notices cover the first row
+of the Select bar (click-through, 3 s or 8 s).
+

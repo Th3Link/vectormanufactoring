@@ -125,6 +125,41 @@ impl Session {
         cue
     }
 
+    /// The direction, as a unit vector in document space (y down, as on the screen), from the
+    /// path in progress toward the side away from it at the target of a close or a join: where a
+    /// hint chip can sit without covering the closing segment or the handles of the nodes it is
+    /// about. `(0, 0)` when there is nothing to be away from.
+    #[must_use]
+    pub fn pen_cue_away(&self) -> (f64, f64) {
+        let target = match self.pen_target() {
+            Some(PenTarget::Join(end)) => end.anchor.point,
+            Some(PenTarget::Close { .. }) => match self.pen_in_progress().and_then(<[_]>::first) {
+                Some(first) => first.point,
+                None => return (0.0, 0.0),
+            },
+            _ => return (0.0, 0.0),
+        };
+        let Some(nodes) = self.pen_in_progress() else {
+            return (0.0, 0.0);
+        };
+        let others: Vec<_> = nodes.iter().filter(|node| node.point != target).collect();
+        if others.is_empty() {
+            return (0.0, 0.0);
+        }
+        #[allow(clippy::cast_precision_loss)]
+        let count = others.len() as f64;
+        let (sum_x, sum_y) = others.iter().fold((0.0, 0.0), |(x, y), node| {
+            (x + node.point.x, y + node.point.y)
+        });
+        let (dx, dy) = (target.x - sum_x / count, target.y - sum_y / count);
+        let length = dx.hypot(dy);
+        if length < 1e-9 {
+            (0.0, 0.0)
+        } else {
+            (dx / length, dy / length)
+        }
+    }
+
     /// The point the rubber band runs to: the target's node centre over a join target, nothing
     /// over a close target (the closing segment replaces it), else the pointer.
     pub(super) fn pen_rubber_band_end(&self) -> Option<Point> {

@@ -7,7 +7,7 @@ import {
   hasChip,
   type PenCue,
 } from "@/lib/penText";
-import { placeReadout } from "@/lib/readoutPlacement";
+import { placeAway, placeReadout } from "@/lib/readoutPlacement";
 
 /** The chip's constant offset from the pointer at the moment it appears, up and to the right. */
 const CHIP_OFFSET_PX = 12;
@@ -29,7 +29,9 @@ interface Shown {
  * says what the click will do and what Shift will do instead. Text only, takes no focus, is
  * `aria-hidden`. Continue and join targets show it after 600 ms of rest, or at once when Shift
  * changes over the target; a close target shows it at once. It is placed once, 12 px up and right
- * of the pointer, and stays there while the pointer stays on the same target. It goes on leaving
+ * of the pointer (over a close or join target: on the side away from the path in progress, so it
+ * covers neither the closing segment nor the handles), and stays there while the pointer stays on
+ * the same target. It goes on leaving
  * the target, on a press and on any key but Shift.
  */
 export function PenHintChip({ cue, containerRef }: PenHintChipProps) {
@@ -129,7 +131,11 @@ export function PenHintChip({ cue, containerRef }: PenHintChipProps) {
   if (!shown || !lines) {
     return null;
   }
-  const placement = placeReadout(shown, size.chip, size.canvas, CHIP_OFFSET_PX);
+  const away = { x: cue.awayX, y: cue.awayY };
+  const placement =
+    away.x === 0 && away.y === 0
+      ? placeReadout(shown, size.chip, size.canvas, CHIP_OFFSET_PX)
+      : placeAway(shown, size.chip, size.canvas, CHIP_OFFSET_PX, away);
   return (
     <div
       ref={chipRef}

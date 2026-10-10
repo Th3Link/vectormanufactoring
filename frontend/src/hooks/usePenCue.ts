@@ -10,7 +10,9 @@ function sameCue(a: PenCue, b: PenCue): boolean {
     a.join === b.join &&
     a.asDrawn === b.asDrawn &&
     a.shift === b.shift &&
-    a.styleDiffers === b.styleDiffers
+    a.styleDiffers === b.styleDiffers &&
+    a.awayX === b.awayX &&
+    a.awayY === b.awayY
   );
 }
 
@@ -35,6 +37,8 @@ export function usePenCue(editor: EditorSession): PenCue {
         asDrawn: raw.as_drawn,
         shift: raw.shift,
         styleDiffers: raw.style_differs,
+        awayX: raw.away_x,
+        awayY: raw.away_y,
       };
       raw.free();
     }
@@ -51,18 +55,22 @@ export function usePenCue(editor: EditorSession): PenCue {
     }
     const container = containerRef.current;
     const later = () => queueMicrotask(refresh);
-    const pointerEvents = ["pointermove", "pointerdown", "pointerup", "pointerleave"];
+    // Losing focus resets the modifiers (`useEditorSession`), so the cue is read again then too:
+    // a Shift released after Shift+Tab into the rail must not leave its chip behind.
+    const pointerEvents = ["pointermove", "pointerdown", "pointerup", "pointerleave", "focusout"];
     for (const name of pointerEvents) {
       container?.addEventListener(name, later);
     }
     window.addEventListener("keydown", later);
     window.addEventListener("keyup", later);
+    window.addEventListener("blur", later);
     return () => {
       for (const name of pointerEvents) {
         container?.removeEventListener(name, later);
       }
       window.removeEventListener("keydown", later);
       window.removeEventListener("keyup", later);
+      window.removeEventListener("blur", later);
     };
   }, [tool, containerRef, refresh]);
 

@@ -33,6 +33,11 @@ pub struct PenCueView {
     pub shift: bool,
     /// Whether a join target's path differs in style from the continued path.
     pub style_differs: bool,
+    /// The unit direction (x) away from the path in progress at a close or join target, for the
+    /// hint chip; 0 when there is none.
+    pub away_x: f64,
+    /// The unit direction (y, down) away from the path in progress.
+    pub away_y: f64,
 }
 
 fn join_code(join: JoinType) -> String {
@@ -83,6 +88,8 @@ impl WasmSession {
             as_drawn: String::new(),
             shift: false,
             style_differs: false,
+            away_x: 0.0,
+            away_y: 0.0,
         };
         let Some(target) = self.session.pen_target() else {
             return view;
@@ -112,6 +119,7 @@ impl WasmSession {
             }
         }
         .clone_into(&mut view.kind);
+        (view.away_x, view.away_y) = self.session.pen_cue_away();
         view
     }
 
