@@ -11,51 +11,43 @@ import {
   stretchHoverLine,
   stretchNotice,
   stretchReadoutLine,
-  totalConverted,
 } from "../src/lib/conversionText.ts";
 
-test("the total adds every kind", () => {
-  assert.equal(totalConverted([]), 0);
-  assert.equal(totalConverted([1, 2, 0, 4]), 7);
-});
-
 test("nothing converting writes no sentence at all", () => {
-  for (const counts of [[], [0, 0, 0, 0]]) {
-    assert.equal(stretchHoverLine(counts), null);
-    assert.equal(stretchReadoutLine(counts), null);
-    assert.equal(stretchNotice(counts), null);
-    assert.equal(stretchEntryNote(counts), null);
-  }
+  assert.equal(stretchHoverLine(0), null);
+  assert.equal(stretchReadoutLine(0), null);
+  assert.equal(stretchNotice(0), null);
+  assert.equal(stretchEntryNote(0), null);
 });
 
 test("the hover line names the count, singular and plural", () => {
-  assert.equal(stretchHoverLine([0, 2, 0, 0]), "Stretching turns 2 shapes into paths");
-  assert.equal(stretchHoverLine([1, 0, 0, 0]), "Stretching turns 1 shape into a path");
+  assert.equal(stretchHoverLine(2), "Stretching turns 2 shapes into paths");
+  assert.equal(stretchHoverLine(1), "Stretching turns 1 shape into a path");
 });
 
 test("the readout line says how many shapes become paths", () => {
-  assert.equal(stretchReadoutLine([1, 1, 0, 0]), "2 shapes become paths");
-  assert.equal(stretchReadoutLine([0, 0, 1, 0]), "1 shape becomes a path");
+  assert.equal(stretchReadoutLine(2), "2 shapes become paths");
+  assert.equal(stretchReadoutLine(1), "1 shape becomes a path");
 });
 
 test("the notice states the count in plain digits and that there is no undo", () => {
   assert.equal(
-    stretchNotice([0, 2, 0, 0]),
+    stretchNotice(2),
     "Stretching turned 2 shapes into paths. No undo yet.",
   );
   assert.equal(
-    stretchNotice([0, 0, 1, 0]),
+    stretchNotice(1),
     "Stretching turned 1 shape into a path. No undo yet.",
   );
   assert.equal(
-    stretchNotice([2500, 2500, 0, 0]),
+    stretchNotice(5000),
     "Stretching turned 5000 shapes into paths. No undo yet.",
   );
 });
 
 test("the entry note", () => {
-  assert.equal(stretchEntryNote([0, 2, 0, 0]), "Turns 2 shapes into paths.");
-  assert.equal(stretchEntryNote([0, 1, 0, 0]), "Turns 1 shape into a path.");
+  assert.equal(stretchEntryNote(2), "Turns 2 shapes into paths.");
+  assert.equal(stretchEntryNote(1), "Turns 1 shape into a path.");
 });
 
 test("the notice stays 6 s", () => {

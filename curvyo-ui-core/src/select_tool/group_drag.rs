@@ -18,7 +18,7 @@ use crate::group_transform::{GroupMap, commit_group, group_map, group_pivot, map
 use crate::object_selection::ObjectSelection;
 use crate::oriented_box::OrientedBox;
 use crate::transform_drag::{DragOrigin, ScaleModes};
-use crate::transform_handle_layout::EditHandle;
+use crate::transform_handle_layout::{EditHandle, is_corner};
 
 /// A resize, rotate or skew drag on the group box in flight.
 #[derive(Debug, Clone)]
@@ -121,7 +121,10 @@ impl SelectTool {
             .filter(|object| selected.contains(&object.id()))
             .cloned()
             .collect();
-        let converted = if matches!(handle, EditHandle::Resize(_)) {
+        // Only an edge handle stretches: a corner drag of a selection that holds a
+        // converting shape is proportional, and one that holds none has nothing to
+        // convert (criterion 19).
+        let converted = if matches!(handle, EditHandle::Resize(d) if !is_corner(d)) {
             converted_paths(&starts)
         } else {
             Vec::new()

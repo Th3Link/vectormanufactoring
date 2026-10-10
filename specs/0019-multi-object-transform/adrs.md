@@ -434,7 +434,7 @@ against.
     roughly 2.5 times a path scale of the same count. Budget unchanged: a
     converting 10,000-object `transform_objects` within 5 s; add that case
     (stars) to the ignored benchmarks and report its `document.loro` bytes.
-  - **Risks.** (a) A free corner drag is never exactly uniform, so it converts
+  - **Risks.** (a) *Superseded by lead decision E (2026-10-10): a corner drag of a selection that holds a converting shape is proportional and never converts.* A free corner drag is never exactly uniform, so it converts
     every polygon and star in the selection; the kind change is visible in the
     preview, the notice names it, Ctrl prevents it, undo reverts it. (b) A
     single polygon's box is its frame square and the converted path's box is
@@ -442,8 +442,8 @@ against.
     make the conversion and the history large; covered by the same 5 s gate.
     (d) Criteria 20, 21, 29 and 31 change wording; the PO owns that.
 
-- **2026-10-10: (8) notes from the build (implementer).** None changes decision 8.
-  - **Ids without a minter at the press.** `SelectTool::pointer_down` and
+- **2026-10-10: (8) notes from the build (implementer).** One deviation, accepted by the architect 2026-10-10 (ids are minted by the session after the press, not passed into `pointer_down`), the rest records choices.
+  - **Ids without a minter at the press (deviation, accepted).** `SelectTool::pointer_down` and
     `open_entry_for_key` keep their signatures. The conversions are built at the press
     with the ids of a local counter (unique within the drag) and the session calls
     `SelectTool::mint_conversion_ids(&mut minter)` right after the press, a key or a
@@ -459,10 +459,11 @@ against.
     opposite side or the centre) stretch and convert through the same
     `transform_objects` (`commit_resize` routes a path result for a primitive there).
     `EntryKind::OuterRadius` and `local_delta_for_radius` are gone.
-  - **Texts.** Rust sends per-kind counts (`hover_conversion_counts`,
-    `live_conversion_counts`, `entry_conversion_counts`, `take_conversion_notice`); the
+  - **Texts.** Rust sends one count of shapes (`hover_conversion_count`,
+    `live_conversion_count`, `entry_conversion_count`, `take_conversion_notice`); the
     frontend (`lib/conversionText.ts`) writes the four sentences, the notice for 6 s on
     the key-hint surface (criterion 54).
+  - **Document-wide ids.** `transform_objects` refuses (`InvalidConversion`) a converted outline that takes an anchor id another path holds, before the first write.
   - **Tests changed because the spec changed:** the tests of the removed criterion 21
     and of the single polygon's "r" entry and corner-only handles
     (`acceptance_otr_tester`, `acceptance_unified_editing`, `acceptance_0005`,

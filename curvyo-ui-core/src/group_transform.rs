@@ -79,14 +79,14 @@ fn scale_object(
 ) -> ObjectSnapshot {
     let factor = stroke_or_radius_factor(sx, sy);
     let axes = Angle::from_radians(0.0);
-    let mut scaled = match object {
-        ObjectSnapshot::Path(path) => ObjectSnapshot::Path(path.scaled_along(pivot, sx, sy, axes)),
-        ObjectSnapshot::Primitive(_) if converted.is_some() && is_stretch(sx, sy) => {
-            // invariant: `converted` is `Some` in this arm.
-            #[allow(clippy::unwrap_used)]
-            ObjectSnapshot::Path(converted.unwrap().scaled_along(pivot, sx, sy, axes))
+    let mut scaled = match (object, converted) {
+        (ObjectSnapshot::Path(path), _) => {
+            ObjectSnapshot::Path(path.scaled_along(pivot, sx, sy, axes))
         }
-        ObjectSnapshot::Primitive(primitive) => {
+        (ObjectSnapshot::Primitive(_), Some(path)) if is_stretch(sx, sy) => {
+            ObjectSnapshot::Path(path.scaled_along(pivot, sx, sy, axes))
+        }
+        (ObjectSnapshot::Primitive(primitive), _) => {
             ObjectSnapshot::Primitive(scale_primitive(primitive, pivot, (sx, sy), modes.radius))
         }
     };

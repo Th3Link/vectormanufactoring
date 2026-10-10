@@ -4,16 +4,18 @@
 //! Split out of [`crate::transform_drag`], which resolves the gestures.
 
 use curvyo_document_core::{
-    Angle, Corner, EllipseFrame, Length, Point, PrimitiveSnapshot, RectBounds, Shape, StarFrame,
-    Vec2, shape_center, translate_shape,
+    Angle, Corner, EllipseFrame, Length, ObjectSnapshot, Point, PrimitiveSnapshot, RectBounds,
+    Shape, StarFrame, Vec2, shape_center, translate_shape,
 };
 
 use crate::ResizeDirection;
+use crate::group_transform::is_stretch;
 use crate::oriented_box::OrientedBox;
-use crate::transform_drag::CornerRadiusScaling;
+use crate::transform_drag::{CornerRadiusScaling, ResizeOptions};
+use crate::transform_handle_layout::is_corner;
 use crate::transform_math::{
-    polygon_star_resize_factor, resize_anchor_local_position, resize_local_box, scaled_and_floored,
-    stroke_or_radius_factor,
+    is_polygon_or_star, polygon_star_resize_factor, resize_anchor_local_position, resize_local_box,
+    scaled_and_floored, stroke_or_radius_factor,
 };
 
 /// A primitive's resized frame and the stroke/radius factor that goes
@@ -117,6 +119,75 @@ pub(crate) fn resize_primitive(
         },
         factor,
     )
+}
+
+/// A polygon's or star's resize along its box axes (`specs/0019-multi-object-
+/// transform/` criterion 56): an edge drag, or a typed size, with the opposite side
+/// (or the centre under Shift; always the centre for a corner) fixed. Unequal
+/// factors are a stretch: the shape becomes its `converted` path, scaled along the
+/// box's axes. Equal factors are a uniform scale and keep the shape. `None` for any
+/// other object, and for a corner drag, which keeps the diagonal rule of
+/// [`resize_primitive`] (always proportional, `0005` criterion 11).
+pub(crate) fn polygon_star_stretch(
+    start: &ObjectSnapshot,
+    start_box: &OrientedBox,
+    direction: ResizeDirection,
+    local_delta: Vec2,
+    options: &ResizeOptions,
+) -> Option<(ObjectSnapshot, f64)> {
+    let ObjectSnapshot::Primitive(primitive) = start else {
+        return None;
+    };
+    if !is_polygon_or_star(start) || (is_corner(direction) && !options.typed) {
+        return None;
+    }
+    let resized = resize_local_box(
+        start_box.min,
+        start_box.max,
+        direction,
+        local_delta,
+        options.shift,
+        options.ctrl,
+    );
+    let (sx, sy) = (resized.sx, resized.sy);
+    if !is_stretch(sx, sy) {
+        let shape = match primitive.shape {
+            Shape::Polygon { frame, point_count } => Shape::Polygon {
+                frame: scaled_star_frame(frame, sx),
+                point_count,
+            },
+            Shape::Star {
+                frame,
+                point_count,
+                inner_ratio,
+            } => Shape::Star {
+                frame: scaled_star_frame(frame, sx),
+                point_count,
+                inner_ratio,
+            },
+            _ => return None,
+        };
+        return Some((
+            ObjectSnapshot::Primitive(PrimitiveSnapshot {
+                shape,
+                ..primitive.clone()
+            }),
+            sx,
+        ));
+    }
+    let Some(path) = options.converted else {
+        return Some((start.clone(), 1.0));
+    };
+    let pivot_local = if is_corner(direction) {
+        start_box.local_center()
+    } else {
+        resize_anchor_local_position(start_box.min, start_box.max, direction, options.shift)
+    };
+    let scaled = path.scaled_along(start_box.to_document(pivot_local), sx, sy, start_box.angle);
+    Some((
+        ObjectSnapshot::Path(scaled),
+        stroke_or_radius_factor(sx, sy),
+    ))
 }
 
 pub(crate) fn scaled_star_frame(frame: StarFrame, factor: f64) -> StarFrame {

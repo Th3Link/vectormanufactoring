@@ -297,12 +297,13 @@ fn a_selection_with_a_star_scales_proportionally_at_a_corner_and_says_where_to_s
         false,
     );
     assert_eq!(session.handle_hint(), "group");
-    assert_eq!(session.hover_conversion_counts(), vec![0, 1, 0, 0]);
+    assert_eq!(session.hover_conversion_count(), 1);
     // The south-east corner is proportional and points to the edge handle.
     hold(&mut session, pt(group_box.2, group_box.3), false, false);
     assert_eq!(session.handle_hint(), "group");
-    assert!(
-        session.hover_conversion_counts().is_empty(),
+    assert_eq!(
+        session.hover_conversion_count(),
+        0,
         "a corner never converts"
     );
     let lines = session.corner_hint_lines();
@@ -651,10 +652,10 @@ fn an_edge_stretch_counts_converts_and_notices_once() {
     hold(&mut session, east, false, false);
     session.pointer_down(east, false);
     hold(&mut session, to, false, false);
-    assert_eq!(session.live_conversion_counts(), vec![0, 1, 0, 0]);
+    assert_eq!(session.live_conversion_count(), 1);
     assert_eq!(session.escape(), EscapeStep::CancelledDrag);
     session.pointer_up(to, false, false);
-    assert_eq!(session.take_conversion_notice(), Vec::<u32>::new());
+    assert_eq!(session.take_conversion_notice(), 0);
     assert!(
         objects(&session)
             .iter()
@@ -667,7 +668,62 @@ fn an_edge_stretch_counts_converts_and_notices_once() {
         objects(&session).iter().find(|o| o.id() == star).unwrap(),
         ObjectSnapshot::Path(_)
     ));
-    assert_eq!(session.take_conversion_notice(), vec![0, 1, 0, 0]);
-    assert!(session.take_conversion_notice().is_empty(), "taken once");
-    assert_eq!(session.live_conversion_counts(), Vec::<u32>::new());
+    assert_eq!(session.take_conversion_notice(), 1);
+    assert_eq!(session.take_conversion_notice(), 0, "taken once");
+    assert_eq!(session.live_conversion_count(), 0);
+}
+
+/// Decision 8 (id handling): the anchors of converted paths carry the ids the session
+/// minted (its peer), never the placeholders built at the press, and no id repeats
+/// across the document, also after a second stretch.
+#[test]
+fn converted_anchors_carry_the_session_minted_ids() {
+    let document = Document::new(1);
+    for x in [60.0, 140.0, 220.0] {
+        let _ = document.create_star(
+            curvyo_document_core::StarFrame {
+                center: pt(x, 60.0),
+                radius: Length::from_mm(20.0),
+                angle: curvyo_document_core::Angle::from_radians(0.0),
+            },
+            curvyo_document_core::PointCount::new(5).unwrap(),
+            curvyo_document_core::InnerRatio::new(0.5).unwrap(),
+        );
+    }
+    let mut session = session_of(&document);
+    let peer = format!("{:016x}", 2);
+    for round in 0..2 {
+        click(&mut session, pt(60.0 + 20.0, 60.0), false);
+        click(&mut session, pt(140.0 + 20.0, 60.0), true);
+        if round == 1 {
+            click(&mut session, pt(220.0 + 20.0, 60.0), true);
+        }
+        let all = objects(&session);
+        let (_, high) = all[..2 + round]
+            .iter()
+            .map(curvyo_ui_core::object_outline_bounds)
+            .reduce(|(a, b), (c, d)| {
+                (
+                    pt(a.x.min(c.x), a.y.min(c.y)),
+                    pt(b.x.max(d.x), b.y.max(d.y)),
+                )
+            })
+            .unwrap();
+        let east = pt(high.x, 60.0);
+        drag_with(&mut session, east, pt(east.x + 40.0, east.y), false, false);
+        let mut ids = Vec::new();
+        for object in objects(&session) {
+            if let ObjectSnapshot::Path(path) = object {
+                for anchor in path.all_anchors() {
+                    assert_eq!(&anchor.id.to_hex()[..16], peer, "the session's peer");
+                    ids.push(anchor.id);
+                }
+            }
+        }
+        let count = ids.len();
+        ids.sort_by_key(|id| id.to_hex());
+        ids.dedup();
+        assert_eq!(ids.len(), count, "round {round}: no anchor id repeats");
+        assert!(count >= 20, "round {round}: stars were converted");
+    }
 }

@@ -5,7 +5,11 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::too_many_lines, missing_docs, clippy::doc_markdown)]
-#![allow(clippy::many_single_char_names, clippy::cast_precision_loss, clippy::type_complexity)]
+#![allow(
+    clippy::many_single_char_names,
+    clippy::cast_precision_loss,
+    clippy::type_complexity
+)]
 #![allow(clippy::manual_assert_eq)]
 
 use curvyo_document_core::{

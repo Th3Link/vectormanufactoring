@@ -69,10 +69,10 @@ interface HandleHintChipProps {
    * and all the lines of a group handle (`hint` is `"group"`, the text is
    * Rust's). Empty for any other handle, then the fixed lines of `hint` show. */
   cornerLines: string[];
-  /** The shapes an edge stretch would turn into paths, per kind; the line
+  /** The number of shapes an edge stretch would turn into paths; the line
    * "Stretching turns 2 shapes into paths" goes after the title
    * (`specs/0019-multi-object-transform/` criterion 55). */
-  conversionCounts: number[];
+  conversionCount: number;
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -87,14 +87,14 @@ interface HandleHintChipProps {
 export function HandleHintChip({
   hint,
   cornerLines,
-  conversionCounts,
+  conversionCount,
   containerRef,
 }: HandleHintChipProps) {
   const base =
     (hint === "param-radius" || hint === "group") && cornerLines.length > 0
       ? cornerLines
       : HINT_LINES[hint];
-  const conversion = stretchHoverLine(conversionCounts);
+  const conversion = stretchHoverLine(conversionCount);
   // Memoized: the hover timer below restarts whenever `lines` changes identity.
   const lines = useMemo(
     () => (base && conversion !== null ? [base[0] ?? "", conversion, ...base.slice(1)] : base),

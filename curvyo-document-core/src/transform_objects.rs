@@ -80,7 +80,8 @@ impl Document {
     /// [`ObjectEditError::InvalidRadius`] for a corner radius that is not finite;
     /// [`ObjectEditError::InvalidConversion`] for a path result of an object that is
     /// still a primitive (the conversion) that is not one closed outline of at
-    /// least two anchors with different ids;
+    /// least two anchors with different ids, or that takes an anchor id another path
+    /// holds;
     /// [`ObjectEditError::NonFiniteGeometry`] for any other number of a result (a
     /// position, size, handle or rotation) that is not finite: a NaN or an
     /// infinity would be saved as `null`. The gesture layer already refuses such
@@ -156,6 +157,31 @@ impl Document {
                 }
             })
             .collect::<Result<Vec<_>, ObjectEditError>>()?;
+        // An anchor id names a node across the whole document (ADR 0002): a
+        // converted outline may not take one that another path already holds.
+        let converted: Vec<&NewAnchor> = planned
+            .iter()
+            .filter_map(|plan| match plan {
+                Planned::Convert { anchors, .. } => Some(anchors),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        if !converted.is_empty() {
+            for id in self.object_ids() {
+                let tree_id = TreeID::new(id.peer, id.counter);
+                let Ok(meta) = tree.get_meta(tree_id) else {
+                    continue;
+                };
+                if shape_codec::read_shape_tag(&meta).is_some() {
+                    continue;
+                }
+                let held = anchor_positions(&meta);
+                if converted.iter().any(|anchor| held.contains(anchor.id)) {
+                    return Err(ObjectEditError::InvalidConversion);
+                }
+            }
+        }
         for plan in &planned {
             let (meta, result) = match plan {
                 Planned::Primitive {

@@ -285,7 +285,7 @@ function readLiveReadout(
 function readReadout(session: WasmSession | null | undefined): LiveReadout | null {
   const readout = readLiveReadout(session?.live_readout());
   if (readout && session) {
-    const note = stretchReadoutLine(session.live_conversion_counts());
+    const note = stretchReadoutLine(session.live_conversion_count());
     if (note !== null) {
       readout.note = note;
     }
@@ -534,10 +534,9 @@ export interface EditorSession {
    * (they depend on the "Link corners" switch and on a limited corner, see
    * `Session::corner_hint_lines`); empty on any other handle. */
   cornerHintLines: string[];
-  /** The shapes an edge stretch would turn into paths, while the pointer rests on
-   * an edge resize handle: `[polygons, stars, rotated rectangles, rotated
-   * ellipses]`, empty otherwise (`Session::hover_conversion_counts`). */
-  conversionHoverCounts: number[];
+  /** The number of shapes an edge stretch would turn into paths, while the pointer
+   * rests on an edge resize handle; 0 otherwise (`Session::hover_conversion_count`). */
+  conversionHoverCount: number;
   /** The typed numeric entry to show, or `null`. */
   transformEntry: TransformEntryState | null;
   /** The open typed move, if any. */
@@ -754,7 +753,7 @@ export function useEditorSession(
   const editHintCounter = useRef(0);
   const [handleHint, setHandleHint] = useState("");
   const [cornerHintLines, setCornerHintLines] = useState<string[]>([]);
-  const [conversionHoverCounts, setConversionHoverCounts] = useState<number[]>([]);
+  const [conversionHoverCount, setConversionHoverCount] = useState(0);
   const limitNoticeTimer = useRef<number | undefined>(undefined);
   const [transformEntry, setTransformEntry] = useState<TransformEntryState | null>(null);
   const [moveEntry, setMoveEntry] = useState<MoveEntryState | null>(null);
@@ -1341,7 +1340,7 @@ export function useEditorSession(
         return;
       }
       setHandleHint("");
-    setConversionHoverCounts([]);
+    setConversionHoverCount(0);
       // Capture the pointer for every tool, not only for panning: a
       // transform drag (a rotate swings the pointer in a wide arc) must
       // keep receiving moves and the release when the pointer leaves the
@@ -1401,7 +1400,7 @@ export function useEditorSession(
       setCursorHint(session?.cursor_hint() ?? "default");
       setHandleHint(session?.handle_hint() ?? "");
       setCornerHintLines(session?.corner_hint_lines() ?? []);
-      setConversionHoverCounts(Array.from(session?.hover_conversion_counts() ?? []));
+      setConversionHoverCount(session?.hover_conversion_count() ?? 0);
       if (session) {
         syncBadges(session);
       }
@@ -1521,7 +1520,7 @@ export function useEditorSession(
     setLiveReadout(null);
     setCursorHint("default");
     setHandleHint("");
-    setConversionHoverCounts([]);
+    setConversionHoverCount(0);
     lastPointerRef.current = null;
     setMoveBadges(NO_BADGES);
   }, []);
@@ -1543,7 +1542,7 @@ export function useEditorSession(
       session.pointer_hover(last.x, last.y, shift, ctrl, alt);
       setLiveReadout(readReadout(session));
       setHandleHint("");
-    setConversionHoverCounts([]);
+    setConversionHoverCount(0);
     }
     setCursorHint(session.cursor_hint());
     syncBadges(session);
@@ -1727,7 +1726,7 @@ export function useEditorSession(
   const entryConversionNote = useCallback(
     (first: string, second: string, lastEdited: number): string | null =>
       stretchEntryNote(
-        sessionRef.current?.entry_conversion_counts(first, second, lastEdited) ?? [],
+        sessionRef.current?.entry_conversion_count(first, second, lastEdited) ?? 0,
       ),
     [],
   );
@@ -1752,7 +1751,7 @@ export function useEditorSession(
     dismissEditHint,
     handleHint,
     cornerHintLines,
-    conversionHoverCounts,
+    conversionHoverCount,
     transformEntry,
     moveEntry,
     moveBadges,

@@ -14,7 +14,6 @@ use curvyo_document_core::{
 };
 
 use crate::ResizeDirection;
-use crate::group_transform::is_stretch;
 use crate::oriented_box::OrientedBox;
 use crate::param_edit::{PARAM_EQUAL_EPSILON, apply_param, radius_is_limited, value_from_pointer};
 use crate::param_handles::ParamHandle;
@@ -25,7 +24,7 @@ use crate::transform_math::{
     is_polygon_or_star, resize_anchor_local_position, resize_local_box, rotate_delta_for,
     rotate_pivot, scaled_and_floored, stroke_or_radius_factor,
 };
-use crate::transform_primitive::{resize_primitive, scaled_star_frame};
+use crate::transform_primitive::{polygon_star_stretch, resize_primitive};
 
 /// A resize/corner-radius drag can never drive a stroke width to zero
 /// or below (acceptance criterion 8 of `specs/0005-object-transform/
@@ -424,75 +423,6 @@ pub(crate) fn resize_by_local_delta(
         scale_stroke(&mut resized, factor);
     }
     sane_or(start, resized)
-}
-
-/// A polygon's or star's resize along its box axes (`specs/0019-multi-object-
-/// transform/` criterion 56): an edge drag, or a typed size, with the opposite side
-/// (or the centre under Shift; always the centre for a corner) fixed. Unequal
-/// factors are a stretch: the shape becomes its `converted` path, scaled along the
-/// box's axes. Equal factors are a uniform scale and keep the shape. `None` for any
-/// other object, and for a corner drag, which keeps the diagonal rule of
-/// [`resize_primitive`] (always proportional, `0005` criterion 11).
-fn polygon_star_stretch(
-    start: &ObjectSnapshot,
-    start_box: &OrientedBox,
-    direction: ResizeDirection,
-    local_delta: Vec2,
-    options: &ResizeOptions,
-) -> Option<(ObjectSnapshot, f64)> {
-    let ObjectSnapshot::Primitive(primitive) = start else {
-        return None;
-    };
-    if !is_polygon_or_star(start) || (is_corner(direction) && !options.typed) {
-        return None;
-    }
-    let resized = resize_local_box(
-        start_box.min,
-        start_box.max,
-        direction,
-        local_delta,
-        options.shift,
-        options.ctrl,
-    );
-    let (sx, sy) = (resized.sx, resized.sy);
-    if !is_stretch(sx, sy) {
-        let shape = match primitive.shape {
-            Shape::Polygon { frame, point_count } => Shape::Polygon {
-                frame: scaled_star_frame(frame, sx),
-                point_count,
-            },
-            Shape::Star {
-                frame,
-                point_count,
-                inner_ratio,
-            } => Shape::Star {
-                frame: scaled_star_frame(frame, sx),
-                point_count,
-                inner_ratio,
-            },
-            _ => return None,
-        };
-        return Some((
-            ObjectSnapshot::Primitive(PrimitiveSnapshot {
-                shape,
-                ..primitive.clone()
-            }),
-            sx,
-        ));
-    }
-    let Some(path) = options.converted else {
-        return Some((start.clone(), 1.0));
-    };
-    let pivot_local = if is_corner(direction) {
-        start_box.local_center()
-    } else {
-        resize_anchor_local_position(start_box.min, start_box.max, direction, options.shift)
-    };
-    let scaled = path.scaled_along(start_box.to_document(pivot_local), sx, sy, start_box.angle);
-    Some((
-        ObjectSnapshot::Path(scaled),
-        stroke_or_radius_factor(sx, sy),
-    ))
 }
 
 /// The object rotated by `delta` about `pivot` (criteria 12-17): the one

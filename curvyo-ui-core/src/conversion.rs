@@ -19,8 +19,9 @@ use crate::AnchorIdMinter;
 /// A rotation within this (radians) of a multiple of 90 degrees is one.
 const QUARTER_TURN_TOLERANCE_RAD: f64 = 1e-9;
 
-/// Two radii closer than this (millimetres) make a circle.
-const CIRCLE_TOLERANCE_MM: f64 = 1e-6;
+/// The geometric tolerance (millimetres) of the group and conversion rules: two radii
+/// closer than this make a circle, and an extent below it is "zero".
+pub(crate) const GEOMETRIC_TOLERANCE_MM: f64 = 1e-6;
 
 /// The kinds of shape a stretch turns into paths, in the order the maker's texts
 /// name them (`specs/0019-multi-object-transform/` criteria 53 and 55).
@@ -98,7 +99,7 @@ fn is_quarter_turn(rotation: Angle) -> bool {
 /// a group share, so that a circle never converts yet stretches in its own turned
 /// frame.
 pub(crate) fn is_circle(frame: &EllipseFrame) -> bool {
-    (frame.rx.as_mm() - frame.ry.as_mm()).abs() < CIRCLE_TOLERANCE_MM
+    (frame.rx.as_mm() - frame.ry.as_mm()).abs() < GEOMETRIC_TOLERANCE_MM
 }
 
 /// The kind of `object` if a stretch along axes at `axes` would turn it into a
@@ -341,6 +342,62 @@ mod tests {
         // Against its own box angle a turned rectangle keeps its kind (one object).
         let own = turned(&document, rect, 30.0);
         assert_eq!(converting_kind(&own, own.rotation()), None);
+    }
+
+    /// Criterion 53.8: a rotation within 1e-9 rad of a quarter turn is aligned (1e-10
+    /// is, 1e-6 is not); a circle is |rx - ry| under 1e-6 mm.
+    #[test]
+    fn the_boundaries_of_aligned_and_circle() {
+        let document = Document::new(1);
+        let rect = document.create_rect(RectBounds {
+            origin: Point::new(0.0, 0.0),
+            width: Length::from_mm(10.0),
+            height: Length::from_mm(6.0),
+        });
+        let ellipse = document.create_ellipse(EllipseFrame {
+            center: Point::new(0.0, 0.0),
+            rx: Length::from_mm(5.0),
+            ry: Length::from_mm(5.0 + 1e-7),
+        });
+        let with_rotation = |id: NodeId, radians: f64| match document.object(id).unwrap() {
+            ObjectSnapshot::Primitive(p) => ObjectSnapshot::Primitive(PrimitiveSnapshot {
+                rotation: Angle::from_radians(radians),
+                ..p
+            }),
+            ObjectSnapshot::Path(_) => panic!("a primitive"),
+        };
+        let zero = Angle::from_radians(0.0);
+        let quarter = std::f64::consts::FRAC_PI_2;
+        for turns in [0.0, quarter, std::f64::consts::PI] {
+            assert_eq!(
+                converting_kind(&with_rotation(rect, turns + 1e-10), zero),
+                None
+            );
+            assert_eq!(
+                converting_kind(&with_rotation(rect, turns + 1e-6), zero),
+                Some(ConvertingKind::RotatedRectangle)
+            );
+        }
+        // 1e-7 apart is a circle, whatever its rotation; 1e-5 apart is an ellipse.
+        assert_eq!(converting_kind(&with_rotation(ellipse, 0.5), zero), None);
+        let wider = match document.object(ellipse).unwrap() {
+            ObjectSnapshot::Primitive(p) => ObjectSnapshot::Primitive(PrimitiveSnapshot {
+                shape: Shape::Ellipse {
+                    frame: EllipseFrame {
+                        center: Point::new(0.0, 0.0),
+                        rx: Length::from_mm(5.0),
+                        ry: Length::from_mm(5.0 + 1e-5),
+                    },
+                },
+                rotation: Angle::from_radians(0.5),
+                ..p
+            }),
+            ObjectSnapshot::Path(_) => panic!("a primitive"),
+        };
+        assert_eq!(
+            converting_kind(&wider, zero),
+            Some(ConvertingKind::RotatedEllipse)
+        );
     }
 
     /// Criterion 53.1/53.2 and the debt item: the converted path has the id, style,

@@ -10,17 +10,13 @@ use std::collections::HashSet;
 use curvyo_document_core::{Angle, NodeId, ObjectSnapshot, Point};
 
 use crate::ResizeDirection;
-use crate::conversion::{ConversionCounts, converting_kind};
+use crate::conversion::{ConversionCounts, GEOMETRIC_TOLERANCE_MM, converting_kind};
 use crate::object_bounds::object_outline_bounds;
 use crate::oriented_box::OrientedBox;
 use crate::transform_handle_layout::{
     ALL_EIGHT, EditHandle, HandleSpec, TransformHandleTolerances, at_least,
     hit_transform_handle_for_side, transform_handles,
 };
-
-/// The tolerance (millimetres) of the group box's own tests: an extent below it is
-/// "zero".
-pub(crate) const GEOMETRIC_TOLERANCE_MM: f64 = 1e-6;
 
 /// The shape of a group box on screen: a box, one line when one axis has no
 /// extent, or a single point (criteria 8 and 13).

@@ -87,14 +87,51 @@ fn selected_session(document: &Document, clicks: &[Point]) -> (Session, Point, P
     (session, low, high)
 }
 
-/// The mean time of `draw_list` over 30 pointer positions of a drag that started
-/// at `press`, the pointer moving along `step` per frame; the best of three drags,
-/// so that a busy machine does not decide the ratio.
-fn frame_time(session: &mut Session, press: Point, step: (f64, f64)) -> Duration {
-    (0..3)
-        .map(|_| one_drag(session, press, step))
-        .min()
-        .unwrap_or_default()
+/// The rounds of the ratio gates: each round times move, scale and rotate (or skew)
+/// back to back, so drift of the machine hits all of them alike, and the gate is the
+/// median of the per-round ratios (min and max are printed).
+const ROUNDS: usize = 11;
+
+/// The frame budget of `unified-object-editing` criterion 15, beside the ratio.
+const FRAME_BUDGET: Duration = Duration::from_millis(8);
+
+fn median(mut values: Vec<f64>) -> f64 {
+    values.sort_by(f64::total_cmp);
+    values[values.len() / 2]
+}
+
+/// The median ratio of each of `others` against `base` over [`ROUNDS`] interleaved
+/// rounds, with the median frame time of `base`, printed with min and max.
+fn median_ratios(
+    session: &mut Session,
+    base: (Point, (f64, f64)),
+    others: &[(&str, Point, (f64, f64))],
+) -> (Duration, Vec<f64>) {
+    let mut base_times = Vec::new();
+    let mut ratios: Vec<Vec<f64>> = vec![Vec::new(); others.len()];
+    let mut other_times: Vec<Vec<f64>> = vec![Vec::new(); others.len()];
+    for _ in 0..ROUNDS {
+        let move_frame = one_drag(session, base.0, base.1).as_secs_f64();
+        base_times.push(move_frame);
+        for (index, (_, press, step)) in others.iter().enumerate() {
+            let frame = one_drag(session, *press, *step).as_secs_f64();
+            ratios[index].push(frame / move_frame);
+            other_times[index].push(frame);
+        }
+    }
+    let mut out = Vec::new();
+    for (index, (name, _, _)) in others.iter().enumerate() {
+        let (min, max) = ratios[index]
+            .iter()
+            .fold((f64::MAX, f64::MIN), |(lo, hi), r| (lo.min(*r), hi.max(*r)));
+        let med = median(ratios[index].clone());
+        println!(
+            "{name}: median {med:.2}x of the move frame (min {min:.2}, max {max:.2}), median frame {:?}",
+            Duration::from_secs_f64(median(other_times[index].clone()))
+        );
+        out.push(med);
+    }
+    (Duration::from_secs_f64(median(base_times)), out)
 }
 
 fn one_drag(session: &mut Session, press: Point, step: (f64, f64)) -> Duration {
@@ -125,29 +162,24 @@ fn a_group_scale_or_rotate_preview_costs_at_most_1_1_times_a_move_preview() {
     let (document, clicks) = scene(true);
     let (mut session, low, high) = selected_session(&document, &clicks);
     let k = session.view().scale();
-    // A move from the first rectangle's outline.
-    let move_frame = frame_time(&mut session, clicks[0], (0.4, 0.2));
-    // A scale from the south-east corner handle.
-    let scale_frame = frame_time(&mut session, pt(high.x, high.y), (0.4, 0.2));
     // A rotate from the north-east corner rotate handle (32 px out on the diagonal).
     let offset = 32.0 / k / std::f64::consts::SQRT_2;
-    let rotate_frame = frame_time(
+    let (move_frame, ratios) = median_ratios(
         &mut session,
-        pt(high.x + offset, low.y - offset),
-        (-0.4, 0.6),
+        (clicks[0], (0.4, 0.2)),
+        &[
+            ("200 objects, scale", pt(high.x, high.y), (0.4, 0.2)),
+            (
+                "200 objects, rotate",
+                pt(high.x + offset, low.y - offset),
+                (-0.4, 0.6),
+            ),
+        ],
     );
-    println!(
-        "200 objects: move {move_frame:?}, scale {scale_frame:?} ({:.2}x), rotate {rotate_frame:?} ({:.2}x)",
-        scale_frame.as_secs_f64() / move_frame.as_secs_f64(),
-        rotate_frame.as_secs_f64() / move_frame.as_secs_f64(),
-    );
+    println!("200 objects: median move frame {move_frame:?}");
     if !cfg!(debug_assertions) {
-        for (name, frame) in [("scale", scale_frame), ("rotate", rotate_frame)] {
-            assert!(
-                frame.as_secs_f64() <= 1.1 * move_frame.as_secs_f64(),
-                "{name} {frame:?} against move {move_frame:?}"
-            );
-        }
+        assert!(ratios.iter().all(|r| *r <= 1.1), "{ratios:?}");
+        assert!(move_frame < FRAME_BUDGET, "the move frame {move_frame:?}");
     }
 }
 
@@ -158,19 +190,16 @@ fn a_group_skew_preview_costs_at_most_1_1_times_a_move_preview() {
     let (document, clicks) = scene(false);
     let (mut session, low, high) = selected_session(&document, &clicks);
     let k = session.view().scale();
-    let move_frame = frame_time(&mut session, clicks[0], (0.4, 0.2));
     // The top skew handle: 16 px above the middle of the top side.
     let top = pt(f64::midpoint(low.x, high.x), low.y - 16.0 / k);
-    let skew_frame = frame_time(&mut session, top, (0.5, 0.0));
-    println!(
-        "100 paths: move {move_frame:?}, skew {skew_frame:?} ({:.2}x)",
-        skew_frame.as_secs_f64() / move_frame.as_secs_f64()
+    let (move_frame, ratios) = median_ratios(
+        &mut session,
+        (clicks[0], (0.4, 0.2)),
+        &[("100 paths, skew", top, (0.5, 0.0))],
     );
     if !cfg!(debug_assertions) {
-        assert!(
-            skew_frame.as_secs_f64() <= 1.1 * move_frame.as_secs_f64(),
-            "skew {skew_frame:?} against move {move_frame:?}"
-        );
+        assert!(ratios[0] <= 1.1, "{ratios:?}");
+        assert!(move_frame < FRAME_BUDGET, "the move frame {move_frame:?}");
     }
 }
 

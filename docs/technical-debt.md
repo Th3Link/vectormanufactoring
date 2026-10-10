@@ -731,15 +731,20 @@ Give the older writers the same check when one of them gets a second caller that
 does not go through the gesture layer (ADR 0004, "never write a value that reopens
 as damaged").
 
-## Notes for the second merger of the multi-object transform and the path tools
+## Notes on the multi-object transform (merged with the path tools)
 
-- `curvyo-document-core/src/path_model.rs` is at 499 non-test lines after
-  `multi-object-transform` (`scaled_along`, `sheared_along`) and about 528 with the
-  path tools (#79). Whoever merges second splits it, for example the two `*_along`
-  methods into a `path_transform.rs`, or states the reason in the PR.
 - The cursor over a selected object's outline in a multi-selection stays
   `default`: the single-object `move` cursor over a selection is not shown for
   several (`select_cursor.rs`). Not a regression, a gap in criterion 46.
+
+## A path result for a primitive is a conversion: a risk for undo-redo (0020)
+
+`Document::transform_objects` takes a path result for a node that is a primitive now as
+the conversion of a stretch (`specs/0019-multi-object-transform/adrs.md`, decision 8). It
+cannot tell an intended conversion from a stale path snapshot. Today nothing turns a path
+back into a primitive, so it is safe. Once undo restores a primitive while a gesture is in
+flight, a stale path result would silently convert it again. `undo-redo` must cancel the
+gestures in flight, or the conversion must carry an explicit intent.
 
 ## One peer's delete refuses a whole multi-object commit
 

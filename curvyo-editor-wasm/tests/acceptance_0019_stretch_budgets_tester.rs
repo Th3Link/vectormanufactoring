@@ -132,7 +132,7 @@ fn stretch_frames_against_move_frames() {
         let (mut s, lo, hi) = selected(&d);
         let centre = pt((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
         let mut ratios = Vec::new();
-        for _ in 0..5 {
+        for _ in 0..11 {
             let mv = best(&mut s, centre, (0.2, 0.1), false);
             let (press, step) = if edge {
                 (pt(hi.x, centre.y), (0.3, 0.0))
@@ -147,5 +147,13 @@ fn stretch_frames_against_move_frames() {
             );
         }
         println!("{name}: ratios {ratios:.3?}");
+        // The gate is the median of the interleaved rounds (a single ratio of two
+        // 4 ms timings is inside machine noise).
+        ratios.sort_by(f64::total_cmp);
+        let median = ratios[ratios.len() / 2];
+        println!("{name}: median ratio {median:.3}");
+        if !cfg!(debug_assertions) {
+            assert!(median <= 1.1, "{name}: median ratio {median:.3}");
+        }
     }
 }

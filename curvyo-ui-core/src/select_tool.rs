@@ -260,6 +260,8 @@ impl SelectTool {
     ) -> SelectPointerDownOutcome {
         self.entry = None;
         self.last_press_handle = None;
+        // A notice not yet taken belongs to the gesture before this one.
+        self.last_conversion = ConversionCounts::default();
         // `adrs.md`: "ui-core filters the selection against the current
         // snapshot first" — drops any id a prior action (this peer's own
         // edit in a different tool, or a collaborator) has since removed,

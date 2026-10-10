@@ -155,7 +155,7 @@ export function Canvas({ editor }: CanvasProps) {
         // A press picks a colour while the eyedropper is on: no move to promise.
         hint={editor.cursorHint === "eyedropper" ? "" : editor.handleHint}
         cornerLines={editor.cornerHintLines}
-        conversionCounts={editor.conversionHoverCounts}
+        conversionCount={editor.conversionHoverCount}
         containerRef={editor.containerRef}
       />
       <KeyHintChip hint={editor.keyHint} containerRef={editor.containerRef} />
