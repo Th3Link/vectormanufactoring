@@ -5,9 +5,7 @@
 //! `curvyo_ui_core` (`style_scope`, `style_panel_state`, `StyleEditor`); the DOM
 //! holds only the open text, the invalid state and "Escape restores".
 
-use curvyo_document_core::{
-    LineCap, LineJoin, MarkerPlace, MarkerShape, NodeId, ObjectSnapshot, StyleEdit,
-};
+use curvyo_document_core::{LineCap, LineJoin, MarkerPlace, MarkerShape, NodeId, StyleEdit};
 use curvyo_ui_core::{
     DashChoice, Grid, MarkerSlot, StyleEntryError, StyleField, StylePanelState, StyleScope,
     StyleTool, ValueField, hsv_to_rgb, parse_dash_text, style_panel_state, style_scope,
