@@ -40,6 +40,7 @@ fn text_of(bytes: Vec<u8>) -> Result<String, String> {
 
 /// The text of the user file; `None` when there is none yet.
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 pub(crate) fn read_formats_file(app: AppHandle) -> Result<Option<String>, String> {
     let path = formats_path(&app)?;
     match curvyo_storage_io::read_optional(&path).map_err(|e| e.to_string())? {
@@ -61,6 +62,7 @@ pub(crate) fn write_formats_file(app: AppHandle, text: String) -> Result<(), Str
 /// Renames the user file to `document-formats.toml.broken`, replacing an older
 /// one. The file is never changed or deleted otherwise.
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 pub(crate) fn set_formats_file_aside(app: AppHandle) -> Result<(), String> {
     let path = formats_path(&app)?;
     let mut aside = path.clone().into_os_string();
