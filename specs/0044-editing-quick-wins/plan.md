@@ -22,30 +22,35 @@ Where #80 or 0020 land first, the seams are named in the tasks.
 
 ### Milestone 1: the object read cache (criterion 5)
 
-- [ ] 1. `#[ignore]` benchmark `tests/draw_list_cache_budget.rs`; numbers before the change at
+- [x] 1. `#[ignore]` benchmark `tests/draw_list_cache_budget.rs`; numbers before the change at
   200 / 5,000 / 10,000 objects (AC 5).
-- [ ] 2. `Session::objects()` returns `Rc<[ObjectSnapshot]>` from a cache keyed on
+- [x] 2. `Session::objects()` returns `Rc<[ObjectSnapshot]>` from a cache keyed on
   `Document::version()`; the drag snapshot becomes the cache's `pinned` flag (AC 5).
-- [ ] 3. Tests: the cache equals a fresh read after every kind of write (an oracle in
+- [x] 3. Tests: the cache equals a fresh read after every kind of write (an oracle in
   `objects()` under `cfg(test)`, so the whole existing session suite checks it); a pinned drag
   keeps its read; `Document::version()` changes on a remote merge (AC 5).
-- [ ] 4. Numbers after; update the debt item.
+- [x] 4. Numbers after; update the debt item.
 
 ### Milestone 2: the rules (criteria 1-3, 6-13)
 
-- [ ] 5. `ui-core/nudge.rs`: direction and Shift to a `Vec2`, the continuation decision, tests (AC 7, 9).
-- [ ] 6. `offset_within_limit` shared by `MoveEntry::resolve` and the nudge (AC 10).
-- [ ] 7. `decide` rows: Ctrl+A and the arrows, with the gate; `KeyInput::time_ms`; outcomes
+- [x] 5. `ui-core/nudge.rs`: direction and Shift to a `Vec2`, the continuation decision, tests (AC 7, 9).
+- [x] 6. `offset_within_limit` shared by `MoveEntry::resolve` and the nudge (AC 10).
+- [x] 7. `decide` rows: Ctrl+A and the arrows, with the gate; `Session::key_down_at` carries the DOM time stamp (`KeyInput` keeps its fields, so
+  no existing literal changes); outcomes
   `SelectedAll`, `Nudged`, `Hint(TooFar)`; table tests (AC 1-3, 6, 7, 11, 13).
-- [ ] 8. Session: select all (view state, no commit), nudge through `commit_move`, the run state
+- [x] 8. Session: select all (view state, no commit), nudge through `commit_move`, the run state
   for the readout distance and the live-region text; session tests (AC 1, 2, 4, 8, 9, 10, 12).
 - [ ] 9. Benchmarks: 5,000 objects Ctrl+A drawn within 100 ms; nudge of 1,000 objects.
+  Both are in `draw_list_cache_budget.rs`. The nudge of 1,000 objects costs 34 ms per event. Ctrl+A
+  with 5,000 objects is drawn in 205 ms (66 ms artwork, 130 ms one dashed box per selected
+  object); the 100 ms assert holds only once `0019`'s group box replaces the per-object boxes.
 
 ### Milestone 3: the frontend (criteria 4, 9, 11, 14)
 
-- [ ] 10. Key forwarding with `timeStamp`; `preventDefault` per outcome; live regions; notice (AC 4, 10, 11).
-- [ ] 11. Move readout chip, 800 ms hold, millimetres whatever the display unit (AC 9).
-- [ ] 12. Tooltip second line; shortcut table rows in `docs/design-system.md` (AC 14).
+- [x] 10. Key forwarding with `timeStamp`; `preventDefault` per outcome; live regions; notice (AC 4, 10, 11).
+- [x] 11. Move readout chip, 800 ms hold, millimetres whatever the display unit (AC 9).
+- [x] 12. Tooltip second line; shortcut table rows in `docs/design-system.md` (AC 14).
+  The "Too far" text shows in the key hint chip: the canvas notice slot of `0020` does not exist yet.
 
 ## Validation
 
