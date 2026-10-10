@@ -354,6 +354,24 @@ pub const SELECTION_CASING: RgbaColor = RgbaColor::WHITE;
 /// the line width (`docs/design-system.md`, "Casing over artwork").
 pub const CASING_WIDTH_FACTOR: f64 = 3.0;
 
+/// `--member-box` (`docs/design-system.md`, row "Member box"): the box each
+/// object of a multi-selection keeps next to the group box, `--accent` at 60%.
+pub const MEMBER_BOX: RgbaColor = ACCENT.with_alpha(153); // 60% of 255, rounded
+
+/// The member box's casing: `--selection-casing` at the same 60%.
+pub const MEMBER_BOX_CASING: RgbaColor = SELECTION_CASING.with_alpha(153);
+
+/// A part of a member box edge within this many device pixels of a group box
+/// edge is not drawn: two dash patterns on one edge would fill each other's gaps.
+pub const MEMBER_BOX_COINCIDENT_DEVICE_PX: f64 = 1.5;
+
+/// A member box under this many screen pixels on both sides is not drawn.
+pub const MEMBER_BOX_MIN_SIDE_PX: f64 = 6.0;
+
+/// The marker square of a group box that is a single point, screen pixels
+/// (criterion 13).
+pub const GROUP_POINT_MARKER_PX: f64 = 6.0;
+
 /// `--hover-box` (`0007` criterion 41): the Select tool's hover box,
 /// `--accent` at 65%. Raised from `--accent-hover`'s 20%, which measured 1.0
 /// to 1.3:1 on every fill. `--accent-hover` stays for rings, buttons and rows.
