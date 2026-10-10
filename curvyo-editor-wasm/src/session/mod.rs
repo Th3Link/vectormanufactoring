@@ -23,8 +23,10 @@
 mod boolean;
 #[cfg(test)]
 mod box_refit_tests;
+mod colour_pick;
 mod corner_readout;
 mod document;
+mod document_presets;
 mod draw;
 mod frame;
 mod keys;
@@ -40,13 +42,12 @@ mod select_bar;
 mod select_gesture;
 mod select_view;
 mod shapes;
-mod stops;
 mod style;
 mod style_view;
 mod tolerances;
 mod transform_entry;
 
-use curvyo_document_core::{Document, NodeId, ObjectSnapshot, OpenError, Point, SaveError, StopId};
+use curvyo_document_core::{Document, NodeId, ObjectSnapshot, OpenError, Point, SaveError};
 use curvyo_ui_core::{
     AnchorIdMinter, EllipseTool, Hit, Modifiers, NodeTool, ObjectSelection, PenTool,
     PolygonStarTool, RectangleTool, SelectTool, StyleEditor, Viewport, hit_test,
@@ -54,6 +55,7 @@ use curvyo_ui_core::{
 
 pub use boolean::BooleanOutcome;
 pub use document::{DocumentSide, FitOutcome, SizeOutcome};
+pub use document_presets::DocumentPresetsRecord;
 pub use keys::{EscapeStep, KeyHint, KeyInput, KeyOutcome};
 pub use move_indicators::MoveIndicators;
 pub use select::DoubleClickHint;
@@ -135,9 +137,10 @@ pub struct Session {
     /// of the stored style, committed once on release
     /// (`specs/0007-stroke-and-fill-styling` criterion 36).
     style: StyleEditor,
-    /// The selected gradient stop of each edited object (ephemeral; the panel
-    /// highlights its row and thumb).
-    selected_stops: Vec<(NodeId, StopId)>,
+    /// The eyedropper (`colour_pick.rs`).
+    colour_pick: colour_pick::ColourPick,
+    /// The document size presets (`document_presets.rs`).
+    presets: curvyo_document_core::PresetList,
     /// Pan/zoom view state (ADR 0009 §2: ephemeral — never written to
     /// the document, resets on `New`/`Open`).
     viewport: Viewport,
@@ -211,7 +214,10 @@ impl Session {
             // selection tool exists").
             tool: Tool::Select,
             style: StyleEditor::default(),
-            selected_stops: Vec::new(),
+            // The tests load the shipped file, so the error branch is
+            // unreachable; an empty list would only hide the buttons.
+            presets: curvyo_document_core::PresetList::shipped().unwrap_or_default(),
+            colour_pick: colour_pick::ColourPick::default(),
             viewport: Viewport::new(),
             hovered: None,
             hovered_object: None,
@@ -244,7 +250,10 @@ impl Session {
             selection: ObjectSelection::new(),
             tool: Tool::Select,
             style: StyleEditor::default(),
-            selected_stops: Vec::new(),
+            // The tests load the shipped file, so the error branch is
+            // unreachable; an empty list would only hide the buttons.
+            presets: curvyo_document_core::PresetList::shipped().unwrap_or_default(),
+            colour_pick: colour_pick::ColourPick::default(),
             viewport: Viewport::new(),
             hovered: None,
             hovered_object: None,
@@ -293,6 +302,7 @@ impl Session {
         // commits it against whatever is selected *then* instead).
         self.flush_select_bar_preview();
         self.flush_style_preview();
+        self.end_colour_pick();
         self.select.cancel_entry();
         self.select.forget_press();
         self.select.cancel_gesture();
@@ -365,6 +375,9 @@ impl Session {
         // against, if the mouse was released outside the slider itself.
         self.flush_select_bar_preview();
         self.flush_style_preview();
+        if self.colour_pick_press(point) {
+            return;
+        }
         self.button_down = true;
         match self.tool {
             Tool::Select => {
@@ -410,6 +423,9 @@ impl Session {
         self.hovered_object = None;
         self.held.shift = shift;
         self.held.ctrl = constrain;
+        if self.colour_pick_move(point) {
+            return;
+        }
         match self.tool {
             Tool::Select => {
                 self.select_hover(point, self.held);
@@ -448,6 +464,9 @@ impl Session {
     /// alongside `shift` (acceptance criteria 5, 7, 16, 17).
     pub fn pointer_up(&mut self, point: Point, shift: bool, constrain: bool) {
         self.button_down = false;
+        if self.colour_pick_release() {
+            return;
+        }
         let Some(point) = sanitized_point(point) else {
             // A release at a non-finite position cannot be committed to
             // anything; cancel the gesture rather than write NaN.

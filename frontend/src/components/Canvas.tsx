@@ -8,6 +8,7 @@ import { NodeContextMenu } from "@/components/NodeToolbar";
 import { MoveEntryChip } from "@/components/MoveEntryChip";
 import { TransformEntryChip } from "@/components/TransformEntryChip";
 import type { EditorSession } from "@/hooks/useEditorSession";
+import { ColourPickChip } from "@/components/ColourPickChip";
 import { cursorForHint } from "@/lib/cursors";
 import { type Rect, placeReadout } from "@/lib/readoutPlacement";
 
@@ -86,7 +87,7 @@ export function Canvas({ editor }: CanvasProps) {
           React would remount it, dropping the WasmSession's attached
           wgpu surface. */}
       <NodeContextMenu
-        disabled={editor.tool !== "node"}
+        disabled={editor.tool !== "node" || editor.cursorHint === "eyedropper"}
         state={editor.nodeToolbarState}
         actions={{
           insertSelected: editor.insertSelected,
@@ -112,7 +113,7 @@ export function Canvas({ editor }: CanvasProps) {
             // ones); suppress the browser's native menu either way so a
             // right-click never interrupts drawing. `NodeContextMenu`
             // itself prevents default for its own (node-tool-only) menu.
-            if (editor.tool !== "node") {
+            if (editor.tool !== "node" || editor.cursorHint === "eyedropper") {
               event.preventDefault();
             }
           }}
@@ -142,7 +143,8 @@ export function Canvas({ editor }: CanvasProps) {
         />
       )}
       <HandleHintChip
-        hint={editor.handleHint}
+        // A press picks a colour while the eyedropper is on: no move to promise.
+        hint={editor.cursorHint === "eyedropper" ? "" : editor.handleHint}
         cornerLines={editor.cornerHintLines}
         containerRef={editor.containerRef}
       />
@@ -154,6 +156,12 @@ export function Canvas({ editor }: CanvasProps) {
         onDismiss={editor.dismissEditHint}
       />
       <MoveBadges badges={editor.moveBadges} containerRef={editor.containerRef} />
+      <ColourPickChip
+        active={editor.cursorHint === "eyedropper"}
+        getSession={editor.getSession}
+        viewKey={editor.zoomPercent}
+        containerRef={editor.containerRef}
+      />
       {editor.liveReadout && (
         <ReadoutChip
           text={editor.liveReadout.text}

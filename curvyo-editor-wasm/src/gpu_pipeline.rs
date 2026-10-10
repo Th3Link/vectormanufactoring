@@ -18,24 +18,15 @@ struct ScreenTransform {
 @group(0) @binding(0)
 var<uniform> transform: ScreenTransform;
 
-@group(1) @binding(0)
-var ramp: texture_2d<f32>;
-@group(1) @binding(1)
-var ramp_sampler: sampler;
-
 struct VertexInput {
     @location(0) position: vec2<f32>,
     @location(1) color: vec4<f32>,
     @location(2) depth: f32,
-    // x, y: the gradient coordinate; z: the ramp's row in the texture;
-    // w: 0 flat, 1 linear, 2 radial.
-    @location(3) gradient: vec4<f32>,
 };
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) color: vec4<f32>,
-    @location(1) gradient: vec4<f32>,
 };
 
 @vertex
@@ -48,39 +39,24 @@ fn vs_main(input: VertexInput) -> VertexOutput {
         1.0,
     );
     out.color = input.color;
-    out.gradient = input.gradient;
     return out;
 }
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    if (input.gradient.w < 0.5) {
-        return input.color;
-    }
-    // Linear: the coordinate's x. Radial: its length. Clamped: SVG pad spread.
-    var t = input.gradient.x;
-    if (input.gradient.w > 1.5) {
-        t = length(input.gradient.xy);
-    }
-    t = clamp(t, 0.0, 1.0);
-    // The first texel's centre at t = 0, the last texel's at t = 1.
-    let u = (t * 255.0 + 0.5) / 256.0;
-    return textureSampleLevel(ramp, ramp_sampler, vec2<f32>(u, input.gradient.z), 0.0);
+    return input.color;
 }
 ";
 
 /// One triangle-list vertex in the shape the GPU pipeline below expects:
 /// a clip-ready `f32` position (before the per-frame screen transform),
-/// a normalized `f32` color, the depth of the vertex's artwork layer and the
-/// gradient attributes (`DrawList::gradient_attributes`, all zero for a flat
-/// vertex).
+/// a normalized `f32` color and the depth of the vertex's artwork layer.
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub(super) struct GpuVertex {
     position: [f32; 2],
     color: [f32; 4],
     depth: f32,
-    gradient: [f32; 4],
 }
 
 /// Converts a draw-list vertex to the GPU's own vertex shape, **relative
@@ -102,7 +78,6 @@ pub(super) fn to_gpu_vertex(
     vertex: curvyo_render_core::Vertex,
     origin: Point,
     depth: f32,
-    gradient: [f32; 4],
 ) -> GpuVertex {
     let relative_x = vertex.position.x - origin.x;
     let relative_y = vertex.position.y - origin.y;
@@ -118,26 +93,22 @@ pub(super) fn to_gpu_vertex(
         position,
         color,
         depth,
-        gradient,
     }
 }
 
 /// Every draw-list vertex in the GPU's shape, shifted by `origin` (the
 /// document point at screen pixel (0, 0)) in `f64` before its own `f32` cast
-/// ([`to_gpu_vertex`]'s doc comment), tagged with its layer's depth and, for a
-/// gradient fill, its coordinate into a ramp texture of `ramp_rows` rows.
+/// ([`to_gpu_vertex`]'s doc comment), tagged with its layer's depth.
 pub(super) fn gpu_vertices(
     draw_list: &DrawList,
     origin: curvyo_document_core::Point,
-    ramp_rows: usize,
 ) -> Vec<GpuVertex> {
     draw_list
         .triangles
         .iter()
         .copied()
         .zip(draw_list.vertex_depths())
-        .zip(draw_list.gradient_attributes(ramp_rows))
-        .map(|((vertex, depth), gradient)| to_gpu_vertex(vertex, origin, depth, gradient))
+        .map(|(vertex, depth)| to_gpu_vertex(vertex, origin, depth))
         .collect()
 }
 
@@ -254,7 +225,7 @@ pub(super) enum DepthMode {
     Overlay,
 }
 
-/// The layout of [`GpuVertex`]: position, colour, layer depth, gradient.
+/// The layout of [`GpuVertex`]: position, colour, layer depth.
 fn vertex_layout() -> wgpu::VertexBufferLayout<'static> {
     wgpu::VertexBufferLayout {
         array_stride: std::mem::size_of::<GpuVertex>() as wgpu::BufferAddress,
@@ -275,24 +246,17 @@ fn vertex_layout() -> wgpu::VertexBufferLayout<'static> {
                 offset: 24,
                 shader_location: 2,
             },
-            wgpu::VertexAttribute {
-                format: wgpu::VertexFormat::Float32x4,
-                offset: 28,
-                shader_location: 3,
-            },
         ],
     }
 }
 
 /// Builds a render pipeline for the draw-list triangle list, transformed by
-/// the `transform_bind_group_layout` uniform and sampling gradient ramps through
-/// `ramp_bind_group_layout`, targeting `surface_format`, with
+/// the `transform_bind_group_layout` uniform, targeting `surface_format`, with
 /// the depth behaviour of `depth`. Split out of [`Gpu::attach`] for the same
 /// `clippy::too_many_lines` reason as [`create_transform_resources`].
 pub(super) fn create_pipeline(
     device: &wgpu::Device,
     transform_bind_group_layout: &wgpu::BindGroupLayout,
-    ramp_bind_group_layout: &wgpu::BindGroupLayout,
     surface_format: wgpu::TextureFormat,
     sample_count: u32,
     depth: DepthMode,
@@ -308,10 +272,7 @@ pub(super) fn create_pipeline(
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("curvyo pipeline layout"),
-        bind_group_layouts: &[
-            Some(transform_bind_group_layout),
-            Some(ramp_bind_group_layout),
-        ],
+        bind_group_layouts: &[Some(transform_bind_group_layout)],
         immediate_size: 0,
     });
 

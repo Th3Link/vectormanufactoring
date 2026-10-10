@@ -17,8 +17,8 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use curvyo_document_core::{
-    AnchorId, Document, FillMode, FillModeTarget, Length, NewAnchor, NodeId, ObjectSnapshot, Point,
-    RectBounds, Tolerance,
+    AnchorId, Document, Length, NewAnchor, NodeId, ObjectSnapshot, Point, RectBounds, StyleEdit,
+    Tolerance,
 };
 use curvyo_ui_core::{
     AnchorIdMinter, GestureShape, MarqueeMode, Modifiers, ObjectSelection,
@@ -91,13 +91,7 @@ impl Rig {
 
     fn fill(&self, id: NodeId) {
         self.document
-            .set_fill_mode(
-                FillMode::Solid,
-                &[FillModeTarget {
-                    id,
-                    seed_stops: vec![],
-                }],
-            )
+            .edit_style(&[id], &StyleEdit::FillEnabled(true))
             .unwrap();
     }
 

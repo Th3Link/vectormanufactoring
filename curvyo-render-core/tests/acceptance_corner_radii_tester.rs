@@ -59,7 +59,7 @@ fn equal_radii_render_exactly_like_the_old_outline() {
                     .set_corner_radii(&[(id, CornerRadii::uniform(Length::from_mm(r)))])
                     .unwrap();
                 let prim = rect_doc.primitive(id).unwrap();
-                let a = build_artwork(&[ObjectSnapshot::Primitive(prim.clone())], &[], view);
+                let a = build_artwork(&[ObjectSnapshot::Primitive(prim.clone())], view);
 
                 let path_doc = Document::new(2);
                 let anchors: Vec<NewAnchor> = old_outline(5.0, -3.0, w, h, r)
@@ -76,7 +76,7 @@ fn equal_radii_render_exactly_like_the_old_outline() {
                 let pid = path_doc.create_path(&anchors, true);
                 let path = path_doc.path(pid).unwrap();
                 assert_eq!(path.style.stroke.width, prim.style.stroke.width);
-                let b = build_artwork(&[ObjectSnapshot::Path(path)], &[], view);
+                let b = build_artwork(&[ObjectSnapshot::Path(path)], view);
                 assert_eq!(
                     format!("{:?}", a.triangles),
                     format!("{:?}", b.triangles),
@@ -98,11 +98,7 @@ fn unequal_radii_draw_something_different_and_finite() {
         height: Length::from_mm(20.0),
     });
     let view = ViewTransform::new(3.78, Point::new(0.0, 0.0));
-    let sharp = build_artwork(
-        &[ObjectSnapshot::Primitive(d.primitive(id).unwrap())],
-        &[],
-        view,
-    );
+    let sharp = build_artwork(&[ObjectSnapshot::Primitive(d.primitive(id).unwrap())], view);
     d.set_corner_radii(&[(
         id,
         CornerRadii {
@@ -113,11 +109,7 @@ fn unequal_radii_draw_something_different_and_finite() {
         },
     )])
     .unwrap();
-    let mixed = build_artwork(
-        &[ObjectSnapshot::Primitive(d.primitive(id).unwrap())],
-        &[],
-        view,
-    );
+    let mixed = build_artwork(&[ObjectSnapshot::Primitive(d.primitive(id).unwrap())], view);
     assert_ne!(
         format!("{:?}", sharp.triangles),
         format!("{:?}", mixed.triangles)

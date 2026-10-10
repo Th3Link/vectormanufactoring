@@ -13,23 +13,26 @@
 //!   stroke_dash    : [f64 ...] multiples of width  absent = [] (solid)
 //!   stroke_join    : "miter" | "round" | "bevel"   absent = "miter"
 //!   stroke_cap     : "butt" | "round" | "square"   absent = "butt"
+//!   stroke_marker_start     : "none" | "arrow" | "dot"  absent = "none"
+//!   stroke_marker_mid       : "none" | "arrow" | "dot"  absent = "none"
+//!   stroke_marker_end       : "none" | "arrow" | "dot"  absent = "none"
+//!   stroke_marker_mid_place : "spaced" | "nodes"        absent = "spaced"
+//!   stroke_marker_mid_count : integer >= 1              absent = 1
 //!   fill_enabled   : bool                          absent = false
-//!   fill_kind      : "solid" | "linear" | "radial" absent = "solid"
 //!   fill           : [r, g, b]                     absent = black
 //!   fill_opacity   : f64 in [0, 1]                 absent = 1
-//!   fill_stops     : movable list of stop maps     absent = no stops
-//!     id           : hex string of the StopId      written once
-//!     position     : f64 in [0, 1]                 LWW register
-//!     color        : [r, g, b]                     LWW register
-//!     opacity      : f64 in [0, 1]                 LWW register
 //! ```
+//!
+//! A version-7 file written by a build with gradients may also hold `fill_kind`
+//! and `fill_stops`; [`crate::legacy_fill`] reads past and drops them.
 
-use loro::{Container, LoroMap, LoroMovableList, LoroValue, ValueOrContainer};
+use loro::{LoroMap, LoroValue};
 
+use crate::legacy_fill;
 use crate::path_codec::{as_f64, as_u8};
 use crate::path_model::Color;
 use crate::style_model::{
-    DashPattern, Fill, FillKind, GradientStop, LineCap, LineJoin, Opacity, StopId, StopPosition,
+    DashPattern, Fill, LineCap, LineJoin, MarkerCount, MarkerPlace, MarkerShape, Markers, Opacity,
     Stroke, Style,
 };
 use crate::units::Length;
@@ -41,16 +44,14 @@ pub(crate) const KEY_STROKE_OPACITY: &str = "stroke_opacity";
 pub(crate) const KEY_STROKE_DASH: &str = "stroke_dash";
 pub(crate) const KEY_STROKE_JOIN: &str = "stroke_join";
 pub(crate) const KEY_STROKE_CAP: &str = "stroke_cap";
+pub(crate) const KEY_MARKER_START: &str = "stroke_marker_start";
+pub(crate) const KEY_MARKER_MID: &str = "stroke_marker_mid";
+pub(crate) const KEY_MARKER_END: &str = "stroke_marker_end";
+pub(crate) const KEY_MARKER_MID_PLACE: &str = "stroke_marker_mid_place";
+pub(crate) const KEY_MARKER_MID_COUNT: &str = "stroke_marker_mid_count";
 pub(crate) const KEY_FILL_ENABLED: &str = "fill_enabled";
-pub(crate) const KEY_FILL_KIND: &str = "fill_kind";
 pub(crate) const KEY_FILL: &str = "fill";
 pub(crate) const KEY_FILL_OPACITY: &str = "fill_opacity";
-pub(crate) const KEY_FILL_STOPS: &str = "fill_stops";
-
-pub(crate) const KEY_STOP_ID: &str = "id";
-pub(crate) const KEY_STOP_POSITION: &str = "position";
-pub(crate) const KEY_STOP_COLOR: &str = "color";
-pub(crate) const KEY_STOP_OPACITY: &str = "opacity";
 
 pub(crate) const JOIN_MITER: &str = "miter";
 pub(crate) const JOIN_ROUND: &str = "round";
@@ -58,9 +59,11 @@ pub(crate) const JOIN_BEVEL: &str = "bevel";
 pub(crate) const CAP_BUTT: &str = "butt";
 pub(crate) const CAP_ROUND: &str = "round";
 pub(crate) const CAP_SQUARE: &str = "square";
-pub(crate) const KIND_SOLID: &str = "solid";
-pub(crate) const KIND_LINEAR: &str = "linear";
-pub(crate) const KIND_RADIAL: &str = "radial";
+pub(crate) const SHAPE_NONE: &str = "none";
+pub(crate) const SHAPE_ARROW: &str = "arrow";
+pub(crate) const SHAPE_DOT: &str = "dot";
+pub(crate) const PLACE_SPACED: &str = "spaced";
+pub(crate) const PLACE_NODES: &str = "nodes";
 
 /// Every style key of an object's meta map, none of them a shape-parameter
 /// key: "object to path" strips `shape_codec::ALL_PRIMITIVE_KEYS` only, so
@@ -74,11 +77,14 @@ pub(crate) const ALL_STYLE_KEYS: &[&str] = &[
     KEY_STROKE_DASH,
     KEY_STROKE_JOIN,
     KEY_STROKE_CAP,
+    KEY_MARKER_START,
+    KEY_MARKER_MID,
+    KEY_MARKER_END,
+    KEY_MARKER_MID_PLACE,
+    KEY_MARKER_MID_COUNT,
     KEY_FILL_ENABLED,
-    KEY_FILL_KIND,
     KEY_FILL,
     KEY_FILL_OPACITY,
-    KEY_FILL_STOPS,
 ];
 
 // ---------------------------------------------------------------------------
@@ -152,19 +158,40 @@ fn read_join(meta: &LoroMap) -> LineJoin {
     }
 }
 
+fn read_marker_shape(meta: &LoroMap, key: &str) -> MarkerShape {
+    match read_string(meta, key).as_deref() {
+        Some(SHAPE_ARROW) => MarkerShape::Arrow,
+        Some(SHAPE_DOT) => MarkerShape::Dot,
+        _ => MarkerShape::None,
+    }
+}
+
+fn read_markers(meta: &LoroMap) -> Markers {
+    Markers {
+        start: read_marker_shape(meta, KEY_MARKER_START),
+        mid: read_marker_shape(meta, KEY_MARKER_MID),
+        end: read_marker_shape(meta, KEY_MARKER_END),
+        mid_place: match read_string(meta, KEY_MARKER_MID_PLACE).as_deref() {
+            Some(PLACE_NODES) => MarkerPlace::AtNodes,
+            _ => MarkerPlace::Spaced,
+        },
+        // A count below 1 or not a whole number reads as 1 (lenient: only a
+        // merged document can hold one; open validation refuses a file's).
+        mid_count: match read_value(meta, KEY_MARKER_MID_COUNT) {
+            // A count above `u32::MAX` saturates (criterion 29 draws 500).
+            Some(LoroValue::I64(n)) if n >= 1 => {
+                MarkerCount::new(u32::try_from(n).unwrap_or(u32::MAX)).unwrap_or(MarkerCount::ONE)
+            }
+            _ => MarkerCount::ONE,
+        },
+    }
+}
+
 fn read_cap(meta: &LoroMap) -> LineCap {
     match read_string(meta, KEY_STROKE_CAP).as_deref() {
         Some(CAP_ROUND) => LineCap::Round,
         Some(CAP_SQUARE) => LineCap::Square,
         _ => LineCap::Butt,
-    }
-}
-
-fn read_kind(meta: &LoroMap) -> FillKind {
-    match read_string(meta, KEY_FILL_KIND).as_deref() {
-        Some(KIND_LINEAR) => FillKind::Linear,
-        Some(KIND_RADIAL) => FillKind::Radial,
-        _ => FillKind::Solid,
     }
 }
 
@@ -186,40 +213,15 @@ pub(crate) fn read_style(meta: &LoroMap) -> Style {
             dash: read_dash(meta),
             join: read_join(meta),
             cap: read_cap(meta),
+            markers: read_markers(meta),
         },
         fill: Fill {
-            enabled: read_bool(meta, KEY_FILL_ENABLED, default.fill.enabled),
-            kind: read_kind(meta),
+            enabled: read_bool(meta, KEY_FILL_ENABLED, default.fill.enabled)
+                && legacy_fill::reads_as_solid(meta),
             color: read_color(meta, KEY_FILL).unwrap_or(default.fill.color),
             opacity: read_opacity(meta, KEY_FILL_OPACITY),
-            stops: read_stops(meta),
         },
     }
-}
-
-pub(crate) fn read_stop(map: &LoroMap) -> Option<GradientStop> {
-    Some(GradientStop {
-        id: read_stop_id(map)?,
-        position: StopPosition::new(read_number(map, KEY_STOP_POSITION)?).ok()?,
-        color: read_color(map, KEY_STOP_COLOR)?,
-        opacity: Opacity::new(read_number(map, KEY_STOP_OPACITY)?).ok()?,
-    })
-}
-
-fn read_stop_id(map: &LoroMap) -> Option<StopId> {
-    read_string(map, KEY_STOP_ID).and_then(|hex| StopId::from_hex(&hex))
-}
-
-/// Reads the stop list in list order; a stop map a peer left incomplete is
-/// skipped rather than failing the read.
-fn read_stops(meta: &LoroMap) -> Vec<GradientStop> {
-    let Some(list) = stops_list(meta) else {
-        return Vec::new();
-    };
-    (0..list.len())
-        .filter_map(|index| stop_map_at(&list, index))
-        .filter_map(|map| read_stop(&map))
-        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -283,12 +285,41 @@ const fn cap_text(cap: LineCap) -> &'static str {
     }
 }
 
-const fn kind_text(kind: FillKind) -> &'static str {
-    match kind {
-        FillKind::Solid => KIND_SOLID,
-        FillKind::Linear => KIND_LINEAR,
-        FillKind::Radial => KIND_RADIAL,
+const fn shape_text(shape: MarkerShape) -> &'static str {
+    match shape {
+        MarkerShape::None => SHAPE_NONE,
+        MarkerShape::Arrow => SHAPE_ARROW,
+        MarkerShape::Dot => SHAPE_DOT,
     }
+}
+
+/// Writes the marker slots of `new` that differ from `old`; returns whether
+/// anything was written.
+fn write_marker_changes(meta: &LoroMap, old: Markers, new: Markers) -> bool {
+    let mut wrote = false;
+    for (key, before, after) in [
+        (KEY_MARKER_START, old.start, new.start),
+        (KEY_MARKER_MID, old.mid, new.mid),
+        (KEY_MARKER_END, old.end, new.end),
+    ] {
+        if before != after {
+            write_text(meta, key, shape_text(after));
+            wrote = true;
+        }
+    }
+    if old.mid_place != new.mid_place {
+        let text = match new.mid_place {
+            MarkerPlace::Spaced => PLACE_SPACED,
+            MarkerPlace::AtNodes => PLACE_NODES,
+        };
+        write_text(meta, KEY_MARKER_MID_PLACE, text);
+        wrote = true;
+    }
+    if old.mid_count != new.mid_count {
+        insert(meta, KEY_MARKER_MID_COUNT, i64::from(new.mid_count.get()));
+        wrote = true;
+    }
+    wrote
 }
 
 /// Writes what a brand-new object carries: the width and colour, explicitly,
@@ -300,14 +331,17 @@ pub(crate) fn write_creation_style(meta: &LoroMap) {
 }
 
 /// Writes every scalar key of `new` that differs from `old` and returns
-/// whether anything was written. The gradient stops are not touched here;
-/// they have their own commands. A value equal to the stored one is never
+/// whether anything was written. A value equal to the stored one is never
 /// rewritten: an LWW rewrite of an unchanged value is a new operation that
 /// could win against a peer's real edit (`adrs.md`, register granularity 5).
 pub(crate) fn write_changes(meta: &LoroMap, old: &Style, new: &Style) -> bool {
     let (os, ns) = (&old.stroke, &new.stroke);
     let (of, nf) = (&old.fill, &new.fill);
     let mut wrote = false;
+    if of != nf {
+        // Any fill write replaces a legacy gradient fill (`legacy_fill`).
+        legacy_fill::forget(meta);
+    }
     if os.enabled != ns.enabled {
         write_bool(meta, KEY_STROKE_ENABLED, ns.enabled);
         wrote = true;
@@ -336,12 +370,9 @@ pub(crate) fn write_changes(meta: &LoroMap, old: &Style, new: &Style) -> bool {
         write_text(meta, KEY_STROKE_CAP, cap_text(ns.cap));
         wrote = true;
     }
+    wrote |= write_marker_changes(meta, os.markers, ns.markers);
     if of.enabled != nf.enabled {
         write_bool(meta, KEY_FILL_ENABLED, nf.enabled);
-        wrote = true;
-    }
-    if of.kind != nf.kind {
-        write_text(meta, KEY_FILL_KIND, kind_text(nf.kind));
         wrote = true;
     }
     if of.color != nf.color {
@@ -361,8 +392,7 @@ fn write_dash(meta: &LoroMap, dash: &DashPattern) {
 
 /// Writes a whole style onto a freshly created meta map (Split's new object):
 /// the width and colour always, every other scalar key only where it differs
-/// from its default, and the stop list verbatim with the same stop ids (a
-/// stop id is unique within one object's list, not across the document).
+/// from its default.
 pub(crate) fn write_style(meta: &LoroMap, style: &Style) {
     write_stroke_width(meta, style.stroke.width);
     write_color(meta, KEY_STROKE, style.stroke.color);
@@ -370,105 +400,6 @@ pub(crate) fn write_style(meta: &LoroMap, style: &Style) {
     baseline.stroke.width = style.stroke.width;
     baseline.stroke.color = style.stroke.color;
     write_changes(meta, &baseline, style);
-    write_stops(meta, &style.fill.stops);
-}
-
-// ---------------------------------------------------------------------------
-// The stop list
-// ---------------------------------------------------------------------------
-
-/// The `fill_stops` movable list of this object, if it has one.
-pub(crate) fn stops_list(meta: &LoroMap) -> Option<LoroMovableList> {
-    match meta.get(KEY_FILL_STOPS) {
-        Some(ValueOrContainer::Container(Container::MovableList(list))) => Some(list),
-        _ => None,
-    }
-}
-
-/// The `fill_stops` list, created if the object has none yet. Only
-/// [`write_stops`] creates it (the fill-mode switch and Split). It is a
-/// **mergeable** child container (its id follows from the map and the key), so
-/// two peers that create it concurrently end up with one list holding both
-/// peers' stops, instead of one list replacing the other and taking its edits
-/// with it. A merge can therefore hold more than the two seed stops; that is
-/// a stored count the format accepts (acceptance criteria 16 and 35).
-fn ensure_stops_list(meta: &LoroMap) -> LoroMovableList {
-    if let Some(list) = stops_list(meta) {
-        return list;
-    }
-    // `ensure_mergeable_movable_list` refuses a key that holds a value that is
-    // not a mergeable list (a scalar or a map a peer left there, which only a
-    // merge can produce: open-file validation rejects it). Then the old
-    // behaviour: replace it with a regular list, which cannot fail on an
-    // attached map.
-    meta.ensure_mergeable_movable_list(KEY_FILL_STOPS)
-        .unwrap_or_else(|_| {
-            // invariant: inserting a brand-new container under a key on an
-            // attached map cannot fail.
-            #[allow(clippy::unwrap_used)]
-            meta.insert_container(KEY_FILL_STOPS, LoroMovableList::new())
-                .unwrap()
-        })
-}
-
-pub(crate) fn stop_map_at(list: &LoroMovableList, index: usize) -> Option<LoroMap> {
-    match list.get(index) {
-        Some(ValueOrContainer::Container(Container::Map(map))) => Some(map),
-        _ => None,
-    }
-}
-
-/// The list index of the stop with `id`, if the list holds it.
-pub(crate) fn stop_index(list: &LoroMovableList, id: StopId) -> Option<usize> {
-    (0..list.len())
-        .find(|&index| stop_map_at(list, index).is_some_and(|map| read_stop_id(&map) == Some(id)))
-}
-
-fn write_stop_fields(map: &LoroMap, stop: &GradientStop) {
-    write_text(map, KEY_STOP_ID, &stop.id.to_hex());
-    write_number(map, KEY_STOP_POSITION, stop.position.get());
-    write_color(map, KEY_STOP_COLOR, stop.color);
-    write_number(map, KEY_STOP_OPACITY, stop.opacity.get());
-}
-
-/// Appends `stops` in order to the object's list (creating it when `stops`
-/// is not empty). Writes nothing for an empty slice.
-pub(crate) fn write_stops(meta: &LoroMap, stops: &[GradientStop]) {
-    if stops.is_empty() {
-        return;
-    }
-    let list = ensure_stops_list(meta);
-    for stop in stops {
-        // invariant: push_container onto an attached movable list cannot
-        // fail.
-        #[allow(clippy::unwrap_used)]
-        let map = list.push_container(LoroMap::new()).unwrap();
-        write_stop_fields(&map, stop);
-    }
-}
-
-/// Inserts `stop` at list `index`.
-pub(crate) fn insert_stop_at(list: &LoroMovableList, index: usize, stop: &GradientStop) {
-    // invariant: `index` is at most `len()`, which the caller takes from the
-    // same list.
-    #[allow(clippy::unwrap_used)]
-    let map = list.insert_container(index, LoroMap::new()).unwrap();
-    write_stop_fields(&map, stop);
-}
-
-/// Writes one stop's position.
-pub(crate) fn write_stop_position(map: &LoroMap, position: StopPosition) {
-    write_number(map, KEY_STOP_POSITION, position.get());
-}
-
-/// Writes one stop's colour.
-pub(crate) fn write_stop_color(map: &LoroMap, color: Color) {
-    write_color(map, KEY_STOP_COLOR, color);
-}
-
-/// Writes one stop's opacity.
-pub(crate) fn write_stop_opacity(map: &LoroMap, opacity: Opacity) {
-    write_number(map, KEY_STOP_OPACITY, opacity.get());
 }
 
 #[cfg(test)]
@@ -486,27 +417,6 @@ mod tests {
                 "{key} would be stripped by `object to path`"
             );
         }
-    }
-
-    /// A merged document is not validated: a peer may have left a scalar under
-    /// `fill_stops`. Seeding stops must still work, replacing it, and never
-    /// panic.
-    #[test]
-    fn seeding_stops_over_a_scalar_under_the_key_replaces_it() {
-        use crate::style_model::{Opacity, StopId, StopPosition};
-        let loro = loro::LoroDoc::new();
-        let meta = loro.get_map("meta");
-        meta.insert(KEY_FILL_STOPS, "not a list").unwrap();
-        assert!(stops_list(&meta).is_none());
-        let stop = GradientStop {
-            id: StopId::new(1, 1),
-            position: StopPosition::START,
-            color: Color::BLACK,
-            opacity: Opacity::OPAQUE,
-        };
-        write_stops(&meta, &[stop]);
-        let list = stops_list(&meta).expect("a list now");
-        assert_eq!(list.len(), 1);
     }
 
     #[test]

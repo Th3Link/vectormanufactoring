@@ -248,7 +248,7 @@ pub enum Shape {
 /// A primitive's full data as read from the document — the primitive
 /// counterpart to [`PathSnapshot`]. `Serialize` only, not
 /// `Deserialize`: it holds a [`Shape`], which does not derive
-/// `Deserialize` either. Not `Copy`: the style holds the gradient stop list.
+/// `Deserialize` either. Not `Copy`: the style holds a dash list.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PrimitiveSnapshot {
     /// This primitive's identity — the same [`NodeId`] a path or any

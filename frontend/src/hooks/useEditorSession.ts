@@ -253,7 +253,7 @@ function isFormControl(target: EventTarget): boolean {
   return (
     target instanceof HTMLElement &&
     target.closest(
-      'input, textarea, select, button, [role="switch"], [role="slider"], [role="radio"], [role="combobox"], [role="option"], [role="dialog"], [contenteditable]:not([contenteditable="false"])',
+      'input, textarea, select, button, [role="switch"], [role="slider"], [role="spinbutton"], [role="radio"], [role="combobox"], [role="option"], [role="dialog"], [contenteditable]:not([contenteditable="false"])',
     ) !== null
   );
 }
@@ -1190,6 +1190,17 @@ export function useEditorSession(
         panningRef.current = true;
         setIsPanning(true);
         session.begin_pan(x, y);
+        return;
+      }
+
+      // A right press while the eyedropper is picking ends picking and writes
+      // nothing; no tool sees it and no context menu opens
+      // (`specs/0017-style-panel-rework` criterion 26).
+      if (event.button === 2 && session.cursor_hint() === "eyedropper") {
+        event.preventDefault();
+        session.end_colour_pick();
+        setCursorHint(session.cursor_hint());
+        syncFromSession();
         return;
       }
 

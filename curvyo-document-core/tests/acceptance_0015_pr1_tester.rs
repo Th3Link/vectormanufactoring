@@ -950,8 +950,7 @@ fn opening_older_files_adds_no_changes() {
         "rotation_v5.curvyo",
         "legacy_corner_radius_v5.curvyo",
         "corner_radii_per_corner.curvyo",
-        "styles_v7.curvyo",
-        "styles_v7_mergeable_stops.curvyo",
+        "legacy_gradient_v7.curvyo",
         "size_damaged_v7.curvyo",
         "display_unit_in_v7.curvyo",
     ] {

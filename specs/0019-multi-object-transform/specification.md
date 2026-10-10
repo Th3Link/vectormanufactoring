@@ -562,10 +562,9 @@ relative; every other entry has the same fixed point as the drag.
     data or a group box. **Expected: no file format change, no new field, no
     `format_version` change** (every write is a field the single-object gestures
     already write; the architect confirms in `adrs.md`).
-51. Given a multi-selection that contains a filled, translucent or gradient-filled
-    object, then the transform changes only geometry fields; the style fields are
-    untouched, and a gradient, defined in the object's own frame, follows its
-    object as it does after a single-object transform. The group box interior has
+51. Given a multi-selection that contains a filled or translucent object, then the
+    transform changes only geometry fields; the style fields are untouched. The
+    group box interior has
     no hit area; presses follow criterion 43, in which a selected object's filled
     interior is a hit.
 52. Given a selection of one object, or a selection that has just dropped from two

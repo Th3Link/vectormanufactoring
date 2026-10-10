@@ -5,10 +5,10 @@
 //! `curvyo_ui_core` (`style_scope`, `style_panel_state`, `StyleEditor`); the DOM
 //! holds only the open text, the invalid state and "Escape restores".
 
-use curvyo_document_core::{Color, FillMode, FillModeTarget, LineCap, LineJoin, StyleEdit};
+use curvyo_document_core::{LineCap, LineJoin, MarkerPlace, MarkerShape, NodeId, StyleEdit};
 use curvyo_ui_core::{
-    DashChoice, StyleEntryError, StyleField, StylePanelState, StyleScope, StyleTool, fill_targets,
-    style_panel_state, style_scope,
+    DashChoice, Grid, MarkerSlot, StyleEntryError, StyleField, StylePanelState, StyleScope,
+    StyleTool, ValueField, hsv_to_rgb, parse_dash_text, style_panel_state, style_scope,
 };
 
 use super::style_view::StylePanelView;
@@ -35,26 +35,40 @@ impl Session {
         )
     }
 
-    /// What the Style panel shows. A drag preview shows as if it were
-    /// committed, so the fields follow the drag.
+    /// What the Style panel shows, or `None` when there is nothing to edit. A
+    /// drag preview shows as if it were committed, so the fields follow the
+    /// drag; which rows are shown follows the committed document.
     #[must_use]
-    pub fn style_panel_state(&self) -> StylePanelState {
-        let mut objects = self.objects();
+    pub fn style_panel_state(&self) -> Option<StylePanelState> {
+        let committed = self.objects();
         let scope = style_scope(
             self.style_tool(),
-            &objects,
+            &committed,
             &self.selection,
             self.node.selection(),
         );
-        self.style.apply_to(&mut objects);
-        style_panel_state(&objects, &scope)
+        if !self.style.is_active() {
+            return style_panel_state(&committed, &committed, &scope);
+        }
+        let mut shown = committed.clone();
+        self.style.apply_to(&mut shown);
+        style_panel_state(&committed, &shown, &scope)
+            .map(|state| state.with_pending(self.style.pending_edit()))
     }
 
     /// [`Session::style_panel_state`] as the flat record the host reads.
     #[must_use]
     pub fn style_panel_view(&self) -> StylePanelView {
         let key = format!("{:?}", self.style_scope().ids);
-        StylePanelView::new(&self.style_panel_state(), key, self.selected_stop_rank())
+        let mut view = self
+            .style_panel_state()
+            .map_or_else(StylePanelView::empty, |state| {
+                StylePanelView::new(&state, key)
+            });
+        view.pick_target = self
+            .colour_pick_target()
+            .map_or_else(String::new, |target| target.name().to_string());
+        view
     }
 
     /// Whether a canvas pointer press is in flight (the button is down): the
@@ -86,19 +100,18 @@ impl Session {
         Ok(self.apply_style_edit(&edit))
     }
 
-    /// A colour area's or hue slider's drag tick: shows `color` on the edited
-    /// objects without writing anything.
-    pub fn preview_style_color(&mut self, field: StyleField, color: Color) {
-        if let Some(edit) = field.color_edit(color) {
-            self.preview_style_edit(edit);
-        }
-    }
-
-    /// An opacity slider's drag tick (a percent): shows it without writing.
-    pub fn preview_style_opacity(&mut self, field: StyleField, percent: f64) {
-        if let Some(edit) = field.opacity_edit(percent) {
-            self.preview_style_edit(edit);
-        }
+    /// A tick of a drag in the colour area or the hue slider: shows the colour
+    /// of hue `hue` (degrees), saturation and value (`0` to `1`) without
+    /// writing. Only the colour changes; each object keeps its alpha. A field
+    /// that is not a colour is ignored.
+    pub fn preview_style_hsv(&mut self, field: StyleField, hue: f64, saturation: f64, value: f64) {
+        let color = hsv_to_rgb(hue, saturation, value);
+        let edit = match field {
+            StyleField::StrokeColor => StyleEdit::StrokeColor(color),
+            StyleField::FillColor => StyleEdit::FillColor(color),
+            _ => return,
+        };
+        self.preview_style_edit(edit);
     }
 
     fn preview_style_edit(&mut self, edit: StyleEdit) {
@@ -107,7 +120,7 @@ impl Session {
         let ids = if self.style.is_active() {
             Vec::new()
         } else {
-            self.style_scope().ids
+            self.edit_ids(&edit)
         };
         if self.style.is_active() || !ids.is_empty() {
             self.style.preview(&ids, edit);
@@ -126,17 +139,80 @@ impl Session {
         self.style.cancel();
     }
 
+    /// A tick of a value field drag (`specs/0017-style-panel-rework` criteria
+    /// 36 to 47): the field's scale maps position `p` (`0` to `1`) to a value,
+    /// rounded to `grid`; it is shown without writing. The gesture ends with
+    /// [`Session::commit_style_preview`] or [`Session::cancel_style_preview`].
+    pub fn preview_value_field(&mut self, field: ValueField, p: f64, grid: Grid) {
+        // A tick that is not a number shows and writes nothing.
+        if !p.is_finite() {
+            return;
+        }
+        let scale = field.scale();
+        let value = scale.round(scale.value_at(p), grid);
+        self.preview_style_edit(field.edit(value));
+    }
+
+    /// An arrow key on a value field (criterion 43): `steps` steps from the
+    /// shown value on `grid`, previewed; the key-up commits. Does nothing while
+    /// the edited objects differ (criterion 44) or when there is nothing to edit.
+    pub fn step_value_field(&mut self, field: ValueField, steps: i32, grid: Grid) {
+        let Some(state) = self.style_panel_state() else {
+            return;
+        };
+        let Some(shown) = state.value_of(field) else {
+            return;
+        };
+        self.preview_style_edit(field.edit(field.scale().step(shown, steps, grid)));
+    }
+
+    /// The reset icon or `Ctrl+Backspace` (criterion 61): every edited object
+    /// takes the field's default, one commit. Writes nothing when the value
+    /// already is the default; `false` when there is nothing to edit.
+    pub fn reset_value_field(&mut self, field: ValueField) -> bool {
+        self.apply_style_edit(&field.reset_edit())
+    }
+
+    /// The objects `edit` goes to (the rule lives in `StyleScope::targets`).
+    fn edit_ids(&self, edit: &StyleEdit) -> Vec<NodeId> {
+        self.style_scope().targets(&self.objects(), edit)
+    }
+
+    /// A marker slot choice (`specs/0018-stroke-markers` criteria 1 and 22):
+    /// one commit to the paths of the scope.
+    pub fn set_marker_shape(&mut self, slot: MarkerSlot, shape: MarkerShape) {
+        let edit = match slot {
+            MarkerSlot::Start => StyleEdit::MarkerStart(shape),
+            MarkerSlot::Mid => StyleEdit::MarkerMid(shape),
+            MarkerSlot::End => StyleEdit::MarkerEnd(shape),
+        };
+        self.apply_style_edit(&edit);
+    }
+
+    /// The Place group (criterion 2): one commit to the paths of the scope.
+    pub fn set_marker_place(&mut self, place: MarkerPlace) {
+        self.apply_style_edit(&StyleEdit::MarkerPlace(place));
+    }
+
     /// The stroke Paint switch (criterion 5): one commit.
     pub fn set_stroke_paint(&mut self, on: bool) {
         self.apply_style_edit(&StyleEdit::StrokeEnabled(on));
     }
 
-    /// The Dash select: one commit. `Custom` is not a choice and writes
-    /// nothing.
+    /// A Dash preset button: one commit.
     pub fn set_stroke_dash(&mut self, choice: DashChoice) {
-        if let Some(pattern) = choice.pattern() {
-            self.apply_style_edit(&StyleEdit::StrokeDash(pattern));
-        }
+        self.apply_style_edit(&StyleEdit::StrokeDash(choice.pattern()));
+    }
+
+    /// Enter or Tab in the pattern line: one commit, `Ok(false)` when there is
+    /// nothing to edit.
+    ///
+    /// # Errors
+    /// [`StyleEntryError::Dash`] for text that is no pattern; nothing is
+    /// written and the line stays open.
+    pub fn set_stroke_dash_text(&mut self, text: &str) -> Result<bool, StyleEntryError> {
+        let pattern = parse_dash_text(text)?;
+        Ok(self.apply_style_edit(&StyleEdit::StrokeDash(pattern)))
     }
 
     /// The Join toggle group: one commit.
@@ -149,33 +225,17 @@ impl Session {
         self.apply_style_edit(&StyleEdit::StrokeCap(cap));
     }
 
-    /// The Fill type row (criteria 13, 17): one commit. Every stored colour,
-    /// opacity and stop stays; a gradient mode seeds the two default stops of
-    /// every object that holds none, from its own fill colour.
-    pub fn set_fill_mode(&mut self, mode: FillMode) {
-        self.flush_style_preview();
-        let ids = self.style_scope().ids;
-        let targets = if matches!(mode, FillMode::Linear | FillMode::Radial) {
-            let objects = self.objects();
-            fill_targets(&mut self.minter, &objects, &ids)
-        } else {
-            ids.into_iter()
-                .map(|id| FillModeTarget {
-                    id,
-                    seed_stops: Vec::new(),
-                })
-                .collect()
-        };
-        if !targets.is_empty() {
-            let _ = self.document.set_fill_mode(mode, &targets);
-        }
+    /// The fill Paint switch (criterion 13): one commit. The stored colour and
+    /// opacity stay.
+    pub fn set_fill_paint(&mut self, on: bool) {
+        self.apply_style_edit(&StyleEdit::FillEnabled(on));
     }
 
     /// Writes `edit` to every edited object in one commit. `false` when there
     /// is nothing to edit or the document refused it.
-    fn apply_style_edit(&mut self, edit: &StyleEdit) -> bool {
+    pub(super) fn apply_style_edit(&mut self, edit: &StyleEdit) -> bool {
         self.flush_style_preview();
-        let ids = self.style_scope().ids;
+        let ids = self.edit_ids(edit);
         !ids.is_empty() && self.document.edit_style(&ids, edit).is_ok()
     }
 }

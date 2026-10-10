@@ -2,36 +2,42 @@
 //! reads (ADR 0001 §5): one read after every change, no editing logic. Kept
 //! apart from `style.rs` so the conversion is plain Rust a host test can pin.
 
-use curvyo_document_core::{Color, FillMode, LineCap, LineJoin};
-use curvyo_ui_core::{BarValue, DashChoice, StopsPanel, StylePanelState};
+use curvyo_document_core::{Color, Length, LineCap, LineJoin, MarkerPlace, MarkerShape, Style};
+use curvyo_ui_core::{
+    BarValue, DashChoice, DashShown, MarkersPanel, Rgba, StylePanelState, ValueScale, hex_text,
+};
 
 /// What the Style panel shows. A `*_mixed` flag means the edited objects
 /// differ (the field is empty with the placeholder "Mixed"); the value beside
 /// it is then meaningless. Colours are `0xRRGGBB`, opacities whole-or-not
 /// percents (the host rounds for display), words are the lower-case names the
-/// host sends back.
+/// host sends back. `*_rows` says whether the rows under a Paint switch are
+/// shown (they are not while every edited paint is off).
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
 #[derive(Debug, Clone, PartialEq)]
-#[allow(clippy::struct_excessive_bools)] // independent shown/enabled/mixed flags, read by name
+#[allow(clippy::struct_excessive_bools)] // independent shown/mixed flags, read by name
 pub struct StylePanelView {
     /// The subject line.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
     pub subject: String,
-    /// Changes whenever the edited objects change, so the host can close a
-    /// colour popover that belongs to other objects.
+    /// Changes whenever the edited objects change, so the host can drop state
+    /// that belongs to other objects.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
     pub scope_key: String,
-    /// There is something to edit; otherwise every control is disabled.
-    pub enabled: bool,
     /// `"on"`, `"off"` or `"mixed"`.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
     pub stroke_paint: String,
-    /// Every edited stroke is off: Dash, Join and Cap are disabled.
-    pub stroke_all_off: bool,
-    /// The stroke colours differ.
+    /// The stroke rows under the Paint switch are shown.
+    pub stroke_rows: bool,
+    /// The stroke colours differ in red, green or blue.
     pub stroke_color_mixed: bool,
     /// The stroke colour.
     pub stroke_color: u32,
+    /// The stroke colour and alpha as `#RRGGBBAA`.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub stroke_hex: String,
+    /// The stroke colour or alpha differ.
+    pub stroke_hex_mixed: bool,
     /// The stroke opacities differ.
     pub stroke_opacity_mixed: bool,
     /// The stroke opacity, percent.
@@ -40,51 +46,108 @@ pub struct StylePanelView {
     pub stroke_width_mixed: bool,
     /// The stroke width, millimetres.
     pub stroke_width: f64,
-    /// `"solid"`, `"dash"`, `"dot"`, `"dash-dot"`, `"custom"` or `"mixed"`.
+    /// The width as the field shows it (up to three decimals).
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub stroke_width_text: String,
+    /// The share of the field's width the bar is filled to (`0` to `1`).
+    pub stroke_width_bar: f64,
+    /// The value differs from the default or is mixed: the reset icon shows.
+    pub stroke_width_resettable: bool,
+    /// The stroke opacity as the field shows it.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub stroke_opacity_text: String,
+    /// The bar position of the stroke opacity.
+    pub stroke_opacity_bar: f64,
+    /// The reset icon of the stroke opacity shows.
+    pub stroke_opacity_resettable: bool,
+    /// The pressed preset: `"solid"`, `"dash"`, `"dot"`, `"dash-dot"`,
+    /// `"none"` (a list that is no preset) or `"mixed"`.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
     pub stroke_dash: String,
+    /// The dash list as the text line shows it; empty for solid and mixed.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub stroke_dash_text: String,
     /// `"miter"`, `"round"`, `"bevel"` or `"mixed"`.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
     pub stroke_join: String,
     /// `"butt"`, `"round"`, `"square"` or `"mixed"`.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
     pub stroke_cap: String,
-    /// `"none"`, `"solid"`, `"linear"`, `"radial"` or `"mixed"`.
+    /// `"on"`, `"off"` or `"mixed"`.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
-    pub fill_mode: String,
-    /// The fill colours differ.
+    pub fill_paint: String,
+    /// The fill rows under the Paint switch are shown.
+    pub fill_rows: bool,
+    /// The fill colours differ in red, green or blue.
     pub fill_color_mixed: bool,
-    /// The solid fill colour.
+    /// The fill colour.
     pub fill_color: u32,
+    /// The fill colour and alpha as `#RRGGBBAA`.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub fill_hex: String,
+    /// The fill colour or alpha differ.
+    pub fill_hex_mixed: bool,
     /// The fill opacities differ.
     pub fill_opacity_mixed: bool,
-    /// The solid fill opacity, percent.
+    /// The fill opacity, percent.
     pub fill_opacity: f64,
-    /// The gradient stop editor: `"hidden"`, `"different-counts"` or
-    /// `"editor"`.
+    /// The Markers group is shown (`specs/0018-stroke-markers`).
+    pub markers_shown: bool,
+    /// `"none"`, `"arrow"`, `"dot"` or `"mixed"`.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
-    pub stops_state: String,
-    /// How many objects the stop editor edits.
-    pub stops_objects: u32,
-    /// Add stop and a bar click work.
-    pub stops_can_add: bool,
-    /// Remove works.
-    pub stops_can_remove: bool,
-    /// The selection holds a polygon or star: the gradient box note shows.
-    pub stops_box_note: bool,
-    /// The bar shows its ramp and thumbs (every list equal in value).
-    pub stops_bar_shown: bool,
-    /// One row of the stop list per rank, six numbers each: position percent,
-    /// 1 if the positions differ, colour `0xRRGGBB`, 1 if the colours differ,
-    /// opacity percent, 1 if the opacities differ.
+    pub marker_start: String,
+    /// The Middle slot, same words.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
-    pub stop_rows: Vec<f64>,
-    /// The bar's stops in position order, three numbers each: position percent,
-    /// colour `0xRRGGBB`, opacity percent; empty unless `stops_bar_shown`.
+    pub marker_mid: String,
+    /// The End slot, same words.
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
-    pub stop_bar: Vec<f64>,
-    /// The selected stop's rank, or -1.
-    pub selected_stop: i32,
+    pub marker_end: String,
+    /// The Place group is shown.
+    pub marker_place_shown: bool,
+    /// `"spaced"`, `"nodes"` or `"mixed"`.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub marker_place: String,
+    /// The Count field is shown.
+    pub marker_count_shown: bool,
+    /// The count as the field shows it; empty when mixed.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub marker_count_text: String,
+    /// The count's value, for `aria-valuenow`.
+    pub marker_count: f64,
+    /// The counts differ.
+    pub marker_count_mixed: bool,
+    /// The bar position of the count.
+    pub marker_count_bar: f64,
+    /// The count is mixed or not 1: the reset icon shows.
+    pub marker_count_resettable: bool,
+    /// One muted line says closed paths have no start or end.
+    pub marker_closed_note: bool,
+    /// The paint the eyedropper is picking for: `"stroke"`, `"fill"`, or empty
+    /// while picking is off.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub pick_target: String,
+    /// The fill opacity as the field shows it.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub fill_opacity_text: String,
+    /// The bar position of the fill opacity.
+    pub fill_opacity_bar: f64,
+    /// The reset icon of the fill opacity shows.
+    pub fill_opacity_resettable: bool,
+    /// The largest width that may be typed, millimetres.
+    pub width_typed_max: f64,
+    /// The width reset target as the tooltip words it.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub width_default_text: String,
+    /// The largest opacity that may be typed, percent.
+    pub opacity_typed_max: f64,
+    /// The opacity reset target as the tooltip words it.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub opacity_default_text: String,
+    /// The largest marker count that may be typed.
+    pub count_typed_max: f64,
+    /// The marker count reset target as the tooltip words it.
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen(getter_with_clone))]
+    pub count_default_text: String,
 }
 
 fn word<T: Copy>(value: BarValue<T>, name: impl Fn(T) -> &'static str) -> String {
@@ -96,6 +159,14 @@ fn word<T: Copy>(value: BarValue<T>, name: impl Fn(T) -> &'static str) -> String
 
 fn pack_rgb(color: Color) -> u32 {
     u32::from(color.r) << 16 | u32::from(color.g) << 8 | u32::from(color.b)
+}
+
+/// The value of `value` in the unit of `scale`, `None` when mixed.
+fn uniform<T: Copy>(value: BarValue<T>, convert: impl Fn(T) -> f64) -> Option<f64> {
+    match value {
+        BarValue::Uniform(v) => Some(convert(v)),
+        BarValue::Mixed => None,
+    }
 }
 
 /// `(mixed, value)` of a colour, `0` when mixed.
@@ -114,110 +185,68 @@ fn percent(value: BarValue<curvyo_document_core::Opacity>) -> (bool, f64) {
     }
 }
 
-/// The stop editor's fields of the view.
-#[allow(clippy::struct_excessive_bools)] // independent flags, read by name
-struct StopsFields {
-    state: &'static str,
-    objects: u32,
-    can_add: bool,
-    can_remove: bool,
-    box_note: bool,
-    bar_shown: bool,
-    rows: Vec<f64>,
-    bar: Vec<f64>,
-}
-
-fn flag(mixed: bool) -> f64 {
-    f64::from(u8::from(mixed))
-}
-
-fn stops_fields(panel: &StopsPanel) -> StopsFields {
-    let mut fields = StopsFields {
-        state: "hidden",
-        objects: 0,
-        can_add: false,
-        can_remove: false,
-        box_note: false,
-        bar_shown: false,
-        rows: Vec::new(),
-        bar: Vec::new(),
-    };
-    match panel {
-        StopsPanel::Hidden => {}
-        StopsPanel::DifferentCounts { box_note } => {
-            fields.state = "different-counts";
-            fields.box_note = *box_note;
-        }
-        StopsPanel::Editor(view) => {
-            fields.state = "editor";
-            fields.objects = u32::try_from(view.objects).unwrap_or(u32::MAX);
-            fields.can_add = view.can_add;
-            fields.can_remove = view.can_remove;
-            fields.box_note = view.box_note;
-            for row in &view.rows {
-                let (position_mixed, position) = match row.position {
-                    BarValue::Uniform(position) => (false, position.get() * 100.0),
-                    BarValue::Mixed => (true, 0.0),
-                };
-                let (color_mixed, color) = colour(row.color);
-                let (opacity_mixed, opacity) = percent(row.opacity);
-                fields.rows.extend([
-                    position,
-                    flag(position_mixed),
-                    f64::from(color),
-                    flag(color_mixed),
-                    opacity,
-                    flag(opacity_mixed),
-                ]);
-            }
-            if let Some(bar) = &view.bar {
-                fields.bar_shown = true;
-                for stop in bar {
-                    fields.bar.extend([
-                        stop.position.get() * 100.0,
-                        f64::from(pack_rgb(stop.color)),
-                        stop.opacity.get() * 100.0,
-                    ]);
-                }
-            }
-        }
+/// `(mixed, text)` of a colour with its alpha.
+fn hex(value: BarValue<Rgba>) -> (bool, String) {
+    match value {
+        BarValue::Uniform((color, opacity)) => (false, hex_text(color, opacity)),
+        BarValue::Mixed => (true, String::new()),
     }
-    fields
 }
 
 impl StylePanelView {
-    /// The record for `state`, tagged with the key of the edited objects and the
-    /// rank of the selected stop.
+    /// The record for `state`, tagged with the key of the edited objects.
     #[must_use]
-    pub fn new(state: &StylePanelState, scope_key: String, selected_stop: Option<usize>) -> Self {
-        let stops = stops_fields(&state.fill.stops);
+    pub fn new(state: &StylePanelState, scope_key: String) -> Self {
         let (stroke_color_mixed, stroke_color) = colour(state.stroke.color);
+        let (stroke_hex_mixed, stroke_hex) = hex(state.stroke.rgba);
         let (stroke_opacity_mixed, stroke_opacity) = percent(state.stroke.opacity);
         let (fill_color_mixed, fill_color) = colour(state.fill.color);
+        let (fill_hex_mixed, fill_hex) = hex(state.fill.rgba);
         let (fill_opacity_mixed, fill_opacity) = percent(state.fill.opacity);
+        let width_shown = ValueScale::StrokeWidth.shown(uniform(state.stroke.width, Length::as_mm));
+        let stroke_opacity_shown =
+            ValueScale::Opacity.shown(uniform(state.stroke.opacity, |o| o.get() * 100.0));
+        let fill_opacity_shown =
+            ValueScale::Opacity.shown(uniform(state.fill.opacity, |o| o.get() * 100.0));
         let (stroke_width_mixed, stroke_width) = match state.stroke.width {
             BarValue::Uniform(width) => (false, width.as_mm()),
             BarValue::Mixed => (true, 0.0),
         };
-        Self {
+        let (stroke_dash, stroke_dash_text) = match &state.stroke.dash {
+            DashShown::Uniform { preset, text } => (
+                match preset {
+                    Some(DashChoice::Solid) => "solid",
+                    Some(DashChoice::Dash) => "dash",
+                    Some(DashChoice::Dot) => "dot",
+                    Some(DashChoice::DashDot) => "dash-dot",
+                    None => "none",
+                }
+                .to_string(),
+                text.clone(),
+            ),
+            DashShown::Mixed => ("mixed".to_string(), String::new()),
+        };
+        let mut view = Self {
             subject: state.subject.clone(),
             scope_key,
-            enabled: state.enabled,
             stroke_paint: word(state.stroke.paint, |on| if on { "on" } else { "off" }),
-            stroke_all_off: state.stroke.all_off,
+            stroke_rows: state.stroke.rows_shown,
             stroke_color_mixed,
             stroke_color,
+            stroke_hex,
+            stroke_hex_mixed,
             stroke_opacity_mixed,
             stroke_opacity,
             stroke_width_mixed,
             stroke_width,
-            stroke_dash: word(state.stroke.dash, |dash| match dash {
-                DashChoice::Solid => "solid",
-                DashChoice::Dash => "dash",
-                DashChoice::Dot => "dot",
-                DashChoice::DashDot => "dash-dot",
-                DashChoice::Custom => "custom",
-            }),
+            stroke_width_text: width_shown.text,
+            stroke_width_bar: width_shown.bar,
+            stroke_width_resettable: width_shown.resettable,
+            stroke_opacity_text: stroke_opacity_shown.text,
+            stroke_opacity_bar: stroke_opacity_shown.bar,
+            stroke_opacity_resettable: stroke_opacity_shown.resettable,
+            stroke_dash,
+            stroke_dash_text,
             stroke_join: word(state.stroke.join, |join| match join {
                 LineJoin::Miter => "miter",
                 LineJoin::Round => "round",
@@ -228,27 +257,138 @@ impl StylePanelView {
                 LineCap::Round => "round",
                 LineCap::Square => "square",
             }),
-            fill_mode: word(state.fill.mode, |mode| match mode {
-                FillMode::None => "none",
-                FillMode::Solid => "solid",
-                FillMode::Linear => "linear",
-                FillMode::Radial => "radial",
-            }),
+            fill_paint: word(state.fill.paint, |on| if on { "on" } else { "off" }),
+            fill_rows: state.fill.rows_shown,
             fill_color_mixed,
             fill_color,
+            fill_hex,
+            fill_hex_mixed,
             fill_opacity_mixed,
             fill_opacity,
-            stops_state: stops.state.to_string(),
-            stops_objects: stops.objects,
-            stops_can_add: stops.can_add,
-            stops_can_remove: stops.can_remove,
-            stops_box_note: stops.box_note,
-            stops_bar_shown: stops.bar_shown,
-            stop_rows: stops.rows,
-            stop_bar: stops.bar,
-            selected_stop: selected_stop
-                .and_then(|rank| i32::try_from(rank).ok())
-                .unwrap_or(-1),
+            fill_opacity_text: fill_opacity_shown.text,
+            fill_opacity_bar: fill_opacity_shown.bar,
+            fill_opacity_resettable: fill_opacity_shown.resettable,
+            width_typed_max: ValueScale::StrokeWidth.typed_max(),
+            width_default_text: ValueScale::StrokeWidth.default_text(),
+            opacity_typed_max: ValueScale::Opacity.typed_max(),
+            opacity_default_text: ValueScale::Opacity.default_text(),
+            count_typed_max: ValueScale::MarkerCount.typed_max(),
+            count_default_text: ValueScale::MarkerCount.default_text(),
+            pick_target: String::new(),
+            markers_shown: false,
+            marker_start: "none".to_string(),
+            marker_mid: "none".to_string(),
+            marker_end: "none".to_string(),
+            marker_place_shown: false,
+            marker_place: "spaced".to_string(),
+            marker_count_shown: false,
+            marker_count_text: "1".to_string(),
+            marker_count: 1.0,
+            marker_count_mixed: false,
+            marker_count_bar: 0.0,
+            marker_count_resettable: false,
+            marker_closed_note: false,
+        };
+        view.apply_markers(state.stroke.markers.as_ref());
+        view
+    }
+
+    /// Fills the marker fields from the Markers group, if it is shown.
+    fn apply_markers(&mut self, markers: Option<&MarkersPanel>) {
+        let Some(markers) = markers else {
+            return;
+        };
+        let shape = |value: BarValue<MarkerShape>| {
+            word(value, |shape| match shape {
+                MarkerShape::None => "none",
+                MarkerShape::Arrow => "arrow",
+                MarkerShape::Dot => "dot",
+            })
+        };
+        self.markers_shown = true;
+        self.marker_start = shape(markers.start);
+        self.marker_mid = shape(markers.mid);
+        self.marker_end = shape(markers.end);
+        self.marker_place_shown = markers.place_shown;
+        self.marker_place = word(markers.place, |place| match place {
+            MarkerPlace::Spaced => "spaced",
+            MarkerPlace::AtNodes => "nodes",
+        });
+        self.marker_count_shown = markers.count_shown;
+        let count =
+            ValueScale::MarkerCount.shown(uniform(markers.count, |count| f64::from(count.get())));
+        self.marker_count_text = count.text;
+        self.marker_count_bar = count.bar;
+        self.marker_count_resettable = count.resettable;
+        match markers.count {
+            BarValue::Uniform(count) => {
+                self.marker_count = f64::from(count.get());
+                self.marker_count_mixed = false;
+            }
+            BarValue::Mixed => self.marker_count_mixed = true,
+        }
+        self.marker_closed_note = markers.closed_note;
+    }
+
+    /// The record while there is nothing to edit: the host renders no Style
+    /// area then, so only the defaults of the fields matter.
+    #[must_use]
+    pub fn empty() -> Self {
+        let defaults = Style::default();
+        Self {
+            subject: String::new(),
+            scope_key: String::new(),
+            stroke_paint: "on".to_string(),
+            stroke_rows: true,
+            stroke_color_mixed: false,
+            stroke_color: pack_rgb(defaults.stroke.color),
+            stroke_hex: hex_text(defaults.stroke.color, defaults.stroke.opacity),
+            stroke_hex_mixed: false,
+            stroke_opacity_mixed: false,
+            stroke_opacity: defaults.stroke.opacity.get() * 100.0,
+            stroke_width_mixed: false,
+            stroke_width: defaults.stroke.width.as_mm(),
+            stroke_width_text: ValueScale::StrokeWidth.text(defaults.stroke.width.as_mm()),
+            stroke_width_bar: ValueScale::StrokeWidth.position_of(defaults.stroke.width.as_mm()),
+            stroke_width_resettable: false,
+            stroke_opacity_text: "100".to_string(),
+            stroke_opacity_bar: 1.0,
+            stroke_opacity_resettable: false,
+            stroke_dash: "solid".to_string(),
+            stroke_dash_text: String::new(),
+            stroke_join: "miter".to_string(),
+            stroke_cap: "butt".to_string(),
+            fill_paint: "off".to_string(),
+            fill_rows: false,
+            fill_color_mixed: false,
+            fill_color: pack_rgb(defaults.fill.color),
+            fill_hex: hex_text(defaults.fill.color, defaults.fill.opacity),
+            fill_hex_mixed: false,
+            fill_opacity_mixed: false,
+            fill_opacity: defaults.fill.opacity.get() * 100.0,
+            fill_opacity_text: "100".to_string(),
+            fill_opacity_bar: 1.0,
+            fill_opacity_resettable: false,
+            width_typed_max: ValueScale::StrokeWidth.typed_max(),
+            width_default_text: ValueScale::StrokeWidth.default_text(),
+            opacity_typed_max: ValueScale::Opacity.typed_max(),
+            opacity_default_text: ValueScale::Opacity.default_text(),
+            count_typed_max: ValueScale::MarkerCount.typed_max(),
+            count_default_text: ValueScale::MarkerCount.default_text(),
+            pick_target: String::new(),
+            markers_shown: false,
+            marker_start: "none".to_string(),
+            marker_mid: "none".to_string(),
+            marker_end: "none".to_string(),
+            marker_place_shown: false,
+            marker_place: "spaced".to_string(),
+            marker_count_shown: false,
+            marker_count_text: "1".to_string(),
+            marker_count: 1.0,
+            marker_count_mixed: false,
+            marker_count_bar: 0.0,
+            marker_count_resettable: false,
+            marker_closed_note: false,
         }
     }
 }
@@ -272,7 +412,8 @@ mod tests {
         let session = session_with_a_rectangle();
         let view = session.style_panel_view();
         assert_eq!(view.subject, "Rectangle");
-        assert!(view.enabled);
+        assert_eq!(view.stroke_hex, "#000000FF");
+        assert!(view.stroke_rows && !view.fill_rows);
         assert_eq!(view.stroke_paint, "on");
         assert_eq!(view.stroke_color, 0);
         assert!((view.stroke_width - 0.25).abs() < 1e-9);
@@ -280,7 +421,7 @@ mod tests {
         assert_eq!(view.stroke_dash, "solid");
         assert_eq!(view.stroke_join, "miter");
         assert_eq!(view.stroke_cap, "butt");
-        assert_eq!(view.fill_mode, "none");
+        assert_eq!(view.fill_paint, "off");
         assert!(!view.stroke_color_mixed && !view.fill_opacity_mixed);
     }
 
@@ -295,6 +436,7 @@ mod tests {
         );
         let view = session.style_panel_view();
         assert_eq!(view.fill_color, 0x002F_6FEE);
+        assert_eq!(view.fill_hex, "#2F6FEEFF");
         assert_eq!(view.scope_key, key, "same objects, same key");
         session.set_tool(Tool::Rectangle);
         assert_ne!(session.style_panel_view().scope_key, key);

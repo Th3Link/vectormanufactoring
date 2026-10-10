@@ -25,6 +25,8 @@
  *   a lasso armed or running, or Alt held over the canvas (the next press
  *   arms one); hotspot at the arrow tip, `crosshair` where custom cursor
  *   images are ignored.
+ * - `"eyedropper"`: a pipette with its tip as the hotspot, picking a colour
+ *   from the drawing (`specs/0017-style-panel-rework`).
  * - anything else: no override (the tool's normal cursor).
  */
 
@@ -59,6 +61,10 @@ const POINTER_ARROW = "M3 3 L3 17 L7 13 L10 20 L12.5 19 L9.5 12 L15 12 Z";
 /** A short wavy trail from the arrow's lower right: the dashed line the maker
  * is about to draw. */
 const LASSO_TRAIL = "M13 18 C15 14 17 14 18 17 C19 20 21 20 22.5 16";
+
+/** The pipette glyph, tip at (2, 22). */
+const EYEDROPPER =
+  "m2 22 1-1h3l9-9 M3 21v-3l9-9 M15 6 l3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z";
 
 /** The built-in resize cursor nearest to a double arrow at `degrees`. */
 export function nearestBuiltInResizeCursor(degrees: number): string {
@@ -105,6 +111,15 @@ export function cursorForHint(hint: string): string | undefined {
   }
   if (hint === "pointer") {
     return "pointer";
+  }
+  if (hint === "eyedropper") {
+    // The pipette, black with a white casing; the hotspot is its tip at the
+    // lower left (`specs/0017-style-panel-rework` UX notes, section 5).
+    return `url("data:image/svg+xml,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 24 24">` +
+        outlined(EYEDROPPER) +
+        `</svg>`,
+    )}") 2 22, crosshair`;
   }
   if (hint.startsWith("skew:")) {
     const degrees = Number.parseFloat(hint.slice("skew:".length));
