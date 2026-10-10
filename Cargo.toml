@@ -38,6 +38,16 @@ pedantic = { level = "warn", priority = -1 }
 unwrap_used = "deny"
 expect_used = "warn"
 
+# Debug builds and test binaries dominated the disk (70 to 90 GB of
+# target/debug per worktree). Line tables keep backtraces and panics readable;
+# dependencies carry no debug info at all. Remove these lines to step through
+# code in a debugger.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [profile.release]
 codegen-units = 1
 lto = true
