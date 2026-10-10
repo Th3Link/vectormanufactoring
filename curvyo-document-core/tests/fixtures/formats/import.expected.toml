@@ -1,0 +1,68 @@
+format = 1
+favourites = ["a3", "a4", "u-keyring", "u-coaster-90", "u-key-tag", "u-round-coaster", "u-letter"]
+
+[enabled]
+slides = true
+
+[[group]]
+id = "u-laser"
+name = "Laser"
+default_orientation = "landscape"
+
+[[group.preset]]
+id = "u-keyring"
+name = "Key ring"
+short_side = 30.0
+long_side = 50.0
+unit = "mm"
+
+[[group.preset]]
+id = "u-coaster-90"
+name = "Coaster"
+note = "Cork"
+short_side = 9.0
+long_side = 9.0
+unit = "cm"
+
+[[group.preset]]
+id = "u-key-tag"
+name = "Key tag"
+short_side = 20.0
+long_side = 60.0
+unit = "mm"
+
+[[group.preset]]
+id = "u-round-coaster"
+name = "Round coaster"
+short_side = 10.0
+long_side = 10.0
+unit = "cm"
+
+[[group]]
+id = "paper"
+
+[[group.preset]]
+id = "u-b5"
+name = "B5"
+short_side = 176.0
+long_side = 250.0
+unit = "mm"
+
+[[group.preset]]
+id = "u-letter"
+name = "Letter"
+short_side = 8.5
+long_side = 11.0
+unit = "in"
+
+[[group]]
+id = "u-embroidery"
+name = "Embroidery"
+default_orientation = "portrait"
+
+[[group.preset]]
+id = "u-hoop-130"
+name = "Hoop 130"
+short_side = 130.0
+long_side = 130.0
+unit = "mm"

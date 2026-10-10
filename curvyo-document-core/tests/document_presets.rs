@@ -96,7 +96,7 @@ fn the_pixel_rule_is_a_ninety_sixth_of_an_inch() {
 
 #[test]
 fn inches_convert_as_254_over_10() {
-    let text = "format = 1\n[[group]]\nid = \"us\"\nname = \"US\"\ndefault_orientation = \"portrait\"\n\
+    let text = "format = 2\n[[group]]\nid = \"us\"\nname = \"US\"\ndefault_orientation = \"portrait\"\n\
         [[group.preset]]\nid = \"letter\"\nname = \"Letter\"\nshort_side = 8.5\nlong_side = 11\nunit = \"in\"\n";
     let list = PresetList::parse(text).unwrap();
     let letter = &list.groups[0].presets[0];
@@ -218,12 +218,12 @@ fn rule_a_text_that_is_not_toml_or_has_an_unknown_key_is_a_syntax_error() {
 }
 
 #[test]
-fn rule_b_format_must_be_one() {
-    for name in ["6b_format_missing.toml", "6b_format_two.toml"] {
+fn rule_b_format_must_be_two() {
+    for name in ["6b_format_missing.toml", "6b_format_one.toml"] {
         let error = error_of(name);
         assert_eq!(
             (error.subject, error.reason),
-            (PresetSubject::File, PresetReason::FormatNotOne)
+            (PresetSubject::File, PresetReason::FormatNotSupported)
         );
     }
 }
@@ -295,9 +295,9 @@ fn rule_d_presets() {
 #[test]
 fn rule_e_the_unit_is_mm_in_or_px() {
     preset_error(
-        "6e_unit_cm.toml",
+        "6e_unit_pt.toml",
         "a4",
-        &PresetReason::UnknownUnit("cm".to_string()),
+        &PresetReason::UnknownUnit("pt".to_string()),
     );
 }
 
@@ -357,7 +357,9 @@ fn rule_h_no_two_presets_have_the_same_size() {
 
 #[test]
 fn a_size_matches_a_preset_in_either_orientation_within_a_hundredth_of_a_millimetre() {
-    let list = shipped();
+    // Slides ship switched off and an off group names no size (`0045` criterion 11).
+    let mut list = shipped();
+    list.groups[1].enabled = true;
     let name = |size: DocumentSize| list.matching(size).map(|(_, p)| p.name.clone());
     assert_eq!(
         name(DocumentSize::from_mm(210.0, 297.0)).as_deref(),

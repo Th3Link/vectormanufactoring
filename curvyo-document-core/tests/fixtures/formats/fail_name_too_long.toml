@@ -1,0 +1,9 @@
+format = 1
+[[group]]
+id = "paper"
+[[group.preset]]
+id = "u-b5"
+name = "A name that is longer than twenty-four characters"
+short_side = 176
+long_side = 250
+unit = "mm"

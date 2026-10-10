@@ -1,0 +1,4 @@
+format = 1
+[[group]]
+id = "u-laser"
+default_orientation = "landscape"
