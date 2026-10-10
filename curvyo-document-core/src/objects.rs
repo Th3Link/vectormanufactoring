@@ -57,6 +57,11 @@ pub enum ObjectEditError {
     /// [`Document::transform_objects`] is not finite: nothing was written.
     #[error("every coordinate and angle must be finite")]
     NonFiniteGeometry,
+    /// A path result given to [`Document::transform_objects`] for an object that
+    /// is still a primitive is not one closed outline of at least two anchors with
+    /// different ids: nothing was written.
+    #[error("a converted shape must be one closed outline of two or more anchors")]
+    InvalidConversion,
 }
 
 /// One object to duplicate with [`Document::duplicate_objects`], and the

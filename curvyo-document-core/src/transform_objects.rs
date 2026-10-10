@@ -11,7 +11,7 @@ use crate::path_codec::{
     self, KEY_HANDLE_IN, KEY_HANDLE_OUT, KEY_POINT, anchor_map_at, node_exists, read_point,
     read_vec2, write_point, write_vec2,
 };
-use crate::path_model::AnchorSnapshot;
+use crate::path_model::{AnchorSnapshot, NewAnchor, PathSnapshot};
 use crate::primitive_model::{ObjectSnapshot, Shape};
 use crate::shape_codec;
 use crate::shape_radii::checked;
@@ -30,6 +30,13 @@ enum Planned<'a> {
     Path {
         meta: loro::LoroMap,
         anchors: Vec<(loro::LoroMovableList, usize, &'a AnchorSnapshot)>,
+        result: &'a ObjectSnapshot,
+    },
+    /// A primitive whose result is a path: its shape keys go and the outline is
+    /// written, under the same id and tree position.
+    Convert {
+        meta: loro::LoroMap,
+        anchors: Vec<NewAnchor>,
         result: &'a ObjectSnapshot,
     },
 }
@@ -71,6 +78,9 @@ impl Document {
     /// [`ObjectEditError::InvalidStrokeWidth`] for a width that is not finite and
     /// above zero (only when `write_stroke_width`);
     /// [`ObjectEditError::InvalidRadius`] for a corner radius that is not finite;
+    /// [`ObjectEditError::InvalidConversion`] for a path result of an object that is
+    /// still a primitive (the conversion) that is not one closed outline of at
+    /// least two anchors with different ids;
     /// [`ObjectEditError::NonFiniteGeometry`] for any other number of a result (a
     /// position, size, handle or rotation) that is not finite: a NaN or an
     /// infinity would be saved as `null`. The gesture layer already refuses such
@@ -116,6 +126,15 @@ impl Document {
                             result,
                         })
                     }
+                    (ObjectSnapshot::Path(path), Some(_)) => {
+                        // A path result for a node that is a primitive now is
+                        // the conversion (`0019` criterion 53).
+                        Ok(Planned::Convert {
+                            meta,
+                            anchors: converted_outline(path)?,
+                            result,
+                        })
+                    }
                     (ObjectSnapshot::Path(path), None) => {
                         let positions = anchor_positions(&meta);
                         let anchors = path
@@ -155,6 +174,15 @@ impl Document {
                     write_anchors(anchors);
                     (meta, result)
                 }
+                Planned::Convert {
+                    meta,
+                    anchors,
+                    result,
+                } => {
+                    shape_codec::strip_primitive_keys(meta);
+                    shape_codec::write_converted_path_fields(meta, anchors);
+                    (meta, result)
+                }
             };
             if path_codec::read_rotation(meta) != result.rotation().normalized() {
                 path_codec::write_rotation(meta, result.rotation());
@@ -166,6 +194,31 @@ impl Document {
         self.commit_with_label("transform_objects");
         Ok(())
     }
+}
+
+/// The anchors of the outline a converted primitive becomes, or
+/// [`ObjectEditError::InvalidConversion`] unless it is one closed outline of at
+/// least two anchors with different ids.
+fn converted_outline(path: &PathSnapshot) -> Result<Vec<NewAnchor>, ObjectEditError> {
+    let mut ids = std::collections::HashSet::new();
+    if !path.closed
+        || !path.extra_subpaths.is_empty()
+        || path.anchors.len() < 2
+        || !path.anchors.iter().all(|a| ids.insert(a.id))
+    {
+        return Err(ObjectEditError::InvalidConversion);
+    }
+    Ok(path
+        .anchors
+        .iter()
+        .map(|a| NewAnchor {
+            id: a.id,
+            point: a.point,
+            handle_in: a.handle_in,
+            handle_out: a.handle_out,
+            kind: a.kind,
+        })
+        .collect())
 }
 
 /// Whether every number of `object`'s geometry (shape, rotation, anchors and
