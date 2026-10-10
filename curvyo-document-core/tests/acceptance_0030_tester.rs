@@ -80,7 +80,7 @@ fn the_shipped_list_is_exactly_the_table_of_criterion_1() {
 #[test]
 fn px_and_inch_conversions_are_exact() {
     let text = r#"
-format = 1
+format = 2
 [[group]]
 id = "g"
 name = "G"
@@ -253,7 +253,7 @@ fn one_more_block_appears_at_the_expected_index() {
 #[test]
 fn nine_paper_presets_load_in_file_order() {
     let mut s = String::from(
-        "format = 1\n[[group]]\nid = \"paper\"\nname = \"Paper\"\ndefault_orientation = \"portrait\"\n",
+        "format = 2\n[[group]]\nid = \"paper\"\nname = \"Paper\"\ndefault_orientation = \"portrait\"\n",
     );
     for i in 0..9 {
         use std::fmt::Write as _;
@@ -281,7 +281,7 @@ fn nine_paper_presets_load_in_file_order() {
 
 #[test]
 fn groups_keep_file_order_even_when_not_alphabetical() {
-    let s = r#"format = 1
+    let s = r#"format = 2
 [[group]]
 id = "z"
 name = "Zed"
@@ -313,7 +313,7 @@ default_orientation = "portrait"
 
 fn one_preset(fields: &str) -> String {
     format!(
-        "format = 1\n[[group]]\nid = \"g\"\nname = \"G\"\ndefault_orientation = \"portrait\"\n[[group.preset]]\n{fields}\n"
+        "format = 2\n[[group]]\nid = \"g\"\nname = \"G\"\ndefault_orientation = \"portrait\"\n[[group.preset]]\n{fields}\n"
     )
 }
 
@@ -336,11 +336,11 @@ fn rule_a_not_toml_and_unknown_keys_at_every_level() {
     assert!(matches!(e.reason, PresetReason::Syntax(_)), "{e:?}");
     assert_eq!(e.subject, PresetSubject::File);
     // unknown top-level key
-    let e = err(&format!("{}\nbogus = 1\n", "format = 1"));
+    let e = err(&format!("{}\nbogus = 1\n", "format = 2"));
     assert!(matches!(e.reason, PresetReason::Syntax(_)), "{e:?}");
     // typo in a group key
     let e = err(
-        "format = 1\n[[group]]\nid=\"g\"\nname=\"G\"\ndefault_orientation=\"portrait\"\ndefault_orientaton=\"x\"\n",
+        "format = 2\n[[group]]\nid=\"g\"\nname=\"G\"\ndefault_orientation=\"portrait\"\ndefault_orientaton=\"x\"\n",
     );
     assert!(matches!(e.reason, PresetReason::Syntax(_)), "{e:?}");
     // typo in a preset key
@@ -353,14 +353,14 @@ fn rule_a_not_toml_and_unknown_keys_at_every_level() {
 
 #[test]
 fn rule_b_format_missing_or_not_one() {
-    let body = &one_preset(good_fields())["format = 1\n".len()..];
+    let body = &one_preset(good_fields())["format = 2\n".len()..];
     let e = err(body);
-    assert_eq!(e.reason, PresetReason::FormatNotOne);
+    assert_eq!(e.reason, PresetReason::FormatNotSupported);
     assert_eq!(e.subject, PresetSubject::File);
-    for bad in ["format = 2\n", "format = 0\n", "format = -1\n"] {
+    for bad in ["format = 1\n", "format = 0\n", "format = -1\n"] {
         assert_eq!(
             err(&format!("{bad}{body}")).reason,
-            PresetReason::FormatNotOne
+            PresetReason::FormatNotSupported
         );
     }
     // wrong type
@@ -371,7 +371,7 @@ fn rule_b_format_missing_or_not_one() {
 #[test]
 fn rule_c_group_rules() {
     let preset = "[[group.preset]]\nid=\"p\"\nname=\"P\"\nshort_side=1\nlong_side=2\nunit=\"mm\"\n";
-    let mk = |head: &str| format!("format = 1\n[[group]]\n{head}\n{preset}");
+    let mk = |head: &str| format!("format = 2\n[[group]]\n{head}\n{preset}");
     // missing id / name / default_orientation
     assert!(matches!(
         err(&mk("name=\"G\"\ndefault_orientation=\"portrait\"")).reason,
@@ -399,12 +399,12 @@ fn rule_c_group_rules() {
         );
     }
     // group without a preset
-    let e = err("format = 1\n[[group]]\nid=\"g\"\nname=\"G\"\ndefault_orientation=\"portrait\"\n");
+    let e = err("format = 2\n[[group]]\nid=\"g\"\nname=\"G\"\ndefault_orientation=\"portrait\"\n");
     assert_eq!(e.reason, PresetReason::EmptyGroup);
     assert_eq!(e.subject, PresetSubject::Group("g".into()));
     // duplicate group id
     let dup = format!(
-        "format = 1\n[[group]]\nid=\"g\"\nname=\"G\"\ndefault_orientation=\"portrait\"\n{preset}[[group]]\nid=\"g\"\nname=\"H\"\ndefault_orientation=\"portrait\"\n[[group.preset]]\nid=\"q\"\nname=\"Q\"\nshort_side=5\nlong_side=6\nunit=\"mm\"\n"
+        "format = 2\n[[group]]\nid=\"g\"\nname=\"G\"\ndefault_orientation=\"portrait\"\n{preset}[[group]]\nid=\"g\"\nname=\"H\"\ndefault_orientation=\"portrait\"\n[[group.preset]]\nid=\"q\"\nname=\"Q\"\nshort_side=5\nlong_side=6\nunit=\"mm\"\n"
     );
     let e = err(&dup);
     assert_eq!(e.reason, PresetReason::DuplicateGroupId);
@@ -433,7 +433,7 @@ fn rule_d_preset_fields_and_duplicate_ids_across_groups() {
         );
     }
     // Same id inside one group and across two groups.
-    let across = "format = 1\n[[group]]\nid=\"g1\"\nname=\"G\"\ndefault_orientation=\"portrait\"\n[[group.preset]]\nid=\"p\"\nname=\"P\"\nshort_side=1\nlong_side=2\nunit=\"mm\"\n[[group]]\nid=\"g2\"\nname=\"H\"\ndefault_orientation=\"portrait\"\n[[group.preset]]\nid=\"p\"\nname=\"Q\"\nshort_side=5\nlong_side=6\nunit=\"mm\"\n";
+    let across = "format = 2\n[[group]]\nid=\"g1\"\nname=\"G\"\ndefault_orientation=\"portrait\"\n[[group.preset]]\nid=\"p\"\nname=\"P\"\nshort_side=1\nlong_side=2\nunit=\"mm\"\n[[group]]\nid=\"g2\"\nname=\"H\"\ndefault_orientation=\"portrait\"\n[[group.preset]]\nid=\"p\"\nname=\"Q\"\nshort_side=5\nlong_side=6\nunit=\"mm\"\n";
     let e = err(across);
     assert_eq!(e.reason, PresetReason::DuplicatePresetId);
     assert_eq!(e.subject, PresetSubject::Preset("p".into()));
@@ -444,7 +444,7 @@ fn rule_d_preset_fields_and_duplicate_ids_across_groups() {
 
 #[test]
 fn rule_e_unit() {
-    for bad in ["cm", "MM", "pt", "", "px "] {
+    for bad in ["ft", "MM", "pt", "", "px "] {
         let e = err(&one_preset(&format!(
             "id=\"p\"\nname=\"P\"\nshort_side=1\nlong_side=2\nunit=\"{bad}\"\n"
         )));
@@ -555,12 +555,12 @@ fn rule_g_ids_names_notes() {
         PresetReason::NoteTooLong
     );
     // group id
-    let g = "format = 1\n[[group]]\nid=\"G_1\"\nname=\"G\"\ndefault_orientation=\"portrait\"\n[[group.preset]]\nid=\"p\"\nname=\"P\"\nshort_side=1\nlong_side=2\nunit=\"mm\"\n";
+    let g = "format = 2\n[[group]]\nid=\"G_1\"\nname=\"G\"\ndefault_orientation=\"portrait\"\n[[group.preset]]\nid=\"p\"\nname=\"P\"\nshort_side=1\nlong_side=2\nunit=\"mm\"\n";
     let e = err(g);
     assert_eq!(e.reason, PresetReason::BadId);
     assert!(matches!(e.subject, PresetSubject::Group(_)));
     // group name
-    let g = "format = 1\n[[group]]\nid=\"g\"\nname=\"\"\ndefault_orientation=\"portrait\"\n[[group.preset]]\nid=\"p\"\nname=\"P\"\nshort_side=1\nlong_side=2\nunit=\"mm\"\n";
+    let g = "format = 2\n[[group]]\nid=\"g\"\nname=\"\"\ndefault_orientation=\"portrait\"\n[[group.preset]]\nid=\"p\"\nname=\"P\"\nshort_side=1\nlong_side=2\nunit=\"mm\"\n";
     assert_eq!(err(g).reason, PresetReason::BadName);
 }
 
@@ -573,7 +573,7 @@ fn rule_h_same_size_within_tolerance() {
             "[[group.preset]]\nid=\"q\"\nname=\"Q\"\nshort_side={sb}\nlong_side={lb}\nunit=\"{ub}\"\n"
         );
         let head =
-            "format = 1\n[[group]]\nid=\"g\"\nname=\"G\"\ndefault_orientation=\"portrait\"\n";
+            "format = 2\n[[group]]\nid=\"g\"\nname=\"G\"\ndefault_orientation=\"portrait\"\n";
         let first = format!(
             "[[group.preset]]\nid=\"p\"\nname=\"P\"\nshort_side={sa}\nlong_side={la}\nunit=\"{ua}\"\n"
         );
@@ -609,7 +609,7 @@ fn rule_h_same_size_within_tolerance() {
 #[test]
 fn the_error_names_the_offender() {
     let e = err(&one_preset(
-        "id=\"bad-one\"\nname=\"P\"\nshort_side=1\nlong_side=2\nunit=\"cm\"\n",
+        "id=\"bad-one\"\nname=\"P\"\nshort_side=1\nlong_side=2\nunit=\"pt\"\n",
     ));
     assert_eq!(e.subject, PresetSubject::Preset("bad-one".into()));
     let text = format!("{e}");
@@ -620,26 +620,28 @@ fn the_error_names_the_offender() {
 fn hostile_inputs_do_not_panic() {
     for t in [
         "\u{0}",
-        "format = 1\n[[group]]\n[[group.preset]]\n",
-        "format = 1\n[group]\nid = 1\n",
-        "format = 1\n[[group]]\nid = \"g\"\nname = \"G\"\ndefault_orientation = \"portrait\"\npreset = 3\n",
+        "format = 2\n[[group]]\n[[group.preset]]\n",
+        "format = 2\n[group]\nid = 1\n",
+        "format = 2\n[[group]]\nid = \"g\"\nname = \"G\"\ndefault_orientation = \"portrait\"\npreset = 3\n",
         "format = 99999999999999999999\n",
-        "format = 1\ngroup = []\n",
-        "format = 1\n[[group]]\nid=\"g\"\nname=\"G\"\ndefault_orientation=\"portrait\"\n[[group.preset]]\nid=\"p\"\nname=\"P\"\nshort_side=1e308\nlong_side=1e309\nunit=\"mm\"\n",
+        "format = 2\ngroup = []\n",
+        "format = 2\n[[group]]\nid=\"g\"\nname=\"G\"\ndefault_orientation=\"portrait\"\n[[group.preset]]\nid=\"p\"\nname=\"P\"\nshort_side=1e308\nlong_side=1e309\nunit=\"mm\"\n",
     ] {
         let _ = PresetList::parse(t);
     }
     let big = "x".repeat(1_000_000);
     let _ = PresetList::parse(&big);
     let many = "[[group]]\n".repeat(10_000);
-    let _ = PresetList::parse(&format!("format = 1\n{many}"));
+    let _ = PresetList::parse(&format!("format = 2\n{many}"));
 }
 
 // ------------------------------------------------- matching / Orientation
 
 #[test]
 fn matching_follows_the_tolerance_and_both_orientations() {
-    let list = shipped();
+    // Slides ship switched off and an off group names no size (`0045` criterion 11).
+    let mut list = shipped();
+    list.groups[1].enabled = true;
     let name = |w: f64, h: f64| {
         list.matching(DocumentSize::from_mm(w, h))
             .map(|(_, p)| p.name.clone())

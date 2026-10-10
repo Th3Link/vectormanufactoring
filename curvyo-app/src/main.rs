@@ -16,6 +16,7 @@
 // to the stricter rule.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+mod formats;
 mod menu;
 mod state;
 
@@ -226,6 +227,11 @@ fn main() {
             take_pending_open,
             confirm_project_opened,
             save_project_bytes,
+            formats::read_formats_file,
+            formats::write_formats_file,
+            formats::set_formats_file_aside,
+            formats::import_formats_file,
+            formats::export_formats_file,
         ])
         .setup(|app| {
             let handle = app.handle().clone();

@@ -26,11 +26,14 @@ mod box_refit_tests;
 mod close_path;
 mod colour_pick;
 mod combine;
+mod conversion_view;
 mod corner_readout;
 mod document;
 mod document_presets;
 mod draw;
+mod formats;
 mod frame;
+mod group_view;
 mod keys;
 mod move_entry;
 mod move_indicators;
@@ -39,12 +42,15 @@ mod node;
 mod nudge;
 mod object_cache;
 mod open_error;
+mod panel_tabs;
 mod pen;
 mod refusal;
 mod ruler;
 mod select;
 mod select_bar;
+mod select_cursor;
 mod select_gesture;
+mod select_readout;
 mod select_view;
 mod shapes;
 mod style;
@@ -65,8 +71,10 @@ pub use close_path::{ClosePathOutcome, ClosePathState};
 pub use combine::{BreakApartOutcome, CombineOutcome};
 pub use document::{DocumentSide, FitOutcome, SizeOutcome};
 pub use document_presets::DocumentPresetsRecord;
+pub use formats::{FormTexts, FormatEdit};
 pub use keys::{EscapeStep, KeyHint, KeyInput, KeyOutcome};
 pub use move_indicators::MoveIndicators;
+pub use panel_tabs::{PanelTabsRecord, PanelView};
 pub use select::DoubleClickHint;
 #[cfg(target_arch = "wasm32")]
 pub use style_view::StylePanelView;
@@ -148,8 +156,13 @@ pub struct Session {
     style: StyleEditor,
     /// The eyedropper (`colour_pick.rs`).
     colour_pick: colour_pick::ColourPick,
-    /// The document size presets (`document_presets.rs`).
-    presets: curvyo_document_core::PresetList,
+    /// The document formats: the built-in list with the maker's file over it
+    /// (`formats.rs`).
+    formats: curvyo_document_core::FormatLibrary,
+    /// Why the maker's formats file could not be read, while it cannot.
+    formats_broken: Option<String>,
+    /// The Properties panel's active tab (`panel_tabs.rs`).
+    panel_tabs: std::cell::Cell<curvyo_ui_core::PanelTabs>,
     /// Pan/zoom view state (ADR 0009 §2: ephemeral — never written to
     /// the document, resets on `New`/`Open`).
     viewport: Viewport,
@@ -224,9 +237,11 @@ impl Session {
             // selection tool exists").
             tool: Tool::Select,
             style: StyleEditor::default(),
-            // The tests load the shipped file, so the error branch is
-            // unreachable; an empty list would only hide the buttons.
-            presets: curvyo_document_core::PresetList::shipped().unwrap_or_default(),
+            formats: Self::builtin_formats(),
+            formats_broken: None,
+            // A new or opened project starts with an empty selection
+            // (`specs/0043-properties-tabs/` criterion 5, 11).
+            panel_tabs: std::cell::Cell::new(curvyo_ui_core::PanelTabs::new(false)),
             colour_pick: colour_pick::ColourPick::default(),
             viewport: Viewport::new(),
             hovered: None,
@@ -262,9 +277,11 @@ impl Session {
             selection: ObjectSelection::new(),
             tool: Tool::Select,
             style: StyleEditor::default(),
-            // The tests load the shipped file, so the error branch is
-            // unreachable; an empty list would only hide the buttons.
-            presets: curvyo_document_core::PresetList::shipped().unwrap_or_default(),
+            formats: Self::builtin_formats(),
+            formats_broken: None,
+            // A new or opened project starts with an empty selection
+            // (`specs/0043-properties-tabs/` criterion 5, 11).
+            panel_tabs: std::cell::Cell::new(curvyo_ui_core::PanelTabs::new(false)),
             colour_pick: colour_pick::ColourPick::default(),
             viewport: Viewport::new(),
             hovered: None,

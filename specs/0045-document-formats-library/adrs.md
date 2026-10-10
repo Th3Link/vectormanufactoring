@@ -143,3 +143,13 @@ Milestones 2 and 3 start after 0043 and 0040 merge: they share
    comments.
 2. Criterion 31 ("not built here"): the browser fallback costs about ten
    lines in `host.ts` and keeps the public demo working. Built (decision 5).
+
+## Notes added during the build (2026-10-10)
+
+- Built-in group ids are never removed, because a user file may append formats to one (collision rule
+  between a later built-in format and a maker's format: `docs/technical-debt.md`, "The user formats file
+  depends on the built-in list").
+- An empty or blank user file means "no formats of the maker's", not the broken-file state.
+- An import joins a group of the maker's by name (ignoring case) or any group by id; a foreign id (one that
+  does not start with `u-`) is replaced by a generated `u-` id.
+

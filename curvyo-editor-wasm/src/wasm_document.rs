@@ -6,10 +6,11 @@
 //! `Session`.
 
 use curvyo_document_core::{DisplayUnit, Orientation};
-use curvyo_ui_core::PanelContent;
 use wasm_bindgen::prelude::*;
 
-use crate::session::{DocumentPresetsRecord, DocumentSide, FitOutcome, SizeOutcome};
+use crate::session::{
+    DocumentPresetsRecord, DocumentSide, FitOutcome, PanelTabsRecord, SizeOutcome,
+};
 use crate::wasm_api::WasmSession;
 
 fn side_from_str(name: &str) -> Option<DocumentSide> {
@@ -31,17 +32,27 @@ fn outcome_word(outcome: SizeOutcome) -> String {
 
 #[wasm_bindgen]
 impl WasmSession {
-    /// What the Properties panel shows: `"document"` (nothing selected),
-    /// `"style"` (something selected) or `"empty"` (the Pen has an unfinished
-    /// path).
-    #[must_use]
-    pub fn panel_content(&self) -> String {
-        match self.session.panel_content() {
-            PanelContent::Document => "document",
-            PanelContent::Style => "style",
-            PanelContent::Empty => "empty",
-        }
-        .to_string()
+    /// What the Properties panel shows: the body (`"document"`, `"style"` or
+    /// `"empty"`), the active tab and the strip. Reading it lets the tab rule
+    /// see a change of selection, so the tab changes in the same frame.
+    pub fn panel_view(&self) -> PanelTabsRecord {
+        PanelTabsRecord::new(&self.session.panel_view())
+    }
+
+    /// A press on the tab `name` (`"document"` or `"style"`): `false` when
+    /// nothing changed (the dimmed Style tab, an unknown name).
+    pub fn press_panel_tab(&mut self, name: &str) -> bool {
+        self.session.press_panel_tab(name)
+    }
+
+    /// Shift+Ctrl+F: Style with a selection, Document without.
+    pub fn panel_shortcut_style(&mut self) {
+        self.session.panel_shortcut_style();
+    }
+
+    /// Shift+Ctrl+D: the Document tab.
+    pub fn panel_shortcut_document(&mut self) {
+        self.session.panel_shortcut_document();
     }
 
     /// The display unit's symbol: `"mm"`, `"cm"` or `"in"`.

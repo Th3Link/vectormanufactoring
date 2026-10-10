@@ -168,7 +168,7 @@ export function ToolRail({
               active={tool === "rectangle"}
               label="Rectangle tool"
               shortcut={letterActsOnSelection ? "Esc, R" : "R"}
-              hint="Shift: from centre. Ctrl: square or circle"
+              hint="Shift: from center. Ctrl: square or circle"
               icon={<Square size={20} />}
               onSelect={onSelect}
               onReturnFocus={onReturnFocus}
@@ -178,7 +178,7 @@ export function ToolRail({
               active={tool === "ellipse"}
               label="Ellipse tool"
               shortcut="E"
-              hint="Shift: from centre. Ctrl: square or circle"
+              hint="Shift: from center. Ctrl: square or circle"
               icon={<CircleIcon size={20} />}
               onSelect={onSelect}
               onReturnFocus={onReturnFocus}

@@ -198,8 +198,9 @@ fn a_rotation_writes_the_rotation_and_a_resize_the_radius_never_the_frame_angle(
 
         select_first_vertex(&mut session, id);
         assert_eq!(key(&mut session, "s"), KeyOutcome::EntryOpened);
-        assert_eq!(session.transform_entry().unwrap().kind, "radius");
-        session.commit_transform_entry("30", "", 0);
+        // `0019` criterion 56: W and H of the frame square, 60 x 60 is a radius of 30.
+        assert_eq!(session.transform_entry().unwrap().kind, "size");
+        session.commit_transform_entry("60", "60", 0);
         let grown = primitive(&session, id);
         assert_eq!(grown.rotation, turned.rotation);
         assert_eq!(

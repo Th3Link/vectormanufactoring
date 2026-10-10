@@ -5,11 +5,13 @@
 //! out of `select_tool.rs`; a child module, so it shares `SelectTool`'s
 //! private state.
 
-use curvyo_document_core::{Document, ObjectSnapshot, Point, Tolerance};
+use curvyo_document_core::{Document, ObjectSnapshot, PathSnapshot, Point, Tolerance};
 
 use super::{SelectDoubleClickOutcome, SelectDrag, SelectTool, sole_selected};
 use crate::ResizeDirection;
 use crate::anchor_id_minter::AnchorIdMinter;
+use crate::conversion::{ConversionCounts, converted_counts};
+use crate::group_entry::GroupEntry;
 use crate::hit_test_object::hit_test_object;
 use crate::move_entry::MoveEntry;
 use crate::object_selection::ObjectSelection;
@@ -33,6 +35,8 @@ pub(super) enum OpenEntry {
     Skew(SkewEntry),
     /// A typed move (relative or absolute).
     Move(MoveEntry),
+    /// An angle, size or skew of a multi-selection.
+    Group(GroupEntry),
 }
 
 /// How the move chip reads its two fields at Enter: its mode switch and its
@@ -68,18 +72,36 @@ pub enum EntryKey {
 pub enum KeyEntryRefusal {
     /// Nothing is selected.
     NothingSelected,
-    /// Several objects are selected; a typed value needs exactly one.
-    SeveralSelected,
-    /// K or Shift+K with one selected object that is not a path.
+    /// K or Shift+K with a selection that holds an object that is not a path.
     SkewNeedsPath,
 }
 
+/// The shapes a commit of the one object `start` turned into paths: it was a
+/// primitive and the document holds a path under its id now.
+fn single_conversion(document: &Document, start: &ObjectSnapshot) -> ConversionCounts {
+    document
+        .object(start.id())
+        .map(|now| converted_counts(std::slice::from_ref(start), &[now]))
+        .unwrap_or_default()
+}
+
 impl OpenEntry {
+    /// The paths this entry would turn shapes into, for the session to give real
+    /// anchor ids ([`SelectTool::mint_conversion_ids`]).
+    pub(super) fn converted_paths_mut(&mut self) -> &mut [Option<PathSnapshot>] {
+        match self {
+            Self::Group(entry) => entry.converted_mut(),
+            Self::Transform(entry) => entry.converted_mut(),
+            Self::Param(_) | Self::Skew(_) | Self::Move(_) => &mut [],
+        }
+    }
+
     pub(super) fn handle(&self) -> EditHandle {
         match self {
             Self::Transform(entry) => entry.handle(),
             Self::Param(entry) => entry.handle(),
             Self::Skew(entry) => entry.handle(),
+            Self::Group(entry) => entry.handle(),
             Self::Move(_) => EditHandle::Move,
         }
     }
@@ -143,7 +165,11 @@ impl SelectTool {
     /// handle is highlighted (`edit-interaction-polish` criterion 59).
     #[must_use]
     pub fn centre_chip_open(&self) -> bool {
-        matches!(&self.entry, Some(OpenEntry::Transform(entry)) if entry.centre_chip())
+        match &self.entry {
+            Some(OpenEntry::Transform(entry)) => entry.centre_chip(),
+            Some(OpenEntry::Group(entry)) => entry.centre_chip(),
+            _ => false,
+        }
     }
 
     /// Closes the numeric entry without writing (criterion 20): idempotent.
@@ -165,16 +191,29 @@ impl SelectTool {
         let Some(entry) = self.entry.as_ref() else {
             return EntryOutcome::Unchanged;
         };
+        let mut converted = ConversionCounts::default();
         let outcome = match entry {
-            OpenEntry::Transform(entry) => entry.commit(document, texts, last_edited),
+            OpenEntry::Transform(entry) => {
+                let outcome = entry.commit(document, texts, last_edited);
+                if outcome == EntryOutcome::Committed {
+                    converted = single_conversion(document, entry.object());
+                }
+                outcome
+            }
             OpenEntry::Param(entry) => entry.commit(document, texts[0]),
             OpenEntry::Skew(entry) => entry.commit(document, texts[0]),
+            OpenEntry::Group(entry) => {
+                let (outcome, counts) = entry.commit_counting(document, texts, last_edited);
+                converted = counts;
+                outcome
+            }
             // The typed move has its own commit: it needs the mode.
             OpenEntry::Move(_) => EntryOutcome::Unchanged,
         };
         if !matches!(outcome, EntryOutcome::Invalid { .. }) {
             self.entry = None;
         }
+        self.record_conversion(converted);
         outcome
     }
 
@@ -228,7 +267,11 @@ impl SelectTool {
         let object = match selection.ids() {
             [] => return Err(KeyEntryRefusal::NothingSelected),
             [_] => sole_selected(objects, selection).ok_or(KeyEntryRefusal::NothingSelected)?,
-            _ => return Err(KeyEntryRefusal::SeveralSelected),
+            _ => {
+                let group =
+                    Self::group_of(objects, selection).ok_or(KeyEntryRefusal::NothingSelected)?;
+                return self.open_group_entry_for_key(objects, selection, &group, key);
+            }
         };
         let box_ = oriented_bounds(object);
         let skew = |side| {
@@ -283,6 +326,16 @@ impl SelectTool {
     ) -> SelectDoubleClickOutcome {
         let (shift, ctrl) = modifiers;
         self.drag = SelectDrag::None;
+        // A multi-selection: its group handles (criterion 47); anywhere else the
+        // double-click is the one of an object.
+        if selection.ids().len() >= 2 {
+            if let Some(outcome) =
+                self.group_double_click(objects, selection, point, handle_tolerances, modifiers)
+            {
+                return outcome;
+            }
+            return double_click(objects, point, tolerance);
+        }
         // Kept (not consumed): a rapid third press is another double-click on
         // the same handle and keeps its entry.
         let first_press_handle = self.last_press_handle;
@@ -429,7 +482,7 @@ mod tests {
     /// The size entry of a polygon or star is the outer radius, as for the
     /// double-click route.
     #[test]
-    fn s_on_a_polygon_or_star_opens_the_outer_radius() {
+    fn s_on_a_polygon_or_star_opens_the_size_entry() {
         let document = Document::new(1);
         let frame = StarFrame {
             center: Point::new(0.0, 0.0),
@@ -446,14 +499,17 @@ mod tests {
             let (tool, result) = open(&document, &[id], EntryKey::Size);
             assert_eq!(result, Ok(()));
             let entry = tool.entry().expect("an entry");
-            assert_eq!(entry.kind(), EntryKind::OuterRadius);
-            assert_eq!(entry.fields()[0].prefill, "12.0");
+            // `0019` criterion 56: W and H of the frame square, not one radius.
+            assert_eq!(entry.kind(), EntryKind::Size);
+            assert_eq!(entry.fields()[0].prefill, "24.0");
+            assert_eq!(entry.fields()[1].prefill, "24.0");
         }
     }
 
-    /// Criterion 59: nothing or several selected refuse and open nothing.
+    /// Criterion 59: nothing selected refuses and opens nothing; several selected
+    /// open the entry of the group box (`multi-object-transform` criteria 33, 34).
     #[test]
-    fn nothing_or_several_selected_refuse_and_open_nothing() {
+    fn nothing_selected_refuses_and_several_open_the_group_entry() {
         let document = Document::new(1);
         let a = rect_at(&document, 0.0, 10.0);
         let b = rect_at(&document, 20.0, 10.0);
@@ -462,8 +518,9 @@ mod tests {
             assert_eq!(result, Err(KeyEntryRefusal::NothingSelected));
             assert!(!tool.has_entry());
             let (tool, result) = open(&document, &[a, b], key);
-            assert_eq!(result, Err(KeyEntryRefusal::SeveralSelected));
-            assert!(!tool.has_entry());
+            assert_eq!(result, Ok(()));
+            assert!(tool.has_entry());
+            assert!(tool.group_entry().is_some());
         }
     }
 

@@ -1,0 +1,10 @@
+format = 1
+[[group]]
+id = "paper"
+[[group.preset]]
+id = "u-b5"
+name = "B5"
+note = "A note that goes on and on and on and on and on and on and on and on"
+short_side = 176
+long_side = 250
+unit = "mm"

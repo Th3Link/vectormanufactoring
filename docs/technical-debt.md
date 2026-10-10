@@ -260,11 +260,11 @@ removed without a migration: the oriented box of a polygon or star turns by
 is the number in the readout. The two registers stay; `StarFrame.angle` plus
 `rotation` is still the stored form until the affine story. Two consequences stay
 open: in box-local coordinates the first outer vertex of a polygon or star is at
-angle 0 (handles never add `StarFrame.angle`), and "Object to path" drops the frame
-angle, so the converted path's `rotation` is the register alone and its readout
-and box direction can differ from the shape's before the conversion. Fix that
-with one more argument to `convert_to_paths` (write `orientation()` as the path's
-`rotation`) when someone asks. See `specs/0012-polygon-star-box-refit/adrs.md`.
+angle 0 (handles never add `StarFrame.angle`). The second one, "Object to path"
+dropping the frame angle, is fixed by `multi-object-transform` (2026-10-10):
+`Document::convert_to_paths` and the conversion of a stretch both write
+`orientation()` as the path's `rotation`, so its readout and box direction do not
+change. See `specs/0012-polygon-star-box-refit/adrs.md`.
 
 ## Undo cannot reach a collaborator's change
 
@@ -348,7 +348,11 @@ between a major tick and the start of its label, because the tester's
 label start positions from `RulerView` instead of tick positions and delete
 the TypeScript copy together with that test's import.
 
-## `panel_content` needs the active tool when 0017 is built
+## `panel_content` needs the active tool when 0017 is built (Done)
+
+**Done (0043, 2026-10-10):** superseded by `panel_body(active, pen_unfinished, scope)` in
+`curvyo-ui-core/src/panel_content.rs` and the tab rule in `panel_tabs.rs`. The text below is the
+original entry.
 
 `curvyo-ui-core::panel_content` decides Document, Style or Empty from the
 object selection and the Pen's unfinished path only. `0017-style-panel-rework`
@@ -719,6 +723,65 @@ and `build_select_draw_list`). Ctrl+A with 5,000 objects is therefore drawn in a
 before `0019`'s group box replaces the per-object boxes, which is above the 100 ms of `0044`
 criterion 5; the artwork cache stays deferred until that number is measured again on top of the
 group box.
+
+
+**Measured 2026-10-10 (`multi-object-transform`, release build, same machine,
+`curvyo-editor-wasm/tests/multi_object_transform_budgets.rs`):** a straight
+segment (both handles zero) was sent to `lyon` as a cubic with its control
+points on its ends. `lyon` flattens such a degenerate curve into more pieces, and
+into a different number at another position, so the blue outline of a scaled or
+turned selection cost 1.4 times that of a moved one (the architect's
+criterion 48 allows 1.1) and a frame at 200 objects took 6.4 ms. Drawing a
+handle-less segment with `line_to` (`curvyo-render-core/src/stroke.rs`) cuts the
+triangles of the 200-object frame from 88,000 to 36,000, the frame to 4.3 ms,
+and makes scale, rotate and move equal. This also lowers the frame at rest; the
+draw-list cache above is still the larger item. Re-measured with the older
+benchmark (`unified_object_editing.rs`, release, same machine): the 200-object
+move frame is 7.1 ms (was 13.8 to 15.6 ms), so the architect's 8 ms budget of
+`unified-object-editing` criterion 15 is met now; a frame at rest is 15.0 ms.
+
+## `curvyo-ui-core/src/transform_entry.rs` is past the size limit
+
+548 non-test lines (`CLAUDE.md` section 5: about 500). `multi-object-transform`
+did not grow it: its entries are in `group_entry.rs`. Split the number parser and
+`EntryField` from the entry state when the next story touches it.
+
+## The single-object writers accept NaN and infinity
+
+`Document::set_rect_bounds`, `move_anchors`, `translate_objects`, `rotate_object`
+and the `resize_*` commands do not check that the numbers they are given are
+finite: a NaN or an infinity is stored as `null` in the saved file. The gesture
+layer (`ui-core`'s `is_sane`) refuses such results, so no caller produces them
+today. `Document::transform_objects` (`multi-object-transform`) does check, and
+refuses the whole call with `ObjectEditError::NonFiniteGeometry` before it writes.
+Give the older writers the same check when one of them gets a second caller that
+does not go through the gesture layer (ADR 0004, "never write a value that reopens
+as damaged").
+
+## Notes on the multi-object transform (merged with the path tools)
+
+- The cursor over a selected object's outline in a multi-selection stays
+  `default`: the single-object `move` cursor over a selection is not shown for
+  several (`select_cursor.rs`). Not a regression, a gap in criterion 46.
+
+## A path result for a primitive is a conversion: a risk for undo-redo (0020)
+
+`Document::transform_objects` takes a path result for a node that is a primitive now as
+the conversion of a stretch (`specs/0019-multi-object-transform/adrs.md`, decision 8). It
+cannot tell an intended conversion from a stale path snapshot. Today nothing turns a path
+back into a primitive, so it is safe. Once undo restores a primitive while a gesture is in
+flight, a stale path result would silently convert it again. `undo-redo` must cancel the
+gestures in flight, or the conversion must carry an explicit intent.
+
+## One peer's delete refuses a whole multi-object commit
+
+`Document::transform_objects` resolves every object before it writes and refuses
+the whole call if one is gone (`ObjectEditError::NoSuchObject`), so a selection
+transformed while a peer deletes one of its objects is not transformed at all,
+and the maker's drag is lost. A Select drag holds the snapshot it started with
+and no merge runs during a drag today (the `Session.drag_objects` note above), so
+this cannot happen yet. When sync reaches the session, skip missing objects
+instead of refusing (`specs/0019-multi-object-transform/adrs.md`, decision 5).
 
 ## The canvas does not react to a `devicePixelRatio` change with no resize event
 
@@ -1238,11 +1301,6 @@ of the Select bar (click-through, 3 s or 8 s).
   edit history"). **Resolution:** `0020` calls `Document::continue_step()` at the marked place in
   `curvyo-ui-core/src/nudge.rs` (`nudge()`); if a selection of thousands still lags, coalesce the
   repeat events of one frame in the frontend.
-- **`Session::key_down` and `key_down_at` are a pair.** `key_down` passes time 0, so a repeat
-  event through it continues any run (only the tests use it). The DOM time stamp is a separate
-  argument because 13 existing tests build `KeyInput` field by field, and #80 and #84 edit the
-  same files. **Resolution:** once #80 and #84 are merged, add `time_ms` to `KeyInput`, delete
-  `key_down_at` and update the literals.
 - **The "Too far from the document. Nothing was changed." text uses the key hint chip.** The
   canvas notice slot of `0020` (UX notes) does not exist yet. **Resolution:** move the text there
   when `0020` builds the slot (`frontend/src/hooks/useEditorSession.ts`, `KEY_HINT_TEXT`).
@@ -1266,3 +1324,34 @@ of the Select bar (click-through, 3 s or 8 s).
   on canvas focus: after a click on a panel control they do nothing until the canvas is clicked or
   tabbed to, with no cue. Existing behaviour, made more visible by `0044`. **Resolution:** a
   separate story for a canvas focus indicator.
+
+
+## The user formats file depends on the built-in list (0045)
+
+`document-formats.toml` is validated against the built-in formats (`0045` criteria 4c and 5:
+ids and sizes are unique across built-in and user entries). A later release that adds a
+built-in format with the id or the size of a maker's format, or removes a built-in group id that
+the file appends to, turns a valid user file into the broken-file state, and every edit is locked.
+Nothing triggers this today; `0045` Question 2 B (shipping a Laser or Embroidery group) and `0046`
+would. **Resolution (before the first built-in addition):** built-in group ids are never removed;
+decide with the product owner how the loader resolves a user and built-in collision (for example the
+user's duplicate is hidden with a notice and the built-in wins); add a test against a "future"
+built-in list.
+
+## 0043 and 0045 review leftovers (2026-10-10)
+
+- **Segmented groups do not select on the arrow keys** (the `ToggleGroup`s and the preset strips): the
+  arrows move focus and Space presses, while `0030` and `0015` say "arrows move and press". Same on
+  `main`; one decision for all groups (UX review N9).
+- **`describe_error` builds UI sentences in `curvyo-document-core`** (`format_library_file.rs`); `0045`
+  `adrs.md` decision 7 puts messages in `ui-core`. It moves next to `import_refusal` together with
+  "Could not save your formats: ..." (now composed in `useFormats.ts`). Not done in the slice because
+  the tester's tests import it from `document-core`; move it with those imports.
+- **Tab strip tooltips open to the left** over the other tab; `side="bottom"` would be kinder (UX N10).
+- **The list jumps by a strip height under the pointer** when a star or a Show switch changes the quick
+  selection with the panel at the top (UX N11); consider scroll anchoring.
+- **List semantics:** the formats list is a `group` with buttons; `role="list"` and `listitem` rows would
+  let a screen reader announce the count (UX N13).
+- **`session/mod.rs` is over 500 lines** (537 non-test lines before the slice); split the glue calls out
+  when the next slice touches it.
+

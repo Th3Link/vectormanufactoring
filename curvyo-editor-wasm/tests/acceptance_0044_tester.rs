@@ -127,15 +127,13 @@ fn ctrl_a(s: &mut Session) -> KeyOutcome {
 }
 
 fn arrow(s: &mut Session, k: &str, shift: bool, repeat: bool, t: f64) -> KeyOutcome {
-    s.key_down_at(
-        KeyInput {
-            key: k,
-            shift,
-            repeat,
-            ..KeyInput::default()
-        },
-        t,
-    )
+    s.key_down(KeyInput {
+        key: k,
+        shift,
+        repeat,
+        time_ms: t,
+        ..KeyInput::default()
+    })
 }
 
 fn select_all(s: &mut Session) {
@@ -919,29 +917,25 @@ fn c11_nothing_selected_other_tools_and_modifiers_leave_the_key_alone() {
         (false, true, true),
     ] {
         assert_eq!(
-            s.key_down_at(
-                KeyInput {
-                    key: "ArrowRight",
-                    ctrl,
-                    alt,
-                    shift,
-                    ..KeyInput::default()
-                },
-                0.0
-            ),
+            s.key_down(KeyInput {
+                key: "ArrowRight",
+                ctrl,
+                alt,
+                shift,
+                time_ms: 0.0,
+                ..KeyInput::default()
+            }),
             KeyOutcome::Ignored,
             "ctrl={ctrl} alt={alt} shift={shift}"
         );
     }
     assert_eq!(
-        s.key_down_at(
-            KeyInput {
-                key: "ArrowRight",
-                dom_blocked: true,
-                ..KeyInput::default()
-            },
-            0.0
-        ),
+        s.key_down(KeyInput {
+            key: "ArrowRight",
+            dom_blocked: true,
+            time_ms: 0.0,
+            ..KeyInput::default()
+        }),
         KeyOutcome::Ignored,
         "a focused field keeps its arrows"
     );

@@ -1,0 +1,9 @@
+format = 1
+[[group]]
+id = "u-laser"
+name = "Laser"
+default_orientation = "landscape"
+[[group]]
+id = "u-laser"
+name = "Laser 2"
+default_orientation = "landscape"

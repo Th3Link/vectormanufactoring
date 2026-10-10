@@ -528,19 +528,19 @@ fn ac07_ellipse_tiers_edge_and_centre_but_no_parameter_handle() {
 #[test]
 fn ac07_polygon_tiers_no_edge_no_parameter_handle() {
     let series = decor_series(|s| star_scene(100, s / 2.0, 8, None, 0.0));
-    assert_tiers("polygon 8", &series, false, true, false);
+    assert_tiers("polygon 8", &series, true, true, false);
     let series = decor_series(|s| star_scene(300, s / 2.0, 12, None, 1.1));
-    assert_tiers("polygon 12 rotated", &series, false, true, false);
+    assert_tiers("polygon 12 rotated", &series, true, true, false);
 }
 
 #[test]
 fn ac07_star_tiers_inner_handle_from_72() {
     let series = decor_series(|s| star_scene(100, s / 2.0, 8, Some(0.9), 0.0));
-    assert_tiers("star 8", &series, false, true, true);
+    assert_tiers("star 8", &series, true, true, true);
     let series = decor_series(|s| star_scene(100, s / 2.0, 4, Some(0.99), 0.0));
-    assert_tiers("star 4 ratio .99", &series, false, true, true);
+    assert_tiers("star 4 ratio .99", &series, true, true, true);
     let series = decor_series(|s| star_scene(800, s / 2.0, 16, Some(0.6), 2.0));
-    assert_tiers("star 16 ratio .6 rotated 800%", &series, false, true, true);
+    assert_tiers("star 16 ratio .6 rotated 800%", &series, true, true, true);
 }
 
 // ---- Criterion 1/2: four knobs at radius 0, at the position rule ----
@@ -1404,15 +1404,17 @@ fn ac19_inner_ratio_field_labels_prefill_and_range() {
     }
 }
 
+/// `0019` criterion 56 replaces the outer radius entry: W and H of the frame square.
 #[test]
-fn ac19_outer_radius_entry_of_polygon_and_star_is_named_outer_radius() {
+fn ac19_size_entry_of_polygon_and_star_has_width_and_height() {
     for ratio in [None, Some(0.5)] {
         let mut sc = star_scene(100, 60.0, 8, ratio, 0.0);
         let h = sc.fr.corner(1.0, 1.0);
         let e = open_entry(&mut sc.s, h, false, false).expect("entry opens");
-        assert_eq!(e.kind, "radius");
-        assert_eq!(e.fields[0].label, "r");
-        assert_eq!(e.fields[0].accessible_name, "Outer radius");
+        assert_eq!(e.kind, "size");
+        assert_eq!(e.fields[0].label, "W");
+        assert_eq!(e.fields[0].accessible_name, "Width");
+        assert_eq!(e.fields[1].accessible_name, "Height");
     }
 }
 
@@ -1434,7 +1436,7 @@ fn ac19_three_accessible_names_never_collide_on_one_selected_kind() {
     }
     assert_eq!(
         names,
-        ["Corner radius, all corners", "Inner ratio", "Outer radius"]
+        ["Corner radius, all corners", "Inner ratio", "Width"]
     );
 }
 
@@ -2309,14 +2311,21 @@ fn ac10_blue_is_a_hollow_outline_of_constant_screen_width() {
         // new top edge sits at y = centre - 50 px, shifted right by 200 px
         let y_mm = sc.fr.c.y - 50.0 / sc.k;
         let x_mm = sc.fr.c.x + (200.0 + 45.0) / sc.k;
-        // Find the extent of blue triangles across the top edge at x_mm
+        // Find the extent of blue triangles across the top edge at x_mm: where the
+        // vertical line through x_mm crosses their sides (a straight edge is one
+        // long quad whose vertices are at its ends, since a handle-less segment is
+        // drawn as a line, so the vertices cannot be sampled near x_mm).
         let mut lo = f64::INFINITY;
         let mut hi = f64::NEG_INFINITY;
         for t in tris_where(&dl, is_blue) {
-            for p in t {
-                if (p.x - x_mm).abs() < 8.0 / sc.k && (p.y - y_mm).abs() < 4.0 / sc.k {
-                    lo = lo.min(p.y);
-                    hi = hi.max(p.y);
+            for i in 0..3 {
+                let (a, b) = (t[i], t[(i + 1) % 3]);
+                if (a.x - x_mm) * (b.x - x_mm) <= 0.0 && (a.x - b.x).abs() > 1e-12 {
+                    let y = a.y + (x_mm - a.x) / (b.x - a.x) * (b.y - a.y);
+                    if (y - y_mm).abs() < 4.0 / sc.k {
+                        lo = lo.min(y);
+                        hi = hi.max(y);
+                    }
                 }
             }
         }
@@ -2890,6 +2899,10 @@ fn ac05_nearest_centre_decides_between_a_knob_and_the_corner_resize_handle() {
 // Criterion 37: two or more selected: no handles
 // =====================================================================
 
+/// Superseded in part by `multi-object-transform` (criterion 37 is kept: no
+/// parameter handle; but a multi-selection now has the transform handles of its
+/// group box). The handles of one object's own box do not respond, except where
+/// the group box has one too.
 #[test]
 fn ac37_two_selected_objects_have_no_transform_or_parameter_handle() {
     let k = k_at_zoom(100);
@@ -2912,18 +2925,17 @@ fn ac37_two_selected_objects_have_no_transform_or_parameter_handle() {
             th: 0.0,
             k,
         };
+        // The first rectangle's own east and south-east spots and its radius
+        // handle spot: the group box (which reaches farther east) has no handle
+        // there, and no parameter handle exists.
         let spots = [
-            fa.corner(-1.0, -1.0),
             fa.corner(1.0, 1.0),
-            fa.mid(0.0, -1.0),
             fa.mid(1.0, 0.0),
             fa.rot_corner(1.0, -1.0),
-            fa.c,
             radius_handle_pos(&fa, (-1.0, -1.0), 0.0),
         ];
         for p in spots {
             let (cur, hnt) = hint(&mut s, p);
-            // the only allowed non-default state: none at all
             assert_eq!(
                 (cur.as_str(), hnt.as_str()),
                 ("default", ""),
@@ -2977,26 +2989,19 @@ fn ac37_delete_removes_every_selected_object_of_any_kind() {
 // Criteria 8 (N/E/S/W-free), 16, 17
 // =====================================================================
 
+/// `0019` criterion 56 supersedes `0009` criterion 8: the four side midpoints of a
+/// polygon's or star's frame square are edge resize handles now (they stretch it and
+/// turn it into a path).
 #[test]
-fn ac08_the_old_north_east_south_west_handles_of_polygon_and_star_are_gone() {
+fn ac08_the_side_midpoints_of_polygon_and_star_are_edge_resize_handles() {
     for ratio in [None, Some(0.5)] {
         let mut sc = star_scene(100, 60.0, 5, ratio, 0.0);
-        // the box of a pentagon is narrower than 2R: E and W lie outside it
         for a in [0.0, PI, -FRAC_PI_2 + PI, FRAC_PI_2 * 3.0] {
             let p = sc.fr.polar(60.0, a);
             let (cur, h) = hint(&mut sc.s, p);
-            assert!(!h.contains("resize") || a == 0.0 || a == PI, "{a}: {h}");
-            let _ = cur;
+            assert!(cur.starts_with("resize:"), "{a}: {cur}");
+            assert_eq!(h, "resize-edge", "{a}");
         }
-        // the E point: 3 px outside the pentagon's box: nothing there
-        let p = sc.fr.polar(60.0, 0.0);
-        let (cur, h) = hint(&mut sc.s, p);
-        assert_eq!(
-            (cur.as_str(), h.as_str()),
-            // Inside the polygon's square box, on no handle: a press moves it.
-            ("move", ""),
-            "E point of the outer circle"
-        );
     }
 }
 
@@ -3101,11 +3106,8 @@ fn ac16_primitives_get_centre_move_rotate_and_typed_entries() {
         let mut sc = mk(0.0);
         let h = sc.fr.corner(1.0, 1.0);
         let e = open_entry(&mut sc.s, h, false, false).expect("size entry");
-        assert_eq!(
-            e.kind,
-            if build >= 2 { "radius" } else { "size" },
-            "kind {build}"
-        );
+        // `0019` criterion 56: a polygon's or star's size entry has W and H too.
+        assert_eq!(e.kind, "size", "kind {build}");
     }
 }
 

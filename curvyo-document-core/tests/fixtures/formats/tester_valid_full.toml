@@ -1,0 +1,43 @@
+# Tester golden: a complete user file (0045 criteria 2, 33, 34).
+format = 1
+favourites = ["a4", "a3", "u-coaster-90", "u-hoop-130"]
+enabled = { slides = true, u-embroidery = false }
+
+[[group]]
+id = "u-laser"
+name = "Laser"
+default_orientation = "landscape"
+
+  [[group.preset]]
+  id = "u-keyring"
+  name = "Key ring"
+  short_side = 30
+  long_side = 50
+  unit = "mm"
+
+  [[group.preset]]
+  id = "u-coaster-90"
+  name = "Coaster"
+  note = "Cork, 90 mm square"
+  short_side = 9
+  long_side = 9
+  unit = "cm"
+
+  [[group.preset]]
+  id = "u-card"
+  name = "Card"
+  short_side = 2
+  long_side = 3.5
+  unit = "in"
+
+[[group]]
+id = "u-embroidery"
+name = "Embroidery"
+default_orientation = "portrait"
+
+  [[group.preset]]
+  id = "u-hoop-130"
+  name = "Hoop 130"
+  short_side = 130
+  long_side = 130
+  unit = "mm"

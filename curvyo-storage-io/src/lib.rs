@@ -10,4 +10,6 @@
 
 mod filesystem;
 
-pub use filesystem::{FsError, read_to_vec, write_atomic};
+pub use filesystem::{
+    FsError, ensure_parent_dir, read_optional, read_to_vec, rename_replacing, write_atomic,
+};

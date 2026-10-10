@@ -1,0 +1,4 @@
+format = 1
+[[group]]
+id = "paper"
+default_orientation = "landscape"

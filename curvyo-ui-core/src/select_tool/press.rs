@@ -84,6 +84,25 @@ pub fn classify_press(
     if PressTarget::arms_lasso(modifiers) {
         return PressTarget::Lasso;
     }
+    // A multi-selection: the handles of its group box, the centre handle last
+    // and only inside its hover region (`specs/0019-multi-object-transform/`
+    // criteria 11, 43 step 2). The box has no hit area of its own, so a press
+    // that hits no handle goes on to the objects (criteria 16, 45).
+    if selection.ids().len() >= 2 {
+        return match SelectTool::group_handle_at(
+            objects,
+            selection,
+            point,
+            handle_tolerances,
+            shift,
+            true,
+        ) {
+            Some((_, EditHandle::Move)) => PressTarget::CentreHandle,
+            Some((_, handle)) => PressTarget::Handle(handle),
+            None => hit_test_object(objects, point, tolerance)
+                .map_or(PressTarget::Empty, PressTarget::Object),
+        };
+    }
     if let Some((_, _, handle)) =
         SelectTool::handle_at(objects, selection, point, handle_tolerances, shift)
     {
@@ -147,6 +166,11 @@ impl SelectTool {
         handle: EditHandle,
         tolerances: &TransformHandleTolerances,
     ) {
+        // The handle of a multi-selection's group box begins a group drag.
+        if selection.ids().len() >= 2 {
+            self.begin_group_press(objects, selection, origin, handle);
+            return;
+        }
         // A handle belongs to the sole selected object, so it exists here.
         let Some(object) = sole_selected(objects, selection) else {
             return;

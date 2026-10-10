@@ -35,8 +35,7 @@ Where #80 or 0020 land first, the seams are named in the tasks.
 
 - [x] 5. `ui-core/nudge.rs`: direction and Shift to a `Vec2`, the continuation decision, tests (AC 7, 9).
 - [x] 6. `offset_within_limit` shared by `MoveEntry::resolve` and the nudge (AC 10).
-- [x] 7. `decide` rows: Ctrl+A and the arrows, with the gate; `Session::key_down_at` carries the DOM time stamp (`KeyInput` keeps its fields, so
-  no existing literal changes); outcomes
+- [x] 7. `decide` rows: Ctrl+A and the arrows, with the gate; `KeyInput::time_ms` carries the DOM time stamp; outcomes
   `SelectedAll`, `Nudged`, `Hint(TooFar)`; table tests (AC 1-3, 6, 7, 11, 13).
 - [x] 8. Session: select all (view state, no commit), nudge through `commit_move`, the run state
   for the readout distance and the live-region text; session tests (AC 1, 2, 4, 8, 9, 10, 12).

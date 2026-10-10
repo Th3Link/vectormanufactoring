@@ -6,7 +6,7 @@ State of this list: 2026-10-10 (the customer renumbered every folder on
 0030 to 0039 and gave the groups half of 0023 its spec; 0040 was added for the
 customer request of 2026-10-10; the customer's undo and history specification of
 2026-10-10 gave 0020 its folder and added 0041 to 0044, and his request for
-customisable document formats and shapes of the same day added 0045 and 0046).
+customisable document formats and shapes of the same day added 0045 and 0046; his three change requests on silent conversion, sliders and the typed move's reference point added 0047).
 
 Spec-driven development, adapted from
 [spec-driven-dev-kit](https://github.com/trojava/spec-driven-dev-kit) for
@@ -59,10 +59,11 @@ from the customer's requests of 2026-10-09; their criteria are complete. 0030,
 `Draft` until `adrs.md` and the UX notes come. 0020 and 0041 to 0046 were
 specified on 2026-10-10 from the customer's texts on undo and history, on
 the panel tabs, and on customisable document formats and shapes; their
-`adrs.md` and UX notes exist since the same day. 0043, 0044 and the rectangular
-part of 0045 are `Ready`. 0020, 0041 and 0042 stay `Draft` until the customer
-accepts ADR 0014 (`docs/adr/0014-history-undo-and-branches.md`, Proposed,
-`needs-customer`, six questions with defaults); 0046 stays a `Draft` sketch.
+`adrs.md` and UX notes exist since the same day. 0043 and the rectangular part
+of 0045 are in progress in #84, 0044 in #87. 0020, 0041 and 0042 stay `Draft`
+until the customer accepts ADR 0014
+(`docs/adr/0014-history-undo-and-branches.md`, Proposed, `needs-customer`,
+seven questions with defaults); 0046 stays a `Draft` sketch.
 Their order, dependencies and conflicts are in "Proposed build order" below.
 
 | No. | Slug | What it delivers | Status | Priority | Requirements | MVP slice |
@@ -71,7 +72,7 @@ Their order, dependencies and conflicts are in "Proposed build order" below.
 | [0016](0016-boolean-operations/) | `boolean-operations` | Union, difference, intersection, exclusion and reverse difference on closed paths, as a command section in the left tool rail; compound-path results. One PR (#73), built as milestones on one branch. The hover preview of the result is not part of it (see "Specified but not built" below). Amended 2026-10-10: the Boolean operations become their own toolbox card (small `fix/` PR). | Done (#69, #73) | Must | R-EDIT-003 | 9 |
 | [0017](0017-style-panel-rework/) | `style-panel-rework` | Empty panel when nothing is selected, controls hidden instead of disabled, 8-digit RGBA hex, inline colour picker, eyedropper, custom dash text line, GIMP-style value fields, gradients removed. Replaces parts of 0007. | In progress (#78) | Must | R-EDIT-005, R-EDIT-006 | - |
 | [0018](0018-stroke-markers/) | `stroke-markers` | Arrow or dot at the start, the end, N places along and on every node of a path. Builds on 0017. | In progress (#78) | Should | R-EDIT-005, R-EDIT-016 | - |
-| [0019](0019-multi-object-transform/) | `multi-object-transform` | One group box with the same handles as a single object, for a selection of several objects. Runs after 0017; 0014 is merged. | Ready | Should | R-EDIT-012 | - |
+| [0019](0019-multi-object-transform/) | `multi-object-transform` | One group box with the same handles as a single object, for a selection of several objects: move, scale, rotate, skew (paths). Any selection can be stretched in one direction (edge handles, typed size); polygons, stars and turned shapes become paths in the same commit, with a notice; their corner drag stays proportional (customer change 2026-10-10). Runs after 0017; 0014 is merged. | In progress | Should | R-EDIT-012 | - |
 | [0020](0020-undo-redo/) | `undo-redo` | Per-user undo (Ctrl+Z) and redo (Ctrl+Shift+Z) for every editing operation, one interaction = one step, peer-scoped in a shared document; every step has a short id, an author, a time and an operation name; the global history of the document is saved in the file and listed in a History tab (deletions visible); wipe of the document history; the "No undo yet" texts go. Specified from the customer's text of 2026-10-10. Needs `0043` for the History tab (milestone 3). | Draft until the customer accepts ADR 0014 (Proposed); ready to build milestones 0-3 on the defaults of ADR 0014 once accepted (`adrs.md` and UX notes exist; milestone 4, the wipe, builds on ADR 0014 Q3 A) | Must | R-EDIT-008, R-HIST-001, R-HIST-004 | 8 |
 | [0023](0023-groups/) | `groups` | Group and ungroup, nested groups, enter a group to edit inside it (everything else dimmed, a visible way out), a group moves and transforms as one with the box of 0019; no group style or transform. The grouping half of the old slice `layers-and-grouping`; layers are 0039. Needs a document-model decision by the customer. | Draft (criteria complete; ADR needs-customer, UX notes pending) | Must | R-EDIT-009 | 10 |
 | [0030](0030-document-size-presets/) | `document-size-presets` | Paper sizes A0 to A6 and slide formats 16:9, 16:10, 4:3 as inline buttons in the Document section, a portrait/landscape switch, the selected format derived from the size; the list comes from one validated data file. Delivered inside the 0017 branch as its last milestone (one PR). | In progress (#78) | Should | R-EDIT-019 | - |
@@ -81,13 +82,14 @@ Their order, dependencies and conflicts are in "Proposed build order" below.
 | [0036](0036-split-at-crossings/) | `split-at-crossings` | Cut the selected paths into separate open pieces wherever they cross or touch each other or themselves, on the exact curves. The customer's word "Split" is interpreted; see its Question 1. | Draft (criteria complete; ADRs and UX notes pending) | Should | R-EDIT-023 | - |
 | [0037](0037-fracture-and-flatten/) | `fracture-and-flatten` | Fracture: cut overlapping shapes into the pieces the overlaps make. Flatten: trim every shape to its visible part and remove hidden shapes. | Draft (criteria complete; ADRs and UX notes pending) | Should | R-EDIT-023 | - |
 | [0038](0038-path-offset/) | `path-offset` | Outset and Inset by a typed distance in mm with Round, Miter or Bevel corners, open paths grow into a closed outline, live blue/black preview, the original kept. Needs a kernel decision (ADR 0003 §4). | Draft (criteria complete; ADRs and UX notes pending) | Should | R-EDIT-007 | - |
-| [0040](0040-document-background/) | `document-background` | The document has a background fill: solid colour with alpha or none (drawn as a checkerboard), default today's #E8E8EB; a Background block in the Document section with the inline colour block of 0017; the eyedropper picks the background where no painted object is under the pointer, and the Background block has its own eyedropper. Needs a format version bump. Builds on 0017 and 0030 (same PR #78). | Ready (spec, `adrs.md` and UX notes exist; one PR, four milestones, starts after #79 and #80 merge) | Should | R-EDIT-024 | - |
+| [0040](0040-document-background/) | `document-background` | The document has a background fill: solid colour with alpha or none (drawn as a checkerboard), default today's #E8E8EB; a Background block in the Document section with the inline colour block of 0017; the eyedropper picks the background where no painted object is under the pointer, and the Background block has its own eyedropper. Needs a format version bump. Builds on 0017 and 0030 (same PR #78). | Ready (spec, `adrs.md` and UX notes exist; one PR, four milestones; #79 has merged, starts after #80 merges; claims `format_version` 10) | Should | R-EDIT-024 | - |
 | [0041](0041-object-history/) | `object-history` | The history of one selected object (a scope in the History tab), object undo and redo with Ctrl+U and Ctrl+Shift+U (an object undo is a step that Ctrl+Z takes back, which makes it an object redo), a clone keeps a copy of its original's history, a wipe of one object's history, groups and multi-object steps. Customer text of 2026-10-10. Builds on `0020`. | Draft until the customer accepts ADR 0014 (Proposed); then ready to build on its defaults once `0020` milestone 2 has merged (`adrs.md` and UX notes exist) | Should | R-HIST-002, R-HIST-004 | - |
 | [0042](0042-history-branches/) | `history-branches` | Steps taken back and then not redone become a branch (no linear redo until the conflict step is taken back); lanes in the history list; a Preview / Live switch to look at or go to an earlier version of an object, with a Restore button; a clone of the state at any row, also of deleted objects; step ids everywhere. The customer is unsure about live versus preview: default Preview. Builds on `0020` and `0041`. | Draft until the customer accepts ADR 0014 (Proposed); then ready to build on its defaults once `0020` and `0041` have merged (`adrs.md` and UX notes exist) | Should | R-HIST-003 | - |
-| [0043](0043-properties-tabs/) | `properties-tabs` | Microtabs on the Properties panel (Document, Style, later History) with icons and tooltips, a fixed strip, auto-switch rules between Document and Style and a sticky manual choice, one Tab stop with roving focus, Shift+Ctrl+F and Shift+Ctrl+H. Lets the maker reach Document while an object is selected. Customer request of 2026-10-10. Built before `0020` milestone 3. | Ready (`adrs.md` and UX notes exist; one PR, can start from `main`) | Should | R-EDIT-025 | - |
-| [0044](0044-editing-quick-wins/) | `editing-quick-wins` | Ctrl+A selects all objects of the context (Select tool); arrow keys nudge the selection by 1 mm, Shift+Arrow by 10 mm, a held key is one step. Collected from reviews; a Proposal until the customer accepts. | Ready (`adrs.md` and UX notes exist; build after #80 merges; the customer can veto at the demo) | Should | R-EDIT-026 | - |
-| [0045](0045-document-formats-library/) | `document-formats-library` | The format list of `0030` becomes user-extendable: formats and groups the maker adds, edits and deletes in an inline form, a star per format that puts it in the quick selection (the `0030` strips become the favourites), groups that can be switched off (Paper on, Slides off by default), the full list as an inline expandable list (no popup), import and export of a formats file, the maker's file laid over the built-in TOML. Customer request of 2026-10-10; where the user file lives needs the customer. | Ready for the rectangular part (`adrs.md` and UX notes exist; user-formats storage on default A, a per-user file in the data directory, the customer may veto; builds after 0040 and 0043) | Should | R-EDIT-027 | - |
+| [0043](0043-properties-tabs/) | `properties-tabs` | Microtabs on the Properties panel (Document, Style, later History) with icons and tooltips, a fixed strip, auto-switch rules between Document and Style and a sticky manual choice, one Tab stop with roving focus, Shift+Ctrl+F and Shift+Ctrl+H. Lets the maker reach Document while an object is selected. Customer request of 2026-10-10. Built before `0020` milestone 3. | In progress (#84, one PR with 0045) | Should | R-EDIT-025 | - |
+| [0044](0044-editing-quick-wins/) | `editing-quick-wins` | Ctrl+A selects all objects of the context (Select tool); arrow keys nudge the selection by 1 mm, Shift+Arrow by 10 mm, a held key is one step. Collected from reviews; a Proposal until the customer accepts. | In progress (#87; the customer can veto at the demo) | Should | R-EDIT-026 | - |
+| [0045](0045-document-formats-library/) | `document-formats-library` | The format list of `0030` becomes user-extendable: formats and groups the maker adds, edits and deletes in an inline form, a star per format that puts it in the quick selection (the `0030` strips become the favourites), groups that can be switched off (Paper on, Slides off by default), the full list as an inline expandable list (no popup), import and export of a formats file, the maker's file laid over the built-in TOML. Customer request of 2026-10-10; where the user file lives needs the customer. | In progress for the rectangular part (#84, one PR with 0043; user-formats storage on default A, a per-user file in the data directory, the customer may veto) | Should | R-EDIT-027 | - |
 | [0046](0046-document-shapes/) | `document-shapes` | Non-rectangular document areas: ellipse and circle, rounded rectangle, and an outline loaded from SVG or DXF (key rings, labels, hoops); the size is the bounding box, the area is a guide and not a mask; a format is a name, a size and a shape. A sketch with open questions. Needs a document-model decision, `0045`, `0040`, the SVG import of `0024`, and a DXF importer nobody has specified. | Draft (sketch with `adrs.md` sketch and UX sketch; the document-model ADR is `needs-customer` and not yet written) | Should | R-EDIT-028 | - |
+| [0047](0047-transform-polish/) | `transform-polish` | Three customer change requests of 2026-10-10. (1) Skew and a stretch of a multi-selection convert the primitives that cannot represent the result to paths, with no warning, hint or refusal (reverses `0008` P1 and `0019` question 2). (2) Every slider (the Ratio sliders, the colour area, the hue slider): a click sets the value at the pointer, a double-click opens value entry, a drag is unchanged. (3) The typed move's Absolute mode measures from the centre of the true bounding box by default; the box is drawn pale red during a move drag and while the entry is open; in Absolute the four corners and the centre are red marks that can be clicked to choose the reference and execute the move; a Reference control in the chip gives the keyboard route. One PR, three milestones (conversion, sliders, reference box). | Ready (spec and `adrs.md` exist; the UX notes are the product owner's draft and the ux-engineer confirms them before the build; criteria marked Proposal are vetoable at the demo; runs alone, after #80) | Should | R-EDIT-029, R-EDIT-012, R-EDIT-015 | - |
 
 ### Specified but not built
 
@@ -125,7 +127,7 @@ deferred past the laser MVP on 2026-10-02 (multi-OS parity and sync, fonts,
 asset management, collaboration, the asset connector, plugins, other machine
 families). They are tracked in `docs/requirements.md` ("MVP (confirmed)" and
 "Explicitly deferred past MVP") and get a number here once the customer
-prioritises them. The next free number is 0047.
+prioritises them. The next free number is 0048.
 
 ## Proposed build order (product owner, 2026-10-10)
 
@@ -149,6 +151,7 @@ For 0023 and 0030 to 0038, with the fixed points 0016 (done), 0017, 0018, 0019 a
 | 0044 `editing-quick-wins` | `editor-wasm` `session/keys.rs`, `ui-core` selection, shortcut table, a per-version object cache | #80 merged (group box, multi-object move, key table). Without 0020 a held nudge writes one commit per event; with 0020 they form one step | 0020 and 0043 (the same key gate and panel files): not in parallel; any other slice is free |
 | 0045 `document-formats-library` | `document-core` (loader, schema 2, overlay), `curvyo-storage-io` (user file, atomic write), `curvyo-app` commands, `editor-wasm` view, the Document tab | 0030 merged; 0040 and 0043 merged for milestones 2 and 3 (milestone 1, the loader, may start earlier); the user-file place on default A unless the customer vetoes | 0040 and 0043 (the Document section file) |
 | 0046 `document-shapes` | `document-core` (shape register, format bump), `render-core` (area, edge), importers in `0024` (SVG) and an unspecified DXF reader, the Document tab | 0045, 0040, the customer and architect on the model; stage 2 needs 0024, stage 3 a DXF importer | 0023 (format version, document root), 0040 (background fill of the area) |
+| 0047 `transform-polish` | `ui-core` (skew and stretch conversion rule, `move_entry.rs` reference, new `reference_point.rs`), `document-core` (`transform_objects` with a conversion), `render-core` (reference box and marks), `editor-wasm` (move drag decoration, chip), `frontend` (four sliders, `MoveEntryChip.tsx`) | #80 merged (group box); #78 merged (picker) | `0044` and `0020` (key gate, commit labels, `MoveEntryChip.tsx`), `0043` and `0040` (`useEditorSession.ts`, panel files): not in parallel with them |
 | 0032 `pen-tablet-input` | pointer input in `frontend` and `editor-wasm`, possibly the Tauri host; the stroke width model | a freehand tool (no spec yet), the platform spike | 0033 (width model) |
 | 0033 `stroke-brushes` | style model, `render-core`, `geometry-core` generators, panel row, plugin host | 0017, 0018, the plugin host | 0018, 0032 (style and width model) |
 
@@ -231,29 +234,30 @@ Slice labels, as in the column above.
 
 ### `format_version` plan
 
-The project file's `format_version` is **7** on `main` (set by 0007, PR #54).
+The project file's `format_version` is **9** on `main` (set by 0017 and 0018,
+PR #78).
 Each change that alters the on-disk shape takes the next number at merge, and
 a reader refuses a file with a higher number ("saved by a newer version").
 
 | Version | Taken by | State |
 |---|---|---|
-| 7 | 0007 `stroke-and-fill-styling` | On `main` |
+| 7 | 0007 `stroke-and-fill-styling` | Done, merged (#54) |
 | 8 | 0016 `boolean-operations` (compound path, PR #73) | Done, merged |
-| 9 | 0017 `style-panel-rework` (odd dash lists) and 0018 `stroke-markers`, one PR | In progress (`story/style-panel-rework`) |
+| 9 | 0017 `style-panel-rework` (odd dash lists) and 0018 `stroke-markers`, one PR | On `main` (#78) |
 | none | 0015 `document-size-and-rulers` | No bump (its `adrs.md`, decision 1) |
-| next free at merge | 0023 `groups` (a group node with children) | Planned; a document-model change that needs the customer |
-| next free at merge | 0040 `document-background` (background paint and colour registers in the document root) | Ready; 10 if nothing else merges first, otherwise the next free number after 0023 or 0033 (not built in parallel with 0023) |
+| 10 | 0040 `document-background` (background paint and colour registers in the document root) | Ready; claims 10, the next free number: the open PRs #80, #84 and #87 keep 9. If another bump merges first, 0040 takes the next free one (not built in parallel with 0023) |
+| next free at merge | 0023 `groups` (a group node with children) | Planned; 11 if 0040 merges first; a document-model change that needs the customer |
 | next free at merge | 0033 `stroke-brushes` (brush reference and embedded definition) | Draft, after the MVP |
 | none by default (ADR 0014 Q2 A), or next free at merge (Q2 B) | 0041 `object-history` (the optional keys `history_floor` and `clone_of`, ADR 0014 §7) | Draft; the keys are additive and older builds ignore them (as 0015's `display_unit`); `needs-customer` (ADR 0014 Q2: B would bump the version so that older builds refuse files with lineage keys) |
 | next free at merge | 0046 `document-shapes` (the `page_shape` register; an older build would draw a rectangle where a key ring is) | Draft; `needs-customer` |
-| none | 0020, 0042, 0043, 0044, 0045 | 0020 saves the history that `document.loro` already holds (step headers in commit messages) and adds one optional root key, `history_wiped` (ADR 0014 §7); 0042 derives branches from the log; 0043 and 0044 write nothing; 0045 keeps formats in a user file outside the project |
+| none | 0020, 0042, 0043, 0044, 0045, 0047 | 0020 saves the history that `document.loro` already holds (step headers in commit messages) and adds one optional root key, `history_wiped` (ADR 0014 §7); 0042 derives branches from the log; 0043 and 0044 write nothing; 0045 keeps formats in a user file outside the project. ADR 0014 Q7 B (soft delete instead of reviving deleted objects) would give 0020 a bump |
 | none | 0030, 0031, 0034, 0035, 0036, 0037, 0038 | No bump: they write existing object kinds (0035 to 0037 use the compound path of 0016) |
 
 A spec does not hard-code a version number it does not own; it says "next free
-at merge". Only 0016 names a number (8), because it is the one that merges
-first. If a third feature merges before 0016, 0016's tests compare against its
-own named constant and the rebase renumbers it; this table is then corrected
-in the same PR.
+at merge". A slice names a number only when it is the next bump to merge: 0016
+named 8, 0040 names 10. If another bump merges first, that slice's tests
+compare against its own named constant and the rebase renumbers it; this table
+is then corrected in the same PR.
 
 ## Numbering
 

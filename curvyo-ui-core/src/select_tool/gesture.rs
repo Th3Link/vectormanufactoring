@@ -118,7 +118,10 @@ impl SelectTool {
         match &mut self.drag {
             SelectDrag::Marquee(drag) => drag.origin.note(point),
             SelectDrag::Lasso(drag) => drag.note(point),
-            SelectDrag::None | SelectDrag::Moving(_) | SelectDrag::Transforming(_) => {}
+            SelectDrag::None
+            | SelectDrag::Moving(_)
+            | SelectDrag::Transforming(_)
+            | SelectDrag::GroupTransforming(_) => {}
         }
     }
 
@@ -144,7 +147,10 @@ impl SelectTool {
         match self.drag {
             SelectDrag::Marquee(_) => Some(GestureKind::Marquee),
             SelectDrag::Lasso(_) => Some(GestureKind::Lasso),
-            SelectDrag::None | SelectDrag::Moving(_) | SelectDrag::Transforming(_) => None,
+            SelectDrag::None
+            | SelectDrag::Moving(_)
+            | SelectDrag::Transforming(_)
+            | SelectDrag::GroupTransforming(_) => None,
         }
     }
 

@@ -163,6 +163,9 @@ impl Session {
             handle_tolerances,
             modifiers,
         );
+        // A resize that may turn shapes into paths carries the session's own
+        // anchor ids from the first preview (`0019` decision 8).
+        self.select.mint_conversion_ids(&mut self.minter);
     }
 
     /// Acceptance criteria 3, 15-18, 20, 41: commits whatever move/resize/
@@ -240,6 +243,7 @@ impl Session {
             handle_tolerances,
             (shift, ctrl),
         );
+        self.select.mint_conversion_ids(&mut self.minter);
         match outcome {
             SelectDoubleClickOutcome::Hit(_) => {
                 self.node.cancel_drag();

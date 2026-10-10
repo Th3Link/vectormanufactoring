@@ -1,7 +1,8 @@
-//! The typed move entry of one object
+//! The typed move entry of one object or of a multi-selection
 //! (`specs/0010-edit-interaction-polish/specification.md`, criteria 15 to 22, 25,
-//! 56): two fields X and Y, read as a relative offset or as an absolute
-//! position of the top-left corner of the object's drawn bounds. The mode is
+//! 56; `specs/0019-multi-object-transform/` criterion 35): two fields X and Y,
+//! read as a relative offset or as an absolute position of the top-left corner
+//! of the drawn bounds (of the group box for a selection). The mode is
 //! the chip's (the DOM holds it and passes it with every commit), so the rule
 //! exists once, here. The DOM chip only holds the text, the caret and the
 //! focus (`adrs.md`, decision 3).
@@ -9,7 +10,7 @@
 use curvyo_document_core::{Document, NodeId, ObjectSnapshot, Point, Vec2};
 
 use crate::anchor_id_minter::AnchorIdMinter;
-
+use crate::group_box::GroupSelection;
 use crate::object_bounds::object_outline_bounds;
 use crate::oriented_box::OrientedBox;
 use crate::transform_commit::{
@@ -19,11 +20,13 @@ use crate::transform_entry::{
     EntryField, EntryOutcome, InvalidReason, format_mm, parse_entry_number,
 };
 
-/// An open move entry: the object and its drawn bounds as they were when it
-/// opened (an entry whose object changed or went away since writes nothing).
+/// An open move entry: the object (or objects) and the drawn bounds as they
+/// were when it opened (an entry whose object changed or went away since
+/// writes nothing).
 #[derive(Debug, Clone)]
 pub struct MoveEntry {
-    start: ObjectSnapshot,
+    start: Vec<ObjectSnapshot>,
+    ids: Vec<NodeId>,
     start_box: OrientedBox,
     /// The tight bounds of the drawn outline: corners `(min, max)`.
     bounds: (Point, Point),
@@ -41,11 +44,25 @@ impl MoveEntry {
     /// mode.
     #[must_use]
     pub fn new(object: &ObjectSnapshot, box_: &OrientedBox) -> Self {
-        let bounds = object_outline_bounds(object);
+        Self::over(vec![object.clone()], *box_, object_outline_bounds(object))
+    }
+
+    /// An entry for the selected `objects` (in selection order) with their
+    /// `group` box: relative offsets move all of them, an absolute position
+    /// puts the top-left corner of the group box there, and a copy copies all
+    /// of them (`specs/0019-multi-object-transform/` criterion 35).
+    #[must_use]
+    pub fn for_group(objects: &[ObjectSnapshot], group: &GroupSelection) -> Self {
+        let box_ = *group.bounds();
+        Self::over(objects.to_vec(), box_, (box_.min, box_.max))
+    }
+
+    fn over(start: Vec<ObjectSnapshot>, start_box: OrientedBox, bounds: (Point, Point)) -> Self {
         let field = |label, name| EntryField::for_param(label, name, "0".to_string());
         Self {
-            start: object.clone(),
-            start_box: *box_,
+            ids: start.iter().map(ObjectSnapshot::id).collect(),
+            start,
+            start_box,
             bounds,
             fields: [
                 field("X", "Horizontal offset"),
@@ -71,10 +88,11 @@ impl MoveEntry {
         self.copy_preset
     }
 
-    /// The object being moved.
+    /// The ids of the objects being moved, in selection order: one for a
+    /// single object.
     #[must_use]
-    pub fn object(&self) -> &ObjectSnapshot {
-        &self.start
+    pub fn ids(&self) -> &[NodeId] {
+        &self.ids
     }
 
     /// The oriented box the object had when the entry opened: its centre is
@@ -156,14 +174,18 @@ impl MoveEntry {
         copy: bool,
         minter: &mut AnchorIdMinter,
     ) -> (EntryOutcome, Option<Vec<NodeId>>) {
-        if document.object(self.start.id()).as_ref() != Some(&self.start) {
+        let unchanged = self
+            .start
+            .iter()
+            .all(|object| document.object(object.id()).as_ref() == Some(object));
+        if !unchanged {
             return (EntryOutcome::Unchanged, None);
         }
         match self.resolve(texts, absolute) {
             Err((field, reason)) => (EntryOutcome::Invalid { field, reason }, None),
             Ok(None) => (EntryOutcome::Unchanged, None),
             Ok(Some(offset)) => {
-                let copies = commit_move(document, &[self.start.id()], offset, copy, minter);
+                let copies = commit_move(document, &self.ids, offset, copy, minter);
                 (EntryOutcome::Committed, copies)
             }
         }

@@ -15,11 +15,11 @@ function tooltipOf(text: string) {
 }
 
 /** A page glyph: 9 x 12 portrait or 12 x 9 landscape, 16 px, 1.5 px stroke. */
-function PageGlyph({ landscape }: { landscape: boolean }) {
+export function PageGlyph({ landscape, size = 16 }: { landscape: boolean; size?: number }) {
   return (
     <svg
-      width="16"
-      height="16"
+      width={size}
+      height={size}
       viewBox="0 0 16 16"
       fill="none"
       stroke="currentColor"
@@ -65,7 +65,7 @@ export function DocumentPresets({ document: doc, onReturnFocus }: DocumentPreset
         <>
           <div>Taller than wide. Swaps width and height.</div>
           <div className="text-muted-foreground">
-            Objects keep their place relative to the centre; nothing rotates.
+            Objects keep their place relative to the center; nothing rotates.
           </div>
         </>
       ),
@@ -83,7 +83,7 @@ export function DocumentPresets({ document: doc, onReturnFocus }: DocumentPreset
         <>
           <div>Wider than tall. Swaps width and height.</div>
           <div className="text-muted-foreground">
-            Objects keep their place relative to the centre; nothing rotates.
+            Objects keep their place relative to the center; nothing rotates.
           </div>
         </>
       ),

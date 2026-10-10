@@ -206,14 +206,12 @@ fn one_nudge_event_with_a_thousand_objects_selected() {
     let mut reads = Duration::ZERO;
     for step in 0..20_u32 {
         let started = Instant::now();
-        let _ = session.key_down_at(
-            KeyInput {
-                key: "ArrowRight",
-                repeat: step > 0,
-                ..KeyInput::default()
-            },
-            f64::from(step) * 33.0,
-        );
+        let _ = session.key_down(KeyInput {
+            key: "ArrowRight",
+            repeat: step > 0,
+            time_ms: f64::from(step) * 33.0,
+            ..KeyInput::default()
+        });
         worst = worst.max(started.elapsed());
         reads = reads.max(reads_after_a_key(&session));
         let started = Instant::now();

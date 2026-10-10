@@ -1,0 +1,9 @@
+format = 1
+[[group]]
+id = "paper"
+[[group.preset]]
+id = "u-huge"
+name = "Huge"
+short_side = 1000
+long_side = 20000
+unit = "cm"

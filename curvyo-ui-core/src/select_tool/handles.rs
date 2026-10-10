@@ -12,22 +12,18 @@ use crate::object_selection::ObjectSelection;
 use crate::oriented_box::{OrientedBox, oriented_bounds};
 use crate::param_handles::{centre_drawn, handle_tiers, param_handles};
 use crate::transform_handle_layout::{
-    ALL_EIGHT, CORNERS_FOUR, EditHandle, HandleSpec, TransformHandleTolerances,
-    hit_transform_handle, resize_handle_local_position, rotate_handle_local_position,
-    skew_handle_local_position, transform_handles,
+    ALL_EIGHT, EditHandle, HandleSpec, TransformHandleTolerances, hit_transform_handle,
+    resize_handle_local_position, rotate_handle_local_position, skew_handle_local_position,
+    transform_handles,
 };
-use crate::transform_math::is_polygon_or_star;
 
-/// The handle kinds `object` shows (criteria 11, 37, 50): corner resize
-/// only for a polygon or star; skew handles only for a path; the side
-/// rotate handles when `side_rotate`.
+/// The handle kinds `object` shows (criteria 11, 37, 50): the four corner and four
+/// edge resize handles for every kind (a polygon's or star's edges stretch and
+/// convert it, `specs/0019-multi-object-transform/` criterion 56); skew handles
+/// only for a path; the side rotate handles when `side_rotate`.
 fn handle_spec_for(object: &ObjectSnapshot, side_rotate: bool) -> HandleSpec {
     HandleSpec {
-        resize_directions: if is_polygon_or_star(object) {
-            &CORNERS_FOUR
-        } else {
-            &ALL_EIGHT
-        },
+        resize_directions: &ALL_EIGHT,
         skew: matches!(object, ObjectSnapshot::Path(_)),
         side_rotate,
     }

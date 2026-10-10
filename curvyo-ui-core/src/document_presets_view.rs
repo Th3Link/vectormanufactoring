@@ -1,8 +1,9 @@
 //! What the Document section shows and does for the size presets
-//! (`specs/0030-document-size-presets/` criteria 10 to 14, 16, 17): the pick
-//! rule, the orientation swap, and the view of groups, buttons, tooltips and the
-//! subject line. Pure functions of the preset list and the document size, so
-//! the DOM holds no preset number, no name and no rule.
+//! (`specs/0030-document-size-presets/` criteria 10 to 14, 16, 17, and
+//! `specs/0045-document-formats-library/` criteria 8 to 11): the pick rule, the
+//! orientation swap, and the quick selection (the favourites of the groups that
+//! are on) with tooltips and the subject line. Pure functions of the preset list
+//! and the document size, so the DOM holds no preset number, no name and no rule.
 
 use curvyo_document_core::{
     DisplayUnit, DocumentPreset, DocumentSize, Orientation, PresetList, PresetUnit,
@@ -96,15 +97,18 @@ const TIMES: char = '\u{d7}';
 #[must_use]
 pub fn presets_view(list: &PresetList, size: DocumentSize, unit: DisplayUnit) -> PresetsView {
     let matched = list.matching(size).map(|(_, preset)| preset.id.clone());
+    // Criterion 9: a group that is off, or has no favourite, draws nothing.
     let groups = list
         .groups
         .iter()
+        .filter(|group| group.enabled)
         .map(|group| PresetGroupView {
             id: group.id.clone(),
             name: group.name.clone(),
             entries: group
                 .presets
                 .iter()
+                .filter(|preset| preset.favourite)
                 .map(|preset| {
                     let press = preset_pick_size(list, size, &preset.id).unwrap_or(size);
                     PresetEntry {
@@ -115,8 +119,9 @@ pub fn presets_view(list: &PresetList, size: DocumentSize, unit: DisplayUnit) ->
                         tooltip: tooltip(preset, press, unit),
                     }
                 })
-                .collect(),
+                .collect::<Vec<_>>(),
         })
+        .filter(|group| !group.entries.is_empty())
         .collect();
     let orientation = Orientation::of(size);
     let subject = match list.matching(size) {
@@ -168,8 +173,11 @@ mod tests {
 
     use super::*;
 
+    /// The shipped list with Slides switched on, which is the list `0030` had.
     fn list() -> PresetList {
-        PresetList::shipped().unwrap()
+        let mut list = PresetList::shipped().unwrap();
+        list.groups[1].enabled = true;
+        list
     }
 
     fn mm(width: f64, height: f64) -> DocumentSize {
@@ -368,6 +376,56 @@ mod tests {
         let view = presets_view(&nine, mm(210.0, 297.0), DisplayUnit::Mm);
         assert_eq!(view.groups[0].entries.len(), 9);
         assert_eq!(view.groups[1].entries.len(), 3);
+    }
+
+    /// `0045` criterion 8: the default settings show exactly the Paper block of
+    /// `0030` and no Slides strip.
+    #[test]
+    fn the_default_quick_selection_is_the_paper_strip() {
+        let default = PresetList::shipped().unwrap();
+        let view = presets_view(&default, mm(210.0, 297.0), DisplayUnit::Mm);
+        assert_eq!(view.groups.len(), 1);
+        assert_eq!(view.groups[0].name, "Paper");
+        let names: Vec<_> = view.groups[0]
+            .entries
+            .iter()
+            .map(|e| e.name.as_str())
+            .collect();
+        assert_eq!(names, ["A0", "A1", "A2", "A3", "A4", "A5", "A6"]);
+        let all = presets_view(&list(), mm(210.0, 297.0), DisplayUnit::Mm);
+        assert_eq!(view.groups[0], all.groups[0]);
+    }
+
+    /// `0045` criterion 11: Slides off, a slide size is "Custom"; a format that
+    /// is not a favourite still names the size and presses no cell.
+    #[test]
+    fn the_subject_names_any_format_of_a_group_that_is_on() {
+        let mut default = PresetList::shipped().unwrap();
+        let slide = mm(508.0, 285.75);
+        assert_eq!(
+            presets_view(&default, slide, DisplayUnit::Mm).subject,
+            "Custom"
+        );
+        default.groups[0].presets[3].favourite = false;
+        let view = presets_view(&default, mm(297.0, 420.0), DisplayUnit::Mm);
+        assert_eq!(view.subject, "A3, portrait");
+        assert!(view.groups[0].entries.iter().all(|e| !e.pressed));
+        assert_eq!(view.groups[0].entries.len(), 6);
+    }
+
+    /// `0045` criterion 9: a group without a favourite draws nothing, and with
+    /// no favourite at all only the subject line is left.
+    #[test]
+    fn a_group_without_a_favourite_draws_nothing() {
+        let mut none = list();
+        for group in &mut none.groups {
+            for preset in &mut group.presets {
+                preset.favourite = false;
+            }
+        }
+        let view = presets_view(&none, mm(210.0, 297.0), DisplayUnit::Mm);
+        assert_eq!(view.groups.len(), 0);
+        assert_eq!(view.subject, "A4, portrait");
     }
 
     #[test]

@@ -281,11 +281,8 @@ fn every_kind_shows_its_handle_set() {
         let rotate = count(&handles, |h| matches!(h, EditHandle::Rotate(_)));
         let skew = count(&handles, |h| matches!(h, EditHandle::Skew(_)));
         let centre = count(&handles, |h| *h == EditHandle::Move);
-        assert_eq!(
-            resize,
-            if is_polygon_or_star(kind) { 4 } else { 8 },
-            "{kind:?}"
-        );
+        // `0019` criterion 56: a polygon or star shows all eight resize handles.
+        assert_eq!(resize, 8, "{kind:?}");
         assert_eq!(rotate, 4, "{kind:?}: corner rotate handles only");
         assert_eq!(
             skew,
@@ -971,13 +968,16 @@ fn a_size_entry_has_the_fields_the_handle_changes() {
     let mut poly = Rig::new(Kind::Polygon);
     open_size(&mut poly, ResizeDirection::Ne, false, false);
     let entry = poly.tool.entry().unwrap();
-    assert_eq!(entry.kind(), EntryKind::OuterRadius);
-    assert_eq!(entry.fields().len(), 1);
+    // `0019` criterion 56 replaces the one "r" field (`0008` criterion 26): W and H
+    // of the frame square.
+    assert_eq!(entry.kind(), EntryKind::Size);
+    assert_eq!(entry.fields().len(), 2);
     assert_eq!(
         (entry.fields()[0].label, entry.fields()[0].accessible_name),
-        ("r", "Outer radius")
+        ("W", "Width")
     );
-    assert_eq!(entry.fields()[0].prefill, "40.0");
+    assert_eq!(entry.fields()[0].prefill, "80.0");
+    assert_eq!(entry.fields()[1].prefill, "80.0");
     // Centre of the shape is the fixed point, with or without Shift (flag 1).
     let center = poly.tool.entry().unwrap().pivot();
     assert!(close(center.x, 60.0) && close(center.y, 50.0));
@@ -1182,10 +1182,7 @@ fn a_typed_size_and_a_dragged_size_leave_the_same_snapshot() {
                     let entry = typed.tool.entry().unwrap().clone();
                     let context =
                         format!("{kind:?} {direction:?} shift {shift} ctrl {ctrl} turn {turn}");
-                    let texts = if entry.kind() == EntryKind::OuterRadius {
-                        let r = radius_of(&result);
-                        [format!("{r}"), String::new()]
-                    } else if entry.fields().len() == 1 {
+                    let texts = if entry.fields().len() == 1 {
                         let touches_width =
                             matches!(direction, ResizeDirection::E | ResizeDirection::W);
                         [
@@ -1220,17 +1217,6 @@ fn a_typed_size_and_a_dragged_size_leave_the_same_snapshot() {
         }
     }
     assert!(compared >= 150, "only {compared} drag/entry pairs compared");
-}
-
-fn radius_of(object: &ObjectSnapshot) -> f64 {
-    let ObjectSnapshot::Primitive(p) = object else {
-        panic!()
-    };
-    match p.shape {
-        curvyo_document_core::Shape::Polygon { frame, .. }
-        | curvyo_document_core::Shape::Star { frame, .. } => frame.radius.as_mm(),
-        _ => panic!("not a polygon or star"),
-    }
 }
 
 fn dragged_start(kind: Kind, turn: f64) -> ObjectSnapshot {

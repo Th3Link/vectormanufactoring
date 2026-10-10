@@ -9,7 +9,7 @@ use super::{Session, Tool};
 /// One key event as the frontend reports it: the DOM `key` value, the
 /// modifiers (`ctrl` already folds in Cmd) and the two facts only the DOM
 /// knows.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 #[allow(clippy::struct_excessive_bools)] // one flag per DOM fact, as the host reports them
 pub struct KeyInput<'a> {
     /// `KeyboardEvent.key`: `"r"`, `"*"`, `"Delete"`, `"Escape"` and so on.
@@ -26,19 +26,20 @@ pub struct KeyInput<'a> {
     /// element, an IME composition is running, or Space is held: knowledge
     /// only the DOM has.
     pub dom_blocked: bool,
+    /// `KeyboardEvent.timeStamp` in milliseconds: decides whether a held arrow key is still the
+    /// same run of nudges. Tests that do not care leave it at 0.
+    pub time_ms: f64,
 }
 
 /// The one-line message of a key that cannot act (criterion 59); the
 /// frontend owns the wording and shows it for 2 s.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyHint {
-    /// Several objects are selected: "Select one object to type a value".
-    SelectOne,
     /// Nothing is selected, or M or K was pressed outside the Select tool:
     /// "Select an object first".
     SelectFirst,
-    /// K or Shift+K with one selected object that is not a path: "Skew works
-    /// on paths only".
+    /// K or Shift+K with a selection that holds an object that is not a path:
+    /// "Skew works on paths only".
     PathOnly,
     /// An arrow key would move the selection beyond the document's coordinate
     /// limit: "Too far from the document. Nothing was changed."
@@ -90,7 +91,6 @@ impl KeyOutcome {
             Self::Escape(EscapeStep::ClearedState) => "escape-state",
             Self::Escape(EscapeStep::LeftTool) => "escape-tool",
             Self::Escape(EscapeStep::Nothing) => "escape-none",
-            Self::Hint(KeyHint::SelectOne) => "hint-select-one",
             Self::Hint(KeyHint::SelectFirst) => "hint-select-first",
             Self::Hint(KeyHint::PathOnly) => "hint-path-only",
             Self::Hint(KeyHint::TooFar) => "hint-too-far",
@@ -239,15 +239,13 @@ fn decide(input: &KeyInput<'_>, state: KeyState) -> KeyAction {
         // The one state that changes a letter: the Select tool with an
         // object selected acts on it; every other state switches tool.
         Binding::Entry(entry, tool) => match (state.tool, state.selected) {
-            (Tool::Select, Selected::One) => KeyAction::OpenEntry(entry),
-            (Tool::Select, Selected::Many) => KeyAction::Hint(KeyHint::SelectOne),
+            (Tool::Select, Selected::One | Selected::Many) => KeyAction::OpenEntry(entry),
             _ => KeyAction::SetTool(tool),
         },
         // M and K have no tool to fall back to: outside the Select tool, or
         // with nothing selected, they only explain themselves.
         Binding::EntryOnly(entry) => match (state.tool, state.selected) {
-            (Tool::Select, Selected::One) => KeyAction::OpenEntry(entry),
-            (Tool::Select, Selected::Many) => KeyAction::Hint(KeyHint::SelectOne),
+            (Tool::Select, Selected::One | Selected::Many) => KeyAction::OpenEntry(entry),
             _ => KeyAction::Hint(KeyHint::SelectFirst),
         },
     }
@@ -310,12 +308,6 @@ impl Session {
     /// [`KeyOutcome::Ignored`], so Ctrl+R and Ctrl+S keep their page and menu
     /// behaviour.
     pub fn key_down(&mut self, input: KeyInput<'_>) -> KeyOutcome {
-        self.key_down_at(input, 0.0)
-    }
-
-    /// [`Session::key_down`] with the event's time stamp (`KeyboardEvent.timeStamp`,
-    /// milliseconds), which decides whether a held arrow key is still the same run.
-    pub fn key_down_at(&mut self, input: KeyInput<'_>, time_ms: f64) -> KeyOutcome {
         let state = KeyState {
             tool: self.tool,
             operation_in_flight: self.operation_in_flight(),
@@ -335,8 +327,10 @@ impl Session {
                     .select
                     .open_entry_for_key(&objects, &self.selection, key)
                 {
-                    Ok(()) => KeyOutcome::EntryOpened,
-                    Err(KeyEntryRefusal::SeveralSelected) => KeyOutcome::Hint(KeyHint::SelectOne),
+                    Ok(()) => {
+                        self.select.mint_conversion_ids(&mut self.minter);
+                        KeyOutcome::EntryOpened
+                    }
                     Err(KeyEntryRefusal::NothingSelected) => KeyOutcome::Hint(KeyHint::SelectFirst),
                     Err(KeyEntryRefusal::SkewNeedsPath) => KeyOutcome::Hint(KeyHint::PathOnly),
                 }
@@ -356,7 +350,7 @@ impl Session {
                 arrow,
                 shift: input.shift,
                 repeat: input.repeat,
-                time_ms,
+                time_ms: input.time_ms,
             }),
         }
     }
@@ -534,8 +528,8 @@ mod tests {
     }
 
     /// Criterion 54: R and S act on the selection only in the Select tool
-    /// with an object selected; every other state switches tool; several
-    /// objects give the hint and change nothing.
+    /// with an object selected (one or several, `multi-object-transform`
+    /// criteria 33 to 37); every other state switches tool.
     #[test]
     fn r_and_s_act_on_the_selection_only_in_the_select_tool() {
         for tool in TOOLS {
@@ -545,8 +539,9 @@ mod tests {
                     ("s", EntryKey::Size, Tool::Select),
                 ] {
                     let expected = match (tool, selected) {
-                        (Tool::Select, Selected::One) => KeyAction::OpenEntry(entry),
-                        (Tool::Select, Selected::Many) => KeyAction::Hint(KeyHint::SelectOne),
+                        (Tool::Select, Selected::One | Selected::Many) => {
+                            KeyAction::OpenEntry(entry)
+                        }
                         _ => KeyAction::SetTool(target),
                     };
                     assert_eq!(
@@ -675,8 +670,9 @@ mod tests {
                         ..KeyInput::default()
                     };
                     let expected = match (tool, selected) {
-                        (Tool::Select, Selected::One) => KeyAction::OpenEntry(entry),
-                        (Tool::Select, Selected::Many) => KeyAction::Hint(KeyHint::SelectOne),
+                        (Tool::Select, Selected::One | Selected::Many) => {
+                            KeyAction::OpenEntry(entry)
+                        }
                         _ => KeyAction::Hint(KeyHint::SelectFirst),
                     };
                     assert_eq!(
@@ -786,7 +782,7 @@ mod tests {
             KeyOutcome::Escape(EscapeStep::ClearedState),
             KeyOutcome::Escape(EscapeStep::LeftTool),
             KeyOutcome::Escape(EscapeStep::Nothing),
-            KeyOutcome::Hint(KeyHint::SelectOne),
+            KeyOutcome::Hint(KeyHint::PathOnly),
         ];
         let mut codes: Vec<&str> = all.iter().map(|o| o.code()).collect();
         codes.sort_unstable();

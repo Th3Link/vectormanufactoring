@@ -491,7 +491,7 @@ export function SelectToolbar({
       <button
         key="object-to-path"
         type="button"
-        title="Convert the selected shapes to paths"
+        title="Convert the selected shapes to paths. Paths can be stretched and skewed freely."
         onClick={onConvertToPaths}
         className={`${BUTTON_CLASS} my-1`}
       >

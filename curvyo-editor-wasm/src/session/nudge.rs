@@ -97,15 +97,13 @@ mod tests {
     }
 
     fn press(session: &mut Session, key: &str, shift: bool, repeat: bool, at: f64) -> KeyOutcome {
-        session.key_down_at(
-            KeyInput {
-                key,
-                shift,
-                repeat,
-                ..KeyInput::default()
-            },
-            at,
-        )
+        session.key_down(KeyInput {
+            key,
+            shift,
+            repeat,
+            time_ms: at,
+            ..KeyInput::default()
+        })
     }
 
     fn ctrl_a(session: &mut Session) -> KeyOutcome {

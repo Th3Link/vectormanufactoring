@@ -50,6 +50,12 @@ against.
 - [`specs/0014-advanced-selection/adrs.md`](../0014-advanced-selection/adrs.md): Alt at
   the press wins over every target; Shift and Ctrl inside the box arm the
   marquee; modifiers reach the session through `Session::held`.
+- [`specs/0003-primitive-shapes/adrs.md`](../0003-primitive-shapes/adrs.md):
+  "object to path keeps the `NodeId`" and the closed-form outline
+  (`outline_of_rotated`); a stretch that converts (decision 8) writes exactly
+  what `convert_to_paths` writes.
+- [`specs/0012-polygon-star-box-refit/adrs.md`](../0012-polygon-star-box-refit/adrs.md):
+  `orientation()`; decision 8 writes it as the converted path's `rotation`.
 - [`specs/0007-stroke-and-fill-styling/`](../0007-stroke-and-fill-styling/)
   criterion 29 (option B): applies unchanged; it is not extended to a
   selection (question 3 decided (b), criterion 44 removed).
@@ -125,13 +131,14 @@ against.
   - **Rotate** is `rotate_by` (`ObjectSnapshot::rotated`) for every kind, as
     today (criterion 26).
   - **Primitive scale** is a new function in `group_transform.rs`: frame
-    centre mapped about the pivot; a uniform factor multiplies every size; an
+    center mapped about the pivot; a uniform factor multiplies every size; an
     aligned rectangle or ellipse with sx ≠ sy takes sx on the dimension along
     document x and sy on the one along y (swapped at ±90°); polygon and star
     take the one factor on the outer radius. A circle (rx = ry within the
     tolerance) at a rotation that is not a multiple of 90° becomes an ellipse
     with `rotation` 0 when sx ≠ sy. That is the one new write (flag 4).
-  - **Kinds are preserved; no conversion.** Non-uniform scale of a
+  - **Kinds are preserved; no conversion.** *Superseded 2026-10-10 by
+    decision 8 (customer change: stretch converts).* Non-uniform scale of a
     uniform-only selection never reaches the per-object function: the edge
     handles are absent and a corner drag uses `polygon_star_resize_factor`.
     Skew never reaches a primitive: the skew handles are absent.
@@ -187,7 +194,7 @@ against.
   - **Press order (criteria 14, 16, 43, 45, 46; question 3 decided (b),
     2026-10-08).** The group box has no hit area of its own. `classify_press`
     for a multi-selection adds exactly one step to today's order: after Alt
-    (`PressTarget::Lasso`, unchanged), the drawn group handles and the centre
+    (`PressTarget::Lasso`, unchanged), the drawn group handles and the center
     handle (its hover region) map to `PressTarget::Handle` and
     `PressTarget::CentreHandle` from the group box. Everything after that is
     today's multi-selection path, unchanged: `hit_test_object` (8 px outline
@@ -259,11 +266,11 @@ against.
     changes with the group box.
   - **PR split, in order, each a `story/` PR after #61:**
     1. **Group box and move.** `ui-core` (`group_box.rs`, the group-handle
-       step of `classify_press`, centre handle), `render-core` (group box,
+       step of `classify_press`, center handle), `render-core` (group box,
        member boxes, the 500 cutoff), `editor-wasm`, frontend. Criteria 1 to
-       8, 14 (centre handle), 16, 17, 35, 37 (M), 43, 45 to 47, 50 to 52. No
-       handle other than the centre handle is drawn; the selection moves by
-       the centre handle and by its selected objects (criterion 16).
+       8, 14 (center handle), 16, 17, 35, 37 (M), 43, 45 to 47, 50 to 52. No
+       handle other than the center handle is drawn; the selection moves by
+       the center handle and by its selected objects (criterion 16).
     2. **Scale.** `document-core` (`transform_objects`, `scaled_along`),
        `group_transform.rs`, `group_drag.rs`, corner and edge handles.
        Criteria 9 to 15, 18 to 24, 29 to 32, 34, 37 (S), 38, 39, 48, 49 with
@@ -286,6 +293,182 @@ against.
   and one document-axes map, so a later group object can call it with its
   own frame. Nothing about the ad hoc group is stored, so
   `layers-and-grouping` chooses its own storage (ADR 0002 §5) freely.
+
+- **2026-10-10: (7) notes from the build (implementer).** None of them changes a
+  decision above; they record what the build chose where the text left room.
+  - **Public API of `curvyo-document-core`.** Besides `Document::transform_objects`,
+    `PathSnapshot::scaled_along` and `sheared_along` (decision 1), the build added
+    three variants to `ObjectEditError`, `InvalidStrokeWidth`, `InvalidRadius`
+    and `NonFiniteGeometry`, because the command refuses a bad width or radius
+    before it writes (the `resize_*` commands refuse the same two with
+    `ShapeEditError` and `PathEditError`), and a position, size, handle or rotation
+    that is NaN or infinite (defence in depth: the gesture layer refuses those too;
+    the older single-object writers have no such check, see
+    `docs/technical-debt.md`). `ui-core` retries once without widths, as decided.
+  - **Field writers.** The per-command helpers of decision 1 were not extracted:
+    `transform_objects` calls the codec writers the single-object commands call
+    (`write_shape_frame`, `write_corner_radii_if_changed`, `write_rotation`,
+    `write_point`, `write_vec2`, `write_stroke_width_if_changed`), so each field
+    still has one writer and the single-object commands are untouched (criterion
+    52).
+  - **Circles (criterion 20, D3).** A circle that is stretched (sx differs from sy)
+    becomes an ellipse with `rotation` 0 whatever its rotation, as the table says;
+    criterion 31's "not a multiple of 90 degrees" only names the case that goes
+    beyond a single object's write. A circle scaled by one factor keeps its
+    `rotation`.
+  - **Uniform-only corner drag.** `resize_local_box` with Ctrl forced on: both
+    factors come from the dominant axis of the drag, the same rule Ctrl gives a
+    free corner, so the dragged corner follows the pointer on that axis (criterion
+    29). A single polygon's diagonal rule is not used: a group has no one radius.
+  - **Flat boxes.** `transform_handle_layout::hit_transform_handle` gained a sibling
+    `hit_transform_handle_for_side` that takes the "shorter side" `s` as a
+    parameter (the old function calls it with the box's shorter side), because a
+    flat group box uses its other extent (criterion 12). The center handle of a
+    group is decided in `group_box.rs` with the group's own `s`.
+  - **Press order.** `classify_press` adds the group handles as one early return
+    for a selection of two or more; the objects, the marquee and the Alt cycle
+    after it are the code of before.
+  - **Keys.** `KeyHint::SelectOne` and `KeyEntryRefusal::SeveralSelected` are gone
+    (criterion 37). K or Shift+K on a selection that holds a non-path is
+    `SkewNeedsPath`, as for one object.
+  - **Draw order.** Member boxes are drawn with the group box, above the blue
+    preview outlines (one `GroupDecorationInput`), not below them as UX notes
+    section 12 lists; they are a hairline at 60% and the difference is not visible.
+  - **`wait` cursor (decision 4).** `Session::release_is_slow` is true for a move or
+    group transform of 100 or more objects; only then does the host show `wait`,
+    yield one frame and release. Below that the release is immediate.
+  - **Selection announcement (UX U4).** Built: `Session::selection_announcement` and
+    a visually hidden polite live region, settled for 500 ms before it speaks.
+
+- **2026-10-10: (8) a stretch converts what cannot follow it (customer change,
+  question 2 now (b)).** Supersedes "kinds are preserved" (decision 2) and the
+  uniform-only rule (decisions 1 and 7, criteria 21 and 29).
+  - **One predicate decides.** `stretch_keeps_kind(object, axes)` in
+    `ui-core/src/conversion.rs`: true for a path; for a rectangle or ellipse
+    whose `rotation` minus `axes` is a quarter turn (within the tolerance); for
+    a circle (it becomes an ellipse, decision 2, `rotation` = `axes`). False
+    for a polygon, a star, and a rectangle or ellipse at any other angle. The
+    group passes `axes` 0; a single object passes its box angle. A uniform map
+    (|sx − sy| ≤ `UNIFORM_EPSILON`), a rotate and a move never convert.
+  - **The conversion is built once, at the press, in `ui-core`.**
+    `conversion.rs` gains `primitive_as_path(primitive, minter) -> PathSnapshot`
+    (same id, style, `outline_of_rotated` anchors with fresh `AnchorIdMinter`
+    ids, `closed`, no extra subpaths, `rotation` = `orientation()`);
+    `build_primitive_conversions` ("Object to path") calls it too, so the two
+    conversions cannot differ. `GroupDrag` (and the group typed entry at open)
+    keeps `converted: Vec<Option<PathSnapshot>>` beside `starts`, filled only
+    for a resize handle and only where the predicate is false. Therefore
+    `SelectTool::pointer_down` and `open_entry_for_key` take `&mut
+    AnchorIdMinter` like `pointer_up` does. Ids minted for a drag that ends
+    uniform or is cancelled are never written; a burnt counter costs nothing.
+    Not minted per frame and not minted at release (the preview and the commit
+    must be the same snapshots, criterion 32).
+  - **Preview = commit.** `group_transform::apply` for a non-uniform `Scale` on
+    an object with a `converted` entry returns
+    `ObjectSnapshot::Path(converted.scaled_along(pivot, sx, sy, axes))` plus
+    the ordinary stroke rule. `resolve` stays the one function for preview,
+    release and entry; the blue overlay, the preview group box and the hit
+    rules see a path from the first non-uniform frame and the primitive again
+    if the drag returns to one factor.
+  - **Document: inside `transform_objects`, no pre-step, no new type.** A
+    pre-step `convert_to_paths` would be a second commit (criterion 31) and
+    would convert on drags that end uniform. A `ConvertToPath` result variant
+    was rejected: an `ObjectSnapshot::Path` result already says it. Rule: a
+    path result for a node that is a primitive now is a conversion
+    (`Planned::Convert`); any other kind mismatch still refuses. Validation
+    before the first write as today, plus: the result is one closed outline
+    with at least two anchors and ids unique within it, else the whole call
+    refuses with a new `ObjectEditError::InvalidConversion`. The write is
+    `strip_primitive_keys` + `write_converted_path_fields` (the
+    `convert_to_paths` writers, so one writer per key) and then the shared
+    `rotation` and stroke writes. One `commit_with_label("transform_objects")`;
+    one undo step restores the primitives. A repeated commit of the same
+    results finds a path with those anchor ids and writes nothing new.
+  - **Format: verified, no change.** The object model already changes kind in
+    place: `convert_to_paths` deletes the primitive keys and writes `closed`
+    and `anchors` under the same `NodeId` and tree position; this writes the
+    same keys with the same meaning, and `rotation` was already a path key.
+    `document.json` shows a path; `format_version` stays. Concurrency is that
+    of "Object to path": a peer's concurrent write to a deleted primitive key
+    can survive as a stray key on a path, which every reader ignores (no
+    shape tag means path).
+  - **Curve fidelity: exact, no tolerance to choose.** The renderer and the
+    hit test already draw a primitive as `outline_of_rotated` (cubic arcs
+    with `KAPPA`, radial error about 0.03 %), and an affine map of a cubic
+    Bézier is exact, so the converted path is the drawn shape, stretched.
+    Node counts are those of "Object to path": rectangle 4 to 8, ellipse 4,
+    polygon n, star 2n. No flattening.
+  - **Stroke, dash, radii.** Width times √(sx·sy) with "Scale stroke width"
+    on, as for every path; dash lengths unchanged as for every scale; the dash
+    phase does not jump because the path starts where the outline starts. An
+    aligned rectangle stays a rectangle and keeps the existing radius rule and
+    Select-bar switch (circular radii, flag 3). A rotated rounded rectangle is
+    converted, so its corners stretch exactly and the switch has no effect on
+    it.
+  - **Polygon and star angle (technical debt "Object to path drops the frame
+    angle").** Closed by this feature: `primitive_as_path` writes
+    `orientation()` as `rotation`, for the stretch and for "Object to path"
+    (`convert_to_paths` gains a rotation per conversion). The gradient re-fit
+    of a polygon or star (0007's known limit) stays and is visible at the
+    first non-uniform frame.
+  - **Single object, same rule, same milestone (proposal; default yes).**
+    Today a polygon or star shows corner handles only and a corner is always
+    uniform (`polygon_star_resize_factor`); a rotated rectangle or ellipse
+    already stretches as itself in its own box. With the rule: a polygon or
+    star shows all eight handles; an edge or a free corner stretches in the
+    box axes and converts through `transform_objects` with one result; Ctrl
+    on a corner keeps the diagonal rule and the kind. `handle_spec_for`
+    loses its polygon case. The `resize_star_frame` path stays for uniform
+    drags.
+  - **After the commit.** Ids and tree positions are kept, so the selection
+    is unchanged; the Select bar and panel read kinds from the objects and
+    show path fields. `SelectTool` keeps the last conversion's counts per
+    kind (polygon, star, rotated rectangle, rotated ellipse; from `starts`
+    against the committed results, only when `transform_objects` returned
+    `Ok`); `editor-wasm` hands them to the frontend, which writes the notice
+    text. No field on `Session` (decision 6). `uniform_only`, `UniformCause`
+    and the "proportional only / Object to path first" hint are deleted.
+  - **Cost.** Building the conversions at the press: 10,000 stars of 5 points
+    are 100,000 anchors of arithmetic, milliseconds. The commit writes about
+    five operations per new anchor plus up to 11 key deletes per object,
+    roughly 2.5 times a path scale of the same count. Budget unchanged: a
+    converting 10,000-object `transform_objects` within 5 s; add that case
+    (stars) to the ignored benchmarks and report its `document.loro` bytes.
+  - **Risks.** (a) *Superseded by lead decision E (2026-10-10): a corner drag of a selection that holds a converting shape is proportional and never converts.* A free corner drag is never exactly uniform, so it converts
+    every polygon and star in the selection; the kind change is visible in the
+    preview, the notice names it, Ctrl prevents it, undo reverts it. (b) A
+    single polygon's box is its frame square and the converted path's box is
+    tight, so the box shrinks on release. (c) Large point counts (up to 1,024)
+    make the conversion and the history large; covered by the same 5 s gate.
+    (d) Criteria 20, 21, 29 and 31 change wording; the PO owns that.
+
+- **2026-10-10: (8) notes from the build (implementer).** One deviation, accepted by the architect 2026-10-10 (ids are minted by the session after the press, not passed into `pointer_down`), the rest records choices.
+  - **Ids without a minter at the press (deviation, accepted).** `SelectTool::pointer_down` and
+    `open_entry_for_key` keep their signatures. The conversions are built at the press
+    with the ids of a local counter (unique within the drag) and the session calls
+    `SelectTool::mint_conversion_ids(&mut minter)` right after the press, a key or a
+    double-click that opens an entry, before the first preview: from then on preview
+    and commit carry the session's own ids, as decided. A caller that does not call it
+    (a unit test) commits the local ids, which are only unique within the drag.
+  - **Lead decision E.** A corner drag of a selection that holds a converting shape is
+    proportional (`GroupSelection::proportional_corners`), the typed size and the edge
+    handles stretch; the corner hint reads "Resize selection, proportional" / "Stretch
+    with an edge handle" (the latter only while an edge handle is drawn).
+  - **One object.** A polygon or star shows all eight handles; its corner drag is the
+    diagonal rule of `0005`, its edge drag and its typed W x H (box axes, about the
+    opposite side or the center) stretch and convert through the same
+    `transform_objects` (`commit_resize` routes a path result for a primitive there).
+    `EntryKind::OuterRadius` and `local_delta_for_radius` are gone.
+  - **Texts.** Rust sends one count of shapes (`hover_conversion_count`,
+    `live_conversion_count`, `entry_conversion_count`, `take_conversion_notice`); the
+    frontend (`lib/conversionText.ts`) writes the four sentences, the notice for 6 s on
+    the key-hint surface (criterion 54).
+  - **Document-wide ids.** `transform_objects` refuses (`InvalidConversion`) a converted outline that takes an anchor id another path holds, before the first write.
+  - **Tests changed because the spec changed:** the tests of the removed criterion 21
+    and of the single polygon's "r" entry and corner-only handles
+    (`acceptance_otr_tester`, `acceptance_unified_editing`, `acceptance_0005`,
+    `acceptance_polygon_star_box_refit`, `acceptance_edit_polish_*`, `acceptance_0019_*`)
+    now assert the new handles and the W x H entry.
 
 ## Flagged to the lead
 
@@ -325,4 +508,7 @@ open for the lead.*
    delete refuses a whole multi-object commit" joins the `drag_objects` note
    under "Canvas performance".
 
-No question for the customer comes from the architecture.
+No question for the customer comes from the architecture. *2026-10-10:* the
+single-object part of decision 8 is a change to accepted behaviour (a polygon
+or star corner is no longer always uniform); it goes to the customer as a
+proposal with default yes.

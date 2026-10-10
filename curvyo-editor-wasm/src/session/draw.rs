@@ -6,8 +6,8 @@
 use std::borrow::Cow;
 
 use curvyo_render_core::{
-    DrawList, TransformDecorationInput, build_artwork, build_decorations, build_marquee_overlay,
-    build_pen_preview, build_select_draw_list, build_transform_draw_list,
+    DrawList, TransformDecorationInput, build_artwork, build_decorations, build_group_draw_list,
+    build_marquee_overlay, build_pen_preview, build_select_draw_list, build_transform_draw_list,
 };
 
 use curvyo_document_core::{ObjectSnapshot, PathSnapshot};
@@ -99,6 +99,9 @@ impl Session {
             view,
             &self.select_decoration_input_in(&live_objects),
         ));
+        if let Some(group) = self.group_decoration_input_in(&live_objects) {
+            list.extend(build_group_draw_list(view, &group));
+        }
         list.extend(build_transform_draw_list(
             view,
             &self.select_transform_decoration_input_in(&live_objects),

@@ -79,8 +79,14 @@ export function useNudgeFeedback(): NudgeFeedback {
     [endStep],
   );
 
+  // Two or more objects are announced by `SelectionAnnouncer` ("5 objects selected, 46.2 by
+  // 18.7 mm"); a second sentence for the same key would be read twice.
   const onSelectAll = useCallback(
-    (count: number) => announce(selectedAnnouncement(count)),
+    (count: number) => {
+      if (count === 1) {
+        announce(selectedAnnouncement(count));
+      }
+    },
     [announce],
   );
 

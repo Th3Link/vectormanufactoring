@@ -19,8 +19,10 @@ license = "AGPL-3.0-or-later"
 thiserror = { version = "2", default-features = false, features = ["std"] }
 serde = { version = "1", default-features = false, features = ["derive", "std"] }
 serde_json = { version = "1", default-features = false, features = ["std"] }
-# The document size presets file (`curvyo-document-core/data/document-presets.toml`): parser only, no writer.
-toml = { version = "1.1", default-features = false, features = ["std", "parse", "serde"] }
+# The built-in document formats (`curvyo-document-core/data/document-presets.toml`) are parsed; the
+# maker's formats file (`document-formats.toml`, specs/0045-document-formats-library) is read and
+# written, which needs `display` (the `toml_writer` crate, pure Rust, builds for wasm32).
+toml = { version = "1.1", default-features = false, features = ["std", "parse", "display", "serde"] }
 zip = { version = "8", default-features = false, features = ["deflate"] }
 loro = { version = "1.16", default-features = false }
 kurbo = { version = "0.13", default-features = false, features = ["std"] }
