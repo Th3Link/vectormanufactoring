@@ -13,17 +13,21 @@ use crate::wasm_api::WasmSession;
 /// `"smooth"` (the join a press applies and the one with no Shift), `shift` is the live Shift and
 /// `style_differs` is `false`; for `"join"`, `style_differs` tells whether the continued path and
 /// the target path differ in style.
-#[wasm_bindgen(getter_with_clone)]
+#[wasm_bindgen]
 #[derive(Debug, Clone)]
 pub struct PenCueView {
     /// The target kind code.
+    #[wasm_bindgen(getter_with_clone)]
     pub kind: String,
     /// The identity of the target node (a path and its end), empty for a place or a close: the
     /// host restarts the rest timer of its chip when it changes.
+    #[wasm_bindgen(getter_with_clone)]
     pub target: String,
     /// The join a close applies, `"sharp"` or `"smooth"`, else empty.
+    #[wasm_bindgen(getter_with_clone)]
     pub join: String,
     /// The join with no Shift, else empty.
+    #[wasm_bindgen(getter_with_clone)]
     pub as_drawn: String,
     /// Whether Shift is held.
     pub shift: bool,
