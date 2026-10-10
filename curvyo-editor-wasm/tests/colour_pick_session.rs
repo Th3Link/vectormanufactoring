@@ -181,6 +181,45 @@ fn the_hover_reports_what_a_click_would_take() {
     assert_ne!(session.cursor_hint(), "eyedropper");
 }
 
+/// A pan moves the document under a still pointer: what a click would take is
+/// read again for the point the pointer is now over (UX review D5).
+#[test]
+fn a_pan_or_a_drag_pan_refreshes_the_hover_under_a_still_pointer() {
+    let mut session = two_squares();
+    paint_the_first(&mut session);
+    select(&mut session, 60.0);
+    session.begin_colour_pick(PaintTarget::Stroke);
+    let over_first = (0..160)
+        .flat_map(|y| (0..160).map(move |x| (f64::from(x) * 5.0, f64::from(y) * 5.0)))
+        .find(|&(x, y)| {
+            let p = session.screen_to_document(x, y);
+            (2.0..18.0).contains(&p.x) && (2.0..18.0).contains(&p.y)
+        })
+        .expect("the first square is on screen");
+    let point = session.screen_to_document(over_first.0, over_first.1);
+    session.pointer_hover(point, false, false);
+    assert!(session.colour_pick_hover().is_some());
+    session.wheel(0.0, 5000.0, over_first.0, over_first.1, false, false);
+    assert_eq!(session.colour_pick_hover(), None, "the square moved away");
+    session.wheel(0.0, -5000.0, over_first.0, over_first.1, false, false);
+    assert!(session.colour_pick_hover().is_some(), "and came back");
+    // A drag pan keeps its anchor under the cursor: the pointer is then over
+    // the anchor's document point, which here holds no paint.
+    let (ex, ey) = (over_first.0 + 200.0, over_first.1);
+    assert!(
+        session.screen_to_document(ex, ey).x > 20.0,
+        "empty ground to the right"
+    );
+    session.begin_pan(ex, ey);
+    session.pan_to(ex + 7.0, ey + 3.0);
+    assert_eq!(
+        session.colour_pick_hover(),
+        None,
+        "a drag pan refreshes too"
+    );
+    session.end_pan();
+}
+
 #[test]
 fn picking_shows_in_the_panel_view() {
     let mut session = two_squares();

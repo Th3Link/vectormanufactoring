@@ -64,7 +64,7 @@ const LASSO_TRAIL = "M13 18 C15 14 17 14 18 17 C19 20 21 20 22.5 16";
 
 /** The pipette glyph, tip at (2, 22). */
 const EYEDROPPER =
-  "m2 22 1-1h3l9-9 M3 21v-3l9-9 m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z";
+  "m2 22 1-1h3l9-9 M3 21v-3l9-9 M15 6 l3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z";
 
 /** The built-in resize cursor nearest to a double arrow at `degrees`. */
 export function nearestBuiltInResizeCursor(degrees: number): string {

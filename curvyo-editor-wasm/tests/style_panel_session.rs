@@ -357,3 +357,49 @@ fn an_edit_over_three_objects_is_one_commit_of_three_writes() {
     assert_eq!(written(3, false), 3 * one, "typed");
     assert_eq!(written(3, true), 3 * one, "dragged");
 }
+
+/// Criterion 44: a drag over objects with different values sets all of them to
+/// the value under the pointer. The panel stops reporting Mixed after the first
+/// tick (the preview makes the objects equal), so the host must latch Mixed at
+/// the press; the session itself maps each `p` to its value, whatever the
+/// ticks before.
+#[test]
+fn a_drag_over_mixed_values_sets_every_object_to_the_value_of_the_pointer_position() {
+    let mut session = session_with_rectangles(3);
+    session.set_tool(Tool::Select);
+    for (k, percent_value) in [(0_u32, 20.0), (1, 50.0), (2, 80.0)] {
+        let edge = Point::new(f64::from(k) * 30.0, 5.0);
+        session.pointer_hover(edge, false, false);
+        session.pointer_down(edge, false);
+        session.pointer_up(edge, false, false);
+        preview_opacity(&mut session, StyleField::StrokeOpacity, percent_value);
+        session.commit_style_preview();
+    }
+    select_first(&mut session, 3);
+    assert_eq!(
+        session.style_panel_state().unwrap().stroke.opacity,
+        BarValue::Mixed
+    );
+
+    let scale = curvyo_ui_core::ValueScale::Opacity;
+    let at = |session: &mut Session, p: f64| {
+        session.preview_value_field(
+            curvyo_ui_core::ValueField::StrokeOpacity,
+            p,
+            curvyo_ui_core::Grid::Normal,
+        );
+    };
+    at(&mut session, 0.1);
+    // One tick makes the objects equal: this is why Mixed is latched by the host.
+    assert!(matches!(
+        session.style_panel_state().unwrap().stroke.opacity,
+        BarValue::Uniform(_)
+    ));
+    at(&mut session, 167.0 / 244.0);
+    session.commit_style_preview();
+    let wanted = scale.round(scale.value_at(167.0 / 244.0), curvyo_ui_core::Grid::Normal);
+    assert_eq!(wanted, 53.0);
+    for style in stored_styles(&session) {
+        assert_eq!(style.stroke.opacity, percent(53));
+    }
+}

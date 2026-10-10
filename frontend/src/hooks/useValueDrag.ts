@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent } from "react";
 
 import type { GridName } from "@/hooks/useStylePanel";
+import { dragPosition } from "@/lib/dragPosition";
 
 /** A press that has moved this far (px) starts a drag; less is a click. */
 export const DRAG_THRESHOLD_PX = 3;
@@ -30,6 +31,9 @@ interface Drag {
   factor: number;
   lastP: number;
   lastX: number;
+  /** Latched at the press: the preview makes the objects equal, which must not
+   * turn the drag relative (criterion 44). */
+  mixed: boolean;
   dragging: boolean;
   left: number;
   width: number;
@@ -119,6 +123,7 @@ export function useValueDrag({ bar, mixed, onTick, onClick, onDragEnd }: ValueDr
       factor: factorOf(event),
       lastP: bar,
       lastX: event.clientX,
+      mixed,
       dragging: false,
       left: box.left,
       width: box.width,
@@ -138,10 +143,7 @@ export function useValueDrag({ bar, mixed, onTick, onClick, onDragEnd }: ValueDr
       document.documentElement.setAttribute("data-value-drag", "");
     }
     rebase(event);
-    const raw = mixed
-      ? (event.clientX - current.left) / current.width
-      : current.baseP + (current.factor * (event.clientX - current.baseX)) / current.width;
-    const p = Math.min(1, Math.max(0, raw));
+    const p = dragPosition(current, event.clientX);
     current.lastP = p;
     current.lastX = event.clientX;
     onTick(p, gridOf(event));

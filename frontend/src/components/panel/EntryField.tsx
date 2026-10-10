@@ -12,7 +12,7 @@ export interface EntryFieldProps {
   suffix?: string;
   /** Width in px. */
   width: number;
-  /** The text shown while the field is empty and not mixed ("Solid. Example: 6 4"). */
+  /** The text shown while the field is empty and not mixed ("Solid, e.g. 6 4"). */
   placeholder?: string;
   /** Room kept free at the right for the suffix, px. Default 32 for a suffix of
    * two or more characters, 24 for one. */

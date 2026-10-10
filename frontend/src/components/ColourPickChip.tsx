@@ -19,6 +19,8 @@ interface ColourPickChipProps {
   /** Picking is on (the cursor is the eyedropper). */
   active: boolean;
   getSession: () => WasmSession | null;
+  /** Changes with the zoom, so a zoom by key re-reads the colour too. */
+  viewKey: number;
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -37,13 +39,42 @@ function parseHex(hex: string): { rgb: number; opacity: number } {
  * control, no focus, no pointer events. The colour is read from the session at
  * most once per animation frame, after the canvas has processed the move.
  */
-export function ColourPickChip({ active, getSession, containerRef }: ColourPickChipProps) {
+export function ColourPickChip({
+  active,
+  getSession,
+  viewKey,
+  containerRef,
+}: ColourPickChipProps) {
   const chipRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<Hover | null>(null);
   const [sizes, setSizes] = useState({
     chip: { width: 0, height: 0 },
     canvas: { width: Number.POSITIVE_INFINITY, height: Number.POSITIVE_INFINITY },
   });
+
+  // The pointer is tracked whether or not picking is on: the press on the
+  // eyedropper button happens elsewhere, and the first move over the canvas
+  // arrives before `active` does.
+  const pointer = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return undefined;
+    }
+    const track = (event: PointerEvent) => {
+      const bounds = container.getBoundingClientRect();
+      pointer.current = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+    };
+    const leave = () => {
+      pointer.current = null;
+    };
+    container.addEventListener("pointermove", track, true);
+    container.addEventListener("pointerleave", leave);
+    return () => {
+      container.removeEventListener("pointermove", track, true);
+      container.removeEventListener("pointerleave", leave);
+    };
+  }, [containerRef]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -52,36 +83,36 @@ export function ColourPickChip({ active, getSession, containerRef }: ColourPickC
       return undefined;
     }
     let frame = 0;
-    let last: { x: number; y: number } | null = null;
     const read = () => {
       frame = 0;
       const session = getSession();
+      const last = pointer.current;
       if (!last || !session) {
+        setHover(null);
         return;
       }
       const [hex = "", paint = ""] = session.colour_pick_hover();
       setHover({ ...last, hex, paint });
     };
-    const track = (event: PointerEvent) => {
-      const bounds = container.getBoundingClientRect();
-      last = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+    // Once per animation frame, after the canvas has processed the event.
+    const schedule = () => {
       if (frame === 0) {
         frame = window.requestAnimationFrame(read);
       }
     };
-    const leave = () => {
-      last = null;
-      setHover(null);
-    };
-    container.addEventListener("pointermove", track);
-    container.addEventListener("pointerleave", leave);
+    // A pan or zoom moves the document under a still pointer.
+    container.addEventListener("pointermove", schedule);
+    container.addEventListener("wheel", schedule);
+    container.addEventListener("pointerleave", schedule);
+    schedule();
     return () => {
       window.cancelAnimationFrame(frame);
-      container.removeEventListener("pointermove", track);
-      container.removeEventListener("pointerleave", leave);
+      container.removeEventListener("pointermove", schedule);
+      container.removeEventListener("wheel", schedule);
+      container.removeEventListener("pointerleave", schedule);
       setHover(null);
     };
-  }, [active, getSession, containerRef]);
+  }, [active, getSession, viewKey, containerRef]);
 
   useLayoutEffect(() => {
     const chip = chipRef.current;

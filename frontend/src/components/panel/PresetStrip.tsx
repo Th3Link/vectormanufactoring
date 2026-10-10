@@ -61,7 +61,7 @@ export function PresetStrip({ labelledBy, cells, value, onPress, onReturnFocus }
                 onReturnFocus();
               }
             }}
-            className="flex h-7 min-w-8 flex-[1_1_auto] items-center justify-center gap-1.5 bg-[var(--panel-bg)] px-1.5 text-sm text-[var(--toolbar-icon)] outline-none hover:bg-[var(--editor-accent-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--editor-accent)] aria-checked:!bg-[var(--toolbar-icon-active-bg)] aria-checked:!text-[var(--toolbar-icon-active-fg)]"
+            className="flex h-7 min-w-8 flex-[1_1_auto] items-center justify-center gap-1.5 bg-[var(--panel-bg)] px-1.5 text-sm text-[var(--toolbar-icon)] outline-none hover:[background-image:linear-gradient(var(--editor-accent-hover),var(--editor-accent-hover))] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--editor-accent)] aria-checked:![background-image:none] aria-checked:!bg-[var(--toolbar-icon-active-bg)] aria-checked:!text-[var(--toolbar-icon-active-fg)]"
           >
             {cell.content}
           </RadioGroup.Item>

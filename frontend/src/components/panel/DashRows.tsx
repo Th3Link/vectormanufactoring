@@ -48,7 +48,7 @@ export function DashRows({ panel, onReturnFocus }: DashRowsProps) {
               suffix="x width"
               gutter={56}
               smallSuffix
-              placeholder="Solid. Example: 6 4"
+              placeholder="Solid, e.g. 6 4"
               width={176}
               align="left"
               onSubmit={panel.setStrokeDashText}

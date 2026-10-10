@@ -88,6 +88,15 @@ impl Session {
         true
     }
 
+    /// A pan or zoom moved the document under the pointer at canvas pixel
+    /// `(screen_x, screen_y)`: the colour a click would take is read again.
+    pub(super) fn refresh_colour_pick_hover(&mut self, screen_x: f64, screen_y: f64) {
+        if self.colour_pick.target.is_some() {
+            let point = self.screen_to_document(screen_x, screen_y);
+            self.colour_pick_move(point);
+        }
+    }
+
     /// The release of a press picking consumed: nothing for a tool to finish.
     pub(super) fn colour_pick_release(&mut self) -> bool {
         std::mem::take(&mut self.colour_pick.swallow_release)

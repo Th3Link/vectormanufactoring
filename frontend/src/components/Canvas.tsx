@@ -143,7 +143,8 @@ export function Canvas({ editor }: CanvasProps) {
         />
       )}
       <HandleHintChip
-        hint={editor.handleHint}
+        // A press picks a colour while the eyedropper is on: no move to promise.
+        hint={editor.cursorHint === "eyedropper" ? "" : editor.handleHint}
         cornerLines={editor.cornerHintLines}
         containerRef={editor.containerRef}
       />
@@ -158,6 +159,7 @@ export function Canvas({ editor }: CanvasProps) {
       <ColourPickChip
         active={editor.cursorHint === "eyedropper"}
         getSession={editor.getSession}
+        viewKey={editor.zoomPercent}
         containerRef={editor.containerRef}
       />
       {editor.liveReadout && (
