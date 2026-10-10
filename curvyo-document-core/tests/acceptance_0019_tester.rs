@@ -127,8 +127,11 @@ fn a_stale_id_refuses_all_and_writes_nothing() {
     }
 }
 
-/// A result whose kind differs from the stored kind (a path result for a
-/// rectangle id) refuses everything.
+/// A result whose kind differs from the stored kind refuses everything. Since the
+/// stretch converts (`0019` criterion 53, decision 8) a path result for a rectangle is
+/// a conversion, and this one (an open path of another object, two anchors) is not a
+/// valid one: `InvalidConversion`; a primitive result for a path stays `NoSuchObject`
+/// (`only_a_primitive_becomes_a_path_never_the_reverse`).
 #[test]
 fn a_changed_kind_refuses_all() {
     let d = Document::new(1);
@@ -147,7 +150,7 @@ fn a_changed_kind_refuses_all() {
     let err = d
         .transform_objects(&[good_a, ObjectSnapshot::Path(wrong), good_b], false)
         .unwrap_err();
-    assert_eq!(err, ObjectEditError::NoSuchObject);
+    assert_eq!(err, ObjectEditError::InvalidConversion);
     assert!(snapshot(&d) == before);
 }
 
