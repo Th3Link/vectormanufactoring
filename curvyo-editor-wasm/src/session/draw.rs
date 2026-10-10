@@ -152,6 +152,7 @@ impl Session {
                 pending.as_ref(),
                 view,
                 self.document.size(),
+                self.shown_background(),
             ));
         }
         // What a press would continue, join or close onto, before the click (`0034`).
@@ -160,6 +161,7 @@ impl Session {
                 &self.pen_cue_data(),
                 view,
                 self.document.size(),
+                self.shown_background(),
             ));
         }
         list

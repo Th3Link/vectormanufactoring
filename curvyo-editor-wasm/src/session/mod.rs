@@ -20,6 +20,8 @@
 //! methods join this type's `impl Session` the same way any other
 //! `impl` block in the same crate would.
 
+mod background;
+mod background_view;
 mod boolean;
 #[cfg(test)]
 mod box_refit_tests;
@@ -62,6 +64,8 @@ use curvyo_ui_core::{
     PolygonStarTool, RectangleTool, SelectTool, StyleEditor, Viewport,
 };
 
+#[cfg(target_arch = "wasm32")]
+pub use background_view::BackgroundView;
 pub use boolean::BooleanOutcome;
 pub use close_path::{ClosePathOutcome, ClosePathState};
 pub use combine::{BreakApartOutcome, CombineOutcome};
@@ -152,6 +156,9 @@ pub struct Session {
     style: StyleEditor,
     /// The eyedropper (`colour_pick.rs`).
     colour_pick: colour_pick::ColourPick,
+    /// The Background block's drag in flight: drawn in place of the stored background,
+    /// committed once on release, never in the document (`background.rs`).
+    background_preview: Option<curvyo_document_core::DocumentBackground>,
     /// The document formats: the built-in list with the maker's file over it
     /// (`formats.rs`).
     formats: curvyo_document_core::FormatLibrary,
@@ -240,6 +247,7 @@ impl Session {
             // (`specs/0043-properties-tabs/` criterion 5, 11).
             panel_tabs: std::cell::Cell::new(curvyo_ui_core::PanelTabs::new(false)),
             colour_pick: colour_pick::ColourPick::default(),
+            background_preview: None,
             viewport: Viewport::new(),
             hovered: None,
             hovered_object: None,
@@ -279,6 +287,7 @@ impl Session {
             // (`specs/0043-properties-tabs/` criterion 5, 11).
             panel_tabs: std::cell::Cell::new(curvyo_ui_core::PanelTabs::new(false)),
             colour_pick: colour_pick::ColourPick::default(),
+            background_preview: None,
             viewport: Viewport::new(),
             hovered: None,
             hovered_object: None,

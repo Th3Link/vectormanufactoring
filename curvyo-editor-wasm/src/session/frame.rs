@@ -1,6 +1,7 @@
-//! The list the host submits each frame: the document's own area under
-//! everything `Session::draw_list` builds (`specs/0015-document-size-and-rulers/`
-//! criterion 28).
+//! The list the host submits each frame: the document's own area (its
+//! background) under everything `Session::draw_list` builds
+//! (`specs/0015-document-size-and-rulers/` criterion 28,
+//! `specs/0040-document-background` criterion 13).
 
 use curvyo_render_core::{DrawList, build_document_area};
 
@@ -13,8 +14,12 @@ impl Session {
     /// `draw_list` so the area is not mistaken for artwork of the document.
     #[must_use]
     pub fn frame_draw_list(&self) -> DrawList {
-        let mut list =
-            build_document_area(self.document.size(), self.view(), self.device_pixel_ratio);
+        let mut list = build_document_area(
+            self.document.size(),
+            self.shown_background(),
+            self.view(),
+            self.device_pixel_ratio,
+        );
         list.extend(self.draw_list());
         list
     }

@@ -5,7 +5,7 @@
 //! item). Compiles for `wasm32` only, like `gpu.rs`.
 
 use curvyo_document_core::{Point, ViewTransform};
-use curvyo_render_core::DrawList;
+use curvyo_render_core::{CHECKER_A, CHECKER_B, CheckerGrid, DrawList, RgbaColor};
 
 const SHADER_SOURCE: &str = r"
 struct ScreenTransform {
@@ -13,6 +13,14 @@ struct ScreenTransform {
     offset_x: f32,
     scale_y: f32,
     offset_y: f32,
+    // The checkerboard of the document area (`specs/0040-document-background`): the
+    // document corner in device pixels, reduced to the pattern's period, the cell
+    // side in device pixels and the two tones.
+    checker_phase: vec2<f32>,
+    checker_cell: f32,
+    checker_pad: f32,
+    checker_a: vec4<f32>,
+    checker_b: vec4<f32>,
 };
 
 @group(0) @binding(0)
@@ -45,6 +53,18 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     return input.color;
+}
+
+// The tone is the parity of floor((p - corner) / cell) over both axes, even is
+// tone A: `curvyo_render_core::checker_tone` is the same formula. `position` is the
+// pixel centre in device pixels, so the cell edges fall on whole pixels.
+@fragment
+fn fs_checker(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
+    let cell = floor((frag.xy - transform.checker_phase) / transform.checker_cell);
+    if ((i32(cell.x) + i32(cell.y)) & 1) == 0 {
+        return transform.checker_a;
+    }
+    return transform.checker_b;
 }
 ";
 
@@ -126,6 +146,21 @@ pub(super) struct ScreenTransform {
     offset_x: f32,
     scale_y: f32,
     offset_y: f32,
+    checker_phase: [f32; 2],
+    checker_cell: f32,
+    checker_pad: f32,
+    checker_a: [f32; 4],
+    checker_b: [f32; 4],
+}
+
+/// A draw-list colour as the shader's normalised `vec4`.
+fn shader_colour(colour: RgbaColor) -> [f32; 4] {
+    [
+        f32::from(colour.r) / 255.0,
+        f32::from(colour.g) / 255.0,
+        f32::from(colour.b) / 255.0,
+        f32::from(colour.a) / 255.0,
+    ]
 }
 
 impl ScreenTransform {
@@ -146,16 +181,32 @@ impl ScreenTransform {
     /// longer needs to repeat that subtraction (`specs/0004-canvas-
     /// navigation-and-selection/adrs.md`: "the shader is unchanged; only
     /// the offset term changes").
-    pub(super) fn new(view: ViewTransform, css_width: f64, css_height: f64) -> Self {
+    ///
+    /// `grid` is where the document area's checkerboard cells are
+    /// ([`curvyo_render_core::checker_grid`]); only a frame whose draw list has
+    /// a checkerboard prefix reads it.
+    pub(super) fn new(
+        view: ViewTransform,
+        css_width: f64,
+        css_height: f64,
+        grid: CheckerGrid,
+    ) -> Self {
         let (width, height) = (css_width.max(1.0), css_height.max(1.0));
         let scale_x = 2.0 * view.scale() / width;
         let scale_y = -2.0 * view.scale() / height;
-        #[allow(clippy::cast_possible_truncation)]
+        let (phase_x, phase_y) = grid.phase();
+        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
         Self {
             scale_x: scale_x as f32,
             offset_x: -1.0,
             scale_y: scale_y as f32,
             offset_y: 1.0,
+            // The phase is below two cells, which is exact in an `f32`.
+            checker_phase: [phase_x as f32, phase_y as f32],
+            checker_cell: grid.cell as f32,
+            checker_pad: 0.0,
+            checker_a: shader_colour(CHECKER_A),
+            checker_b: shader_colour(CHECKER_B),
         }
     }
 }
@@ -183,7 +234,7 @@ pub(super) fn create_transform_resources(device: &wgpu::Device) -> TransformReso
         label: Some("curvyo transform layout"),
         entries: &[wgpu::BindGroupLayoutEntry {
             binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Uniform,
                 has_dynamic_offset: false,
@@ -212,17 +263,45 @@ pub(super) fn create_transform_resources(device: &wgpu::Device) -> TransformReso
 /// layers apart ([`curvyo_render_core::DrawList::vertex_depths`]).
 pub(super) const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
-/// How a pipeline treats depth.
+/// What a pipeline draws: how it treats depth and which fragment entry point
+/// colours its pixels.
 #[derive(Clone, Copy)]
-pub(super) enum DepthMode {
+pub(super) enum PipelineKind {
     /// Artwork: a vertex of layer `k` passes only where nothing of its layer
     /// or a later one was written, and writes its depth. A pixel is therefore
     /// painted at most once per layer (single coverage), and later layers
     /// still paint over earlier ones.
-    SingleCoverage,
+    Artwork,
+    /// The checkerboard prefix of the document area: the artwork depth rule,
+    /// coloured by the checkerboard shader instead of the vertex colour.
+    Checker,
     /// Overlay (editor decorations): always passes, never writes, so
     /// translucent glyphs blend in list order as they always did.
     Overlay,
+}
+
+impl PipelineKind {
+    fn depth_rule(self) -> (bool, wgpu::CompareFunction) {
+        match self {
+            Self::Artwork | Self::Checker => (true, wgpu::CompareFunction::Less),
+            Self::Overlay => (false, wgpu::CompareFunction::Always),
+        }
+    }
+
+    const fn fragment_entry(self) -> &'static str {
+        match self {
+            Self::Artwork | Self::Overlay => "fs_main",
+            Self::Checker => "fs_checker",
+        }
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Artwork => "curvyo artwork pipeline",
+            Self::Checker => "curvyo checkerboard pipeline",
+            Self::Overlay => "curvyo overlay pipeline",
+        }
+    }
 }
 
 /// The layout of [`GpuVertex`]: position, colour, layer depth.
@@ -251,20 +330,17 @@ fn vertex_layout() -> wgpu::VertexBufferLayout<'static> {
 }
 
 /// Builds a render pipeline for the draw-list triangle list, transformed by
-/// the `transform_bind_group_layout` uniform, targeting `surface_format`, with
-/// the depth behaviour of `depth`. Split out of [`Gpu::attach`] for the same
+/// the `transform_bind_group_layout` uniform, targeting `surface_format`, as the
+/// `kind` of pipeline. Split out of [`Gpu::attach`] for the same
 /// `clippy::too_many_lines` reason as [`create_transform_resources`].
 pub(super) fn create_pipeline(
     device: &wgpu::Device,
     transform_bind_group_layout: &wgpu::BindGroupLayout,
     surface_format: wgpu::TextureFormat,
     sample_count: u32,
-    depth: DepthMode,
+    kind: PipelineKind,
 ) -> wgpu::RenderPipeline {
-    let (depth_write_enabled, depth_compare) = match depth {
-        DepthMode::SingleCoverage => (true, wgpu::CompareFunction::Less),
-        DepthMode::Overlay => (false, wgpu::CompareFunction::Always),
-    };
+    let (depth_write_enabled, depth_compare) = kind.depth_rule();
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("curvyo draw-list shader"),
         source: wgpu::ShaderSource::Wgsl(SHADER_SOURCE.into()),
@@ -277,10 +353,7 @@ pub(super) fn create_pipeline(
     });
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some(match depth {
-            DepthMode::SingleCoverage => "curvyo artwork pipeline",
-            DepthMode::Overlay => "curvyo overlay pipeline",
-        }),
+        label: Some(kind.label()),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module: &shader,
@@ -290,7 +363,7 @@ pub(super) fn create_pipeline(
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
-            entry_point: Some("fs_main"),
+            entry_point: Some(kind.fragment_entry()),
             targets: &[Some(wgpu::ColorTargetState {
                 format: surface_format,
                 blend: Some(wgpu::BlendState::ALPHA_BLENDING),

@@ -24,9 +24,28 @@ use curvyo_ui_core::{
     BarValue, DashChoice, DashShown, Grid, MAX_DASH_NUMBER, MAX_DASH_NUMBERS, PaintTarget,
     StyleEntryError, StyleField, StyleScope, ValueField, ValueScale, dash_text, hex_text,
     hsv_to_rgb, opacity_from_percent, parse_dash_text, parse_hex, parse_opacity_percent,
-    parse_stroke_width, pick_colour, rgb_to_hsv, style_panel_state,
+    parse_stroke_width, rgb_to_hsv, style_panel_state,
 };
 use proptest::prelude::*;
+
+/// The eyedropper over the objects only: no background to fall back to
+/// (`0040-document-background` added that source; these cases are about the objects).
+fn pick_colour(
+    objects: &[ObjectSnapshot],
+    point: Point,
+    tolerance: Tolerance,
+) -> Option<curvyo_ui_core::PickedColour> {
+    curvyo_ui_core::pick_colour(
+        objects,
+        point,
+        tolerance,
+        curvyo_document_core::DocumentSize::default(),
+        curvyo_document_core::DocumentBackground {
+            paint: curvyo_document_core::BackgroundPaint::None,
+            ..curvyo_document_core::DocumentBackground::DEFAULT
+        },
+    )
+}
 
 fn rgb(r: u8, g: u8, b: u8) -> Color {
     Color { r, g, b }
