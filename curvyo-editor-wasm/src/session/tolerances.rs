@@ -59,6 +59,9 @@ impl Session {
             point: self.point_tolerance(),
             handle: self.handle_tolerance(),
             segment: self.segment_tolerance(),
+            drag_threshold: Tolerance::from_mm(
+                self.transform_handle_tolerances().drag_threshold_mm,
+            ),
         }
     }
 

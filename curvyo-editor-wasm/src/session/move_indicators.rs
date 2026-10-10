@@ -42,6 +42,13 @@ impl Session {
             remove_badge: false,
             lock: None,
         };
+        if self.tool == Tool::Node {
+            // The lock badge of a segment bend (`0031` criterion 13).
+            return MoveIndicators {
+                lock: self.live_bend().and_then(|bend| bend.axis),
+                ..none
+            };
+        }
         if self.tool != Tool::Select {
             return none;
         }
@@ -150,6 +157,17 @@ impl Session {
         ))
     }
 
+    /// The readout of a segment bend past the drag threshold: the displacement from the press,
+    /// after any axis lock (`0031` criterion 16).
+    pub(super) fn bend_readout(&self) -> Option<LiveReadout> {
+        let anchor = self.pointer_position?;
+        let bend = self.live_bend()?;
+        Some(LiveReadout {
+            text: move_readout_text(bend.displacement, false),
+            anchor,
+        })
+    }
+
     /// The readout of a move drag past the dead zone: the offset a release
     /// would commit, after any axis lock, with " Copy" in copy mode.
     pub(super) fn move_readout(&self) -> Option<LiveReadout> {
@@ -166,7 +184,7 @@ impl Session {
 
 /// `Δ 12.5, −3.0 mm`, with ` Copy` for a copy: X right, Y down, one decimal,
 /// a real minus sign (U+2212) in the readout only.
-fn move_readout_text(offset: Vec2, copy: bool) -> String {
+pub(super) fn move_readout_text(offset: Vec2, copy: bool) -> String {
     let suffix = if copy { " Copy" } else { "" };
     format!(
         "Δ {}, {} mm{suffix}",

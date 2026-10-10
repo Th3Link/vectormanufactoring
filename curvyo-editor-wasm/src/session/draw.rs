@@ -6,13 +6,11 @@
 use std::borrow::Cow;
 
 use curvyo_render_core::{
-    DrawList, GradientFrame, TransformDecorationInput, build_artwork, build_decorations,
-    build_group_draw_list, build_marquee_overlay, build_pen_preview, build_select_draw_list,
-    build_transform_draw_list,
+    DrawList, TransformDecorationInput, build_artwork, build_decorations, build_group_draw_list,
+    build_marquee_overlay, build_pen_preview, build_select_draw_list, build_transform_draw_list,
 };
 
-use curvyo_document_core::{FillKind, ObjectSnapshot, PathSnapshot};
-use curvyo_ui_core::oriented_bounds;
+use curvyo_document_core::{ObjectSnapshot, PathSnapshot};
 
 use super::{Session, Tool};
 
@@ -49,7 +47,9 @@ impl Session {
         // interleaved, each with its fill then its stroke
         // (`specs/0007-stroke-and-fill-styling` criterion 26). The Node
         // tool's live drag reshapes the paths it moves.
-        let mut artwork_objects = if self.tool == Tool::Node {
+        // A segment bend leaves the artwork as committed ("black old"): its blue outline is
+        // drawn over it below, and only the decorations read the live paths.
+        let mut artwork_objects = if self.tool == Tool::Node && self.live_bend().is_none() {
             Cow::Owned(Self::with_paths(&objects, &paths))
         } else {
             Cow::Borrowed(&objects[..])
@@ -59,8 +59,15 @@ impl Session {
         if self.style.is_active() {
             self.style.apply_to(artwork_objects.to_mut());
         }
-        let frames = Self::gradient_frames(&artwork_objects);
-        let mut list = build_artwork(&artwork_objects, &frames, view);
+        let mut list = build_artwork(&artwork_objects, view);
+        // The blue half of a segment bend, over the artwork and under the nodes and handles.
+        let bend_preview = self.bend_preview_objects(&objects);
+        if !bend_preview.is_empty() {
+            list.extend(curvyo_render_core::build_live_edit_preview(
+                &bend_preview,
+                view,
+            ));
+        }
         // A compound path shows no node, handle or segment (`0016-boolean-operations` criterion 38).
         let editable: Vec<_> = paths
             .iter()
@@ -141,36 +148,21 @@ impl Session {
             });
             list.extend(build_pen_preview(
                 nodes,
-                self.pointer_position,
+                self.pen_rubber_band_end(),
                 pending.as_ref(),
                 view,
-                self.is_hovering_pen_close_target(),
+                self.document.size(),
+            ));
+        }
+        // What a press would continue, join or close onto, before the click (`0034`).
+        if self.tool == Tool::Pen {
+            list.extend(curvyo_render_core::build_pen_cue(
+                &self.pen_cue_data(),
+                view,
                 self.document.size(),
             ));
         }
         list
-    }
-
-    /// The box each gradient-filled object's gradient spans: its oriented
-    /// selection box (`specs/0007-stroke-and-fill-styling` criteria 21, 22).
-    /// Objects without a gradient fill get `None`, so nothing is computed for
-    /// them.
-    fn gradient_frames(objects: &[ObjectSnapshot]) -> Vec<Option<GradientFrame>> {
-        objects
-            .iter()
-            .map(|object| {
-                let fill = &object.style().fill;
-                (fill.paints() && fill.kind != FillKind::Solid).then(|| {
-                    let oriented = oriented_bounds(object);
-                    GradientFrame {
-                        min: oriented.min,
-                        max: oriented.max,
-                        angle: oriented.angle,
-                        pivot: oriented.pivot,
-                    }
-                })
-            })
-            .collect()
     }
 
     /// `objects` with each path replaced by the path of the same id in `paths`

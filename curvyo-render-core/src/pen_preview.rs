@@ -57,14 +57,6 @@ fn screen_px_to_mm(view: ViewTransform, px: f64) -> f64 {
 /// straight line precisely because releasing now places a corner node,
 /// not a curved one.
 ///
-/// `is_hovering_close_target` is the host's own
-/// `is_hovering_pen_close_target()` (acceptance criterion 5's "Cursors"
-/// UX note): when `true`, the first placed node also gets the hover ring
-/// treatment, the same visual the most-recently-placed node always
-/// carries — the spec calls for both the cursor swap *and* this ring as
-/// two independent, deliberately redundant signals that closing is one
-/// click away, not an either/or.
-///
 /// `document_size` is only for the hollow nodes' knockout: each is filled with
 /// the colour behind it, the document's over the document and the
 /// pasteboard's beyond its edge (`specs/0015-document-size-and-rulers/`
@@ -75,7 +67,6 @@ pub fn build_pen_preview(
     cursor: Option<Point>,
     pending: Option<&AnchorSnapshot>,
     view: ViewTransform,
-    is_hovering_close_target: bool,
     document_size: DocumentSize,
 ) -> DrawList {
     let mut list = DrawList::default();
@@ -126,26 +117,6 @@ pub fn build_pen_preview(
     if let Some(last) = nodes.last() {
         list.extend(glyphs::ring(
             last.point,
-            hover_ring_diameter,
-            hover_ring_thickness,
-            theme::ACCENT_HOVER,
-        ));
-    }
-
-    // Acceptance criterion 5's second close-target signal: the path's
-    // own first node also gets the hover ring while the cursor is over
-    // it and closing is one click away. `is_hovering_close_target` only
-    // ever comes in `true` once at least two nodes are placed — the
-    // same precondition `curvyo_ui_core::PenTool`'s own close decision
-    // uses — but `nodes.len() > 1` is checked here too rather than
-    // trusting the caller, so a single placed node (first and last are
-    // the same node, already ringed above) can never be drawn twice.
-    if is_hovering_close_target
-        && nodes.len() > 1
-        && let Some(first) = nodes.first()
-    {
-        list.extend(glyphs::ring(
-            first.point,
             hover_ring_diameter,
             hover_ring_thickness,
             theme::ACCENT_HOVER,
@@ -248,7 +219,6 @@ mod tests {
             Some(Point::new(5.0, 5.0)),
             None,
             ViewTransform::identity(),
-            false,
             DocumentSize::default(),
         );
         assert_eq!(list.triangles.len(), 0);
@@ -262,7 +232,6 @@ mod tests {
             Some(Point::new(10.0, 0.0)),
             None,
             ViewTransform::identity(),
-            false,
             DocumentSize::default(),
         );
         let without_cursor = build_pen_preview(
@@ -270,7 +239,6 @@ mod tests {
             None,
             None,
             ViewTransform::identity(),
-            false,
             DocumentSize::default(),
         );
         assert!(
@@ -294,7 +262,6 @@ mod tests {
             None,
             None,
             ViewTransform::identity(),
-            false,
             DocumentSize::default(),
         );
         let two_nodes = build_pen_preview(
@@ -302,76 +269,11 @@ mod tests {
             None,
             None,
             ViewTransform::identity(),
-            false,
             DocumentSize::default(),
         );
         assert!(
             two_nodes.triangle_count() > one_node.triangle_count(),
             "the stroke between the two placed nodes adds geometry"
-        );
-    }
-
-    /// Acceptance criterion 5's second close-target signal: hovering the
-    /// in-progress path's own first node, with the host reporting
-    /// `is_hovering_close_target`, must draw that first node's hover
-    /// ring in addition to the last node's permanent one — a strictly
-    /// bigger draw list than the same nodes without the flag set.
-    #[test]
-    fn hovering_the_close_target_rings_the_first_node_too() {
-        let nodes = [
-            NewAnchor::corner(AnchorId::new(1, 1), Point::new(0.0, 0.0)),
-            NewAnchor::corner(AnchorId::new(1, 2), Point::new(10.0, 0.0)),
-            NewAnchor::corner(AnchorId::new(1, 3), Point::new(5.0, 10.0)),
-        ];
-        let not_hovering = build_pen_preview(
-            &nodes,
-            None,
-            None,
-            ViewTransform::identity(),
-            false,
-            DocumentSize::default(),
-        );
-        let hovering = build_pen_preview(
-            &nodes,
-            None,
-            None,
-            ViewTransform::identity(),
-            true,
-            DocumentSize::default(),
-        );
-        assert!(
-            hovering.triangle_count() > not_hovering.triangle_count(),
-            "the first node's hover ring must add geometry when closing is one click away"
-        );
-    }
-
-    /// The flag must not conjure a ring out of nothing when there is no
-    /// path to close yet (a single placed node, where "first" and
-    /// "last" are the same node that already always rings) — guards
-    /// against the two branches silently double-drawing the same ring.
-    #[test]
-    fn hovering_close_target_with_one_node_does_not_double_the_ring() {
-        let nodes = [NewAnchor::corner(AnchorId::new(1, 1), Point::new(0.0, 0.0))];
-        let not_hovering = build_pen_preview(
-            &nodes,
-            None,
-            None,
-            ViewTransform::identity(),
-            false,
-            DocumentSize::default(),
-        );
-        let hovering = build_pen_preview(
-            &nodes,
-            None,
-            None,
-            ViewTransform::identity(),
-            true,
-            DocumentSize::default(),
-        );
-        assert_eq!(
-            hovering.triangle_count(),
-            not_hovering.triangle_count(),
-            "first == last for one node; the flag must not draw a second ring on top"
         );
     }
 
@@ -401,7 +303,6 @@ mod tests {
             cursor,
             None,
             ViewTransform::identity(),
-            false,
             DocumentSize::default(),
         );
         let dragging = build_pen_preview(
@@ -409,7 +310,6 @@ mod tests {
             cursor,
             Some(&pending),
             ViewTransform::identity(),
-            false,
             DocumentSize::default(),
         );
         assert!(
@@ -437,7 +337,6 @@ mod tests {
             cursor,
             Some(&pending),
             ViewTransform::identity(),
-            false,
             DocumentSize::default(),
         );
         assert!(
@@ -460,7 +359,6 @@ mod tests {
             Some(origin),
             Some(&pending),
             ViewTransform::identity(),
-            false,
             DocumentSize::default(),
         );
         // Only C's own node glyph (hollow square: outline + fill, 2
@@ -487,7 +385,6 @@ mod tests {
             cursor,
             Some(&pending),
             ViewTransform::identity(),
-            false,
             DocumentSize::default(),
         );
 
@@ -503,7 +400,6 @@ mod tests {
             cursor,
             Some(&smooth_pending),
             ViewTransform::identity(),
-            false,
             DocumentSize::default(),
         );
 
@@ -522,14 +418,7 @@ mod tests {
         let anchor = |x: f64| NewAnchor::corner(AnchorId::new(1, 1), Point::new(x, 10.0));
         let size = DocumentSize::from_mm(100.0, 100.0);
         let colours = |x: f64| {
-            let list = build_pen_preview(
-                &[anchor(x)],
-                None,
-                None,
-                ViewTransform::identity(),
-                false,
-                size,
-            );
+            let list = build_pen_preview(&[anchor(x)], None, None, ViewTransform::identity(), size);
             list.triangles.iter().map(|v| v.color).collect::<Vec<_>>()
         };
         let inside = colours(50.0);

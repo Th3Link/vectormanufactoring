@@ -218,16 +218,6 @@ impl WasmSession {
         self.session.pointer_leave();
     }
 
-    /// Acceptance criterion 5's cursor cue
-    /// (`specification.md`'s "Cursors"): whether the live cursor is
-    /// currently over the in-progress pen path's own close target, so
-    /// the host can swap in the close-path cursor variant. Call after
-    /// every [`WasmSession::pointer_hover`].
-    #[must_use]
-    pub fn is_hovering_pen_close_target(&self) -> bool {
-        self.session.is_hovering_pen_close_target()
-    }
-
     /// The pointer released at canvas-relative CSS pixel `(x, y)`.
     /// `constrain` is the Ctrl modifier's state at release (acceptance
     /// criteria 2, 8), consulted by the rectangle/ellipse tools and,

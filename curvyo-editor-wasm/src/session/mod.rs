@@ -23,9 +23,13 @@
 mod boolean;
 #[cfg(test)]
 mod box_refit_tests;
+mod close_path;
+mod colour_pick;
+mod combine;
 mod conversion_view;
 mod corner_readout;
 mod document;
+mod document_presets;
 mod draw;
 mod frame;
 mod group_view;
@@ -36,6 +40,7 @@ mod navigation;
 mod node;
 mod open_error;
 mod pen;
+mod refusal;
 mod ruler;
 mod select;
 mod select_bar;
@@ -44,20 +49,22 @@ mod select_gesture;
 mod select_readout;
 mod select_view;
 mod shapes;
-mod stops;
 mod style;
 mod style_view;
 mod tolerances;
 mod transform_entry;
 
-use curvyo_document_core::{Document, NodeId, ObjectSnapshot, OpenError, Point, SaveError, StopId};
+use curvyo_document_core::{Document, NodeId, ObjectSnapshot, OpenError, Point, SaveError};
 use curvyo_ui_core::{
     AnchorIdMinter, EllipseTool, Hit, Modifiers, NodeTool, ObjectSelection, PenTool,
-    PolygonStarTool, RectangleTool, SelectTool, StyleEditor, Viewport, hit_test,
+    PolygonStarTool, RectangleTool, SelectTool, StyleEditor, Viewport,
 };
 
 pub use boolean::BooleanOutcome;
+pub use close_path::{ClosePathOutcome, ClosePathState};
+pub use combine::{BreakApartOutcome, CombineOutcome};
 pub use document::{DocumentSide, FitOutcome, SizeOutcome};
+pub use document_presets::DocumentPresetsRecord;
 pub use keys::{EscapeStep, KeyHint, KeyInput, KeyOutcome};
 pub use move_indicators::MoveIndicators;
 pub use select::DoubleClickHint;
@@ -139,9 +146,10 @@ pub struct Session {
     /// of the stored style, committed once on release
     /// (`specs/0007-stroke-and-fill-styling` criterion 36).
     style: StyleEditor,
-    /// The selected gradient stop of each edited object (ephemeral; the panel
-    /// highlights its row and thumb).
-    selected_stops: Vec<(NodeId, StopId)>,
+    /// The eyedropper (`colour_pick.rs`).
+    colour_pick: colour_pick::ColourPick,
+    /// The document size presets (`document_presets.rs`).
+    presets: curvyo_document_core::PresetList,
     /// Pan/zoom view state (ADR 0009 §2: ephemeral — never written to
     /// the document, resets on `New`/`Open`).
     viewport: Viewport,
@@ -187,9 +195,11 @@ pub struct Session {
     /// limit is never silent. The host clears it after the delay
     /// ([`Session::clear_limit_notice`]); a press clears it too.
     limit_notice: Option<shapes::LiveReadout>,
-    /// The objects a refused boolean operation is drawn around (red, hollow, never stored), and
+    /// The objects a refused rail command is drawn around (red, hollow, never stored), and
     /// the selection it was refused for: the outline ends with the selection or the tool.
-    boolean_refusal: Option<boolean::RefusalMarks>,
+    command_refusal: Option<refusal::RefusalMarks>,
+    /// The Pen's end-node cache and the target of the press in flight (`0034`).
+    pen_cue: pen::PenCueState,
 }
 
 impl Session {
@@ -215,7 +225,10 @@ impl Session {
             // selection tool exists").
             tool: Tool::Select,
             style: StyleEditor::default(),
-            selected_stops: Vec::new(),
+            // The tests load the shipped file, so the error branch is
+            // unreachable; an empty list would only hide the buttons.
+            presets: curvyo_document_core::PresetList::shipped().unwrap_or_default(),
+            colour_pick: colour_pick::ColourPick::default(),
             viewport: Viewport::new(),
             hovered: None,
             hovered_object: None,
@@ -225,7 +238,8 @@ impl Session {
             device_pixel_ratio: 1.0,
             button_down: false,
             limit_notice: None,
-            boolean_refusal: None,
+            command_refusal: None,
+            pen_cue: pen::PenCueState::default(),
         }
     }
 
@@ -248,7 +262,10 @@ impl Session {
             selection: ObjectSelection::new(),
             tool: Tool::Select,
             style: StyleEditor::default(),
-            selected_stops: Vec::new(),
+            // The tests load the shipped file, so the error branch is
+            // unreachable; an empty list would only hide the buttons.
+            presets: curvyo_document_core::PresetList::shipped().unwrap_or_default(),
+            colour_pick: colour_pick::ColourPick::default(),
             viewport: Viewport::new(),
             hovered: None,
             hovered_object: None,
@@ -258,7 +275,8 @@ impl Session {
             device_pixel_ratio: 1.0,
             button_down: false,
             limit_notice: None,
-            boolean_refusal: None,
+            command_refusal: None,
+            pen_cue: pen::PenCueState::default(),
         })
     }
 
@@ -297,6 +315,7 @@ impl Session {
         // commits it against whatever is selected *then* instead).
         self.flush_select_bar_preview();
         self.flush_style_preview();
+        self.end_colour_pick();
         self.select.cancel_entry();
         self.select.forget_press();
         self.select.cancel_gesture();
@@ -315,7 +334,7 @@ impl Session {
             self.hovered_object = None;
         }
         if tool != self.tool {
-            self.boolean_refusal = None;
+            self.command_refusal = None;
         }
         self.tool = tool;
     }
@@ -337,7 +356,11 @@ impl Session {
     /// primitives`]: both a path and a primitive are "any object" to
     /// `hit_test_object`/`object_bounds`.
     fn objects(&self) -> Vec<ObjectSnapshot> {
-        if self.tool == Tool::Select && self.select.drag_in_flight() {
+        // A Select or Node-tool drag reuses one read of the document for all its frames: nothing
+        // changes the document while it runs (`0031` criterion 17).
+        if (self.tool == Tool::Select && self.select.drag_in_flight())
+            || (self.tool == Tool::Node && self.node.drag_in_flight())
+        {
             return self
                 .drag_objects
                 .borrow_mut()
@@ -369,14 +392,16 @@ impl Session {
         // against, if the mouse was released outside the slider itself.
         self.flush_select_bar_preview();
         self.flush_style_preview();
+        if self.colour_pick_press(point) {
+            return;
+        }
         self.button_down = true;
         match self.tool {
             Tool::Select => {
                 self.select_pointer_down(point, shift);
             }
             Tool::Pen => {
-                let tolerance = self.point_tolerance_as_length();
-                self.pen.pointer_down(point, tolerance);
+                self.pen_pointer_down(point, shift);
             }
             Tool::Node => {
                 let paths = self.paths();
@@ -414,20 +439,21 @@ impl Session {
         self.hovered_object = None;
         self.held.shift = shift;
         self.held.ctrl = constrain;
+        if self.colour_pick_move(point) {
+            return;
+        }
         match self.tool {
             Tool::Select => {
                 self.select_hover(point, self.held);
             }
             Tool::Node => {
-                let paths = self.paths();
-                self.hovered = hit_test(
-                    &paths,
-                    self.node.selection(),
-                    point,
-                    self.point_tolerance(),
-                    self.handle_tolerance(),
-                    self.segment_tolerance(),
-                );
+                // A bend in flight follows the pointer; no hover test runs during any drag
+                // (`0031` criterion 17).
+                self.node.pointer_moved(point, shift);
+                if !self.node.drag_in_flight() {
+                    let paths = self.paths();
+                    self.hovered = self.hovered_segment_hit(&paths, point);
+                }
             }
             Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
                 self.shape_pointer_move(point, Modifiers::new(shift, constrain));
@@ -452,6 +478,9 @@ impl Session {
     /// alongside `shift` (acceptance criteria 5, 7, 16, 17).
     pub fn pointer_up(&mut self, point: Point, shift: bool, constrain: bool) {
         self.button_down = false;
+        if self.colour_pick_release() {
+            return;
+        }
         let Some(point) = sanitized_point(point) else {
             // A release at a non-finite position cannot be committed to
             // anything; cancel the gesture rather than write NaN.
@@ -466,8 +495,10 @@ impl Session {
                 let threshold = self.drag_threshold();
                 self.pen
                     .pointer_up(&mut self.minter, &self.document, point, threshold);
+                self.pen_cue.release();
             }
             Tool::Node => {
+                self.node.pointer_moved(point, shift);
                 self.node.pointer_up(&self.document, point);
             }
             Tool::Rectangle | Tool::Ellipse | Tool::PolygonStar => {
@@ -738,49 +769,9 @@ mod tests {
         );
     }
 
-    /// Acceptance criterion 5's cursor cue: hovering near the
-    /// in-progress path's own first node, with enough nodes placed,
-    /// reports the close target; the node tool, idle pen tool, and
-    /// hovering elsewhere all report `false`.
-    ///
-    /// 2026-10-05 (node-size round): the second node moved from (10, 0)
-    /// to (50, 0) — at the identity view used here, 1 document mm is 1
-    /// screen px, and `POINT_TOLERANCE_PX` doubling to 16 means the old
-    /// 10mm separation would have put "hovering the last node" (distance
-    /// 10 from the first) *inside* the now-16mm close tolerance, turning
-    /// this into a false positive unrelated to what the test actually
-    /// guards. 50mm stays unambiguously outside tolerance regardless.
-    #[test]
-    fn is_hovering_pen_close_target_matches_the_real_close_decision() {
-        let mut session = Session::new(1);
-        session.set_tool(Tool::Pen);
-        assert!(!session.is_hovering_pen_close_target(), "idle: no path yet");
-
-        session.pointer_down(Point::new(0.0, 0.0), false);
-        session.pointer_up(Point::new(0.0, 0.0), false, false);
-        session.pointer_down(Point::new(50.0, 0.0), false);
-        session.pointer_up(Point::new(50.0, 0.0), false, false);
-
-        session.pointer_hover(Point::new(0.1, 0.1), false, false);
-        assert!(session.is_hovering_pen_close_target());
-
-        session.pointer_hover(Point::new(50.0, 0.0), false, false);
-        assert!(
-            !session.is_hovering_pen_close_target(),
-            "near the last node, not the first"
-        );
-
-        session.set_tool(Tool::Node);
-        session.pointer_hover(Point::new(0.1, 0.1), false, false);
-        assert!(
-            !session.is_hovering_pen_close_target(),
-            "the node tool never shows a pen cursor"
-        );
-    }
-
     /// Resets `session`'s viewport to an identity-equivalent view (1
     /// screen px per document mm, origin at the document origin) — these
-    /// two tests were written and pinned against `ViewTransform::
+    /// tests were written and pinned against `ViewTransform::
     /// identity()`, back when `Session`'s only view was a bare,
     /// never-defaulted-to-100%-zoom `ViewTransform`. `canvas-navigation-
     /// and-selection` gives `Session` a real `Viewport` defaulting to
@@ -969,9 +960,7 @@ mod tests {
     fn join_selected_closes_an_open_path_through_the_session() {
         // Far enough apart that the third click does not land inside the
         // (doubled, 16px/mm at this identity view) close-path tolerance
-        // around the first node — the same pitfall
-        // `is_hovering_pen_close_target_matches_the_real_close_decision`'s
-        // own doc comment already names for this exact reason.
+        // around the first node.
         let mut session = Session::new(1);
         session.set_tool(Tool::Pen);
         session.pointer_down(Point::new(0.0, 0.0), false);

@@ -6,8 +6,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use curvyo_document_core::{
-    Document, EllipseFrame, FillMode, FillModeTarget, Length, NodeId, ObjectSnapshot, Point,
-    RectBounds, Tolerance,
+    Document, EllipseFrame, Length, NodeId, ObjectSnapshot, Point, RectBounds, StyleEdit, Tolerance,
 };
 use curvyo_ui_core::{
     AnchorIdMinter, Modifiers, ObjectSelection, PressTarget, SelectPointerDownOutcome, SelectTool,
@@ -46,13 +45,7 @@ fn circle(document: &Document, x: f64, y: f64, r: f64) -> NodeId {
 
 fn fill(document: &Document, id: NodeId) {
     document
-        .set_fill_mode(
-            FillMode::Solid,
-            &[FillModeTarget {
-                id,
-                seed_stops: vec![],
-            }],
-        )
+        .edit_style(&[id], &StyleEdit::FillEnabled(true))
         .unwrap();
 }
 

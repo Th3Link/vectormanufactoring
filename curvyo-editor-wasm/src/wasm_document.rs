@@ -5,11 +5,11 @@
 //! booleans and numbers only (ADR 0001 §5), every method a pass-through to
 //! `Session`.
 
-use curvyo_document_core::DisplayUnit;
+use curvyo_document_core::{DisplayUnit, Orientation};
 use curvyo_ui_core::PanelContent;
 use wasm_bindgen::prelude::*;
 
-use crate::session::{DocumentSide, FitOutcome, SizeOutcome};
+use crate::session::{DocumentPresetsRecord, DocumentSide, FitOutcome, SizeOutcome};
 use crate::wasm_api::WasmSession;
 
 fn side_from_str(name: &str) -> Option<DocumentSide> {
@@ -18,6 +18,15 @@ fn side_from_str(name: &str) -> Option<DocumentSide> {
         "height" => Some(DocumentSide::Height),
         _ => None,
     }
+}
+
+fn outcome_word(outcome: SizeOutcome) -> String {
+    match outcome {
+        SizeOutcome::Committed => "committed",
+        SizeOutcome::Unchanged => "unchanged",
+        SizeOutcome::Invalid => "invalid:number",
+    }
+    .to_string()
 }
 
 #[wasm_bindgen]
@@ -71,12 +80,32 @@ impl WasmSession {
         let Some(side) = side_from_str(side) else {
             return "unchanged".to_string();
         };
-        match self.session.set_document_side(side, text) {
-            SizeOutcome::Committed => "committed",
-            SizeOutcome::Unchanged => "unchanged",
-            SizeOutcome::Invalid => "invalid:number",
-        }
-        .to_string()
+        outcome_word(self.session.set_document_side(side, text))
+    }
+
+    /// The presets part of the Document section: the subject line, the pressed
+    /// orientation and every button in file order. Read in the same sync as the
+    /// size fields.
+    #[must_use]
+    pub fn document_presets_view(&self) -> DocumentPresetsRecord {
+        DocumentPresetsRecord::new(&self.session.document_presets_view())
+    }
+
+    /// A press on the preset button `id`: `"committed"`, `"unchanged"` or
+    /// `"invalid:number"` (an unknown id).
+    pub fn apply_document_preset(&mut self, id: &str) -> String {
+        outcome_word(self.session.apply_document_preset(id))
+    }
+
+    /// A press on an orientation item, `"portrait"` or `"landscape"`:
+    /// `"committed"` or `"unchanged"`.
+    pub fn set_document_orientation(&mut self, orientation: &str) -> String {
+        let wanted = match orientation {
+            "portrait" => Orientation::Portrait,
+            "landscape" => Orientation::Landscape,
+            _ => return "unchanged".to_string(),
+        };
+        outcome_word(self.session.set_document_orientation(wanted))
     }
 
     /// The Fit to content button: `"fitted"`, `"already-fits"`, `"empty"`,

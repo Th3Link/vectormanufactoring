@@ -6,12 +6,13 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use curvyo_document_core::{
-    Color, DashPattern, Document, EllipseFrame, FillMode, FillModeTarget, Length, LineCap,
-    LineJoin, NewAnchor, NodeId, ObjectSnapshot, Opacity, Point, RectBounds, StyleEdit,
+    Color, DashPattern, Document, EllipseFrame, Length, LineCap, LineJoin, NewAnchor, NodeId,
+    ObjectSnapshot, Opacity, Point, RectBounds, StyleEdit,
 };
 use curvyo_ui_core::{
-    BarValue, DashChoice, NodeSelection, ObjectSelection, StyleEditor, StyleField, StyleTool,
-    parse_hex, parse_opacity_percent, parse_stroke_width, style_panel_state, style_scope,
+    BarValue, DashChoice, DashShown, NodeSelection, ObjectSelection, StyleEditor, StyleEntryError,
+    StyleField, StyleTool, parse_hex, parse_opacity_percent, parse_stroke_width, style_panel_state,
+    style_scope,
 };
 
 fn square(document: &Document, x: f64) -> NodeId {
@@ -72,7 +73,7 @@ fn state_of(document: &Document, ids: &[NodeId]) -> curvyo_ui_core::StylePanelSt
         &selected(ids),
         &NodeSelection::new(),
     );
-    style_panel_state(&objects, &scope)
+    style_panel_state(&objects, &objects, &scope).expect("objects to edit")
 }
 
 fn percent(n: u32) -> Opacity {
@@ -82,7 +83,7 @@ fn percent(n: u32) -> Opacity {
 // ---- scope and subject line (criterion 37) --------------------------------
 
 #[test]
-fn pen_and_an_empty_selection_disable_the_panel() {
+fn pen_and_an_empty_selection_leave_nothing_to_edit() {
     let document = Document::new(1);
     let a = square(&document, 0.0);
     let objects = objects(&document);
@@ -94,7 +95,7 @@ fn pen_and_an_empty_selection_disable_the_panel() {
         &NodeSelection::new(),
     );
     assert_eq!(pen.ids, Vec::<NodeId>::new());
-    assert_eq!(pen.subject, "Pen: finish the path to style it");
+    assert_eq!(pen.subject, "", "no text for the Pen (criterion 4)");
 
     let none = style_scope(
         StyleTool::Other,
@@ -103,14 +104,14 @@ fn pen_and_an_empty_selection_disable_the_panel() {
         &NodeSelection::new(),
     );
     assert_eq!(none.ids, Vec::<NodeId>::new());
-    assert_eq!(none.subject, "Nothing selected");
+    assert_eq!(none.subject, "");
     let node_none = style_scope(
         StyleTool::Node,
         &objects,
         &ObjectSelection::new(),
         &NodeSelection::new(),
     );
-    assert_eq!(node_none.subject, "Nothing selected");
+    assert_eq!(node_none.subject, "");
 }
 
 #[test]
@@ -210,23 +211,44 @@ fn the_node_tool_fallback_is_the_paths_of_the_object_selection_only() {
         &selected(&[r]),
         &NodeSelection::new(),
     );
-    assert_eq!(none.subject, "Nothing selected");
+    assert_eq!(none.subject, "");
 }
 
 // ---- what the panel shows (criteria 5, 13, 24) -----------------------------
 
 #[test]
-fn a_disabled_panel_shows_the_frozen_defaults() {
+fn nothing_to_edit_gives_no_panel_state() {
     let document = Document::new(1);
-    let state = state_of(&document, &[]);
-    assert!(!state.enabled);
+    let _ = square(&document, 0.0);
+    let objects = objects(&document);
+    let scope = style_scope(
+        StyleTool::Other,
+        &objects,
+        &ObjectSelection::new(),
+        &NodeSelection::new(),
+    );
+    assert_eq!(style_panel_state(&objects, &objects, &scope), None);
+}
+
+#[test]
+fn a_new_object_shows_the_frozen_defaults() {
+    let document = Document::new(1);
+    let a = square(&document, 0.0);
+    let state = state_of(&document, &[a]);
     assert_eq!(state.stroke.paint, BarValue::Uniform(true));
     assert_eq!(state.stroke.width, BarValue::Uniform(Length::from_mm(0.25)));
     assert_eq!(state.stroke.color, BarValue::Uniform(Color::BLACK));
-    assert_eq!(state.stroke.dash, BarValue::Uniform(DashChoice::Solid));
+    assert_eq!(
+        state.stroke.dash,
+        DashShown::Uniform {
+            preset: Some(DashChoice::Solid),
+            text: String::new()
+        }
+    );
     assert_eq!(state.stroke.join, BarValue::Uniform(LineJoin::Miter));
     assert_eq!(state.stroke.cap, BarValue::Uniform(LineCap::Butt));
-    assert_eq!(state.fill.mode, BarValue::Uniform(FillMode::None));
+    assert_eq!(state.fill.paint, BarValue::Uniform(false));
+    assert!(state.stroke.rows_shown && !state.fill.rows_shown);
 }
 
 #[test]
@@ -234,7 +256,6 @@ fn equal_objects_show_one_value_and_different_ones_show_mixed() {
     let document = Document::new(1);
     let (a, b) = (square(&document, 0.0), circle(&document, 30.0));
     let state = state_of(&document, &[a, b]);
-    assert!(state.enabled);
     assert_eq!(state.stroke.width, BarValue::Uniform(Length::from_mm(0.25)));
 
     edit(
@@ -252,19 +273,19 @@ fn equal_objects_show_one_value_and_different_ones_show_mixed() {
 }
 
 #[test]
-fn stroke_rows_are_off_only_when_every_object_has_its_stroke_off() {
+fn stroke_rows_are_hidden_only_when_every_object_has_its_stroke_off() {
     let document = Document::new(1);
     let (a, b) = (square(&document, 0.0), square(&document, 20.0));
     edit(&document, &[a], &StyleEdit::StrokeEnabled(false));
     let some_off = state_of(&document, &[a, b]);
     assert_eq!(some_off.stroke.paint, BarValue::Mixed);
-    assert!(!some_off.stroke.all_off);
+    assert!(some_off.stroke.rows_shown, "mixed Paint shows the rows");
 
     edit(&document, &[b], &StyleEdit::StrokeEnabled(false));
     let all_off = state_of(&document, &[a, b]);
     assert_eq!(all_off.stroke.paint, BarValue::Uniform(false));
-    assert!(all_off.stroke.all_off);
-    // The stored values stay on show while the stroke is off (criterion 5).
+    assert!(!all_off.stroke.rows_shown);
+    // The stored values stay readable while the stroke is off (criterion 7).
     assert_eq!(
         all_off.stroke.width,
         BarValue::Uniform(Length::from_mm(0.25))
@@ -272,23 +293,57 @@ fn stroke_rows_are_off_only_when_every_object_has_its_stroke_off() {
 }
 
 #[test]
-fn the_dash_choice_names_a_preset_or_custom() {
+fn rows_follow_the_committed_document_and_values_follow_the_preview() {
+    let document = Document::new(1);
+    let a = square(&document, 0.0);
+    let committed = objects(&document);
+    let scope = style_scope(
+        StyleTool::Other,
+        &committed,
+        &selected(&[a]),
+        &NodeSelection::new(),
+    );
+    // A width dragged to 0 previews as a stroke that is off.
+    let mut shown = committed.clone();
+    StyleEdit::StrokeWidth(Length::from_mm(0.0))
+        .apply_to(shown[0].style_mut())
+        .unwrap();
+    let state = style_panel_state(&committed, &shown, &scope).unwrap();
+    assert_eq!(state.stroke.paint, BarValue::Uniform(false));
+    assert!(
+        state.stroke.rows_shown,
+        "the row stays while the drag is running (criterion 8)"
+    );
+}
+
+#[test]
+fn the_dash_row_names_the_pressed_preset_and_the_numbers() {
     let document = Document::new(1);
     let (a, b) = (square(&document, 0.0), square(&document, 20.0));
-    for (choice, lengths) in [
-        (DashChoice::Dash, vec![6.0, 4.0]),
-        (DashChoice::Dot, vec![1.0, 3.0]),
-        (DashChoice::DashDot, vec![6.0, 3.0, 1.0, 3.0]),
-        (DashChoice::Custom, vec![2.0, 2.0]),
-        (DashChoice::Solid, vec![]),
+    for (choice, lengths, text) in [
+        (Some(DashChoice::Dash), vec![6.0, 4.0], "6 4"),
+        (Some(DashChoice::Dot), vec![1.0, 3.0], "1 3"),
+        (
+            Some(DashChoice::DashDot),
+            vec![6.0, 3.0, 1.0, 3.0],
+            "6 3 1 3",
+        ),
+        (None, vec![2.0, 2.0], "2 2"),
+        (None, vec![1.0, 2.0, 4.0], "1 2 4"),
+        (Some(DashChoice::Solid), vec![], ""),
     ] {
         let pattern = DashPattern::new(lengths).unwrap();
         edit(&document, &[a], &StyleEdit::StrokeDash(pattern.clone()));
         let state = state_of(&document, &[a]);
-        assert_eq!(state.stroke.dash, BarValue::Uniform(choice));
-        assert_eq!(choice.pattern().is_none(), choice == DashChoice::Custom);
-        if let Some(preset) = choice.pattern() {
-            assert_eq!(preset, pattern);
+        assert_eq!(
+            state.stroke.dash,
+            DashShown::Uniform {
+                preset: choice,
+                text: text.to_string()
+            }
+        );
+        if let Some(preset) = choice {
+            assert_eq!(preset.pattern(), pattern);
         }
     }
     edit(
@@ -296,58 +351,137 @@ fn the_dash_choice_names_a_preset_or_custom() {
         &[a],
         &StyleEdit::StrokeDash(DashPattern::new(vec![6.0, 4.0]).unwrap()),
     );
-    assert_eq!(state_of(&document, &[a, b]).stroke.dash, BarValue::Mixed);
+    assert_eq!(state_of(&document, &[a, b]).stroke.dash, DashShown::Mixed);
     assert_eq!(DashChoice::from_name("dash-dot"), Some(DashChoice::DashDot));
     assert_eq!(DashChoice::from_name("custom"), None);
 }
 
 #[test]
-fn the_fill_mode_row_reads_none_and_solid_and_mixed() {
+fn the_hex_value_is_mixed_when_colour_or_alpha_differ() {
     let document = Document::new(1);
     let (a, b) = (square(&document, 0.0), square(&document, 20.0));
     assert_eq!(
-        state_of(&document, &[a, b]).fill.mode,
-        BarValue::Uniform(FillMode::None)
+        state_of(&document, &[a, b]).stroke.rgba,
+        BarValue::Uniform((Color::BLACK, Opacity::OPAQUE))
+    );
+    edit(&document, &[a], &StyleEdit::StrokeOpacity(percent(50)));
+    let state = state_of(&document, &[a, b]);
+    assert_eq!(state.stroke.rgba, BarValue::Mixed);
+    assert_eq!(
+        state.stroke.color,
+        BarValue::Uniform(Color::BLACK),
+        "the picker's colour is the RGB alone"
+    );
+}
+
+#[test]
+fn the_fill_paint_row_reads_off_on_and_mixed() {
+    let document = Document::new(1);
+    let (a, b) = (square(&document, 0.0), square(&document, 20.0));
+    assert_eq!(
+        state_of(&document, &[a, b]).fill.paint,
+        BarValue::Uniform(false)
     );
     document
-        .set_fill_mode(
-            FillMode::Solid,
-            &[FillModeTarget {
-                id: a,
-                seed_stops: vec![],
-            }],
-        )
+        .edit_style(&[a], &StyleEdit::FillEnabled(true))
         .unwrap();
     let state = state_of(&document, &[a, b]);
-    assert_eq!(state.fill.mode, BarValue::Mixed);
+    assert_eq!(state.fill.paint, BarValue::Mixed);
     assert_eq!(
-        state_of(&document, &[a]).fill.mode,
-        BarValue::Uniform(FillMode::Solid)
+        state_of(&document, &[a]).fill.paint,
+        BarValue::Uniform(true)
     );
 }
 
 // ---- typed values (criteria 5, 6, 14) --------------------------------------
 
 #[test]
-fn hex_accepts_three_or_six_digits_in_any_case_with_or_without_hash() {
+fn hex_accepts_three_four_six_or_eight_digits_in_any_case_with_or_without_hash() {
     let orange = Color {
         r: 0xFF,
         g: 0x88,
         b: 0x00,
     };
     for text in ["#F80", "f80", "#ff8800", "FF8800", "  #Ff8800  "] {
-        assert_eq!(parse_hex(text), Ok(orange), "{text}");
+        let typed = parse_hex(text).unwrap();
+        assert_eq!((typed.color, typed.opacity), (orange, None), "{text}");
     }
-    assert!(parse_hex("").is_err());
-    assert!(parse_hex("#12").is_err());
-    assert!(parse_hex("#12345").is_err());
-    assert!(parse_hex("#GGGGGG").is_err());
-    // Colour and opacity are independent: eight digits are refused, with their
-    // own message.
-    let eight = parse_hex("#FF8800CC").unwrap_err();
-    assert_ne!(eight, parse_hex("#12").unwrap_err());
-    assert_eq!(eight.code(), "hex8");
-    assert_eq!(parse_hex("#12").unwrap_err().code(), "hex");
+    for text in ["#F80C", "f80c", "#ff8800cc", "FF8800CC", " #Ff8800Cc "] {
+        let typed = parse_hex(text).unwrap();
+        assert_eq!(typed.color, orange, "{text}");
+        assert_eq!(
+            typed.opacity,
+            Some(Opacity::new(204.0 / 255.0).unwrap()),
+            "{text}: stored as AA / 255"
+        );
+    }
+    for text in [
+        "",
+        "#",
+        "#12",
+        "#12345",
+        "#1234567",
+        "#123456789",
+        "#GGGGGG",
+        "#12 345",
+    ] {
+        assert_eq!(parse_hex(text), Err(StyleEntryError::Hex), "{text:?}");
+    }
+    assert_eq!(StyleEntryError::Hex.code(), "hex");
+}
+
+#[test]
+fn hex_text_shows_eight_upper_case_digits_with_the_alpha_rounded_half_up() {
+    use curvyo_ui_core::hex_text;
+    let blue = Color {
+        r: 0x2F,
+        g: 0x6F,
+        b: 0xEE,
+    };
+    assert_eq!(hex_text(blue, Opacity::OPAQUE), "#2F6FEEFF");
+    assert_eq!(hex_text(blue, percent(50)), "#2F6FEE80", "127.5 rounds up");
+    assert_eq!(hex_text(blue, percent(0)), "#2F6FEE00");
+    assert_eq!(
+        hex_text(blue, Opacity::new(128.0 / 255.0).unwrap()),
+        "#2F6FEE80"
+    );
+    // Typed 8 digits read back as the same 8 digits.
+    for alpha in 0..=255_u8 {
+        let text = format!("#2F6FEE{alpha:02X}");
+        let typed = parse_hex(&text).unwrap();
+        assert_eq!(hex_text(typed.color, typed.opacity.unwrap()), text);
+    }
+}
+
+#[test]
+fn a_typed_hex_makes_the_edit_that_fits_its_length() {
+    let orange = Color {
+        r: 0xFF,
+        g: 0x88,
+        b: 0x00,
+    };
+    assert_eq!(
+        StyleField::FillColor.parse_text("F80"),
+        Ok(StyleEdit::FillColor(orange))
+    );
+    assert_eq!(
+        StyleField::StrokeColor.parse_text("FF8800"),
+        Ok(StyleEdit::StrokeColor(orange))
+    );
+    assert_eq!(
+        StyleField::StrokeColor.parse_text("F80C"),
+        Ok(StyleEdit::StrokeRgba(
+            orange,
+            Opacity::new(204.0 / 255.0).unwrap()
+        ))
+    );
+    assert_eq!(
+        StyleField::FillColor.parse_text("#FF880080"),
+        Ok(StyleEdit::FillRgba(
+            orange,
+            Opacity::new(128.0 / 255.0).unwrap()
+        ))
+    );
 }
 
 #[test]
@@ -494,10 +628,8 @@ fn a_cancel_with_no_drag_running_does_not_block_the_next_one() {
 
 #[test]
 fn the_host_words_parse_back() {
-    use curvyo_ui_core::{cap_from_name, fill_mode_from_name, join_from_name};
+    use curvyo_ui_core::{cap_from_name, join_from_name};
     assert_eq!(join_from_name("bevel"), Some(LineJoin::Bevel));
     assert_eq!(cap_from_name("square"), Some(LineCap::Square));
-    assert_eq!(fill_mode_from_name("solid"), Some(FillMode::Solid));
     assert_eq!(join_from_name("mixed"), None);
-    assert_eq!(fill_mode_from_name("custom"), None);
 }

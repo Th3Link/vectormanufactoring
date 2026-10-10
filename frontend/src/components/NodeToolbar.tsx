@@ -13,6 +13,7 @@ import { ContextMenu } from "radix-ui";
 import type { ReactNode } from "react";
 
 import type { NodeToolbarState } from "@/hooks/useEditorSession";
+import { ClosePathGroup } from "@/components/ClosePathGroup";
 import { COMPOUND_NODES_TEXT } from "@/lib/booleanText";
 
 export interface NodeActions {
@@ -139,6 +140,8 @@ const OTHER_ACTIONS: ActionDescriptor[] = [
 interface NodeToolbarProps {
   state: NodeToolbarState;
   actions: NodeActions;
+  /** The Close path group (`0034-pen-path-extension`); the bar has none without it. */
+  closePath?: React.ComponentProps<typeof ClosePathGroup>;
 }
 
 /**
@@ -150,7 +153,7 @@ interface NodeToolbarProps {
  * individual buttons (`specs/0006-path-merge-split-and-node-types/
  * specification.md`'s UX notes).
  */
-export function NodeToolbar({ state, actions }: NodeToolbarProps) {
+export function NodeToolbar({ state, actions, closePath }: NodeToolbarProps) {
   if (state.compoundOnly) {
     // Text only, no controls (`0016-boolean-operations` criterion 38).
     return (
@@ -169,7 +172,7 @@ export function NodeToolbar({ state, actions }: NodeToolbarProps) {
   }
   return (
     <div
-      className="flex pointer-events-auto h-9 min-w-0 items-center gap-1 rounded-lg px-2"
+      className="pointer-events-auto flex min-h-9 max-w-full min-w-0 flex-wrap items-center gap-x-1 gap-y-1 rounded-lg px-2 py-1"
       style={{
         background: "var(--toolbar-bg)",
         boxShadow: "var(--panel-elevation-shadow)",
@@ -197,19 +200,28 @@ export function NodeToolbar({ state, actions }: NodeToolbarProps) {
 
       <div className="mx-1 h-5 w-px bg-border" aria-hidden />
 
-      {OTHER_ACTIONS.map((action) => (
-        <button
-          key={action.key}
-          type="button"
-          aria-label={action.label}
-          title={action.label}
-          disabled={!action.enabled(state)}
-          onClick={() => action.run(actions)}
-          className="flex size-7 items-center justify-center rounded-md text-[var(--toolbar-icon)] outline-none hover:bg-[var(--editor-accent-hover)] focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
-        >
-          {action.icon}
-        </button>
-      ))}
+      <div className="flex items-center gap-1">
+        {OTHER_ACTIONS.map((action) => (
+          <button
+            key={action.key}
+            type="button"
+            aria-label={action.label}
+            title={action.label}
+            disabled={!action.enabled(state)}
+            onClick={() => action.run(actions)}
+            className="flex size-7 items-center justify-center rounded-md text-[var(--toolbar-icon)] outline-none hover:bg-[var(--editor-accent-hover)] focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
+          >
+            {action.icon}
+          </button>
+        ))}
+      </div>
+
+      {closePath && (
+        <>
+          <div className="mx-1 h-5 w-px bg-border" aria-hidden />
+          <ClosePathGroup {...closePath} />
+        </>
+      )}
     </div>
   );
 }

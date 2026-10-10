@@ -31,6 +31,13 @@ pub const AXIS_GUIDE: RgbaColor = ACCENT.with_alpha(128);
 /// is not along.
 pub const AXIS_GUIDE_IDLE: RgbaColor = ACCENT_HOVER;
 
+/// The hover band over a Node-tool segment a press would bend (`--segment-hover`,
+/// `docs/design-system.md` row "Segment hover highlight"): `--accent` at 50 %, the same step as
+/// [`AXIS_GUIDE`]. Not [`ACCENT_HOVER`] (20 %), which over a thin black stroke does not show.
+pub const SEGMENT_HOVER: RgbaColor = ACCENT.with_alpha(128);
+/// The width of that band, screen pixels (`0031-segment-drag-bending` criterion 15).
+pub const SEGMENT_HOVER_WIDTH_PX: f64 = 4.0;
+
 /// `--node-stroke`: a corner/smooth node glyph's outline, both states.
 pub const NODE_STROKE: RgbaColor = RgbaColor::opaque(0x3A, 0x3A, 0x3F);
 

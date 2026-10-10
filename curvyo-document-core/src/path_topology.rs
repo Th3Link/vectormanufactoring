@@ -10,12 +10,14 @@
 //! modules call, now `pub(crate)` for that reason.
 
 use crate::document::{Document, OBJECTS_TREE};
+use crate::junction::merged_junction;
 use crate::path_codec::{
     KEY_HANDLE_IN, KEY_HANDLE_OUT, KEY_POINT, anchor_map_at, insert_anchor_at, write_closed,
     write_kind, write_point, write_vec2,
 };
 use crate::path_model::{AnchorId, AnchorKind, NewAnchor, NodeId, PathEditError, PathSnapshot};
-use crate::units::{Point, Vec2};
+use crate::path_reverse::reversed_anchors;
+use crate::units::Vec2;
 
 /// One of [`Document::split_at_anchor`]'s two resulting coincident
 /// anchors: which path it ended up on, and its own id. A named alias
@@ -192,10 +194,11 @@ impl Document {
         let len = snapshot.anchors.len();
         let first = &snapshot.anchors[0];
         let last = &snapshot.anchors[len - 1];
+        let merged = merged_junction(first, false, last, true);
         let map = anchor_map_at(&anchors, 0);
-        write_point(&map, KEY_POINT, midpoint_of(first.point, last.point));
-        write_vec2(&map, KEY_HANDLE_IN, last.handle_in);
-        write_kind(&map, AnchorKind::Corner);
+        write_point(&map, KEY_POINT, merged.point);
+        write_vec2(&map, KEY_HANDLE_IN, merged.handle_in);
+        write_kind(&map, merged.kind);
         // invariant: `len` was just read from this same (just-resolved)
         // snapshot, so `len - 1` is this list's own last valid index.
         #[allow(clippy::unwrap_used)]
@@ -230,21 +233,10 @@ impl Document {
         let b_anchor = &b_snapshot.anchors[b_index];
         let a_is_last = a_index == a_snapshot.anchors.len() - 1;
         let b_is_last = b_index == b_snapshot.anchors.len() - 1;
-        let midpoint = midpoint_of(a_anchor.point, b_anchor.point);
-
-        // Each side's own interior-facing handle, read *before* any
+        // Each side's own interior-facing handle is read *before* any
         // reversal — a structural fact of being a first- or last-anchor,
         // unaffected by how the list is later reordered.
-        let a_interior = if a_is_last {
-            a_anchor.handle_in
-        } else {
-            a_anchor.handle_out
-        };
-        let b_interior = if b_is_last {
-            b_anchor.handle_in
-        } else {
-            b_anchor.handle_out
-        };
+        let merged = merged_junction(a_anchor, a_is_last, b_anchor, b_is_last);
 
         let mut rest: Vec<NewAnchor> = b_snapshot
             .anchors
@@ -254,25 +246,20 @@ impl Document {
             .map(|(_, anchor)| *anchor)
             .collect();
         if a_is_last == b_is_last {
-            rest.reverse();
-            for anchor in &mut rest {
-                std::mem::swap(&mut anchor.handle_in, &mut anchor.handle_out);
-            }
+            rest = reversed_anchors(&rest);
         }
 
         let (_, a_anchors) = self.path_parts(a_path)?;
         let a_map = anchor_map_at(&a_anchors, a_index);
-        write_point(&a_map, KEY_POINT, midpoint);
-        write_kind(&a_map, AnchorKind::Corner);
+        write_point(&a_map, KEY_POINT, merged.point);
+        write_kind(&a_map, merged.kind);
+        write_vec2(&a_map, KEY_HANDLE_IN, merged.handle_in);
+        write_vec2(&a_map, KEY_HANDLE_OUT, merged.handle_out);
         if a_is_last {
-            write_vec2(&a_map, KEY_HANDLE_IN, a_interior);
-            write_vec2(&a_map, KEY_HANDLE_OUT, b_interior);
             for (offset, anchor) in rest.iter().enumerate() {
                 insert_anchor_at(&a_anchors, a_index + 1 + offset, anchor);
             }
         } else {
-            write_vec2(&a_map, KEY_HANDLE_OUT, a_interior);
-            write_vec2(&a_map, KEY_HANDLE_IN, b_interior);
             for (offset, anchor) in rest.iter().enumerate() {
                 insert_anchor_at(&a_anchors, offset, anchor);
             }
@@ -472,12 +459,6 @@ impl Document {
         self.commit_with_label("split_at_anchor");
         Ok(((path, new_id), (path, split_anchor.id)))
     }
-}
-
-/// The point exactly between `a` and `b` — Join's own, no-snapping
-/// placement rule (acceptance criterion 9).
-fn midpoint_of(a: Point, b: Point) -> Point {
-    Point::new(f64::midpoint(a.x, b.x), f64::midpoint(a.y, b.y))
 }
 
 /// `id`'s index within `snapshot`'s own anchor list.

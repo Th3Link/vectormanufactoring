@@ -3,15 +3,16 @@ import { useEffect, useState } from "react";
 import { Canvas } from "@/components/Canvas";
 import { ErrorDialog } from "@/components/ErrorDialog";
 import { NodeToolbar } from "@/components/NodeToolbar";
-import { PropertiesPanel } from "@/components/PropertiesPanel";
+import { PropertiesPanel } from "@/components/panel/PropertiesPanel";
 import { Rulers } from "@/components/Rulers";
 import { SelectToolbar } from "@/components/SelectToolbar";
 import { ShapeToolbar } from "@/components/ShapeToolbar";
 import { StatusBar } from "@/components/StatusBar";
 import { ToolRail } from "@/components/ToolRail";
 import type { EditorSession } from "@/hooks/useEditorSession";
-import { useBooleanCommands } from "@/hooks/useBooleanCommands";
+import { useRailCommands } from "@/hooks/useRailCommands";
 import { useEditorSession } from "@/hooks/useEditorSession";
+import { useClosePathState } from "@/hooks/usePenCue";
 import { useDocumentPanel } from "@/hooks/useDocumentPanel";
 import type {
   OpenBytesPayload,
@@ -50,7 +51,8 @@ async function openBytes(
 function App() {
   const [cursorMm, setCursorMm] = useState({ x: 0, y: 0 });
   const editor = useEditorSession(setCursorMm);
-  const booleans = useBooleanCommands(editor);
+  const railCommands = useRailCommands(editor);
+  const closePathState = useClosePathState(editor);
   const documentPanel = useDocumentPanel(editor);
   const [openErrorMessage, setOpenErrorMessage] = useState<string | null>(
     null,
@@ -166,14 +168,14 @@ function App() {
           selectionCount={editor.selectionCount}
           onSelect={editor.setTool}
           onReturnFocus={() => editor.containerRef.current?.focus()}
-          booleans={booleans}
+          commands={railCommands}
         />
         <Canvas editor={editor} />
         {/* Contextual tool bar: floats over the canvas, right of the tool
          * rail, so showing/hiding it never resizes the canvas
          * (`docs/design-system.md`, "no layout shift on tool switch"). */}
         <div
-          className={`pointer-events-none absolute top-3 right-3 left-[72px] z-20 flex ${
+          className={`pointer-events-none absolute top-3 right-3 left-[calc(var(--rail-right)+12px)] z-20 flex ${
             // The Select bar is left-aligned so its two switches never move
             // when the selection changes; the Node and Shape bars stay
             // centred (`docs/design-system.md`, "Select bar layout").
@@ -200,6 +202,13 @@ function App() {
           ) : null}
           {editor.tool === "node" ? (
             <NodeToolbar
+              closePath={{
+                state: closePathState,
+                onClose: editor.closePath,
+                onReturnFocus: () => editor.containerRef.current?.focus(),
+                tool: editor.tool,
+                selectionCount: editor.selectionCount,
+              }}
               state={editor.nodeToolbarState}
               actions={{
                 insertSelected: editor.insertSelected,

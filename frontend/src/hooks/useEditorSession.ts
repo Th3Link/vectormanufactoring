@@ -11,6 +11,8 @@ import {
   stretchReadoutLine,
 } from "@/lib/conversionText";
 import type { BooleanOp, BooleanResult } from "@/lib/booleanText";
+import type { BreakApartResult, CombineResult } from "@/lib/pathText";
+import type { ClosePathResult } from "@/lib/penText";
 
 /** The canvas's backing-buffer (physical pixel) size for a given CSS
  * (layout) size, plus the `devicePixelRatio` that relates the two —
@@ -259,7 +261,7 @@ function isFormControl(target: EventTarget): boolean {
   return (
     target instanceof HTMLElement &&
     target.closest(
-      'input, textarea, select, button, [role="switch"], [role="slider"], [role="radio"], [role="combobox"], [role="option"], [role="dialog"], [contenteditable]:not([contenteditable="false"])',
+      'input, textarea, select, button, [role="switch"], [role="slider"], [role="spinbutton"], [role="radio"], [role="combobox"], [role="option"], [role="dialog"], [contenteditable]:not([contenteditable="false"])',
     ) !== null
   );
 }
@@ -563,10 +565,6 @@ export interface EditorSession {
   /** The note under a size entry's fields while the typed size turns shapes into
    * paths ("Turns 2 shapes into paths."); `null` when it does not. */
   entryConversionNote: (first: string, second: string, lastEdited: number) => string | null;
-  /** Acceptance criterion 5's cursor cue: whether the live cursor is
-   * over the in-progress pen path's own close target — `Canvas` swaps
-   * to the "pen-with-small-circle" cursor variant while this is `true`. */
-  isHoveringPenCloseTarget: boolean;
   /** The current zoom level's integer percentage read-out (acceptance
    * criterion 9) — `StatusBar`'s new center segment. */
   zoomPercent: number;
@@ -653,6 +651,13 @@ export interface EditorSession {
   /** A boolean operation on the selection, in one commit (`0016-boolean-operations`);
    * `"ignored"` when no session is live or the Select tool is not active. */
   applyBoolean: (op: BooleanOp) => BooleanResult;
+  /** Combine on the selection, in one commit (`0035-combine-and-break-apart`). */
+  applyCombine: () => CombineResult;
+  /** Break apart on the selection, in one commit (`0035-combine-and-break-apart`). */
+  applyBreakApart: () => BreakApartResult;
+  /** The Node bar's Close path buttons (`0034-pen-path-extension`): closes the open paths of
+   * the editing set with `join` (`"sharp"` or `"smooth"`) in one commit. */
+  closePath: (join: "sharp" | "smooth") => ClosePathResult;
   onPointerDown: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerMove: (event: React.PointerEvent<HTMLCanvasElement>) => void;
   onPointerUp: (event: React.PointerEvent<HTMLCanvasElement>) => void;
@@ -738,8 +743,6 @@ export function useEditorSession(
   const [polyStarMode, setPolyStarModeState] = useState<PolyStarMode>("polygon");
   const [polyStarPointCount, setPolyStarPointCountState] = useState(6);
   const [polyStarRatio, setPolyStarRatioState] = useState(0.5);
-  const [isHoveringPenCloseTarget, setIsHoveringPenCloseTarget] =
-    useState(false);
   const [liveReadout, setLiveReadout] = useState<LiveReadout | null>(null);
   const [scaleStrokeWidth, setScaleStrokeWidthState] = useState(false);
   const [scaleCornerRadius, setScaleCornerRadiusState] = useState(false);
@@ -830,7 +833,6 @@ export function useEditorSession(
     }
     setToolState(session.tool() as Tool);
     setNodeToolbarState(readToolbarState(session.node_toolbar_state()));
-    setIsHoveringPenCloseTarget(session.is_hovering_pen_close_target());
     setPolyStarModeState(session.poly_star_mode() as PolyStarMode);
     setPolyStarPointCountState(session.poly_star_point_count());
     setPolyStarRatioState(session.poly_star_ratio());
@@ -1186,6 +1188,24 @@ export function useEditorSession(
     syncFromSession();
   }, [syncFromSession]);
 
+  const closePath = useCallback(
+    (join: "sharp" | "smooth"): ClosePathResult => {
+      const raw = sessionRef.current?.close_path(join);
+      syncFromSession();
+      if (!raw) {
+        return { closed: 0, skipped: 0, sameEnds: 0 };
+      }
+      const result = {
+        closed: raw.closed,
+        skipped: raw.skipped,
+        sameEnds: raw.same_ends,
+      };
+      raw.free();
+      return result;
+    },
+    [syncFromSession],
+  );
+
   const applyBoolean = useCallback(
     (op: BooleanOp): BooleanResult => {
       const raw = sessionRef.current?.apply_boolean(op);
@@ -1199,6 +1219,40 @@ export function useEditorSession(
     },
     [syncFromSession],
   );
+
+  const applyCombine = useCallback((): CombineResult => {
+    const raw = sessionRef.current?.apply_combine();
+    syncFromSession();
+    if (!raw) {
+      return { kind: "ignored", count: 0, of: 0, holes: 0, stylesDiffer: false };
+    }
+    const result = {
+      kind: raw.kind,
+      count: raw.count,
+      of: raw.of,
+      holes: raw.holes,
+      stylesDiffer: raw.styles_differ,
+    };
+    raw.free();
+    return result;
+  }, [syncFromSession]);
+
+  const applyBreakApart = useCallback((): BreakApartResult => {
+    const raw = sessionRef.current?.apply_break_apart();
+    syncFromSession();
+    if (!raw) {
+      return { kind: "ignored", compounds: 0, pieces: 0, withHoles: false, leftAlone: 0 };
+    }
+    const result = {
+      kind: raw.kind,
+      compounds: raw.compounds,
+      pieces: raw.pieces,
+      withHoles: raw.with_holes,
+      leftAlone: raw.left_alone,
+    };
+    raw.free();
+    return result;
+  }, [syncFromSession]);
 
   /** The event's canvas-relative CSS pixel position — pure DOM geometry,
    * no wasm call and no document-space conversion (that happens inside
@@ -1252,6 +1306,17 @@ export function useEditorSession(
         panningRef.current = true;
         setIsPanning(true);
         session.begin_pan(x, y);
+        return;
+      }
+
+      // A right press while the eyedropper is picking ends picking and writes
+      // nothing; no tool sees it and no context menu opens
+      // (`specs/0017-style-panel-rework` criterion 26).
+      if (event.button === 2 && session.cursor_hint() === "eyedropper") {
+        event.preventDefault();
+        session.end_colour_pick();
+        setCursorHint(session.cursor_hint());
+        syncFromSession();
         return;
       }
 
@@ -1331,9 +1396,6 @@ export function useEditorSession(
         event.shiftKey,
         event.ctrlKey || event.metaKey,
         event.altKey,
-      );
-      setIsHoveringPenCloseTarget(
-        session?.is_hovering_pen_close_target() ?? false,
       );
       setLiveReadout(readReadout(session));
       setCursorHint(session?.cursor_hint() ?? "default");
@@ -1456,7 +1518,6 @@ export function useEditorSession(
 
   const onPointerLeave = useCallback(() => {
     sessionRef.current?.pointer_leave();
-    setIsHoveringPenCloseTarget(false);
     setLiveReadout(null);
     setCursorHint("default");
     setHandleHint("");
@@ -1701,7 +1762,6 @@ export function useEditorSession(
     transformEntryLinked,
     entryConversionNote,
     onContainerBlur,
-    isHoveringPenCloseTarget,
     zoomPercent,
     isPanning,
     isSpaceHeld,
@@ -1737,6 +1797,9 @@ export function useEditorSession(
     setPolyStarRatio,
     convertSelectedToPaths,
     applyBoolean,
+    applyCombine,
+    applyBreakApart,
+    closePath,
     onPointerDown,
     onPointerMove,
     onPointerUp,

@@ -266,12 +266,6 @@ dropping the frame angle, is fixed by `multi-object-transform` (2026-10-10):
 `orientation()` as the path's `rotation`, so its readout and box direction do not
 change. See `specs/0012-polygon-star-box-refit/adrs.md`.
 
-*2026-10-07 (architect, `0007-stroke-and-fill-styling`):* a gradient makes this
-visible. A polygon's or star's gradient box is its circumscribed square, a path's
-is tight, so "Object to path" re-fits the gradient of a polygon or star (a
-rectangle or ellipse does not change). Accepted as a known limit of `0007`; a
-shrink-wrapped polygon box and the `rotation` carry-over above close it together.
-
 ## Undo cannot reach a collaborator's change
 
 Undo and redo are scoped to the local peer
@@ -682,12 +676,27 @@ benchmark gives 16.5 to 21.6 ms per frame at rest (main: 16.6 to 17.4 ms on
 this machine) and 13.8 to 15.6 ms for the 200-object move frame (main: 12.1 to
 14.1 ms). A new `#[ignore]` benchmark, `curvyo-editor-wasm/tests/style_read_cost.rs`,
 gives 14 ms per frame at rest for the 200 default-styled objects and 16 ms with
-every style key set on every object (dash, join, cap, a 2-stop gradient). That
+every style key set on every object (dash, join, cap). That
 is below the 25 ms line the architect set (readiness check, section 5), so the
 draw-list cache stays deferred for now; PR 2 adds fills and dashes, which are
-tessellated every frame, and measures again. PR 4 adds gradient ramps, which
-are rebuilt and uploaded every frame as well (at most 1024 of them); a cache
-would cover them with the tessellation.
+tessellated every frame, and measures again.
+
+**Update 2026-10-10 (`0031-segment-drag-bending` and `0034-pen-path-extension`).** The "cheap document
+version" the cache needs now exists: `Document::version()` (an opaque marker that changes exactly
+when something is committed or merged). The Pen's index of path ends uses it (`Session::with_end_index`
+rebuilds only when the version changes: 45 ms for 5000 open paths, 0.1 ms warm,
+`curvyo-editor-wasm/tests/pen_target_budget.rs`). The draw-list cache itself is still not built. A
+Node-tool drag now keeps the snapshot it started with, like a Select drag (`Session::objects`): a bend
+frame on a path of 5000 nodes costs about 7.6 ms after the first frame
+(`curvyo-editor-wasm/tests/segment_bend_budget.rs`). The same assumption holds: no remote merge and no
+undo may run during a Node-tool drag.
+
+**Update 2026-10-10 (`0035-combine-and-break-apart`).** Combine and Break apart read every selected
+object once and write one commit, so they do not need the cache: with 1000 circles in a rectangle,
+2000 disjoint squares, 500 nested squares or a compound path of 5000 squares a command takes 11 to
+373 ms in a release build (budget 2 s, `curvyo-editor-wasm/tests/combine_interactivity.rs`), and the
+touch and nesting kernel 16 ms for 1001 outlines. The Boolean busy state (two painted frames before
+the call) is shared by both cards of the rail.
 
 **Measured 2026-10-10 (`multi-object-transform`, release build, same machine,
 `curvyo-editor-wasm/tests/multi_object_transform_budgets.rs`):** a straight
@@ -1118,20 +1127,10 @@ release-mode job.
   A resize the document refuses (now also for an invalid width) silently drops
   the geometry resize. Unreachable today, because the sizes and the stroke
   factor are validated before the call, but PR 2 should handle the `Result`.
-- **Concurrent first creation of `fill_stops` by two peers keeps only one
-  list** (a Loro map key holds one container; the other peer's stops are
-  lost). The ADR accepts this. For PR 4: consider Loro's mergeable movable list.
-  `add_stop` no longer creates the list (only the fill-mode switch and Split
-  do), so there is one creation path to reason about. **Resolved in PR 4
-  (2026-10-08):** new lists are a mergeable child container, so both peers'
-  stops merge; see the PR 4 entry below.
-
 **2026-10-08 (`stroke-and-fill-styling` PR 2):** `gpu.rs` was 695 lines; its
 shader, vertex shape, screen transform, pipeline and MSAA target moved to
 `gpu_pipeline.rs` (a pure move, `gpu.rs` is now about 470 lines with the depth
-attachment), so the depth state and, in PR 4, the ramp texture go there.
-Gradient fills are stored and hit-tested (`Fill::paints`) but not painted until
-PR 4; a file with a gradient fill shows it as no fill until then. The editor
+attachment), so the depth state goes there. The editor
 lines' white casing makes the white-triangle counts of older tests depend on
 box size; those tests count fans only (`white_count` in
 `acceptance_unified_editing.rs`).
@@ -1158,9 +1157,6 @@ box size; those tests count fans only (`white_count` in
   outline twice. Fine at today's object counts. When
   `advanced-selection` adds the cycle list, compute each object's outline once
   per call, and reject by a cached bounding box first.
-- **SVG import and dashes.** A zero-length "on" entry of a dash pattern is
-  skipped, so a round-capped `[0, 3]` pattern draws nothing where SVG draws
-  dots. The presets have `on > 0`; revisit when `svg-import-export` is planned.
 
 **2026-10-08 (`stroke-and-fill-styling` PR 3):**
 
@@ -1179,58 +1175,22 @@ box size; those tests count fans only (`white_count` in
 - **`ToolRail` and `ToolbarSwitch` keep their own inline `Tooltip`.** The
   design system says they become the one `ui/tooltip.tsx` wrapper; PR 3 adds the
   wrapper for the panel and does not touch the two older users.
-- **react-colorful steps 5 % and labels its sliders "Color", "Hue" and
-  "Alpha".** The picker renames them to the design system's names after mount
-  and handles the arrow keys itself (1 %, Shift 10 %). If a later react-colorful
-  upgrade changes its markup, the rename silently stops; the picker has no test
-  for it (see the item above).
 - **Opening or closing the panel announces its width change to the viewport**
   (`Viewport::keep_origin_for_width_change`), because the existing resize keeps
   the view's centre (`canvas-navigation-and-selection` criterion 10) and would
   move the document by half the panel width. A resize that does not match the
   announcement is an ordinary window resize.
 - **Who writes the UI text.** Rust builds the Style panel's subject line
-  ("3 rectangles"); a refused typed value comes back as a code (`hex`, `hex8`,
-  `percent`, `width`) and the host owns the message. The rule from here on:
+  ("3 rectangles"); a refused typed value comes back as a code (`hex`,
+  `percent`, `width`, `dash`, `count`) and the host owns the message. The rule from here on:
   Rust sends codes and counts, the host owns all other strings, so a later
-  localisation touches one layer. PR 4's stop messages ("No stops. Nothing is
-  painted. Add a stop.") follow it; the subject line stays as the one exception
+  localisation touches one layer. The subject line stays as the one exception
   until a localisation story moves it.
 
 **2026-10-08 (`stroke-and-fill-styling` PR 4):**
 
-- **A polygon or star's gradient spans the square around it, not a tight box**
-  (criterion 21, accepted). A triangle's ramp starts about a quarter of the way
-  along, where the shape begins; the panel says so in a muted line, and "Object to
-  path" re-fits it (tested: a triangle's box goes from 2 R to 1.5 R wide). A tight
-  box for polygons and stars is `polygon-star-box-refit`'s follow-up.
-- **The concurrent first creation of `fill_stops` is no longer lossy** (the PR 1
-  review note): the list is a mergeable container, so both peers' stops merge.
-  A merge can hold more than two seed stops; nothing removes duplicates.
-- **At most 1024 gradient fills are painted from a ramp per frame**; later ones
-  paint flat in their first stop's colour. The ramp texture grows by powers of two
-  and never shrinks. A document with more than 1024 gradient fills in view is far
-  beyond what the editor keeps interactive today.
-- **Each vertex carries four more floats** (the gradient attribute, zero for flat
-  vertices), which is 57 % more vertex memory. A separate buffer for the gradient
-  ranges would remove it, at the cost of a second vertex stream; not worth it
-  until the vertex counts of a frame matter (see the canvas performance item).
-- **The pixel result of the ramp shader was checked by eye in the Browser pane,
-  not by an automated pixel test** (the GPU modules compile for wasm32 only). The
-  ramp, the coordinates and the vertex ranges are tested natively.
-- **`AnchorIdMinter` also mints `StopId`s** (`mint_stop`, one counter for both
-  kinds), so the name is too narrow. A `chore/` can rename it to `IdMinter`.
 - **`DrawList` and `Vertex` live in `glyphs.rs`**, a module about decoration
-  glyph geometry. The gradient methods moved to `gradient.rs` to keep the file
-  under the limit; moving `DrawList` and `Vertex` to a `draw_list.rs` is the
-  cleaner end state.
-- **Ramps are rebuilt and uploaded every frame** (256 `ramp_at` calls per
-  gradient plus the texture write). Measured in the UX review (the Browser
-  pane's software GL, so absolute values are high): 199 gradient rectangles
-  render in 10.7 ms per frame against 6.2 ms for the same 199 solid fills, about
-  23 us per gradient, which extrapolates to about +23 ms per frame at the 1024
-  cap. Fine at 200; the draw-list cache of the canvas performance item above
-  should cover the ramps.
+  glyph geometry. Moving them to a `draw_list.rs` is the cleaner end state.
 - **`curvyo-ui-core/src/session/transform_entry.rs` is 548 lines**, over the
   500-line rule, and is not split by `multi-object-transform` (found in the
   2026-10-08 architect review). Split typed-entry parsing from the entry state
@@ -1242,3 +1202,57 @@ box size; those tests count fans only (`white_count` in
   separate `chore/` and a precondition for any interactive 10 fps target above
   a few thousand objects. `multi-object-transform` gates only the group box
   (under 20 ms at 10,000 objects) and reports the rest.
+
+## The rail's width is written in three places, and `node_tool.rs` is past the size limit
+
+*2026-10-10 (`path-tools`, architect review).* The width of the two rail columns exists as
+`--rail-right: 116px` (`frontend/src/index.css`), as the tooltip offsets 66 and 10
+(`frontend/src/components/railCard.ts`) and as `DOCUMENT_INSET_PX` 128
+(`curvyo-ui-core/src/viewport.rs`). `frontend/tests/railWidth.test.ts` pins the three against each
+other, so a third column (`0023`, `0036` to `0038`) fails a test instead of drifting. A single
+source would have to cross the Rust and TypeScript boundary (a build step or a value passed from the
+session); not worth it for one number.
+
+`curvyo-ui-core/src/node_tool.rs` has about 825 non-test lines (781 before `0031-segment-drag-bending`,
+which added the bend drag, 44 lines). It already held the node drag, the handle drag, the marquee
+and the segment selection. The Pen's commit planning moved out of `pen_tool.rs` into
+`pen_tool/commit.rs` in the same slice (`pen_tool.rs` is now about 390 non-test lines). Splitting the
+Node tool's drag kinds into submodules is mechanical and belongs to the next slice that touches
+`node_tool.rs`.
+
+*2026-10-10 (`path-tools`, UX review).* Two places where the specs are ahead of the code or the code
+reads differently from the notes: (1) `0035` criterion 15 and its UX notes describe a group selection
+box with handles around the pieces after Break apart; `0019-multi-object-transform` is not built, so
+a multi-selection shows only the dashed member boxes (note for the PO: reword the sentence or ship
+`0019` first). (2) The Properties panel's subject line says "2 paths" for a compound path plus an open
+path (a compound path counts as a path); the notes expect "2 objects" for a mix. Cosmetic; the rule
+lives in `ui-core/src/panel_content.rs`. Also accepted as specified: Path notices cover the first row
+of the Select bar (click-through, 3 s or 8 s).
+
+
+**2026-10-09 (`0017-style-panel-rework`):**
+
+- **`legacy_fill.rs` reads past a feature that no longer exists.** A version-7
+  file written by the `0007` PR 4 build can hold `fill_kind` and `fill_stops`.
+  The document reads such a fill as off and drops both keys on the next fill
+  write (`specs/0017-style-panel-rework/adrs.md`, decision 1). The module, the
+  validation of `fill_kind` and `tests/fixtures/legacy_gradient_v7.curvyo` go
+  when no such file can still exist (for example once a file conversion step has
+  run over every customer project). Until then they are the only place the word
+  "gradient" remains in the code.
+
+**2026-10-09 (`0018-stroke-markers`):**
+
+- **Marker placement lives in `render-core` at display tolerance.** Spaced
+  markers are measured with `lyon` at `min(display tolerance, 0.01 mm)` and drawn
+  every frame with the rest of the artwork (no cache). If SVG export of Spaced
+  markers (SVG has no equivalent) or a manufacturing use (open question 5 of the
+  spec) needs the same positions, the placement function moves to a core crate
+  both can reach.
+- **Markers are not part of the selection box, hit tests or bounds** (criterion
+  18): a marker may stick out of the box. A marker that matters for a cut job is
+  a `manufacturing-roles` decision.
+- **At most 500 markers per slot of one outline and 50,000 per frame are drawn**;
+  past the frame budget further markers are skipped, never the stroke.
+- **A compound path applies its markers to each outline** (each outline is closed
+  in practice, so only Middle shows); the spec does not say more.

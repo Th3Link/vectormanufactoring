@@ -22,8 +22,8 @@
 )]
 
 use curvyo_document_core::{
-    AnchorId, Color, DashPattern, Document, FillMode, FillModeTarget, Length, NewAnchor, NodeId,
-    ObjectSnapshot, Point, RectBounds, StyleEdit, ViewTransform,
+    AnchorId, Color, DashPattern, Document, Length, NewAnchor, NodeId, ObjectSnapshot, Point,
+    RectBounds, StyleEdit, ViewTransform,
 };
 use curvyo_render_core::{DrawList, build_artwork, build_live_edit_preview};
 
@@ -78,23 +78,11 @@ fn compound(
             .edit_style(&[id], &StyleEdit::FillColor(Color { r: 255, g: 0, b: 0 }))
             .unwrap();
         document
-            .set_fill_mode(
-                FillMode::Solid,
-                &[FillModeTarget {
-                    id,
-                    seed_stops: vec![],
-                }],
-            )
+            .edit_style(&[id], &StyleEdit::FillEnabled(true))
             .unwrap();
     } else {
         document
-            .set_fill_mode(
-                FillMode::None,
-                &[FillModeTarget {
-                    id,
-                    seed_stops: vec![],
-                }],
-            )
+            .edit_style(&[id], &StyleEdit::FillEnabled(false))
             .unwrap();
     }
     if stroke_width > 0.0 {
@@ -115,7 +103,7 @@ fn artwork(document: &Document) -> DrawList {
         .into_iter()
         .map(|id| document.object(id).unwrap())
         .collect();
-    build_artwork(&objects, &[], view())
+    build_artwork(&objects, view())
 }
 
 fn in_triangle(p: Point, a: Point, b: Point, c: Point) -> bool {

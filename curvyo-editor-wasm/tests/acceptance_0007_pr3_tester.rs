@@ -11,12 +11,37 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 
 use curvyo_document_core::{
-    Color, Document, FillMode, Length, LineCap, LineJoin, ObjectSnapshot, Opacity, Point, Style,
-    unpack,
+    Color, Document, Length, LineCap, LineJoin, ObjectSnapshot, Opacity, Point, Style, unpack,
 };
 use curvyo_editor_wasm::{Session, Tool};
 use curvyo_render_core::DrawList;
 use curvyo_ui_core::{BarValue, DashChoice, StyleEntryError, StyleField};
+
+/// A colour-area tick for `color`, through the same call the panel makes.
+fn preview_colour(session: &mut Session, field: StyleField, color: Color) {
+    let hsv = curvyo_ui_core::rgb_to_hsv(color);
+    session.preview_style_hsv(field, hsv.hue.unwrap_or(0.0), hsv.saturation, hsv.value);
+}
+
+/// An opacity drag tick for `percent`, through the value-field call.
+fn preview_opacity(session: &mut Session, field: StyleField, percent: f64) {
+    let (value_field, scale) = match field {
+        StyleField::StrokeOpacity => (
+            curvyo_ui_core::ValueField::StrokeOpacity,
+            curvyo_ui_core::ValueScale::Opacity,
+        ),
+        StyleField::FillOpacity => (
+            curvyo_ui_core::ValueField::FillOpacity,
+            curvyo_ui_core::ValueScale::Opacity,
+        ),
+        _ => return,
+    };
+    session.preview_value_field(
+        value_field,
+        scale.position_of(percent),
+        curvyo_ui_core::Grid::Normal,
+    );
+}
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -141,8 +166,8 @@ fn width_zero_is_no_stroke_and_keeps_every_stored_value() {
     assert_eq!(off.stroke.dash.as_slice(), &[1.0, 3.0]);
     assert_eq!(off.stroke.join, LineJoin::Round);
     assert_eq!(off.stroke.cap, LineCap::Square);
-    let state = session.style_panel_state();
-    assert!(state.stroke.all_off);
+    let state = session.style_panel_state().unwrap();
+    assert!(!state.stroke.rows_shown);
     assert_eq!(state.stroke.paint, BarValue::Uniform(false));
 
     // Typing 0 again changes nothing.
@@ -182,7 +207,7 @@ fn a_non_zero_width_or_a_colour_or_opacity_edit_turns_an_off_stroke_back_on() {
         if edit != 0 {
             assert_eq!(s.stroke.width, Length::from_mm(2.0), "other values kept");
         }
-        assert!(!session.style_panel_state().stroke.all_off);
+        assert!(session.style_panel_state().unwrap().stroke.rows_shown);
     }
 }
 
@@ -191,7 +216,7 @@ fn a_colour_preview_on_an_off_stroke_is_drawn_and_commits_the_stroke_on() {
     let mut session = rectangles(1);
     session.set_stroke_paint(false);
     let off = session.draw_list();
-    session.preview_style_color(StyleField::StrokeColor, red());
+    preview_colour(&mut session, StyleField::StrokeColor, red());
     let previewed = session.draw_list();
     assert!(
         previewed.triangles.len() > off.triangles.len(),
@@ -211,10 +236,10 @@ fn some_on_some_off_keeps_the_rows_enabled_and_paint_on_turns_all_on() {
         .unwrap();
     session.set_stroke_paint(false);
     select_all(&mut session, 2);
-    let state = session.style_panel_state();
+    let state = session.style_panel_state().unwrap();
     assert_eq!(state.subject, "2 rectangles");
     assert_eq!(state.stroke.paint, BarValue::Mixed);
-    assert!(!state.stroke.all_off);
+    assert!(state.stroke.rows_shown);
     assert_eq!(state.stroke.width, BarValue::Mixed);
 
     session.set_stroke_paint(true);
@@ -244,7 +269,7 @@ fn typed_values_survive_save_and_reopen_unchanged() {
     session
         .set_style_text(StyleField::StrokeOpacity, "37")
         .unwrap();
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     session
         .set_style_text(StyleField::FillColor, "12ab34")
         .unwrap();
@@ -287,11 +312,7 @@ fn refused_text_writes_nothing_for_every_field_and_selection_size() {
         (StyleField::StrokeWidth, "", StyleEntryError::Width),
         (StyleField::StrokeColor, "#12", StyleEntryError::Hex),
         (StyleField::FillColor, "zzz", StyleEntryError::Hex),
-        (
-            StyleField::StrokeColor,
-            "#11223344",
-            StyleEntryError::HexEightDigits,
-        ),
+        (StyleField::StrokeColor, "#1122334", StyleEntryError::Hex),
         (StyleField::StrokeOpacity, "-1", StyleEntryError::Percent),
         (StyleField::FillOpacity, "101", StyleEntryError::Percent),
         (StyleField::FillOpacity, "x", StyleEntryError::Percent),
@@ -325,10 +346,10 @@ fn an_edit_that_changes_nothing_records_no_operation() {
     session.set_stroke_dash(DashChoice::Solid);
     session.set_stroke_join(LineJoin::Miter);
     session.set_stroke_cap(LineCap::Butt);
-    session.set_fill_mode(FillMode::None);
+    session.set_fill_paint(false);
     assert_eq!(version(&session), v);
     // A drag that ends where it began writes nothing either.
-    session.preview_style_opacity(StyleField::StrokeOpacity, 100.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 100.0);
     session.commit_style_preview();
     assert_eq!(version(&session), v);
 }
@@ -338,9 +359,9 @@ fn an_edit_that_changes_nothing_records_no_operation() {
 // ---------------------------------------------------------------------
 
 #[test]
-fn fill_none_solid_and_gradient_modes_keep_the_stored_colour() {
+fn fill_on_and_off_keep_the_stored_colour() {
     let mut session = rectangles(1);
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     let first = styles(&session)[0].clone();
     assert!(first.fill.enabled);
     assert_eq!(first.fill.color, Color::BLACK, "black the first time");
@@ -350,55 +371,51 @@ fn fill_none_solid_and_gradient_modes_keep_the_stored_colour() {
     session
         .set_style_text(StyleField::FillOpacity, "40")
         .unwrap();
-    session.set_fill_mode(FillMode::None);
+    session.set_fill_paint(false);
     let none = styles(&session)[0].clone();
     assert!(!none.fill.enabled);
     assert_eq!(none.fill.color, Color { r: 0, g: 0, b: 255 }, "kept");
     assert_eq!(none.fill.opacity, pct(40));
 
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     let back = styles(&session)[0].clone();
     assert!(back.fill.enabled);
     assert_eq!(back.fill.color, Color { r: 0, g: 0, b: 255 });
     assert_eq!(back.fill.opacity, pct(40));
-
-    session.set_fill_mode(FillMode::Linear);
-    session.set_fill_mode(FillMode::Solid);
-    let round_trip = styles(&session)[0].clone();
-    assert_eq!(round_trip.fill.color, Color { r: 0, g: 0, b: 255 });
-    assert_eq!(round_trip.fill.opacity, pct(40));
-
-    session.set_fill_mode(FillMode::Radial);
-    session.set_fill_mode(FillMode::Solid);
-    assert_eq!(styles(&session)[0].fill.color, Color { r: 0, g: 0, b: 255 });
 }
 
 #[test]
-fn fill_mode_over_a_mixed_selection_changes_only_the_mode() {
+fn the_fill_paint_over_a_mixed_selection_changes_only_the_paint() {
     let mut session = rectangles(2);
     select_only(&mut session, 0);
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     session
         .set_style_text(StyleField::FillColor, "#F00")
         .unwrap();
     select_all(&mut session, 2);
-    assert_eq!(session.style_panel_state().fill.mode, BarValue::Mixed);
-    assert_eq!(session.style_panel_state().fill.color, BarValue::Mixed);
-    session.set_fill_mode(FillMode::Solid);
+    assert_eq!(
+        session.style_panel_state().unwrap().fill.paint,
+        BarValue::Mixed
+    );
+    assert_eq!(
+        session.style_panel_state().unwrap().fill.color,
+        BarValue::Mixed
+    );
+    session.set_fill_paint(true);
     let all = styles(&session);
     assert!(all.iter().all(|s| s.fill.enabled));
     assert_eq!(all[0].fill.color, red(), "keeps its own colour");
     assert_eq!(all[1].fill.color, Color::BLACK);
     assert_eq!(
-        session.style_panel_state().fill.mode,
-        BarValue::Uniform(FillMode::Solid)
+        session.style_panel_state().unwrap().fill.paint,
+        BarValue::Uniform(true)
     );
 }
 
 #[test]
 fn a_panel_fill_edit_never_changes_the_stroke_and_vice_versa() {
     let mut session = rectangles(1);
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     let before = styles(&session)[0].clone();
     session
         .set_style_text(StyleField::FillColor, "#123")
@@ -428,7 +445,7 @@ fn a_path_and_a_rectangle_take_the_identical_edits() {
     session.pointer_hover(Point::new(125.0, 100.0), true, false);
     session.pointer_down(Point::new(125.0, 100.0), true);
     session.pointer_up(Point::new(125.0, 100.0), true, false);
-    let state = session.style_panel_state();
+    let state = session.style_panel_state().unwrap();
     assert_eq!(state.subject, "2 objects");
 
     session
@@ -443,7 +460,7 @@ fn a_path_and_a_rectangle_take_the_identical_edits() {
     session.set_stroke_dash(DashChoice::DashDot);
     session.set_stroke_join(LineJoin::Bevel);
     session.set_stroke_cap(LineCap::Round);
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     session
         .set_style_text(StyleField::FillColor, "#0F0")
         .unwrap();
@@ -479,7 +496,7 @@ fn a_multi_selection_edit_changes_one_property_and_keeps_each_objects_others() {
     select_only(&mut session, 2);
     session.set_stroke_cap(LineCap::Round);
     select_all(&mut session, 3);
-    let state = session.style_panel_state();
+    let state = session.style_panel_state().unwrap();
     assert_eq!(state.stroke.width, BarValue::Mixed);
     assert_eq!(state.stroke.color, BarValue::Mixed);
     assert_eq!(state.stroke.cap, BarValue::Mixed);
@@ -501,7 +518,7 @@ fn a_multi_selection_edit_changes_one_property_and_keeps_each_objects_others() {
         assert_eq!(s.stroke.join, LineJoin::Round);
         assert_eq!(s.stroke.opacity, pct(20));
     }
-    let state = session.style_panel_state();
+    let state = session.style_panel_state().unwrap();
     assert_eq!(state.stroke.opacity, BarValue::Uniform(pct(20)));
     assert_eq!(state.stroke.width, BarValue::Mixed, "still mixed");
 }
@@ -517,13 +534,12 @@ fn an_empty_selection_and_the_pen_ignore_every_panel_control() {
     // Escape clears the object selection in the Select tool.
     session.escape();
     let before = session.draw_list();
-    assert_eq!(session.style_panel_state().subject, "Nothing selected");
-    assert!(!session.style_panel_state().enabled);
+    assert_eq!(session.style_panel_state(), None);
     for round in 0..2 {
         if round == 1 {
             select_only(&mut session, 0);
             session.set_tool(Tool::Pen);
-            assert!(!session.style_panel_state().enabled);
+            assert_eq!(session.style_panel_state(), None);
         }
         assert_eq!(
             session.set_style_text(StyleField::StrokeWidth, "9"),
@@ -537,19 +553,17 @@ fn an_empty_selection_and_the_pen_ignore_every_panel_control() {
         session.set_stroke_dash(DashChoice::Dash);
         session.set_stroke_join(LineJoin::Round);
         session.set_stroke_cap(LineCap::Round);
-        session.set_fill_mode(FillMode::Solid);
-        session.preview_style_color(StyleField::StrokeColor, red());
-        session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+        session.set_fill_paint(true);
+        preview_colour(&mut session, StyleField::StrokeColor, red());
+        preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
         assert_eq!(session.draw_list().triangles.len(), before.triangles.len());
         assert!(!has_alpha(&session.draw_list(), 102), "no preview drawn");
         session.commit_style_preview();
     }
     assert_eq!(version(&session), v, "nothing recorded");
     assert!(styles(&session).iter().all(|s| *s == Style::default()));
-    // The disabled panel still reports the frozen defaults.
-    let state = session.style_panel_state();
-    assert_eq!(state.stroke.width, BarValue::Uniform(Length::from_mm(0.25)));
-    assert_eq!(state.fill.mode, BarValue::Uniform(FillMode::None));
+    // With nothing to edit the panel has no Style state at all.
+    assert_eq!(session.style_panel_state(), None);
 }
 
 #[test]
@@ -561,14 +575,14 @@ fn subjects_name_the_kind_the_count_or_objects() {
         session.pointer_down(Point::new(x, 0.0), false);
         session.pointer_up(Point::new(x + 10.0, 10.0), false, false);
     }
-    assert_eq!(session.style_panel_state().subject, "Ellipse");
+    assert_eq!(session.style_panel_state().unwrap().subject, "Ellipse");
     session.set_tool(Tool::Select);
     session.pointer_down(Point::new(0.0, 5.0), false);
     session.pointer_up(Point::new(0.0, 5.0), false, false);
     session.pointer_hover(Point::new(30.0, 5.0), true, false);
     session.pointer_down(Point::new(30.0, 5.0), true);
     session.pointer_up(Point::new(30.0, 5.0), true, false);
-    assert_eq!(session.style_panel_state().subject, "2 ellipses");
+    assert_eq!(session.style_panel_state().unwrap().subject, "2 ellipses");
 }
 
 #[test]
@@ -578,13 +592,12 @@ fn a_shape_just_drawn_with_any_creation_tool_is_editable_at_once() {
         session.set_tool(tool);
         session.pointer_down(Point::new(0.0, 0.0), false);
         session.pointer_up(Point::new(20.0, 20.0), false, false);
-        let state = session.style_panel_state();
-        assert!(state.enabled, "{tool:?}");
-        assert_ne!(state.subject, "Nothing selected", "{tool:?}");
+        let state = session.style_panel_state().unwrap();
+        assert_ne!(state.subject, "", "{tool:?}");
         session
             .set_style_text(StyleField::StrokeColor, "#F00")
             .unwrap();
-        session.set_fill_mode(FillMode::Solid);
+        session.set_fill_paint(true);
         let s = &styles(&session)[0];
         assert_eq!(s.stroke.color, red(), "{tool:?}");
         assert!(s.fill.enabled, "{tool:?}");
@@ -595,8 +608,7 @@ fn a_shape_just_drawn_with_any_creation_tool_is_editable_at_once() {
 fn switching_to_the_select_tool_keeps_the_panel_on_the_selection() {
     let mut session = rectangles(1);
     session.set_tool(Tool::Select);
-    let state = session.style_panel_state();
-    assert!(state.enabled);
+    let state = session.style_panel_state().unwrap();
     assert_eq!(state.subject, "Rectangle");
 }
 
@@ -613,9 +625,9 @@ fn the_node_tool_edits_paths_only_and_follows_the_node_selection() {
         session.pointer_down(Point::new(125.0, y), true);
         session.pointer_up(Point::new(125.0, y), true, false);
     }
-    assert_eq!(session.style_panel_state().subject, "3 objects");
+    assert_eq!(session.style_panel_state().unwrap().subject, "3 objects");
     session.set_tool(Tool::Node);
-    let state = session.style_panel_state();
+    let state = session.style_panel_state().unwrap();
     assert_eq!(
         state.subject, "2 paths",
         "the Node tool without a node selected edits the paths of the object selection only"
@@ -643,11 +655,11 @@ fn selecting_a_node_narrows_the_node_tool_to_the_path_that_owns_it() {
         session.pointer_up(Point::new(25.0, y), y > 0.0, false);
     }
     session.set_tool(Tool::Node);
-    assert_eq!(session.style_panel_state().subject, "2 paths");
+    assert_eq!(session.style_panel_state().unwrap().subject, "2 paths");
     // Click the first node of the second path.
     session.pointer_down(Point::new(0.0, 40.0), false);
     session.pointer_up(Point::new(0.0, 40.0), false, false);
-    let subject = session.style_panel_state().subject;
+    let subject = session.style_panel_state().unwrap().subject;
     assert_eq!(subject, "Path", "only the owner of the selected node");
     session
         .set_style_text(StyleField::StrokeColor, "#F00")
@@ -665,7 +677,7 @@ fn selecting_a_node_narrows_the_node_tool_to_the_path_that_owns_it() {
 fn a_canvas_press_that_changes_the_selection_does_not_retarget_a_pending_drag() {
     let mut session = rectangles(2);
     select_only(&mut session, 1);
-    session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
     // Press and release on the other rectangle while the drag is "pending".
     click_edge(&mut session, 0, false);
     session.commit_style_preview();
@@ -685,7 +697,7 @@ fn a_canvas_press_that_changes_the_selection_does_not_retarget_a_pending_drag() 
         "no ghost"
     );
     assert_eq!(
-        session.style_panel_state().stroke.opacity,
+        session.style_panel_state().unwrap().stroke.opacity,
         BarValue::Uniform(Opacity::OPAQUE),
         "the panel now reads the new selection"
     );
@@ -695,7 +707,7 @@ fn a_canvas_press_that_changes_the_selection_does_not_retarget_a_pending_drag() 
 fn the_preview_never_leaks_into_the_next_selection_or_the_saved_file() {
     let mut session = rectangles(2);
     select_only(&mut session, 1);
-    session.preview_style_color(StyleField::StrokeColor, red());
+    preview_colour(&mut session, StyleField::StrokeColor, red());
     assert!(
         styles(&session)
             .iter()
@@ -726,7 +738,7 @@ fn a_tool_switch_mid_drag_commits_once_to_the_started_objects_and_leaves_no_ghos
         Tool::PolygonStar,
     ] {
         let mut session = rectangles(1);
-        session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+        preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
         session.set_tool(tool);
         session.commit_style_preview();
         session.cancel_style_preview();
@@ -746,7 +758,7 @@ fn a_tool_switch_mid_drag_commits_once_to_the_started_objects_and_leaves_no_ghos
 #[test]
 fn a_discrete_edit_during_a_drag_keeps_both_and_leaves_the_state_consistent() {
     let mut session = rectangles(1);
-    session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
     session.set_stroke_cap(LineCap::Round);
     session.commit_style_preview();
     let s = &styles(&session)[0];
@@ -757,7 +769,7 @@ fn a_discrete_edit_during_a_drag_keeps_both_and_leaves_the_state_consistent() {
         s.stroke.opacity == pct(40),
         "no ghost preview after the release"
     );
-    session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
     session.commit_style_preview();
     assert_eq!(
         styles(&session)[0].stroke.opacity,
@@ -769,7 +781,7 @@ fn a_discrete_edit_during_a_drag_keeps_both_and_leaves_the_state_consistent() {
 #[test]
 fn a_typed_value_during_a_drag_does_not_lose_the_typed_value() {
     let mut session = rectangles(1);
-    session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
     session
         .set_style_text(StyleField::StrokeWidth, "4")
         .unwrap();
@@ -782,8 +794,12 @@ fn escape_during_a_drag_on_a_multi_selection_reverts_all_objects() {
     let mut session = rectangles(3);
     select_all(&mut session, 3);
     let before = session.draw_list();
-    session.preview_style_color(StyleField::StrokeColor, red());
-    session.preview_style_color(StyleField::StrokeColor, Color { r: 0, g: 0, b: 255 });
+    preview_colour(&mut session, StyleField::StrokeColor, red());
+    preview_colour(
+        &mut session,
+        StyleField::StrokeColor,
+        Color { r: 0, g: 0, b: 255 },
+    );
     session.cancel_style_preview();
     assert_eq!(
         session.draw_list().triangles.len(),
@@ -801,7 +817,7 @@ fn escape_during_a_drag_on_a_multi_selection_reverts_all_objects() {
     session.commit_style_preview();
     assert!(styles(&session).iter().all(|s| *s == Style::default()));
     // The next drag after the release works again.
-    session.preview_style_color(StyleField::StrokeColor, red());
+    preview_colour(&mut session, StyleField::StrokeColor, red());
     session.commit_style_preview();
     assert!(styles(&session).iter().all(|s| s.stroke.color == red()));
 }
@@ -810,7 +826,7 @@ fn escape_during_a_drag_on_a_multi_selection_reverts_all_objects() {
 fn out_of_range_and_non_finite_slider_ticks_store_a_valid_opacity() {
     for percent in [150.0, -20.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
         let mut session = rectangles(1);
-        session.preview_style_opacity(StyleField::FillOpacity, percent);
+        preview_opacity(&mut session, StyleField::FillOpacity, percent);
         session.commit_style_preview();
         let o = styles(&session)[0].fill.opacity.get();
         assert!(o.is_finite() && (0.0..=1.0).contains(&o), "{percent}: {o}");
@@ -823,8 +839,8 @@ fn out_of_range_and_non_finite_slider_ticks_store_a_valid_opacity() {
 fn a_colour_tick_in_the_opacity_field_or_the_other_way_round_is_ignored() {
     let mut session = rectangles(1);
     let v = version(&session);
-    session.preview_style_color(StyleField::StrokeWidth, red());
-    session.preview_style_opacity(StyleField::FillColor, 50.0);
+    preview_colour(&mut session, StyleField::StrokeWidth, red());
+    preview_colour(&mut session, StyleField::FillOpacity, red());
     session.commit_style_preview();
     assert_eq!(version(&session), v);
 }
@@ -833,7 +849,7 @@ fn a_colour_tick_in_the_opacity_field_or_the_other_way_round_is_ignored() {
 fn a_preview_for_a_deleted_object_commits_without_panic_or_damage() {
     let mut session = rectangles(2);
     select_all(&mut session, 2);
-    session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
     select_only(&mut session, 0);
     session.delete_selected();
     session.commit_style_preview();
@@ -855,7 +871,7 @@ fn a_panel_edit_after_the_selection_was_deleted_is_a_no_op() {
     let mut session = rectangles(1);
     session.delete_selected();
     let v = version(&session);
-    assert_eq!(session.style_panel_state().subject, "Nothing selected");
+    assert_eq!(session.style_panel_state(), None, "nothing to edit");
     assert_eq!(
         session.set_style_text(StyleField::StrokeWidth, "3"),
         Ok(false)
@@ -952,14 +968,14 @@ fn the_pointer_is_down_between_press_and_release_only() {
 #[test]
 fn choosing_the_pressed_fill_stroke_join_or_dash_again_records_no_operation() {
     let mut session = rectangles(1);
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     session.set_stroke_dash(DashChoice::Dash);
     session.set_stroke_join(LineJoin::Bevel);
     session.set_stroke_cap(LineCap::Square);
     session.set_stroke_paint(false);
     let v = version(&session);
     // A click on the item that is already pressed (the toggle strips send it).
-    session.set_fill_mode(FillMode::Solid);
+    session.set_fill_paint(true);
     session.set_stroke_dash(DashChoice::Dash);
     session.set_stroke_join(LineJoin::Bevel);
     session.set_stroke_cap(LineCap::Square);
@@ -971,7 +987,7 @@ fn choosing_the_pressed_fill_stroke_join_or_dash_again_records_no_operation() {
 fn a_press_on_empty_canvas_with_a_pending_drag_commits_it_to_the_started_objects() {
     let mut session = rectangles(2);
     select_all(&mut session, 2);
-    session.preview_style_opacity(StyleField::StrokeOpacity, 40.0);
+    preview_opacity(&mut session, StyleField::StrokeOpacity, 40.0);
     let empty = Point::new(900.0, 900.0);
     session.pointer_down(empty, false);
     session.pointer_up(empty, false, false);
@@ -980,5 +996,5 @@ fn a_press_on_empty_canvas_with_a_pending_drag_commits_it_to_the_started_objects
         styles(&session).iter().all(|s| s.stroke.opacity == pct(40)),
         "both objects the drag started on, once"
     );
-    assert_eq!(session.style_panel_state().subject, "Nothing selected");
+    assert_eq!(session.style_panel_state(), None, "nothing to edit");
 }

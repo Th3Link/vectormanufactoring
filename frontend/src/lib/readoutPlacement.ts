@@ -70,6 +70,24 @@ export function placeReadout(
   };
 }
 
+/**
+ * Like [`placeReadout`], but on the side of the pointer given by `away` (a unit vector, y down):
+ * right when it points right, left when it points left, below when it points down, above when up.
+ * Used where the usual up-and-right place may cover geometry the chip is about (the Pen's hint
+ * chip over a closing node). Clamped inside the canvas.
+ */
+export function placeAway(
+  anchor: { x: number; y: number },
+  chip: Size,
+  canvas: Size,
+  offset: number,
+  away: { x: number; y: number },
+): Placement {
+  const left = away.x >= 0 ? anchor.x + offset : anchor.x - offset - chip.width;
+  const top = away.y >= 0 ? anchor.y + offset : anchor.y - offset - chip.height;
+  return clampInside(left, top, chip, canvas);
+}
+
 /** Distance from a handle's glyph edge to the entry chip, in CSS pixels
  * (`docs/design-system.md`, "Transform entry chip": 10px clear space). */
 const ENTRY_CHIP_GAP_PX = 10;

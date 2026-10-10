@@ -2,15 +2,16 @@
 //! styling/adrs.md`, readiness check section 5): the cost of reading every
 //! object's style at rest, with the 200-object document of
 //! `unified_object_editing.rs`'s benchmark, once with default styles and once
-//! with every style key set. If a frame at rest passes 25 ms, the draw-list
+//! with every style key set (the paths with a Start and End arrow and ten
+//! spaced dots). If a frame at rest passes 25 ms, the draw-list
 //! cache moves into PR 2. Run in release by hand:
 //! `cargo test --release -p curvyo-editor-wasm --test style_read_cost -- --ignored --nocapture`.
 
 #![allow(clippy::unwrap_used)]
 
 use curvyo_document_core::{
-    AnchorId, Color, DashPattern, Document, FillMode, FillModeTarget, GradientStop, Length,
-    LineCap, LineJoin, NewAnchor, NodeId, Point, RectBounds, StopId, StyleEdit, pack,
+    AnchorId, Color, DashPattern, Document, Length, LineCap, LineJoin, MarkerCount, MarkerShape,
+    NewAnchor, NodeId, Point, RectBounds, StyleEdit, pack,
 };
 use curvyo_editor_wasm::{Session, Tool};
 
@@ -50,7 +51,7 @@ fn document_with_200_objects() -> (Document, Vec<NodeId>) {
 
 fn style_everything(document: &Document, ids: &[NodeId]) {
     let red = Color { r: 255, g: 0, b: 0 };
-    for (n, id) in ids.iter().enumerate() {
+    for id in ids {
         let edit = |edit: StyleEdit| document.edit_style(&[*id], &edit).unwrap();
         edit(StyleEdit::StrokeWidth(Length::from_mm(0.5)));
         edit(StyleEdit::StrokeColor(red));
@@ -59,21 +60,17 @@ fn style_everything(document: &Document, ids: &[NodeId]) {
         ));
         edit(StyleEdit::StrokeJoin(LineJoin::Round));
         edit(StyleEdit::StrokeCap(LineCap::Round));
-        let counter = n as u64 * 2;
-        document
-            .set_fill_mode(
-                FillMode::Linear,
-                &[FillModeTarget {
-                    id: *id,
-                    seed_stops: GradientStop::default_pair(
-                        red,
-                        StopId::new(5, counter),
-                        StopId::new(5, counter + 1),
-                    )
-                    .to_vec(),
-                }],
-            )
-            .unwrap();
+        // Markers belong to paths: the rectangles refuse them.
+        for marker in [
+            StyleEdit::MarkerStart(MarkerShape::Arrow),
+            StyleEdit::MarkerEnd(MarkerShape::Arrow),
+            StyleEdit::MarkerMid(MarkerShape::Dot),
+            StyleEdit::MarkerCount(MarkerCount::new(10).unwrap()),
+        ] {
+            let _ = document.edit_style(&[*id], &marker);
+        }
+        edit(StyleEdit::FillEnabled(true));
+        edit(StyleEdit::FillColor(red));
     }
 }
 

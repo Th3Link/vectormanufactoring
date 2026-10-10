@@ -336,6 +336,11 @@ impl Session {
     /// With the pointer button still down steps 3 and 4 are skipped: only the
     /// drag is cancelled (criterion 49).
     pub fn escape(&mut self) -> EscapeStep {
+        // Picking a colour ends first (`0017` criterion 60).
+        if self.colour_pick_target().is_some() {
+            self.end_colour_pick();
+            return EscapeStep::ClearedState;
+        }
         if self.select.has_entry() {
             self.select.cancel_entry();
             return EscapeStep::ClosedEntry;

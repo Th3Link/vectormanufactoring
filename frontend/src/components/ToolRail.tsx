@@ -9,7 +9,14 @@ import {
 import { Tooltip } from "radix-ui";
 
 import { BooleanCommands } from "@/components/BooleanCommands";
-import type { BooleanCommands as BooleanCommandsState } from "@/hooks/useBooleanCommands";
+import { BooleanNotice } from "@/components/BooleanNotice";
+import { PathCommands } from "@/components/PathCommands";
+import {
+  COLUMN_A_TOOLTIP_OFFSET_PX,
+  RAIL_CARD_CLASS,
+  RAIL_CARD_STYLE,
+} from "@/components/railCard";
+import type { RailCommands } from "@/hooks/useRailCommands";
 import type { Tool } from "@/hooks/useEditorSession";
 
 interface ToolRailProps {
@@ -23,8 +30,9 @@ interface ToolRailProps {
   /** Called after a mouse click on a button, so the tool letters keep working
    * (keyboard activation keeps focus on the rail for Tab navigation). */
   onReturnFocus: () => void;
-  /** The Boolean section under the tools (`specs/0016-boolean-operations/`). */
-  booleans: BooleanCommandsState;
+  /** The Boolean card below the tools card (`specs/0016-boolean-operations/`), the Path card in
+   * column B (`specs/0035-combine-and-break-apart/`) and the notice both share. */
+  commands: RailCommands;
 }
 
 interface ToolButtonProps {
@@ -80,7 +88,7 @@ function ToolButton({
       <Tooltip.Portal>
         <Tooltip.Content
           side="right"
-          sideOffset={6}
+          sideOffset={COLUMN_A_TOOLTIP_OFFSET_PX}
           className="z-50 rounded-md bg-popover px-2 py-1 text-xs text-popover-foreground ring-1 ring-foreground/10"
         >
           <div>
@@ -94,96 +102,113 @@ function ToolButton({
 }
 
 /**
- * The tool rail (`docs/design-system.md`'s 2026-10-05 "Left tool panel":
- * floats *over* the canvas, inset 12px from the left and top edges,
- * elevated with `--panel-elevation-shadow`, fixed 48px icon-column
- * width — the canvas is never resized or repositioned to make room for
- * it). Select is first — a deliberate, one-time exception to "new tools
- * append in ship order" (acceptance criterion 12; `docs/design-system.md`:
- * "the rail's new default/master tool"), then Pen, Node, Rectangle,
- * Ellipse, Polygon-star, each shifted down one slot but otherwise in
- * their own established order.
+ * The tool rail (`docs/design-system.md`, rows "Tool rail architecture", "Toolbox card",
+ * "Boolean toolbox" and "Path toolbox"): two columns of cards that float over the canvas, inset
+ * 12px from the left and top edges (`--rail-inset`), each 48px wide and 8px apart (`--rail-right`
+ * is the right edge of the second): column A holds the tools card and, 8px below it, the Boolean
+ * card; column B holds the Path card. Select is first, a deliberate, one-time exception to "new
+ * tools append in ship order" (acceptance criterion 12), then Pen, Node, Rectangle, Ellipse,
+ * Polygon-star. The canvas is never resized or repositioned to make room for it.
+ *
+ * The root keeps 4px clear under the column. In a viewport too short for it the tools card stays
+ * fixed and the cards below scroll (`0016` criterion 1b); the root passes no pointer event
+ * through to itself, so the canvas around the cards stays usable.
  */
 export function ToolRail({
   tool,
   selectionCount,
   onSelect,
   onReturnFocus,
-  booleans,
+  commands,
 }: ToolRailProps) {
   // The one state that changes a letter: the Select tool with a selection.
   const letterActsOnSelection = tool === "select" && selectionCount > 0;
   return (
     <Tooltip.Provider>
-      <div
-        className="absolute top-3 left-3 z-30 flex w-12 flex-col items-center gap-1 rounded-lg py-1"
-        style={{
-          background: "var(--toolbar-bg)",
-          boxShadow: "var(--panel-elevation-shadow)",
-        }}
-      >
-        <ToolButton
-          tool="select"
-          active={tool === "select"}
-          label="Select tool"
-          shortcut="S or Esc"
-          hint="Drag a box. Shift: add. Ctrl: remove. Alt: invert, lasso, cycle"
-          icon={<SelectIcon size={20} />}
-          onSelect={onSelect}
-          onReturnFocus={onReturnFocus}
-        />
-        <ToolButton
-          tool="pen"
-          active={tool === "pen"}
-          label="Pen tool"
-          shortcut="B"
-          icon={<PenToolIcon size={20} />}
-          onSelect={onSelect}
-          onReturnFocus={onReturnFocus}
-        />
-        <ToolButton
-          tool="node"
-          active={tool === "node"}
-          label="Node tool"
-          shortcut="N"
-          icon={<MousePointer2 size={20} />}
-          onSelect={onSelect}
-          onReturnFocus={onReturnFocus}
-        />
-        <ToolButton
-          tool="rectangle"
-          active={tool === "rectangle"}
-          label="Rectangle tool"
-          shortcut={letterActsOnSelection ? "Esc, R" : "R"}
-          hint="Shift: from centre. Ctrl: square or circle"
-          icon={<Square size={20} />}
-          onSelect={onSelect}
-          onReturnFocus={onReturnFocus}
-        />
-        <ToolButton
-          tool="ellipse"
-          active={tool === "ellipse"}
-          label="Ellipse tool"
-          shortcut="E"
-          hint="Shift: from centre. Ctrl: square or circle"
-          icon={<CircleIcon size={20} />}
-          onSelect={onSelect}
-          onReturnFocus={onReturnFocus}
-        />
-        <ToolButton
-          tool="polygon-star"
-          active={tool === "polygon-star"}
-          label="Polygon/star tool"
-          shortcut="*"
-          icon={<Star size={20} />}
-          onSelect={onSelect}
-          onReturnFocus={onReturnFocus}
-        />
-        <BooleanCommands
-          commands={booleans}
-          selectTool={tool === "select"}
-          onReturnFocus={onReturnFocus}
-        />
+      <div className="pointer-events-none absolute top-3 bottom-1 left-3 z-30 flex gap-2">
+        <div className="flex min-h-0 w-12 flex-col gap-2">
+          <div className={RAIL_CARD_CLASS} style={RAIL_CARD_STYLE}>
+            <ToolButton
+              tool="select"
+              active={tool === "select"}
+              label="Select tool"
+              shortcut="S or Esc"
+              hint="Drag a box. Shift: add. Ctrl: remove. Alt: invert, lasso, cycle"
+              icon={<SelectIcon size={20} />}
+              onSelect={onSelect}
+              onReturnFocus={onReturnFocus}
+            />
+            <ToolButton
+              tool="pen"
+              active={tool === "pen"}
+              label="Pen tool"
+              shortcut="B"
+              icon={<PenToolIcon size={20} />}
+              onSelect={onSelect}
+              onReturnFocus={onReturnFocus}
+            />
+            <ToolButton
+              tool="node"
+              active={tool === "node"}
+              label="Node tool"
+              shortcut="N"
+              hint="Drag a segment to bend it. Shift: one axis"
+              icon={<MousePointer2 size={20} />}
+              onSelect={onSelect}
+              onReturnFocus={onReturnFocus}
+            />
+            <ToolButton
+              tool="rectangle"
+              active={tool === "rectangle"}
+              label="Rectangle tool"
+              shortcut={letterActsOnSelection ? "Esc, R" : "R"}
+              hint="Shift: from centre. Ctrl: square or circle"
+              icon={<Square size={20} />}
+              onSelect={onSelect}
+              onReturnFocus={onReturnFocus}
+            />
+            <ToolButton
+              tool="ellipse"
+              active={tool === "ellipse"}
+              label="Ellipse tool"
+              shortcut="E"
+              hint="Shift: from centre. Ctrl: square or circle"
+              icon={<CircleIcon size={20} />}
+              onSelect={onSelect}
+              onReturnFocus={onReturnFocus}
+            />
+            <ToolButton
+              tool="polygon-star"
+              active={tool === "polygon-star"}
+              label="Polygon/star tool"
+              shortcut="*"
+              icon={<Star size={20} />}
+              onSelect={onSelect}
+              onReturnFocus={onReturnFocus}
+            />
+          </div>
+          {/* The cards below the tools card scroll in a viewport too short for them; the wider
+           * box leaves room for their shadows. */}
+          <div
+            className="pointer-events-none -mx-3 min-h-0 overflow-y-auto px-3"
+            style={{ scrollbarWidth: "thin" }}
+          >
+            <BooleanCommands
+              commands={commands.booleans}
+              selectTool={tool === "select"}
+              onReturnFocus={onReturnFocus}
+            />
+          </div>
+        </div>
+        {/* Column B: the Path card, which never scrolls (92px). */}
+        <div className="flex w-12 flex-col gap-2">
+          <PathCommands
+            commands={commands.path}
+            selectTool={tool === "select"}
+            onReturnFocus={onReturnFocus}
+          />
+        </div>
+        <BooleanNotice notice={commands.notice} />
       </div>
     </Tooltip.Provider>
   );

@@ -315,7 +315,8 @@ fn ac14a_panel_content_for_every_selection_and_pen_state() {
         (50, false, PanelContent::Style),
     ] {
         assert_eq!(
-            panel_content(&selection_of(selected), pen),
+            // The tool can style what is selected (Select or a creation tool).
+            panel_content(&selection_of(selected), pen, selected > 0),
             want,
             "{selected} selected, pen unfinished: {pen}"
         );
@@ -325,9 +326,12 @@ fn ac14a_panel_content_for_every_selection_and_pen_state() {
 #[test]
 fn ac14a_clearing_the_selection_reveals_the_document_section() {
     let mut selection = selection_of(3);
-    assert_eq!(panel_content(&selection, false), PanelContent::Style);
+    assert_eq!(panel_content(&selection, false, true), PanelContent::Style);
     selection.clear();
-    assert_eq!(panel_content(&selection, false), PanelContent::Document);
+    assert_eq!(
+        panel_content(&selection, false, false),
+        PanelContent::Document
+    );
 }
 
 // ---- criterion 20: the view follows a resize or a fit ----
@@ -389,10 +393,12 @@ fn ac20_zero_offset_changes_nothing_including_the_inset() {
     let before = screen(v.view(), 0.0, 0.0);
     v.pan_by_document_offset(Vec2::new(0.0, 0.0));
     assert_eq!(screen(v.view(), 0.0, 0.0), before);
-    assert_eq!(before, (72.0, 72.0));
-    // Still the untouched view: a window resize keeps the corner at 72 px.
+    // 128 px is not exactly representable through the scale, as 72 px happened to be.
+    let near = |(x, y): (f64, f64)| (x - 128.0).abs() < 1e-9 && (y - 128.0).abs() < 1e-9;
+    assert!(near(before), "{before:?}");
+    // Still the untouched view: a window resize keeps the corner at 128 px.
     v.resize(500.0, 450.0);
-    assert_eq!(screen(v.view(), 0.0, 0.0), (72.0, 72.0));
+    assert!(near(screen(v.view(), 0.0, 0.0)));
 }
 
 /// The command is not a navigation gesture: a window resize of a view that

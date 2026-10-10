@@ -12,12 +12,22 @@ export interface ActionNotice {
   id: number;
   kind: "success" | "refusal";
   text: string;
+  /** How long it stays, ms; the default of its kind if absent. */
+  ms?: number;
+  /** The card whose first button the notice is level with: the Boolean card (default) or the
+   * Path card. */
+  anchor?: "boolean" | "path";
 }
 
 export interface ActionNoticeState {
   notice: ActionNotice | null;
-  /** Shows a notice in place of the one on screen. */
-  show: (kind: ActionNotice["kind"], text: string) => void;
+  /** Shows a notice in place of the one on screen, for `ms` or the default of its kind. */
+  show: (
+    kind: ActionNotice["kind"],
+    text: string,
+    ms?: number,
+    anchor?: ActionNotice["anchor"],
+  ) => void;
 }
 
 /**
@@ -41,10 +51,13 @@ export function useActionNotice(
     onEnd();
   }, [onEnd]);
 
-  const show = useCallback((kind: ActionNotice["kind"], text: string) => {
-    counter.current += 1;
-    setNotice({ id: counter.current, kind, text });
-  }, []);
+  const show = useCallback(
+    (kind: ActionNotice["kind"], text: string, ms?: number, anchor?: ActionNotice["anchor"]) => {
+      counter.current += 1;
+      setNotice({ id: counter.current, kind, text, ms, anchor });
+    },
+    [],
+  );
 
   // The baseline is taken in the commit that shows the notice, after the state the action
   // changed (tool, selection size) has settled in the same batch.
@@ -66,7 +79,7 @@ export function useActionNotice(
     }
     const timer = window.setTimeout(
       end,
-      notice.kind === "success" ? SUCCESS_NOTICE_MS : REFUSAL_NOTICE_MS,
+      notice.ms ?? (notice.kind === "success" ? SUCCESS_NOTICE_MS : REFUSAL_NOTICE_MS),
     );
     window.addEventListener("pointerdown", end, true);
     window.addEventListener("keydown", end, true);

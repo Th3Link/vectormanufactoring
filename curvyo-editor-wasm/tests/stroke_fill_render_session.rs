@@ -6,8 +6,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 
 use curvyo_document_core::{
-    AnchorId, Document, EllipseFrame, FillMode, FillModeTarget, Length, NewAnchor, NodeId, Point,
-    RectBounds, StyleEdit, pack,
+    AnchorId, Document, EllipseFrame, Length, NewAnchor, NodeId, Point, RectBounds, StyleEdit, pack,
 };
 use curvyo_editor_wasm::{Session, Tool};
 use curvyo_render_core::{DrawList, RgbaColor};
@@ -39,14 +38,7 @@ fn circle(d: &Document, x: f64, y: f64, r: f64) -> NodeId {
 }
 
 fn fill(d: &Document, id: NodeId) {
-    d.set_fill_mode(
-        FillMode::Solid,
-        &[FillModeTarget {
-            id,
-            seed_stops: vec![],
-        }],
-    )
-    .unwrap();
+    d.edit_style(&[id], &StyleEdit::FillEnabled(true)).unwrap();
 }
 
 fn open(d: &Document) -> Session {

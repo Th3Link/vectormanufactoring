@@ -11,8 +11,8 @@
 )]
 
 use curvyo_document_core::{
-    AnchorId, Color, DashPattern, Document, FillMode, FillModeTarget, Length, NewAnchor, NodeId,
-    ObjectSnapshot, Point, StyleEdit, ViewTransform,
+    AnchorId, Color, DashPattern, Document, Length, NewAnchor, NodeId, ObjectSnapshot, Point,
+    StyleEdit, ViewTransform,
 };
 use curvyo_render_core::{DrawList, build_artwork, build_live_edit_preview};
 
@@ -59,13 +59,7 @@ fn compound(document: &Document, outlines: &[(Vec<NewAnchor>, bool)], fill: bool
             .edit_style(&[id], &StyleEdit::FillColor(Color { r: 255, g: 0, b: 0 }))
             .unwrap();
         document
-            .set_fill_mode(
-                FillMode::Solid,
-                &[FillModeTarget {
-                    id,
-                    seed_stops: vec![],
-                }],
-            )
+            .edit_style(&[id], &StyleEdit::FillEnabled(true))
             .unwrap();
         document
             .edit_style(&[id], &StyleEdit::StrokeEnabled(false))
@@ -80,7 +74,7 @@ fn artwork(document: &Document) -> DrawList {
         .into_iter()
         .map(|id| document.object(id).unwrap())
         .collect();
-    build_artwork(&objects, &[], view())
+    build_artwork(&objects, view())
 }
 
 /// Whether the triangles of `layer` cover `p`.

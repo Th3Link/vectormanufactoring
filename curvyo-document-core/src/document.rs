@@ -12,6 +12,10 @@ use crate::document_size::{MAX_DOCUMENT_MM, MIN_DOCUMENT_MM};
 use crate::error::{OpenError, SaveError};
 use crate::units::{DocumentSize, Length};
 
+/// An opaque marker of a document's state, see [`Document::version`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocumentVersion(loro::Frontiers);
+
 /// The container `format_version` this build writes and the newest it
 /// accepts on read (ADR 0004 §9).
 ///
@@ -70,11 +74,11 @@ use crate::units::{DocumentSize, Length};
 /// styling/adrs.md`, "`format_version`" and the 2026-10-07 readiness check):
 /// every object node may carry the style keys of `crate::style_codec`
 /// (`stroke_enabled`, `stroke_opacity`, `stroke_dash`, `stroke_join`,
-/// `stroke_cap`, `fill_enabled`, `fill_kind`, `fill`, `fill_opacity` and the
-/// `fill_stops` list), and `document.json` writes one `style` object per
-/// object. A version-6 reader tolerates unknown keys, so it would open a
-/// version-7 file and draw every dash, fill and gradient as a thin black
-/// outline, the silent partial read ADR 0004 §9 forbids; with the bump it
+/// `stroke_cap`, `fill_enabled`, `fill`, `fill_opacity`; a build of that
+/// version may also have written the two keys `crate::legacy_fill` reads past),
+/// and `document.json` writes one `style` object per object. A version-6
+/// reader tolerates unknown keys, so it would open a version-7 file and draw
+/// every dash and fill as a thin black outline, the silent partial read ADR 0004 §9 forbids; with the bump it
 /// says "saved by a newer version". Migration from version 6 is empty by
 /// construction: every new key is absent in an older file and an absent key
 /// reads as the frozen default, which is what older builds drew (0.25 mm
@@ -83,16 +87,10 @@ use crate::units::{DocumentSize, Length};
 /// the complete format of the slice: later parts of the story add no key
 /// and need no further bump. The number is provisional by the rule above.
 ///
-/// **Two stored forms of `fill_stops`, one version.** A stop list written by a
-/// build up to the gradient part is a regular movable-list container; new stop
-/// lists are written as a Loro *mergeable* child container (`LoroMap::
-/// ensure_mergeable_movable_list`: a marker value in the map slot and a
-/// container id that follows from the map and the key), so two peers that create
-/// the list at once merge their stops instead of one list replacing the other.
-/// Readers accept both forms, and no build before this one wrote `fill_stops`
-/// from the editor, so the version stays 7. Reading the mergeable form needs
-/// Loro 1.16 or later (the workspace requires it); the goldens are
-/// `styles_v7.curvyo` (regular) and `styles_v7_mergeable_stops.curvyo`.
+/// The fill keys `fill_kind` and `fill_stops` of a version-7 file are not part
+/// of the format any more (`specs/0017-style-panel-rework/adrs.md`, decision 1):
+/// `crate::legacy_fill` reads past them and drops them on the next fill write,
+/// which needs no bump because nothing is misread in either direction.
 ///
 /// Bumped to 8 in `boolean-operations` (`specs/0016-boolean-operations/
 /// adrs.md`, "compound path"): a path may hold several outlines, the first in
@@ -103,7 +101,22 @@ use crate::units::{DocumentSize, Length};
 /// it must refuse the file as too new. Migration from version 7 is none: the
 /// key is simply absent, and a file from an earlier build opens unchanged and
 /// is not rewritten. Golden: `compound_v8.curvyo`.
-pub const CURRENT_FORMAT_VERSION: u32 = 8;
+///
+/// Bumped to 9 in `style-panel-rework` (`specs/0017-style-panel-rework/
+/// adrs.md`, decision 2): a stroke dash list may have an odd count (`1 2 4`),
+/// stored as typed. A build that stops at version 8 refuses an odd list as a
+/// damaged file, the wrong message, so it must refuse the file as too new.
+/// Migration from version 8 is none: every stored even list stays valid, and
+/// a file from an earlier build opens unchanged and is not rewritten. Golden:
+/// `dash_v9.curvyo`.
+///
+/// Version 9 also carries the five stroke marker keys of `stroke-markers`
+/// (`specs/0018-stroke-markers/adrs.md`, decision 1): the two features share
+/// one bump because they merge in one pull request. A build that stops at
+/// version 8 would ignore the keys and draw no markers, a silent partial read,
+/// so it must refuse the file as too new. Migration from version 8 is none:
+/// absent keys read as None, Spaced and 1. Golden: `markers_v9.curvyo`.
+pub const CURRENT_FORMAT_VERSION: u32 = 9;
 
 pub(crate) const ROOT_MAP: &str = "root";
 const KEY_FORMAT_VERSION: &str = "format_version";
@@ -244,6 +257,15 @@ impl Document {
     /// methods only — never exposed outside this crate (ADR 0004 §3).
     pub(crate) const fn loro(&self) -> &LoroDoc {
         &self.loro
+    }
+
+    /// An opaque marker of the document's current state: it differs from an earlier one exactly
+    /// when something was committed (or merged) in between. For caches built from the whole
+    /// document, such as the Pen's index of path ends (`specs/0034-pen-path-extension`
+    /// criterion 24).
+    #[must_use]
+    pub fn version(&self) -> DocumentVersion {
+        DocumentVersion(self.loro.state_frontiers())
     }
 
     /// Commits the pending auto-commit transaction with `label` as its

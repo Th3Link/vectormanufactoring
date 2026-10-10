@@ -70,7 +70,7 @@ pub(crate) fn node_exists(tree: &LoroTree, id: loro::TreeID) -> bool {
 
 /// Writes a brand-new path's `closed` flag and its whole style. Takes the
 /// style explicitly so `Document::split_at_anchor`'s new object copies the
-/// split path's own style, stops included, instead of resetting it
+/// split path's own style instead of resetting it
 /// (`specs/0007-stroke-and-fill-styling/adrs.md`, section 3);
 /// `Document::create_path` passes the creation default.
 pub(crate) fn write_path_style(meta: &LoroMap, closed: bool, style: &Style) {
@@ -157,6 +157,11 @@ pub(crate) fn anchor_index(
 /// Resolves two anchor ids to the `(earlier, later)` pair of indices of a
 /// path-adjacent segment between them — earlier being the one whose
 /// `handle_out` faces the segment, later the one whose `handle_in` does.
+///
+/// The given direction `a` to `b` is tried first, then `b` to `a`. For a path of three or more
+/// nodes this is the same pair either way; for a closed path of two nodes, which has two segments
+/// (`A` to `B` and the closing `B` to `A`), the direction picks the segment
+/// (`specs/0031-segment-drag-bending` criterion 6a).
 pub(crate) fn adjacent_segment_indices(
     anchors: &LoroMovableList,
     closed: bool,
@@ -166,19 +171,14 @@ pub(crate) fn adjacent_segment_indices(
     let index_a = anchor_index(anchors, a)?;
     let index_b = anchor_index(anchors, b)?;
     let len = anchors.len();
-    if index_a + 1 == index_b {
+    let follows = |from: usize, to: usize| {
+        from != to && (from + 1 == to || (closed && from + 1 == len && to == 0))
+    };
+    if follows(index_a, index_b) {
         return Ok((index_a, index_b));
     }
-    if index_b + 1 == index_a {
+    if follows(index_b, index_a) {
         return Ok((index_b, index_a));
-    }
-    if closed && len > 2 {
-        if index_a == 0 && index_b == len - 1 {
-            return Ok((index_b, index_a));
-        }
-        if index_b == 0 && index_a == len - 1 {
-            return Ok((index_a, index_b));
-        }
     }
     Err(crate::path_model::PathEditError::NotAnAdjacentSegment)
 }

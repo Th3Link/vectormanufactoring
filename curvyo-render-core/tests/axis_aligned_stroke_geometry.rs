@@ -37,7 +37,6 @@ fn two_node_path(a: Point, b: Point) -> Document {
 fn draw(snapshot: curvyo_document_core::PathSnapshot) -> DrawList {
     build_artwork(
         &[curvyo_document_core::ObjectSnapshot::Path(snapshot)],
-        &[],
         curvyo_document_core::ViewTransform::identity(),
     )
 }
@@ -143,7 +142,6 @@ fn in_progress_pen_preview_stroke_is_non_empty_for_axis_aligned_segments() {
         None,
         None,
         curvyo_document_core::ViewTransform::identity(),
-        false,
         curvyo_document_core::DocumentSize::default(),
     );
     let with_segment_list = build_pen_preview(
@@ -151,7 +149,6 @@ fn in_progress_pen_preview_stroke_is_non_empty_for_axis_aligned_segments() {
         None,
         None,
         curvyo_document_core::ViewTransform::identity(),
-        false,
         curvyo_document_core::DocumentSize::default(),
     );
     assert!(

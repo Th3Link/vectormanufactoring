@@ -58,6 +58,11 @@ fn selected(ids: &[NodeId]) -> ObjectSelection {
     selection
 }
 
+/// The colour a typed hex gives, whatever alpha it carried.
+fn hex_rgb(text: &str) -> Result<Color, StyleEntryError> {
+    parse_hex(text).map(|typed| typed.color)
+}
+
 fn style_of(document: &Document, id: NodeId) -> curvyo_document_core::Style {
     match document.object(id).unwrap() {
         curvyo_document_core::ObjectSnapshot::Path(p) => p.style,
@@ -79,11 +84,11 @@ fn hex_short_and_long_forms_agree_for_every_case_and_prefix() {
     for text in [
         "#F80", "f80", "F80", "#f80", "#FF8800", "ff8800", "#ff8800", "FF8800", "#Ff8800",
     ] {
-        assert_eq!(parse_hex(text), Ok(want), "{text:?}");
+        assert_eq!(hex_rgb(text), Ok(want), "{text:?}");
     }
-    assert_eq!(parse_hex("#000"), Ok(Color::BLACK));
+    assert_eq!(hex_rgb("#000"), Ok(Color::BLACK));
     assert_eq!(
-        parse_hex("fff"),
+        hex_rgb("fff"),
         Ok(Color {
             r: 255,
             g: 255,
@@ -100,8 +105,6 @@ fn hex_refuses_every_wrong_length_with_the_hex_error() {
         "1",
         "12",
         "#12",
-        "1234",
-        "#1234",
         "12345",
         "#12345",
         "1234567",
@@ -114,13 +117,17 @@ fn hex_refuses_every_wrong_length_with_the_hex_error() {
 }
 
 #[test]
-fn hex_refuses_eight_digits_with_its_own_message() {
-    for text in ["#12345678", "12345678", "#FF880080", "ff880080"] {
-        assert_eq!(
-            parse_hex(text),
-            Err(StyleEntryError::HexEightDigits),
-            "{text:?}"
-        );
+fn hex_takes_four_and_eight_digits_as_rgb_and_alpha() {
+    for text in [
+        "#12345678",
+        "12345678",
+        "#FF880080",
+        "ff880080",
+        "#F808",
+        "f808",
+    ] {
+        let typed = parse_hex(text).unwrap_or_else(|_| panic!("{text:?}"));
+        assert!(typed.opacity.is_some(), "{text:?} carries an alpha");
     }
 }
 
@@ -163,17 +170,20 @@ proptest! {
     #[test]
     fn hex_never_panics_and_round_trips_valid_input(text in "\\PC{0,12}") {
         {
-            if let Ok(color) = parse_hex(&text) {
-                // Anything accepted must be 3 or 6 hex digits after an optional #.
-                let digits = text.strip_prefix('#').unwrap_or(&text);
-                prop_assert!(digits.len() == 3 || digits.len() == 6, "{text:?}");
+            if let Ok(typed) = parse_hex(&text) {
+                let color = typed.color;
+                // Anything accepted must be 3, 4, 6 or 8 hex digits after an optional #
+                // (surrounding spaces are ignored).
+                let trimmed = text.trim();
+                let digits = trimmed.strip_prefix('#').unwrap_or(trimmed);
+                prop_assert!([3, 4, 6, 8].contains(&digits.len()), "{text:?}");
                 prop_assert!(digits.chars().all(|c| c.is_ascii_hexdigit()), "{text:?}");
-                let long = if digits.len() == 3 {
+                let long = if digits.len() <= 4 {
                     digits.chars().flat_map(|c| [c, c]).collect::<String>()
                 } else {
                     digits.to_string()
                 };
-                let n = u32::from_str_radix(&long, 16).unwrap();
+                let n = u32::from_str_radix(&long[..6], 16).unwrap();
                 prop_assert_eq!(
                     (u32::from(color.r) << 16) | (u32::from(color.g) << 8) | u32::from(color.b),
                     n
@@ -187,7 +197,7 @@ proptest! {
         let mut text = format!("{rgb:06x}");
         if upper { text = text.to_uppercase(); }
         if hash { text.insert(0, '#'); }
-        let c = parse_hex(&text).unwrap();
+        let c = parse_hex(&text).unwrap().color;
         prop_assert_eq!(
             (u32::from(c.r) << 16) | (u32::from(c.g) << 8) | u32::from(c.b),
             rgb
@@ -334,15 +344,13 @@ proptest! {
 #[test]
 fn every_style_field_refuses_the_other_fields_kind_of_value() {
     assert!(StyleField::StrokeColor.parse_text("5").is_err());
-    assert!(StyleField::FillColor.parse_text("1000").is_err());
+    assert!(StyleField::FillColor.parse_text("10000").is_err());
     assert!(StyleField::StrokeWidth.parse_text("#F80").is_err());
     assert!(StyleField::StrokeOpacity.parse_text("#F80").is_err());
     assert!(StyleField::FillOpacity.parse_text("1001").is_err());
     assert_eq!(StyleField::from_name("stroke-dash"), None);
     assert_eq!(StyleField::from_name(""), None);
     assert_eq!(StyleField::from_name("Stroke-Width"), None);
-    assert!(StyleField::StrokeWidth.color_edit(Color::BLACK).is_none());
-    assert!(StyleField::StrokeColor.opacity_edit(50.0).is_none());
 }
 
 // ---------------------------------------------------------------------
@@ -372,10 +380,10 @@ fn ids_the_document_no_longer_holds_are_dropped_from_the_scope() {
         &NodeSelection::new(),
     );
     assert_eq!(only_gone.ids, []);
-    let state = style_panel_state(&objs, &only_gone);
-    assert!(
-        !state.enabled,
-        "a stale-only selection is the disabled panel"
+    assert_eq!(
+        style_panel_state(&objs, &objs, &only_gone),
+        None,
+        "a stale-only selection leaves nothing to edit"
     );
 }
 
@@ -407,7 +415,7 @@ fn the_pen_ignores_a_selection_and_the_node_tool_with_nothing_is_disabled() {
         &NodeSelection::new(),
     );
     assert_eq!(pen.ids, []);
-    assert_eq!(pen.subject, "Pen: finish the path to style it");
+    assert_eq!(pen.subject, "", "no text for the Pen (criterion 4)");
 
     let node_none = style_scope(
         StyleTool::Node,
@@ -416,8 +424,8 @@ fn the_pen_ignores_a_selection_and_the_node_tool_with_nothing_is_disabled() {
         &NodeSelection::new(),
     );
     assert_eq!(node_none.ids, []);
-    assert_eq!(node_none.subject, "Nothing selected");
-    assert!(!style_panel_state(&objs, &node_none).enabled);
+    assert_eq!(node_none.subject, "", "no text when nothing is selected");
+    assert_eq!(style_panel_state(&objs, &objs, &node_none), None);
 
     // Node tool, only a rectangle in the object selection: it is not a path,
     // so the panel has nothing to edit (the Node tool edits paths only).
@@ -431,8 +439,9 @@ fn the_pen_ignores_a_selection_and_the_node_tool_with_nothing_is_disabled() {
 }
 
 #[test]
-fn a_disabled_panel_is_inert_and_shows_the_frozen_defaults() {
+fn an_empty_scope_has_no_panel_state() {
     let document = Document::new(1);
+    let _ = square(&document, 0.0);
     let objs = objects(&document);
     let scope = style_scope(
         StyleTool::Other,
@@ -440,14 +449,8 @@ fn a_disabled_panel_is_inert_and_shows_the_frozen_defaults() {
         &ObjectSelection::new(),
         &NodeSelection::new(),
     );
-    let state = style_panel_state(&objs, &scope);
-    assert!(!state.enabled);
-    assert_eq!(state.subject, "Nothing selected");
-    assert_eq!(state.stroke.width, BarValue::Uniform(Length::from_mm(0.25)));
-    assert_eq!(state.stroke.paint, BarValue::Uniform(true));
-    assert_eq!(state.stroke.dash, BarValue::Uniform(DashChoice::Solid));
-    assert!(!state.stroke.all_off);
-    assert_eq!(state.stroke.opacity, BarValue::Uniform(Opacity::OPAQUE));
+    assert_eq!(scope.subject, "");
+    assert_eq!(style_panel_state(&objs, &objs, &scope), None);
 }
 
 // ---------------------------------------------------------------------
@@ -469,7 +472,7 @@ fn mixed_values_show_mixed_only_for_the_property_that_differs() {
         &selected(&[a, b]),
         &NodeSelection::new(),
     );
-    let state = style_panel_state(&objs, &scope);
+    let state = style_panel_state(&objs, &objs, &scope).unwrap();
     assert_eq!(state.stroke.width, BarValue::Mixed);
     assert_eq!(state.stroke.color, BarValue::Uniform(Color::BLACK));
     assert_eq!(state.stroke.paint, BarValue::Uniform(true));
@@ -477,7 +480,7 @@ fn mixed_values_show_mixed_only_for_the_property_that_differs() {
 }
 
 #[test]
-fn some_on_and_some_off_is_not_all_off_and_paint_is_mixed() {
+fn some_on_and_some_off_shows_the_rows_and_paint_is_mixed() {
     let document = Document::new(1);
     let a = square(&document, 0.0);
     let b = square(&document, 30.0);
@@ -491,9 +494,9 @@ fn some_on_and_some_off_is_not_all_off_and_paint_is_mixed() {
         &selected(&[a, b]),
         &NodeSelection::new(),
     );
-    let state = style_panel_state(&objs, &both);
+    let state = style_panel_state(&objs, &objs, &both).unwrap();
     assert_eq!(state.stroke.paint, BarValue::Mixed);
-    assert!(!state.stroke.all_off, "rows stay enabled when mixed");
+    assert!(state.stroke.rows_shown, "rows stay shown when mixed");
 
     let off_only = style_scope(
         StyleTool::Other,
@@ -501,8 +504,8 @@ fn some_on_and_some_off_is_not_all_off_and_paint_is_mixed() {
         &selected(&[a]),
         &NodeSelection::new(),
     );
-    let state = style_panel_state(&objs, &off_only);
-    assert!(state.stroke.all_off);
+    let state = style_panel_state(&objs, &objs, &off_only).unwrap();
+    assert!(!state.stroke.rows_shown);
     assert_eq!(state.stroke.paint, BarValue::Uniform(false));
     // Colour and Width stay readable while the stroke is off.
     assert_eq!(state.stroke.width, BarValue::Uniform(Length::from_mm(0.25)));
@@ -516,7 +519,7 @@ fn width_zero_switches_off_and_keeps_the_stored_width_and_every_other_value() {
     for e in [
         StyleEdit::StrokeWidth(Length::from_mm(4.0)),
         StyleEdit::StrokeColor(red),
-        StyleEdit::StrokeDash(DashChoice::Dot.pattern().unwrap()),
+        StyleEdit::StrokeDash(DashChoice::Dot.pattern()),
     ] {
         document.edit_style(&[a], &e).unwrap();
     }

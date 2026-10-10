@@ -107,6 +107,12 @@
        redefining --accent here to design-system.md's blue would silently
        recolor every future shadcn menu/dropdown hover too. Same values,
        collision-free name — see docs/design-system.md's own note. */
+    /* The tool rail (docs/design-system.md, rows "Tool rail architecture" and "Toolbox card"):
+       inset from the viewport edge, and the rail's right edge (two 48px columns 8px apart). Bars start at
+       --rail-right + 12; notices and tooltips open from it. 60px with one column; 116px since the Path card
+       (column B) ships. */
+    --rail-inset: 12px;
+    --rail-right: 116px;
     --toolbar-bg: #DCDCE0;
     --toolbar-icon: #3A3A3F;
     --toolbar-icon-active-bg: #2F6FEE;
@@ -136,7 +142,11 @@
     --checker-a: #FFFFFF;
     --checker-b: #C9C9CE;
     --mixed-hatch: #8E8E93;
-    --no-paint-slash: var(--field-invalid);
+    /* 0017 style-panel-rework: the value field's bar and the picker's thumbs. */
+    --value-fill: color-mix(in srgb, var(--editor-accent) 28%, white);
+    --value-edge: var(--editor-accent);
+    --picker-thumb-ring: #FFFFFF;
+    --picker-thumb-casing: rgb(0 0 0 / 0.4);
 }
 
 .dark {
@@ -190,23 +200,27 @@
    needs rules. The hotspot (2 2) sits at the nib's drawing tip in both
    SVGs below, matching where a click would land.
 
-   Two pen-tool cursors: the plain nib for idle/placing/mid-drag, and a
-   "pen-with-small-circle" variant — public/cursors/pen-close.svg, the
-   plain nib plus one added ring badge at the same hotspot — while
-   hovering the in-progress path's own first node (acceptance criterion
-   5's close target). `useEditorSession`'s `WasmSession.
-   is_hovering_pen_close_target()` decides which class applies; the
-   first node's own hover ring (a second, independent cue the UX notes
-   ask for alongside the cursor swap) is a separate, still-open gap in
-   curvyo-render-core's pen preview (it always rings the most-recently-
-   placed node, never conditionally the first one), not something this
-   cursor rule can provide on its own. */
+   Pen cursors: the plain nib for idle/placing/mid-drag, and one variant each for what a press
+   would do (`specs/0034-pen-path-extension/`): close (`pen-close.svg`, the nib plus a ring
+   badge), continue and join. `usePenCue` (the session's `pen_cue`, decided in `pen_target`)
+   picks the class. The ring on the target node is drawn by `curvyo-render-core`'s pen cue. */
 .canvas-cursor-pen {
   cursor: url("/cursors/pen.svg") 2 2, crosshair;
 }
 
 .canvas-cursor-pen-close {
   cursor: url("/cursors/pen-close.svg") 2 2, crosshair;
+}
+
+/* 0034-pen-path-extension: the Pen over an end node it would continue, and over another path's end
+   it would join (docs/design-system.md, "Pen cursors"). Hotspot at the nib tip like the others;
+   the plain nib returns while Shift asks for the alternative. */
+.canvas-cursor-pen-continue {
+  cursor: url("/cursors/pen-continue.svg") 2 2, crosshair;
+}
+
+.canvas-cursor-pen-join {
+  cursor: url("/cursors/pen-join.svg") 2 2, crosshair;
 }
 /* unified-object-editing (docs/design-system.md, "Select bar"): the Ratio
    slider of a selection whose stars differ shows no thumb and a neutral track
@@ -273,46 +287,15 @@ input[type="range"].select-bar-slider-mixed::-moz-range-thumb {
   scrollbar-width: thin;
 }
 
-/* react-colorful, restyled to the design system (docs/design-system.md,
-   "Colour popover"): the saturation/value area 208 x 128, the hue and opacity
-   sliders 12 px high with a 16 px thumb, the opacity ramp over a checkerboard. */
-.colour-picker .react-colorful {
-  width: 208px;
-  height: auto;
-  gap: 10px;
-  display: flex;
-  flex-direction: column;
+/* 0017 criterion 35: nothing in the panel selects or drags as text except a
+   text input. */
+.properties-panel,
+.properties-panel * {
+  user-select: none;
+  -webkit-user-drag: none;
 }
-.colour-picker .react-colorful__saturation {
-  height: 128px;
-  border-radius: 5px;
-  border-bottom: 0;
-}
-.colour-picker .react-colorful__hue,
-.colour-picker .react-colorful__alpha {
-  height: 12px;
-  border-radius: 6px;
-}
-.colour-picker .react-colorful__alpha {
-  background-image:
-    linear-gradient(45deg, var(--checker-b) 25%, transparent 25%, transparent 75%, var(--checker-b) 75%),
-    linear-gradient(45deg, var(--checker-b) 25%, transparent 25%, transparent 75%, var(--checker-b) 75%);
-  background-color: var(--checker-a);
-  background-size: 12px 12px;
-  background-position: 0 0, 6px 6px;
-}
-.colour-picker .react-colorful__alpha-gradient {
-  border-radius: 6px;
-  box-shadow: none;
-}
-.colour-picker .react-colorful__pointer {
-  width: 16px;
-  height: 16px;
-  border: 2px solid #fff;
-  box-shadow: 0 0 0 1px var(--toolbar-icon);
-}
-.colour-picker .react-colorful__interactive:focus .react-colorful__pointer {
-  box-shadow: 0 0 0 1px var(--toolbar-icon), 0 0 0 3px var(--editor-accent);
+.properties-panel input {
+  user-select: text;
 }
 
 /* A control the panel focused from its own keyboard shortcut shows the focus
@@ -327,4 +310,11 @@ input[type="range"].select-bar-slider-mixed::-moz-range-thumb {
 html[data-boolean-busy],
 html[data-boolean-busy] * {
   cursor: wait !important;
+}
+
+/* A value field drag keeps the resize cursor over the whole window until the
+   release (`0017` criterion 37). */
+html[data-value-drag],
+html[data-value-drag] * {
+  cursor: ew-resize !important;
 }

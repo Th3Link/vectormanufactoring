@@ -41,6 +41,9 @@ impl Session {
     /// the move cursor follows the press, which Shift changes.
     #[must_use]
     pub fn cursor_hint(&self) -> String {
+        if self.colour_pick_target().is_some() {
+            return "eyedropper".to_string();
+        }
         if self.tool != Tool::Select {
             return "default".to_string();
         }

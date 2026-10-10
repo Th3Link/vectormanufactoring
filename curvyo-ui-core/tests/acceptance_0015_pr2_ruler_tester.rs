@@ -811,16 +811,16 @@ fn majors_cover_the_whole_strip() {
 // ---- AC 11a: initial view ----
 
 #[test]
-fn ac11a_initial_view_puts_the_corner_72px_in() {
+fn ac11a_initial_view_puts_the_corner_128px_in() {
     let vp = Viewport::with_document_inset();
     let (x, y) = vp.view().document_to_screen(Point::new(0.0, 0.0));
     assert!(
-        (x - 72.0).abs() < 1e-9 && (y - 72.0).abs() < 1e-9,
+        (x - 128.0).abs() < 1e-9 && (y - 128.0).abs() < 1e-9,
         "({x}, {y})"
     );
     assert_eq!(vp.zoom_percent(), 100);
-    assert!((DOCUMENT_INSET_PX - 72.0).abs() < 1e-12);
-    let d = vp.screen_to_document(72.0, 72.0);
+    assert!((DOCUMENT_INSET_PX - 128.0).abs() < 1e-12);
+    let d = vp.screen_to_document(128.0, 128.0);
     assert!(d.x.abs() < 1e-9 && d.y.abs() < 1e-9);
 }
 
@@ -842,7 +842,7 @@ fn ac11a_survives_first_size_reports_and_resizes_until_first_pan() {
         vp.resize(w, h);
         let (x, y) = corner(&vp);
         assert!(
-            (x - 72.0).abs() < 1e-9 && (y - 72.0).abs() < 1e-9,
+            (x - 128.0).abs() < 1e-9 && (y - 128.0).abs() < 1e-9,
             "after {w}x{h}: ({x}, {y})"
         );
     }
@@ -851,7 +851,7 @@ fn ac11a_survives_first_size_reports_and_resizes_until_first_pan() {
     vp.resize(900.0, 650.0);
     let (x, y) = corner(&vp);
     assert!(
-        (x - 72.0).abs() < 1e-9 && (y - 72.0).abs() < 1e-9,
+        (x - 128.0).abs() < 1e-9 && (y - 128.0).abs() < 1e-9,
         "after zero report: ({x}, {y})"
     );
 }
@@ -864,7 +864,7 @@ fn ac11a_panel_toggle_keeps_the_corner_too() {
     vp.resize(720.0, 700.0);
     let (x, y) = corner(&vp);
     assert!(
-        (x - 72.0).abs() < 1e-9 && (y - 72.0).abs() < 1e-9,
+        (x - 128.0).abs() < 1e-9 && (y - 128.0).abs() < 1e-9,
         "({x}, {y})"
     );
 }
@@ -912,16 +912,16 @@ fn ac11a_first_zoom_and_drag_pan_end_the_inset() {
 fn ac11a_zoom_stays_cursor_fixed_from_inset_view() {
     let mut vp = Viewport::with_document_inset();
     vp.resize(1000.0, 700.0);
-    vp.zoom_about(72.0, 72.0, 3.0);
+    vp.zoom_about(128.0, 128.0, 3.0);
     let (x, y) = corner(&vp);
-    assert!((x - 72.0).abs() < 1e-6 && (y - 72.0).abs() < 1e-6);
+    assert!((x - 128.0).abs() < 1e-6 && (y - 128.0).abs() < 1e-6);
     // clamped at the limits
     for _ in 0..30 {
-        vp.zoom_about(72.0, 72.0, 10.0);
+        vp.zoom_about(128.0, 128.0, 10.0);
     }
     assert_eq!(vp.zoom_percent(), 8000);
     for _ in 0..60 {
-        vp.zoom_about(72.0, 72.0, 0.1);
+        vp.zoom_about(128.0, 128.0, 0.1);
     }
     assert_eq!(vp.zoom_percent(), 2);
 }

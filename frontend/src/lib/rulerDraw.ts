@@ -6,7 +6,7 @@
 
 /** The few Canvas2D members the drawing uses, so a test can record them. */
 export interface RulerContext {
-  fillStyle: string | CanvasGradient | CanvasPattern;
+  fillStyle: CanvasRenderingContext2D["fillStyle"];
   font: string;
   textBaseline: CanvasTextBaseline;
   textAlign: CanvasTextAlign;

@@ -3,7 +3,8 @@
 The list of all features comes first, then the convention for writing them.
 State of this list: 2026-10-10 (the customer renumbered every folder on
 2026-10-09, see "Numbering" below; the customer requests of 2026-10-09 added
-0030 to 0039 and gave the groups half of 0023 its spec).
+0030 to 0039 and gave the groups half of 0023 its spec; 0040 was added for the
+customer request of 2026-10-10).
 
 Spec-driven development, adapted from
 [spec-driven-dev-kit](https://github.com/trojava/spec-driven-dev-kit) for
@@ -60,18 +61,19 @@ order, dependencies and conflicts are in "Proposed build order" below.
 |---|---|---|---|---|---|---|
 | [0015](0015-document-size-and-rulers/) | `document-size-and-rulers` | Rulers in mm along the top and left, document resize with the content staying centred, fit the document to the drawing, drawing outside the document edge. | Done (#67, #72) | Must | none yet | - |
 | [0016](0016-boolean-operations/) | `boolean-operations` | Union, difference, intersection, exclusion and reverse difference on closed paths, as a command section in the left tool rail; compound-path results. One PR (#73), built as milestones on one branch. The hover preview of the result is not part of it (see "Specified but not built" below). Amended 2026-10-10: the Boolean operations become their own toolbox card (small `fix/` PR). | Done (#69, #73) | Must | R-EDIT-003 | 9 |
-| [0017](0017-style-panel-rework/) | `style-panel-rework` | Empty panel when nothing is selected, controls hidden instead of disabled, 8-digit RGBA hex, inline colour picker, eyedropper, custom dash text line, GIMP-style value fields, gradients removed. Replaces parts of 0007. | Ready | Must | R-EDIT-005, R-EDIT-006 | - |
-| [0018](0018-stroke-markers/) | `stroke-markers` | Arrow or dot at the start, the end, N places along and on every node of a path. Builds on 0017. | Ready | Should | R-EDIT-005, R-EDIT-016 | - |
+| [0017](0017-style-panel-rework/) | `style-panel-rework` | Empty panel when nothing is selected, controls hidden instead of disabled, 8-digit RGBA hex, inline colour picker, eyedropper, custom dash text line, GIMP-style value fields, gradients removed. Replaces parts of 0007. | In progress (#78) | Must | R-EDIT-005, R-EDIT-006 | - |
+| [0018](0018-stroke-markers/) | `stroke-markers` | Arrow or dot at the start, the end, N places along and on every node of a path. Builds on 0017. | In progress (#78) | Should | R-EDIT-005, R-EDIT-016 | - |
 | [0019](0019-multi-object-transform/) | `multi-object-transform` | One group box with the same handles as a single object, for a selection of several objects: move, scale, rotate, skew (paths). Any selection can be stretched in one direction (edge handles, typed size); polygons, stars and turned shapes become paths in the same commit, with a notice; their corner drag stays proportional (customer change 2026-10-10). Runs after 0017; 0014 is merged. | In progress | Should | R-EDIT-012 | - |
 | 0020 | `undo-redo` | Ctrl+Z and Ctrl+Y undo and redo every editing operation, one interaction = one undo step. **Number reserved, no folder: the customer has ideas that come first.** | Not started | Must | R-EDIT-008 | 8 |
 | [0023](0023-groups/) | `groups` | Group and ungroup, nested groups, enter a group to edit inside it (everything else dimmed, a visible way out), a group moves and transforms as one with the box of 0019; no group style or transform. The grouping half of the old slice `layers-and-grouping`; layers are 0039. Needs a document-model decision by the customer. | Draft (criteria complete; ADR needs-customer, UX notes pending) | Must | R-EDIT-009 | 10 |
-| [0030](0030-document-size-presets/) | `document-size-presets` | Paper sizes A0 to A6 and slide formats 16:9, 16:10, 4:3 as inline buttons in the Document section, a portrait/landscape switch, the selected format derived from the size; the list comes from one validated data file. Delivered inside the 0017 branch as its last milestone (one PR). | Ready | Should | R-EDIT-019 | - |
+| [0030](0030-document-size-presets/) | `document-size-presets` | Paper sizes A0 to A6 and slide formats 16:9, 16:10, 4:3 as inline buttons in the Document section, a portrait/landscape switch, the selected format derived from the size; the list comes from one validated data file. Delivered inside the 0017 branch as its last milestone (one PR). | In progress (#78) | Should | R-EDIT-019 | - |
 | [0031](0031-segment-drag-bending/) | `segment-drag-bending` | In the Node tool, drag a line or curve segment to bend it; the two handles move by a written rule, node types are honoured, blue/black preview, one commit, Escape cancels. | Ready | Should | R-EDIT-020, R-EDIT-001 | - |
 | [0034](0034-pen-path-extension/) | `pen-path-extension` | With the Pen: continue an open path from either end, connect two paths by drawing onto the other's end, close with a sharp or smooth closing node (Shift flips, chip and preview show which), and a Close path command in the Node bar. Milestone M3 of the path-tools slice (one PR with 0016's toolbox fix, 0031 and 0035). | Ready | Should | R-EDIT-022 | - |
 | [0035](0035-combine-and-break-apart/) | `combine-and-break-apart` | Combine closed shapes into one compound path (shapes inside shapes become holes, curves kept, crossing outlines refused); Break apart a compound path into pieces that keep their holes. Brings the second rail column (Path card). Milestone M4 of the path-tools slice (one PR with 0016's toolbox fix, 0031 and 0034). | Ready | Should | R-EDIT-023 | - |
 | [0036](0036-split-at-crossings/) | `split-at-crossings` | Cut the selected paths into separate open pieces wherever they cross or touch each other or themselves, on the exact curves. The customer's word "Split" is interpreted; see its Question 1. | Draft (criteria complete; ADRs and UX notes pending) | Should | R-EDIT-023 | - |
 | [0037](0037-fracture-and-flatten/) | `fracture-and-flatten` | Fracture: cut overlapping shapes into the pieces the overlaps make. Flatten: trim every shape to its visible part and remove hidden shapes. | Draft (criteria complete; ADRs and UX notes pending) | Should | R-EDIT-023 | - |
 | [0038](0038-path-offset/) | `path-offset` | Outset and Inset by a typed distance in mm with Round, Miter or Bevel corners, open paths grow into a closed outline, live blue/black preview, the original kept. Needs a kernel decision (ADR 0003 §4). | Draft (criteria complete; ADRs and UX notes pending) | Should | R-EDIT-007 | - |
+| [0040](0040-document-background/) | `document-background` | The document has a background fill: solid colour with alpha or none (drawn as a checkerboard), default today's #E8E8EB; a Background block in the Document section with the inline colour block of 0017; the eyedropper picks the background where no painted object is under the pointer, and the Background block has its own eyedropper. Needs a format version bump. Builds on 0017 and 0030 (same PR #78). | Ready (spec, `adrs.md` and UX notes exist; one PR, four milestones, starts after #79 and #80 merge) | Should | R-EDIT-024 | - |
 
 ### Specified but not built
 
@@ -109,7 +111,7 @@ deferred past the laser MVP on 2026-10-02 (multi-OS parity and sync, fonts,
 asset management, collaboration, the asset connector, plugins, other machine
 families). They are tracked in `docs/requirements.md` ("MVP (confirmed)" and
 "Explicitly deferred past MVP") and get a number here once the customer
-prioritises them. The next free number is 0040.
+prioritises them. The next free number is 0041.
 
 ## Proposed build order (product owner, 2026-10-10)
 
@@ -125,6 +127,7 @@ For 0023 and 0030 to 0038, with the fixed points 0016 (done), 0017, 0018, 0019 a
 | 0036 `split-at-crossings` | `geometry-core` (new curve-intersection module), rail button | 0016 merged; the rail layout decision | 0037, 0038 (same crate) |
 | 0037 `fracture-and-flatten` | `geometry-core` (kernel use), rail buttons | 0016 merged; the rail layout decision | 0036, 0038 (same crate) |
 | 0038 `path-offset` | `geometry-core` (offset, maybe a new dependency), an entry widget, `render-core` preview | 0016 merged; the kernel check of ADR 0003 §4 | 0036, 0037 (same crate) |
+| 0040 `document-background` | `document-core` (two registers, format), `ui-core` Document view and eyedropper hit test, `render-core` document rectangle and checkerboard, `editor-wasm`, the Document section of `PropertiesPanel.tsx` | 0017 and 0030 merged (PR #78): it reuses their colour block, eyedropper and Document section | 0023 (format version, document root); 0031 and 0034 are disjoint |
 | 0032 `pen-tablet-input` | pointer input in `frontend` and `editor-wasm`, possibly the Tauri host; the stroke width model | a freehand tool (no spec yet), the platform spike | 0033 (width model) |
 | 0033 `stroke-brushes` | style model, `render-core`, `geometry-core` generators, panel row, plugin host | 0017, 0018, the plugin host | 0018, 0032 (style and width model) |
 
@@ -214,10 +217,10 @@ a reader refuses a file with a higher number ("saved by a newer version").
 |---|---|---|
 | 7 | 0007 `stroke-and-fill-styling` | On `main` |
 | 8 | 0016 `boolean-operations` (compound path, PR #73) | Done, merged |
-| next free at merge | 0017 `style-panel-rework`, PR 2 (odd dash patterns) | Planned |
-| next free at merge | 0018 `stroke-markers` | Planned, after 0017 |
+| 9 | 0017 `style-panel-rework` (odd dash lists) and 0018 `stroke-markers`, one PR | In progress (`story/style-panel-rework`) |
 | none | 0015 `document-size-and-rulers` | No bump (its `adrs.md`, decision 1) |
 | next free at merge | 0023 `groups` (a group node with children) | Planned; a document-model change that needs the customer |
+| next free at merge | 0040 `document-background` (background paint and colour registers in the document root) | Ready; 10 if nothing else merges first, otherwise the next free number after 0023 or 0033 (not built in parallel with 0023) |
 | next free at merge | 0033 `stroke-brushes` (brush reference and embedded definition) | Draft, after the MVP |
 | none | 0030, 0031, 0034, 0035, 0036, 0037, 0038 | No bump: they write existing object kinds (0035 to 0037 use the compound path of 0016) |
 

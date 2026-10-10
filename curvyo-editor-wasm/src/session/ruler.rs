@@ -35,17 +35,17 @@ mod tests {
 
     use super::*;
 
-    /// Criterion 11a: after `show_default_view` the document corner is 72 px
+    /// Criterion 11a: after `show_default_view` the document corner is 128 px
     /// right of and below the canvas corner, and a click there is document
     /// (0, 0).
     #[test]
-    fn the_default_view_puts_the_document_corner_72_px_in() {
+    fn the_default_view_puts_the_document_corner_128_px_in() {
         let mut session = Session::new(1);
         session.show_default_view();
-        let corner = session.screen_to_document(72.0, 72.0);
+        let corner = session.screen_to_document(128.0, 128.0);
         assert!(corner.x.abs() < 1e-9 && corner.y.abs() < 1e-9, "{corner:?}");
         let (x, y) = session.view().document_to_screen(Point::new(0.0, 0.0));
-        assert!((x - 72.0).abs() < 1e-9 && (y - 72.0).abs() < 1e-9);
+        assert!((x - 128.0).abs() < 1e-9 && (y - 128.0).abs() < 1e-9);
     }
 
     /// Criteria 3 and 9: the 0 tick is at the document corner, and a tick
@@ -56,7 +56,7 @@ mod tests {
         session.show_default_view();
         let layout = session.ruler_layout(RulerAxis::Horizontal, 800.0, 7.0, 7.0);
         let origin = layout.origin_px.unwrap();
-        assert!((origin - 72.0).abs() < 1e-9);
+        assert!((origin - 128.0).abs() < 1e-9);
         // The tick labelled "100" (mm) at 100 % is where a click lands at
         // document x = 100 mm.
         let label = layout.labels.iter().find(|l| l.text == "100").unwrap();

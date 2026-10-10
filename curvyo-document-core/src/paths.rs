@@ -20,6 +20,7 @@ use crate::path_codec::{
 use crate::path_model::{
     AnchorId, AnchorKind, HandleSlot, NewAnchor, NodeId, PathEditError, PathSnapshot,
 };
+use crate::smooth_handles::smooth_corner_handles;
 use crate::style_model::Style;
 use crate::units::{Length, Point, Vec2};
 
@@ -30,16 +31,7 @@ use crate::units::{Length, Point, Vec2};
 /// (`specs/0006-path-merge-split-and-node-types/adrs.md`: "the wasm
 /// binding string... is not persisted and is renamed outright.
 /// `DEFAULT_SMOOTH_HANDLE_LENGTH_MM` becomes `DEFAULT_HANDLE_LENGTH_MM`").
-const DEFAULT_HANDLE_LENGTH_MM: f64 = 10.0;
-
-/// Below this length, a handle counts as "no existing length to keep" for
-/// acceptance criterion 2's "its own current length, if that side already
-/// had a non-zero handle; otherwise the slice's existing default handle
-/// length" — not a geometric [`crate::units::Tolerance`] (`CLAUDE.md` §5):
-/// this is a plain zero/non-zero classification of a stored value, the
-/// same kind of exact check `specs/0002-path-node-editing/adrs.md` already
-/// uses for "a retracted handle is the exact zero vector".
-const ZERO_HANDLE_EPSILON: f64 = f64::EPSILON;
+pub(crate) const DEFAULT_HANDLE_LENGTH_MM: f64 = 10.0;
 
 /// Default fraction of the segment chord a "make curve" extends its two
 /// adjoining handles by (acceptance criterion 14; a standard Bézier
@@ -101,19 +93,6 @@ fn asymmetric_opposite(dragged: Vec2, opposite: Vec2) -> Vec2 {
         opposite
     } else {
         dragged.normalized_to(opposite.length()).negated()
-    }
-}
-
-/// Acceptance criterion 2's "its own current length, if that side already
-/// had a non-zero handle; otherwise the slice's existing default handle
-/// length" — one side of a Corner→Asymmetric conversion.
-#[must_use]
-fn kept_length_or_default(existing_handle: Vec2) -> f64 {
-    let length = existing_handle.length();
-    if length > ZERO_HANDLE_EPSILON {
-        length
-    } else {
-        DEFAULT_HANDLE_LENGTH_MM
     }
 }
 
@@ -393,11 +372,10 @@ impl Document {
                     let point = read_point(&map, KEY_POINT);
                     let handle_in = read_vec2(&map, KEY_HANDLE_IN);
                     let handle_out = read_vec2(&map, KEY_HANDLE_OUT);
-                    let unit = neighbour_tangent(&anchors, closed, index, point).normalized_to(1.0);
-                    let out_len = kept_length_or_default(handle_out);
-                    let in_len = kept_length_or_default(handle_in);
-                    write_vec2(&map, KEY_HANDLE_OUT, unit.scaled(out_len));
-                    write_vec2(&map, KEY_HANDLE_IN, unit.negated().scaled(in_len));
+                    let tangent = neighbour_tangent(&anchors, closed, index, point);
+                    let (new_in, new_out) = smooth_corner_handles(tangent, handle_in, handle_out);
+                    write_vec2(&map, KEY_HANDLE_OUT, new_out);
+                    write_vec2(&map, KEY_HANDLE_IN, new_in);
                 }
                 // `Symmetric`→`Corner`, `Asymmetric`→`Corner`,
                 // `Symmetric`→`Asymmetric`: shape-preserving, kind only.
@@ -575,7 +553,7 @@ impl Document {
     /// mutating method ends in exactly one Loro commit") rather than a
     /// second, separate one. Also takes an explicit style rather than always
     /// writing the creation default, so Split can copy the original path's
-    /// own style (stops included) instead of resetting it.
+    /// own style instead of resetting it.
     /// `pub(crate)` for `path_topology` to call.
     ///
     /// # Panics

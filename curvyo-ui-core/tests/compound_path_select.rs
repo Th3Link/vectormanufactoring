@@ -13,8 +13,8 @@
 use std::collections::HashSet;
 
 use curvyo_document_core::{
-    AnchorId, Angle, Color, Document, FillMode, FillModeTarget, Length, NewAnchor, NodeId,
-    ObjectSnapshot, PathSnapshot, Point, RectBounds, StyleEdit, Tolerance, Vec2,
+    AnchorId, Angle, Color, Document, Length, NewAnchor, NodeId, ObjectSnapshot, PathSnapshot,
+    Point, RectBounds, StyleEdit, Tolerance, Vec2,
 };
 use curvyo_ui_core::{
     AnchorIdMinter, EditHandle, EntryOutcome, Modifiers, NodeSelection, ObjectSelection,
@@ -65,13 +65,7 @@ fn add_compound(document: &Document, outlines: &[(Vec<NewAnchor>, bool)]) -> Nod
         .edit_style(&[id], &StyleEdit::FillColor(Color { r: 9, g: 9, b: 9 }))
         .unwrap();
     document
-        .set_fill_mode(
-            FillMode::Solid,
-            &[FillModeTarget {
-                id,
-                seed_stops: vec![],
-            }],
-        )
+        .edit_style(&[id], &StyleEdit::FillEnabled(true))
         .unwrap();
     id
 }
@@ -109,13 +103,7 @@ fn a_click_in_the_hole_misses_and_a_click_on_the_fill_or_any_stroke_hits() {
         height: Length::from_mm(30.0),
     });
     document
-        .set_fill_mode(
-            FillMode::Solid,
-            &[FillModeTarget {
-                id: behind,
-                seed_stops: vec![],
-            }],
-        )
+        .edit_style(&[behind], &StyleEdit::FillEnabled(true))
         .unwrap();
     let ring = add_compound(&document, &ring_outlines());
     let objects = objects(&document);

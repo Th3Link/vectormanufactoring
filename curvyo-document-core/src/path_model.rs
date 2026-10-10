@@ -175,7 +175,7 @@ pub enum HandleSlot {
 
 /// An RGB color, 8 bits per channel.
 ///
-/// Alpha is not part of it: stroke, fill and each gradient stop carry their
+/// Alpha is not part of it: stroke and fill carry their
 /// own [`crate::Opacity`] (`specs/0007-stroke-and-fill-styling/adrs.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Color {
@@ -495,6 +495,19 @@ pub enum PathEditError {
     /// or less would make the file refuse to open.
     #[error("a stroke width must be a finite number greater than zero")]
     InvalidStrokeWidth,
+    /// `Document::extend_path`, `connect_paths` or `close_paths` refused: the path to grow is
+    /// closed, compound, the same object as the one to absorb, or the absorbed one is closed or
+    /// compound (`specs/0034-pen-path-extension`).
+    #[error("this path cannot be extended or connected")]
+    NotExtendable,
+    /// `Document::close_paths` refused: the closed result would have fewer than three anchors.
+    #[error("a closed path needs at least three nodes")]
+    TooFewToClose,
+    /// A path command carried an added anchor id that is used twice, or is already an id of one of
+    /// the paths it changes. Only those paths are checked: the caller mints ids (`AnchorIdMinter`),
+    /// so a clash with an unrelated object cannot arise in a session.
+    #[error("an anchor id is used twice")]
+    DuplicateAnchorId,
 }
 
 #[cfg(test)]

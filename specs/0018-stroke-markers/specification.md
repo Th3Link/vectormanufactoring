@@ -1,6 +1,6 @@
 # Stroke markers: arrows and dots at the start, end, along and on the nodes of a path
 
-Status: Ready
+Status: In progress
 Priority: Should
 Origin: Customer
 
@@ -103,14 +103,17 @@ manufacturing).
 
 14. Given a marker anchor, then **direction of travel** is the direction of the
     path at the anchor, following the node order. At a point inside a segment it
-    is the curve's tangent there. On the first node it is the outgoing tangent of
-    the first segment, on the last node the incoming tangent of the last segment.
-    On a node inside the path it is the bisector of the incoming and outgoing
-    tangents (the unit vectors added, normalized); if the two point in opposite
-    directions (within 1 degree of a reversal), the outgoing tangent is used. A
-    tangent with a zero-length handle uses the direction to the next control point
-    or node that differs from the anchor. On a closed path the node's incoming
-    tangent comes from the closing segment.
+    is the curve's tangent there. On the first node of an open path it is the
+    outgoing tangent of the first segment, on the last node of an open path the
+    incoming tangent of the last segment. On a node inside the path it is the
+    bisector of the incoming and outgoing tangents (the unit vectors added,
+    normalized); if the two point in opposite directions (within 1 degree of a
+    reversal), the outgoing tangent is used. A tangent with a zero-length handle
+    uses the direction to the next control point or node that differs from the
+    anchor. On a closed path every node, the first included, has an incoming
+    tangent (from the closing segment for the first node) and an outgoing one, so
+    a Spaced Middle marker on the first node of a closed path points along the
+    corner bisector, as At nodes does there.
 15. Given an Arrow, then its tip points along the direction of travel for Middle
     and End. For **Start it points the opposite way**, outward from the path, so
     a Start and an End arrow on a line make a double-headed arrow. A Dot has no
@@ -172,7 +175,7 @@ manufacturing).
     project, then all settings read back as set, and the markers draw the same.
 29. Given a project file written before this feature (an older format version),
     then it opens with every slot None, Place Spaced and Count 1, and no change in
-    what is drawn, including the gradient and dash fixtures of `style-panel-rework`.
+    what is drawn, including the dash fixtures of `style-panel-rework`.
     Given a file written by a later build (a higher format version), then it is
     refused as "saved by a newer version", the same as any such file (not as
     damaged), before any marker key is read. Given a file of this format version
@@ -197,6 +200,15 @@ manufacturing).
     no start or end." It is not an error and no control is disabled. Given at least
     one selected path is open, or both Start and End are None, then the line is not
     shown.
+33. Given a compound path (`0016`), then each outline is treated as a closed path
+    of its own (criteria 10, 11 and 14): Start and End draw nothing, and only the
+    Middle slot draws. Spaced puts Count markers on each outline, counted from
+    that outline's first node; At nodes puts one on every node of every outline.
+    Count and the limit of 500 apply per outline, not to the whole path. Given
+    Break apart (`0035`), then no marker moves: each outline keeps the markers
+    it had. Given Combine (`0035` criterion 4) reverses an outline, then that
+    outline's Middle arrows turn around with it. The closed-path line of
+    criterion 32 shows for a compound path.
 
 ## Out of scope
 
@@ -243,14 +255,14 @@ manufacturing).
 New stroke style values: Start, Middle and End shape (None, Arrow, Dot), Middle
 place (Spaced, At nodes) and Middle count (whole number, 1 or more). Defaults as
 above; an absent value is the default. This is a **format change: the
-`format_version` goes up**. The number is the next free one at merge (see the
-`format_version` plan in `specs/README.md`: `boolean-operations` takes 8,
-`style-panel-rework` takes the next free number for odd dash lists, and this
-feature the one after, whatever merge order results). Key names: `adrs.md`
-decision 1. `advanced-selection` has no bump. `rectangle-corner-radii` and
-`ellipse-arcs-and-shaping` (both Draft) also want one; the PR that merges first
-takes the next number. A golden fixture holds a project with all values set,
-another one with a file of the previous format version.
+`format_version` goes up**, to 9. `style-panel-rework` (odd dash lists) and this
+feature share that one version: they are delivered in one PR, so there is one
+bump (see the `format_version` plan in `specs/README.md`; `boolean-operations`
+took 8). Key names: `adrs.md` decision 1. `advanced-selection` has no bump.
+`rectangle-corner-radii` and `ellipse-arcs-and-shaping` (both Draft) also want
+one; the PR that merges first takes the next number. A golden fixture
+(`markers_v9.curvyo`) holds a project with all values set, another one a file of
+the previous format version.
 
 ## UX notes
 
@@ -373,4 +385,4 @@ request as made.
 ## Links
 Requirements: R-EDIT-005 (stroke styling), R-EDIT-016 (`docs/requirements.md`)
 Depends on: `specs/0017-style-panel-rework/`
-PR: TBD
+PR: #78
