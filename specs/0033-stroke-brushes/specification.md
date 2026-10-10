@@ -84,6 +84,7 @@ Shapes are SVG path data in a unit box (1 = the stroke width); parameters are ty
 - **Markers (`0018`):** decoration on the centre line, drawn over the brush result; they are not part of the brush output and are not expanded into it.
 - **Dash (`0017`):** hidden while a brush is set (criterion 5). Perforation and Dots cover what a dash does with more control.
 - **Pressure (`0032-pen-tablet-input`):** a width-profile brush is where recorded pressure naturally lands: the sampled pressure becomes the profile of that stroke. Both features need a width model on the path; they should share one document-model decision.
+- **Variable-width stroke offset (`0038-path-offset`):** the `i_overlay` library already in the project can offset a stroke whose width varies along the path (round joins and ends only); the width-profile kind can start from it. No scope change here.
 - **Booleans, offset, fracture, flatten, combine (`0016`, `0035`, `0037`, `0038`):** these work on shapes, not on strokes. A brush stroke is not an operand until it is expanded (criterion 9); they refuse it with a message that says so.
 - **Paint None / stroke width 0:** no brush row, no brush drawn (`0017` criterion 5).
 

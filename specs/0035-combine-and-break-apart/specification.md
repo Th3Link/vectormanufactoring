@@ -4,6 +4,8 @@ Status: Ready (`adrs.md` and the UX notes exist, both 2026-10-10)
 Priority: Should
 Origin: Customer (Combine, and Break apart "into separate paths: what happens to the holes", request of 2026-10-09, with the wish that the UX be much better than Inkscape's). The hole rule, the refusals, the names and the defaults are my proposals, marked in "Decided by the product owner".
 
+Amendment pending (customer decision of 2026-10-10, `specs/0048-split-compound-path/`): the command specified here as Break apart, which keeps holes with their piece, is the customer's **Split**; Break apart is to become the command that gives every outline its own object (Question 2, option B, promoted). Criteria 13 to 18 and Question 2 change with it once `0048` Question 1 is confirmed; until then the text below stands.
+
 ## User value
 
 As a maker I want to select the outline of a plate and the circles of its mounting holes and make them **one object with holes**, and to take such an object apart again without losing its holes, so that the laser cuts one clean job, the holes are real holes, and I never have to run a Boolean difference just to get a plate with holes.
@@ -73,7 +75,7 @@ As a maker I want to select the outline of a plate and the circles of its mounti
 - **Combining open paths** into one object. A compound path holds closed outlines only (`0016`); open subpaths are a model change (Question 1).
 - **Crossing or overlapping outlines.** Use Union, Exclusion or Fracture (`0037`).
 - **Releasing the holes** of a compound path as their own objects (Question 2).
-- **Splitting a path at a node** (`0006`, the Node tool) and **at crossings** (`0036-split-at-crossings`).
+- **Splitting a path at a node** (`0006`, the Node tool) and **at crossings** (`0036-cut-at-crossings`, now called Cut).
 - **Combine and Break apart through groups** (`0023-groups` criterion 28).
 - **Changing the fill rule.** The fill is nonzero and the winding encodes the holes.
 - **A shortcut** for either command, as for the Boolean operations (`0016` Question 3).
@@ -107,7 +109,7 @@ This is the first release with a second rail column.
 - **`--rail-right`** goes from 60 px to **116 px**. Everything keyed to it moves by 56 px, and nothing else changes: the overlay row of the bars (`left`) 72 px to **128 px**; the default view on New and Open (document top-left) 72 px to 128 px; the Boolean notice and the new Path notices (left edge `--rail-right` + 12) 72 px to 128 px; the tooltips of the Tools and Boolean buttons open 6 px right of the **116 px** edge, not of the 60 px edge, so they never cover the Path card (they sit about 66 px from their own button; the pressed button's hover ground ties them back, as the rail rules say). Tooltips of the Path buttons open at 122 px as well.
 - **At 800 x 600** (Tauri, panel open, rulers on; viewport about 496 x 546): column A unchanged (ends 512 px, 34 px clear), column B 12 to 104 px. The bars' row shrinks from 412 px to **356 px** (496 - 128 - 12); with the panel collapsed it is 612 px. The Node bar (about 300 px) and the polygon/star bar (about 310 px) still fit on one row. The Select bar wraps by whole groups as before and gets taller; the implementer measures every Select bar state at build and reports the row counts. If the settings group (the two switches) alone is wider than 356 px, its two switches wrap inside the group, the first row keeps its y, and that is reported to the lead. A 360 px notice at 128 px needs 488 px of the 496: it fits; the notice clamps to the viewport as always.
 - **What does not move:** column A, its cards, its gap, the Boolean notice's top (level with Union), the panel, the rulers, the status bar. Nothing is reflowed by window size. The Path card never scrolls (92 px); the "too short" rule of the rail applies to column A only.
-- **Later growth:** `0023` adds the Group card above Path (Path moves down 144 px in that release, announced there), `0036` to `0038` add buttons below Combine and Break apart in the Path card. The card order inside it is fixed by `docs/design-system.md`.
+- **Later growth (amended 2026-10-10, batch 4; the rows of `docs/design-system.md` win where they differ from this section):** the Path card grows to four buttons (Combine, Split, Break apart, Cut); the built Break apart becomes Split (`0048`) and keeps its place as the second button; the Group card (`0023`) goes under the Tools card in column A and not above Path; the Boolean card moves into column B below Path in the first release that needs the room, and takes Fracture and Flatten (`0037`); Offset (`0038`) is a button of the Select bar. See "Tool rail architecture".
 - **Why the Path card is the top of column B and not a second row of column A:** column A has 500 px of 546 px used. A third card there would not fit at 800 x 600, and the maker would see commands that need the Select tool far from it. Column B puts Combine and Break apart right of the Select and Pen buttons, which is where the hand already is when a selection has just been made.
 
 ### Buttons, glyphs, states
@@ -178,6 +180,6 @@ Milestone M4 of the path-tools slice (the four milestones of `adrs.md`), deliver
 
 Requirements: R-EDIT-023 (`docs/requirements.md`); related R-EDIT-003
 Builds on: `specs/0016-boolean-operations/` (compound path, winding rule, rail commands, refusal notices; must be merged first)
-Related: `specs/0023-groups/` (refusal for groups), `specs/0036-split-at-crossings/`, `specs/0037-fracture-and-flatten/`, `specs/0006-path-merge-split-and-node-types/` (node-level Join and Split)
+Related: `specs/0023-groups/` (refusal for groups), `specs/0048-split-compound-path/`, `specs/0036-cut-at-crossings/`, `specs/0037-fracture-and-flatten/`, `specs/0006-path-merge-split-and-node-types/` (node-level Join and Split)
 ADRs: `adrs.md` (architect, 2026-10-10)
 PR: TBD (shared path-tools PR)

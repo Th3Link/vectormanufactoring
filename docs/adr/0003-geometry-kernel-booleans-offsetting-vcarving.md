@@ -1,6 +1,6 @@
 # ADR 0003: Geometry kernel, boolean operations, offsetting and V-carving
 
-**Status:** Accepted (customer sign-off, 2026-10-02); §3 kernel library amendment of 2026-10-09 in effect since PR #69 merged on 2026-10-09 (`i_overlay` `=9.0.1` replaces `clipper2-rust`)
+**Status:** Accepted (customer sign-off, 2026-10-02); §3 kernel library amendment of 2026-10-09 in effect since PR #69 merged on 2026-10-09 (`i_overlay` `=9.0.1` replaces `clipper2-rust`); §4 offsetting amendment of 2026-10-10 (customer decision: `i_overlay`'s integer offsetter, no new dependency)
 
 ## Context
 
@@ -199,6 +199,32 @@ foundation.
    > **Note 2026-10-10:** the spike's pick was replaced by `i_overlay` (§3
    > amendment of 2026-10-09), so this question no longer applies; this item
    > stands as written.
+   >
+   > **Amendment 2026-10-10 (offsetting uses `i_overlay`'s own offsetter;
+   > customer decision of 2026-10-10 on `specs/0038-path-offset`).** The
+   > check that the §3 amendment left open has been done. `i_overlay`
+   > `=9.0.1` has integer outline offsetting (`IntOutlineOffset`: Bevel,
+   > Miter and Round joins, holes, inner collapse handled by its own union),
+   > integer stroke offsetting for open paths (`IntStrokeOffset`: Butt,
+   > Square and Round caps) and a variable-width stroke with round joins
+   > (`IntVariableStrokeOffset`).
+   >
+   > - **Decision:** offsetting runs on the flattened, snapped polygons of
+   >   the boolean pipeline through those integer traits, with
+   >   `MathMode::Integer`. That is deterministic for the same reason as §3.
+   >   It replaces "`kurbo` stroke expansion plus union" in this item. It
+   >   adds no dependency.
+   > - **Not used:** the float adapters (`OutlineOffset`, `StrokeOffset`).
+   >   They scale from the input bounds, which §3 forbids.
+   > - **Why the written plan lost:** it builds the same joins and the same
+   >   cleanup as our own code, on float output that would have to be
+   >   snapped to the grid anyway.
+   > - **Known difference:** past the miter limit, `i_overlay` clips the
+   >   miter at the limit distance (SVG 2 `miter-clip`) and does not bevel
+   >   it.
+   >
+   > What stays: polyline results, a dedicated module, golden and property
+   > tests. Details: `specs/0038-path-offset/adrs.md`.
 5. **V-carving uses an approximate medial axis derived from a constrained
    Delaunay triangulation** of the flattened boundary (`spade`, pure Rust,
    robust predicates), not an exact Voronoi diagram of curve segments. Carve

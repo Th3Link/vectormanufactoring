@@ -27,7 +27,7 @@ A decision too small for a full ADR gets a short dated note in that feature's
 |---|---|---|---|
 | [0001](0001-ui-framework-and-canvas-rendering.md) | UI framework and canvas rendering | workspace | Accepted |
 | [0002](0002-document-model-units-and-svg-round-trip.md) | Internal document model, units and SVG round-trip | workspace | Accepted |
-| [0003](0003-geometry-kernel-booleans-offsetting-vcarving.md) | Geometry kernel, boolean operations, offsetting and V-carving | workspace | Accepted; §3 amendment 2026-10-09 in effect since PR #69 merged (`i_overlay` `=9.0.1` replaces `clipper2-rust`) |
+| [0003](0003-geometry-kernel-booleans-offsetting-vcarving.md) | Geometry kernel, boolean operations, offsetting and V-carving | workspace | Accepted; §3 amendment 2026-10-09 in effect since PR #69 merged (`i_overlay` `=9.0.1` replaces `clipper2-rust`); §4 amendment 2026-10-10 (offsetting on `i_overlay`'s integer offsetter, customer decision) |
 | [0004](0004-persistence-and-cross-machine-sync.md) | Persistence, collaboration and cross-machine sync | workspace | Accepted |
 | [0005](0005-extension-and-plugin-model.md) | Extension and plugin model | workspace | Accepted |
 | [0006](0006-license.md) | License | workspace | Accepted |
@@ -104,11 +104,10 @@ unawareness. Reversing either needs a new ADR, not an edit:
   PR #69 merged the same day):** the kernel's property tests found wrong areas from
   `clipper2-rust` on lattice input and none from `i_overlay`, so the library is
   `i_overlay` `=9.0.1`. Recorded in ADR 0003 §3.
-- **Offsetting (ADR 0003 §4).** §4 stands as written (`kurbo` stroke expansion
-  plus a union with the boolean library). The earlier question whether to use
-  Clipper2's offsetter instead lost its premise with the library change.
-  Whether `i_overlay` can offset outlines with the joins §4 lists: to be
-  checked when the offsetting story is specified.
+- ~~**Offsetting (ADR 0003 §4).**~~ Done 2026-10-10. `i_overlay` `=9.0.1`
+  has integer outline and stroke offsetting with the joins §4 lists. The
+  customer chose it for `specs/0038-path-offset`, and the amendment to §4
+  records it. No new dependency.
 - **ADR 0007 is over the five-minute rule and wants splitting, not trimming.**
   It carries three subjects — credential storage, the source/sink trait design,
   and the git-forge sink — and a consolidation pass took out the prose without
