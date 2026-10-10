@@ -2,6 +2,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { WasmSession } from "@/lib/editorSession";
 
+/** How a gesture ends in the session: the commit at the release and the drop at Escape. */
+export interface GestureEnds {
+  commit: (session: WasmSession) => void;
+  cancel: (session: WasmSession) => void;
+}
+
+/** The Style panel's drag (the default). */
+const STYLE_ENDS: GestureEnds = {
+  commit: (session) => session.commit_style_preview(),
+  cancel: (session) => session.cancel_style_preview(),
+};
+
 export interface PreviewGesture {
   /** Shows `tick` on the next frame; the first of a gesture starts it. */
   queue: (tick: (session: WasmSession) => void) => void;
@@ -23,11 +35,14 @@ export interface PreviewGesture {
  * removed when the gesture ends or the panel goes away.
  *
  * `onChange` runs after every update the session took, so the panel re-reads
- * what it shows.
+ * what it shows. `ends` says which session calls commit and drop the preview:
+ * the Style panel's by default, the Background block's for the document
+ * (`specs/0040-document-background` criterion 22). It must be a stable object.
  */
 export function usePreviewGesture(
   getSession: () => WasmSession | null,
   onChange: () => void,
+  ends: GestureEnds = STYLE_ENDS,
 ): PreviewGesture {
   const [previewing, setPreviewing] = useState(false);
   const [cancels, setCancels] = useState(0);
@@ -58,9 +73,12 @@ export function usePreviewGesture(
     endGesture.current?.();
     endGesture.current = null;
     setPreviewing(false);
-    getSession()?.commit_style_preview();
+    const session = getSession();
+    if (session) {
+      ends.commit(session);
+    }
     onChange();
-  }, [flush, getSession, onChange]);
+  }, [flush, getSession, onChange, ends]);
 
   const begin = useCallback(() => {
     if (endGesture.current) {
@@ -82,7 +100,10 @@ export function usePreviewGesture(
       event.preventDefault();
       event.stopPropagation();
       dropPending();
-      getSession()?.cancel_style_preview();
+      const session = getSession();
+      if (session) {
+        ends.cancel(session);
+      }
       setCancels((n) => n + 1);
       onChange();
     };
@@ -91,7 +112,10 @@ export function usePreviewGesture(
     // the gesture then has nothing to write.
     const onPointerCancel = () => {
       dropPending();
-      getSession()?.cancel_style_preview();
+      const session = getSession();
+      if (session) {
+        ends.cancel(session);
+      }
       commit();
     };
     window.addEventListener("pointerup", onRelease, true);
@@ -106,7 +130,7 @@ export function usePreviewGesture(
       window.removeEventListener("keyup", onStepKeyUp, true);
       window.removeEventListener("keydown", onEscape, true);
     };
-  }, [commit, dropPending, getSession, onChange]);
+  }, [commit, dropPending, getSession, onChange, ends]);
 
   // A panel that goes away mid-gesture must not leave listeners behind.
   useEffect(

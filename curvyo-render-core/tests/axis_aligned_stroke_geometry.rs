@@ -16,7 +16,9 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use curvyo_document_core::{AnchorId, AnchorKind, Color, Document, NewAnchor, Point};
+use curvyo_document_core::{
+    AnchorId, AnchorKind, Color, Document, DocumentBackground, NewAnchor, Point,
+};
 use curvyo_render_core::{DrawList, build_artwork, build_pen_preview};
 
 fn two_node_path(a: Point, b: Point) -> Document {
@@ -143,6 +145,7 @@ fn in_progress_pen_preview_stroke_is_non_empty_for_axis_aligned_segments() {
         None,
         curvyo_document_core::ViewTransform::identity(),
         curvyo_document_core::DocumentSize::default(),
+        DocumentBackground::DEFAULT,
     );
     let with_segment_list = build_pen_preview(
         &horizontal_nodes,
@@ -150,6 +153,7 @@ fn in_progress_pen_preview_stroke_is_non_empty_for_axis_aligned_segments() {
         None,
         curvyo_document_core::ViewTransform::identity(),
         curvyo_document_core::DocumentSize::default(),
+        DocumentBackground::DEFAULT,
     );
     assert!(
         with_segment_list.triangle_count() > no_cursor_list.triangle_count(),

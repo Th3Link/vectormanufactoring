@@ -19,9 +19,27 @@ use curvyo_document_core::{
     ObjectSnapshot, Point, RectBounds, StyleEdit, Tolerance,
 };
 use curvyo_ui_core::{
-    Grid, StyleEntryError, StyleField, ValueField, hit_test_object, hit_test_objects,
-    object_bounds, pick_colour,
+    Grid, StyleEntryError, StyleField, ValueField, hit_test_object, hit_test_objects, object_bounds,
 };
+
+/// The eyedropper over the objects only: no background to fall back to
+/// (`0040-document-background` added that source; these cases are about the objects).
+fn pick_colour(
+    objects: &[ObjectSnapshot],
+    point: Point,
+    tolerance: Tolerance,
+) -> Option<curvyo_ui_core::PickedColour> {
+    curvyo_ui_core::pick_colour(
+        objects,
+        point,
+        tolerance,
+        curvyo_document_core::DocumentSize::default(),
+        curvyo_document_core::DocumentBackground {
+            paint: curvyo_document_core::BackgroundPaint::None,
+            ..curvyo_document_core::DocumentBackground::DEFAULT
+        },
+    )
+}
 
 fn pt(x: f64, y: f64) -> Point {
     Point::new(x, y)

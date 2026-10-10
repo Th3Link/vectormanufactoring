@@ -39,6 +39,11 @@ pub struct Vertex {
 /// once per pixel, and a later layer paints over an earlier one. The rest is
 /// the overlay, editor decorations that blend in list order as they always
 /// did.
+///
+/// The document area may start with a **checkerboard prefix**
+/// ([`DrawList::checker_end`]): its first vertices are a quad the host paints
+/// with the checkerboard shader instead of the vertex colour
+/// (`specs/0040-document-background`). The prefix is also artwork layer 0.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct DrawList {
     /// The triangle list. `triangles.len()` is always a multiple of 3.
@@ -46,6 +51,9 @@ pub struct DrawList {
     /// The vertex index at which each artwork layer ends, ascending. The
     /// layers cover `triangles[..layers.last()]`; what follows is the overlay.
     layers: Vec<usize>,
+    /// The number of leading vertices the host paints as a checkerboard; `0`
+    /// when there is none. Always the end of artwork layer 0 when not 0.
+    checker_end: usize,
 }
 
 impl DrawList {
@@ -65,6 +73,14 @@ impl DrawList {
     #[must_use]
     pub fn layers(&self) -> &[usize] {
         &self.layers
+    }
+
+    /// The number of leading vertices (the document area's quad) the host paints
+    /// with the checkerboard shader; `0` when the document area is a plain colour.
+    /// These vertices are artwork layer 0 and carry a placeholder colour.
+    #[must_use]
+    pub const fn checker_end(&self) -> usize {
+        self.checker_end
     }
 
     /// The vertex index at which the overlay starts: the end of the last
@@ -105,6 +121,15 @@ impl DrawList {
         }
     }
 
+    /// Closes the triangles pushed so far as the checkerboard prefix, which is
+    /// also artwork layer 0. Only the document-area builder calls this, on an
+    /// empty list.
+    pub(crate) fn close_checker_prefix(&mut self) {
+        debug_assert!(self.layers.is_empty() && self.checker_end == 0);
+        self.close_layer();
+        self.checker_end = self.triangles.len();
+    }
+
     /// Appends `layer` (one tessellation) as a new artwork layer. Only the
     /// artwork builder calls this, before any overlay exists.
     pub(crate) fn extend_artwork(&mut self, layer: Self) {
@@ -127,8 +152,14 @@ impl DrawList {
 
     /// Appends another draw list to this one. Its artwork layers stay layers
     /// when this list has no overlay yet (artwork is extended before
-    /// decorations); otherwise its triangles join this list's overlay.
+    /// decorations); otherwise its triangles join this list's overlay. This
+    /// list keeps its checkerboard prefix; `other` has none (only the document
+    /// area has one, and it comes first).
     pub fn extend(&mut self, other: Self) {
+        debug_assert_eq!(
+            other.checker_end, 0,
+            "only the first list has a checkerboard"
+        );
         let base = self.triangles.len();
         let keeps_layers = self.overlay_start() == base;
         self.triangles.extend(other.triangles);

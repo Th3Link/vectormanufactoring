@@ -162,7 +162,8 @@ impl WasmSession {
     }
 
     /// The eyedropper button: starts picking a colour from the drawing for
-    /// `"stroke"` or `"fill"`; pressing it again ends picking.
+    /// `"stroke"`, `"fill"` or `"background"` (the Background block's button);
+    /// pressing it again ends picking.
     pub fn begin_colour_pick(&mut self, target_name: &str) {
         if let Some(target) = PaintTarget::from_name(target_name) {
             self.session.begin_colour_pick(target);
@@ -175,9 +176,15 @@ impl WasmSession {
         self.session.end_colour_pick();
     }
 
+    /// The sentence for the status region after a pick, for example "Background color
+    /// set to #E8E8EBFF": returned once, then empty.
+    pub fn take_colour_pick_announcement(&mut self) -> String {
+        self.session.take_colour_pick_announcement()
+    }
+
     /// What a click at the pointer would take while picking: empty, or the
-    /// colour as `#RRGGBBAA` and the paint it comes from (`"stroke"` or
-    /// `"fill"`). Call after `pointer_hover`.
+    /// colour as `#RRGGBBAA` and the paint it comes from (`"stroke"`, `"fill"`
+    /// or `"background"`). Call after `pointer_hover`.
     #[must_use]
     pub fn colour_pick_hover(&self) -> Vec<String> {
         self.session

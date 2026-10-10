@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 
-import type { StyleFieldName, StylePanelApi } from "@/hooks/useStylePanel";
+import type { HsvTriple } from "@/hooks/useStylePanel";
+import { type PickerSeen, pickerStep } from "@/lib/pickerSync";
 
 const WIDTH = 244;
 const AREA_HEIGHT = 96;
@@ -17,14 +18,18 @@ interface Hsv {
 }
 
 interface ColourPickerProps {
-  /** "Stroke" or "Fill": prefixes the accessible names. */
+  /** "Stroke", "Fill" or "Background": prefixes the accessible names. */
   name: string;
-  field: StyleFieldName;
   /** Packed `0xRRGGBB` of the shared colour. */
   rgb: number;
   /** The edited objects differ in colour: no thumb. */
   mixed: boolean;
-  panel: StylePanelApi;
+  /** The hue, saturation and value of a packed colour (Rust's rounding). */
+  hsvOf: (rgb: number) => HsvTriple;
+  /** The packed colour of a hue, saturation and value (Rust's rounding). */
+  rgbOf: (hue: number, saturation: number, value: number) => number;
+  /** A tick of a drag: shown on the canvas, nothing written. */
+  onPreview: (hue: number, saturation: number, value: number) => void;
 }
 
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
@@ -90,23 +95,31 @@ function Thumb({ size, left, top }: { size: number; left: number; top: number })
  * a drag previews per frame and commits once on release
  * (`usePreviewGesture`). The alpha is not in the picker: the Opacity row owns it.
  */
-export function ColourPicker({ name, field, rgb, mixed, panel }: ColourPickerProps) {
+export function ColourPicker({
+  name,
+  rgb,
+  mixed,
+  hsvOf,
+  rgbOf,
+  onPreview,
+}: ColourPickerProps) {
   const [hsv, setHsv] = useState<Hsv>({ h: 0, s: 1, v: 1 });
-  // The colour the picker last sent, and the one it last read from outside.
-  const [seen, setSeen] = useState<number | null>(null);
+  // The colour the picker last read from outside (and the converter that read it), and the one
+  // it last sent.
+  const [seen, setSeen] = useState<PickerSeen>({ rgb: null, source: null });
   const [own, setOwn] = useState<number | null>(null);
   const areaCanvas = useRef<HTMLCanvasElement>(null);
   const hueCanvas = useRef<HTMLCanvasElement>(null);
 
-  if (!mixed && seen !== rgb && own !== rgb) {
-    const [hue, saturation, value] = panel.hsvOf(rgb);
-    setSeen(rgb);
-    setHsv((previous) => ({ h: hue < 0 ? previous.h : hue, s: saturation, v: value }));
-  } else if (!mixed && seen !== rgb) {
-    setSeen(rgb);
+  const read = pickerStep(seen, rgb, own, hsvOf, mixed);
+  if (read !== "keep") {
+    setSeen({ rgb, source: hsvOf });
+    if (read === "derive") {
+      const [hue, saturation, value] = hsvOf(rgb);
+      setHsv((previous) => ({ h: hue < 0 ? previous.h : hue, s: saturation, v: value }));
+    }
   }
 
-  const { rgbOf } = panel;
   useEffect(() => {
     const canvas = areaCanvas.current;
     if (canvas) {
@@ -130,9 +143,9 @@ export function ColourPicker({ name, field, rgb, mixed, panel }: ColourPickerPro
 
   const apply = (next: Hsv) => {
     const clamped = { h: clamp(next.h, 0, 360), s: clamp(next.s, 0, 1), v: clamp(next.v, 0, 1) };
-    setOwn(panel.rgbOf(clamped.h, clamped.s, clamped.v));
+    setOwn(rgbOf(clamped.h, clamped.s, clamped.v));
     setHsv(clamped);
-    panel.previewHsv(field, clamped.h, clamped.s, clamped.v);
+    onPreview(clamped.h, clamped.s, clamped.v);
   };
 
   const dragArea = (event: PointerEvent<HTMLDivElement>) => {

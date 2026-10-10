@@ -3,7 +3,7 @@
 
 use curvyo_document_core::{NodeId, ObjectSnapshot, PrimitiveSnapshot, Shape, StyleEdit};
 
-use crate::object_selection::ObjectSelection;
+use crate::object_selection::{ObjectSelection, objects_with_ids};
 use crate::selection::NodeSelection;
 
 /// The tool the panel is scoped by (criterion 37). The creation tools and
@@ -44,13 +44,10 @@ impl StyleScope {
 
 /// The ids in `ids` that are paths, in order.
 fn paths_among(ids: &[NodeId], objects: &[ObjectSnapshot]) -> Vec<NodeId> {
-    ids.iter()
-        .copied()
-        .filter(|id| {
-            objects
-                .iter()
-                .any(|o| o.id() == *id && matches!(o, ObjectSnapshot::Path(_)))
-        })
+    objects_with_ids(objects, ids)
+        .into_iter()
+        .filter(|object| matches!(object, ObjectSnapshot::Path(_)))
+        .map(ObjectSnapshot::id)
         .collect()
 }
 
@@ -80,10 +77,7 @@ pub fn style_scope(
     } else {
         selection.ids().to_vec()
     };
-    let held: Vec<&ObjectSnapshot> = wanted
-        .iter()
-        .filter_map(|id| objects.iter().find(|object| object.id() == *id))
-        .collect();
+    let held = objects_with_ids(objects, &wanted);
     StyleScope {
         ids: held.iter().map(|object| object.id()).collect(),
         subject: subject_line(&held),

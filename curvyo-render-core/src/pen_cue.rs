@@ -4,7 +4,9 @@
 //! of the closing node and its glyph of the resolved kind. Data in, triangles out: the targets
 //! and the join are resolved by `curvyo-ui-core`.
 
-use curvyo_document_core::{AnchorKind, AnchorSnapshot, DocumentSize, Point, Vec2, ViewTransform};
+use curvyo_document_core::{
+    AnchorKind, AnchorSnapshot, DocumentBackground, DocumentSize, Point, Vec2, ViewTransform,
+};
 
 use crate::color::RgbaColor;
 use crate::document_area::background_at;
@@ -44,7 +46,12 @@ fn px(view: ViewTransform, pixels: f64) -> f64 {
 
 /// The cue as triangles.
 #[must_use]
-pub fn build_pen_cue(cue: &PenCue, view: ViewTransform, document_size: DocumentSize) -> DrawList {
+pub fn build_pen_cue(
+    cue: &PenCue,
+    view: ViewTransform,
+    document_size: DocumentSize,
+    background: DocumentBackground,
+) -> DrawList {
     let mut list = DrawList::default();
     if let Some((point, kind)) = cue.target {
         list.extend(idle_glyph(point, kind, view));
@@ -57,7 +64,7 @@ pub fn build_pen_cue(cue: &PenCue, view: ViewTransform, document_size: DocumentS
     }
     if let Some(closing) = &cue.closing {
         list.extend(closing_segment(closing, view));
-        list.extend(closing_node(closing, view, document_size));
+        list.extend(closing_node(closing, view, document_size, background));
     }
     list
 }
@@ -166,6 +173,7 @@ fn closing_node(
     closing: &ClosingCue,
     view: ViewTransform,
     document_size: DocumentSize,
+    background: DocumentBackground,
 ) -> DrawList {
     let node = &closing.node;
     let mut list = DrawList::default();
@@ -208,7 +216,7 @@ fn closing_node(
     list.extend(glyph(
         node.point,
         (size - 2.0 * outline).max(0.0),
-        background_at(document_size, node.point),
+        background_at(document_size, background, node.point),
     ));
     list
 }
@@ -229,6 +237,7 @@ mod tests {
             &PenCue::default(),
             ViewTransform::identity(),
             DocumentSize::default(),
+            DocumentBackground::DEFAULT,
         );
         assert_eq!(list.triangle_count(), 0);
     }
@@ -240,7 +249,12 @@ mod tests {
             target: Some((Point::new(5.0, 5.0), AnchorKind::Corner)),
             closing: None,
         };
-        let list = build_pen_cue(&cue, ViewTransform::identity(), DocumentSize::default());
+        let list = build_pen_cue(
+            &cue,
+            ViewTransform::identity(),
+            DocumentSize::default(),
+            DocumentBackground::DEFAULT,
+        );
         let ring_only = glyphs::ring(
             Point::new(5.0, 5.0),
             theme::HOVER_RING_DIAMETER_PX,
@@ -273,8 +287,8 @@ mod tests {
         };
         let view = ViewTransform::identity();
         let size = DocumentSize::default();
-        let a = build_pen_cue(&plain, view, size);
-        let b = build_pen_cue(&with_handle, view, size);
+        let a = build_pen_cue(&plain, view, size, DocumentBackground::DEFAULT);
+        let b = build_pen_cue(&with_handle, view, size, DocumentBackground::DEFAULT);
         // 100 px at 10 px per dash and gap: about ten dashes of two triangles each, plus the glyph.
         assert!(a.triangle_count() > 15, "{}", a.triangle_count());
         assert!(b.triangle_count() > a.triangle_count());

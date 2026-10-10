@@ -1,6 +1,7 @@
 import { CircleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { BackgroundBlock } from "@/components/panel/BackgroundBlock";
 import { DocumentPresets } from "@/components/panel/DocumentPresets";
 import { EntryField } from "@/components/panel/EntryField";
 import { FormatList } from "@/components/panel/FormatList";
@@ -8,6 +9,7 @@ import { FormatsBrokenBlock } from "@/components/panel/FormatsBrokenBlock";
 import { StyleRow } from "@/components/panel/StyleRow";
 import { ToggleGroup, type ToggleOption } from "@/components/ui/toggle-group";
 import { Tooltip } from "@/components/ui/tooltip";
+import type { BackgroundPanelApi } from "@/hooks/useBackgroundPanel";
 import type { DocumentPanelApi, UnitSymbol } from "@/hooks/useDocumentPanel";
 import type { FormatsApi } from "@/hooks/useFormats";
 
@@ -41,6 +43,7 @@ const REFUSAL_MS = 8000;
 interface DocumentSectionProps {
   document: DocumentPanelApi;
   formats: FormatsApi;
+  background: BackgroundPanelApi;
   onReturnFocus: () => void;
 }
 
@@ -48,10 +51,16 @@ interface DocumentSectionProps {
  * The "Document" section of the properties panel (`specs/0015-document-size-
  * and-rulers`, `docs/design-system.md`, "Properties panel: Document section"):
  * Width and Height typed fields (a resize keeps the center), the display unit,
- * and Fit to content. Every value and every rule comes from the session; this
- * holds the fields' text and the two short messages under the button.
+ * and Fit to content, then the Background block (`specs/0040-document-background`).
+ * Every value and every rule comes from the session; this holds the fields' text and
+ * the two short messages under the button.
  */
-export function DocumentSection({ document: doc, formats, onReturnFocus }: DocumentSectionProps) {
+export function DocumentSection({
+  document: doc,
+  formats,
+  background,
+  onReturnFocus,
+}: DocumentSectionProps) {
   const { view } = doc;
   const messages = { number: view.sideMessage } as const;
   const [notice, setNotice] = useState<string | null>(null);
@@ -188,6 +197,12 @@ export function DocumentSection({ document: doc, formats, onReturnFocus }: Docum
           )}
         </div>
       )}
+      <div
+        aria-hidden
+        className="my-1 h-px"
+        style={{ background: "color-mix(in srgb, var(--toolbar-icon) 25%, transparent)" }}
+      />
+      <BackgroundBlock background={background} onReturnFocus={onReturnFocus} />
     </div>
   );
 }

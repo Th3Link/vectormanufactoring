@@ -1310,13 +1310,17 @@ of the Select bar (click-through, 3 s or 8 s).
   document changes). For 10,000 objects that is the size of the document twice while a frame
   works on the previous read. Fine at today's sizes; the second half of the draw-list cache (the
   tessellated artwork) should replace the snapshots with a cheaper index.
-- **After Ctrl+A with 5,000 objects the frontend's reads cost more than the frame.** Measured in
-  `draw_list_cache_budget.rs` (release): `select_bar_state` 126 ms, `style_panel_view` 141 ms,
-  `path_availability` 15 ms, `boolean_availability` 7 ms, against 11.8 ms for the key and the first
-  frame (after #80's group box; 135 to 210 ms before it). They run on every `syncFromSession`, so a selection of thousands makes each
-  key press and pointer event slow, whatever the draw list costs. Not fixed in `0044`.
-  **Resolution:** find the quadratic id lookups behind the two panel reads (`ids.contains` over all
-  objects) and cache the result per selection and document version, as the object read is.
+- **The reads after Ctrl+A with 5,000 objects were quadratic (fixed in `fix/panel-reads`).**
+  `select_bar_state` took 114 ms, `style_panel_view` 127 ms, `path_availability` 12 ms and
+  `boolean_availability` 6 ms, because each selected id was looked up with a scan of all objects
+  (and `operands_in_order` scanned the selection once per object). `objects_with_ids`
+  (`curvyo-ui-core/src/object_selection.rs`) now resolves the ids in one pass; the four reads
+  together cost 5 to 9 ms, the slowest 4.4 ms
+  (`each_panel_read_stays_within_a_frame_with_five_thousand_selected_objects`). What remains is the
+  first read after any document change, which rebuilds the object cache: about 35 µs per object,
+  so roughly 180 ms with 5,000 objects after a write (the "first frame" of the table above).
+  **Resolution:** the second half of the draw-list cache, or an incremental object cache that
+  re-reads only the objects a commit touched.
 - **The nudge readout can cover a handle of a single small object** (UX review of #87): the chip,
   16 px right of and below the centre, covers the bottom-right corner-radius knob of a 21 mm
   rectangle for up to 800 ms. Cosmetic. **Resolution:** do not draw the parameter handles while a
@@ -1355,4 +1359,4 @@ built-in list.
   let a screen reader announce the count (UX N13).
 - **`session/mod.rs` is over 500 lines** (537 non-test lines before the slice); split the glue calls out
   when the next slice touches it.
-
+- **The Select bar overlaps the properties panel below about 600 px window width** (UX review of `0040`, found at 420 px; below the 800 x 600 minimum, so not fixed there).

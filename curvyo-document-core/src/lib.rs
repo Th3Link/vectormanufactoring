@@ -23,6 +23,7 @@ mod corner_radii;
 mod corner_radii_codec;
 mod display_unit;
 mod document;
+mod document_background;
 mod document_presets;
 mod document_size;
 mod error;
@@ -61,6 +62,7 @@ pub use container::{CURRENT_LORO_SNAPSHOT_VERSION, pack, unpack};
 pub use corner_radii::{Corner, CornerRadii, SHARP_CORNER_EPSILON_MM, effective_corner_radii};
 pub use display_unit::DisplayUnit;
 pub use document::{CURRENT_FORMAT_VERSION, Document, DocumentVersion};
+pub use document_background::{BackgroundPaint, DocumentBackground};
 pub use document_presets::{
     DocumentPreset, PRESET_MATCH_TOLERANCE, PresetError, PresetGroup, PresetList, PresetReason,
     PresetSubject, checked_name,

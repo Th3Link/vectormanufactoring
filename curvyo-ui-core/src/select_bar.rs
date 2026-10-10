@@ -11,7 +11,7 @@ use curvyo_document_core::{
     SHARP_CORNER_EPSILON_MM, Shape, effective_corner_radii,
 };
 
-use crate::object_selection::ObjectSelection;
+use crate::object_selection::{ObjectSelection, objects_with_ids};
 use crate::param_edit::{PARAM_EQUAL_EPSILON, ParamValue};
 
 /// The kinds of object a bar control acts on.
@@ -50,10 +50,8 @@ pub fn ids_of_kind(
     selection: &ObjectSelection,
     kind: ObjectKind,
 ) -> Vec<NodeId> {
-    selection
-        .ids()
-        .iter()
-        .filter_map(|id| objects.iter().find(|object| object.id() == *id))
+    objects_with_ids(objects, selection.ids())
+        .into_iter()
         .filter(|object| kind.matches(object))
         .map(ObjectSnapshot::id)
         .collect()
@@ -125,8 +123,8 @@ fn shapes_of<'a>(
     objects: &'a [ObjectSnapshot],
     ids: &'a [NodeId],
 ) -> impl Iterator<Item = &'a Shape> + 'a {
-    ids.iter()
-        .filter_map(|id| objects.iter().find(|object| object.id() == *id))
+    objects_with_ids(objects, ids)
+        .into_iter()
         .filter_map(|object| match object {
             ObjectSnapshot::Primitive(primitive) => Some(&primitive.shape),
             ObjectSnapshot::Path(_) => None,

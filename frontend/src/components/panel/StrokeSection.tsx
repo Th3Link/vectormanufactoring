@@ -47,25 +47,28 @@ export function StrokeSection({ panel, onReturnFocus }: StrokeSectionProps) {
         <div className="contents" {...rowsFocus}>
           <ColourBlock
             name="Stroke"
-            field="stroke-color"
             rgb={view.strokeColor}
             hex={view.strokeHex}
             hexMixed={view.strokeHexMixed}
             opacity={view.strokeOpacity}
-            panel={panel}
+            picking={view.pickTarget === "stroke"}
+            onPick={() => panel.beginPick("stroke")}
+            onSubmitHex={(text) => panel.setText("stroke-color", text)}
             onReturnFocus={onReturnFocus}
           />
           <ColourPicker
             name="Stroke"
-            field="stroke-color"
             rgb={view.strokeColor}
             mixed={view.strokeColorMixed}
-            panel={panel}
+            hsvOf={panel.hsvOf}
+            rgbOf={panel.rgbOf}
+            onPreview={(hue, saturation, value) =>
+              panel.previewHsv("stroke-color", hue, saturation, value)
+            }
           />
           <ValueField
             label="Opacity"
             name="Stroke opacity"
-            field="stroke-opacity"
             text={view.strokeOpacityText}
             bar={view.strokeOpacityBar}
             mixed={view.strokeOpacityMixed}
@@ -76,13 +79,15 @@ export function StrokeSection({ panel, onReturnFocus }: StrokeSectionProps) {
             typedMax={view.opacityTypedMax}
             defaultText={view.opacityDefaultText}
             messages={PERCENT_MESSAGES}
-            panel={panel}
+            onPreview={(p, grid) => panel.previewValue("stroke-opacity", p, grid)}
+            onStep={(steps, grid) => panel.stepValue("stroke-opacity", steps, grid)}
+            onReset={() => panel.resetValue("stroke-opacity")}
+            onSubmit={(text) => panel.setText("stroke-opacity", text)}
             onReturnFocus={onReturnFocus}
           />
           <ValueField
             label="Width"
             name="Stroke width"
-            field="stroke-width"
             text={view.strokeWidthText}
             bar={view.strokeWidthBar}
             mixed={view.strokeWidthMixed}
@@ -93,7 +98,10 @@ export function StrokeSection({ panel, onReturnFocus }: StrokeSectionProps) {
             typedMax={view.widthTypedMax}
             defaultText={view.widthDefaultText}
             messages={WIDTH_MESSAGES}
-            panel={panel}
+            onPreview={(p, grid) => panel.previewValue("stroke-width", p, grid)}
+            onStep={(steps, grid) => panel.stepValue("stroke-width", steps, grid)}
+            onReset={() => panel.resetValue("stroke-width")}
+            onSubmit={(text) => panel.setText("stroke-width", text)}
             onReturnFocus={onReturnFocus}
           />
           <DashRows panel={panel} onReturnFocus={onReturnFocus} />

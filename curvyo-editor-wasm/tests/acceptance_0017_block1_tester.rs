@@ -922,6 +922,8 @@ fn a_legacy_gradient_object_shows_fill_none_and_opening_writes_nothing() {
 #[test]
 fn the_interior_of_a_gradient_object_is_not_clickable_and_the_object_has_no_fill_to_pick() {
     let mut s = legacy_session();
+    // A None background: the empty page is a miss for the eyedropper (as before `0040`).
+    s.set_background_paint(curvyo_document_core::BackgroundPaint::None);
     s.set_tool(Tool::Select);
     // (25, 5) is inside the open path's implied triangle, far from its segments.
     click(&mut s, pt(25.0, 5.0), false);
@@ -987,6 +989,9 @@ fn painted_squares() -> Session {
     select(&mut s, &[1]);
     s.set_fill_paint(true);
     s.set_style_text(StyleField::FillColor, "00FF00").unwrap();
+    // With a None background the empty page is a miss for the eyedropper, as it was before
+    // `0040` (a Solid one is picked: see `document_background_session.rs`).
+    s.set_background_paint(curvyo_document_core::BackgroundPaint::None);
     s
 }
 

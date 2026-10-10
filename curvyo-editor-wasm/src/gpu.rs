@@ -9,12 +9,12 @@
 //! host never needs a GPU driver.
 
 use curvyo_document_core::ViewTransform;
-use curvyo_render_core::DrawList;
+use curvyo_render_core::{DrawList, checker_grid};
 use wasm_bindgen::JsValue;
 use web_sys::HtmlCanvasElement;
 
 use crate::gpu_pipeline::{
-    DEPTH_FORMAT, DepthMode, ScreenTransform, TransformResources, create_depth_view,
+    DEPTH_FORMAT, PipelineKind, ScreenTransform, TransformResources, create_depth_view,
     create_msaa_view, create_pipeline, create_transform_resources, gpu_vertices,
 };
 
@@ -100,6 +100,9 @@ pub struct Gpu {
     /// Draws the artwork prefix of the draw list with single coverage per
     /// layer (depth test "less", depth writes on).
     artwork_pipeline: wgpu::RenderPipeline,
+    /// Draws the checkerboard prefix of the document area with the artwork
+    /// depth rule and the checkerboard fragment shader.
+    checker_pipeline: wgpu::RenderPipeline,
     /// Draws the overlay (editor decorations): no depth test, no writes.
     overlay_pipeline: wgpu::RenderPipeline,
     transform_buffer: wgpu::Buffer,
@@ -266,14 +269,21 @@ impl Gpu {
             &transform_bind_group_layout,
             config.format,
             sample_count,
-            DepthMode::SingleCoverage,
+            PipelineKind::Artwork,
+        );
+        let checker_pipeline = create_pipeline(
+            &device,
+            &transform_bind_group_layout,
+            config.format,
+            sample_count,
+            PipelineKind::Checker,
         );
         let overlay_pipeline = create_pipeline(
             &device,
             &transform_bind_group_layout,
             config.format,
             sample_count,
-            DepthMode::Overlay,
+            PipelineKind::Overlay,
         );
         let msaa_view = create_msaa_view(&device, &config, sample_count);
         let depth_view = create_depth_view(&device, &config, sample_count);
@@ -284,6 +294,7 @@ impl Gpu {
             queue,
             config,
             artwork_pipeline,
+            checker_pipeline,
             overlay_pipeline,
             transform_buffer,
             transform_bind_group,
@@ -348,7 +359,8 @@ impl Gpu {
     pub fn render(&mut self, draw_list: &DrawList, view: ViewTransform) -> Result<(), JsValue> {
         let css_width = f64::from(self.config.width) / self.device_pixel_ratio;
         let css_height = f64::from(self.config.height) / self.device_pixel_ratio;
-        let transform = ScreenTransform::new(view, css_width, css_height);
+        let grid = checker_grid(view, self.device_pixel_ratio);
+        let transform = ScreenTransform::new(view, css_width, css_height, grid);
         self.queue
             .write_buffer(&self.transform_buffer, 0, bytemuck::bytes_of(&transform));
 
@@ -404,9 +416,12 @@ impl Gpu {
             });
             if let Some(vertex_buffer) = &vertex_buffer {
                 #[allow(clippy::cast_possible_truncation)]
-                let (overlay_start, end) =
-                    (draw_list.overlay_start() as u32, vertices.len() as u32);
-                self.record_draws(&mut pass, vertex_buffer, overlay_start, end);
+                let (checker_end, overlay_start, end) = (
+                    draw_list.checker_end() as u32,
+                    draw_list.overlay_start() as u32,
+                    vertices.len() as u32,
+                );
+                self.record_draws(&mut pass, vertex_buffer, checker_end, overlay_start, end);
             }
         }
 
@@ -461,20 +476,27 @@ impl Gpu {
         )
     }
 
-    /// Issues the frame's draw calls: the artwork prefix first, with single
-    /// coverage per layer, then the overlay over it in list order.
+    /// Issues the frame's draw calls: the checkerboard prefix when there is
+    /// one (one call, however large the document or the zoom), the rest of the
+    /// artwork with single coverage per layer, then the overlay over it in
+    /// list order.
     fn record_draws(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
         vertex_buffer: &wgpu::Buffer,
+        checker_end: u32,
         overlay_start: u32,
         end: u32,
     ) {
         pass.set_bind_group(0, &self.transform_bind_group, &[]);
         pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        if overlay_start > 0 {
+        if checker_end > 0 {
+            pass.set_pipeline(&self.checker_pipeline);
+            pass.draw(0..checker_end, 0..1);
+        }
+        if overlay_start > checker_end {
             pass.set_pipeline(&self.artwork_pipeline);
-            pass.draw(0..overlay_start, 0..1);
+            pass.draw(checker_end..overlay_start, 0..1);
         }
         if end > overlay_start {
             pass.set_pipeline(&self.overlay_pipeline);

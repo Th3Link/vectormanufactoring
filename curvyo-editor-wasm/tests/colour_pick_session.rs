@@ -19,6 +19,9 @@ fn two_squares() -> Session {
         session.pointer_down(Point::new(x, 0.0), false);
         session.pointer_up(Point::new(x + 20.0, 20.0), false, false);
     }
+    // A None background: the empty page is a miss for the eyedropper, as it was before `0040`
+    // (a Solid one is picked: see `document_background_session.rs`).
+    session.set_background_paint(curvyo_document_core::BackgroundPaint::None);
     session
 }
 

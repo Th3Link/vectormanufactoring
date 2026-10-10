@@ -6,6 +6,8 @@
 //! the offending objects; the sentences are the host's (`docs/design-system.md`, "Action
 //! notice").
 
+use std::collections::HashSet;
+
 use curvyo_document_core::{
     NewAnchor, NodeId, ObjectSnapshot, Point, Tolerance, outline_of_rotated,
 };
@@ -85,9 +87,10 @@ pub(crate) fn operands_in_order<'a>(
     objects: &'a [ObjectSnapshot],
     selection: &ObjectSelection,
 ) -> Vec<&'a ObjectSnapshot> {
+    let selected: HashSet<NodeId> = selection.ids().iter().copied().collect();
     objects
         .iter()
-        .filter(|object| selection.contains(object.id()))
+        .filter(|object| selected.contains(&object.id()))
         .collect()
 }
 
