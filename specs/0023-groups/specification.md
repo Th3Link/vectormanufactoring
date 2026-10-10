@@ -77,11 +77,11 @@ Group and Ungroup are buttons, not menu-only items: a card of two buttons, the s
 
 ## Groups and layers
 
-Layers (named, with visible and locked flags, MVP slice 10, R-EDIT-009) are a separate entry, `0039-layers`, not yet specified. They are designed to follow from groups: a layer is a top-level group that has a name and two flags. This spec stores no name and no flag on a group, so it neither helps nor blocks that: the model of criterion 25 can take extra registers later without changing any criterion here.
+Layers (named, with visible and locked flags, MVP slice 10, R-EDIT-009) are a separate entry, `0050-layers-and-objects-panel` (specified 2026-10-10; it replaced the placeholder `0039-layers`). They follow from groups: a layer is a top-level group that has a name, visibility, lock and opacity. This spec stores no name and no flag on a group, so it neither helps nor blocks that: the model of criterion 25 takes extra registers later without changing any criterion here. `0050` amends criterion 14 (an emptied layer stays) and criteria 8 to 10 (the children of layers count as top-level objects of the document).
 
 ## Out of scope
 
-- **Layers**, visibility and lock, named groups, an Objects panel with a tree (`0039`).
+- **Layers**, visibility and lock, named groups, an Objects panel with a tree (`0050`, which replaced the placeholder `0039`).
 - **Moving objects into or out of a group** without ungrouping (drag into a group, "Move to group", Inkscape's "Move to layer"). The way to add an object to a group today is to enter it and draw, or to ungroup and group again (Question 3).
 - **A group transform or a persistent group box orientation** (Question 2).
 - **Group-level style inheritance**, clip paths, masks, opacity of a group as a whole, blend modes.
@@ -152,6 +152,6 @@ The Group card is 92 px in column A (ends 424 px of 546); nothing else in the vi
 Requirements: R-EDIT-009 (`docs/requirements.md`); related R-EDIT-012
 Builds on: `specs/0019-multi-object-transform/` (the group box and its handles; must be built first), `specs/0014-advanced-selection/` (hit rules, Alt-click cycle, marquee), `specs/0010-edit-interaction-polish/` (Escape cascade, shortcut gating), `specs/0017-style-panel-rework/` (Style area, subject line, Mixed)
 Amends: `specs/0016-boolean-operations/` (refusal for groups, criterion 28), `specs/0034-pen-path-extension/` (targets, criterion 30)
-Related: `docs/adr/0002-document-model-units-and-svg-round-trip.md` §5 (tree, no inheritance), `specs/0039` (layers, placeholder in `specs/README.md`), `specs/0020` (undo, reserved)
+Related: `docs/adr/0002-document-model-units-and-svg-round-trip.md` §5 (tree, no inheritance), `specs/0050-layers-and-objects-panel/` (layers, names, flags and the tree panel; replaced the placeholder `0039`), `specs/0049-linked-clone/`, `specs/0020` (undo, reserved)
 ADRs: `adrs.md` (architect, to come; document model, accepted by the customer on 2026-10-10)
 PR: TBD
