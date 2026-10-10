@@ -16,10 +16,9 @@ use std::io::{Cursor, Write};
 
 use curvyo_document_core::{
     AnchorId, AnchorKind, CURRENT_FORMAT_VERSION, Color, CopySource, DashPattern, Document,
-    EllipseFrame, FillKind, FillMode, FillModeTarget, GradientStop, Length, LineCap, LineJoin,
-    MAX_GRADIENT_STOPS, NewAnchor, NodeId, ObjectSnapshot, Opacity, PathEditError, Point,
-    PointCount, RectBounds, Shape, ShapeEditError, StarFrame, StopChange, StopEdit, StopId,
-    StopPosition, Style, StyleEdit, StyleEditError, Vec2, pack, unpack,
+    EllipseFrame, Length, LineCap, LineJoin, NewAnchor, NodeId, ObjectSnapshot, Opacity,
+    PathEditError, Point, PointCount, RectBounds, Shape, ShapeEditError, StarFrame, Style,
+    StyleEdit, Vec2, pack, unpack,
 };
 use loro::LoroDoc;
 
@@ -41,10 +40,6 @@ fn blue() -> Color {
 
 fn opacity(v: f64) -> Opacity {
     Opacity::new(v).unwrap()
-}
-
-fn position(v: f64) -> StopPosition {
-    StopPosition::new(v).unwrap()
 }
 
 fn rect(document: &Document) -> NodeId {
@@ -91,46 +86,6 @@ fn style_of(document: &Document, id: NodeId) -> Style {
         ObjectSnapshot::Path(p) => p.style,
         ObjectSnapshot::Primitive(p) => p.style,
     }
-}
-
-fn stop(counter: u64, at: f64, color: Color, alpha: f64) -> GradientStop {
-    GradientStop {
-        id: StopId::new(7, counter),
-        position: position(at),
-        color,
-        opacity: opacity(alpha),
-    }
-}
-
-fn set_mode(document: &Document, mode: FillMode, id: NodeId, seed: &[GradientStop]) {
-    document
-        .set_fill_mode(
-            mode,
-            &[FillModeTarget {
-                id,
-                seed_stops: seed.to_vec(),
-            }],
-        )
-        .unwrap();
-}
-
-/// A gradient fill with stops at 0, 0.5, 1 on `id`.
-fn linear_with_three_stops(document: &Document, id: NodeId) -> [GradientStop; 3] {
-    let stops = [
-        stop(1, 0.0, red(), 1.0),
-        stop(2, 0.5, Color::BLACK, 0.5),
-        stop(3, 1.0, blue(), 1.0),
-    ];
-    set_mode(document, FillMode::Linear, id, &stops[..2]);
-    document.add_stop(id, stops[2]).unwrap();
-    document
-        .edit_stops(&[StopEdit {
-            id,
-            stop: stops[1].id,
-            change: StopChange::Position(position(0.5)),
-        }])
-        .unwrap();
-    stops
 }
 
 fn reopen(document: &Document) -> Document {
@@ -198,46 +153,6 @@ fn ac3_every_object_kind_is_created_with_the_frozen_default_style() {
         assert_eq!(style.stroke.color, Color::BLACK);
         assert!(!style.fill.enabled);
     }
-}
-
-#[test]
-fn ac1_ac2_the_same_edit_works_on_paths_and_primitives_and_keeps_shape_parameters() {
-    let document = Document::new(1);
-    let path = open_path(&document);
-    let primitives = [rect(&document), ellipse(&document), star(&document)];
-    let shapes_before: Vec<Shape> = primitives
-        .iter()
-        .map(|id| document.primitive(*id).unwrap().shape)
-        .collect();
-    let anchors_before = document.path(path).unwrap().anchors;
-    let all = [path, primitives[0], primitives[1], primitives[2]];
-
-    document
-        .edit_style(&all, &StyleEdit::StrokeWidth(mm(2.0)))
-        .unwrap();
-    document
-        .edit_style(
-            &all,
-            &StyleEdit::StrokeDash(DashPattern::new(vec![6.0, 4.0]).unwrap()),
-        )
-        .unwrap();
-    set_mode(&document, FillMode::Solid, path, &[]);
-    for id in primitives {
-        set_mode(&document, FillMode::Solid, id, &[]);
-    }
-
-    for id in all {
-        let style = style_of(&document, id);
-        assert_eq!(style.stroke.width, mm(2.0));
-        assert_eq!(style.stroke.dash.as_slice(), [6.0, 4.0]);
-        assert!(style.fill.enabled);
-    }
-    // No implicit "object to path": still the same primitives, same shapes.
-    for (id, before) in primitives.iter().zip(&shapes_before) {
-        assert_eq!(document.primitive(*id).unwrap().shape, *before);
-        assert!(document.path(*id).is_none(), "still a primitive");
-    }
-    assert_eq!(document.path(path).unwrap().anchors, anchors_before);
 }
 
 // ---------------------------------------------------------------------
@@ -426,256 +341,6 @@ fn join_and_cap_are_stored_and_read_back() {
 }
 
 // ---------------------------------------------------------------------
-// AC 13, 14: fill modes keep what they do not use
-// ---------------------------------------------------------------------
-
-#[test]
-fn ac13_fill_none_keeps_colour_and_stops_and_re_enabling_restores_them() {
-    let document = Document::new(1);
-    let id = rect(&document);
-    document
-        .edit_style(&[id], &StyleEdit::FillColor(red()))
-        .unwrap();
-    set_mode(&document, FillMode::Solid, id, &[]);
-    set_mode(&document, FillMode::None, id, &[]);
-    let none = style_of(&document, id);
-    assert!(!none.fill.enabled);
-    assert_eq!(none.fill.color, red());
-    set_mode(&document, FillMode::Solid, id, &[]);
-    let solid = style_of(&document, id);
-    assert!(solid.fill.enabled);
-    assert_eq!(
-        (solid.fill.kind, solid.fill.color),
-        (FillKind::Solid, red())
-    );
-}
-
-#[test]
-fn ac13_solid_to_linear_and_back_loses_neither_the_colour_nor_the_stops() {
-    let document = Document::new(1);
-    let id = rect(&document);
-    document
-        .edit_style(&[id], &StyleEdit::FillColor(red()))
-        .unwrap();
-    document
-        .edit_style(&[id], &StyleEdit::FillOpacity(opacity(0.4)))
-        .unwrap();
-    set_mode(&document, FillMode::Solid, id, &[]);
-    let stops = GradientStop::default_pair(red(), StopId::new(7, 1), StopId::new(7, 2));
-    set_mode(&document, FillMode::Linear, id, &stops);
-    set_mode(&document, FillMode::Solid, id, &[]);
-    let back = style_of(&reopen(&document), id);
-    assert_eq!(back.fill.kind, FillKind::Solid);
-    assert_eq!(back.fill.color, red());
-    assert_eq!(back.fill.opacity.get(), 0.4);
-    assert_eq!(back.fill.stops, stops);
-}
-
-#[test]
-fn ac17_a_gradient_without_stops_gets_the_seed_and_one_with_stops_keeps_them() {
-    let document = Document::new(1);
-    let (a, b) = (rect(&document), ellipse(&document));
-    document
-        .edit_style(&[a], &StyleEdit::FillColor(red()))
-        .unwrap();
-    let seeds = [
-        FillModeTarget {
-            id: a,
-            seed_stops: GradientStop::default_pair(red(), StopId::new(7, 1), StopId::new(7, 2))
-                .to_vec(),
-        },
-        FillModeTarget {
-            id: b,
-            seed_stops: GradientStop::default_pair(
-                Color::BLACK,
-                StopId::new(7, 3),
-                StopId::new(7, 4),
-            )
-            .to_vec(),
-        },
-    ];
-    document.set_fill_mode(FillMode::Radial, &seeds).unwrap();
-    let (sa, sb) = (style_of(&document, a), style_of(&document, b));
-    assert_eq!(sa.fill.kind, FillKind::Radial);
-    assert_eq!(sa.fill.stops.len(), 2);
-    assert_eq!(sa.fill.stops[0].color, red());
-    assert_eq!(
-        sa.fill.stops[1].color,
-        Color {
-            r: 255,
-            g: 255,
-            b: 255
-        }
-    );
-    assert_eq!(sb.fill.stops[0].color, Color::BLACK, "each takes its own");
-
-    // Switching kind keeps the stops; a second seed is ignored.
-    document.set_fill_mode(FillMode::Linear, &seeds).unwrap();
-    assert_eq!(style_of(&document, a).fill.stops, sa.fill.stops);
-    assert_eq!(style_of(&document, a).fill.kind, FillKind::Linear);
-}
-
-// ---------------------------------------------------------------------
-// AC 16 to 20: stops
-// ---------------------------------------------------------------------
-
-#[test]
-fn ac18_a_stop_is_inserted_in_position_order_and_ties_go_after_equals() {
-    let document = Document::new(1);
-    let id = rect(&document);
-    let base = GradientStop::default_pair(red(), StopId::new(7, 1), StopId::new(7, 2));
-    set_mode(&document, FillMode::Linear, id, &base);
-    document.add_stop(id, stop(3, 0.5, blue(), 1.0)).unwrap();
-    document
-        .add_stop(id, stop(4, 0.5, Color::BLACK, 1.0))
-        .unwrap();
-    document.add_stop(id, stop(5, 0.0, blue(), 0.5)).unwrap();
-    document.add_stop(id, stop(6, 1.0, blue(), 0.5)).unwrap();
-    let order: Vec<u64> = style_of(&document, id)
-        .fill
-        .stops
-        .iter()
-        .map(|s| (s.id.as_u128() & 0xffff_ffff) as u64)
-        .collect();
-    // Stop 5 joins position 0 after stop 1; stops 3 and 4 sit at 0.5 in the
-    // order they were added; stop 6 joins position 1 after stop 2.
-    assert_eq!(order, [1, 5, 3, 4, 2, 6]);
-}
-
-#[test]
-fn ac18_a_17th_stop_is_refused_and_a_file_may_hold_more() {
-    let document = Document::new(1);
-    let id = rect(&document);
-    let base = GradientStop::default_pair(red(), StopId::new(7, 1), StopId::new(7, 2));
-    set_mode(&document, FillMode::Linear, id, &base);
-    for n in 3..=MAX_GRADIENT_STOPS as u64 {
-        document
-            .add_stop(id, stop(n, n as f64 / 20.0, blue(), 1.0))
-            .unwrap();
-    }
-    assert_eq!(style_of(&document, id).fill.stops.len(), MAX_GRADIENT_STOPS);
-    assert_eq!(
-        document.add_stop(id, stop(99, 0.5, blue(), 1.0)),
-        Err(StyleEditError::TooManyStops)
-    );
-    assert_eq!(style_of(&document, id).fill.stops.len(), MAX_GRADIENT_STOPS);
-}
-
-#[test]
-fn ac19_a_stop_can_be_removed_down_to_two_and_not_below() {
-    let document = Document::new(1);
-    let id = rect(&document);
-    let stops = linear_with_three_stops(&document, id);
-    document.remove_stop(id, stops[1].id).unwrap();
-    let left = style_of(&document, id).fill.stops;
-    assert_eq!(left, [stops[0], stops[2]]);
-    assert_eq!(
-        document.remove_stop(id, stops[0].id),
-        Err(StyleEditError::TooFewStops)
-    );
-    assert_eq!(style_of(&document, id).fill.stops, left);
-}
-
-#[test]
-fn ac20_editing_one_stop_changes_only_that_value() {
-    let document = Document::new(1);
-    let id = rect(&document);
-    let stops = linear_with_three_stops(&document, id);
-    let edit = |stop: StopId, change| {
-        document
-            .edit_stops(&[StopEdit { id, stop, change }])
-            .unwrap();
-    };
-
-    edit(stops[1].id, StopChange::Color(red()));
-    let after = style_of(&document, id).fill.stops;
-    assert_eq!(after[0], stops[0]);
-    assert_eq!(after[2], stops[2]);
-    assert_eq!(
-        after[1],
-        GradientStop {
-            color: red(),
-            ..stops[1]
-        }
-    );
-
-    edit(stops[1].id, StopChange::Opacity(opacity(0.25)));
-    edit(stops[1].id, StopChange::Position(position(0.8)));
-    let after = style_of(&document, id).fill.stops;
-    assert_eq!(after[0], stops[0]);
-    assert_eq!(after[2], stops[2]);
-    assert_eq!(
-        after[1],
-        GradientStop {
-            color: red(),
-            opacity: opacity(0.25),
-            position: position(0.8),
-            ..stops[1]
-        }
-    );
-    // A position edit does not move the stop within the list; the renderer
-    // sorts. Here the edited stop now sits after the stop at 1.0 in order
-    // of position but keeps its list slot.
-    assert_eq!(
-        after.iter().map(|s| s.id).collect::<Vec<_>>(),
-        stops.iter().map(|s| s.id).collect::<Vec<_>>()
-    );
-}
-
-#[test]
-fn ac34_a_multi_object_stop_edit_applies_each_objects_own_stop_in_one_batch() {
-    let document = Document::new(1);
-    let (a, b) = (rect(&document), ellipse(&document));
-    let seeds = [
-        FillModeTarget {
-            id: a,
-            seed_stops: GradientStop::default_pair(red(), StopId::new(7, 1), StopId::new(7, 2))
-                .to_vec(),
-        },
-        FillModeTarget {
-            id: b,
-            seed_stops: GradientStop::default_pair(red(), StopId::new(8, 1), StopId::new(8, 2))
-                .to_vec(),
-        },
-    ];
-    document.set_fill_mode(FillMode::Linear, &seeds).unwrap();
-    document
-        .edit_stops(&[
-            StopEdit {
-                id: a,
-                stop: StopId::new(7, 2),
-                change: StopChange::Color(blue()),
-            },
-            StopEdit {
-                id: b,
-                stop: StopId::new(8, 2),
-                change: StopChange::Color(blue()),
-            },
-        ])
-        .unwrap();
-    for id in [a, b] {
-        let stops = style_of(&document, id).fill.stops;
-        assert_eq!(stops[0].color, red());
-        assert_eq!(stops[1].color, blue());
-    }
-    // A stale stop refuses the whole batch.
-    let bad = document.edit_stops(&[
-        StopEdit {
-            id: a,
-            stop: StopId::new(7, 1),
-            change: StopChange::Color(Color::BLACK),
-        },
-        StopEdit {
-            id: b,
-            stop: StopId::new(9, 9),
-            change: StopChange::Color(Color::BLACK),
-        },
-    ]);
-    assert_eq!(bad, Err(StyleEditError::NoSuchStop));
-    assert_eq!(style_of(&document, a).fill.stops[0].color, red());
-}
-
-// ---------------------------------------------------------------------
 // AC 24: one property, each object independently
 // ---------------------------------------------------------------------
 
@@ -714,55 +379,17 @@ fn ac24_a_batch_changes_one_property_and_leaves_every_other_alone() {
 // AC 25: persistence
 // ---------------------------------------------------------------------
 
-#[test]
-fn ac25_every_property_including_the_ordered_stops_reads_back_exactly() {
-    let document = Document::new(1);
-    let path = open_path(&document);
-    let shape = rect(&document);
-    for id in [path, shape] {
-        linear_with_three_stops(&document, id);
-        document
-            .edit_style(
-                &[id],
-                &StyleEdit::StrokeDash(DashPattern::new(vec![6.0, 3.0, 1.0, 3.0]).unwrap()),
-            )
-            .unwrap();
-        document
-            .edit_style(&[id], &StyleEdit::StrokeOpacity(opacity(0.6)))
-            .unwrap();
-        document
-            .edit_style(&[id], &StyleEdit::StrokeJoin(LineJoin::Bevel))
-            .unwrap();
-        document
-            .edit_style(&[id], &StyleEdit::StrokeCap(LineCap::Round))
-            .unwrap();
-        document
-            .edit_style(&[id], &StyleEdit::FillColor(blue()))
-            .unwrap();
-        document
-            .edit_style(&[id], &StyleEdit::FillOpacity(opacity(0.25)))
-            .unwrap();
-        document
-            .edit_style(&[id], &StyleEdit::StrokeWidth(mm(0.0)))
-            .unwrap();
-        // Two stops at the same position keep the order they were made in.
-        document.add_stop(id, stop(10, 0.5, red(), 1.0)).unwrap();
-    }
-    let reopened = reopen(&document);
-    for id in [path, shape] {
-        let style = style_of(&document, id);
-        assert_eq!(style_of(&reopened, id), style);
-        assert!(!style.stroke.enabled);
-        assert_eq!(style.fill.stops.len(), 4);
-    }
-}
-
 // ---------------------------------------------------------------------
 // AC 30 to 33: copy, split, join, object to path
 // ---------------------------------------------------------------------
 
 fn style_everything(document: &Document, id: NodeId) {
-    linear_with_three_stops(document, id);
+    document
+        .edit_style(&[id], &StyleEdit::FillEnabled(true))
+        .unwrap();
+    document
+        .edit_style(&[id], &StyleEdit::FillColor(blue()))
+        .unwrap();
     document
         .edit_style(&[id], &StyleEdit::StrokeWidth(mm(1.5)))
         .unwrap();
@@ -778,63 +405,6 @@ fn style_everything(document: &Document, id: NodeId) {
     document
         .edit_style(&[id], &StyleEdit::StrokeCap(LineCap::Round))
         .unwrap();
-}
-
-#[test]
-fn ac30_a_copy_has_the_same_style_and_stops_and_is_independent() {
-    let document = Document::new(1);
-    let path = open_path(&document);
-    let shape = rect(&document);
-    style_everything(&document, path);
-    style_everything(&document, shape);
-    let copies = document
-        .duplicate_objects(
-            &[
-                CopySource {
-                    id: path,
-                    anchor_ids: vec![
-                        AnchorId::new(5, 1),
-                        AnchorId::new(5, 2),
-                        AnchorId::new(5, 3),
-                    ],
-                },
-                CopySource {
-                    id: shape,
-                    anchor_ids: vec![],
-                },
-            ],
-            Vec2::new(5.0, 5.0),
-        )
-        .unwrap();
-    for (original, copy) in [path, shape].into_iter().zip(&copies) {
-        assert_eq!(style_of(&document, *copy), style_of(&document, original));
-        let stop_id = style_of(&document, original).fill.stops[1].id;
-        // Editing the copy's stop leaves the original alone.
-        document
-            .edit_stops(&[StopEdit {
-                id: *copy,
-                stop: stop_id,
-                change: StopChange::Color(blue()),
-            }])
-            .unwrap();
-        document
-            .edit_style(&[*copy], &StyleEdit::StrokeJoin(LineJoin::Bevel))
-            .unwrap();
-        assert_eq!(
-            style_of(&document, original).fill.stops[1].color,
-            Color::BLACK
-        );
-        assert_eq!(style_of(&document, original).stroke.join, LineJoin::Miter);
-        // And the reverse.
-        document
-            .edit_stops(&[StopEdit {
-                id: original,
-                stop: stop_id,
-                change: StopChange::Opacity(opacity(0.9)),
-            }])
-            .unwrap();
-        assert_eq!(style_of(&document, *copy).fill.stops[1].opacity.get(), 0.5);
-    }
 }
 
 #[test]
@@ -918,24 +488,6 @@ fn ac32_closing_a_path_onto_itself_keeps_its_style() {
         .unwrap();
     assert!(document.path(path).unwrap().closed);
     assert_eq!(style_of(&document, path), before);
-}
-
-#[test]
-fn ac33_object_to_path_keeps_the_whole_style_including_the_stops() {
-    let document = Document::new(1);
-    let shape = rect(&document);
-    style_everything(&document, shape);
-    let before = style_of(&document, shape);
-    let anchors: Vec<NewAnchor> = (0..4)
-        .map(|i| NewAnchor {
-            kind: AnchorKind::Corner,
-            ..NewAnchor::corner(AnchorId::new(4, i + 1), pt(f64::from(i as u32), 0.0))
-        })
-        .collect();
-    document.convert_to_paths(&[(shape, anchors)]).unwrap();
-    let path = document.path(shape).expect("now a path");
-    assert_eq!(path.style, before);
-    assert_eq!(path.style.fill.stops.len(), 3);
 }
 
 // ---------------------------------------------------------------------
@@ -1066,87 +618,173 @@ fn a_peer_turning_the_stroke_off_does_not_lose_a_concurrent_colour_edit() {
     assert_eq!(style.stroke.color, blue());
 }
 
-#[test]
-fn two_peers_editing_different_stops_of_one_gradient_both_survive_the_merge() {
-    let (a, b, id) = two_peers(|document| {
-        let id = rect(document);
-        linear_with_three_stops(document, id);
-        id
-    });
-    a.edit_stops(&[StopEdit {
-        id,
-        stop: StopId::new(7, 1),
-        change: StopChange::Color(Color::BLACK),
-    }])
-    .unwrap();
-    b.edit_stops(&[StopEdit {
-        id,
-        stop: StopId::new(7, 3),
-        change: StopChange::Position(position(0.9)),
-    }])
-    .unwrap();
-    b.add_stop(id, stop(40, 0.2, red(), 1.0)).unwrap();
-    let stops = style_of(&merged(&a, &b), id).fill.stops;
-    assert_eq!(stops.len(), 4);
-    let find = |counter: u64| {
-        stops
-            .iter()
-            .find(|s| s.id == StopId::new(7, counter))
-            .unwrap()
-    };
-    assert_eq!(find(1).color, Color::BLACK);
-    assert_eq!(find(3).position.get(), 0.9);
-    assert_eq!(find(40).position.get(), 0.2);
-}
+// ---- more fill and copy cases
 
 #[test]
-fn two_peers_removing_different_stops_leave_a_one_stop_gradient_that_still_opens() {
-    let (a, b, id) = two_peers(|document| {
-        let id = rect(document);
-        linear_with_three_stops(document, id);
-        id
-    });
-    a.remove_stop(id, StopId::new(7, 1)).unwrap();
-    b.remove_stop(id, StopId::new(7, 3)).unwrap();
-    let style = style_of(&merged(&a, &b), id);
-    assert_eq!(
-        style.fill.stops.len(),
-        1,
-        "a stored count outside 2 to 16 is valid"
-    );
-}
-
-#[test]
-fn two_peers_creating_the_stop_list_at_once_keep_both_peers_stops() {
-    let (a, b, id) = two_peers(rect);
-    let mine = [stop(1, 0.0, red(), 1.0), stop(2, 1.0, blue(), 1.0)];
-    let theirs = [
-        GradientStop {
-            id: StopId::new(8, 1),
-            ..stop(1, 0.0, red(), 1.0)
-        },
-        GradientStop {
-            id: StopId::new(8, 2),
-            ..stop(2, 1.0, blue(), 1.0)
-        },
-    ];
-    set_mode(&a, FillMode::Linear, id, &mine);
-    // A edits a stop of the list it just created; B created its own list
-    // concurrently. The edit must not vanish with a losing list.
-    a.edit_stops(&[StopEdit {
-        id,
-        stop: StopId::new(7, 1),
-        change: StopChange::Color(Color::BLACK),
-    }])
-    .unwrap();
-    set_mode(&b, FillMode::Linear, id, &theirs);
-    let style = style_of(&merged(&a, &b), id);
-    assert_eq!(style.fill.stops.len(), 4, "both lists merge into one");
-    let edited = style
-        .fill
-        .stops
+fn ac1_ac2_the_same_edit_works_on_paths_and_primitives_and_keeps_shape_parameters() {
+    let document = Document::new(1);
+    let path = open_path(&document);
+    let primitives = [rect(&document), ellipse(&document), star(&document)];
+    let shapes_before: Vec<Shape> = primitives
         .iter()
-        .find(|s| s.id == StopId::new(7, 1))
+        .map(|id| document.primitive(*id).unwrap().shape)
+        .collect();
+    let anchors_before = document.path(path).unwrap().anchors;
+    let all = [path, primitives[0], primitives[1], primitives[2]];
+
+    document
+        .edit_style(&all, &StyleEdit::StrokeWidth(mm(2.0)))
         .unwrap();
-    assert_eq!(edited.color, Color::BLACK, "A's edit survives");
+    document
+        .edit_style(
+            &all,
+            &StyleEdit::StrokeDash(DashPattern::new(vec![6.0, 4.0]).unwrap()),
+        )
+        .unwrap();
+    document
+        .edit_style(&all, &StyleEdit::FillEnabled(true))
+        .unwrap();
+
+    for id in all {
+        let style = style_of(&document, id);
+        assert_eq!(style.stroke.width, mm(2.0));
+        assert_eq!(style.stroke.dash.as_slice(), [6.0, 4.0]);
+        assert!(style.fill.enabled);
+    }
+    // No implicit "object to path": still the same primitives, same shapes.
+    for (id, before) in primitives.iter().zip(&shapes_before) {
+        assert_eq!(document.primitive(*id).unwrap().shape, *before);
+        assert!(document.path(*id).is_none(), "still a primitive");
+    }
+    assert_eq!(document.path(path).unwrap().anchors, anchors_before);
+}
+
+#[test]
+fn ac13_fill_none_keeps_colour_and_re_enabling_restores_them() {
+    let document = Document::new(1);
+    let id = rect(&document);
+    document
+        .edit_style(&[id], &StyleEdit::FillColor(red()))
+        .unwrap();
+    document
+        .edit_style(&[id], &StyleEdit::FillEnabled(true))
+        .unwrap();
+    document
+        .edit_style(&[id], &StyleEdit::FillEnabled(false))
+        .unwrap();
+    let none = style_of(&document, id);
+    assert!(!none.fill.enabled);
+    assert_eq!(none.fill.color, red());
+    document
+        .edit_style(&[id], &StyleEdit::FillEnabled(true))
+        .unwrap();
+    let solid = style_of(&document, id);
+    assert!(solid.fill.enabled);
+    assert_eq!(solid.fill.color, red());
+}
+
+#[test]
+fn ac25_every_property_reads_back_exactly() {
+    let document = Document::new(1);
+    let path = open_path(&document);
+    let shape = rect(&document);
+    for id in [path, shape] {
+        document
+            .edit_style(&[id], &StyleEdit::FillEnabled(true))
+            .unwrap();
+        document
+            .edit_style(
+                &[id],
+                &StyleEdit::StrokeDash(DashPattern::new(vec![6.0, 3.0, 1.0, 3.0]).unwrap()),
+            )
+            .unwrap();
+        document
+            .edit_style(&[id], &StyleEdit::StrokeOpacity(opacity(0.6)))
+            .unwrap();
+        document
+            .edit_style(&[id], &StyleEdit::StrokeJoin(LineJoin::Bevel))
+            .unwrap();
+        document
+            .edit_style(&[id], &StyleEdit::StrokeCap(LineCap::Round))
+            .unwrap();
+        document
+            .edit_style(&[id], &StyleEdit::FillColor(blue()))
+            .unwrap();
+        document
+            .edit_style(&[id], &StyleEdit::FillOpacity(opacity(0.25)))
+            .unwrap();
+        document
+            .edit_style(&[id], &StyleEdit::StrokeWidth(mm(0.0)))
+            .unwrap();
+    }
+    let reopened = reopen(&document);
+    for id in [path, shape] {
+        let style = style_of(&document, id);
+        assert_eq!(style_of(&reopened, id), style);
+        assert!(!style.stroke.enabled);
+        assert!(style.fill.enabled);
+    }
+}
+
+#[test]
+fn ac30_a_copy_has_the_same_style_and_is_independent() {
+    let document = Document::new(1);
+    let path = open_path(&document);
+    let shape = rect(&document);
+    style_everything(&document, path);
+    style_everything(&document, shape);
+    let copies = document
+        .duplicate_objects(
+            &[
+                CopySource {
+                    id: path,
+                    anchor_ids: vec![
+                        AnchorId::new(5, 1),
+                        AnchorId::new(5, 2),
+                        AnchorId::new(5, 3),
+                    ],
+                },
+                CopySource {
+                    id: shape,
+                    anchor_ids: vec![],
+                },
+            ],
+            Vec2::new(5.0, 5.0),
+        )
+        .unwrap();
+    for (original, copy) in [path, shape].into_iter().zip(&copies) {
+        assert_eq!(style_of(&document, *copy), style_of(&document, original));
+        // Editing the copy's fill leaves the original alone.
+        document
+            .edit_style(&[*copy], &StyleEdit::FillColor(red()))
+            .unwrap();
+        document
+            .edit_style(&[*copy], &StyleEdit::StrokeJoin(LineJoin::Bevel))
+            .unwrap();
+        assert_eq!(style_of(&document, original).fill.color, blue());
+        assert_eq!(style_of(&document, original).stroke.join, LineJoin::Miter);
+        // And the reverse.
+        document
+            .edit_style(&[original], &StyleEdit::FillOpacity(opacity(0.9)))
+            .unwrap();
+        assert_eq!(style_of(&document, *copy).fill.opacity.get(), 1.0);
+    }
+}
+
+#[test]
+fn ac33_object_to_path_keeps_the_whole_style() {
+    let document = Document::new(1);
+    let shape = rect(&document);
+    style_everything(&document, shape);
+    let before = style_of(&document, shape);
+    let anchors: Vec<NewAnchor> = (0..4)
+        .map(|i| NewAnchor {
+            kind: AnchorKind::Corner,
+            ..NewAnchor::corner(AnchorId::new(4, i + 1), pt(f64::from(i as u32), 0.0))
+        })
+        .collect();
+    document.convert_to_paths(&[(shape, anchors)]).unwrap();
+    let path = document.path(shape).expect("now a path");
+    assert_eq!(path.style, before);
+    assert!(path.style.fill.enabled);
 }

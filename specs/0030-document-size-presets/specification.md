@@ -1,6 +1,6 @@
 # Document size presets: paper sizes A0 to A6 and slide formats
 
-Status: Ready (`adrs.md` and the UX notes exist, both 2026-10-10)
+Status: In progress (`adrs.md` and the UX notes exist, both 2026-10-10)
 Priority: Should
 Origin: Customer (the request, the paper and slide groups, the data file, inline choice, portrait/landscape, round trip). The slide list, the pixel rule and the orientation rule are my proposals, marked in "Decided by the product owner" and in the open questions.
 
@@ -168,4 +168,4 @@ Requirements: R-EDIT-019 (`docs/requirements.md`)
 Builds on: `specs/0015-document-size-and-rulers/` (Document section, resize around the centre, `resize_document`, display unit, limits), `specs/0017-style-panel-rework/` (panel rule: no popups; criteria 3, 55, 57)
 Related: `docs/adr/0002-document-model-units-and-svg-round-trip.md` (mm, 96 dpi at the SVG boundary)
 ADRs: `adrs.md` (architect, 2026-10-10)
-PR: TBD (part of the 0017 PR)
+PR: #78 (part of the 0017 PR)

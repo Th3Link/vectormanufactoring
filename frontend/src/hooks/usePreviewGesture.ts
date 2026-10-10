@@ -86,14 +86,22 @@ export function usePreviewGesture(
       setCancels((n) => n + 1);
       onChange();
     };
+    // The system took the pointer away (`0017` criterion 40): the preview is
+    // dropped and nothing is written, the same as Escape; the commit that ends
+    // the gesture then has nothing to write.
+    const onPointerCancel = () => {
+      dropPending();
+      getSession()?.cancel_style_preview();
+      commit();
+    };
     window.addEventListener("pointerup", onRelease, true);
-    window.addEventListener("pointercancel", onRelease, true);
+    window.addEventListener("pointercancel", onPointerCancel, true);
     window.addEventListener("blur", onRelease);
     window.addEventListener("keyup", onStepKeyUp, true);
     window.addEventListener("keydown", onEscape, true);
     endGesture.current = () => {
       window.removeEventListener("pointerup", onRelease, true);
-      window.removeEventListener("pointercancel", onRelease, true);
+      window.removeEventListener("pointercancel", onPointerCancel, true);
       window.removeEventListener("blur", onRelease);
       window.removeEventListener("keyup", onStepKeyUp, true);
       window.removeEventListener("keydown", onEscape, true);

@@ -56,7 +56,11 @@ impl Session {
     /// What the Properties panel shows (criterion 14a).
     #[must_use]
     pub fn panel_content(&self) -> PanelContent {
-        panel_content(&self.selection, self.pen_path_unfinished())
+        panel_content(
+            &self.selection,
+            self.pen_path_unfinished(),
+            !self.style_scope().ids.is_empty(),
+        )
     }
 
     /// Whether the Pen holds an unfinished path, whichever tool is active. A
@@ -118,6 +122,19 @@ impl Session {
             DocumentSide::Width => DocumentSize::new(typed, before.height),
             DocumentSide::Height => DocumentSize::new(before.width, typed),
         };
+        self.resize_document_to(wanted)
+    }
+
+    /// The one resize every size change goes through (a typed side, a preset,
+    /// an orientation swap): the centre stays fixed, every object moves by half
+    /// the change, one commit, and the view follows by the same shift. A size
+    /// within 1e-9 mm of the current one writes nothing. Ignored while the Pen
+    /// has an unfinished path.
+    pub(super) fn resize_document_to(&mut self, wanted: DocumentSize) -> SizeOutcome {
+        if self.pen_path_unfinished() {
+            return SizeOutcome::Unchanged;
+        }
+        let before = self.document.size();
         match self.document.resize(wanted) {
             Ok(true) => {
                 self.follow_document_shift(Document::resize_shift(before, self.document.size()));

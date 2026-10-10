@@ -16,7 +16,6 @@
 use curvyo_document_core::{Angle, Point, Vec2};
 
 use crate::color::RgbaColor;
-use crate::gradient::GradientFill;
 
 /// One draw-list vertex: a document-space position plus a flat color.
 /// No texture coordinate and no normal — every shape this crate produces
@@ -47,8 +46,6 @@ pub struct DrawList {
     /// The vertex index at which each artwork layer ends, ascending. The
     /// layers cover `triangles[..layers.last()]`; what follows is the overlay.
     layers: Vec<usize>,
-    /// The gradient fills among the artwork ([`DrawList::gradients`]).
-    pub(crate) gradients: Vec<GradientFill>,
 }
 
 impl DrawList {
@@ -138,12 +135,6 @@ impl DrawList {
         if keeps_layers {
             self.layers
                 .extend(other.layers.into_iter().map(|end| end + base));
-            self.gradients
-                .extend(other.gradients.into_iter().map(|mut fill| {
-                    fill.start += base;
-                    fill.end += base;
-                    fill
-                }));
         }
     }
 

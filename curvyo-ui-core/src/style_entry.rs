@@ -3,7 +3,7 @@
 //! criteria 5, 6, 13, 14).
 
 use curvyo_document_core::{
-    Color, FillMode, Length, LineCap, LineJoin, Opacity, StopChange, StopPosition, StyleEdit,
+    Color, Length, LineCap, LineJoin, MarkerCount, MarkerPlace, MarkerShape, Opacity, StyleEdit,
 };
 
 use crate::transform_entry::parse_entry_number;
@@ -15,15 +15,17 @@ pub const MAX_STROKE_WIDTH_MM: f64 = 1000.0;
 /// its text and shows the matching message; nothing is written.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StyleEntryError {
-    /// Not 3 or 6 hex digits ("Enter 3 or 6 hex digits").
+    /// Not 3, 4, 6 or 8 hex digits ("Enter 3, 4, 6 or 8 hex digits").
     Hex,
-    /// 8 hex digits: colour and opacity are independent ("Use 6 digits; set
-    /// opacity separately").
-    HexEightDigits,
     /// Not a number from 0 to 100 ("Enter a number from 0 to 100").
     Percent,
     /// Not a number from 0 to 1000 ("Enter a number from 0 to 1000").
     Width,
+    /// Not a whole number from 1 to 500 ("Enter a whole number from 1 to 500").
+    Count,
+    /// Not 1 to 16 numbers from 0 to 1000 with a sum above 0, separated by
+    /// spaces ("Enter 1 to 16 numbers from 0 to 1000, for example 1 2 4 2").
+    Dash,
 }
 
 impl StyleEntryError {
@@ -32,43 +34,66 @@ impl StyleEntryError {
     pub const fn code(self) -> &'static str {
         match self {
             Self::Hex => "hex",
-            Self::HexEightDigits => "hex8",
             Self::Percent => "percent",
             Self::Width => "width",
+            Self::Count => "count",
+            Self::Dash => "dash",
         }
     }
 }
 
-/// Parses a hex colour: 3 or 6 digits, with or without a leading `#`, in any
-/// case (`#F80` is `#FF8800`).
+/// A colour typed as hex: the RGB, and the alpha when the form carried one.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HexColour {
+    /// The red, green and blue.
+    pub color: Color,
+    /// The alpha as `AA / 255` for the 4 and 8 digit forms, `None` for the 3
+    /// and 6 digit forms, which leave the alpha as it is.
+    pub opacity: Option<Opacity>,
+}
+
+/// Parses a hex colour: 3 (`F80`), 4 (`F80C`), 6 (`FF8800`) or 8 (`FF8800CC`)
+/// digits, with or without a leading `#`, in any case, surrounding spaces
+/// ignored. A 3 or 4 digit form doubles each digit.
 ///
 /// # Errors
-/// [`StyleEntryError::HexEightDigits`] for 8 digits, [`StyleEntryError::Hex`]
-/// for anything else that is not 3 or 6 hex digits.
-pub fn parse_hex(text: &str) -> Result<Color, StyleEntryError> {
+/// [`StyleEntryError::Hex`] for any other length or a character that is not a
+/// hex digit.
+pub fn parse_hex(text: &str) -> Result<HexColour, StyleEntryError> {
     let trimmed = text.trim();
     let digits = trimmed.strip_prefix('#').unwrap_or(trimmed);
     if !digits.chars().all(|c| c.is_ascii_hexdigit()) {
         return Err(StyleEntryError::Hex);
     }
     let value = |hex: &str| u8::from_str_radix(hex, 16).map_err(|_| StyleEntryError::Hex);
-    match digits.len() {
-        3 => {
-            let channel = |n: usize| value(&digits[n..=n].repeat(2));
-            Ok(Color {
-                r: channel(0)?,
-                g: channel(1)?,
-                b: channel(2)?,
-            })
-        }
-        6 => Ok(Color {
-            r: value(&digits[0..2])?,
-            g: value(&digits[2..4])?,
-            b: value(&digits[4..6])?,
-        }),
-        8 => Err(StyleEntryError::HexEightDigits),
-        _ => Err(StyleEntryError::Hex),
-    }
+    let doubled = |n: usize| value(&digits[n..=n].repeat(2));
+    let pair = |n: usize| value(&digits[n..n + 2]);
+    let (r, g, b, alpha) = match digits.len() {
+        3 => (doubled(0)?, doubled(1)?, doubled(2)?, None),
+        4 => (doubled(0)?, doubled(1)?, doubled(2)?, Some(doubled(3)?)),
+        6 => (pair(0)?, pair(2)?, pair(4)?, None),
+        8 => (pair(0)?, pair(2)?, pair(4)?, Some(pair(6)?)),
+        _ => return Err(StyleEntryError::Hex),
+    };
+    Ok(HexColour {
+        color: Color { r, g, b },
+        opacity: alpha.map(opacity_from_byte),
+    })
+}
+
+/// The alpha byte `AA` as the fraction `AA / 255` it is stored as.
+fn opacity_from_byte(alpha: u8) -> Opacity {
+    // `alpha / 255` is within 0..=1, a valid opacity.
+    Opacity::new(f64::from(alpha) / 255.0).unwrap_or(Opacity::OPAQUE)
+}
+
+/// A colour with its alpha as the field shows it: `#RRGGBBAA`, upper case,
+/// `AA = round(255 x alpha)` with .5 rounded up.
+#[must_use]
+pub fn hex_text(color: Color, opacity: Opacity) -> String {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let alpha = (opacity.get() * 255.0).round() as u8;
+    format!("#{:02X}{:02X}{:02X}{alpha:02X}", color.r, color.g, color.b)
 }
 
 /// An opacity from a whole percent `n` (0 to 100), stored as exactly `n / 100`
@@ -104,15 +129,39 @@ pub fn parse_opacity_percent(text: &str) -> Result<Opacity, StyleEntryError> {
 }
 
 /// Parses the stroke width field, millimetres, with `.` or `,` as the decimal
-/// mark. Zero is allowed: it switches the stroke off.
+/// mark and an optional trailing `mm`. Zero is allowed: it switches the stroke off.
 ///
 /// # Errors
 /// [`StyleEntryError::Width`] for text that is not a number from 0 to 1000.
 pub fn parse_stroke_width(text: &str) -> Result<Length, StyleEntryError> {
-    match parse_entry_number(text, false) {
+    // A trailing unit and the spaces around it are ignored (`0017` criterion 42).
+    let trimmed = text.trim();
+    let number = trimmed.strip_suffix("mm").unwrap_or(trimmed);
+    match parse_entry_number(number, false) {
         Some(mm) if (0.0..=MAX_STROKE_WIDTH_MM).contains(&mm) => Ok(Length::from_mm(mm)),
         _ => Err(StyleEntryError::Width),
     }
+}
+
+/// The largest count that may be typed.
+pub const MAX_MARKER_COUNT: u32 = 500;
+
+/// Parses the Count field: a whole number from 1 to 500. A decimal like `2.5`,
+/// `0`, `501` or text is refused.
+///
+/// # Errors
+/// [`StyleEntryError::Count`] for anything else.
+pub fn parse_marker_count(text: &str) -> Result<MarkerCount, StyleEntryError> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() || !trimmed.chars().all(|c| c.is_ascii_digit()) {
+        return Err(StyleEntryError::Count);
+    }
+    trimmed
+        .parse::<u32>()
+        .ok()
+        .filter(|n| (1..=MAX_MARKER_COUNT).contains(n))
+        .and_then(|n| MarkerCount::new(n).ok())
+        .ok_or(StyleEntryError::Count)
 }
 
 /// A style property edited with a typed value or a colour area.
@@ -128,6 +177,8 @@ pub enum StyleField {
     FillColor,
     /// The solid fill opacity.
     FillOpacity,
+    /// The number of Middle markers.
+    MarkerCount,
 }
 
 impl StyleField {
@@ -140,6 +191,7 @@ impl StyleField {
             "stroke-opacity" => Self::StrokeOpacity,
             "fill-color" => Self::FillColor,
             "fill-opacity" => Self::FillOpacity,
+            "marker-count" => Self::MarkerCount,
             _ => return None,
         })
     }
@@ -151,33 +203,31 @@ impl StyleField {
     pub fn parse_text(self, text: &str) -> Result<StyleEdit, StyleEntryError> {
         Ok(match self {
             Self::StrokeWidth => StyleEdit::StrokeWidth(parse_stroke_width(text)?),
-            Self::StrokeColor => StyleEdit::StrokeColor(parse_hex(text)?),
+            Self::StrokeColor => hex_edit(
+                parse_hex(text)?,
+                StyleEdit::StrokeColor,
+                StyleEdit::StrokeRgba,
+            ),
             Self::StrokeOpacity => StyleEdit::StrokeOpacity(parse_opacity_percent(text)?),
-            Self::FillColor => StyleEdit::FillColor(parse_hex(text)?),
+            Self::FillColor => {
+                hex_edit(parse_hex(text)?, StyleEdit::FillColor, StyleEdit::FillRgba)
+            }
             Self::FillOpacity => StyleEdit::FillOpacity(parse_opacity_percent(text)?),
+            Self::MarkerCount => StyleEdit::MarkerCount(parse_marker_count(text)?),
         })
     }
+}
 
-    /// The edit that sets a colour area's value, `None` for a field that is
-    /// not a colour.
-    #[must_use]
-    pub const fn color_edit(self, color: Color) -> Option<StyleEdit> {
-        match self {
-            Self::StrokeColor => Some(StyleEdit::StrokeColor(color)),
-            Self::FillColor => Some(StyleEdit::FillColor(color)),
-            _ => None,
-        }
-    }
-
-    /// The edit that sets an opacity slider's value (a whole percent), `None`
-    /// for a field that is not an opacity.
-    #[must_use]
-    pub fn opacity_edit(self, percent: f64) -> Option<StyleEdit> {
-        match self {
-            Self::StrokeOpacity => Some(StyleEdit::StrokeOpacity(opacity_from_percent(percent))),
-            Self::FillOpacity => Some(StyleEdit::FillOpacity(opacity_from_percent(percent))),
-            _ => None,
-        }
+/// The edit a typed hex makes: the colour alone for the 3 and 6 digit forms,
+/// the colour and the alpha for the 4 and 8 digit forms.
+fn hex_edit(
+    typed: HexColour,
+    colour: fn(Color) -> StyleEdit,
+    rgba: fn(Color, Opacity) -> StyleEdit,
+) -> StyleEdit {
+    match typed.opacity {
+        None => colour(typed.color),
+        Some(opacity) => rgba(typed.color, opacity),
     }
 }
 
@@ -203,90 +253,47 @@ pub fn cap_from_name(name: &str) -> Option<LineCap> {
     }
 }
 
-/// Parses the host's fill-mode word.
+/// A marker slot of a path's stroke (`specs/0018-stroke-markers`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkerSlot {
+    /// The first node of an open path.
+    Start,
+    /// Along the path or on its nodes.
+    Mid,
+    /// The last node of an open path.
+    End,
+}
+
+impl MarkerSlot {
+    /// The slot named by the host (`"start"`, `"mid"`, `"end"`).
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "start" => Some(Self::Start),
+            "mid" => Some(Self::Mid),
+            "end" => Some(Self::End),
+            _ => None,
+        }
+    }
+}
+
+/// Parses the host's marker shape word (`"none"`, `"arrow"`, `"dot"`).
 #[must_use]
-pub fn fill_mode_from_name(name: &str) -> Option<FillMode> {
+pub fn marker_shape_from_name(name: &str) -> Option<MarkerShape> {
     match name {
-        "none" => Some(FillMode::None),
-        "solid" => Some(FillMode::Solid),
-        "linear" => Some(FillMode::Linear),
-        "radial" => Some(FillMode::Radial),
+        "none" => Some(MarkerShape::None),
+        "arrow" => Some(MarkerShape::Arrow),
+        "dot" => Some(MarkerShape::Dot),
         _ => None,
     }
 }
 
-/// Parses a stop position field: a percent from 0 to 100 with an optional
-/// trailing `%` and either decimal mark, stored as the fraction typed (the
-/// panel shows one decimal at most).
-///
-/// # Errors
-/// [`StyleEntryError::Percent`] for text that is not a number from 0 to 100.
-pub fn parse_position_percent(text: &str) -> Result<StopPosition, StyleEntryError> {
-    let trimmed = text.trim();
-    let number = trimmed.strip_suffix('%').unwrap_or(trimmed);
-    let value = parse_entry_number(number, false).ok_or(StyleEntryError::Percent)?;
-    if !(0.0..=100.0).contains(&value) {
-        return Err(StyleEntryError::Percent);
-    }
-    // `+ 0.0` turns a negative zero into zero.
-    StopPosition::new(value / 100.0 + 0.0).map_err(|_| StyleEntryError::Percent)
-}
-
-/// A value of a gradient stop edited with typed text or a drag.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StopField {
-    /// Where the stop sits along the gradient.
-    Position,
-    /// The stop's colour.
-    Color,
-    /// The stop's own opacity.
-    Opacity,
-}
-
-impl StopField {
-    /// The field named by the host (`"position"`, `"color"`, `"opacity"`).
-    #[must_use]
-    pub fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "position" => Some(Self::Position),
-            "color" => Some(Self::Color),
-            "opacity" => Some(Self::Opacity),
-            _ => None,
-        }
-    }
-
-    /// The change that typing `text` commits.
-    ///
-    /// # Errors
-    /// The parse error of the field's own kind of value.
-    pub fn parse_text(self, text: &str) -> Result<StopChange, StyleEntryError> {
-        Ok(match self {
-            Self::Position => StopChange::Position(parse_position_percent(text)?),
-            Self::Color => StopChange::Color(parse_hex(text)?),
-            Self::Opacity => StopChange::Opacity(parse_opacity_percent(text)?),
-        })
-    }
-
-    /// The change a drag tick makes: `value` is a percent for a position and an
-    /// opacity, `0xRRGGBB` for a colour.
-    #[must_use]
-    pub fn drag_change(self, value: f64) -> StopChange {
-        match self {
-            // To 0.1 %: a position set by the pointer or a key is a round number.
-            Self::Position => StopChange::Position(
-                StopPosition::new(((value * 10.0).round() / 1000.0).clamp(0.0, 1.0))
-                    .unwrap_or(StopPosition::START),
-            ),
-            Self::Color => {
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let rgb = value.clamp(0.0, f64::from(0x00FF_FFFF_u32)) as u32;
-                StopChange::Color(Color {
-                    r: ((rgb >> 16) & 0xFF) as u8,
-                    g: ((rgb >> 8) & 0xFF) as u8,
-                    b: (rgb & 0xFF) as u8,
-                })
-            }
-            Self::Opacity => StopChange::Opacity(opacity_from_percent(value)),
-        }
+/// Parses the host's Place word (`"spaced"`, `"nodes"`).
+#[must_use]
+pub fn marker_place_from_name(name: &str) -> Option<MarkerPlace> {
+    match name {
+        "spaced" => Some(MarkerPlace::Spaced),
+        "nodes" => Some(MarkerPlace::AtNodes),
+        _ => None,
     }
 }

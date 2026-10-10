@@ -94,6 +94,7 @@ impl Session {
         } else {
             self.viewport.pan_by_screen_delta(delta_x, delta_y);
         }
+        self.refresh_colour_pick_hover(screen_x, screen_y);
     }
 
     /// Starts a drag-pan gesture (middle-mouse or Space+primary,
@@ -110,6 +111,7 @@ impl Session {
     /// keeping its anchor document point exactly under the live cursor.
     pub fn pan_to(&mut self, screen_x: f64, screen_y: f64) {
         self.viewport.continue_drag_pan(screen_x, screen_y);
+        self.refresh_colour_pick_hover(screen_x, screen_y);
     }
 
     /// Ends the drag-pan gesture, if one is in flight.

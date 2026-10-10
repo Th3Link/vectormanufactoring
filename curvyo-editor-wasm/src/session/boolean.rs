@@ -64,6 +64,7 @@ impl Session {
             return BooleanOutcome::Ignored;
         }
         self.flush_select_bar_preview();
+        self.end_colour_pick();
         let objects = self.objects();
         let selection = self.boolean_selection();
         let plan = match plan_boolean(&objects, &selection, op, &mut self.minter) {

@@ -19,10 +19,14 @@ mod boolean;
 mod break_apart;
 mod close_path;
 mod closing_join;
+mod colour_hsv;
+mod colour_pick;
 mod combine;
 mod conversion;
+mod dash_text;
 mod display_unit_text;
 mod document_fit;
+mod document_presets_view;
 mod ellipse_tool;
 mod hit_test;
 mod hit_test_object;
@@ -54,13 +58,13 @@ mod style_edit;
 mod style_entry;
 mod style_panel;
 mod style_scope;
-mod style_stops;
 mod transform_commit;
 mod transform_drag;
 mod transform_entry;
 mod transform_handle_layout;
 mod transform_math;
 mod transform_primitive;
+mod value_scale;
 mod viewport;
 
 pub use anchor_id_minter::AnchorIdMinter;
@@ -73,16 +77,22 @@ pub use close_path::{
     ClosableCounts, ClosePlan, closable_counts, close_path_set, plan_close_paths,
 };
 pub use closing_join::{JoinType, resolve_closing_node};
+pub use colour_hsv::{Hsv, hsv_to_rgb, rgb_to_hsv};
+pub use colour_pick::{PaintTarget, PickedColour, pick_colour};
 pub use combine::{
     COMBINE_COMMIT_LABEL, CombinePlan, CombineRefusal, PathAvailability, path_availability,
     plan_combine,
 };
 pub use conversion::build_primitive_conversions;
+pub use dash_text::{MAX_DASH_NUMBER, MAX_DASH_NUMBERS, dash_text, parse_dash_text};
 pub use display_unit_text::{
     content_too_large_message, document_side_message, format_cursor, format_field_length,
     format_size, format_status_length, parse_document_side,
 };
 pub use document_fit::fit_document_to_content;
+pub use document_presets_view::{
+    PresetEntry, PresetGroupView, PresetsView, orientation_swap, preset_pick_size, presets_view,
+};
 pub use ellipse_tool::EllipseTool;
 pub use hit_test::{Hit, hit_test};
 pub use hit_test_object::{hit_test_object, hit_test_objects, hit_test_objects_along};
@@ -130,16 +140,15 @@ pub use skew_entry::SkewEntry;
 pub use skew_math::{SkewFrame, skew_angle, skew_factor, skew_frame};
 pub use style_edit::StyleEditor;
 pub use style_entry::{
-    MAX_STROKE_WIDTH_MM, StopField, StyleEntryError, StyleField, cap_from_name,
-    fill_mode_from_name, join_from_name, opacity_from_percent, parse_hex, parse_opacity_percent,
-    parse_position_percent, parse_stroke_width,
+    HexColour, MAX_STROKE_WIDTH_MM, MarkerSlot, StyleEntryError, StyleField, cap_from_name,
+    hex_text, join_from_name, marker_place_from_name, marker_shape_from_name, opacity_from_percent,
+    parse_hex, parse_marker_count, parse_opacity_percent, parse_stroke_width,
 };
-pub use style_panel::{DashChoice, FillPanel, StrokePanel, StylePanelState, style_panel_state};
+pub use style_panel::{
+    DashChoice, DashShown, FillPanel, MarkersPanel, Rgba, StrokePanel, StylePanelState,
+    style_panel_state,
+};
 pub use style_scope::{StyleScope, StyleTool, style_scope};
-pub use style_stops::{
-    BarStop, NewStop, StopEditorView, StopRowView, StopsPanel, fill_targets, new_stop_values,
-    selected_rank, stop_edits, stop_targets, stops_panel,
-};
 pub use transform_drag::{
     CornerLinking, CornerRadiusScaling, ParamDragInfo, ScaleModes, StrokeScaling,
 };
@@ -157,4 +166,5 @@ pub use transform_math::{
     resize_local_box, rotate_delta_angle, rotate_delta_for, rotate_pivot, scaled_and_floored,
     stroke_or_radius_factor,
 };
+pub use value_scale::{FieldShown, Grid, ValueField, ValueScale};
 pub use viewport::{DOCUMENT_INSET_PX, PX_PER_MM_AT_100, Viewport, Zoom};

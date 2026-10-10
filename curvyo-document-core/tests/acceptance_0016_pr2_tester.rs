@@ -181,20 +181,25 @@ fn open_edited(edit: impl FnOnce(&LoroMap)) -> Result<Document, OpenError> {
 // =====================================================================
 
 #[test]
-fn ac37_current_format_version_is_8_and_pack_stamps_it() {
-    assert_eq!(CURRENT_FORMAT_VERSION, 8);
+fn ac37_pack_stamps_the_current_format_version() {
     let d = Document::new(1);
-    assert_eq!(manifest_version(&pack(&d, "t").unwrap()), 8);
+    assert_eq!(
+        manifest_version(&pack(&d, "t").unwrap()),
+        u64::from(CURRENT_FORMAT_VERSION)
+    );
 }
 
 #[test]
 fn ac37_a_file_newer_than_this_build_is_refused_as_too_new() {
     let d = Document::new(1);
     let l = d.export_loro_snapshot().unwrap();
-    let bytes = container(9, &l, b"{}");
+    let bytes = container(CURRENT_FORMAT_VERSION + 1, &l, b"{}");
     match unpack(2, &bytes) {
         Err(OpenError::FormatTooNew { found, supported }) => {
-            assert_eq!((found, supported), (9, 8));
+            assert_eq!(
+                (found, supported),
+                (CURRENT_FORMAT_VERSION + 1, CURRENT_FORMAT_VERSION)
+            );
         }
         other => panic!("expected FormatTooNew, got {:?}", other.map(|_| ())),
     }
@@ -469,7 +474,7 @@ fn ac37_earlier_fixtures_open_unchanged_and_opening_writes_nothing() {
         "paths_v2.curvyo",
         "primitives_v3.curvyo",
         "rotation_v5.curvyo",
-        "styles_v7.curvyo",
+        "legacy_gradient_v7.curvyo",
         "display_unit_in_v7.curvyo",
         "legacy_corner_radius_v5.curvyo",
         "valid.curvyo",

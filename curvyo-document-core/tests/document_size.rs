@@ -46,8 +46,7 @@ fn every_earlier_golden_opens_at_a4_in_mm() {
         "rotation_v5.curvyo",
         "legacy_corner_radius_v5.curvyo",
         "corner_radii_per_corner.curvyo",
-        "styles_v7.curvyo",
-        "styles_v7_mergeable_stops.curvyo",
+        "legacy_gradient_v7.curvyo",
     ] {
         let document = unpack(2, &fixture(name)).unwrap_or_else(|e| panic!("{name}: {e:?}"));
         assert_eq!(

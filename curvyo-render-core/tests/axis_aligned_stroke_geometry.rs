@@ -37,7 +37,6 @@ fn two_node_path(a: Point, b: Point) -> Document {
 fn draw(snapshot: curvyo_document_core::PathSnapshot) -> DrawList {
     build_artwork(
         &[curvyo_document_core::ObjectSnapshot::Path(snapshot)],
-        &[],
         curvyo_document_core::ViewTransform::identity(),
     )
 }

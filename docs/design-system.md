@@ -860,11 +860,11 @@ selection by dragging; a slightly logarithmic scale for Width and Opacity.
 | Hover | Border `--toolbar-icon` at 100% (8.3:1). The bar does not change (a darker tint would put the unit below 4.5:1) |
 | Focus | The panel's focus ring: 2px `--editor-accent` with a 1px `--toolbar-bg` offset, `focus-visible` only |
 | Drag | Pointer captured; the cursor stays `ew-resize` in the whole window until release; with Shift or Ctrl down, the muted 12px word "coarse" or "fine" shows centred in the field (`aria-hidden`); no tooltip while dragging |
-| Typing | Bar hidden, border 2px `--editor-accent`, number selected, unit stays, text right-aligned where the value was, cursor `text`. Invalid: border `--field-invalid` |
+| Typing | Bar hidden, border 2px `--editor-accent`, number selected, unit stays, text right-aligned where the value was, cursor `text`. The label is not drawn while typing (the input covers the box; the accessible name stays; decided 2026-10-10). Invalid: border `--field-invalid` |
 | Mixed | "Mixed" in `--field-placeholder` in place of value and unit; no bar; reset icon shown |
 | Disabled | Does not exist |
 | Mapping | `p` is 0 at the left end, 1 at the right end. Width (mm): `v = 20 (100^p - 1) / 99`, inverse `p = ln(1 + 99 v / 20) / ln 100`, drag 0 to 20, typed 0 to 1000, grid 0.01 (Shift 0.1, Ctrl 0.001). Opacity (%): `v = 100 (4^p - 1) / 3`, inverse `p = ln(1 + 3 v / 100) / ln 4`, integers. Count: linear, `p = (v - 1) / 49`, drag 1 to 50, typed 1 to 500. A value above the drag maximum draws a full bar |
-| Modifiers | Shift: `p` moves ten times as fast (arrow keys: step x10). Ctrl (Cmd on macOS): ten times slower (step never below the grid). Same keys for mouse and keyboard. Value is `clamp(p0 + dx / W)` from the press, no re-basing at the ends; a modifier change mid-drag re-bases |
+| Modifiers | Shift: `p` moves ten times as fast (arrow keys: step x10). Ctrl (Cmd on macOS): ten times slower (step never below the grid). Same keys for mouse and keyboard. Value is `clamp(p0 + dx / W)` from the press, no re-basing at the ends; a modifier change mid-drag re-bases. A Mixed field has no `p0`: the drag is absolute, `p = (x - left) / W`, and stays so for the whole gesture even though the preview makes the objects equal after the first tick (`lib/dragPosition.ts`). Shift on an arrow key steps ten times and then rounds to the Shift grid, so 97 % goes to 90 %, not 87 % (it lands on round numbers; decided 2026-10-10) |
 | Keys | Arrows step on the grid (preview on key-down, one commit on key-up); Home / End: scale minimum / end; Enter, F2, a digit, `.`, `,`, `-` start typing; `Ctrl+Backspace` (Cmd on macOS) resets; Backspace and Delete alone do nothing and never reach the canvas |
 | Semantics | `aria-label` "Stroke width" (contains the visible "Width"), `aria-valuemin`, `aria-valuemax` (typed maximum), `aria-valuenow`, `aria-valuetext` ("0.25 millimetres", "50 percent", "3 markers"; Mixed: "Mixed", no `valuenow`), `aria-keyshortcuts="Control+Backspace"` |
 | Tooltip | "Drag to change, click to type. Shift: coarse. Ctrl: fine. Ctrl+Backspace: reset." (Cmd on macOS) |
@@ -899,8 +899,8 @@ every colour. No alpha slider. The picker keeps its own HSV state and re-derives
 it from the stored colour only when the colour changed from outside it, so the
 hue does not jump through greys; mixed colours show no thumb. A press on the area
 moves the thumb to the press point. Arrow keys 1 % (Shift 10 %), preview on
-key-down, commit on key-up. Built on `react-colorful`'s saturation and hue parts
-(MIT, as chosen for `0007`); its alpha part is not used.
+key-down, commit on key-up. Our own component (no colour-picker dependency): the area
+and the hue ramp are drawn from Rust's HSV conversion; there is no alpha part.
 
 **`ToggleGroup` item.** 40px wide (Join, Cap, marker choices), 44px (Paint, Dash
 presets), 28px high; icon 16px, 1.5px absolute stroke; the group is one 1px
@@ -924,7 +924,7 @@ period is under 2 screen px draws solid. The group's tooltip carries the note
 "Patterns scale with the stroke width and draw solid when too small to see". A
 list that equals no preset leaves all four unpressed and shows its numbers in
 the Pattern line; there is no "Custom" entry. Pattern line: numbers separated by
-spaces, commas or both, 1 to 16 numbers from 0 to 1000, shown back as numbers
+spaces (a comma is refused with the error chip), 1 to 16 numbers from 0 to 1000, shown back as numbers
 with one space ("1 2 4 2"); tooltip "Lengths in multiples of the stroke width: on,
 off, on, off. Example: 1 2 4 2".
 

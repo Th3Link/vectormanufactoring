@@ -226,10 +226,14 @@ fn ac14a_a_selection_shows_style_and_escape_reveals_the_document_section() {
         Tool::Node,
     ] {
         s.set_tool(tool);
-        let want = if s.selected_object_count() > 0 {
-            PanelContent::Style
-        } else {
+        // The Node tool styles paths only (`0017` criterion 1): a rectangle in
+        // the selection leaves the body empty.
+        let want = if s.selected_object_count() == 0 {
             PanelContent::Document
+        } else if tool == Tool::Node {
+            PanelContent::Empty
+        } else {
+            PanelContent::Style
         };
         assert_eq!(s.panel_content(), want, "{tool:?}");
         s.set_tool(Tool::Select);

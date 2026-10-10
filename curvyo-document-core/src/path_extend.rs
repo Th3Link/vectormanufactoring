@@ -12,9 +12,8 @@ use crate::path_codec::{
     KEY_HANDLE_IN, KEY_HANDLE_OUT, KEY_POINT, anchor_index, anchor_map_at, insert_anchor_at,
     read_vec2, write_closed, write_kind, write_point, write_vec2,
 };
-use crate::path_model::{
-    AnchorId, AnchorSnapshot, NewAnchor, NodeId, PathEditError, PathSnapshot, reversed_anchors,
-};
+use crate::path_model::{AnchorId, AnchorSnapshot, NewAnchor, NodeId, PathEditError, PathSnapshot};
+use crate::path_reverse::reversed_anchors;
 
 /// One end of an open path's anchor list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,0 +1,98 @@
+# Document size presets: the buttons of the Document section of the Properties
+# panel (`specs/0030-document-size-presets/`). Add a format by adding one
+# `[[group.preset]]` block to a group; nothing else needs changing. A test loads
+# this file, so a mistake fails the quality gate, not the maker's machine.
+#
+# Sizes are given as `short_side` and `long_side`: a preset has no orientation of
+# its own (the group has a default, the document has a current one).
+# `unit` is `mm`, `in` or `px`; a pixel is 1/96 inch (25.4 / 96 mm).
+
+format = 1                      # schema version of this file; a reader refuses another
+
+[[group]]
+id = "paper"
+name = "Paper"                  # heading in the panel
+default_orientation = "portrait"
+
+  [[group.preset]]
+  id = "a0"                     # stable, lower case; never shown
+  name = "A0"                   # label on the button, 24 characters at most
+  note = "ISO 216"              # optional, shown in the tooltip
+  short_side = 841
+  long_side = 1189
+  unit = "mm"
+
+  [[group.preset]]
+  id = "a1"
+  name = "A1"
+  note = "ISO 216"
+  short_side = 594
+  long_side = 841
+  unit = "mm"
+
+  [[group.preset]]
+  id = "a2"
+  name = "A2"
+  note = "ISO 216"
+  short_side = 420
+  long_side = 594
+  unit = "mm"
+
+  [[group.preset]]
+  id = "a3"
+  name = "A3"
+  note = "ISO 216"
+  short_side = 297
+  long_side = 420
+  unit = "mm"
+
+  [[group.preset]]
+  id = "a4"
+  name = "A4"
+  note = "ISO 216"
+  short_side = 210
+  long_side = 297
+  unit = "mm"
+
+  [[group.preset]]
+  id = "a5"
+  name = "A5"
+  note = "ISO 216"
+  short_side = 148
+  long_side = 210
+  unit = "mm"
+
+  [[group.preset]]
+  id = "a6"
+  name = "A6"
+  note = "ISO 216"
+  short_side = 105
+  long_side = 148
+  unit = "mm"
+
+[[group]]
+id = "slides"
+name = "Slides"
+default_orientation = "landscape"
+
+  [[group.preset]]
+  id = "slide-16-9"
+  name = "16:9"
+  note = "Full HD"
+  short_side = 1080
+  long_side = 1920
+  unit = "px"
+
+  [[group.preset]]
+  id = "slide-16-10"
+  name = "16:10"
+  short_side = 1200
+  long_side = 1920
+  unit = "px"
+
+  [[group.preset]]
+  id = "slide-4-3"
+  name = "4:3"
+  short_side = 768
+  long_side = 1024
+  unit = "px"

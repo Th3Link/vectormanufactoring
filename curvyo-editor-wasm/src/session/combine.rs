@@ -66,6 +66,7 @@ impl Session {
             return CombineOutcome::Ignored;
         }
         self.flush_select_bar_preview();
+        self.end_colour_pick();
         let objects = self.objects();
         let selection = self.boolean_selection();
         let plan = match plan_combine(&objects, &selection, &mut self.minter) {
@@ -116,6 +117,7 @@ impl Session {
             return BreakApartOutcome::Ignored;
         }
         self.flush_select_bar_preview();
+        self.end_colour_pick();
         let objects = self.objects();
         let selection = self.boolean_selection();
         let plan = match plan_break_apart(&objects, &selection, &mut self.minter) {

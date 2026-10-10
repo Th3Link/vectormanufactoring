@@ -15,17 +15,13 @@
 #![allow(clippy::similar_names, clippy::doc_markdown, missing_docs)]
 #![allow(clippy::type_complexity, clippy::needless_pass_by_value)]
 
-use std::io::{Cursor, Write};
-
 use curvyo_document_core::{
-    AnchorId, AnchorKind, Angle, CURRENT_FORMAT_VERSION, CURRENT_LORO_SNAPSHOT_VERSION, Color,
-    Document, EllipseFrame, FillMode, FillModeTarget, GradientStop, InnerRatio, Length, NewAnchor,
-    NodeId, ObjectSnapshot, Opacity, Point, PointCount, RectBounds, Shape, StarFrame, StopId,
-    StopPosition, StyleEdit, Vec2, pack, unpack,
+    AnchorId, AnchorKind, Angle, Color, Document, EllipseFrame, InnerRatio, Length, NewAnchor,
+    NodeId, ObjectSnapshot, Opacity, Point, PointCount, RectBounds, Shape, StarFrame, StyleEdit,
+    Vec2, pack, unpack,
 };
 use curvyo_editor_wasm::{Session, Tool};
 use curvyo_render_core::DrawList;
-use loro::{LoroDoc, LoroMap};
 
 // ---------------------------------------------------------------- helpers
 
@@ -106,34 +102,7 @@ fn fill(d: &Document, id: NodeId) {
 fn fill_with(d: &Document, id: NodeId, c: Color, a: f64) {
     d.edit_style(&[id], &StyleEdit::FillColor(c)).unwrap();
     d.edit_style(&[id], &StyleEdit::FillOpacity(op(a))).unwrap();
-    d.set_fill_mode(
-        FillMode::Solid,
-        &[FillModeTarget {
-            id,
-            seed_stops: vec![],
-        }],
-    )
-    .unwrap();
-}
-
-fn stop(n: u64, p: f64) -> GradientStop {
-    GradientStop {
-        id: StopId::new(9, n),
-        position: StopPosition::new(p).unwrap(),
-        color: rgb(0, 0, 255),
-        opacity: op(1.0),
-    }
-}
-
-fn gradient(d: &Document, id: NodeId, mode: FillMode) {
-    d.set_fill_mode(
-        mode,
-        &[FillModeTarget {
-            id,
-            seed_stops: vec![stop(1, 0.0), stop(2, 1.0)],
-        }],
-    )
-    .unwrap();
+    d.edit_style(&[id], &StyleEdit::FillEnabled(true)).unwrap();
 }
 
 fn no_stroke(d: &Document, id: NodeId) {
@@ -350,106 +319,10 @@ fn ac23_opacity_zero_still_counts_as_filled_and_a_hollow_fill_mode_none_does_not
     pick(&mut s, pt(30.0, 20.0));
     assert_eq!(selected(&s), "rect");
     // Fill switched to None again.
-    d.set_fill_mode(
-        FillMode::None,
-        &[FillModeTarget {
-            id: r,
-            seed_stops: vec![],
-        }],
-    )
-    .unwrap();
+    d.edit_style(&[r], &StyleEdit::FillEnabled(false)).unwrap();
     let mut s = open(&d);
     pick(&mut s, pt(30.0, 20.0));
     assert_eq!(selected(&s), "none");
-}
-
-#[test]
-fn ac23_linear_and_radial_fills_count_as_filled() {
-    for mode in [FillMode::Linear, FillMode::Radial] {
-        let d = Document::new(1);
-        let r = rect(&d, 0.0, 0.0, 60.0, 40.0);
-        gradient(&d, r, mode);
-        let mut s = open(&d);
-        pick(&mut s, pt(30.0, 20.0));
-        assert_eq!(selected(&s), "rect", "{mode:?}");
-    }
-}
-
-/// A container whose only rectangle is in linear gradient mode with exactly
-/// these stops (built through the Loro registers, as a peer's merge could).
-fn with_stops(stops: &[(u64, f64)]) -> Vec<u8> {
-    let d = Document::new(1);
-    let _ = rect(&d, 0.0, 0.0, 60.0, 40.0);
-    let loro = LoroDoc::new();
-    loro.import(&d.export_loro_snapshot().unwrap()).unwrap();
-    let tree = loro.get_tree("paths");
-    let meta = tree.get_meta(tree.roots()[0]).unwrap();
-    meta.insert("fill_enabled", true).unwrap();
-    meta.insert("fill_kind", "linear").unwrap();
-    let list = meta.ensure_mergeable_movable_list("fill_stops").unwrap();
-    for (n, p) in stops {
-        let m = list.push_container(LoroMap::new()).unwrap();
-        m.insert("id", StopId::new(5, *n).to_hex()).unwrap();
-        m.insert("position", *p).unwrap();
-        m.insert(
-            "color",
-            loro::LoroValue::from(vec![
-                loro::LoroValue::from(0_i64),
-                loro::LoroValue::from(0_i64),
-                loro::LoroValue::from(255_i64),
-            ]),
-        )
-        .unwrap();
-        m.insert("opacity", 1.0).unwrap();
-    }
-    loro.commit();
-    let bytes = loro.export(loro::ExportMode::Snapshot).unwrap();
-    let manifest = serde_json::json!({
-        "format_version": CURRENT_FORMAT_VERSION,
-        "loro_snapshot_version": CURRENT_LORO_SNAPSHOT_VERSION,
-        "app_version": "tester",
-    });
-    let mut w = zip::ZipWriter::new(Cursor::new(Vec::new()));
-    let o = zip::write::SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
-    for (name, b) in [
-        ("manifest.json", serde_json::to_vec(&manifest).unwrap()),
-        ("document.loro", bytes),
-        ("document.json", b"{}".to_vec()),
-    ] {
-        w.start_file(name, o).unwrap();
-        w.write_all(&b).unwrap();
-    }
-    w.finish().unwrap().into_inner()
-}
-
-#[test]
-fn ac35_a_gradient_with_no_stops_is_not_clickable_and_with_one_or_many_stops_it_is() {
-    for (stops, clickable) in [
-        (vec![], false),
-        (vec![(1, 0.5)], true),
-        (vec![(1, 0.0), (2, 1.0)], true),
-        ((1..=20).map(|n| (n, n as f64 / 20.0)).collect(), true),
-    ] {
-        let bytes = with_stops(&stops);
-        let Ok(mut s) = Session::open(2, &bytes) else {
-            panic!("a document with {} stops must open", stops.len());
-        };
-        s.set_tool(Tool::Select);
-        click(&mut s, pt(30.0, 20.0));
-        assert_eq!(
-            selected(&s) == "rect",
-            clickable,
-            "{} stops: interior click",
-            stops.len()
-        );
-        // And nothing is painted for 0 stops, a flat colour for 1 stop.
-        let list = s.draw_list();
-        let centre = composite_at(&list, pt(30.0, 20.0));
-        if stops.is_empty() {
-            assert!(near(centre, 255.0, 255.0, 255.0), "0 stops paint nothing");
-        }
-    }
 }
 
 #[test]

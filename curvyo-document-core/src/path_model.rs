@@ -175,7 +175,7 @@ pub enum HandleSlot {
 
 /// An RGB color, 8 bits per channel.
 ///
-/// Alpha is not part of it: stroke, fill and each gradient stop carry their
+/// Alpha is not part of it: stroke and fill carry their
 /// own [`crate::Opacity`] (`specs/0007-stroke-and-fill-styling/adrs.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Color {
@@ -489,22 +489,6 @@ pub enum PathEditError {
     /// so a clash with an unrelated object cannot arise in a session.
     #[error("an anchor id is used twice")]
     DuplicateAnchorId,
-}
-
-/// `anchors` in the opposite order, each anchor's incoming and outgoing handle swapped: the same
-/// outline walked the other way (`specs/0006-path-merge-split-and-node-types` criterion 9, the
-/// rule of Join; `0034-pen-path-extension` criteria 4 and 8).
-#[must_use]
-pub fn reversed_anchors(anchors: &[NewAnchor]) -> Vec<NewAnchor> {
-    anchors
-        .iter()
-        .rev()
-        .map(|anchor| NewAnchor {
-            handle_in: anchor.handle_out,
-            handle_out: anchor.handle_in,
-            ..*anchor
-        })
-        .collect()
 }
 
 #[cfg(test)]

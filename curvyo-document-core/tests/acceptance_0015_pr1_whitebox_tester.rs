@@ -280,7 +280,7 @@ fn older_files_export_exactly_what_the_previous_build_exported() {
     let baseline: serde_json::Value =
         serde_json::from_slice(&fixture("baseline_pre_0015_export.json")).unwrap();
     let map = baseline.as_object().unwrap();
-    assert_eq!(map.len(), 9);
+    assert_eq!(map.len(), 8);
     for (name, old) in map {
         let d = unpack(2, &fixture(name)).unwrap();
         let mut now: serde_json::Value = serde_json::from_slice(&d.export_json().unwrap()).unwrap();

@@ -65,10 +65,11 @@ impl Session {
     }
 
     /// What a Pen press at the pointer would do now: while a press is down, what it was decided
-    /// to do; otherwise the live target. `None` outside the Pen tool or off the canvas.
+    /// to do; otherwise the live target. `None` outside the Pen tool, off the canvas and while the
+    /// eyedropper is picking (the pointer is picking a colour, not aiming a press).
     #[must_use]
     pub fn pen_target(&self) -> Option<PenTarget> {
-        if self.tool != Tool::Pen {
+        if self.tool != Tool::Pen || self.colour_pick_target().is_some() {
             return None;
         }
         if self.button_down {

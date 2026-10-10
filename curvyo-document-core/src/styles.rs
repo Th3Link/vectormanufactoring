@@ -1,10 +1,8 @@
-//! `Document`'s style commands (`specs/0007-stroke-and-fill-styling/adrs.md`,
-//! "register granularity", "the gradient stop model" and "interaction
-//! commits"): one style-field edit over several objects, the fill-mode
-//! switch, and add, remove and edit for gradient stops. Every command
-//! resolves all its ids before the first write, so one stale id refuses the
-//! whole call, writes nothing only where a value actually changes, and ends
-//! in at most one commit.
+//! `Document`'s style command (`specs/0007-stroke-and-fill-styling/adrs.md`,
+//! "register granularity" and "interaction commits"): one style-field edit over
+//! several objects. It resolves all its ids before the first write, so one stale
+//! id refuses the whole call, writes only where a value actually changes, and
+//! ends in at most one commit.
 
 use std::collections::HashSet;
 
@@ -14,20 +12,12 @@ use crate::document::{Document, OBJECTS_TREE};
 use crate::path_codec::node_exists;
 use crate::path_model::{Color, NodeId};
 use crate::paths::tree_id_of;
-use crate::style_codec::{
-    insert_stop_at, read_stop, read_style, stop_index, stop_map_at, stops_list, write_changes,
-    write_stop_color, write_stop_opacity, write_stop_position, write_stops,
-};
+use crate::shape_codec::{ShapeTag, read_shape_tag_checked};
+use crate::style_codec::{read_style, write_changes};
 use crate::style_model::{
-    DashPattern, GradientStop, LineCap, LineJoin, Opacity, StopId, StopPosition, Style,
+    DashPattern, LineCap, LineJoin, MarkerCount, MarkerPlace, MarkerShape, Opacity, Style,
 };
 use crate::units::Length;
-
-/// The most stops the add command lets a gradient reach (acceptance
-/// criterion 16: an edit-time limit, not a stored invariant).
-pub const MAX_GRADIENT_STOPS: usize = 16;
-/// The fewest stops the remove command leaves a gradient with.
-pub const MIN_GRADIENT_STOPS: usize = 2;
 
 /// Why a style command refused to apply. Every variant describes a caller
 /// error against a snapshot that is already stale (ADR 0009 §2), or an edit
@@ -37,32 +27,22 @@ pub enum StyleEditError {
     /// No object with this id exists any more.
     #[error("no such object")]
     NoSuchObject,
-    /// The object has no stop with this id.
-    #[error("no such gradient stop")]
-    NoSuchStop,
     /// A stroke width must be finite and not negative (zero turns the
     /// stroke off).
     #[error("stroke width must be zero or greater")]
     InvalidWidth,
-    /// Adding would pass [`MAX_GRADIENT_STOPS`].
-    #[error("A gradient holds at most 16 stops")]
-    TooManyStops,
-    /// Removing would leave fewer than [`MIN_GRADIENT_STOPS`].
-    #[error("A gradient keeps at least 2 stops")]
-    TooFewStops,
-    /// The object has no stop list: only the fill-mode switch and Split create
-    /// one, so a stop cannot be added to an object that never had a gradient.
-    #[error("this object has no gradient stops to add to")]
-    NoStopList,
-    /// The object already has a stop with the id being added.
-    #[error("a stop with this id already exists")]
-    DuplicateStop,
+    /// A marker edit names a primitive: markers belong to paths only
+    /// (`specs/0018-stroke-markers` criteria 21 and 22). The whole call is
+    /// refused.
+    #[error("markers can only be set on paths")]
+    NotAPath,
 }
 
 /// One style property change. Applied to each target object on its own, so
-/// every other property of each object stays as it was (acceptance criterion
-/// 24). Editing the stroke colour, opacity or width turns a stroke that is
-/// off back on in the same commit.
+/// every other property of each object stays as it was (`0007` acceptance
+/// criterion 24). Editing the stroke colour, opacity or width turns a stroke
+/// that is off back on in the same commit; a fill is turned on only by
+/// [`StyleEdit::FillEnabled`] (`0017` criteria 9 and 15).
 #[derive(Debug, Clone, PartialEq)]
 pub enum StyleEdit {
     /// The Paint switch of the stroke. Off keeps every other stroke value.
@@ -72,6 +52,9 @@ pub enum StyleEdit {
     StrokeWidth(Length),
     /// The stroke colour; also switches the stroke on.
     StrokeColor(Color),
+    /// The stroke colour and opacity in one write (an 8-digit hex, a pick from
+    /// the drawing); also switches the stroke on.
+    StrokeRgba(Color, Opacity),
     /// The stroke opacity; also switches the stroke on.
     StrokeOpacity(Opacity),
     /// The dash pattern, as multiples of the width.
@@ -80,10 +63,24 @@ pub enum StyleEdit {
     StrokeJoin(LineJoin),
     /// The cap style.
     StrokeCap(LineCap),
-    /// The solid fill colour.
+    /// The Paint switch of the fill. Off keeps the colour and opacity.
+    FillEnabled(bool),
+    /// The solid fill colour. Never turns the fill on.
     FillColor(Color),
-    /// The solid fill opacity.
+    /// The solid fill colour and opacity in one write. Never turns the fill on.
+    FillRgba(Color, Opacity),
+    /// The solid fill opacity. Never turns the fill on.
     FillOpacity(Opacity),
+    /// The shape of the Start marker (a path only).
+    MarkerStart(MarkerShape),
+    /// The shape of the Middle marker (a path only).
+    MarkerMid(MarkerShape),
+    /// The shape of the End marker (a path only).
+    MarkerEnd(MarkerShape),
+    /// Where the Middle marker goes (a path only).
+    MarkerPlace(MarkerPlace),
+    /// How many Middle markers a Spaced placement draws (a path only).
+    MarkerCount(MarkerCount),
 }
 
 impl StyleEdit {
@@ -115,6 +112,11 @@ impl StyleEdit {
                 stroke.color = *color;
                 stroke.enabled = true;
             }
+            Self::StrokeRgba(color, opacity) => {
+                stroke.color = *color;
+                stroke.opacity = *opacity;
+                stroke.enabled = true;
+            }
             Self::StrokeOpacity(opacity) => {
                 stroke.opacity = *opacity;
                 stroke.enabled = true;
@@ -122,62 +124,34 @@ impl StyleEdit {
             Self::StrokeDash(dash) => stroke.dash = dash.clone(),
             Self::StrokeJoin(join) => stroke.join = *join,
             Self::StrokeCap(cap) => stroke.cap = *cap,
+            Self::FillEnabled(on) => style.fill.enabled = *on,
             Self::FillColor(color) => style.fill.color = *color,
+            Self::FillRgba(color, opacity) => {
+                style.fill.color = *color;
+                style.fill.opacity = *opacity;
+            }
             Self::FillOpacity(opacity) => style.fill.opacity = *opacity,
+            Self::MarkerStart(shape) => stroke.markers.start = *shape,
+            Self::MarkerMid(shape) => stroke.markers.mid = *shape,
+            Self::MarkerEnd(shape) => stroke.markers.end = *shape,
+            Self::MarkerPlace(place) => stroke.markers.mid_place = *place,
+            Self::MarkerCount(count) => stroke.markers.mid_count = *count,
         }
         Ok(())
     }
-}
 
-/// What the fill-mode row of the panel offers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FillMode {
-    /// No fill; the stored colour, kind and stops stay.
-    None,
-    /// The stored solid colour.
-    Solid,
-    /// A linear gradient on the stored stops.
-    Linear,
-    /// A radial gradient on the stored stops.
-    Radial,
-}
-
-/// One object of a [`Document::set_fill_mode`] call, with the stops it gets
-/// if it has none yet (acceptance criterion 17; each object of a
-/// multi-selection takes its own, built from its own stored colour with
-/// [`GradientStop::default_pair`]). Ignored for `None` and `Solid` and for an
-/// object that already holds stops.
-#[derive(Debug, Clone, PartialEq)]
-pub struct FillModeTarget {
-    /// The object.
-    pub id: NodeId,
-    /// The stops to create when the object has none.
-    pub seed_stops: Vec<GradientStop>,
-}
-
-/// The one value of a stop a [`StopEdit`] changes.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum StopChange {
-    /// Move the stop along the gradient. The list order is not touched; the
-    /// render order is a stable sort by position.
-    Position(StopPosition),
-    /// Recolour the stop.
-    Color(Color),
-    /// Change the stop's own opacity.
-    Opacity(Opacity),
-}
-
-/// One stop edit: object, stop and change. A multi-selection edit passes one
-/// per object, each with that object's own `StopId` (the editor maps rank to
-/// id; this crate never addresses a stop by rank).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct StopEdit {
-    /// The object holding the stop.
-    pub id: NodeId,
-    /// The stop within that object's list.
-    pub stop: StopId,
-    /// What changes.
-    pub change: StopChange,
+    /// Whether this edit changes a marker setting, which only a path has.
+    #[must_use]
+    pub const fn is_marker_edit(&self) -> bool {
+        matches!(
+            self,
+            Self::MarkerStart(_)
+                | Self::MarkerMid(_)
+                | Self::MarkerEnd(_)
+                | Self::MarkerPlace(_)
+                | Self::MarkerCount(_)
+        )
+    }
 }
 
 impl Document {
@@ -188,10 +162,18 @@ impl Document {
     ///
     /// # Errors
     /// [`StyleEditError::NoSuchObject`] if any id is gone;
-    /// [`StyleEditError::InvalidWidth`] for a negative or non-finite width.
+    /// [`StyleEditError::InvalidWidth`] for a negative or non-finite width;
+    /// [`StyleEditError::NotAPath`] for a marker edit that names a primitive.
     /// Either refuses the whole call.
     pub fn edit_style(&self, ids: &[NodeId], edit: &StyleEdit) -> Result<(), StyleEditError> {
         let metas = self.style_metas(ids)?;
+        if edit.is_marker_edit()
+            && metas
+                .iter()
+                .any(|meta| !matches!(read_shape_tag_checked(meta), ShapeTag::Absent))
+        {
+            return Err(StyleEditError::NotAPath);
+        }
         let planned: Vec<(LoroMap, Style, Style)> = metas
             .into_iter()
             .map(|meta| {
@@ -207,165 +189,6 @@ impl Document {
         }
         if wrote {
             self.commit_with_label("edit_style");
-        }
-        Ok(())
-    }
-
-    /// Switches the fill mode of every target, in **one commit** (acceptance
-    /// criteria 13, 17, 24). Switching keeps every stored colour, opacity and
-    /// stop. A gradient mode on an object without stops creates its
-    /// `seed_stops`; linear and radial share one stop list.
-    ///
-    /// # Errors
-    /// [`StyleEditError::NoSuchObject`] if any id is gone, refusing the whole
-    /// call.
-    pub fn set_fill_mode(
-        &self,
-        mode: FillMode,
-        targets: &[FillModeTarget],
-    ) -> Result<(), StyleEditError> {
-        let ids: Vec<NodeId> = targets.iter().map(|t| t.id).collect();
-        let metas = self.style_metas(&ids)?;
-        let mut seen = HashSet::new();
-        let mut wrote = false;
-        for (target, meta) in targets.iter().filter(|t| seen.insert(t.id)).zip(&metas) {
-            let old = read_style(meta);
-            let mut new = old.clone();
-            match mode {
-                FillMode::None => new.fill.enabled = false,
-                FillMode::Solid => {
-                    new.fill.enabled = true;
-                    new.fill.kind = crate::style_model::FillKind::Solid;
-                }
-                FillMode::Linear | FillMode::Radial => {
-                    new.fill.enabled = true;
-                    new.fill.kind = if mode == FillMode::Linear {
-                        crate::style_model::FillKind::Linear
-                    } else {
-                        crate::style_model::FillKind::Radial
-                    };
-                }
-            }
-            wrote |= write_changes(meta, &old, &new);
-            let is_gradient = matches!(mode, FillMode::Linear | FillMode::Radial);
-            if is_gradient && old.fill.stops.is_empty() && !target.seed_stops.is_empty() {
-                write_stops(meta, &target.seed_stops);
-                wrote = true;
-            }
-        }
-        if wrote {
-            self.commit_with_label("set_fill_mode");
-        }
-        Ok(())
-    }
-
-    /// Adds `stop` to the object's gradient, in **one commit**, so that in
-    /// render order (position, ties in list order) it comes after every stop
-    /// whose position is not greater and before every stop whose position is
-    /// greater: a tie goes after the existing equal stops (acceptance criterion
-    /// 18). The stored list is not sorted (a position edit does not move a stop
-    /// in it), so the place is found from the list indices of the stops at or
-    /// before the position, not from the first greater stop in list order,
-    /// which would put the new stop in front of a coincident pair and change
-    /// the ramp. The caller chose the position, colour and opacity (the ramp's
-    /// own at that position).
-    ///
-    /// # Errors
-    /// [`StyleEditError::NoSuchObject`]; [`StyleEditError::NoStopList`] if the
-    /// object never had a gradient; [`StyleEditError::TooManyStops`] at 16 or
-    /// more stops; [`StyleEditError::DuplicateStop`] if the id is
-    /// already in the list.
-    pub fn add_stop(&self, id: NodeId, stop: GradientStop) -> Result<(), StyleEditError> {
-        let meta = self.style_meta(id)?;
-        let list = stops_list(&meta).ok_or(StyleEditError::NoStopList)?;
-        if list.len() >= MAX_GRADIENT_STOPS {
-            return Err(StyleEditError::TooManyStops);
-        }
-        if stop_index(&list, stop.id).is_some() {
-            return Err(StyleEditError::DuplicateStop);
-        }
-        // After the last listed stop at or before the position; the front when
-        // there is none. Stops listed before that one but further along the
-        // gradient stay after the new stop in render order.
-        let index = (0..list.len())
-            .rev()
-            .find(|&index| {
-                stop_map_at(&list, index)
-                    .and_then(|map| read_stop(&map))
-                    .is_some_and(|existing| existing.position.get() <= stop.position.get())
-            })
-            .map_or(0, |last| last + 1);
-        insert_stop_at(&list, index, &stop);
-        self.commit_with_label("add_stop");
-        Ok(())
-    }
-
-    /// Removes one stop, in **one commit** (acceptance criterion 19).
-    ///
-    /// # Errors
-    /// [`StyleEditError::NoSuchObject`]; [`StyleEditError::NoSuchStop`];
-    /// [`StyleEditError::TooFewStops`] when the gradient holds 2 stops or
-    /// fewer.
-    ///
-    /// # Panics
-    /// Does not panic in practice: the index deleted was just read from the
-    /// same list.
-    pub fn remove_stop(&self, id: NodeId, stop: StopId) -> Result<(), StyleEditError> {
-        let meta = self.style_meta(id)?;
-        let list = stops_list(&meta).ok_or(StyleEditError::NoSuchStop)?;
-        let index = stop_index(&list, stop).ok_or(StyleEditError::NoSuchStop)?;
-        if list.len() <= MIN_GRADIENT_STOPS {
-            return Err(StyleEditError::TooFewStops);
-        }
-        // invariant: `index` was just read from this same list.
-        #[allow(clippy::unwrap_used)]
-        list.delete(index, 1).unwrap();
-        self.commit_with_label("remove_stop");
-        Ok(())
-    }
-
-    /// Edits stop values, in **one commit** for the whole batch (acceptance
-    /// criteria 20, 34): only the named value of each named stop is written,
-    /// and only if it differs from the stored one. A batch that changes
-    /// nothing makes no commit.
-    ///
-    /// # Errors
-    /// [`StyleEditError::NoSuchObject`] or [`StyleEditError::NoSuchStop`] if
-    /// any target is gone, refusing the whole call.
-    pub fn edit_stops(&self, edits: &[StopEdit]) -> Result<(), StyleEditError> {
-        let resolved: Vec<(LoroMap, &StopEdit)> = edits
-            .iter()
-            .map(|edit| {
-                let meta = self.style_meta(edit.id)?;
-                let list = stops_list(&meta).ok_or(StyleEditError::NoSuchStop)?;
-                let index = stop_index(&list, edit.stop).ok_or(StyleEditError::NoSuchStop)?;
-                let map = stop_map_at(&list, index).ok_or(StyleEditError::NoSuchStop)?;
-                Ok((map, edit))
-            })
-            .collect::<Result<_, StyleEditError>>()?;
-        let mut wrote = false;
-        for (map, edit) in &resolved {
-            let Some(current) = read_stop(map) else {
-                continue;
-            };
-            match edit.change {
-                StopChange::Position(position) if current.position != position => {
-                    write_stop_position(map, position);
-                    wrote = true;
-                }
-                StopChange::Color(color) if current.color != color => {
-                    write_stop_color(map, color);
-                    wrote = true;
-                }
-                StopChange::Opacity(opacity) if current.opacity != opacity => {
-                    write_stop_opacity(map, opacity);
-                    wrote = true;
-                }
-                _ => {}
-            }
-        }
-        if wrote {
-            self.commit_with_label("edit_stops");
         }
         Ok(())
     }
@@ -496,6 +319,48 @@ mod tests {
         assert_eq!(counters(&document), before);
     }
 
+    /// `0017` criteria 9, 15: a stroke edit of colour, opacity or width turns an
+    /// off stroke on; a fill edit never turns a fill on; only Paint does.
+    #[test]
+    fn only_the_stroke_turns_itself_on_by_an_edit() {
+        let document = Document::new(1);
+        let a = rect(&document);
+        document
+            .edit_style(&[a], &StyleEdit::StrokeEnabled(false))
+            .unwrap();
+        document
+            .edit_style(
+                &[a],
+                &StyleEdit::StrokeRgba(red(), Opacity::new(0.5).unwrap()),
+            )
+            .unwrap();
+        let stroke = style_of(&document, a).stroke;
+        assert!(stroke.enabled);
+        assert_eq!((stroke.color, stroke.opacity.get()), (red(), 0.5));
+
+        document
+            .edit_style(&[a], &StyleEdit::FillColor(red()))
+            .unwrap();
+        document
+            .edit_style(
+                &[a],
+                &StyleEdit::FillRgba(Color::BLACK, Opacity::new(0.25).unwrap()),
+            )
+            .unwrap();
+        document
+            .edit_style(&[a], &StyleEdit::FillOpacity(Opacity::new(0.75).unwrap()))
+            .unwrap();
+        let fill = style_of(&document, a).fill;
+        assert!(!fill.enabled, "a colour edit leaves the fill off");
+        assert_eq!(fill.opacity.get(), 0.75);
+        document
+            .edit_style(&[a], &StyleEdit::FillEnabled(true))
+            .unwrap();
+        let fill = style_of(&document, a).fill;
+        assert!(fill.enabled);
+        assert_eq!((fill.color, fill.opacity.get()), (Color::BLACK, 0.75));
+    }
+
     #[test]
     fn a_duplicate_id_in_the_batch_is_applied_once() {
         let document = Document::new(1);
@@ -505,110 +370,5 @@ mod tests {
             .edit_style(&[a, a], &StyleEdit::StrokeColor(red()))
             .unwrap();
         assert_eq!(counters(&document).0 - ops, 1);
-    }
-
-    #[test]
-    fn set_fill_mode_and_the_stop_commands_are_one_commit_each() {
-        let document = Document::new(1);
-        let a = rect(&document);
-        let stops = GradientStop::default_pair(Color::BLACK, StopId::new(1, 1), StopId::new(1, 2));
-        let (_, changes) = counters(&document);
-        document
-            .set_fill_mode(
-                FillMode::Linear,
-                &[FillModeTarget {
-                    id: a,
-                    seed_stops: stops.to_vec(),
-                }],
-            )
-            .unwrap();
-        assert_eq!(counters(&document).1 - changes, 1);
-        let before = counters(&document);
-        document
-            .set_fill_mode(
-                FillMode::Linear,
-                &[FillModeTarget {
-                    id: a,
-                    seed_stops: stops.to_vec(),
-                }],
-            )
-            .unwrap();
-        assert_eq!(
-            counters(&document),
-            before,
-            "same mode again writes nothing"
-        );
-    }
-
-    #[test]
-    fn a_failed_stop_command_writes_nothing() {
-        let document = Document::new(1);
-        let a = rect(&document);
-        let stops = GradientStop::default_pair(Color::BLACK, StopId::new(1, 1), StopId::new(1, 2));
-        document
-            .set_fill_mode(
-                FillMode::Linear,
-                &[FillModeTarget {
-                    id: a,
-                    seed_stops: stops.to_vec(),
-                }],
-            )
-            .unwrap();
-        let before = counters(&document);
-        assert_eq!(
-            document.remove_stop(a, StopId::new(1, 1)),
-            Err(StyleEditError::TooFewStops)
-        );
-        assert_eq!(
-            document.remove_stop(a, StopId::new(9, 9)),
-            Err(StyleEditError::NoSuchStop)
-        );
-        assert_eq!(
-            document.add_stop(a, stops[0]),
-            Err(StyleEditError::DuplicateStop)
-        );
-        let edits = [
-            StopEdit {
-                id: a,
-                stop: StopId::new(1, 1),
-                change: StopChange::Color(red()),
-            },
-            StopEdit {
-                id: a,
-                stop: StopId::new(9, 9),
-                change: StopChange::Color(red()),
-            },
-        ];
-        assert_eq!(document.edit_stops(&edits), Err(StyleEditError::NoSuchStop));
-        assert_eq!(counters(&document), before);
-    }
-
-    #[test]
-    fn add_stop_never_creates_the_stop_list() {
-        let document = Document::new(1);
-        let a = rect(&document);
-        let stop =
-            GradientStop::default_pair(Color::BLACK, StopId::new(1, 1), StopId::new(1, 2))[0];
-        let before = counters(&document);
-        assert_eq!(document.add_stop(a, stop), Err(StyleEditError::NoStopList));
-        assert_eq!(counters(&document), before);
-        assert_eq!(style_of(&document, a).fill.stops.len(), 0);
-        // Only the fill-mode switch creates it; then add works.
-        document
-            .set_fill_mode(
-                FillMode::Linear,
-                &[FillModeTarget {
-                    id: a,
-                    seed_stops: GradientStop::default_pair(
-                        Color::BLACK,
-                        StopId::new(1, 3),
-                        StopId::new(1, 4),
-                    )
-                    .to_vec(),
-                }],
-            )
-            .unwrap();
-        document.add_stop(a, stop).unwrap();
-        assert_eq!(style_of(&document, a).fill.stops.len(), 3);
     }
 }

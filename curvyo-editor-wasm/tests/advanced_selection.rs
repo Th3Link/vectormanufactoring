@@ -545,13 +545,7 @@ fn alt_over_a_filled_object_switches_hover_and_cursor_with_no_pointer_event() {
         height: Length::from_mm(100.0),
     });
     document
-        .set_fill_mode(
-            curvyo_document_core::FillMode::Solid,
-            &[curvyo_document_core::FillModeTarget {
-                id,
-                seed_stops: vec![],
-            }],
-        )
+        .edit_style(&[id], &curvyo_document_core::StyleEdit::FillEnabled(true))
         .unwrap();
     let mut s = Session::open(2, &pack(&document, "0.1.0").unwrap()).unwrap();
     s.resize_viewport(1200.0, 800.0);

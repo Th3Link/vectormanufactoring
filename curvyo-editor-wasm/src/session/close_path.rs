@@ -52,6 +52,7 @@ impl Session {
         if self.tool != Tool::Node {
             return ClosePathOutcome::default();
         }
+        self.end_colour_pick();
         let paths = self.paths();
         let set = close_path_set(&paths, self.node.selection(), &self.selection);
         let plan = plan_close_paths(&set, join);

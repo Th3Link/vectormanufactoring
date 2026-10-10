@@ -315,7 +315,8 @@ fn ac14a_panel_content_for_every_selection_and_pen_state() {
         (50, false, PanelContent::Style),
     ] {
         assert_eq!(
-            panel_content(&selection_of(selected), pen),
+            // The tool can style what is selected (Select or a creation tool).
+            panel_content(&selection_of(selected), pen, selected > 0),
             want,
             "{selected} selected, pen unfinished: {pen}"
         );
@@ -325,9 +326,12 @@ fn ac14a_panel_content_for_every_selection_and_pen_state() {
 #[test]
 fn ac14a_clearing_the_selection_reveals_the_document_section() {
     let mut selection = selection_of(3);
-    assert_eq!(panel_content(&selection, false), PanelContent::Style);
+    assert_eq!(panel_content(&selection, false, true), PanelContent::Style);
     selection.clear();
-    assert_eq!(panel_content(&selection, false), PanelContent::Document);
+    assert_eq!(
+        panel_content(&selection, false, false),
+        PanelContent::Document
+    );
 }
 
 // ---- criterion 20: the view follows a resize or a fit ----

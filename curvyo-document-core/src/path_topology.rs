@@ -15,9 +15,8 @@ use crate::path_codec::{
     KEY_HANDLE_IN, KEY_HANDLE_OUT, KEY_POINT, anchor_map_at, insert_anchor_at, write_closed,
     write_kind, write_point, write_vec2,
 };
-use crate::path_model::{
-    AnchorId, AnchorKind, NewAnchor, NodeId, PathEditError, PathSnapshot, reversed_anchors,
-};
+use crate::path_model::{AnchorId, AnchorKind, NewAnchor, NodeId, PathEditError, PathSnapshot};
+use crate::path_reverse::reversed_anchors;
 use crate::units::Vec2;
 
 /// One of [`Document::split_at_anchor`]'s two resulting coincident

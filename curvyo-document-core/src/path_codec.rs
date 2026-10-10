@@ -70,7 +70,7 @@ pub(crate) fn node_exists(tree: &LoroTree, id: loro::TreeID) -> bool {
 
 /// Writes a brand-new path's `closed` flag and its whole style. Takes the
 /// style explicitly so `Document::split_at_anchor`'s new object copies the
-/// split path's own style, stops included, instead of resetting it
+/// split path's own style instead of resetting it
 /// (`specs/0007-stroke-and-fill-styling/adrs.md`, section 3);
 /// `Document::create_path` passes the creation default.
 pub(crate) fn write_path_style(meta: &LoroMap, closed: bool, style: &Style) {

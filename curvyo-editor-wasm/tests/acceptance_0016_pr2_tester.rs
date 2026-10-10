@@ -24,8 +24,8 @@
 use std::collections::HashSet;
 
 use curvyo_document_core::{
-    AnchorId, Color, Document, FillMode, FillModeTarget, Length, NewAnchor, NodeId, ObjectSnapshot,
-    PathSnapshot, Point, RectBounds, StyleEdit, pack, unpack,
+    AnchorId, Color, Document, Length, NewAnchor, NodeId, ObjectSnapshot, PathSnapshot, Point,
+    RectBounds, StyleEdit, pack, unpack,
 };
 use curvyo_editor_wasm::{Session, Tool};
 
@@ -62,14 +62,8 @@ fn ring_document(with_behind: bool) -> (Document, NodeId) {
             width: Length::from_mm(16.0),
             height: Length::from_mm(16.0),
         });
-        d.set_fill_mode(
-            FillMode::Solid,
-            &[FillModeTarget {
-                id: behind,
-                seed_stops: vec![],
-            }],
-        )
-        .unwrap();
+        d.edit_style(&[behind], &StyleEdit::FillEnabled(true))
+            .unwrap();
     }
     let seed = d.create_rect(RectBounds {
         origin: pt(900.0, 900.0),
@@ -89,14 +83,8 @@ fn ring_document(with_behind: bool) -> (Document, NodeId) {
         .unwrap();
     d.edit_style(&[ring], &StyleEdit::FillColor(Color { r: 255, g: 0, b: 0 }))
         .unwrap();
-    d.set_fill_mode(
-        FillMode::Solid,
-        &[FillModeTarget {
-            id: ring,
-            seed_stops: vec![],
-        }],
-    )
-    .unwrap();
+    d.edit_style(&[ring], &StyleEdit::FillEnabled(true))
+        .unwrap();
     d.edit_style(&[ring], &StyleEdit::StrokeWidth(Length::from_mm(1.0)))
         .unwrap();
     (d, ring)
@@ -629,14 +617,7 @@ fn a_session_with_a_hundred_outline_compound_path_moves_and_hit_tests() {
     let id = d
         .replace_with_path(&[seed], seed, &outlines, "boolean_union")
         .unwrap();
-    d.set_fill_mode(
-        FillMode::Solid,
-        &[FillModeTarget {
-            id,
-            seed_stops: vec![],
-        }],
-    )
-    .unwrap();
+    d.edit_style(&[id], &StyleEdit::FillEnabled(true)).unwrap();
     let t = std::time::Instant::now();
     let mut s = open(&d);
     println!("open: {:?}", t.elapsed());
@@ -718,14 +699,7 @@ fn ac36_object_to_path_on_a_mix_converts_the_rectangle_and_leaves_the_compound_a
         width: Length::from_mm(10.0),
         height: Length::from_mm(10.0),
     });
-    d.set_fill_mode(
-        FillMode::Solid,
-        &[FillModeTarget {
-            id: r,
-            seed_stops: vec![],
-        }],
-    )
-    .unwrap();
+    d.edit_style(&[r], &StyleEdit::FillEnabled(true)).unwrap();
     let mut s = open(&d);
     click(&mut s, pt(7.0, 20.0));
     s.pointer_hover(pt(105.0, 5.0), true, false);
