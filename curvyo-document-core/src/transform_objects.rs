@@ -128,8 +128,7 @@ impl Document {
                         })
                     }
                     (ObjectSnapshot::Path(path), Some(_)) => {
-                        // A path result for a node that is a primitive now is
-                        // the conversion (`0019` criterion 53).
+                        // The conversion of `0019` criterion 53.
                         Ok(Planned::Convert {
                             meta,
                             anchors: converted_outline(path)?,
@@ -157,31 +156,7 @@ impl Document {
                 }
             })
             .collect::<Result<Vec<_>, ObjectEditError>>()?;
-        // An anchor id names a node across the whole document (ADR 0002): a
-        // converted outline may not take one that another path already holds.
-        let converted: Vec<&NewAnchor> = planned
-            .iter()
-            .filter_map(|plan| match plan {
-                Planned::Convert { anchors, .. } => Some(anchors),
-                _ => None,
-            })
-            .flatten()
-            .collect();
-        if !converted.is_empty() {
-            for id in self.object_ids() {
-                let tree_id = TreeID::new(id.peer, id.counter);
-                let Ok(meta) = tree.get_meta(tree_id) else {
-                    continue;
-                };
-                if shape_codec::read_shape_tag(&meta).is_some() {
-                    continue;
-                }
-                let held = anchor_positions(&meta);
-                if converted.iter().any(|anchor| held.contains(anchor.id)) {
-                    return Err(ObjectEditError::InvalidConversion);
-                }
-            }
-        }
+        self.converted_ids_are_free(&tree, &planned)?;
         for plan in &planned {
             let (meta, result) = match plan {
                 Planned::Primitive {
@@ -218,6 +193,41 @@ impl Document {
             }
         }
         self.commit_with_label("transform_objects");
+        Ok(())
+    }
+}
+
+impl Document {
+    /// An anchor id names a node across the whole document (ADR 0002): a converted
+    /// outline may not take one that another path already holds.
+    fn converted_ids_are_free(
+        &self,
+        tree: &loro::LoroTree,
+        planned: &[Planned],
+    ) -> Result<(), ObjectEditError> {
+        let converted: Vec<&NewAnchor> = planned
+            .iter()
+            .filter_map(|plan| match plan {
+                Planned::Convert { anchors, .. } => Some(anchors),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        if converted.is_empty() {
+            return Ok(());
+        }
+        for id in self.object_ids() {
+            let Ok(meta) = tree.get_meta(TreeID::new(id.peer, id.counter)) else {
+                continue;
+            };
+            if shape_codec::read_shape_tag(&meta).is_some() {
+                continue;
+            }
+            let held = anchor_positions(&meta);
+            if converted.iter().any(|anchor| held.contains(anchor.id)) {
+                return Err(ObjectEditError::InvalidConversion);
+            }
+        }
         Ok(())
     }
 }
