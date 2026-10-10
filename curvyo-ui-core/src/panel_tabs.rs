@@ -34,11 +34,34 @@ impl PanelTab {
         }
     }
 
-    fn tooltip(self, non_empty: bool) -> &'static str {
+    fn tooltip(self, blocker: Option<StyleBlocker>) -> &'static str {
+        match (self, blocker) {
+            (Self::Document, _) => "Document (Shift+Ctrl+D)",
+            (Self::Style, None) => "Style (Shift+Ctrl+F)",
+            (Self::Style, Some(blocker)) => blocker.tooltip(),
+        }
+    }
+}
+
+/// Why the Style tab is dimmed: the tool's style scope holds no object. The
+/// tooltip names the right reason (criterion 4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StyleBlocker {
+    /// Nothing is selected.
+    NothingSelected,
+    /// Something is selected, but the Pen tool styles nothing.
+    PenTool,
+    /// Something is selected, but the Node tool styles paths only and the
+    /// selection holds none.
+    NodeToolWithoutPath,
+}
+
+impl StyleBlocker {
+    const fn tooltip(self) -> &'static str {
         match self {
-            Self::Document => "Document (Shift+Ctrl+D)",
-            Self::Style if non_empty => "Style (Shift+Ctrl+F)",
-            Self::Style => "Style: select an object first",
+            Self::NothingSelected => "Style: select an object first",
+            Self::PenTool => "Style: the Pen tool has nothing to style",
+            Self::NodeToolWithoutPath => "Style: the Node tool styles paths only",
         }
     }
 }
@@ -131,15 +154,25 @@ pub struct PanelTabEntry {
     pub selected: bool,
 }
 
-/// The strip for the current state, in order.
+/// The strip for the current state, in order. With `non_empty` false the
+/// reason is that nothing is selected.
 #[must_use]
 pub fn tab_entries(active: PanelTab, non_empty: bool) -> Vec<PanelTabEntry> {
+    tab_entries_for(
+        active,
+        (!non_empty).then_some(StyleBlocker::NothingSelected),
+    )
+}
+
+/// The strip when the Style tab is dimmed for `blocker` (`None`: it is not).
+#[must_use]
+pub fn tab_entries_for(active: PanelTab, blocker: Option<StyleBlocker>) -> Vec<PanelTabEntry> {
     TABS.iter()
         .map(|&tab| PanelTabEntry {
             name: tab.name(),
             label: tab.label(),
-            tooltip: tab.tooltip(non_empty),
-            enabled: tab != PanelTab::Style || non_empty,
+            tooltip: tab.tooltip(blocker),
+            enabled: tab != PanelTab::Style || blocker.is_none(),
             selected: tab == active,
         })
         .collect()
@@ -268,6 +301,28 @@ mod tests {
                 .map(|e| (e.enabled, e.selected))
                 .collect::<Vec<_>>(),
             [(true, false), (true, true)]
+        );
+    }
+
+    /// Criterion 4: the tooltip names the reason the tab is dimmed.
+    #[test]
+    fn the_dimmed_tooltip_names_the_right_reason() {
+        let tip = |blocker| tab_entries_for(Document, Some(blocker))[1].tooltip;
+        assert_eq!(
+            tip(StyleBlocker::NothingSelected),
+            "Style: select an object first"
+        );
+        assert_eq!(
+            tip(StyleBlocker::PenTool),
+            "Style: the Pen tool has nothing to style"
+        );
+        assert_eq!(
+            tip(StyleBlocker::NodeToolWithoutPath),
+            "Style: the Node tool styles paths only"
+        );
+        assert_eq!(
+            tab_entries_for(Style, None)[1].tooltip,
+            "Style (Shift+Ctrl+F)"
         );
     }
 

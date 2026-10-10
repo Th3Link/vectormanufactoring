@@ -10,8 +10,8 @@ use curvyo_document_core::{
 };
 use curvyo_ui_core::{
     FieldError, FormDraft, FormPrefill, FormatListView, add_prefill, added_notice,
-    check_format_form, edit_prefill, format_list_view, import_notice, import_refusal,
-    refusal_message, saved_notice,
+    check_format_form, edit_prefill, field_error, format_list_view, import_notice, import_refusal,
+    saved_notice,
 };
 
 use super::Session;
@@ -66,6 +66,12 @@ impl Session {
     /// # Errors
     /// The reason, "made by a newer version" and the like.
     pub fn load_formats(&mut self, text: &str) -> Result<(), String> {
+        // An empty or blank file means no formats of the maker's, not a broken
+        // file; the next change writes it.
+        if text.trim().is_empty() {
+            self.formats_file_set_aside();
+            return Ok(());
+        }
         let builtin = Self::formats_builtin();
         match FormatLibrary::load(builtin.clone(), text) {
             Ok(library) => {
@@ -94,6 +100,12 @@ impl Session {
         PresetList::shipped().unwrap_or_default()
     }
 
+    /// The library of the built-in formats alone: a new or opened session
+    /// starts with it, and the host then loads the maker's file.
+    pub(super) fn builtin_formats() -> FormatLibrary {
+        FormatLibrary::from_builtin(Self::formats_builtin())
+    }
+
     /// Why the user file could not be read, while it cannot.
     #[must_use]
     pub fn formats_broken(&self) -> Option<&str> {
@@ -103,7 +115,7 @@ impl Session {
     /// The file was moved aside: the library runs on the built-in formats and
     /// edits work again (criterion 6).
     pub fn formats_file_set_aside(&mut self) {
-        self.formats = FormatLibrary::from_builtin(Self::formats_builtin());
+        self.formats = Self::builtin_formats();
         self.formats_broken = None;
     }
 
@@ -155,7 +167,7 @@ impl Session {
 
     fn refused(error: &curvyo_document_core::FormatError) -> FormatEdit {
         FormatEdit {
-            errors: vec![refusal_message(error)],
+            errors: vec![field_error(error)],
             ..FormatEdit::default()
         }
     }

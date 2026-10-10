@@ -9,9 +9,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use crate::document_presets::{
-    DocumentPreset, Orientation, PresetError, PresetGroup, PresetList, PresetReason, PresetSubject,
-    RawPreset, checked_name, id_is_valid, same_sides, validate_preset,
+    DocumentPreset, PresetError, PresetGroup, PresetList, PresetReason, PresetSubject, RawPreset,
+    checked_name, id_is_valid, same_sides, validate_preset,
 };
+use crate::preset_units::{AuthoredSize, Orientation, PresetUnit};
 use crate::units::Length;
 
 /// The schema of the user file.
@@ -52,9 +53,16 @@ pub(crate) struct UserFile {
     pub(crate) groups: Vec<UserGroup>,
 }
 
+/// Only the version of the file; every other key is ignored here.
+#[derive(Deserialize)]
+struct RawHeader {
+    format: Option<i64>,
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawUserFile {
+    #[allow(dead_code)] // read by `RawHeader` first; kept so the strict parse knows the key
     format: Option<i64>,
     favourites: Option<Vec<String>>,
     enabled: Option<BTreeMap<String, bool>>,
@@ -119,13 +127,16 @@ impl UserFile {
         if text.len() > MAX_USER_FILE_BYTES {
             return Err(fail(PresetSubject::File, PresetReason::FileTooLarge));
         }
-        let raw: RawUserFile = toml::from_str(text).map_err(|error| {
+        // The version is read first and alone: a newer file carries keys this
+        // version does not know, and "made by a newer version" must win over
+        // the unknown-key error (criterion 33).
+        let header: RawHeader = toml::from_str(text).map_err(|error| {
             fail(
                 PresetSubject::File,
                 PresetReason::Syntax(error.message().to_string()),
             )
         })?;
-        match raw.format {
+        match header.format {
             Some(USER_FILE_FORMAT) => {}
             Some(_) => return Err(fail(PresetSubject::File, PresetReason::FormatNewer)),
             None => {
@@ -135,6 +146,12 @@ impl UserFile {
                 ));
             }
         }
+        let raw: RawUserFile = toml::from_str(text).map_err(|error| {
+            fail(
+                PresetSubject::File,
+                PresetReason::Syntax(error.message().to_string()),
+            )
+        })?;
         let mut file = Self::default();
         let mut known: Vec<DocumentPreset> = builtin.presets().map(|(_, p)| p.clone()).collect();
         for (position, group) in raw.group.into_iter().enumerate() {
@@ -396,7 +413,7 @@ pub(crate) fn user_preset(
     name: String,
     short: f64,
     long: f64,
-    unit: crate::document_presets::PresetUnit,
+    unit: PresetUnit,
 ) -> DocumentPreset {
     DocumentPreset {
         id,
@@ -404,7 +421,7 @@ pub(crate) fn user_preset(
         note: None,
         short_side: unit.to_length(short),
         long_side: unit.to_length(long),
-        authored: crate::document_presets::AuthoredSize { short, long, unit },
+        authored: AuthoredSize { short, long, unit },
         favourite: false,
         user: true,
     }

@@ -14,10 +14,18 @@ export function FormatsBrokenBlock({ formats }: { formats: FormatsApi }) {
   const { broken } = formats.list;
   const notice = formats.notice?.anchor === "broken" ? formats.notice : null;
   if (broken === "") {
+    // An overlay in a zero-height slot, so the format area below does not move
+    // when the notice comes and goes (UX review N5).
     return notice ? (
-      <p role="status" className="rounded-md bg-[var(--toolbar-bg)] px-2 py-1 text-xs text-[var(--toolbar-icon)]">
-        {notice.text}
-      </p>
+      <div className="relative h-0">
+        <p
+          role="status"
+          className="absolute top-0 right-0 z-30 max-w-[244px] rounded-md bg-[var(--toolbar-bg)] px-2 py-1 text-xs text-[var(--toolbar-icon)]"
+          style={{ boxShadow: "var(--panel-elevation-shadow)" }}
+        >
+          {notice.text}
+        </p>
+      </div>
     ) : null;
   }
   return (
@@ -26,7 +34,11 @@ export function FormatsBrokenBlock({ formats }: { formats: FormatsApi }) {
         <CircleAlert size={12} aria-hidden className="mt-0.5 shrink-0" />
         <span>Your formats file could not be read: {broken}. Built-in formats are shown.</span>
       </p>
-      <button type="button" onClick={formats.setAside} className={`${OUTLINE_BUTTON} w-full`}>
+      <button
+        type="button"
+        onClick={(event) => formats.setAside(event.detail === 0)}
+        className={`${OUTLINE_BUTTON} w-full`}
+      >
         Set file aside
       </button>
       {notice?.kind === "refusal" && (

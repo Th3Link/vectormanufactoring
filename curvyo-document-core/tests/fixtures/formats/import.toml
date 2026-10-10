@@ -43,6 +43,15 @@ default_orientation = "portrait"
   long_side = 130
   unit = "mm"
 
+  # A hand-written id that does not start with u-: added under a new u- id
+  # (criterion 32).
+  [[group.preset]]
+  id = "hoop-110"
+  name = "Hoop 110"
+  short_side = 110
+  long_side = 110
+  unit = "mm"
+
 [[group]]
 id = "paper"
 

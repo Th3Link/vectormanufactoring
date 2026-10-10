@@ -3,6 +3,7 @@ import { useEffect, useId, useRef } from "react";
 
 import { PageGlyph } from "@/components/panel/DocumentPresets";
 import { PresetStrip } from "@/components/panel/PresetStrip";
+import { scrollBodyTo } from "@/lib/panelScroll";
 import { PanelSwitch } from "@/components/ui/switch";
 import { ToggleGroup, type ToggleOption } from "@/components/ui/toggle-group";
 import type { FormField, FormUnit, FormatGroup, FormatsApi } from "@/hooks/useFormats";
@@ -29,8 +30,8 @@ const ORIENTATION_OPTIONS: readonly ToggleOption<"portrait" | "landscape">[] = [
     label: "Opens as Portrait",
     tooltip: "A pick from this group starts taller than wide.",
     icon: (
-      <span className="flex items-center gap-1 text-sm">
-        <PageGlyph landscape={false} />
+      <span className="flex items-center gap-1 text-xs">
+        <PageGlyph landscape={false} size={14} />
         Portrait
       </span>
     ),
@@ -40,8 +41,8 @@ const ORIENTATION_OPTIONS: readonly ToggleOption<"portrait" | "landscape">[] = [
     label: "Opens as Landscape",
     tooltip: "A pick from this group starts wider than tall.",
     icon: (
-      <span className="flex items-center gap-1 text-sm">
-        <PageGlyph landscape />
+      <span className="flex items-center gap-1 text-xs">
+        <PageGlyph landscape size={14} />
         Landscape
       </span>
     ),
@@ -89,8 +90,8 @@ function TextField({
 }: TextFieldProps) {
   const chipId = useId();
   return (
-    <div className="flex h-7 items-center gap-2">
-      <span className="w-[60px] shrink-0 text-sm text-[var(--toolbar-icon)]">{rowLabel}</span>
+    <div className="flex min-h-7 items-center gap-2">
+      <span className="w-[60px] shrink-0 text-sm leading-4 text-[var(--toolbar-icon)]">{rowLabel}</span>
       <div className="relative w-[158px]">
         <input
           ref={(element) => setRef(field, element)}
@@ -105,7 +106,7 @@ function TextField({
           onFocus={onFocus}
           onChange={(event) => onChange(event.target.value)}
           className={`${FIELD_CLASS} ${numeric ? "text-right tabular-nums" : ""} ${error ? FIELD_INVALID : FIELD_BORDER}`}
-          style={{ paddingRight: suffix ? 28 : 6 }}
+          style={{ paddingRight: suffix ? 34 : 6 }}
         />
         {suffix && (
           <span
@@ -157,7 +158,7 @@ export function FormatForm({ formats, onReturnFocus }: FormatFormProps) {
     }
   }, [request]);
   useEffect(() => {
-    root.current?.scrollIntoView({ block: "start" });
+    scrollBodyTo(root.current);
   }, []);
 
   if (!form) {
@@ -194,8 +195,7 @@ export function FormatForm({ formats, onReturnFocus }: FormatFormProps) {
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.preventDefault();
-          formats.cancelForm();
-          onReturnFocus();
+          formats.cancelForm(true);
         }
       }}
       className="flex w-[244px] flex-col gap-2 rounded-[5px] border border-[color-mix(in_srgb,var(--toolbar-icon)_25%,transparent)] p-2"
@@ -255,6 +255,7 @@ export function FormatForm({ formats, onReturnFocus }: FormatFormProps) {
             { id: NEW_GROUP, label: "New group", content: "New group…", tooltip: "Make a new group" },
           ]}
           value={newGroup ? NEW_GROUP : values.groupId}
+          width="w-full"
           onPress={(id) => formats.changeForm({ groupId: id === NEW_GROUP ? "" : id })}
           onReturnFocus={onReturnFocus}
         />
@@ -275,7 +276,7 @@ export function FormatForm({ formats, onReturnFocus }: FormatFormProps) {
               options={ORIENTATION_OPTIONS}
               value={values.orientation}
               onChange={(orientation) => formats.changeForm({ orientation })}
-              itemWidth={79}
+              itemWidth={78}
               onReturnFocus={onReturnFocus}
             />
           </div>
@@ -295,9 +296,11 @@ export function FormatForm({ formats, onReturnFocus }: FormatFormProps) {
         </button>
         <button
           type="button"
-          onClick={() => {
-            formats.cancelForm();
-            onReturnFocus();
+          onClick={(event) => {
+            formats.cancelForm(event.detail === 0);
+            if (event.detail > 0) {
+              onReturnFocus();
+            }
           }}
           className={`${OUTLINE_BUTTON} w-[109px]`}
         >

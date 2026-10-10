@@ -257,3 +257,15 @@ fn the_text_the_host_stores_loads_into_a_new_session() {
     assert_eq!(orientation, "landscape");
     let _ = Orientation::Landscape;
 }
+
+/// An empty or blank file means no formats of the maker's, not a broken file.
+#[test]
+fn an_empty_file_is_no_formats_and_not_a_broken_file() {
+    for text in ["", "  \n\t\n"] {
+        let mut session = Session::new(1);
+        assert!(session.load_formats(text).is_ok(), "{text:?}");
+        assert_eq!(session.formats_broken(), None);
+        assert_eq!(groups(&session), ["Paper"]);
+        assert!(session.set_format_favourite("a4", false).ok);
+    }
+}

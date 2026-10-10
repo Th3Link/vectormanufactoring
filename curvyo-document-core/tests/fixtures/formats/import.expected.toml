@@ -66,3 +66,10 @@ name = "Hoop 130"
 short_side = 130.0
 long_side = 130.0
 unit = "mm"
+
+[[group.preset]]
+id = "u-hoop-110"
+name = "Hoop 110"
+short_side = 110.0
+long_side = 110.0
+unit = "mm"

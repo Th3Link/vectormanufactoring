@@ -34,6 +34,12 @@ export function PanelSwitch({
         aria-label={name ?? label}
         data-control={control}
         onCheckedChange={onCheckedChange}
+        onKeyDown={(event) => {
+          // Only Space toggles a switch (`0045` criterion 17).
+          if (event.key === "Enter") {
+            event.preventDefault();
+          }
+        }}
         onClick={(event) => {
           // `detail` is 0 for keyboard activation, 1 or more for a click.
           if (event.detail > 0) {

@@ -4,9 +4,11 @@
 //! ways a tab is chosen (a press, Shift+Ctrl+F, Shift+Ctrl+D). The rules are
 //! `curvyo_ui_core::panel_tabs`'s and `panel_content`'s.
 
-use curvyo_ui_core::{PanelContent, PanelTab, PanelTabEntry, PanelTabs, panel_body, tab_entries};
+use curvyo_ui_core::{
+    PanelContent, PanelTab, PanelTabEntry, PanelTabs, StyleBlocker, panel_body, tab_entries_for,
+};
 
-use super::Session;
+use super::{Session, Tool};
 
 /// What the Properties panel shows: the strip and the body of the active tab.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,6 +35,20 @@ impl Session {
         result
     }
 
+    /// Why the Style tab is dimmed, `None` while the scope holds objects: the
+    /// tooltip names nothing selected, or the tool that cannot style the
+    /// selection.
+    fn style_blocker(&self, non_empty: bool) -> Option<StyleBlocker> {
+        if non_empty {
+            return None;
+        }
+        Some(match self.tool() {
+            Tool::Pen if !self.selection.is_empty() => StyleBlocker::PenTool,
+            Tool::Node if !self.selection.is_empty() => StyleBlocker::NodeToolWithoutPath,
+            _ => StyleBlocker::NothingSelected,
+        })
+    }
+
     /// Reads the panel: lets the tab rule see the scope's current state (so an
     /// edge since the last read switches the tab, in the same frame as the
     /// selection change), then returns the strip and the body.
@@ -44,7 +60,7 @@ impl Session {
         });
         PanelView {
             content: panel_body(active, self.pen_path_unfinished(), non_empty),
-            tabs: tab_entries(active, non_empty),
+            tabs: tab_entries_for(active, self.style_blocker(non_empty)),
         }
     }
 
@@ -138,7 +154,6 @@ impl PanelTabsRecord {
 mod tests {
     use curvyo_document_core::{Length, NodeId, Point, RectBounds};
 
-    use super::super::Tool;
     use super::super::document::{DocumentSide, SizeOutcome};
     use super::*;
 
@@ -197,6 +212,24 @@ mod tests {
         assert_eq!(record.tab_enabled, [1, 0]);
         assert_eq!(record.tab_tooltips[1], "Style: select an object first");
         assert_eq!(record.active, "document");
+    }
+
+    /// Criterion 4: the dimmed Style tab says why, also when something is
+    /// selected but the tool cannot style it.
+    #[test]
+    fn the_dimmed_style_tooltip_names_the_reason() {
+        let mut session = Session::new(1);
+        let id = rect(&session, 0.0);
+        session.selection.select_single(id);
+        session.set_tool(Tool::Node);
+        let tip = |s: &Session| s.panel_view().tabs[1].tooltip;
+        assert_eq!(tip(&session), "Style: the Node tool styles paths only");
+        session.set_tool(Tool::Pen);
+        assert_eq!(tip(&session), "Style: the Pen tool has nothing to style");
+        session.set_tool(Tool::Select);
+        assert_eq!(tip(&session), "Style (Shift+Ctrl+F)");
+        session.selection.clear();
+        assert_eq!(tip(&session), "Style: select an object first");
     }
 
     /// Criterion 14: the two shortcuts.

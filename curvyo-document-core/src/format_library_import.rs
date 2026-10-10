@@ -69,14 +69,14 @@ impl FormatLibrary {
             skipped: 0,
         };
         let mut new_ids: BTreeMap<String, String> = BTreeMap::new();
+        let mut receiving: BTreeSet<String> = BTreeSet::new();
         for group in &incoming.groups {
-            let mut received = false;
             for preset in &group.presets {
                 match merged.import_format(group, preset) {
-                    Merge::Added(id) => {
+                    Merge::Added(id, target) => {
                         new_ids.insert(preset.id.clone(), id);
                         report.added += 1;
-                        received = true;
+                        receiving.insert(target);
                     }
                     Merge::Skipped(Some(id)) => {
                         new_ids.insert(preset.id.clone(), id);
@@ -85,8 +85,8 @@ impl FormatLibrary {
                     Merge::Skipped(None) => report.skipped += 1,
                 }
             }
-            report.groups += usize::from(received);
         }
+        report.groups = receiving.len();
         if let Some(favourites) = &incoming.favourites {
             let wanted: Vec<String> = favourites
                 .iter()
@@ -112,12 +112,17 @@ impl FormatLibrary {
         {
             return Merge::Skipped(Some(known.id.clone()));
         }
-        let (short, long) = (preset.short_side.as_mm(), preset.long_side.as_mm());
-        if self.list().with_sides(short, long, None).is_some() {
+        if self
+            .list()
+            .with_sides(preset.short_side, preset.long_side, None)
+            .is_some()
+        {
             return Merge::Skipped(None);
         }
         let target = self.group_for_import(group);
-        let id = if self.list().find(&preset.id).is_some() {
+        // An id the maker's file may own starts with `u-` (criterion 32): a
+        // foreign id, or one that is taken, is replaced.
+        let id = if !preset.id.starts_with("u-") || self.list().find(&preset.id).is_some() {
             self.unique_preset_id(&preset.name)
         } else {
             preset.id.clone()
@@ -125,11 +130,12 @@ impl FormatLibrary {
         let mut added = preset.clone();
         added.id.clone_from(&id);
         self.push_user_preset(&target, added);
-        Merge::Added(id)
+        Merge::Added(id, target)
     }
 
-    /// The group an imported group joins: the one with its id, else the one
-    /// with its name ignoring case, else a new group.
+    /// The group an imported group joins: the one with its id (a built-in id
+    /// appends to that built-in group), else the maker's group with its name
+    /// ignoring case, else a new group (criterion 27).
     fn group_for_import(&mut self, group: &UserGroup) -> String {
         let name = group.name.to_lowercase();
         let existing = self
@@ -141,7 +147,7 @@ impl FormatLibrary {
                 self.list()
                     .groups
                     .iter()
-                    .find(|g| g.name.to_lowercase() == name)
+                    .find(|g| g.user && g.name.to_lowercase() == name)
             })
             .map(|g| g.id.clone());
         existing.unwrap_or_else(|| {
@@ -159,8 +165,8 @@ impl FormatLibrary {
 }
 
 enum Merge {
-    /// Added under this id.
-    Added(String),
+    /// Added under this id to the group with this id.
+    Added(String, String),
     /// Left out; carries the id of the identical format the library has.
     Skipped(Option<String>),
 }

@@ -3,6 +3,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { PageGlyph } from "@/components/panel/DocumentPresets";
 import { FormatForm, OUTLINE_BUTTON, PRIMARY_BUTTON } from "@/components/panel/FormatForm";
+import { scrollBodyTo } from "@/lib/panelScroll";
 import { PanelSwitch } from "@/components/ui/switch";
 import { ToggleGroup, type ToggleOption } from "@/components/ui/toggle-group";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -20,8 +21,8 @@ const ORIENTATION_OPTIONS: readonly ToggleOption<"portrait" | "landscape">[] = [
     label: "Opens as Portrait",
     tooltip: "A pick from this group starts taller than wide.",
     icon: (
-      <span className="flex items-center gap-1 text-sm">
-        <PageGlyph landscape={false} />
+      <span className="flex items-center gap-1 text-xs">
+        <PageGlyph landscape={false} size={14} />
         Portrait
       </span>
     ),
@@ -31,8 +32,8 @@ const ORIENTATION_OPTIONS: readonly ToggleOption<"portrait" | "landscape">[] = [
     label: "Opens as Landscape",
     tooltip: "A pick from this group starts wider than tall.",
     icon: (
-      <span className="flex items-center gap-1 text-sm">
-        <PageGlyph landscape />
+      <span className="flex items-center gap-1 text-xs">
+        <PageGlyph landscape size={14} />
         Landscape
       </span>
     ),
@@ -70,13 +71,14 @@ function NoticeUnder({ notice, anchor }: { notice: FormatNotice | null; anchor: 
 
 interface ConfirmProps {
   prompt: string;
-  onCancel: () => void;
-  onDelete: () => void;
+  /** `keyboard` is true for Escape and for a key press on the button. */
+  onCancel: (keyboard: boolean) => void;
+  onDelete: (keyboard: boolean) => void;
 }
 
 /** The inline confirm that replaces a row or a header (`0045` criterion 22):
  * focus on Cancel, Delete ignores presses for 400 ms, Escape cancels. */
-function InlineConfirm({ prompt, onCancel, onDelete }: ConfirmProps) {
+function InlineConfirm({ prompt, onCancel, onDelete, onReturnFocus }: ConfirmProps & { onReturnFocus: () => void }) {
   const cancel = useRef<HTMLButtonElement>(null);
   const armed = useRef(false);
   useEffect(() => {
@@ -92,24 +94,37 @@ function InlineConfirm({ prompt, onCancel, onDelete }: ConfirmProps) {
         if (event.key === "Escape") {
           event.preventDefault();
           event.stopPropagation();
-          onCancel();
+          onCancel(true);
         }
       }}
       className="flex flex-col gap-2 rounded-[5px] border border-[color-mix(in_srgb,var(--toolbar-icon)_25%,transparent)] p-2"
     >
       <p className="text-sm text-[var(--toolbar-icon)]">{prompt}</p>
       <div className="flex gap-2">
-        <button ref={cancel} type="button" onClick={onCancel} className={`${OUTLINE_BUTTON} w-[109px]`}>
+        <button
+          ref={cancel}
+          type="button"
+          onClick={(event) => {
+            onCancel(event.detail === 0);
+            if (event.detail > 0) {
+              onReturnFocus();
+            }
+          }}
+          className={`${OUTLINE_BUTTON} w-[109px]`}
+        >
           Cancel
         </button>
         <button
           type="button"
-          onClick={() => {
+          onClick={(event) => {
             if (armed.current) {
-              onDelete();
+              onDelete(event.detail === 0);
+              if (event.detail > 0) {
+                onReturnFocus();
+              }
             }
           }}
-          className={`${PRIMARY_BUTTON} w-[109px]`}
+          className={`${OUTLINE_BUTTON} w-[109px] !text-[var(--destructive)]`}
         >
           Delete
         </button>
@@ -145,8 +160,7 @@ function GroupEditForm({ formats, onReturnFocus }: GroupEditProps) {
         if (event.key === "Escape") {
           event.preventDefault();
           event.stopPropagation();
-          formats.cancelGroupForm();
-          onReturnFocus();
+          formats.cancelGroupForm(true);
         }
       }}
       className="flex flex-col gap-2 rounded-[5px] border border-[color-mix(in_srgb,var(--toolbar-icon)_25%,transparent)] p-2"
@@ -187,7 +201,7 @@ function GroupEditForm({ formats, onReturnFocus }: GroupEditProps) {
           options={ORIENTATION_OPTIONS}
           value={form.orientation}
           onChange={(orientation) => formats.changeGroupForm({ orientation })}
-          itemWidth={79}
+          itemWidth={78}
           onReturnFocus={onReturnFocus}
         />
       </div>
@@ -197,9 +211,11 @@ function GroupEditForm({ formats, onReturnFocus }: GroupEditProps) {
         </button>
         <button
           type="button"
-          onClick={() => {
-            formats.cancelGroupForm();
-            onReturnFocus();
+          onClick={(event) => {
+            formats.cancelGroupForm(event.detail === 0);
+            if (event.detail > 0) {
+              onReturnFocus();
+            }
           }}
           className={`${OUTLINE_BUTTON} w-[109px]`}
         >
@@ -219,7 +235,12 @@ interface RowProps {
 function FormatRowView({ row, formats, onReturnFocus }: RowProps) {
   if (formats.confirm?.kind === "format" && formats.confirm.id === row.id) {
     return (
-      <InlineConfirm prompt={row.deletePrompt} onCancel={formats.cancelDelete} onDelete={formats.doDelete} />
+      <InlineConfirm
+        prompt={row.deletePrompt}
+        onCancel={formats.cancelDelete}
+        onDelete={formats.doDelete}
+        onReturnFocus={onReturnFocus}
+      />
     );
   }
   if (formats.form?.editing === row.id) {
@@ -234,8 +255,10 @@ function FormatRowView({ row, formats, onReturnFocus }: RowProps) {
   return (
     <div
       data-rk={`fmt:${row.id}`}
-      className={`flex h-7 items-center rounded-[5px] hover:bg-[var(--editor-accent-hover)] ${
-        row.selected ? "bg-[var(--value-fill)] shadow-[inset_3px_0_0_var(--editor-accent)]" : ""
+      className={`flex h-7 items-center rounded-[5px] ${
+        row.selected
+          ? "bg-[var(--value-fill)] shadow-[inset_3px_0_0_var(--editor-accent)]"
+          : "hover:bg-[color-mix(in_srgb,var(--editor-accent)_8%,white)]"
       }`}
     >
       {row.canStar && (
@@ -255,16 +278,22 @@ function FormatRowView({ row, formats, onReturnFocus }: RowProps) {
           </button>
         </Tooltip>
       )}
-      <button
-        type="button"
-        data-control="apply"
-        aria-label={row.applyName}
-        onClick={click(() => formats.pick(row.id))}
-        className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-[5px] px-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--editor-accent)]"
-      >
-        <span className="min-w-0 flex-1 truncate text-sm text-[var(--toolbar-icon)]">{row.name}</span>
-        <span className="shrink-0 text-xs tabular-nums text-[var(--panel-muted-fg)]">{row.size}</span>
-      </button>
+      <Tooltip side="left" content={`${row.name}, ${row.size}`}>
+        <button
+          type="button"
+          data-control="apply"
+          aria-label={row.applyName}
+          onClick={click(() => formats.pick(row.id))}
+          className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-[5px] px-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--editor-accent)]"
+        >
+          <span className="min-w-[56px] flex-1 truncate text-sm text-[var(--toolbar-icon)]">
+            {row.name}
+          </span>
+          <span className="min-w-0 shrink truncate text-xs tabular-nums text-[var(--panel-muted-fg)]">
+            {row.size}
+          </span>
+        </button>
+      </Tooltip>
       <span className="flex w-[52px] shrink-0 justify-end">
         {row.canEdit && (
           <>
@@ -315,6 +344,7 @@ function FormatGroupView({ group, formats, onReturnFocus }: GroupProps) {
         prompt={group.deletePrompt}
         onCancel={formats.cancelDelete}
         onDelete={formats.doDelete}
+        onReturnFocus={onReturnFocus}
       />
     );
   } else if (formats.groupForm?.id === group.id) {
@@ -480,20 +510,32 @@ export function FormatList({ formats, onReturnFocus }: FormatListProps) {
   // Opening scrolls the panel so the row is at the top of the body.
   useEffect(() => {
     if (expanded && opened) {
-      disclosure.current?.scrollIntoView({ block: "start" });
+      scrollBodyTo(disclosure.current);
     }
   }, [expanded, opened]);
 
+  // Puts the keyboard back where a form, confirm or file action left it, once.
   const returnTo = formats.focusReturn;
+  const { takeFocusReturn } = formats;
   useEffect(() => {
     if (!returnTo) {
       return;
     }
-    const target = returnTo.rowId
-      ? root.current?.querySelector<HTMLElement>(`[data-rk="fmt:${returnTo.rowId}"] [data-control="apply"]`)
-      : addButton.current;
-    target?.focus();
-  }, [returnTo]);
+    let target: HTMLElement | null | undefined;
+    if (returnTo.target === "add") {
+      target = addButton.current;
+    } else if (returnTo.target === "disclosure") {
+      target = disclosure.current;
+    } else {
+      const [kind, id, control] = returnTo.target.split(":");
+      target = root.current?.querySelector<HTMLElement>(
+        `[data-rk="${kind}:${id}"] [data-control="${control}"]`,
+      );
+    }
+    // A row that is gone, or a list that is closed: the disclosure is the next best stop.
+    (target ?? disclosure.current)?.focus();
+    takeFocusReturn(returnTo.n);
+  }, [returnTo, takeFocusReturn]);
 
   return (
     <div className="flex flex-col">

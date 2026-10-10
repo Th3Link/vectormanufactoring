@@ -159,24 +159,28 @@ export interface FormatsApi {
   changeForm: (change: Partial<FormValues>) => void;
   focusFormField: (field: FormField) => void;
   submitForm: () => void;
-  cancelForm: () => void;
+  /** `keyboard` is true when Escape or a key press closed it: the keyboard
+   * goes to a sensible control instead of the canvas. */
+  cancelForm: (keyboard: boolean) => void;
   groupForm: GroupForm | null;
   openGroupEdit: (id: string) => void;
   changeGroupForm: (change: Partial<GroupForm>) => void;
   saveGroupForm: () => void;
-  cancelGroupForm: () => void;
+  cancelGroupForm: (keyboard: boolean) => void;
   /** The format or group whose delete is being confirmed. */
   confirm: { kind: "format" | "group"; id: string } | null;
   askDelete: (kind: "format" | "group", id: string) => void;
-  cancelDelete: () => void;
-  doDelete: () => void;
+  cancelDelete: (keyboard: boolean) => void;
+  doDelete: (keyboard: boolean) => void;
   importFile: () => void;
   exportFile: () => void;
-  setAside: () => void;
+  setAside: (keyboard: boolean) => void;
   notice: FormatNotice | null;
-  /** After a form was saved: where the keyboard goes back to (the row's apply
-   * button, or the Add format button when `rowId` is `null`). */
-  focusReturn: { rowId: string | null; n: number } | null;
+  /** Where the keyboard goes back to after a form or confirm closed or the
+   * file was set aside: `"add"`, `"disclosure"`, or `"<row key>:<control>"`
+   * such as `"fmt:u-key-ring:apply"`. Consumed once by `takeFocusReturn`. */
+  focusReturn: { target: string; n: number } | null;
+  takeFocusReturn: (n: number) => void;
 }
 
 const FIELD_ORDER: FormField[] = ["name", "width", "height", "group-name"];
@@ -371,13 +375,28 @@ export function useFormats(
     }
     lastGroup.current = values.groupId;
     setForm(null);
-    setFocusReturn({ rowId: current.editing, n: ++counter.current });
+    setFocusReturn({
+      target: current.editing === null ? "add" : `fmt:${current.editing}:apply`,
+      n: ++counter.current,
+    });
     void write(edit.file_text, "add");
     say("add", "success", edit.notice);
     refresh();
   }, [form, getSession, refresh, say, write]);
 
-  const cancelForm = useCallback(() => setForm(null), []);
+  const returnKeyboardTo = useCallback((target: string) => {
+    setFocusReturn({ target, n: ++counter.current });
+  }, []);
+
+  const cancelForm = useCallback(
+    (keyboard: boolean) => {
+      if (keyboard && form) {
+        returnKeyboardTo(form.editing === null ? "add" : `fmt:${form.editing}:edit`);
+      }
+      setForm(null);
+    },
+    [form, returnKeyboardTo],
+  );
 
   const openGroupEdit = useCallback(
     (id: string) => {
@@ -413,16 +432,35 @@ export function useFormats(
     refresh();
   }, [groupForm, getSession, refresh, write]);
 
-  const cancelGroupForm = useCallback(() => setGroupForm(null), []);
+  const cancelGroupForm = useCallback(
+    (keyboard: boolean) => {
+      if (keyboard && groupForm) {
+        returnKeyboardTo(`grp:${groupForm.id}:edit`);
+      }
+      setGroupForm(null);
+    },
+    [groupForm, returnKeyboardTo],
+  );
 
   const askDelete = useCallback((kind: "format" | "group", id: string) => {
     setForm(null);
     setGroupForm(null);
     setConfirm({ kind, id });
   }, []);
-  const cancelDelete = useCallback(() => setConfirm(null), []);
+  const cancelDelete = useCallback(
+    (keyboard: boolean) => {
+      if (keyboard && confirm) {
+        returnKeyboardTo(
+          `${confirm.kind === "format" ? "fmt" : "grp"}:${confirm.id}:delete`,
+        );
+      }
+      setConfirm(null);
+    },
+    [confirm, returnKeyboardTo],
+  );
 
-  const doDelete = useCallback(() => {
+  const doDelete = useCallback(
+    (keyboard: boolean) => {
     const active = getSession();
     if (!confirm || !active) {
       return;
@@ -435,8 +473,14 @@ export function useFormats(
     if (edit.ok) {
       void write(edit.file_text, "add");
     }
+    // The row is gone: the keyboard goes back to the disclosure.
+    if (keyboard) {
+      returnKeyboardTo("disclosure");
+    }
     refresh();
-  }, [confirm, getSession, refresh, write]);
+    },
+    [confirm, getSession, refresh, returnKeyboardTo, write],
+  );
 
   const importFile = useCallback(() => {
     void (async () => {
@@ -474,7 +518,8 @@ export function useFormats(
     })();
   }, [getSession, say]);
 
-  const setAside = useCallback(() => {
+  const setAside = useCallback(
+    (keyboard: boolean) => {
     void (async () => {
       const failure = await setFormatsAside();
       if (failure !== null) {
@@ -482,10 +527,19 @@ export function useFormats(
         return;
       }
       getSession()?.formats_file_set_aside();
+      if (keyboard) {
+        returnKeyboardTo("disclosure");
+      }
       say("broken", "success", "Moved to document-formats.toml.broken.");
       refresh();
     })();
-  }, [getSession, refresh, say]);
+    },
+    [getSession, refresh, returnKeyboardTo, say],
+  );
+
+  const takeFocusReturn = useCallback((n: number) => {
+    setFocusReturn((now) => (now && now.n === n ? null : now));
+  }, []);
 
   return {
     list,
@@ -517,5 +571,6 @@ export function useFormats(
     setAside,
     notice,
     focusReturn,
+    takeFocusReturn,
   };
 }

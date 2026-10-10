@@ -218,7 +218,11 @@ export function PropertiesPanel({ editor, document: doc }: PropertiesPanelProps)
             className="flex min-h-0 flex-1 flex-col"
           >
             <div className="flex h-7 shrink-0 items-center justify-between gap-2 px-3 pt-3 pb-2 box-content">
-              <PanelTabStrip tabs={doc.view.tabs} onReturnFocus={returnFocus} />
+              <PanelTabStrip
+                tabs={doc.view.tabs}
+                active={doc.view.activeTab}
+                onReturnFocus={returnFocus}
+              />
               <PanelSubject text={subject} />
             </div>
             {/* Keyed on the tab: the scroll position starts at the top on every

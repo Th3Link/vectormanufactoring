@@ -628,7 +628,7 @@ fn the_export_is_the_user_groups_and_their_favourites() {
 fn an_import_merges_by_id_size_and_group() {
     let mut lib = library(&fixture("valid.toml"));
     let report = lib.import(&fixture("import.toml")).unwrap();
-    assert_eq!((report.added, report.groups, report.skipped), (4, 3, 3));
+    assert_eq!((report.added, report.groups, report.skipped), (5, 3, 3));
     assert_eq!(lib.user_text().unwrap(), fixture("import.expected.toml"));
     // Built-in groups and the enabled choices are not changed.
     assert!(lib.list().groups[1].enabled);

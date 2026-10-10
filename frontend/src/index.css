@@ -282,6 +282,9 @@ input[type="range"].select-bar-slider-mixed::-moz-range-thumb {
 /* The body scrolls under the fixed header row (`0043`): one thin scrollbar, no
    scroll chaining. */
 .properties-panel-body {
+  /* A containing block, so the hidden inputs of Radix radio groups are clipped
+     by the scroller and never lengthen the page (UX review B2). */
+  position: relative;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;

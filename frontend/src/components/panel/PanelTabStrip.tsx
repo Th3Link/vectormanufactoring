@@ -1,5 +1,5 @@
 import { Droplet, File } from "lucide-react";
-import type { ComponentType } from "react";
+import { type ComponentType, useEffect, useRef, useState } from "react";
 
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -14,6 +14,8 @@ const GLYPHS: Record<string, ComponentType<{ size: number; strokeWidth: number; 
 
 interface PanelTabStripProps {
   tabs: readonly PanelTabView[];
+  /** The active tab's name. */
+  active: string;
   /** After a mouse press the keyboard goes back to the canvas; a key press
    * keeps the focus on the strip so the arrows keep working. */
   onReturnFocus: () => void;
@@ -30,9 +32,33 @@ const TAB_CLASS =
  * `aria-selected`. A dimmed tab is a disabled button (no pointer events, so
  * its tooltip sits on a wrapper), skipped by the arrows and never a Tab stop.
  */
-export function PanelTabStrip({ tabs, onReturnFocus }: PanelTabStripProps) {
+export function PanelTabStrip({ tabs, active, onReturnFocus }: PanelTabStripProps) {
+  // The strip is one Tab stop and it is the active tab (criterion 12). Radix
+  // keeps the tab that had focus last as the stop, so when the active tab
+  // changes while focus is elsewhere (a shortcut, a selection) the strip is
+  // rebuilt: a fresh group forwards the Tab stop to the active tab.
+  const focusInside = useRef(false);
+  const [generation, setGeneration] = useState(0);
+  useEffect(() => {
+    if (!focusInside.current) {
+      setGeneration((n) => n + 1);
+    }
+  }, [active]);
   return (
-    <TabsList aria-label="Panel" loop={false} className="flex shrink-0 gap-1">
+    <TabsList
+      key={generation}
+      aria-label="Panel"
+      loop={false}
+      onFocus={() => {
+        focusInside.current = true;
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          focusInside.current = false;
+        }
+      }}
+      className="flex shrink-0 gap-1"
+    >
       {tabs.map((tab) => {
         const Glyph = GLYPHS[tab.name];
         const trigger = (

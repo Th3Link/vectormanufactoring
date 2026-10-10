@@ -39,6 +39,7 @@ mod path_model;
 mod path_reverse;
 mod path_topology;
 mod paths;
+mod preset_units;
 mod primitive_model;
 mod primitive_outline;
 mod replace;
@@ -59,8 +60,8 @@ pub use corner_radii::{Corner, CornerRadii, SHARP_CORNER_EPSILON_MM, effective_c
 pub use display_unit::DisplayUnit;
 pub use document::{CURRENT_FORMAT_VERSION, Document, DocumentVersion};
 pub use document_presets::{
-    AuthoredSize, DocumentPreset, Orientation, PRESET_MATCH_TOLERANCE, PresetError, PresetGroup,
-    PresetList, PresetReason, PresetSubject, PresetUnit, checked_name,
+    DocumentPreset, PRESET_MATCH_TOLERANCE, PresetError, PresetGroup, PresetList, PresetReason,
+    PresetSubject, checked_name,
 };
 pub use document_size::{
     DocumentSizeError, MAX_DOCUMENT_MM, MIN_DOCUMENT_MM, validated_document_side,
@@ -81,6 +82,7 @@ pub use path_model::{
 };
 pub use path_reverse::reversed_anchors;
 pub use paths::resolve_handle_pair;
+pub use preset_units::{AuthoredSize, Orientation, PresetUnit};
 pub use primitive_model::{
     EllipseFrame, InnerRatio, ObjectSnapshot, PointCount, PrimitiveSnapshot, RectBounds, Shape,
     ShapeParamError, StarFrame, shape_center, shape_frame_bounds, translate_shape,

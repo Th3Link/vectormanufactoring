@@ -211,8 +211,10 @@ fn size_message(unit: PresetUnit) -> String {
     format!("{} {}", range_message(lowest, highest), unit.symbol())
 }
 
-/// The chip of a refusal that only the library can see (criterion 20).
-fn field_error(error: &FormatError) -> FieldError {
+/// The chip of a refusal that only the library can see (criterion 20), and
+/// of every edit the library refuses.
+#[must_use]
+pub fn field_error(error: &FormatError) -> FieldError {
     let message = match &error.reason {
         FormatReason::SameSizeAs(name) => format!("Same size as {name}"),
         FormatReason::NameInGroup(name) => format!("This group already has {name}"),
@@ -231,13 +233,6 @@ fn field_error(error: &FormatError) -> FieldError {
         curvyo_document_core::FormatField::GroupName => FormField::GroupName,
     };
     FieldError { field, message }
-}
-
-/// The chip of a refused edit that reached the library (the group form of
-/// criterion 24 and every edit).
-#[must_use]
-pub fn refusal_message(error: &FormatError) -> FieldError {
-    field_error(error)
 }
 
 /// The notice after a format was added (criterion 20).

@@ -230,13 +230,7 @@ impl Session {
             // selection tool exists").
             tool: Tool::Select,
             style: StyleEditor::default(),
-            formats: curvyo_document_core::FormatLibrary::shipped().unwrap_or_else(|_| {
-                // The tests load the shipped file, so this is unreachable; an
-                // empty list would only hide the buttons.
-                curvyo_document_core::FormatLibrary::from_builtin(
-                    curvyo_document_core::PresetList::default(),
-                )
-            }),
+            formats: Self::builtin_formats(),
             formats_broken: None,
             // A new or opened project starts with an empty selection
             // (`specs/0043-properties-tabs/` criterion 5, 11).
@@ -275,13 +269,7 @@ impl Session {
             selection: ObjectSelection::new(),
             tool: Tool::Select,
             style: StyleEditor::default(),
-            formats: curvyo_document_core::FormatLibrary::shipped().unwrap_or_else(|_| {
-                // The tests load the shipped file, so this is unreachable; an
-                // empty list would only hide the buttons.
-                curvyo_document_core::FormatLibrary::from_builtin(
-                    curvyo_document_core::PresetList::default(),
-                )
-            }),
+            formats: Self::builtin_formats(),
             formats_broken: None,
             // A new or opened project starts with an empty selection
             // (`specs/0043-properties-tabs/` criterion 5, 11).
