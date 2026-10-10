@@ -87,9 +87,17 @@ fn selected_session(document: &Document, clicks: &[Point]) -> (Session, Point, P
     (session, low, high)
 }
 
-/// The mean time of `draw_list` over `frames` pointer positions of a drag that
-/// started at `press`, the pointer moving along `step` per frame.
+/// The mean time of `draw_list` over 30 pointer positions of a drag that started
+/// at `press`, the pointer moving along `step` per frame; the best of three drags,
+/// so that a busy machine does not decide the ratio.
 fn frame_time(session: &mut Session, press: Point, step: (f64, f64)) -> Duration {
+    (0..3)
+        .map(|_| one_drag(session, press, step))
+        .min()
+        .unwrap_or_default()
+}
+
+fn one_drag(session: &mut Session, press: Point, step: (f64, f64)) -> Duration {
     session.pointer_hover(press, false, false);
     session.pointer_down(press, false);
     let frames = 30u32;
@@ -164,4 +172,81 @@ fn a_group_skew_preview_costs_at_most_1_1_times_a_move_preview() {
             "skew {skew_frame:?} against move {move_frame:?}"
         );
     }
+}
+
+/// Reported, not gated (criterion 49, decision 3): at 10,000 selected objects (5,000
+/// paths with 20 nodes, 5,000 rectangles) the frame at rest, a scale preview frame
+/// and the pointer event that precedes it. A full-fidelity frame of this size needs the
+/// draw-list cache (`docs/technical-debt.md`).
+#[test]
+#[ignore = "benchmark: run in release with --ignored --nocapture"]
+fn report_the_frames_of_10000_selected_objects() {
+    let document = Document::new(1);
+    let columns = 100u32;
+    for i in 0..5000u32 {
+        let (cx, cy) = (f64::from(i % columns) * 30.0, f64::from(i / columns) * 30.0);
+        let anchors: Vec<NewAnchor> = (0..20u32)
+            .map(|n| {
+                let a = f64::from(n) / 20.0 * std::f64::consts::TAU;
+                NewAnchor::corner(
+                    AnchorId::new(1, u64::from(i) * 20 + u64::from(n)),
+                    pt(cx + 10.0 * a.cos(), cy + 10.0 * a.sin()),
+                )
+            })
+            .collect();
+        let _ = document.create_path(&anchors, true);
+    }
+    for i in 0..5000u32 {
+        let (x, y) = (
+            f64::from(i % columns) * 30.0,
+            1600.0 + f64::from(i / columns) * 30.0,
+        );
+        let _ = document.create_rect(RectBounds {
+            origin: pt(x, y),
+            width: Length::from_mm(12.0),
+            height: Length::from_mm(12.0),
+        });
+    }
+    let mut session = Session::open(2, &pack(&document, "0.1.0").unwrap()).unwrap();
+    session.set_tool(Tool::Select);
+    session.resize_viewport(1200.0, 800.0);
+    for _ in 0..12 {
+        session.wheel(0.0, 100.0, 600.0, 400.0, false, true);
+    }
+    // Select everything with one marquee that contains it all.
+    let from = pt(-200.0, -200.0);
+    let to = pt(3200.0, 3300.0);
+    session.pointer_hover(from, false, false);
+    session.pointer_down(from, false);
+    session.pointer_hover(to, false, false);
+    session.pointer_up(to, false, false);
+    println!("selected: {}", session.selected_object_count());
+    let began = Instant::now();
+    let _ = session.draw_list();
+    println!("10,000 selected, frame at rest: {:?}", began.elapsed());
+    let objects: Vec<ObjectSnapshot> = document
+        .object_ids()
+        .into_iter()
+        .filter_map(|id| document.object(id))
+        .collect();
+    let (_, high) = objects
+        .iter()
+        .map(object_outline_bounds)
+        .reduce(|(a, b), (c, d)| {
+            (
+                pt(a.x.min(c.x), a.y.min(c.y)),
+                pt(b.x.max(d.x), b.y.max(d.y)),
+            )
+        })
+        .unwrap();
+    session.pointer_hover(high, false, false);
+    session.pointer_down(high, false);
+    let to = pt(high.x + 40.0, high.y + 20.0);
+    let began = Instant::now();
+    session.pointer_hover(to, false, false);
+    println!("scale drag, pointer event: {:?}", began.elapsed());
+    let began = Instant::now();
+    let _ = session.draw_list();
+    println!("scale drag, preview frame: {:?}", began.elapsed());
+    session.escape();
 }
