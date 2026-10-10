@@ -6,9 +6,21 @@
 //! positions come from the design system's pixel layout (rotate 32 px out on
 //! the diagonal, skew 16 px out, resize at corners and edge midpoints).
 
+// Test code: byte buffers are compared with `assert!(a == b, "msg")` on purpose
+// (a failing `assert_eq!` would print the whole snapshot), and the arithmetic is
+// written the way the specification states it.
+#![allow(
+    clippy::manual_assert_eq,
+    clippy::manual_midpoint,
+    clippy::collapsible_if
+)]
+#![allow(clippy::unneeded_wildcard_pattern, clippy::unreadable_literal)]
+#![allow(clippy::used_underscore_binding, clippy::useless_conversion)]
+#![allow(clippy::suboptimal_flops, clippy::imprecise_flops)]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::too_many_lines, clippy::cast_precision_loss, missing_docs)]
 #![allow(clippy::many_single_char_names, clippy::doc_markdown)]
+#![allow(clippy::items_after_statements)]
 
 use std::f64::consts::{FRAC_PI_2, SQRT_2};
 
@@ -174,7 +186,10 @@ fn ac6_one_object_or_none_has_no_group() {
     one.select_single(a);
     assert!(SelectTool::group_of(&snapshots(&d), &one).is_none());
     assert!(SelectTool::group_of(&snapshots(&d), &ObjectSelection::new()).is_none());
-    assert!(SelectTool::group_handle_positions(&snapshots(&d), &one, tol(), false).is_empty());
+    assert_eq!(
+        SelectTool::group_handle_positions(&snapshots(&d), &one, tol(), false).len(),
+        0
+    );
 }
 
 /// Criterion 3/1: a polygon and a star contribute their outline, a path its
@@ -413,8 +428,8 @@ fn ac13_a_single_point_has_no_handle() {
     let g = SelectTool::group_of(&snapshots(&d), &selection(&d)).unwrap();
     assert_eq!(g.shape(), GroupBoxShape::Point);
     assert_eq!(g.side_mm(), 0.0);
-    assert!(handles(&d, false).is_empty());
-    assert!(handles(&d, true).is_empty());
+    assert_eq!(handles(&d, false).len(), 0);
+    assert_eq!(handles(&d, true).len(), 0);
     // And no hit anywhere near.
     let objects = snapshots(&d);
     let sel = selection(&d);

@@ -5,6 +5,17 @@
 //! small reference models written here (a linear map applied to anchors,
 //! handle vectors and frames), never read back from the code under test.
 
+// Test code: byte buffers are compared with `assert!(a == b, "msg")` on purpose
+// (a failing `assert_eq!` would print the whole snapshot), and the arithmetic is
+// written the way the specification states it.
+#![allow(
+    clippy::manual_assert_eq,
+    clippy::manual_midpoint,
+    clippy::collapsible_if
+)]
+#![allow(clippy::unneeded_wildcard_pattern, clippy::unreadable_literal)]
+#![allow(clippy::used_underscore_binding, clippy::useless_conversion)]
+#![allow(clippy::suboptimal_flops, clippy::imprecise_flops)]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::float_cmp)]
 #![allow(clippy::many_single_char_names, clippy::similar_names)]
 #![allow(clippy::too_many_lines, clippy::cast_precision_loss)]
@@ -417,7 +428,11 @@ fn ac2_stroke_width_is_not_part_of_the_group_box() {
 fn ac3_group_box_ignores_the_stale_oriented_box_of_a_turned_path() {
     let d = Document::new(1);
     let p = d.create_path(
-        &[anchor(1, 50.0, 50.0), anchor(2, 70.0, 50.0), anchor(3, 60.0, 56.0)],
+        &[
+            anchor(1, 50.0, 50.0),
+            anchor(2, 70.0, 50.0),
+            anchor(3, 60.0, 56.0),
+        ],
         true,
     );
     let _ = d.create_rect(rect_bounds(100.0, 50.0, 10.0, 10.0));
@@ -442,7 +457,10 @@ fn ac3_group_box_ignores_the_stale_oriented_box_of_a_turned_path() {
         v.fields[0].prefill.parse().unwrap(),
         v.fields[1].prefill.parse().unwrap(),
     );
-    assert!(near(w, x1 - x0, 0.06) && near(h, y1 - y0, 0.06), "{w} x {h}");
+    assert!(
+        near(w, x1 - x0, 0.06) && near(h, y1 - y0, 0.06),
+        "{w} x {h}"
+    );
 }
 
 /// Criterion 7: after each committed rotate the box is the axis-aligned bounds
@@ -691,7 +709,6 @@ fn ac20_every_kind_under_a_non_uniform_scale() {
     assert!(near(ar, FRAC_PI_2, 1e-9));
 }
 
-
 // ---------------------------------------------------------------------
 // Part C: rotate
 // ---------------------------------------------------------------------
@@ -711,17 +728,6 @@ fn rotate_drag(
     to
 }
 
-fn norm(a: f64) -> f64 {
-    let n = a % (2.0 * PI);
-    if n > PI {
-        n - 2.0 * PI
-    } else if n <= -PI {
-        n + 2.0 * PI
-    } else {
-        n
-    }
-}
-
 /// Criterion 26, the spec's example (moved by (50, 50)): the two squares
 /// turned by 90 degrees about the box centre (65, 55): the left square ends at
 /// (60, 40)-(70, 50), the right one at (60, 60)-(70, 70), each rotation 90.
@@ -732,14 +738,24 @@ fn ac26_example_two_squares_turned_by_90() {
     select_all(&mut s);
     let g = two_squares_box(&s);
     let commits = change_count(&s);
-    rotate_drag(&mut s, g.rot_corner(1.0, 1.0), g.centre(), 90.0, false, false);
+    rotate_drag(
+        &mut s,
+        g.rot_corner(1.0, 1.0),
+        g.centre(),
+        90.0,
+        false,
+        false,
+    );
     assert_eq!(change_count(&s), commits + 1, "one commit");
     let o = objects(&s);
     let ((b0, r0), (b1, r1)) = (rect_of(&o[0]), rect_of(&o[1]));
     assert_pt(rect_centre(b0), 65.0, 45.0, 1e-6, "left centre");
     assert_pt(rect_centre(b1), 65.0, 65.0, 1e-6, "right centre");
     assert!(near(b0.width.as_mm(), 10.0, 1e-9) && near(b0.height.as_mm(), 10.0, 1e-9));
-    assert!(near(r0, FRAC_PI_2, 1e-9) && near(r1, FRAC_PI_2, 1e-9), "{r0} {r1}");
+    assert!(
+        near(r0, FRAC_PI_2, 1e-9) && near(r1, FRAC_PI_2, 1e-9),
+        "{r0} {r1}"
+    );
     // The box after the commit is axis-aligned again: 10 x 30.
     key(&mut s, "s", false);
     let v = s.transform_entry().unwrap();
@@ -758,7 +774,14 @@ fn ac26_rotate_and_rotate_back_restores() {
         let mut s = open(&d);
         select_all(&mut s);
         let g = GBox::new(&s, pt(50.0, 50.0), pt(80.0, 60.0));
-        rotate_drag(&mut s, g.rot_corner(1.0, 1.0), g.centre(), degrees, false, false);
+        rotate_drag(
+            &mut s,
+            g.rot_corner(1.0, 1.0),
+            g.centre(),
+            degrees,
+            false,
+            false,
+        );
         let mid = objects(&s);
         assert!(
             path_points(&mid[0])
@@ -773,7 +796,14 @@ fn ac26_rotate_and_rotate_back_restores() {
         } else {
             g
         };
-        rotate_drag(&mut s, g2.rot_corner(1.0, 1.0), g2.centre(), -degrees, false, false);
+        rotate_drag(
+            &mut s,
+            g2.rot_corner(1.0, 1.0),
+            g2.centre(),
+            -degrees,
+            false,
+            false,
+        );
         let after = objects(&s);
         for (a, b) in after.iter().zip(&before) {
             for (pa, pb) in path_points(a).iter().zip(path_points(b)) {
@@ -794,7 +824,11 @@ fn ac26_rotate_and_rotate_back_restores() {
 fn ac26_every_kind_turns_rigidly_with_rotation_added() {
     let d = Document::new(1);
     let path = d.create_path(
-        &[anchor(1, 40.0, 40.0), anchor(2, 100.0, 40.0), anchor(3, 70.0, 90.0)],
+        &[
+            anchor(1, 40.0, 40.0),
+            anchor(2, 100.0, 40.0),
+            anchor(3, 70.0, 90.0),
+        ],
         true,
     );
     let r = d.create_rect(rect_bounds(50.0, 50.0, 12.0, 8.0));
@@ -829,21 +863,36 @@ fn ac26_every_kind_turns_rigidly_with_rotation_added() {
     let degrees: f64 = 37.0;
     let delta = degrees.to_radians();
     let pivot = g.centre();
-    rotate_drag(&mut s, g.rot_corner(-1.0, 1.0), pivot, degrees, false, false);
+    rotate_drag(
+        &mut s,
+        g.rot_corner(-1.0, 1.0),
+        pivot,
+        degrees,
+        false,
+        false,
+    );
     let after = objects(&s);
     // Path.
     for (a, b) in path_points(&after[0]).iter().zip(path_points(&before[0])) {
         let m = rot(b, pivot, delta);
         assert_pt(*a, m.x, m.y, 1e-6, "path anchor");
     }
-    assert!(near(angle_diff(rotation_of(&after[0]), rotation_of(&before[0]) + delta), 0.0, 1e-9));
+    assert!(near(
+        angle_diff(rotation_of(&after[0]), rotation_of(&before[0]) + delta),
+        0.0,
+        1e-9
+    ));
     // Rectangle: centre turned, size unchanged, rotation + delta.
     let ((bb, br), (ab, ar)) = (rect_of(&before[1]), rect_of(&after[1]));
     let c = rot(rect_centre(bb), pivot, delta);
     assert_pt(rect_centre(ab), c.x, c.y, 1e-6, "rect centre");
     assert!(near(ab.width.as_mm(), bb.width.as_mm(), 1e-9));
     assert!(near(ab.height.as_mm(), bb.height.as_mm(), 1e-9));
-    assert!(near(angle_diff(ar, br + delta), 0.0, 1e-9), "{ar} vs {}", br + delta);
+    assert!(
+        near(angle_diff(ar, br + delta), 0.0, 1e-9),
+        "{ar} vs {}",
+        br + delta
+    );
     // Ellipse.
     let ((bf, br), (af, ar)) = (ellipse_of(&before[2]), ellipse_of(&after[2]));
     let c = rot(bf.center, pivot, delta);
@@ -899,7 +948,14 @@ fn ac25_shift_pivots() {
     let mut s = open(&d);
     select_all(&mut s);
     let g = two_squares_box(&s);
-    rotate_drag(&mut s, g.rot_corner(1.0, 1.0), g.corner(-1.0, -1.0), 90.0, true, false);
+    rotate_drag(
+        &mut s,
+        g.rot_corner(1.0, 1.0),
+        g.corner(-1.0, -1.0),
+        90.0,
+        true,
+        false,
+    );
     let o = objects(&s);
     let (b0, r0) = rect_of(&o[0]);
     // Left square centre (55, 55) about (50, 50) by 90: (50 - 5, 50 + 5) = (45, 55).
@@ -915,10 +971,20 @@ fn ac25_shift_pivots() {
     let to = rot(g.rot_side(1.0, 0.0), pivot, FRAC_PI_2);
     hold(&mut s, to, true, false);
     s.pointer_up(to, true, false);
-    assert_eq!(s.selected_object_count(), 2, "a Shift press on a side rotate handle rotates, it does not toggle");
+    assert_eq!(
+        s.selected_object_count(),
+        2,
+        "a Shift press on a side rotate handle rotates, it does not toggle"
+    );
     let o = objects(&s);
     let (b0, _) = rect_of(&o[0]);
-    assert_pt(rect_centre(b0), 50.0, 60.0, 1e-6, "left centre about the W midpoint");
+    assert_pt(
+        rect_centre(b0),
+        50.0,
+        60.0,
+        1e-6,
+        "left centre about the W midpoint",
+    );
 }
 
 /// Criterion 25: Shift changes the pivot mid-drag; the result is computed from
@@ -987,13 +1053,33 @@ fn ac28_rotate_readout() {
     hold(&mut s, from, false, false);
     s.pointer_down(from, false);
     assert!(s.live_readout().is_none() || s.live_readout().is_some());
-    hold(&mut s, rot(from, g.centre(), 37.4_f64.to_radians()), false, false);
+    hold(
+        &mut s,
+        rot(from, g.centre(), 37.4_f64.to_radians()),
+        false,
+        false,
+    );
     assert_eq!(s.live_readout().unwrap().text, "Δ 37.4°");
-    hold(&mut s, rot(from, g.centre(), 40.0_f64.to_radians()), false, true);
+    hold(
+        &mut s,
+        rot(from, g.centre(), 40.0_f64.to_radians()),
+        false,
+        true,
+    );
     assert_eq!(s.live_readout().unwrap().text, "Δ 45°");
-    hold(&mut s, rot(from, g.centre(), (-22.5_f64).to_radians()), false, false);
+    hold(
+        &mut s,
+        rot(from, g.centre(), (-22.5_f64).to_radians()),
+        false,
+        false,
+    );
     assert_eq!(s.live_readout().unwrap().text, "Δ \u{2212}22.5°");
-    hold(&mut s, rot(from, g.centre(), 200.0_f64.to_radians()), false, false);
+    hold(
+        &mut s,
+        rot(from, g.centre(), 200.0_f64.to_radians()),
+        false,
+        false,
+    );
     assert_eq!(s.live_readout().unwrap().text, "Δ \u{2212}160°");
     s.pointer_up(from, false, false);
     assert!(s.live_readout().is_none());
@@ -1009,11 +1095,7 @@ fn ac30_cancelled_and_empty_gestures_write_nothing() {
     let g = two_squares_box(&s);
     let before = bytes_of(&s);
     let commits = change_count(&s);
-    let handles = [
-        g.corner(1.0, 1.0),
-        g.mid(1.0, 0.0),
-        g.rot_corner(1.0, -1.0),
-    ];
+    let handles = [g.corner(1.0, 1.0), g.mid(1.0, 0.0), g.rot_corner(1.0, -1.0)];
     for h in handles {
         // Under the dead zone.
         hold(&mut s, h, false, false);
@@ -1031,7 +1113,10 @@ fn ac30_cancelled_and_empty_gestures_write_nothing() {
         hold(&mut s, h, false, false);
         s.pointer_down(h, false);
         hold(&mut s, pt(h.x + 20.0, h.y + 9.0), false, false);
-        assert_eq!(key(&mut s, "Escape", false), KeyOutcome::Escape(EscapeStep::CancelledDrag));
+        assert_eq!(
+            key(&mut s, "Escape", false),
+            KeyOutcome::Escape(EscapeStep::CancelledDrag)
+        );
         s.pointer_up(pt(h.x + 20.0, h.y + 9.0), false, false);
         assert_eq!(change_count(&s), commits, "Escape {h:?}");
         assert_eq!(s.selected_object_count(), 2, "the selection survives");
@@ -1070,7 +1155,11 @@ fn ac16_the_centre_handle_moves_the_selection_in_one_commit() {
     select_all(&mut s);
     let g = wide_box(&s);
     let commits = change_count(&s);
-    drag(&mut s, g.centre(), pt(g.centre().x + 7.0, g.centre().y - 3.0));
+    drag(
+        &mut s,
+        g.centre(),
+        pt(g.centre().x + 7.0, g.centre().y - 3.0),
+    );
     assert_eq!(change_count(&s), commits + 1);
     let o = origins(&s);
     assert_pt(o[0], 57.0, 47.0, 1e-9, "first");
@@ -1132,7 +1221,11 @@ fn ac45_the_empty_interior_clears_or_marquees_and_never_moves() {
     // selects nothing: the marquee. No object moves.
     drag(&mut s, pt(75.0, 56.0), pt(85.0, 64.0));
     assert!(bytes_of(&s) == before, "the document changed");
-    assert_eq!(s.selected_object_count(), 0, "the marquee replaced the selection");
+    assert_eq!(
+        s.selected_object_count(),
+        0,
+        "the marquee replaced the selection"
+    );
     // A click on the empty interior clears the selection.
     select_all(&mut s);
     click(&mut s, pt(80.0, 60.0 - 6.0));
@@ -1176,7 +1269,13 @@ fn ac43_a_plain_press_on_an_unselected_object_inside_the_box_selects_it() {
     drag(&mut s, pt(85.0, 55.0), pt(85.0, 100.0));
     let o = origins(&s);
     assert_pt(o[0], 50.0, 50.0, 1e-9, "first stays");
-    assert_pt(o[2], 80.0, 55.0 + 45.0, 1e-9, "the unselected object, now selected, moved");
+    assert_pt(
+        o[2],
+        80.0,
+        55.0 + 45.0,
+        1e-9,
+        "the unselected object, now selected, moved",
+    );
     assert_eq!(s.selected_object_count(), 1);
 }
 
@@ -1237,7 +1336,10 @@ fn ac17_centre_handle_with_shift_ctrl_and_escape() {
     hold(&mut s, c, false, false);
     s.pointer_down(c, false);
     hold(&mut s, pt(c.x + 30.0, c.y), false, false);
-    assert_eq!(key(&mut s, "Escape", false), KeyOutcome::Escape(EscapeStep::CancelledDrag));
+    assert_eq!(
+        key(&mut s, "Escape", false),
+        KeyOutcome::Escape(EscapeStep::CancelledDrag)
+    );
     s.pointer_up(pt(c.x + 30.0, c.y), false, false);
     assert!(bytes_of(&s) == before, "the document changed");
 }
@@ -1255,7 +1357,11 @@ fn ac14_no_centre_handle_under_48_px_so_the_centre_is_ordinary_canvas() {
     let before = bytes_of(&s);
     drag(&mut s, c, pt(c.x + 20.0, c.y));
     assert!(bytes_of(&s) == before, "no move from the empty centre");
-    assert_eq!(s.selected_object_count(), 0, "the marquee replaced the selection");
+    assert_eq!(
+        s.selected_object_count(),
+        0,
+        "the marquee replaced the selection"
+    );
 }
 
 /// Criterion 46: the cursor over the centre handle is `move`; over a corner
@@ -1273,7 +1379,10 @@ fn ac46_cursors() {
     let inside = s.cursor_hint();
     hold(&mut s, pt(300.0, 300.0), false, false);
     let outside = s.cursor_hint();
-    assert_eq!(inside, outside, "empty canvas inside the box looks like outside");
+    assert_eq!(
+        inside, outside,
+        "empty canvas inside the box looks like outside"
+    );
     hold(&mut s, g.corner(1.0, 1.0), false, false);
     let c = s.cursor_hint();
     assert!(c.contains("resize") || c.contains("nwse"), "{c}");
@@ -1300,14 +1409,30 @@ fn ux5_copy_and_remove_badges_follow_the_press_test() {
         let m = s.move_indicators();
         (m.copy_badge, m.remove_badge)
     };
-    assert_eq!(badges(&mut s, pt(60.0, 50.0)), (true, false), "selected outline");
+    assert_eq!(
+        badges(&mut s, pt(60.0, 50.0)),
+        (true, false),
+        "selected outline"
+    );
     assert_eq!(badges(&mut s, g.centre()), (true, false), "centre handle");
     // Over an unselected object `edit-interaction-polish` criterion 37 keeps
     // the plus badge and a Ctrl press copies that object alone (the UX notes of
     // 0019 section 5 say "no badge": the accepted older rule is kept).
-    assert_eq!(badges(&mut s, pt(90.0, 55.0)), (true, false), "unselected object");
-    assert_eq!(badges(&mut s, pt(75.0, 100.0)), (false, true), "empty canvas");
-    assert_eq!(badges(&mut s, pt(100.0, 68.0)), (false, true), "empty inside the group box");
+    assert_eq!(
+        badges(&mut s, pt(90.0, 55.0)),
+        (true, false),
+        "unselected object"
+    );
+    assert_eq!(
+        badges(&mut s, pt(75.0, 100.0)),
+        (false, true),
+        "empty canvas"
+    );
+    assert_eq!(
+        badges(&mut s, pt(100.0, 68.0)),
+        (false, true),
+        "empty inside the group box"
+    );
 }
 
 /// Criterion 43 step 1: Alt starts the lasso, also on a handle: no transform.
@@ -1322,7 +1447,10 @@ fn ac43_alt_on_a_handle_starts_the_lasso() {
     s.modifiers_changed(false, false, true);
     s.pointer_hover(from, false, false);
     s.pointer_down(from, false);
-    for q in [pt(from.x + 5.0, from.y + 20.0), pt(from.x - 40.0, from.y + 20.0)] {
+    for q in [
+        pt(from.x + 5.0, from.y + 20.0),
+        pt(from.x - 40.0, from.y + 20.0),
+    ] {
         s.pointer_hover(q, false, false);
     }
     s.pointer_up(pt(from.x - 40.0, from.y + 20.0), false, false);
@@ -1340,7 +1468,11 @@ fn ac14_press_where_a_hidden_skew_handle_would_be_is_ordinary() {
     select_all(&mut s);
     let g = wide_box(&s);
     let before = bytes_of(&s);
-    drag(&mut s, g.skew(0.0, -1.0), pt(g.skew(0.0, -1.0).x + 10.0, g.skew(0.0, -1.0).y));
+    drag(
+        &mut s,
+        g.skew(0.0, -1.0),
+        pt(g.skew(0.0, -1.0).x + 10.0, g.skew(0.0, -1.0).y),
+    );
     assert!(bytes_of(&s) == before, "the document changed");
 }
 
@@ -1354,7 +1486,11 @@ fn ac43_ctrl_on_empty_canvas_is_the_remove_marquee() {
     let before = bytes_of(&s);
     drag_mod(&mut s, pt(75.0, 56.0), pt(85.0, 64.0), false, true);
     assert!(bytes_of(&s) == before, "the document changed");
-    assert_eq!(s.selected_object_count(), 2, "nothing was inside the marquee");
+    assert_eq!(
+        s.selected_object_count(),
+        2,
+        "nothing was inside the marquee"
+    );
 }
 
 /// Criterion 43 step 4 and `edit-interaction-polish` 37: a Ctrl drag from an
@@ -1372,9 +1508,18 @@ fn ac43_ctrl_drag_from_an_unselected_object_copies_it_alone() {
     assert_eq!(objects(&s).len(), 4, "exactly one copy");
     assert_eq!(s.selected_object_count(), 1);
     let o = origins(&s);
-    assert!(o.iter().any(|p| near(p.x, 82.0, 1e-9) && near(p.y, 55.0, 1e-9)));
-    assert!(o.iter().any(|p| near(p.x, 82.0, 1e-9) && near(p.y, 95.0, 1e-9)));
-    assert!(o.iter().any(|p| near(p.x, 50.0, 1e-9) && near(p.y, 50.0, 1e-9)));
+    assert!(
+        o.iter()
+            .any(|p| near(p.x, 82.0, 1e-9) && near(p.y, 55.0, 1e-9))
+    );
+    assert!(
+        o.iter()
+            .any(|p| near(p.x, 82.0, 1e-9) && near(p.y, 95.0, 1e-9))
+    );
+    assert!(
+        o.iter()
+            .any(|p| near(p.x, 50.0, 1e-9) && near(p.y, 50.0, 1e-9))
+    );
 }
 
 // ---------------------------------------------------------------------
@@ -1453,13 +1598,21 @@ fn ac41_skew_and_skew_back_restores() {
     // refit box is read through the typed move chip's prefill instead.
     let _ = (x0, x1);
     let outcome = key(&mut s, "m", false);
-    assert_eq!(outcome, KeyOutcome::EntryOpened, "selected: {}", s.selected_object_count());
+    assert_eq!(
+        outcome,
+        KeyOutcome::EntryOpened,
+        "selected: {}",
+        s.selected_object_count()
+    );
     let m = s.move_entry().unwrap();
     let tl = pt(
         m.absolute_prefill[0].parse().unwrap(),
         m.absolute_prefill[1].parse().unwrap(),
     );
-    assert_eq!(key(&mut s, "Escape", false), KeyOutcome::Escape(EscapeStep::ClosedEntry));
+    assert_eq!(
+        key(&mut s, "Escape", false),
+        KeyOutcome::Escape(EscapeStep::ClosedEntry)
+    );
     key(&mut s, "s", false);
     let v = s.transform_entry().unwrap();
     let (w, hh): (f64, f64) = (
@@ -1531,10 +1684,20 @@ fn ac41_ac42_skew_angle_cap_and_readout() {
     let dx = 10.0 * 12.5_f64.to_radians().tan();
     hold(&mut s, pt(h.x + dx, h.y), false, false);
     assert_eq!(s.live_readout().unwrap().text, "Skew x +12.5°");
-    hold(&mut s, pt(h.x - 10.0 * 8.0_f64.to_radians().tan(), h.y), false, false);
+    hold(
+        &mut s,
+        pt(h.x - 10.0 * 8.0_f64.to_radians().tan(), h.y),
+        false,
+        false,
+    );
     assert_eq!(s.live_readout().unwrap().text, "Skew x \u{2212}8°");
     // Ctrl: 22.5 degrees shows as "22.5°".
-    hold(&mut s, pt(h.x + 10.0 * 23.0_f64.to_radians().tan(), h.y), false, true);
+    hold(
+        &mut s,
+        pt(h.x + 10.0 * 23.0_f64.to_radians().tan(), h.y),
+        false,
+        true,
+    );
     assert_eq!(s.live_readout().unwrap().text, "Skew x +22.5°");
     // A huge drag with Ctrl caps at 75.
     hold(&mut s, pt(h.x + 100000.0, h.y), false, true);
@@ -1577,7 +1740,10 @@ fn ac37_ac40_skew_key_on_a_mixed_selection() {
     let v = s.transform_entry().unwrap();
     assert_eq!(v.kind, "skew");
     let commits = change_count(&s);
-    assert_eq!(s.commit_transform_entry("45", "", 0), EntryOutcome::Committed);
+    assert_eq!(
+        s.commit_transform_entry("45", "", 0),
+        EntryOutcome::Committed
+    );
     assert_eq!(change_count(&s), commits + 1);
     let after = objects(&s);
     // K = top handle: bottom side fixed (y = 60): x' = x + tan(45) * (60 - y).
@@ -1591,7 +1757,10 @@ fn ac37_ac40_skew_key_on_a_mixed_selection() {
     let mut s = open(&d);
     select_all(&mut s);
     assert_eq!(key(&mut s, "k", true), KeyOutcome::EntryOpened);
-    assert_eq!(s.commit_transform_entry("45", "", 0), EntryOutcome::Committed);
+    assert_eq!(
+        s.commit_transform_entry("45", "", 0),
+        EntryOutcome::Committed
+    );
     for (a, b) in objects(&s).iter().zip(&b) {
         for (qa, qb) in path_points(a).iter().zip(path_points(b)) {
             assert_pt(*qa, qb.x, qb.y + (qb.x - 50.0), 1e-6, "Shift+K skew");
@@ -1606,7 +1775,11 @@ fn ac37_keys_with_nothing_selected() {
     let (d, _) = two_squares();
     let mut s = open(&d);
     for k in ["m", "k"] {
-        assert_eq!(key(&mut s, k, false), KeyOutcome::Hint(KeyHint::SelectFirst), "{k}");
+        assert_eq!(
+            key(&mut s, k, false),
+            KeyOutcome::Hint(KeyHint::SelectFirst),
+            "{k}"
+        );
     }
     click(&mut s, pt(55.0, 50.0));
     assert_eq!(key(&mut s, "r", false), KeyOutcome::EntryOpened);
@@ -1619,9 +1792,9 @@ fn ac37_keys_with_nothing_selected() {
 fn radii_of(o: &ObjectSnapshot) -> [f64; 4] {
     match o {
         ObjectSnapshot::Primitive(p) => match p.shape {
-            Shape::Rect { corner_radii: r, .. } => {
-                [r.tl.as_mm(), r.tr.as_mm(), r.br.as_mm(), r.bl.as_mm()]
-            }
+            Shape::Rect {
+                corner_radii: r, ..
+            } => [r.tl.as_mm(), r.tr.as_mm(), r.br.as_mm(), r.bl.as_mm()],
             other => panic!("rect expected: {other:?}"),
         },
         ObjectSnapshot::Path(_) => panic!("rect expected"),
@@ -1677,14 +1850,20 @@ fn ac24_the_two_switches() {
     let to = pt(170.0, 80.0);
     let off = run(false, false, to);
     for (a, b) in off.iter().zip(&before) {
-        assert!(near(style_width(a), style_width(b), 0.0), "stroke untouched");
+        assert!(
+            near(style_width(a), style_width(b), 0.0),
+            "stroke untouched"
+        );
     }
     assert_eq!(radii_of(&off[0]), [1.0, 2.0, 3.0, 4.0]);
     assert_eq!(radii_of(&off[1]), [1.0, 2.0, 3.0, 4.0]);
     let f = 2.0_f64.sqrt();
     let on = run(true, true, to);
     for (a, b) in on.iter().zip(&before) {
-        assert!(near(style_width(a), style_width(b) * f, 1e-9), "stroke * sqrt(2)");
+        assert!(
+            near(style_width(a), style_width(b) * f, 1e-9),
+            "stroke * sqrt(2)"
+        );
     }
     let r = radii_of(&on[0]);
     for (got, want) in r.iter().zip([1.0, 2.0, 3.0, 4.0]) {
@@ -1694,14 +1873,26 @@ fn ac24_the_two_switches() {
     // untouched.
     let only_stroke = run(true, false, to);
     assert_eq!(radii_of(&only_stroke[0]), [1.0, 2.0, 3.0, 4.0]);
-    assert!(near(style_width(&only_stroke[2]), style_width(&before[2]) * f, 1e-9));
+    assert!(near(
+        style_width(&only_stroke[2]),
+        style_width(&before[2]) * f,
+        1e-9
+    ));
     let only_radius = run(false, true, to);
-    assert!(near(style_width(&only_radius[0]), style_width(&before[0]), 0.0));
+    assert!(near(
+        style_width(&only_radius[0]),
+        style_width(&before[0]),
+        0.0
+    ));
     assert!(near(radii_of(&only_radius[1])[3], 4.0 * f, 1e-9));
     // The floor: a collapse takes the stroke to 0.01 mm, never below.
     let collapsed = run(true, true, pt(-100.0, 80.0));
     for o in &collapsed {
-        assert!(near(style_width(o), 0.01, 1e-12), "floor: {}", style_width(o));
+        assert!(
+            near(style_width(o), 0.01, 1e-12),
+            "floor: {}",
+            style_width(o)
+        );
     }
 }
 
@@ -1737,7 +1928,11 @@ fn ac22_a_negative_factor_clamps_to_zero() {
     for o in objects(&s) {
         let (b, _) = rect_of(&o);
         assert!(b.width.as_mm() >= 0.0 && b.height.as_mm() >= 0.0);
-        assert!(near(b.width.as_mm(), 0.0, 1e-9), "x collapsed: {}", b.width.as_mm());
+        assert!(
+            near(b.width.as_mm(), 0.0, 1e-9),
+            "x collapsed: {}",
+            b.width.as_mm()
+        );
         assert!(near(rect_centre(b).x, 50.0, 1e-9), "all at the pivot x");
         // y: 30 -> sy = (30 - 50) / 10 < 0 -> 0 as well.
         assert!(near(b.height.as_mm(), 0.0, 1e-9));
@@ -1815,14 +2010,26 @@ fn ac12_gestures_on_a_flat_group_box() {
     drag(&mut s, g.mid(1.0, 0.0), pt(90.0, 66.0));
     let o = objects(&s);
     let xs: Vec<f64> = o.iter().flat_map(path_points).map(|p| p.x).collect();
-    assert!(xs.iter().zip([50.0, 66.0, 74.0, 90.0]).all(|(a, b)| near(*a, b, 1e-6)), "{xs:?}");
+    assert!(
+        xs.iter()
+            .zip([50.0, 66.0, 74.0, 90.0])
+            .all(|(a, b)| near(*a, b, 1e-6)),
+        "{xs:?}"
+    );
     for q in o.iter().flat_map(path_points) {
         assert!(near(q.y, 60.0, 1e-9), "y untouched");
     }
     // Rotate by 90 about the centre (60, 60): the line turns vertical.
     let mut s = open(&d);
     select_everything(&mut s);
-    rotate_drag(&mut s, g.rot_corner(1.0, 1.0), g.centre(), 90.0, false, false);
+    rotate_drag(
+        &mut s,
+        g.rot_corner(1.0, 1.0),
+        g.centre(),
+        90.0,
+        false,
+        false,
+    );
     let o = objects(&s);
     let p0 = path_points(&o[0]);
     assert_pt(p0[0], 60.0, 50.0, 1e-6, "turned");
@@ -1847,7 +2054,11 @@ fn ac13_a_single_point_selection() {
     let before = bytes_of(&s);
     // A rotate-handle position of a notional square: no handle exists.
     let diag = 32.0 / SQRT_2 / k_of(&s);
-    drag(&mut s, pt(80.0 + diag, 60.0 + diag), pt(80.0 + diag, 60.0 + diag + 30.0));
+    drag(
+        &mut s,
+        pt(80.0 + diag, 60.0 + diag),
+        pt(80.0 + diag, 60.0 + diag + 30.0),
+    );
     assert!(bytes_of(&s) == before, "no rotate gesture on a point");
     // (The press on empty canvas ran a marquee that replaced the selection.)
     drag(&mut s, pt(70.0, 50.0), pt(90.0, 70.0));
@@ -1902,7 +2113,10 @@ fn compound_scene() -> Session {
     select_everything(&mut s);
     let out = s.apply_boolean(curvyo_ui_core::BooleanOp::Difference);
     assert!(
-        matches!(out, curvyo_editor_wasm::BooleanOutcome::Applied { compound: true, .. }),
+        matches!(
+            out,
+            curvyo_editor_wasm::BooleanOutcome::Applied { compound: true, .. }
+        ),
         "{out:?}"
     );
     // A second object: an open path far to the right.
@@ -1942,7 +2156,14 @@ fn compound_path_in_a_selection_follows_scale_rotate_and_skew() {
     assert_eq!(seen, count);
     // Rotate by 90 about the centre (95, 70).
     let mut s = compound_scene();
-    rotate_drag(&mut s, gb.rot_corner(1.0, 1.0), gb.centre(), 90.0, false, false);
+    rotate_drag(
+        &mut s,
+        gb.rot_corner(1.0, 1.0),
+        gb.centre(),
+        90.0,
+        false,
+        false,
+    );
     for (a, b) in objects(&s).iter().zip(&before) {
         for (qa, qb) in all_points(a).iter().zip(all_points(b)) {
             let m = rot(qb, gb.centre(), FRAC_PI_2);
@@ -1955,7 +2176,13 @@ fn compound_path_in_a_selection_follows_scale_rotate_and_skew() {
     drag(&mut s, h, pt(h.x + 20.0, h.y));
     for (a, b) in objects(&s).iter().zip(&before) {
         for (qa, qb) in all_points(a).iter().zip(all_points(b)) {
-            assert_pt(*qa, qb.x + 0.5 * (90.0 - qb.y), qb.y, 1e-6, "compound anchor under skew");
+            assert_pt(
+                *qa,
+                qb.x + 0.5 * (90.0 - qb.y),
+                qb.y,
+                1e-6,
+                "compound anchor under skew",
+            );
         }
     }
 }
@@ -1992,17 +2219,33 @@ fn ac33_the_angle_chip() {
     let hr = g.rot_corner(1.0, -1.0);
     assert_pt(v.handle, hr.x, hr.y, 1e-6, "chip anchor");
     let commits = change_count(&s);
-    assert_eq!(s.commit_transform_entry("37.5", "", 0), EntryOutcome::Committed);
+    assert_eq!(
+        s.commit_transform_entry("37.5", "", 0),
+        EntryOutcome::Committed
+    );
     assert_eq!(change_count(&s), commits + 1);
     let typed = objects(&s);
     // Differential: the drag of the same angle leaves the same document.
     let mut s2 = open(&d);
     select_all(&mut s2);
-    rotate_drag(&mut s2, g.rot_corner(1.0, 1.0), g.centre(), 37.5, false, false);
+    rotate_drag(
+        &mut s2,
+        g.rot_corner(1.0, 1.0),
+        g.centre(),
+        37.5,
+        false,
+        false,
+    );
     let dragged = objects(&s2);
     for (a, b) in typed.iter().zip(&dragged) {
         let ((ba, ra), (bb, rb)) = (rect_of(a), rect_of(b));
-        assert_pt(rect_centre(ba), rect_centre(bb).x, rect_centre(bb).y, 1e-6, "centre");
+        assert_pt(
+            rect_centre(ba),
+            rect_centre(bb).x,
+            rect_centre(bb).y,
+            1e-6,
+            "centre",
+        );
         assert!(near(angle_diff(ra, rb), 0.0, 1e-9));
         assert!(near(ba.width.as_mm(), bb.width.as_mm(), 1e-9));
     }
@@ -2031,23 +2274,44 @@ fn ac33_angle_chip_text_rules() {
     // An unedited Enter: the prefill itself.
     let mut s = fresh();
     let prefill = s.transform_entry().unwrap().fields[0].prefill.clone();
-    assert_eq!(s.commit_transform_entry(&prefill, "", 0), EntryOutcome::Unchanged);
+    assert_eq!(
+        s.commit_transform_entry(&prefill, "", 0),
+        EntryOutcome::Unchanged
+    );
     // Accepted spellings: 12,5 / −30 / 45° all rotate.
-    let want = [("12,5", 12.5), ("\u{2212}30", -30.0), ("45°", 45.0), (" 90 ", 90.0)];
+    let want = [
+        ("12,5", 12.5),
+        ("\u{2212}30", -30.0),
+        ("45°", 45.0),
+        (" 90 ", 90.0),
+    ];
     for (text, degrees) in want {
         let mut s = fresh();
-        assert_eq!(s.commit_transform_entry(text, "", 0), EntryOutcome::Committed, "{text}");
+        assert_eq!(
+            s.commit_transform_entry(text, "", 0),
+            EntryOutcome::Committed,
+            "{text}"
+        );
         let (_, r) = rect_of(&objects(&s)[0]);
-        assert!(near(angle_diff(r, f64::to_radians(degrees)), 0.0, 1e-9), "{text}: {r}");
+        assert!(
+            near(angle_diff(r, f64::to_radians(degrees)), 0.0, 1e-9),
+            "{text}: {r}"
+        );
     }
     // Invalid keeps the chip open and writes nothing.
     for text in ["abc", "", "nan", "inf", "-inf", "1e999", "1,2,3", "12 34"] {
         let mut s = fresh();
         let before = bytes_of(&s);
         let out = s.commit_transform_entry(text, "", 0);
-        assert!(matches!(out, EntryOutcome::Invalid { field: 0, .. }), "{text:?}: {out:?}");
+        assert!(
+            matches!(out, EntryOutcome::Invalid { field: 0, .. }),
+            "{text:?}: {out:?}"
+        );
         assert!(bytes_of(&s) == before);
-        assert!(s.transform_entry().is_some(), "{text:?}: the chip stays open");
+        assert!(
+            s.transform_entry().is_some(),
+            "{text:?}: the chip stays open"
+        );
     }
 }
 
@@ -2065,15 +2329,27 @@ fn ac33_double_click_opens_the_chip_and_fixes_the_pivot() {
     let v = s.transform_entry().expect("chip");
     assert_eq!(v.kind, "angle");
     // The pivot of a Shift press is the opposite corner (50, 50).
-    assert_eq!(s.commit_transform_entry("90", "", 0), EntryOutcome::Committed);
+    assert_eq!(
+        s.commit_transform_entry("90", "", 0),
+        EntryOutcome::Committed
+    );
     let (b0, _) = rect_of(&objects(&s)[0]);
-    assert_pt(rect_centre(b0), 45.0, 55.0, 1e-6, "about the opposite corner");
+    assert_pt(
+        rect_centre(b0),
+        45.0,
+        55.0,
+        1e-6,
+        "about the opposite corner",
+    );
     // Escape closes without a write.
     let mut s = open(&d);
     select_all(&mut s);
     double_click_at(&mut s, g.rot_corner(1.0, 1.0), false, false);
     assert!(bytes_of(&s) == before);
-    assert_eq!(key(&mut s, "Escape", false), KeyOutcome::Escape(EscapeStep::ClosedEntry));
+    assert_eq!(
+        key(&mut s, "Escape", false),
+        KeyOutcome::Escape(EscapeStep::ClosedEntry)
+    );
     assert!(bytes_of(&s) == before);
     assert!(s.transform_entry().is_none());
     assert_eq!(s.selected_object_count(), 2);
@@ -2097,11 +2373,17 @@ fn ac34_the_size_chip() {
         (v.fields[0].accessible_name, v.fields[1].accessible_name),
         ("Width", "Height")
     );
-    assert_eq!((v.fields[0].prefill.as_str(), v.fields[1].prefill.as_str()), ("30.0", "10.0"));
+    assert_eq!(
+        (v.fields[0].prefill.as_str(), v.fields[1].prefill.as_str()),
+        ("30.0", "10.0")
+    );
     assert!(!v.linked);
     // The same as the drag of the spec example: sx = 2, sy = 3.
     let commits = change_count(&s);
-    assert_eq!(s.commit_transform_entry("60", "30", 0), EntryOutcome::Committed);
+    assert_eq!(
+        s.commit_transform_entry("60", "30", 0),
+        EntryOutcome::Committed
+    );
     assert_eq!(change_count(&s), commits + 1);
     let o = objects(&s);
     let ((b0, _), (b1, _)) = (rect_of(&o[0]), rect_of(&o[1]));
@@ -2113,17 +2395,27 @@ fn ac34_the_size_chip() {
     select_all(&mut s);
     assert_eq!(key(&mut s, "s", false), KeyOutcome::EntryOpened);
     assert!(s.transform_entry().unwrap().at_centre);
-    assert_eq!(s.commit_transform_entry("60", "10", 0), EntryOutcome::Committed);
+    assert_eq!(
+        s.commit_transform_entry("60", "10", 0),
+        EntryOutcome::Committed
+    );
     let (b0, _) = rect_of(&objects(&s)[0]);
     assert_pt(b0.origin, 35.0, 50.0, 1e-6, "about the centre");
     // Refusals.
-    for (w, h, why) in [("0", "10", "zero"), ("-5", "10", "negative"), ("30", "0", "zero h")] {
+    for (w, h, why) in [
+        ("0", "10", "zero"),
+        ("-5", "10", "negative"),
+        ("30", "0", "zero h"),
+    ] {
         let mut s = open(&d);
         select_all(&mut s);
         key(&mut s, "s", false);
         let before = bytes_of(&s);
         let out = s.commit_transform_entry(w, h, 0);
-        assert!(matches!(out, EntryOutcome::Invalid { .. }), "{why}: {out:?}");
+        assert!(
+            matches!(out, EntryOutcome::Invalid { .. }),
+            "{why}: {out:?}"
+        );
         assert!(bytes_of(&s) == before && s.transform_entry().is_some());
     }
     let mut s = open(&d);
@@ -2131,13 +2423,19 @@ fn ac34_the_size_chip() {
     key(&mut s, "s", false);
     let before = bytes_of(&s);
     let out = s.commit_transform_entry("1e8", "10", 0);
-    assert!(matches!(out, EntryOutcome::Invalid { field: _, .. }), "{out:?}");
+    assert!(
+        matches!(out, EntryOutcome::Invalid { field: _, .. }),
+        "{out:?}"
+    );
     assert!(bytes_of(&s) == before, "Too large writes nothing");
     // Unedited and equal sizes write nothing.
     let mut s = open(&d);
     select_all(&mut s);
     key(&mut s, "s", false);
-    assert_eq!(s.commit_transform_entry("30.0", "10.0", 0), EntryOutcome::Unchanged);
+    assert_eq!(
+        s.commit_transform_entry("30.0", "10.0", 0),
+        EntryOutcome::Unchanged
+    );
     assert!(bytes_of(&s) == before);
 }
 
@@ -2172,7 +2470,10 @@ fn ac34_uniform_only_size_chip_is_linked() {
     let mut s = open(&d);
     select_everything(&mut s);
     key(&mut s, "s", false);
-    assert_eq!(s.commit_transform_entry("80", &format!("{other}"), 0), EntryOutcome::Committed);
+    assert_eq!(
+        s.commit_transform_entry("80", &format!("{other}"), 0),
+        EntryOutcome::Committed
+    );
     let o = objects(&s);
     let xs = path_points(&o[0]);
     assert!(near(xs[1].x - xs[0].x, 80.0, 1e-6), "path is now 80 wide");
@@ -2198,8 +2499,16 @@ fn ac34_size_chip_reads_the_switches_when_it_opens() {
         EntryOutcome::Committed
     );
     let o = objects(&s);
-    assert!(near(style_width(&o[0]), 0.25 * 2.0_f64.sqrt(), 1e-6), "{}", style_width(&o[0]));
-    assert_eq!(radii_of(&o[0]), [1.0, 2.0, 3.0, 4.0], "radius switch was off");
+    assert!(
+        near(style_width(&o[0]), 0.25 * 2.0_f64.sqrt(), 1e-6),
+        "{}",
+        style_width(&o[0])
+    );
+    assert_eq!(
+        radii_of(&o[0]),
+        [1.0, 2.0, 3.0, 4.0],
+        "radius switch was off"
+    );
     // With both off: neither is written.
     let mut s = open(&d);
     select_everything(&mut s);
@@ -2234,7 +2543,14 @@ fn ac35_the_move_chip() {
     assert_eq!(v.absolute_prefill, ["50.0".to_string(), "50.0".to_string()]);
     let commits = change_count(&s);
     assert_eq!(
-        s.commit_move_entry("5", "-3", MoveEntryMode { absolute: false, copy: false }),
+        s.commit_move_entry(
+            "5",
+            "-3",
+            MoveEntryMode {
+                absolute: false,
+                copy: false
+            }
+        ),
         EntryOutcome::Committed
     );
     assert_eq!(change_count(&s), commits + 1);
@@ -2243,24 +2559,52 @@ fn ac35_the_move_chip() {
     assert_pt(o[1], 95.0, 47.0, 1e-9, "relative");
     // Absolute: the top-left of the group box goes to (100, 200).
     let mut s = fresh();
-    s.commit_move_entry("100", "200", MoveEntryMode { absolute: true, copy: false });
+    s.commit_move_entry(
+        "100",
+        "200",
+        MoveEntryMode {
+            absolute: true,
+            copy: false,
+        },
+    );
     let o = origins(&s);
     assert_pt(o[0], 100.0, 200.0, 1e-9, "absolute");
     assert_pt(o[1], 140.0, 200.0, 1e-9, "absolute keeps the arrangement");
     // Copy: four objects, the copies selected.
     let mut s = fresh();
-    s.commit_move_entry("0", "50", MoveEntryMode { absolute: false, copy: true });
+    s.commit_move_entry(
+        "0",
+        "50",
+        MoveEntryMode {
+            absolute: false,
+            copy: true,
+        },
+    );
     assert_eq!(objects(&s).len(), 4);
     assert_eq!(s.selected_object_count(), 2);
     // Invalid text keeps the chip open.
     let mut s = fresh();
-    let out = s.commit_move_entry("abc", "1", MoveEntryMode { absolute: false, copy: false });
+    let out = s.commit_move_entry(
+        "abc",
+        "1",
+        MoveEntryMode {
+            absolute: false,
+            copy: false,
+        },
+    );
     assert!(matches!(out, EntryOutcome::Invalid { .. }));
     assert!(s.move_entry().is_some());
     // A zero offset writes nothing.
     let mut s = fresh();
     let before = bytes_of(&s);
-    let out = s.commit_move_entry("0", "0", MoveEntryMode { absolute: false, copy: false });
+    let out = s.commit_move_entry(
+        "0",
+        "0",
+        MoveEntryMode {
+            absolute: false,
+            copy: false,
+        },
+    );
     assert_eq!(out, EntryOutcome::Unchanged);
     assert!(bytes_of(&s) == before);
 }
@@ -2280,12 +2624,25 @@ fn ac35_absolute_move_uses_the_outline_bounds_of_a_rotated_rectangle() {
     let mut s = open(&d);
     select_everything(&mut s);
     key(&mut s, "m", false);
-    s.commit_move_entry("100", "100", MoveEntryMode { absolute: true, copy: false });
+    s.commit_move_entry(
+        "100",
+        "100",
+        MoveEntryMode {
+            absolute: true,
+            copy: false,
+        },
+    );
     // The circle's left-most is no longer the box edge; the box top-left was
     // (-1.1603, -4.3301): the shift is (101.1603, 104.3301).
     let o = objects(&s);
     let (e, _) = ellipse_of(&o[1]);
-    assert_pt(e.center, 40.0 + 101.160_254, 5.0 + 104.330_127, 1e-5, "circle");
+    assert_pt(
+        e.center,
+        40.0 + 101.160_254,
+        5.0 + 104.330_127,
+        1e-5,
+        "circle",
+    );
 }
 
 /// Criterion 38: the hint lines of each handle.
@@ -2415,5 +2772,1018 @@ fn u4_selection_announcement() {
     let mut s = open(&d);
     assert_eq!(s.selection_announcement(), "");
     select_all(&mut s);
-    assert_eq!(s.selection_announcement(), "2 objects selected, 30.0 by 10.0 mm");
+    assert_eq!(
+        s.selection_announcement(),
+        "2 objects selected, 30.0 by 10.0 mm"
+    );
+}
+
+// ---------------------------------------------------------------------
+// Member boxes, draw list
+// ---------------------------------------------------------------------
+
+fn count_colour(s: &Session, a: u8) -> usize {
+    s.draw_list()
+        .triangles
+        .iter()
+        .filter(|v| (v.color.r, v.color.g, v.color.b, v.color.a) == (0x2F, 0x6F, 0xEE, a))
+        .count()
+}
+
+const MEMBER_ALPHA: u8 = 153;
+
+/// A grid of `n` 8 mm squares, 14 mm apart, 25 per row, all in the viewport.
+fn grid(n: usize) -> Document {
+    let d = Document::new(1);
+    for i in 0..n {
+        let (cx, cy) = ((i % 25) as f64, (i / 25) as f64);
+        let _ = d.create_rect(rect_bounds(10.0 + cx * 14.0, 10.0 + cy * 14.0, 8.0, 8.0));
+    }
+    d
+}
+
+/// Criterion 4 and 5: a member box per selected object up to 500 objects,
+/// none above; crossing 500 either way removes or adds all of them in the
+/// same frame; the group box and its handles are drawn at any count.
+#[test]
+fn ac5_member_boxes_stop_above_500_objects() {
+    let d = grid(501);
+    let mut s = open(&d);
+    s.resize_viewport(3000.0, 2000.0);
+    // 500 objects: a marquee around all but the last.
+    key(&mut s, "Escape", false);
+    drag(
+        &mut s,
+        pt(5.0, 5.0),
+        pt(10.0 + 24.0 * 14.0 + 12.0, 10.0 + 19.0 * 14.0 + 12.0),
+    );
+    assert_eq!(s.selected_object_count(), 500);
+    let with_members = count_colour(&s, MEMBER_ALPHA);
+    assert!(with_members > 0, "500 selected: member boxes are drawn");
+    // Add the 501st with Shift-click on its outline: no member box, same frame.
+    let last = pt(10.0, 10.0 + 20.0 * 14.0 + 4.0);
+    let _ = last;
+    let ids = doc_of(&s).object_ids();
+    assert_eq!(ids.len(), 501);
+    let p501 = pt(10.0 + 14.0 * 0.0 + 4.0, 10.0 + 20.0 * 14.0); // top edge of the 501st
+    shift_click(&mut s, p501);
+    assert_eq!(s.selected_object_count(), 501);
+    assert_eq!(
+        count_colour(&s, MEMBER_ALPHA),
+        0,
+        "501 selected: no member box, nothing in place"
+    );
+    assert!(
+        count_colour(&s, 255) > 0,
+        "the group box and handles are still drawn"
+    );
+    // Back to 500: they return.
+    shift_click(&mut s, p501);
+    assert_eq!(s.selected_object_count(), 500);
+    assert_eq!(count_colour(&s, MEMBER_ALPHA), with_members);
+}
+
+/// Criterion 4: a member smaller than 6 px on both sides has no member box.
+#[test]
+fn ac4_tiny_members_have_no_box() {
+    let d = Document::new(1);
+    for i in 0..3 {
+        let _ = d.create_rect(rect_bounds(50.0 + 20.0 * f64::from(i), 50.0, 1.0, 1.0));
+    }
+    let mut s = open(&d);
+    drag(&mut s, pt(40.0, 40.0), pt(120.0, 60.0));
+    assert_eq!(s.selected_object_count(), 3);
+    assert_eq!(
+        count_colour(&s, MEMBER_ALPHA),
+        0,
+        "1 mm = about 3.8 px: under 6 px"
+    );
+    let big = Document::new(1);
+    for i in 0..3 {
+        let _ = big.create_rect(rect_bounds(50.0 + 20.0 * f64::from(i), 50.0, 8.0, 8.0));
+    }
+    let mut s = open(&big);
+    drag(&mut s, pt(40.0, 40.0), pt(120.0, 70.0));
+    assert!(count_colour(&s, MEMBER_ALPHA) > 0);
+}
+
+/// Criteria 30 and 32: nothing blue remains after Escape or a release; a drag
+/// in flight draws more than at rest.
+#[test]
+fn ac32_the_preview_is_drawn_during_the_drag_and_gone_after() {
+    let (d, _) = two_squares();
+    let mut s = open(&d);
+    select_all(&mut s);
+    let g = two_squares_box(&s);
+    let at_rest = s.draw_list().triangles.len();
+    let from = g.corner(1.0, 1.0);
+    hold(&mut s, from, false, false);
+    s.pointer_down(from, false);
+    hold(&mut s, pt(110.0, 80.0), false, false);
+    let during = s.draw_list().triangles.len();
+    assert!(during > at_rest, "a blue preview outline is drawn");
+    assert_eq!(
+        key(&mut s, "Escape", false),
+        KeyOutcome::Escape(EscapeStep::CancelledDrag)
+    );
+    s.pointer_up(pt(110.0, 80.0), false, false);
+    hold(&mut s, pt(300.0, 300.0), false, false);
+    assert_eq!(
+        s.draw_list().triangles.len(),
+        at_rest,
+        "nothing blue remains"
+    );
+}
+
+/// Criteria 6 and 52: a selection that drops from two to one shows exactly the
+/// single object's oriented box and handles; a rotated rectangle keeps its own
+/// oriented corners, which the group box never has.
+#[test]
+fn ac6_ac52_dropping_to_one_object_restores_the_single_object_box() {
+    let d = Document::new(1);
+    let r = d.create_rect(rect_bounds(50.0, 50.0, 40.0, 20.0));
+    rotate_about_centre(&d, r, 30.0_f64.to_radians());
+    let _ = d.create_rect(rect_bounds(150.0, 50.0, 20.0, 20.0));
+    let mut s = open(&d);
+    select_everything(&mut s);
+    // Oriented SE corner of the rotated rectangle: centre (70, 60) + R(30)*(20, 10).
+    let se = rot(pt(90.0, 70.0), pt(70.0, 60.0), 30.0_f64.to_radians());
+    hold(&mut s, se, false, false);
+    assert_eq!(
+        s.handle_hint(),
+        "",
+        "no handle of the single rectangle in a group"
+    );
+    // Drop the second object with Shift-click on its outline.
+    shift_click(&mut s, pt(160.0, 50.0));
+    assert_eq!(s.selected_object_count(), 1);
+    hold(&mut s, se, false, false);
+    assert_eq!(
+        s.handle_hint(),
+        "resize-corner",
+        "the oriented corner is a handle again"
+    );
+    assert_eq!(s.corner_hint_lines().first().map(String::as_str), None);
+}
+
+/// Criterion 10 and 11 wired through the session: the centre handle exists
+/// from 48 px of the shorter side (cursor `move` at the centre); the edge
+/// resize handles are hit-testable under 24 px.
+#[test]
+fn ac10_session_tiers_follow_the_zoom() {
+    let k = {
+        let (d, _) = two_squares();
+        k_of(&open(&d))
+    };
+    let tier = |h_px: f64| {
+        let h = h_px / k;
+        let d = Document::new(1);
+        let _ = d.create_rect(rect_bounds(50.0, 50.0, 60.0, h));
+        let _ = d.create_rect(rect_bounds(150.0, 50.0, 60.0, h));
+        let mut s = open(&d);
+        select_everything(&mut s);
+        let g = GBox::new(&s, pt(50.0, 50.0), pt(210.0, 50.0 + h));
+        hold(&mut s, g.centre(), false, false);
+        let centre = s.cursor_hint() == "move";
+        hold(&mut s, g.mid(0.0, -1.0), false, false);
+        let edge = s.handle_hint() == "group";
+        (centre, edge)
+    };
+    assert_eq!(tier(47.0), (false, true));
+    assert_eq!(tier(49.0), (true, true));
+    assert_eq!(
+        tier(20.0),
+        (false, true),
+        "edge handles hit-testable under 24 px"
+    );
+}
+
+// ---------------------------------------------------------------------
+// Filled objects, gradients, hit priority (criteria 43, 51; 0007 option B)
+// ---------------------------------------------------------------------
+
+/// Gives the object at `outline` a solid fill, leaving nothing selected.
+fn fill_object(s: &mut Session, outline: Point) {
+    click(s, outline);
+    s.set_fill_mode(curvyo_document_core::FillMode::Solid);
+    key(s, "Escape", false);
+}
+
+/// Criterion 43 steps 5 and 6 and `0007` option B: with a multi-selection, a
+/// press inside the filled interior of a selected object moves the selection; a
+/// press inside the filled interior of an unselected object (also within the
+/// group box) selects it, replacing the selection.
+#[test]
+fn ac43_filled_interiors() {
+    let d = Document::new(1);
+    let _ = d.create_rect(rect_bounds(50.0, 50.0, 30.0, 30.0));
+    let _ = d.create_rect(rect_bounds(150.0, 50.0, 30.0, 30.0));
+    let _ = d.create_rect(rect_bounds(95.0, 55.0, 20.0, 20.0)); // between them
+    let mut s = open(&d);
+    fill_object(&mut s, pt(65.0, 50.0));
+    fill_object(&mut s, pt(165.0, 50.0));
+    fill_object(&mut s, pt(105.0, 55.0));
+    click(&mut s, pt(65.0, 50.0));
+    shift_click(&mut s, pt(165.0, 50.0));
+    assert_eq!(s.selected_object_count(), 2);
+    // Interior of a selected, filled object: a drag moves the whole selection.
+    drag(&mut s, pt(60.0, 70.0), pt(60.0, 80.0));
+    let o = origins(&s);
+    assert_pt(o[0], 50.0, 60.0, 1e-9, "first");
+    assert_pt(o[1], 150.0, 60.0, 1e-9, "second");
+    assert_pt(o[2], 95.0, 55.0, 1e-9, "the third did not move");
+    // Interior of the unselected, filled third object: selects it (click).
+    click(&mut s, pt(105.0, 65.0));
+    assert_eq!(s.selected_object_count(), 1);
+    // And with a multi-selection again, a drag from that interior moves only it.
+    click(&mut s, pt(65.0, 60.0));
+    shift_click(&mut s, pt(165.0, 60.0));
+    assert_eq!(s.selected_object_count(), 2);
+    drag(&mut s, pt(105.0, 65.0), pt(105.0, 95.0));
+    let o = origins(&s);
+    assert_pt(
+        o[2],
+        95.0,
+        85.0,
+        1e-9,
+        "the unselected filled object moved alone",
+    );
+    assert_pt(o[0], 50.0, 60.0, 1e-9, "the selection did not move");
+    assert_eq!(s.selected_object_count(), 1);
+}
+
+/// Criterion 51: the style fields (fill mode, colour, gradient stops) are not
+/// written by a transform of a selection that holds a gradient-filled object.
+#[test]
+fn ac51_style_fields_are_untouched() {
+    let d = wide_squares();
+    let mut s = open(&d);
+    click(&mut s, pt(60.0, 50.0));
+    s.set_fill_mode(curvyo_document_core::FillMode::Linear);
+    key(&mut s, "Escape", false);
+    let styles = |s: &Session| -> Vec<String> {
+        objects(s)
+            .iter()
+            .map(|o| match o {
+                ObjectSnapshot::Primitive(p) => format!("{:?}", p.style),
+                ObjectSnapshot::Path(p) => format!("{:?}", p.style),
+            })
+            .collect()
+    };
+    let before = styles(&s);
+    select_everything(&mut s);
+    let g = wide_box(&s);
+    drag(&mut s, g.corner(1.0, 1.0), pt(170.0, 100.0));
+    let g2 = GBox::new(&s, pt(50.0, 50.0), pt(170.0, 100.0));
+    rotate_drag(
+        &mut s,
+        g2.rot_corner(1.0, 1.0),
+        pt(110.0, 75.0),
+        33.0,
+        false,
+        false,
+    );
+    assert_eq!(styles(&s), before, "style fields");
+}
+
+// ---------------------------------------------------------------------
+// Frames and registers
+// ---------------------------------------------------------------------
+
+/// Criterion 20 (paths): the map is in the document axes, whatever the
+/// `rotation` register of the path: a path turned earlier scales and skews
+/// along the document axes, with its register unchanged by a scale.
+#[test]
+fn ac20_a_turned_path_scales_and_skews_in_document_axes() {
+    let d = Document::new(1);
+    let p = d.create_path(
+        &[
+            anchor(1, 50.0, 50.0),
+            anchor(2, 70.0, 50.0),
+            anchor(3, 70.0, 60.0),
+            anchor(4, 50.0, 60.0),
+        ],
+        true,
+    );
+    let o = d.object(p).unwrap();
+    d.rotate_object(&o.rotated(pt(60.0, 55.0), Angle::from_radians(0.5)))
+        .unwrap();
+    let _ = d.create_path(&[anchor(11, 120.0, 40.0), anchor(12, 130.0, 80.0)], false);
+    let before = objects(&open(&d));
+    let reg = rotation_of(&before[0]);
+    assert!(near(reg, 0.5, 1e-9));
+    let all: Vec<Point> = before.iter().flat_map(path_points).collect();
+    let (x0, x1) = (
+        all.iter().map(|q| q.x).fold(f64::MAX, f64::min),
+        all.iter().map(|q| q.x).fold(f64::MIN, f64::max),
+    );
+    let (y0, y1) = (
+        all.iter().map(|q| q.y).fold(f64::MAX, f64::min),
+        all.iter().map(|q| q.y).fold(f64::MIN, f64::max),
+    );
+    let mut s = open(&d);
+    select_everything(&mut s);
+    let g = GBox::new(&s, pt(x0, y0), pt(x1, y1));
+    // Scale sx = 2, sy = 1.5 about (x0, y0).
+    drag(
+        &mut s,
+        g.corner(1.0, 1.0),
+        pt(x0 + 2.0 * (x1 - x0), y0 + 1.5 * (y1 - y0)),
+    );
+    for (a, b) in objects(&s).iter().zip(&before) {
+        for (qa, qb) in path_points(a).iter().zip(path_points(b)) {
+            assert_pt(
+                *qa,
+                x0 + (qb.x - x0) * 2.0,
+                y0 + (qb.y - y0) * 1.5,
+                1e-6,
+                "scaled in document axes",
+            );
+        }
+    }
+    assert!(
+        near(rotation_of(&objects(&s)[0]), reg, 1e-12),
+        "register unchanged by a scale"
+    );
+    // Skew: top handle, document axes.
+    let mut s = open(&d);
+    select_everything(&mut s);
+    let h = g.skew(0.0, -1.0);
+    let dx = 0.5 * (y1 - y0);
+    drag(&mut s, h, pt(h.x + dx, h.y));
+    for (a, b) in objects(&s).iter().zip(&before) {
+        for (qa, qb) in path_points(a).iter().zip(path_points(b)) {
+            assert_pt(
+                *qa,
+                qb.x + 0.5 * (y1 - qb.y),
+                qb.y,
+                1e-6,
+                "skewed in document axes",
+            );
+        }
+    }
+    assert!(near(rotation_of(&objects(&s)[0]), reg, 1e-12));
+}
+
+/// Criterion 26: `rotation` is normalised to (-pi, pi]: 90 + 90 degrees is pi
+/// (not -pi), 170 + 20 is -170.
+#[test]
+fn ac26_rotation_is_normalised_to_minus_pi_exclusive_pi_inclusive() {
+    let (d, _) = two_squares();
+    let mut s = open(&d);
+    select_all(&mut s);
+    key(&mut s, "r", false);
+    s.commit_transform_entry("90", "", 0);
+    key(&mut s, "r", false);
+    s.commit_transform_entry("90", "", 0);
+    let (_, r) = rect_of(&objects(&s)[0]);
+    assert!(near(r, PI, 1e-9), "pi, not -pi: {r}");
+    key(&mut s, "r", false);
+    s.commit_transform_entry("20", "", 0);
+    let (_, r) = rect_of(&objects(&s)[0]);
+    assert!(near(r, -PI + 20.0_f64.to_radians(), 1e-9), "{r}");
+    key(&mut s, "r", false);
+    s.commit_transform_entry("-30", "", 0);
+    let (_, r) = rect_of(&objects(&s)[0]);
+    assert!(
+        near(r, PI - 10.0_f64.to_radians(), 1e-9),
+        "wraps through pi: {r}"
+    );
+}
+
+/// Criterion 20 table, row 3, other quarter turns: 180, -90 and 270 degrees
+/// are aligned. At 180 width goes by sx; at -90 width goes by sy.
+#[test]
+fn ac20_other_quarter_turns() {
+    for (rotation, swapped) in [
+        (PI, false),
+        (-FRAC_PI_2, true),
+        (3.0 * FRAC_PI_2, true),
+        (0.0, false),
+    ] {
+        let d = Document::new(1);
+        let _ = d.create_path(&[anchor(1, 20.0, 20.0), anchor(2, 120.0, 80.0)], false);
+        let r = d.create_rect(rect_bounds(40.0, 30.0, 12.0, 20.0));
+        rotate_about_centre(&d, r, rotation);
+        let mut s = open(&d);
+        select_everything(&mut s);
+        let g = GBox::new(&s, pt(20.0, 20.0), pt(120.0, 80.0));
+        drag(&mut s, g.corner(1.0, 1.0), pt(220.0, 200.0)); // sx = 2, sy = 3
+        let (b, _) = rect_of(&objects(&s)[1]);
+        let (ew, eh) = if swapped {
+            (12.0 * 3.0, 20.0 * 2.0)
+        } else {
+            (12.0 * 2.0, 20.0 * 3.0)
+        };
+        assert!(
+            near(b.width.as_mm(), ew, 1e-6) && near(b.height.as_mm(), eh, 1e-6),
+            "rotation {rotation}: {} x {}",
+            b.width.as_mm(),
+            b.height.as_mm()
+        );
+    }
+}
+
+/// Criterion 20/21: a uniform factor on a uniform-only selection scales a
+/// polygon, a star and a rotated rectangle without changing their registers or
+/// counts; a corner drag is proportional whatever the drag.
+#[test]
+fn ac21_uniform_only_corner_drag_is_proportional() {
+    let d = Document::new(1);
+    let _ = d.create_path(&[anchor(1, 50.0, 50.0), anchor(2, 150.0, 50.0)], false);
+    let poly = d.create_polygon(
+        StarFrame {
+            center: pt(70.0, 80.0),
+            radius: Length::from_mm(10.0),
+            angle: Angle::from_radians(-FRAC_PI_2),
+        },
+        PointCount::new(6).unwrap(),
+    );
+    let star = d.create_star(
+        StarFrame {
+            center: pt(110.0, 80.0),
+            radius: Length::from_mm(10.0),
+            angle: Angle::from_radians(-FRAC_PI_2),
+        },
+        PointCount::new(5).unwrap(),
+        curvyo_document_core::InnerRatio::new(0.4).unwrap(),
+    );
+    let rr = d.create_rect(rect_bounds(125.0, 70.0, 20.0, 10.0));
+    rotate_about_centre(&d, rr, 0.3);
+    let _ = (poly, star);
+    let before = objects(&open(&d));
+    let mut s = open(&d);
+    select_everything(&mut s);
+    // Box x 50..150, y 50..~90; read it from the typed size chip.
+    key(&mut s, "m", false);
+    let m = s.move_entry().unwrap();
+    let tl = pt(
+        m.absolute_prefill[0].parse().unwrap(),
+        m.absolute_prefill[1].parse().unwrap(),
+    );
+    key(&mut s, "Escape", false);
+    select_everything(&mut s);
+    key(&mut s, "s", false);
+    let v = s.transform_entry().unwrap();
+    let (w, h): (f64, f64) = (
+        v.fields[0].prefill.parse().unwrap(),
+        v.fields[1].prefill.parse().unwrap(),
+    );
+    key(&mut s, "Escape", false);
+    select_everything(&mut s);
+    let g = GBox::new(&s, tl, pt(tl.x + w, tl.y + h));
+    // No edge resize handle: a press on the E edge handle spot is a marquee.
+    let before_bytes = bytes_of(&s);
+    drag(
+        &mut s,
+        g.mid(1.0, 0.0),
+        pt(g.mid(1.0, 0.0).x + 30.0, g.mid(1.0, 0.0).y),
+    );
+    assert!(
+        bytes_of(&s) == before_bytes,
+        "no edge handle on a uniform-only selection"
+    );
+    select_everything(&mut s);
+    // A drag mostly in x: still one factor; sx dominated: f = (w + 50) / w.
+    let f = (g.w() + 50.0) / g.w();
+    let c = g.corner(1.0, 1.0);
+    drag(&mut s, c, pt(c.x + 50.0, c.y + 3.0));
+    let after = objects(&s);
+    let p0 = tl;
+    let mapped = |q: Point| pt(p0.x + (q.x - p0.x) * f, p0.y + (q.y - p0.y) * f);
+    // Path anchors scale by f in both axes.
+    for (qa, qb) in path_points(&after[0]).iter().zip(path_points(&before[0])) {
+        let m = mapped(qb);
+        assert_pt(*qa, m.x, m.y, 1e-6, "path anchor");
+    }
+    // Polygon: radius * f, centre mapped, rotation unchanged.
+    for i in [1, 2] {
+        let get = |o: &ObjectSnapshot| match o {
+            ObjectSnapshot::Primitive(p) => match p.shape {
+                Shape::Polygon { frame, .. } | Shape::Star { frame, .. } => {
+                    (frame, p.rotation.as_radians())
+                }
+                other => panic!("{other:?}"),
+            },
+            ObjectSnapshot::Path(_) => unreachable!(),
+        };
+        let ((fb, rb), (fa, ra)) = (get(&before[i]), get(&after[i]));
+        let c = mapped(fb.center);
+        assert_pt(fa.center, c.x, c.y, 1e-6, "centre");
+        assert!(
+            near(fa.radius.as_mm(), fb.radius.as_mm() * f, 1e-6),
+            "radius"
+        );
+        assert!(near(ra, rb, 1e-12));
+    }
+    if let (ObjectSnapshot::Primitive(pb), ObjectSnapshot::Primitive(pa)) = (&before[2], &after[2])
+    {
+        if let (
+            Shape::Star {
+                inner_ratio: ib, ..
+            },
+            Shape::Star {
+                inner_ratio: ia, ..
+            },
+        ) = (pb.shape, pa.shape)
+        {
+            assert!(near(ib.get(), ia.get(), 1e-12), "ratio unchanged");
+        }
+    }
+    // Rotated rectangle: both dimensions * f, rotation unchanged.
+    let ((bb, br), (ab, ar)) = (rect_of(&before[3]), rect_of(&after[3]));
+    assert!(near(ab.width.as_mm(), bb.width.as_mm() * f, 1e-6));
+    assert!(near(ab.height.as_mm(), bb.height.as_mm() * f, 1e-6));
+    assert!(near(ar, br, 1e-12));
+    let c = mapped(rect_centre(bb));
+    assert_pt(rect_centre(ab), c.x, c.y, 1e-6, "rect centre");
+}
+
+// ---------------------------------------------------------------------
+// Robustness of typed entries on degenerate boxes
+// ---------------------------------------------------------------------
+
+fn all_finite(s: &Session) -> bool {
+    objects(s).iter().all(|o| match o {
+        ObjectSnapshot::Path(p) => {
+            p.subpaths().all(|sp| {
+                sp.anchors.iter().all(|a| {
+                    a.point.x.is_finite()
+                        && a.point.y.is_finite()
+                        && a.handle_in.x.is_finite()
+                        && a.handle_in.y.is_finite()
+                        && a.handle_out.x.is_finite()
+                        && a.handle_out.y.is_finite()
+                })
+            }) && p.rotation.as_radians().is_finite()
+        }
+        ObjectSnapshot::Primitive(p) => {
+            let (c, w) = match p.shape {
+                Shape::Rect { bounds, .. } => {
+                    (bounds.origin, bounds.width.as_mm() + bounds.height.as_mm())
+                }
+                Shape::Ellipse { frame } => (frame.center, frame.rx.as_mm() + frame.ry.as_mm()),
+                Shape::Polygon { frame, .. } | Shape::Star { frame, .. } => {
+                    (frame.center, frame.radius.as_mm())
+                }
+            };
+            c.x.is_finite()
+                && c.y.is_finite()
+                && w.is_finite()
+                && p.rotation.as_radians().is_finite()
+        }
+    })
+}
+
+/// Degenerate boxes with typed entries: a box flat in x (vertical lines) with
+/// a typed width, a skew by key where the lever has zero length, and a point
+/// selection with every key: nothing becomes NaN or infinite, nothing panics.
+#[test]
+fn degenerate_boxes_with_typed_entries_stay_finite() {
+    let vertical = || {
+        let d = Document::new(1);
+        let _ = d.create_path(&[anchor(1, 60.0, 50.0), anchor(2, 60.0, 58.0)], false);
+        let _ = d.create_path(&[anchor(3, 60.0, 62.0), anchor(4, 60.0, 70.0)], false);
+        d
+    };
+    // Size chip with a width typed on a zero-width box.
+    let mut s = open(&vertical());
+    select_everything(&mut s);
+    key(&mut s, "s", false);
+    if let Some(v) = s.transform_entry() {
+        let h = v.fields[1].prefill.clone();
+        let out = s.commit_transform_entry("10", &h, 0);
+        assert!(
+            matches!(
+                out,
+                EntryOutcome::Invalid { .. } | EntryOutcome::Unchanged | EntryOutcome::Committed
+            ),
+            "{out:?}"
+        );
+    }
+    assert!(all_finite(&s), "size chip on a flat box");
+    // Skew keys: the right handle has zero lever on a zero-width box.
+    for (k, shift) in [("k", false), ("k", true)] {
+        let mut s = open(&vertical());
+        select_everything(&mut s);
+        let out = key(&mut s, k, shift);
+        if out == KeyOutcome::EntryOpened {
+            let _ = s.commit_transform_entry("30", "", 0);
+        }
+        assert!(all_finite(&s), "K {shift}");
+    }
+    // A single point: R, S, M, K keys.
+    let point = || {
+        let d = Document::new(1);
+        let _ = d.create_path(&[anchor(1, 80.0, 60.0), anchor(2, 80.0, 60.0)], false);
+        let _ = d.create_path(&[anchor(3, 80.0, 60.0), anchor(4, 80.0, 60.0)], false);
+        d
+    };
+    for k in ["r", "s", "m", "k"] {
+        let mut s = open(&point());
+        select_everything(&mut s);
+        if key(&mut s, k, false) == KeyOutcome::EntryOpened {
+            if let Some(v) = s.transform_entry() {
+                let texts: Vec<String> = v.fields.iter().map(|f| f.prefill.clone()).collect();
+                let _ = s.commit_transform_entry(
+                    if v.kind == "angle" { "45" } else { "10" },
+                    texts.get(1).map_or("", String::as_str),
+                    0,
+                );
+            }
+            if s.move_entry().is_some() {
+                let _ = s.commit_move_entry(
+                    "5",
+                    "5",
+                    MoveEntryMode {
+                        absolute: false,
+                        copy: false,
+                    },
+                );
+            }
+        }
+        assert!(all_finite(&s), "key {k} on a point");
+    }
+}
+
+// ---------------------------------------------------------------------
+// Interruptions, Escape cascade, persistence, axes
+// ---------------------------------------------------------------------
+
+/// A pointer cancel (the browser took the pointer) during a group drag writes
+/// nothing and leaves the selection; a later stray release writes nothing.
+#[test]
+fn a_cancelled_pointer_during_a_group_drag_writes_nothing() {
+    for h in 0..3 {
+        let (d, _) = two_squares();
+        let mut s = open(&d);
+        select_all(&mut s);
+        let g = two_squares_box(&s);
+        let before = bytes_of(&s);
+        let from = [g.corner(1.0, 1.0), g.rot_corner(1.0, 1.0), g.mid(1.0, 0.0)][h];
+        hold(&mut s, from, false, false);
+        s.pointer_down(from, false);
+        hold(&mut s, pt(from.x + 20.0, from.y + 8.0), false, false);
+        s.pointer_cancelled();
+        s.pointer_up(pt(from.x + 20.0, from.y + 8.0), false, false);
+        assert!(bytes_of(&s) == before, "handle {h}");
+        assert_eq!(s.selected_object_count(), 2);
+    }
+}
+
+/// Deleting the selection while a group drag is in flight: the release does not
+/// bring anything back and does not panic.
+#[test]
+fn delete_during_a_group_drag_leaves_nothing_behind() {
+    let (d, _) = two_squares();
+    let mut s = open(&d);
+    select_all(&mut s);
+    let g = two_squares_box(&s);
+    let from = g.corner(1.0, 1.0);
+    hold(&mut s, from, false, false);
+    s.pointer_down(from, false);
+    hold(&mut s, pt(from.x + 20.0, from.y + 8.0), false, false);
+    let out = key(&mut s, "Delete", false);
+    s.pointer_up(pt(from.x + 20.0, from.y + 8.0), false, false);
+    println!(
+        "Delete during a drag: {out:?}, {} objects left",
+        objects(&s).len()
+    );
+    assert!(
+        objects(&s).is_empty() || objects(&s).len() == 2,
+        "either refused or deleted"
+    );
+    if out == KeyOutcome::Ignored {
+        return; // the key was gated off while the drag ran: the release commits normally
+    }
+    for o in objects(&s) {
+        let (b, _) = rect_of(&o);
+        assert!(
+            near(b.width.as_mm(), 10.0, 1e-9),
+            "an object can only be untouched"
+        );
+    }
+}
+
+/// Escape cascade: an open chip closes first (the selection stays), the next
+/// Escape clears the selection and with it the group box.
+#[test]
+fn escape_cascade_with_a_group() {
+    let (d, _) = two_squares();
+    let mut s = open(&d);
+    select_all(&mut s);
+    let at_rest = s.draw_list().triangles.len();
+    key(&mut s, "r", false);
+    assert!(s.transform_entry().is_some());
+    assert_eq!(
+        key(&mut s, "Escape", false),
+        KeyOutcome::Escape(EscapeStep::ClosedEntry)
+    );
+    assert_eq!(s.selected_object_count(), 2);
+    assert_eq!(s.draw_list().triangles.len(), at_rest);
+    assert_eq!(
+        key(&mut s, "Escape", false),
+        KeyOutcome::Escape(EscapeStep::ClearedState)
+    );
+    assert_eq!(s.selected_object_count(), 0);
+    assert!(
+        s.draw_list().triangles.len() < at_rest,
+        "group box and handles are gone"
+    );
+}
+
+/// Criterion 50: a transformed multi-selection survives save and reopen with
+/// the same kinds and the same numbers; the file has no new top-level key and
+/// the same format version as before the transform.
+#[test]
+fn ac50_save_and_reopen() {
+    let d = Document::new(1);
+    let _ = d.create_path(
+        &[
+            anchor(1, 20.0, 20.0),
+            anchor(2, 60.0, 30.0),
+            anchor(3, 40.0, 60.0),
+        ],
+        true,
+    );
+    let _ = d.create_rect(rect_bounds(70.0, 30.0, 20.0, 10.0));
+    let _ = d.create_ellipse(EllipseFrame {
+        center: pt(100.0, 50.0),
+        rx: Length::from_mm(8.0),
+        ry: Length::from_mm(8.0),
+    });
+    let _ = d.create_star(
+        StarFrame {
+            center: pt(130.0, 40.0),
+            radius: Length::from_mm(9.0),
+            angle: Angle::from_radians(-FRAC_PI_2),
+        },
+        PointCount::new(5).unwrap(),
+        curvyo_document_core::InnerRatio::new(0.5).unwrap(),
+    );
+    let json_before: serde_json::Value =
+        serde_json::from_slice(&doc_of(&open(&d)).export_json().unwrap()).unwrap();
+    let mut s = open(&d);
+    select_everything(&mut s);
+    // Uniform-only (the star): proportional scale, then a rotate, then a move.
+    key(&mut s, "s", false);
+    let v = s.transform_entry().unwrap();
+    let (w, h): (f64, f64) = (
+        v.fields[0].prefill.parse().unwrap(),
+        v.fields[1].prefill.parse().unwrap(),
+    );
+    let h2 = s
+        .transform_entry_linked(0, &format!("{}", w * 1.5))
+        .unwrap();
+    assert_eq!(
+        s.commit_transform_entry(&format!("{}", w * 1.5), &h2, 0),
+        EntryOutcome::Committed
+    );
+    let _ = h;
+    key(&mut s, "r", false);
+    assert_eq!(
+        s.commit_transform_entry("33", "", 0),
+        EntryOutcome::Committed
+    );
+    key(&mut s, "m", false);
+    assert_eq!(
+        s.commit_move_entry(
+            "7",
+            "-4",
+            MoveEntryMode {
+                absolute: false,
+                copy: false
+            }
+        ),
+        EntryOutcome::Committed
+    );
+    let live = objects(&s);
+    let reopened = Session::open(5, &s.pack("0.1.0").unwrap()).unwrap();
+    let again = objects(&reopened);
+    assert_eq!(live.len(), again.len());
+    for (a, b) in live.iter().zip(&again) {
+        assert_eq!(a, b, "bit-exact after reopening");
+    }
+    // Kinds retained.
+    assert!(matches!(&live[0], ObjectSnapshot::Path(_)));
+    assert!(
+        matches!(&live[1], ObjectSnapshot::Primitive(p) if matches!(p.shape, Shape::Rect { .. }))
+    );
+    assert!(
+        matches!(&live[2], ObjectSnapshot::Primitive(p) if matches!(p.shape, Shape::Ellipse { .. }))
+    );
+    assert!(
+        matches!(&live[3], ObjectSnapshot::Primitive(p) if matches!(p.shape, Shape::Star { .. }))
+    );
+    // No format change.
+    let json_after: serde_json::Value =
+        serde_json::from_slice(&doc_of(&s).export_json().unwrap()).unwrap();
+    assert_eq!(json_before["format_version"], json_after["format_version"]);
+    let mut kb: Vec<&String> = json_before.as_object().unwrap().keys().collect();
+    let mut ka: Vec<&String> = json_after.as_object().unwrap().keys().collect();
+    kb.sort();
+    ka.sort();
+    assert_eq!(kb, ka);
+    let text = serde_json::to_string(&json_after).unwrap();
+    assert!(
+        !text.contains("group") && !text.contains("preview"),
+        "no group box or preview data in the file"
+    );
+}
+
+/// Criterion 17: the origin axes pass through the group box centre at the
+/// press: with Shift past the dead zone the strong line runs through the
+/// centre along the locked axis, the faint one across.
+#[test]
+fn ac17_origin_axes_pass_through_the_group_box_centre() {
+    let d = wide_squares();
+    let mut s = open(&d);
+    select_all(&mut s);
+    let g = wide_box(&s);
+    let c = g.centre();
+    let from = pt(60.0, 50.0); // an outline press, not the centre handle
+    hold(&mut s, from, true, false);
+    s.pointer_down(from, true);
+    hold(&mut s, pt(from.x + 20.0, from.y + 4.0), true, false);
+    let list = s.draw_list();
+    let line = |alpha: u8| -> Vec<Point> {
+        list.triangles
+            .iter()
+            .filter(|v| (v.color.r, v.color.g, v.color.b, v.color.a) == (0x2F, 0x6F, 0xEE, alpha))
+            .map(|v| pt(f64::from(v.position.x), f64::from(v.position.y)))
+            .collect()
+    };
+    let strong = line(128);
+    let faint = line(51);
+    assert!(
+        !strong.is_empty() && !faint.is_empty(),
+        "both axis lines are drawn"
+    );
+    // x-locked move: the strong (locked) line is horizontal through the centre.
+    let k = k_of(&s);
+    assert!(
+        strong.iter().all(|p| (p.y - c.y).abs() <= 1.0 / k + 1e-6),
+        "locked axis through the centre y = {}: {:?}",
+        c.y,
+        &strong[..strong.len().min(4)]
+    );
+    assert!(
+        faint.iter().all(|p| (p.x - c.x).abs() <= 1.0 / k + 1e-6),
+        "idle axis through the centre x"
+    );
+    s.pointer_up(pt(from.x + 20.0, from.y + 4.0), true, false);
+}
+
+// ---------------------------------------------------------------------
+// Cursors, further modifiers, edge chips
+// ---------------------------------------------------------------------
+
+/// Criterion 46 and UX section 4: the four stock resize angles, the arc cursor
+/// for every rotate handle, the two-arrow cursor at 0 and 90 degrees for skew,
+/// `move` on the centre; modifiers never change a handle cursor.
+#[test]
+fn ac46_handle_cursors() {
+    let d = two_paths();
+    let mut s = open(&d);
+    select_all(&mut s);
+    let g = two_squares_box(&s);
+    let cursor = |s: &mut Session, p: Point, shift: bool| {
+        hold(s, p, shift, false);
+        s.cursor_hint()
+    };
+    let nw = cursor(&mut s, g.corner(-1.0, -1.0), false);
+    let se = cursor(&mut s, g.corner(1.0, 1.0), false);
+    let ne = cursor(&mut s, g.corner(1.0, -1.0), false);
+    let sw = cursor(&mut s, g.corner(-1.0, 1.0), false);
+    let n = cursor(&mut s, g.mid(0.0, -1.0), false);
+    let e = cursor(&mut s, g.mid(1.0, 0.0), false);
+    let south = cursor(&mut s, g.mid(0.0, 1.0), false);
+    let w = cursor(&mut s, g.mid(-1.0, 0.0), false);
+    assert!(nw.starts_with("resize:") && nw == se, "{nw} {se}");
+    assert!(ne.starts_with("resize:") && ne == sw, "{ne} {sw}");
+    assert!(n.starts_with("resize:") && n == south, "{n} {south}");
+    assert!(e.starts_with("resize:") && e == w, "{e} {w}");
+    let mut distinct = vec![nw.clone(), ne.clone(), n.clone(), e.clone()];
+    distinct.sort();
+    distinct.dedup();
+    assert_eq!(distinct.len(), 4, "four stock angles: {nw} {ne} {n} {e}");
+    for (sx, sy) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)] {
+        assert_eq!(cursor(&mut s, g.rot_corner(sx, sy), false), "rotate");
+    }
+    for (nx, ny) in [(0.0, -1.0), (1.0, 0.0), (0.0, 1.0), (-1.0, 0.0)] {
+        assert_eq!(
+            cursor(&mut s, g.rot_side(nx, ny), true),
+            "rotate",
+            "side rotate"
+        );
+    }
+    assert_eq!(
+        cursor(&mut s, g.skew(0.0, -1.0), false),
+        cursor(&mut s, g.skew(0.0, 1.0), false)
+    );
+    assert_eq!(
+        cursor(&mut s, g.skew(1.0, 0.0), false),
+        cursor(&mut s, g.skew(-1.0, 0.0), false)
+    );
+    assert_ne!(
+        cursor(&mut s, g.skew(0.0, -1.0), false),
+        cursor(&mut s, g.skew(1.0, 0.0), false)
+    );
+    assert!(cursor(&mut s, g.skew(0.0, -1.0), false).starts_with("skew:"));
+    // Modifiers never change a handle cursor.
+    hold(&mut s, g.corner(1.0, 1.0), true, true);
+    assert_eq!(s.cursor_hint(), se);
+}
+
+/// Criterion 14/43: a side rotate handle exists only while Shift is held; a
+/// plain press where it would be is an ordinary press (no rotation).
+#[test]
+fn ac9_side_rotate_handles_exist_only_with_shift() {
+    let (d, _) = two_squares();
+    let mut s = open(&d);
+    select_all(&mut s);
+    let g = two_squares_box(&s);
+    let before = bytes_of(&s);
+    drag(
+        &mut s,
+        g.rot_side(1.0, 0.0),
+        pt(g.rot_side(1.0, 0.0).x + 10.0, g.rot_side(1.0, 0.0).y + 25.0),
+    );
+    assert!(bytes_of(&s) == before, "no rotation without Shift");
+}
+
+/// Criterion 19: Ctrl and Shift on a corner together: both axes, one factor,
+/// about the centre.
+#[test]
+fn ac19_shift_and_ctrl_on_a_corner() {
+    let (d, _) = two_squares();
+    let mut s = open(&d);
+    select_all(&mut s);
+    let g = two_squares_box(&s);
+    // Centre (65, 55); the corner (80, 60) -> (95, 62): fx = 30/15 = 2,
+    // fy = 7/5 = 1.4: dominant is x -> one factor 2 about the centre.
+    drag_mod(&mut s, g.corner(1.0, 1.0), pt(95.0, 62.0), true, true);
+    let (b0, _) = rect_of(&objects(&s)[0]);
+    assert!(near(b0.width.as_mm(), 20.0, 1e-6) && near(b0.height.as_mm(), 20.0, 1e-6));
+    assert_pt(
+        rect_centre(b0),
+        65.0 + (55.0 - 65.0) * 2.0,
+        55.0,
+        1e-6,
+        "centre mapped about the box centre",
+    );
+}
+
+/// Criterion 34: a double-click on an edge resize handle opens a one-field size
+/// chip (W for a side, H for the top); the result scales that axis only about the
+/// opposite side.
+#[test]
+fn ac34_edge_handle_chip_has_one_field() {
+    let (d, _) = two_squares();
+    let mut s = open(&d);
+    select_all(&mut s);
+    let g = two_squares_box(&s);
+    double_click_at(&mut s, g.mid(1.0, 0.0), false, false);
+    let v = s.transform_entry().expect("size chip");
+    assert_eq!(v.fields.len(), 1);
+    assert_eq!(v.fields[0].label, "W");
+    assert_eq!(v.fields[0].prefill, "30.0");
+    assert_eq!(
+        s.commit_transform_entry("60", "", 0),
+        EntryOutcome::Committed
+    );
+    let (b0, _) = rect_of(&objects(&s)[0]);
+    let (b1, _) = rect_of(&objects(&s)[1]);
+    assert_pt(b0.origin, 50.0, 50.0, 1e-6, "anchored at the W side");
+    assert!(near(b0.width.as_mm(), 20.0, 1e-6) && near(b0.height.as_mm(), 10.0, 1e-6));
+    assert_pt(b1.origin, 90.0, 50.0, 1e-6, "second");
+    let mut s = open(&d);
+    select_all(&mut s);
+    double_click_at(&mut s, g.mid(0.0, -1.0), false, false);
+    let v = s.transform_entry().expect("size chip");
+    assert_eq!((v.fields.len(), v.fields[0].label), (1, "H"));
+}
+
+/// Criterion 47: a double-click on a skew handle opens the skew chip and a
+/// double-click on the centre handle (s >= 48 px) the move chip.
+#[test]
+fn ac47_double_clicks_on_the_other_handles() {
+    let d = two_paths();
+    let mut s = open(&d);
+    select_all(&mut s);
+    let g = two_squares_box(&s);
+    double_click_at(&mut s, g.skew(0.0, -1.0), false, false);
+    assert_eq!(s.transform_entry().expect("skew chip").kind, "skew");
+    let d = wide_squares();
+    let mut s = open(&d);
+    select_all(&mut s);
+    let g = wide_box(&s);
+    double_click_at(&mut s, g.centre(), false, false);
+    assert!(s.move_entry().is_some(), "move chip from the centre handle");
+    assert_eq!(s.selected_object_count(), 2);
+    // Ctrl at the second press presets the Copy check.
+    let mut s = open(&d);
+    select_all(&mut s);
+    double_click_at(&mut s, g.centre(), false, true);
+    assert!(s.move_entry().expect("move chip").copy_preset);
 }
