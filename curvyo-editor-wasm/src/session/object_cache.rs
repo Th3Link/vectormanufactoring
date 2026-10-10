@@ -3,14 +3,14 @@
 //! (`specs/0044-editing-quick-wins/adrs.md`, decision 5).
 
 use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use curvyo_document_core::{Document, DocumentVersion, ObjectSnapshot};
 
 /// The cached read and whether a drag holds it.
 #[derive(Debug, Default)]
 struct Held {
-    read: Option<(DocumentVersion, Rc<[ObjectSnapshot]>)>,
+    read: Option<(DocumentVersion, Arc<[ObjectSnapshot]>)>,
     /// A Select or Node-tool drag keeps its first read for its whole life, whatever the document
     /// does: it writes nothing until its release, so only a merge could change the document
     /// under it, and that is seen by the first read after the drag (`0031` criterion 17).
@@ -28,21 +28,21 @@ impl ObjectCache {
     /// returned unchanged, so a frame of a drag never reads the document; without it the read is
     /// returned only if the document is still at the version it was made at. Everything else
     /// (`New`, `Open`) builds a new `Session` and with it an empty cache.
-    pub(super) fn get(&self, document: &Document, pin: bool) -> Rc<[ObjectSnapshot]> {
+    pub(super) fn get(&self, document: &Document, pin: bool) -> Arc<[ObjectSnapshot]> {
         let mut held = self.held.borrow_mut();
         if pin
             && held.pinned
             && let Some((_, objects)) = &held.read
         {
-            return Rc::clone(objects);
+            return Arc::clone(objects);
         }
         held.pinned = pin;
         let version = document.version();
         let objects = match &held.read {
-            Some((read_at, objects)) if *read_at == version => Rc::clone(objects),
+            Some((read_at, objects)) if *read_at == version => Arc::clone(objects),
             _ => {
                 let objects = read_objects(document);
-                held.read = Some((version, Rc::clone(&objects)));
+                held.read = Some((version, Arc::clone(&objects)));
                 objects
             }
         };
@@ -57,7 +57,7 @@ impl ObjectCache {
 }
 
 /// Reads every object out of the document, in z-order.
-fn read_objects(document: &Document) -> Rc<[ObjectSnapshot]> {
+fn read_objects(document: &Document) -> Arc<[ObjectSnapshot]> {
     document
         .object_ids()
         .into_iter()
@@ -88,7 +88,7 @@ mod tests {
         let cache = ObjectCache::default();
         let first = cache.get(&document, false);
         let second = cache.get(&document, false);
-        assert!(Rc::ptr_eq(&first, &second));
+        assert!(Arc::ptr_eq(&first, &second));
         assert_eq!(first.len(), 1);
     }
 
@@ -100,7 +100,7 @@ mod tests {
         let before = cache.get(&document, false);
         add_path(&document, 3);
         let after = cache.get(&document, false);
-        assert!(!Rc::ptr_eq(&before, &after));
+        assert!(!Arc::ptr_eq(&before, &after));
         assert_eq!((before.len(), after.len()), (1, 2));
     }
 
@@ -112,19 +112,25 @@ mod tests {
         let cache = ObjectCache::default();
         let start = cache.get(&document, true);
         let during = cache.get(&document, true);
-        assert!(Rc::ptr_eq(&start, &during));
+        assert!(Arc::ptr_eq(&start, &during));
         let ids = document.object_ids();
         let _ = document.translate_objects(&ids, curvyo_document_core::Vec2::new(5.0, 0.0));
         assert!(
-            Rc::ptr_eq(&start, &cache.get(&document, true)),
+            Arc::ptr_eq(&start, &cache.get(&document, true)),
             "a drag keeps its read"
         );
         let after = cache.get(&document, false);
-        assert!(!Rc::ptr_eq(&start, &after));
+        assert!(!Arc::ptr_eq(&start, &after));
         assert_ne!(
             &start[..],
             &after[..],
             "the read after the drag sees the move"
         );
+    }
+
+    #[test]
+    fn a_session_can_move_to_another_thread() {
+        fn assert_send<T: Send>() {}
+        assert_send::<super::super::Session>();
     }
 }

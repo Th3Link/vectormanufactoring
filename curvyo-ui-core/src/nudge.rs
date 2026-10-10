@@ -13,10 +13,10 @@ use crate::transform_commit::{commit_move, offset_within_limit};
 
 /// One plain arrow key moves the selection this far, in document millimetres, whatever the zoom
 /// and the display unit.
-pub const NUDGE: Length = Length::from_mm(1.0);
+pub(crate) const NUDGE: Length = Length::from_mm(1.0);
 
 /// One Shift+arrow key moves the selection this far.
-pub const NUDGE_LARGE: Length = Length::from_mm(10.0);
+pub(crate) const NUDGE_LARGE: Length = Length::from_mm(10.0);
 
 /// A repeat event joins the run of the previous nudge only when it arrives within this many
 /// milliseconds of it.
@@ -80,7 +80,7 @@ impl NudgeEvent {
     /// Whether moving objects with the tight bounds `bounds` (`(min, max)` corners) by this event
     /// keeps every edge within the document's coordinate limit, the rule of a typed move.
     #[must_use]
-    pub fn fits(self, bounds: (Point, Point)) -> bool {
+    pub(crate) fn fits(self, bounds: (Point, Point)) -> bool {
         offset_within_limit(bounds, self.offset())
     }
 }
@@ -165,7 +165,8 @@ impl NudgeRun {
 /// What [`nudge`] did.
 #[derive(Debug, Clone, PartialEq)]
 pub enum NudgeOutcome {
-    /// None of the selected ids names an object any more: nothing to move, nothing written.
+    /// None of the selected ids names an object any more, or the document refused the write:
+    /// nothing moved.
     NothingToMove,
     /// The move would leave the document's coordinate limit: nothing was written.
     TooFar,
@@ -181,11 +182,13 @@ pub enum NudgeOutcome {
 /// Moves the selected objects by `event` with the typed move's own write
 /// (`commit_move`, the commit `translate_objects`), one commit per event, and returns the run
 /// the event belongs to. `objects` is the document's current read; ids in `selected` that are
-/// not in it are skipped, so one stale id does not refuse the batch.
+/// not in it are skipped, so one stale id does not refuse the batch. A write the document
+/// refuses (an object in `objects` that is gone from the document) leaves the version as it was
+/// and reports [`NudgeOutcome::NothingToMove`], not a move.
 ///
-/// This is the one place where `0020` joins a continuation event to the step of the run: before
-/// the write, when `new_run` is false, it calls `Document::continue_step()`
-/// (`specs/0044-editing-quick-wins/adrs.md`, decision 4).
+/// Future work (`0020`, `specs/0044-editing-quick-wins/adrs.md` decision 4): when `continues` is
+/// true, this is where `Document::continue_step()` will be called before the write, so the
+/// commits of a held key form one step. It does not exist yet and nothing calls it.
 pub fn nudge(
     document: &Document,
     objects: &[ObjectSnapshot],
@@ -201,11 +204,17 @@ pub fn nudge(
     if !event.fits(bounds) {
         return NudgeOutcome::TooFar;
     }
-    let continues = NudgeRun::continues(previous, event, &document.version());
+    let before = document.version();
+    let continues = NudgeRun::continues(previous, event, &before);
     let ids: Vec<NodeId> = live.iter().map(|object| object.id()).collect();
+    // 0020: `Document::continue_step()` goes directly above this write when `continues`.
     let _ = commit_move(document, &ids, event.offset(), false, minter);
+    let after = document.version();
+    if after == before {
+        return NudgeOutcome::NothingToMove;
+    }
     NudgeOutcome::Moved {
-        run: NudgeRun::after(previous, continues, event, document.version()),
+        run: NudgeRun::after(previous, continues, event, after),
         new_run: !continues,
     }
 }
@@ -506,6 +515,25 @@ mod tests {
         let version = document.version();
         let none = nudge(&document, &objects, &[gone], e, None, &mut minter);
         assert_eq!(none, NudgeOutcome::NothingToMove);
+        assert_eq!(document.version(), version);
+    }
+
+    #[test]
+    fn a_write_the_document_refuses_is_not_reported_as_a_move() {
+        let document = Document::new(1);
+        let (a, _, objects) = two_paths(&document);
+        document.delete_objects(&[a]).expect("deleted");
+        let version = document.version();
+        let mut minter = AnchorIdMinter::new(1);
+        let outcome = nudge(
+            &document,
+            &objects,
+            &[a],
+            event(Arrow::Right, false, false, 0.0),
+            None,
+            &mut minter,
+        );
+        assert_eq!(outcome, NudgeOutcome::NothingToMove);
         assert_eq!(document.version(), version);
     }
 

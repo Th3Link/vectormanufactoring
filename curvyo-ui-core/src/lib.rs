@@ -105,8 +105,7 @@ pub use node_tool::{
     PointerDownOutcome as NodePointerDownOutcome, PointerUpOutcome as NodePointerUpOutcome,
 };
 pub use nudge::{
-    Arrow, CONTINUATION_WINDOW_MS, NUDGE, NUDGE_LARGE, NudgeEvent, NudgeOutcome, NudgeRun, nudge,
-    selection_centre,
+    Arrow, CONTINUATION_WINDOW_MS, NudgeEvent, NudgeOutcome, NudgeRun, nudge, selection_centre,
 };
 pub use object_bounds::{content_bounds, object_bounds, object_outline_bounds};
 pub use object_selection::{ObjectSelection, SelectionCombine};

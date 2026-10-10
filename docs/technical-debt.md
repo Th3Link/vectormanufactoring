@@ -1225,3 +1225,36 @@ of the Select bar (click-through, 3 s or 8 s).
   past the frame budget further markers are skipped, never the stroke.
 - **A compound path applies its markers to each outline** (each outline is closed
   in practice, so only Middle shows); the spec does not say more.
+
+## Open points of `0044-editing-quick-wins` (select all and keyboard nudge)
+
+*2026-10-10 (architect review of #87).*
+
+- **A held nudge writes about 30 commits per second.** Until `0020` joins them into one step,
+  each key-repeat event is one `translate_objects` commit (ADR 0014 §2 is Proposed). With 1,000
+  objects selected one event costs 34 ms in a release build (`draw_list_cache_budget.rs`), more than
+  the 33 ms between two repeat events, so repeats can queue and the objects keep moving after the
+  key is released. The oplog also grows by one commit per event (see "Document files grow with
+  edit history"). **Resolution:** `0020` calls `Document::continue_step()` at the marked place in
+  `curvyo-ui-core/src/nudge.rs` (`nudge()`); if a selection of thousands still lags, coalesce the
+  repeat events of one frame in the frontend.
+- **`Session::key_down` and `key_down_at` are a pair.** `key_down` passes time 0, so a repeat
+  event through it continues any run (only the tests use it). The DOM time stamp is a separate
+  argument because 13 existing tests build `KeyInput` field by field, and #80 and #84 edit the
+  same files. **Resolution:** once #80 and #84 are merged, add `time_ms` to `KeyInput`, delete
+  `key_down_at` and update the literals.
+- **The "Too far from the document. Nothing was changed." text uses the key hint chip.** The
+  canvas notice slot of `0020` (UX notes) does not exist yet. **Resolution:** move the text there
+  when `0020` builds the slot (`frontend/src/hooks/useEditorSession.ts`, `KEY_HINT_TEXT`).
+- **The object cache holds one full snapshot of every object for the life of a session**
+  (`session/object_cache.rs`, an `Arc<[ObjectSnapshot]>` that is replaced, not freed, when the
+  document changes). For 10,000 objects that is the size of the document twice while a frame
+  works on the previous read. Fine at today's sizes; the second half of the draw-list cache (the
+  tessellated artwork) should replace the snapshots with a cheaper index.
+- **After Ctrl+A with 5,000 objects the frontend's reads cost more than the frame.** Measured in
+  `draw_list_cache_budget.rs` (release): `select_bar_state` 126 ms, `style_panel_view` 141 ms,
+  `path_availability` 15 ms, `boolean_availability` 7 ms, against about 135 to 210 ms for the key
+  and the first frame. They run on every `syncFromSession`, so a selection of thousands makes each
+  key press and pointer event slow, whatever the draw list costs. Not fixed in `0044`.
+  **Resolution:** find the quadratic id lookups behind the two panel reads (`ids.contains` over all
+  objects) and cache the result per selection and document version, as the object read is.

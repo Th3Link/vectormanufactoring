@@ -52,7 +52,7 @@ mod style_view;
 mod tolerances;
 mod transform_entry;
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use curvyo_document_core::{Document, NodeId, ObjectSnapshot, OpenError, Point, SaveError};
 use curvyo_ui_core::{
@@ -356,7 +356,7 @@ impl Session {
     /// tool's own counterpart to [`Session::paths`]/[`Session::
     /// primitives`]: both a path and a primitive are "any object" to
     /// `hit_test_object`/`object_bounds`. Read once per document version.
-    fn objects(&self) -> Rc<[ObjectSnapshot]> {
+    fn objects(&self) -> Arc<[ObjectSnapshot]> {
         // A Select or Node-tool drag reuses one read of the document for all its frames: nothing
         // changes the document while it runs (`0031` criterion 17).
         let drag = (self.tool == Tool::Select && self.select.drag_in_flight())
