@@ -1,6 +1,6 @@
 # ADR 0003: Geometry kernel, boolean operations, offsetting and V-carving
 
-**Status:** Accepted (customer sign-off, 2026-10-02); §3 kernel library amendment of 2026-10-09 proposed (`clipper2-rust` replaced by `i_overlay`; the lead's default, the customer may veto; takes effect when PR #69 merges)
+**Status:** Accepted (customer sign-off, 2026-10-02); §3 kernel library amendment of 2026-10-09 in effect since PR #69 merged on 2026-10-09 (`i_overlay` `=9.0.1` replaces `clipper2-rust`)
 
 ## Context
 
@@ -195,6 +195,10 @@ foundation.
    > not a candidate-list update, so it needs a new ADR superseding this one
    > rather than a feature-local note — flagged to the lead, customer decision.
    > Until that happens this item stands as written.
+   >
+   > **Note 2026-10-10:** the spike's pick was replaced by `i_overlay` (§3
+   > amendment of 2026-10-09), so this question no longer applies; this item
+   > stands as written.
 5. **V-carving uses an approximate medial axis derived from a constrained
    Delaunay triangulation** of the flattened boundary (`spade`, pure Rust,
    robust predicates), not an exact Voronoi diagram of curve segments. Carve
