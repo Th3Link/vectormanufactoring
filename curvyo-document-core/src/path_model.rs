@@ -356,8 +356,18 @@ impl PathSnapshot {
     /// pure translation", extended here to "a resize never rotates").
     #[must_use]
     pub fn scaled(&self, pivot: Point, sx: f64, sy: f64) -> Self {
-        let into_local = Angle::from_radians(-self.rotation.as_radians());
-        let out_of_local = self.rotation;
+        self.scaled_along(pivot, sx, sy, self.rotation)
+    }
+
+    /// This path scaled by `(sx, sy)` about `pivot` along axes turned by
+    /// `axes`: [`PathSnapshot::scaled`] with the frame given instead of the
+    /// path's own `rotation`. A selection of several objects scales along the
+    /// document axes (`axes` zero, `specs/0019-multi-object-transform/` criterion
+    /// 20). `rotation` is untouched.
+    #[must_use]
+    pub fn scaled_along(&self, pivot: Point, sx: f64, sy: f64, axes: Angle) -> Self {
+        let into_local = Angle::from_radians(-axes.as_radians());
+        let out_of_local = axes;
         let mut scaled = self.clone();
         for anchor in scaled.all_anchors_mut() {
             anchor.point =
@@ -384,8 +394,17 @@ impl PathSnapshot {
     /// orientation.
     #[must_use]
     pub fn sheared(&self, pivot: Point, ku: f64, kv: f64) -> Self {
-        let into_local = Angle::from_radians(-self.rotation.as_radians());
-        let out_of_local = self.rotation;
+        self.sheared_along(pivot, ku, kv, self.rotation)
+    }
+
+    /// This path sheared along axes turned by `axes`: [`PathSnapshot::sheared`]
+    /// with the frame given instead of the path's own `rotation`. A selection
+    /// of several paths shears along the document axes (`axes` zero,
+    /// `specs/0019-multi-object-transform/` criterion 41). `rotation` is untouched.
+    #[must_use]
+    pub fn sheared_along(&self, pivot: Point, ku: f64, kv: f64, axes: Angle) -> Self {
+        let into_local = Angle::from_radians(-axes.as_radians());
+        let out_of_local = axes;
         let shear = |x: f64, y: f64| (x + ku * y, y + kv * x);
         let mut sheared = self.clone();
         for anchor in sheared.all_anchors_mut() {

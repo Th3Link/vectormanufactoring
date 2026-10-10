@@ -45,6 +45,14 @@ pub enum ObjectEditError {
     /// without an anchor.
     #[error("a replacement path needs at least one outline, each with an anchor")]
     NoOutlines,
+    /// A stroke width given to [`Document::transform_objects`] is not finite
+    /// and above zero: nothing was written.
+    #[error("a stroke width must be finite and above zero")]
+    InvalidStrokeWidth,
+    /// A corner radius given to [`Document::transform_objects`] is not finite:
+    /// nothing was written.
+    #[error("a corner radius must be finite")]
+    InvalidRadius,
 }
 
 /// One object to duplicate with [`Document::duplicate_objects`], and the

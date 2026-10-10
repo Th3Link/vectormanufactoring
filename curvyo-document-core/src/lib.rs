@@ -42,6 +42,7 @@ mod style_model;
 mod style_validation;
 mod styles;
 mod subpath_codec;
+mod transform_objects;
 mod units;
 
 pub use container::{CURRENT_LORO_SNAPSHOT_VERSION, pack, unpack};
