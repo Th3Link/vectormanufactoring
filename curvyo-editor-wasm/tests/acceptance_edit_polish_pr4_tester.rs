@@ -1311,7 +1311,10 @@ fn c37_the_badge_and_pointer_down_agree_on_a_grid() {
                     let badge = s.move_indicators().copy_badge;
                     s.pointer_down(at, shift);
                     s.pointer_hover(plus(at, 40.0, 6.0), shift, true);
-                    let began = readout(&s).is_some_and(|t| t.starts_with('Δ'));
+                    // The move readout is "Δ dx, dy mm"; a group rotate's is "Δ 37.4°"
+                    // (`multi-object-transform`), which no press with Ctrl on a
+                    // handle may be mistaken for.
+                    let began = readout(&s).is_some_and(|t| t.starts_with('Δ') && t.contains("mm"));
                     s.escape();
                     if badge != began {
                         mismatches.push((sel_points.len(), shift, at, badge, began));

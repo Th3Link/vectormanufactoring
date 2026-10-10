@@ -26,7 +26,7 @@ const UNIT_OPTIONS: readonly ToggleOption<UnitSymbol>[] = (
 }));
 
 const SIZE_TOOLTIP =
-  "Document size. A resize keeps the centre, so objects move with the document and nothing changes on screen.";
+  "Document size. A resize keeps the center, so objects move with the document and nothing changes on screen.";
 const FIT_TOOLTIP =
   "Resize the document to the extent of all objects, without margin. Objects move so the extent starts at 0, 0.";
 
@@ -43,7 +43,7 @@ interface DocumentSectionProps {
 /**
  * The "Document" section of the properties panel (`specs/0015-document-size-
  * and-rulers`, `docs/design-system.md`, "Properties panel: Document section"):
- * Width and Height typed fields (a resize keeps the centre), the display unit,
+ * Width and Height typed fields (a resize keeps the center), the display unit,
  * and Fit to content. Every value and every rule comes from the session; this
  * holds the fields' text and the two short messages under the button.
  */

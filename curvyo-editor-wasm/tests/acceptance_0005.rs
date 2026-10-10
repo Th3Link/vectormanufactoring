@@ -407,7 +407,9 @@ fn ac1_closed_path_shows_eight_resize_handles_and_a_rotate_handle() {
 }
 
 #[test]
-fn ac1_polygon_and_star_have_corner_handles_only_plus_rotate_ac11() {
+/// `0019` criterion 56 supersedes `0005` criterion 11 here: a polygon or star shows
+/// the four edge resize handles too (they stretch it and turn it into a path).
+fn ac1_polygon_and_star_have_eight_resize_handles_plus_rotate_0019_c56() {
     for doc in [
         polygon_doc(30.0, 30.0, 10.0, 6),
         star_doc(30.0, 30.0, 10.0, 5, 0.5),
@@ -430,7 +432,7 @@ fn ac1_polygon_and_star_have_corner_handles_only_plus_rotate_ac11() {
             "move", // not a handle; a press here moves the object (`0007` 28)
             "pointer on outline mid is not a handle"
         );
-        assert_full_handle_set(&mut s, min.x, min.y, max.x, max.y, true);
+        assert_full_handle_set(&mut s, min.x, min.y, max.x, max.y, false);
     }
 }
 
@@ -458,23 +460,30 @@ fn ac1_slice4_baseline_still_shows_no_path_nodes_or_shape_handles() {
 // AC 2: multi-selection shows no transform handles
 // ---------------------------------------------------------------------
 
+/// Superseded by `multi-object-transform` (criterion 2 of `0005` no longer
+/// applies): a multi-selection shows the handles of its group box, not those of
+/// each object. The handle positions of one rectangle's own box do not respond
+/// where the group box has none, and the group box's own corner does.
 #[test]
-fn ac2_two_selected_objects_show_no_transform_handles() {
+fn ac2_two_selected_objects_show_the_group_handles_not_their_own() {
     let document = Document::new(1);
     let _ = document.create_rect(rect_bounds(0.0, 0.0, 40.0, 20.0));
     let _ = document.create_rect(rect_bounds(100.0, 0.0, 40.0, 20.0));
     let mut s = open_in_session(&document);
     click(&mut s, pt(20.0, 0.0));
     shift_click(&mut s, pt(120.0, 0.0));
-    // None of the 9 handle positions of either rect responds.
-    for (x0, x1) in [(0.0, 40.0), (100.0, 140.0)] {
-        let c = pt(f64::midpoint(x0, x1), 10.0);
-        for (name, p) in eight(x0, 0.0, x1, 20.0, c, 0.0) {
-            assert_eq!(hint_at(&mut s, p), "default", "handle {name} of {x0}");
-        }
-        let rh = rotate_handle(&s, x0, 0.0, x1, c, 0.0);
-        assert_eq!(hint_at(&mut s, rh), "default");
+    // The second rectangle's north-west and west spots and the first one's
+    // north-east and east spots lie inside the group box (0, 0) to (140, 20).
+    for p in [
+        pt(100.0, 0.0),
+        pt(100.0, 10.0),
+        pt(40.0, 0.0),
+        pt(40.0, 10.0),
+    ] {
+        assert_eq!(hint_at(&mut s, p), "default", "{p:?}");
     }
+    // The group box's own south-east corner is a resize handle (its cursor).
+    assert_eq!(hint_at(&mut s, pt(140.0, 20.0)), "resize:45.0");
 }
 
 #[test]

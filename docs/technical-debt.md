@@ -260,11 +260,11 @@ removed without a migration: the oriented box of a polygon or star turns by
 is the number in the readout. The two registers stay; `StarFrame.angle` plus
 `rotation` is still the stored form until the affine story. Two consequences stay
 open: in box-local coordinates the first outer vertex of a polygon or star is at
-angle 0 (handles never add `StarFrame.angle`), and "Object to path" drops the frame
-angle, so the converted path's `rotation` is the register alone and its readout
-and box direction can differ from the shape's before the conversion. Fix that
-with one more argument to `convert_to_paths` (write `orientation()` as the path's
-`rotation`) when someone asks. See `specs/0012-polygon-star-box-refit/adrs.md`.
+angle 0 (handles never add `StarFrame.angle`). The second one, "Object to path"
+dropping the frame angle, is fixed by `multi-object-transform` (2026-10-10):
+`Document::convert_to_paths` and the conversion of a stretch both write
+`orientation()` as the path's `rotation`, so its readout and box direction do not
+change. See `specs/0012-polygon-star-box-refit/adrs.md`.
 
 ## Undo cannot reach a collaborator's change
 
@@ -697,6 +697,64 @@ object once and write one commit, so they do not need the cache: with 1000 circl
 373 ms in a release build (budget 2 s, `curvyo-editor-wasm/tests/combine_interactivity.rs`), and the
 touch and nesting kernel 16 ms for 1001 outlines. The Boolean busy state (two painted frames before
 the call) is shared by both cards of the rail.
+
+**Measured 2026-10-10 (`multi-object-transform`, release build, same machine,
+`curvyo-editor-wasm/tests/multi_object_transform_budgets.rs`):** a straight
+segment (both handles zero) was sent to `lyon` as a cubic with its control
+points on its ends. `lyon` flattens such a degenerate curve into more pieces, and
+into a different number at another position, so the blue outline of a scaled or
+turned selection cost 1.4 times that of a moved one (the architect's
+criterion 48 allows 1.1) and a frame at 200 objects took 6.4 ms. Drawing a
+handle-less segment with `line_to` (`curvyo-render-core/src/stroke.rs`) cuts the
+triangles of the 200-object frame from 88,000 to 36,000, the frame to 4.3 ms,
+and makes scale, rotate and move equal. This also lowers the frame at rest; the
+draw-list cache above is still the larger item. Re-measured with the older
+benchmark (`unified_object_editing.rs`, release, same machine): the 200-object
+move frame is 7.1 ms (was 13.8 to 15.6 ms), so the architect's 8 ms budget of
+`unified-object-editing` criterion 15 is met now; a frame at rest is 15.0 ms.
+
+## `curvyo-ui-core/src/transform_entry.rs` is past the size limit
+
+548 non-test lines (`CLAUDE.md` section 5: about 500). `multi-object-transform`
+did not grow it: its entries are in `group_entry.rs`. Split the number parser and
+`EntryField` from the entry state when the next story touches it.
+
+## The single-object writers accept NaN and infinity
+
+`Document::set_rect_bounds`, `move_anchors`, `translate_objects`, `rotate_object`
+and the `resize_*` commands do not check that the numbers they are given are
+finite: a NaN or an infinity is stored as `null` in the saved file. The gesture
+layer (`ui-core`'s `is_sane`) refuses such results, so no caller produces them
+today. `Document::transform_objects` (`multi-object-transform`) does check, and
+refuses the whole call with `ObjectEditError::NonFiniteGeometry` before it writes.
+Give the older writers the same check when one of them gets a second caller that
+does not go through the gesture layer (ADR 0004, "never write a value that reopens
+as damaged").
+
+## Notes on the multi-object transform (merged with the path tools)
+
+- The cursor over a selected object's outline in a multi-selection stays
+  `default`: the single-object `move` cursor over a selection is not shown for
+  several (`select_cursor.rs`). Not a regression, a gap in criterion 46.
+
+## A path result for a primitive is a conversion: a risk for undo-redo (0020)
+
+`Document::transform_objects` takes a path result for a node that is a primitive now as
+the conversion of a stretch (`specs/0019-multi-object-transform/adrs.md`, decision 8). It
+cannot tell an intended conversion from a stale path snapshot. Today nothing turns a path
+back into a primitive, so it is safe. Once undo restores a primitive while a gesture is in
+flight, a stale path result would silently convert it again. `undo-redo` must cancel the
+gestures in flight, or the conversion must carry an explicit intent.
+
+## One peer's delete refuses a whole multi-object commit
+
+`Document::transform_objects` resolves every object before it writes and refuses
+the whole call if one is gone (`ObjectEditError::NoSuchObject`), so a selection
+transformed while a peer deletes one of its objects is not transformed at all,
+and the maker's drag is lost. A Select drag holds the snapshot it started with
+and no merge runs during a drag today (the `Session.drag_objects` note above), so
+this cannot happen yet. When sync reaches the session, skip missing objects
+instead of refusing (`specs/0019-multi-object-transform/adrs.md`, decision 5).
 
 ## The canvas does not react to a `devicePixelRatio` change with no resize event
 

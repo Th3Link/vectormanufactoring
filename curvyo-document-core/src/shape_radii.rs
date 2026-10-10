@@ -20,7 +20,7 @@ use crate::units::Length;
 /// refused ([`ShapeEditError::InvalidRadius`], nothing written, so a saved
 /// file can never hold a value that reopens as damaged), a negative one is
 /// floored to zero (defence; nothing in the UI produces one).
-fn checked(radii: CornerRadii) -> Result<CornerRadii, ShapeEditError> {
+pub(crate) fn checked(radii: CornerRadii) -> Result<CornerRadii, ShapeEditError> {
     let floor = |radius: Length| Length::from_mm(radius.as_mm().max(0.0));
     if !Corner::ALL
         .iter()

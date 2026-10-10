@@ -77,6 +77,11 @@ pub(crate) struct AnchorPositions {
 }
 
 impl AnchorPositions {
+    /// Whether an anchor `id` is in any outline.
+    pub(crate) fn contains(&self, id: AnchorId) -> bool {
+        self.positions.contains_key(&id)
+    }
+
     /// The list and index of the anchor `id`, in whichever outline it is.
     pub(crate) fn get(&self, id: AnchorId) -> Option<(LoroMovableList, usize)> {
         let &(outline, index) = self.positions.get(&id)?;

@@ -24,17 +24,21 @@ pub struct MoveEntryView {
     /// Whether the Copy check opens on: Ctrl was held at the second press of
     /// the double-click (criterion 23).
     pub copy_preset: bool,
+    /// Whether the chip moves a multi-selection: "Absolute" then measures from
+    /// the top-left corner of the group box, and says so
+    /// (`specs/0019-multi-object-transform/` criterion 35).
+    pub selection: bool,
 }
 
 impl Session {
-    /// The open move entry, if the Select tool is active and its object is
-    /// still the sole selection.
+    /// The open move entry, if the Select tool is active and its objects are
+    /// still the selection.
     fn open_move_entry(&self) -> Option<&MoveEntry> {
         if self.tool != Tool::Select {
             return None;
         }
         let entry = self.select.move_entry()?;
-        (self.selection.ids() == [entry.object().id()]).then_some(entry)
+        (self.selection.ids() == entry.ids()).then_some(entry)
     }
 
     /// The move chip to show, or `None`.
@@ -48,6 +52,7 @@ impl Session {
             relative_prefill: [relative(0), relative(1)],
             absolute_prefill: entry.absolute_prefill().clone(),
             copy_preset: entry.copy_preset(),
+            selection: entry.ids().len() >= 2,
         })
     }
 

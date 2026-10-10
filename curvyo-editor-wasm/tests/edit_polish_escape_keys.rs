@@ -11,7 +11,7 @@ use curvyo_document_core::{
     AnchorId, Document, Length, NewAnchor, ObjectSnapshot, Point, PointCount, RectBounds, pack,
     unpack,
 };
-use curvyo_editor_wasm::{EscapeStep, KeyHint, KeyInput, KeyOutcome, Session, Tool};
+use curvyo_editor_wasm::{EscapeStep, KeyInput, KeyOutcome, Session, Tool};
 
 /// Screen pixels per millimetre of a fresh session (96 dpi at 100 %).
 const SCALE: f64 = 96.0 / 25.4;
@@ -545,10 +545,10 @@ fn r_and_s_open_for_a_tiny_object() {
     assert!(session.transform_entry().is_some());
 }
 
-/// Criterion 59: several objects selected: R gives the hint and changes
-/// nothing, not even the tool.
+/// Superseded by `multi-object-transform` (criteria 33 and 34): several objects
+/// selected, R and S open the entries of the selection and change no tool.
 #[test]
-fn r_with_several_objects_selected_gives_a_hint() {
+fn r_and_s_with_several_objects_selected_open_the_selection_entries() {
     let document = rect_document();
     let _ = document.create_rect(RectBounds {
         origin: pt(200.0, 20.0),
@@ -562,9 +562,10 @@ fn r_with_several_objects_selected_gives_a_hint() {
     session.pointer_up(pt(200.0, 40.0), true, false);
     assert_eq!(session.selected_object_count(), 2);
     for k in ["r", "s"] {
-        assert_eq!(key(&mut session, k), KeyOutcome::Hint(KeyHint::SelectOne));
+        assert_eq!(key(&mut session, k), KeyOutcome::EntryOpened);
         assert_eq!(session.tool(), Tool::Select);
         assert_eq!(session.selected_object_count(), 2);
+        session.cancel_transform_entry();
     }
 }
 

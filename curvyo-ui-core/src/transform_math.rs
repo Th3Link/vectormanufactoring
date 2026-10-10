@@ -454,22 +454,6 @@ pub fn local_delta_for_size(
     Vec2::new(x, y)
 }
 
-/// The local displacement of a polygon or star's corner handle that makes
-/// its outer radius `target_radius` (criterion 26): along the corner's
-/// diagonal by `√2 · (target − start)`, which
-/// [`polygon_star_resize_factor`] maps back to exactly `target_radius`.
-#[must_use]
-pub fn local_delta_for_radius(
-    start_radius: f64,
-    direction: ResizeDirection,
-    target_radius: f64,
-) -> Vec2 {
-    direction
-        .unit_vector()
-        .normalized_to(1.0)
-        .scaled(std::f64::consts::SQRT_2 * (target_radius - start_radius))
-}
-
 /// The stroke width (or corner radius) `factor` applied to
 /// `start_value`, floored at `min_value` rather than crossing to zero or
 /// negative (acceptance criterion 8's "the drag has no further effect
@@ -902,25 +886,4 @@ mod tests {
             }
         }
     }
-
-    /// Criterion 26: the typed radius's delta maps back to exactly that
-    /// radius through `polygon_star_resize_factor`.
-    #[test]
-    fn local_delta_for_radius_round_trips_through_the_polygon_factor() {
-        for direction in CORNERS {
-            let delta = local_delta_for_radius(10.0, direction, 17.5);
-            let factor = polygon_star_resize_factor(10.0, direction, delta);
-            assert!(
-                (10.0 * factor - 17.5).abs() < 1e-9,
-                "{direction:?}: {factor}"
-            );
-        }
-    }
-
-    const CORNERS: [ResizeDirection; 4] = [
-        ResizeDirection::Ne,
-        ResizeDirection::Se,
-        ResizeDirection::Sw,
-        ResizeDirection::Nw,
-    ];
 }

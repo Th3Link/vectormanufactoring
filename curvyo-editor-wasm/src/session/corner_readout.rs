@@ -30,6 +30,9 @@ impl Session {
             return Vec::new();
         }
         let objects = self.objects();
+        if self.selection.ids().len() >= 2 {
+            return self.group_hint_lines(&objects);
+        }
         let Some((object, _, EditHandle::Param(ParamHandle::CornerRadius(corner)))) =
             self.select_hovered_handle(&objects)
         else {

@@ -716,12 +716,14 @@ fn ac11_a_multi_object_move_previews_every_selected_object() {
     tool.pointer_down(
         &objects,
         &mut selection,
-        pt(0.0, 5.0),
+        // On the top edge of the first square, clear of the group box's west edge
+        // handle at (0, 5), which takes a press first (`multi-object-transform`).
+        pt(5.0, 0.0),
         SEGMENT_TOLERANCE,
         tolerances(),
         Modifiers::NONE,
     );
-    let to = pt(10.0, 9.0);
+    let to = pt(15.0, 4.0);
     tool.pointer_moved(to, Modifiers::NONE, &mut selection);
     let live = tool
         .live_edit(&objects, &selection, to, false, false)

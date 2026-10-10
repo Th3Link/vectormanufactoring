@@ -32,13 +32,11 @@ pub struct KeyInput<'a> {
 /// frontend owns the wording and shows it for 2 s.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyHint {
-    /// Several objects are selected: "Select one object to type a value".
-    SelectOne,
     /// Nothing is selected, or M or K was pressed outside the Select tool:
     /// "Select an object first".
     SelectFirst,
-    /// K or Shift+K with one selected object that is not a path: "Skew works
-    /// on paths only".
+    /// K or Shift+K with a selection that holds an object that is not a path:
+    /// "Skew works on paths only".
     PathOnly,
 }
 
@@ -79,7 +77,6 @@ impl KeyOutcome {
             Self::Escape(EscapeStep::ClearedState) => "escape-state",
             Self::Escape(EscapeStep::LeftTool) => "escape-tool",
             Self::Escape(EscapeStep::Nothing) => "escape-none",
-            Self::Hint(KeyHint::SelectOne) => "hint-select-one",
             Self::Hint(KeyHint::SelectFirst) => "hint-select-first",
             Self::Hint(KeyHint::PathOnly) => "hint-path-only",
         }
@@ -196,15 +193,13 @@ fn decide(input: &KeyInput<'_>, state: KeyState) -> KeyAction {
         // The one state that changes a letter: the Select tool with an
         // object selected acts on it; every other state switches tool.
         Binding::Entry(entry, tool) => match (state.tool, state.selected) {
-            (Tool::Select, Selected::One) => KeyAction::OpenEntry(entry),
-            (Tool::Select, Selected::Many) => KeyAction::Hint(KeyHint::SelectOne),
+            (Tool::Select, Selected::One | Selected::Many) => KeyAction::OpenEntry(entry),
             _ => KeyAction::SetTool(tool),
         },
         // M and K have no tool to fall back to: outside the Select tool, or
         // with nothing selected, they only explain themselves.
         Binding::EntryOnly(entry) => match (state.tool, state.selected) {
-            (Tool::Select, Selected::One) => KeyAction::OpenEntry(entry),
-            (Tool::Select, Selected::Many) => KeyAction::Hint(KeyHint::SelectOne),
+            (Tool::Select, Selected::One | Selected::Many) => KeyAction::OpenEntry(entry),
             _ => KeyAction::Hint(KeyHint::SelectFirst),
         },
     }
@@ -286,8 +281,10 @@ impl Session {
                     .select
                     .open_entry_for_key(&objects, &self.selection, key)
                 {
-                    Ok(()) => KeyOutcome::EntryOpened,
-                    Err(KeyEntryRefusal::SeveralSelected) => KeyOutcome::Hint(KeyHint::SelectOne),
+                    Ok(()) => {
+                        self.select.mint_conversion_ids(&mut self.minter);
+                        KeyOutcome::EntryOpened
+                    }
                     Err(KeyEntryRefusal::NothingSelected) => KeyOutcome::Hint(KeyHint::SelectFirst),
                     Err(KeyEntryRefusal::SkewNeedsPath) => KeyOutcome::Hint(KeyHint::PathOnly),
                 }
@@ -478,8 +475,8 @@ mod tests {
     }
 
     /// Criterion 54: R and S act on the selection only in the Select tool
-    /// with an object selected; every other state switches tool; several
-    /// objects give the hint and change nothing.
+    /// with an object selected (one or several, `multi-object-transform`
+    /// criteria 33 to 37); every other state switches tool.
     #[test]
     fn r_and_s_act_on_the_selection_only_in_the_select_tool() {
         for tool in TOOLS {
@@ -489,8 +486,9 @@ mod tests {
                     ("s", EntryKey::Size, Tool::Select),
                 ] {
                     let expected = match (tool, selected) {
-                        (Tool::Select, Selected::One) => KeyAction::OpenEntry(entry),
-                        (Tool::Select, Selected::Many) => KeyAction::Hint(KeyHint::SelectOne),
+                        (Tool::Select, Selected::One | Selected::Many) => {
+                            KeyAction::OpenEntry(entry)
+                        }
                         _ => KeyAction::SetTool(target),
                     };
                     assert_eq!(
@@ -619,8 +617,9 @@ mod tests {
                         ..KeyInput::default()
                     };
                     let expected = match (tool, selected) {
-                        (Tool::Select, Selected::One) => KeyAction::OpenEntry(entry),
-                        (Tool::Select, Selected::Many) => KeyAction::Hint(KeyHint::SelectOne),
+                        (Tool::Select, Selected::One | Selected::Many) => {
+                            KeyAction::OpenEntry(entry)
+                        }
                         _ => KeyAction::Hint(KeyHint::SelectFirst),
                     };
                     assert_eq!(
@@ -730,7 +729,7 @@ mod tests {
             KeyOutcome::Escape(EscapeStep::ClearedState),
             KeyOutcome::Escape(EscapeStep::LeftTool),
             KeyOutcome::Escape(EscapeStep::Nothing),
-            KeyOutcome::Hint(KeyHint::SelectOne),
+            KeyOutcome::Hint(KeyHint::PathOnly),
         ];
         let mut codes: Vec<&str> = all.iter().map(|o| o.code()).collect();
         codes.sort_unstable();

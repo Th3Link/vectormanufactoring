@@ -28,6 +28,9 @@ mod display_unit_text;
 mod document_fit;
 mod document_presets_view;
 mod ellipse_tool;
+mod group_box;
+mod group_entry;
+mod group_transform;
 mod hit_test;
 mod hit_test_object;
 mod marquee;
@@ -83,7 +86,9 @@ pub use combine::{
     COMBINE_COMMIT_LABEL, CombinePlan, CombineRefusal, PathAvailability, path_availability,
     plan_combine,
 };
-pub use conversion::build_primitive_conversions;
+pub use conversion::{
+    ConversionCounts, ConvertingKind, build_primitive_conversions, primitive_as_path,
+};
 pub use dash_text::{MAX_DASH_NUMBER, MAX_DASH_NUMBERS, dash_text, parse_dash_text};
 pub use display_unit_text::{
     content_too_large_message, document_side_message, format_cursor, format_field_length,
@@ -94,6 +99,10 @@ pub use document_presets_view::{
     PresetEntry, PresetGroupView, PresetsView, orientation_swap, preset_pick_size, presets_view,
 };
 pub use ellipse_tool::EllipseTool;
+pub use group_box::{
+    GroupBoxShape, GroupSelection, group_handles, hit_group_handle, is_drawn_group_handle,
+};
+pub use group_entry::GroupEntry;
 pub use hit_test::{Hit, hit_test};
 pub use hit_test_object::{hit_test_object, hit_test_objects, hit_test_objects_along};
 pub use marquee::{MarqueeMode, objects_in_marquee};

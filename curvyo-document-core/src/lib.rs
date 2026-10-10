@@ -34,6 +34,7 @@ mod path_extend;
 mod path_model;
 mod path_reverse;
 mod path_topology;
+mod path_transform;
 mod paths;
 mod primitive_model;
 mod primitive_outline;
@@ -48,6 +49,7 @@ mod style_model;
 mod style_validation;
 mod styles;
 mod subpath_codec;
+mod transform_objects;
 mod units;
 
 pub use container::{CURRENT_LORO_SNAPSHOT_VERSION, pack, unpack};

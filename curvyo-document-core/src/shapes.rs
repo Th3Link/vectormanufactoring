@@ -11,13 +11,13 @@ use loro::TreeParentId;
 use crate::corner_radii::CornerRadii;
 use crate::corner_radii_codec::write_corner_radii_if_changed;
 use crate::document::{Document, OBJECTS_TREE};
-use crate::path_codec::node_exists;
+use crate::path_codec::{self, node_exists};
 use crate::path_model::{NewAnchor, NodeId};
 use crate::primitive_model::{
     EllipseFrame, InnerRatio, ObjectSnapshot, PointCount, PrimitiveSnapshot, RectBounds, StarFrame,
 };
 use crate::shape_codec::{self, SHAPE_ELLIPSE, SHAPE_POLYGON, SHAPE_RECT, SHAPE_STAR};
-use crate::units::Length;
+use crate::units::{Angle, Length};
 
 /// Why a shape-editing [`Document`] method refused to apply.
 ///
@@ -370,9 +370,22 @@ impl Document {
             })
             .collect::<Result<_, _>>()?;
 
-        for (meta, (_, anchors)) in metas.into_iter().zip(conversions.iter()) {
+        // The shown angle (a polygon's or star's frame angle plus its register)
+        // is what the converted path keeps as its `rotation`, read before the
+        // primitive keys go, so that its readout and box direction do not change.
+        let orientations: Vec<Angle> = conversions
+            .iter()
+            .map(|(id, _)| self.object(*id).map(|o| o.orientation()))
+            .collect::<Option<_>>()
+            .ok_or(ShapeEditError::NoSuchObject)?;
+        for ((meta, (_, anchors)), orientation) in
+            metas.into_iter().zip(conversions.iter()).zip(orientations)
+        {
             shape_codec::strip_primitive_keys(&meta);
             shape_codec::write_converted_path_fields(&meta, anchors);
+            if path_codec::read_rotation(&meta) != orientation.normalized() {
+                path_codec::write_rotation(&meta, orientation);
+            }
         }
         self.commit_with_label("convert_to_paths");
         Ok(())

@@ -4,7 +4,9 @@
 //! (`docs/technical-debt.md`); a child module, so it reads `SelectTool`'s
 //! private drag state.
 
-use curvyo_document_core::{Angle, ObjectSnapshot, Point, Vec2};
+use std::collections::{HashMap, HashSet};
+
+use curvyo_document_core::{Angle, NodeId, ObjectSnapshot, Point, Vec2};
 
 use super::entry::OpenEntry;
 use super::{SelectDrag, SelectTool};
@@ -12,7 +14,7 @@ use crate::object_selection::ObjectSelection;
 use crate::oriented_box::OrientedBox;
 use crate::param_edit::apply_param;
 use crate::param_handles::ParamHandle;
-use crate::skew_math::skew_frame;
+use crate::skew_math::{skew_angle, skew_frame};
 use crate::transform_commit::same_within_tolerance;
 use crate::transform_drag::{ParamDragInfo, pivot_for};
 use crate::transform_handle_layout::EditHandle;
@@ -55,13 +57,18 @@ impl SelectTool {
         let resolved: Vec<ObjectSnapshot> = if let Some(live) = self.live_move(pointer, shift, ctrl)
         {
             copy = live.copy;
+            let selected: HashSet<NodeId> = selection.ids().iter().copied().collect();
             objects
                 .iter()
-                .filter(|object| selection.contains(object.id()))
+                .filter(|object| selected.contains(&object.id()))
                 .map(|object| object.translated(live.offset))
                 .collect()
         } else if let Some(live) = self.live_transform(pointer, shift, ctrl) {
             vec![live]
+        } else if let SelectDrag::GroupTransforming(drag) = &self.drag
+            && drag.origin.is_active_at(pointer)
+        {
+            drag.resolve(pointer, shift, ctrl)
         } else {
             // No drag in flight: a slider edit of the bar, previewed the same
             // way (criterion 10), on the objects it was started against.
@@ -73,10 +80,11 @@ impl SelectTool {
                 .map(|object| apply_param(object, pending.value))
                 .collect()
         };
+        let committed: HashMap<NodeId, &ObjectSnapshot> =
+            objects.iter().map(|object| (object.id(), object)).collect();
         let changed = resolved.iter().any(|new| {
-            objects
-                .iter()
-                .find(|old| old.id() == new.id())
+            committed
+                .get(&new.id())
                 .is_none_or(|old| !same_within_tolerance(old, new))
         });
         changed.then_some(LiveEdit {
@@ -103,7 +111,7 @@ impl SelectTool {
             // A marquee or lasso changes nothing under the handles.
             SelectDrag::None | SelectDrag::Marquee(_) | SelectDrag::Lasso(_) => true,
             SelectDrag::Transforming(drag) => matches!(drag.handle, EditHandle::Param(_)),
-            SelectDrag::Moving(_) => false,
+            SelectDrag::Moving(_) | SelectDrag::GroupTransforming(_) => false,
         }
     }
 
@@ -114,6 +122,7 @@ impl SelectTool {
     pub fn dragging_handle(&self) -> Option<EditHandle> {
         match &self.drag {
             SelectDrag::Transforming(drag) => Some(drag.handle),
+            SelectDrag::GroupTransforming(drag) => Some(drag.handle),
             SelectDrag::Moving(drag) if drag.from_center => Some(EditHandle::Move),
             SelectDrag::Moving(_)
             | SelectDrag::Marquee(_)
@@ -134,10 +143,12 @@ impl SelectTool {
             SelectDrag::Transforming(drag) => {
                 pivot_for(drag.handle, &drag.start, &drag.start_box, shift)
             }
+            SelectDrag::GroupTransforming(drag) => drag.pivot(shift),
             SelectDrag::Moving(_) | SelectDrag::Marquee(_) | SelectDrag::Lasso(_) => None,
             SelectDrag::None => match &self.entry {
                 Some(OpenEntry::Transform(entry)) => Some(entry.pivot()),
                 Some(OpenEntry::Skew(entry)) => Some(entry.pivot()),
+                Some(OpenEntry::Group(entry)) => Some(entry.pivot()),
                 Some(OpenEntry::Param(_) | OpenEntry::Move(_)) | None => None,
             },
         }
@@ -172,6 +183,7 @@ impl SelectTool {
                 Some(drag.resolve(current, shift, ctrl))
             }
             SelectDrag::Transforming(_)
+            | SelectDrag::GroupTransforming(_)
             | SelectDrag::Moving(_)
             | SelectDrag::Marquee(_)
             | SelectDrag::Lasso(_)
@@ -189,6 +201,7 @@ impl SelectTool {
                 drag.param_info(current)
             }
             SelectDrag::Transforming(_)
+            | SelectDrag::GroupTransforming(_)
             | SelectDrag::Moving(_)
             | SelectDrag::Marquee(_)
             | SelectDrag::Lasso(_)
@@ -216,10 +229,24 @@ impl SelectTool {
     #[must_use]
     pub fn live_skew_angle(&self, current: Point, shift: bool, ctrl: bool) -> Option<Angle> {
         match &self.drag {
+            SelectDrag::GroupTransforming(drag) if drag.origin.is_active_at(current) => {
+                let EditHandle::Skew(side) = drag.handle else {
+                    return None;
+                };
+                Some(skew_angle(
+                    &drag.start_box,
+                    side,
+                    drag.origin.down_at,
+                    current,
+                    shift,
+                    ctrl,
+                ))
+            }
             SelectDrag::Transforming(drag) if drag.origin.is_active_at(current) => {
                 drag.skew_angle_at(current, shift, ctrl)
             }
             SelectDrag::Transforming(_)
+            | SelectDrag::GroupTransforming(_)
             | SelectDrag::Moving(_)
             | SelectDrag::Marquee(_)
             | SelectDrag::Lasso(_)
@@ -233,19 +260,21 @@ impl SelectTool {
     /// `extend_mm` past each end of the box.
     #[must_use]
     pub fn skew_guide(&self, shift: bool, extend_mm: f64) -> Option<(Point, Point)> {
-        let SelectDrag::Transforming(drag) = &self.drag else {
+        let (start_box, handle) = match &self.drag {
+            SelectDrag::Transforming(drag) => (&drag.start_box, drag.handle),
+            SelectDrag::GroupTransforming(drag) => (&drag.start_box, drag.handle),
+            _ => return None,
+        };
+        let EditHandle::Skew(side) = handle else {
             return None;
         };
-        let EditHandle::Skew(side) = drag.handle else {
-            return None;
-        };
-        let frame = skew_frame(&drag.start_box, side, shift);
-        let (sin, cos) = drag.start_box.angle.as_radians().sin_cos();
+        let frame = skew_frame(start_box, side, shift);
+        let (sin, cos) = start_box.angle.as_radians().sin_cos();
         // The fixed line runs along `u` for an x skew, along `v` otherwise.
         let (direction, length) = if frame.along_u {
-            (Vec2::new(cos, sin), drag.start_box.width())
+            (Vec2::new(cos, sin), start_box.width())
         } else {
-            (Vec2::new(-sin, cos), drag.start_box.height())
+            (Vec2::new(-sin, cos), start_box.height())
         };
         let half = direction.scaled(length / 2.0 + extend_mm);
         Some((

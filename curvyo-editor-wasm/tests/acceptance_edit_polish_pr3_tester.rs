@@ -2129,8 +2129,12 @@ fn c25_a_committed_move_keeps_selection_and_tool_and_survives_save_and_reopen() 
     assert!(pnear(p.anchors[0].point, pt(10.0, 20.0), 1e-9));
 }
 
+/// Superseded by `multi-object-transform` (criteria 35 and 37, "Changes to
+/// accepted behaviour" 3): the typed move works for a selection, over the group
+/// box; skew still needs paths only, and says so; "Select one object to type a
+/// value" no longer exists.
 #[test]
-fn c25_the_typed_move_exists_only_for_a_single_selection() {
+fn c25_the_typed_move_works_for_a_selection_and_skew_needs_paths() {
     let d = Document::new(1);
     let _ = d.create_rect(bounds(0.0, 0.0, 120.0, 80.0));
     let _ = d.create_rect(bounds(300.0, 0.0, 120.0, 80.0));
@@ -2141,21 +2145,18 @@ fn c25_the_typed_move_exists_only_for_a_single_selection() {
     s.pointer_up(pt(360.0, 0.0), true, false);
     assert_eq!(s.selected_object_count(), 2);
     let before = snapshot_bytes(&s);
-    assert_eq!(press(&mut s, "m"), KeyOutcome::Hint(KeyHint::SelectOne));
-    assert_eq!(press(&mut s, "k"), KeyOutcome::Hint(KeyHint::SelectOne));
+    assert_eq!(press(&mut s, "k"), KeyOutcome::Hint(KeyHint::PathOnly));
     assert_eq!(
         press_shift(&mut s, "K"),
-        KeyOutcome::Hint(KeyHint::SelectOne)
+        KeyOutcome::Hint(KeyHint::PathOnly)
     );
     assert!(s.move_entry().is_none());
     assert_eq!(snapshot_bytes(&s), before);
     assert_eq!(s.selected_object_count(), 2);
     assert_eq!(s.tool(), Tool::Select);
-    // a double-click in the union box centre opens nothing
-    let c = pt(210.0, 40.0);
-    dbl(&mut s, c, c, false, false);
-    assert!(s.move_entry().is_none());
-    assert_eq!(snapshot_bytes(&s), before);
+    assert_eq!(press(&mut s, "m"), KeyOutcome::EntryOpened);
+    assert!(s.move_entry().is_some(), "the move chip of the selection");
+    assert_eq!(snapshot_bytes(&s), before, "opening writes nothing");
 }
 
 // ---------------------------------------------------------------------
@@ -2625,7 +2626,7 @@ fn c57_s_shrinks_about_the_centre_too_and_a_one_field_change_keeps_the_centre() 
 }
 
 #[test]
-fn c57_polygon_and_star_scale_about_the_centre_with_one_field_r_for_both_routes() {
+fn c57_polygon_and_star_scale_about_the_centre_with_w_and_h_for_both_routes() {
     for (name, d) in [
         ("polygon", polygon_doc(70.0, 60.0, 40.0, 5)),
         ("star", star_doc(70.0, 60.0, 40.0, 5, 0.5)),
@@ -2634,13 +2635,16 @@ fn c57_polygon_and_star_scale_about_the_centre_with_one_field_r_for_both_routes(
             let mut s = select_at(&d, pt(70.0, 20.0));
             let _ = th;
             assert_eq!(press(&mut s, "s"), KeyOutcome::EntryOpened);
-            assert_eq!(s.transform_entry().map(|e| e.kind), Some("radius"));
+            // `0019` criterion 56 replaces the one field "r" (`0008` criterion 26):
+            // W and H of the frame square; 120 x 120 is a radius of 60.
+            assert_eq!(s.transform_entry().map(|e| e.kind), Some("size"));
             let e = s.transform_entry().unwrap();
-            assert_eq!(e.fields.len(), 1, "{name}");
-            assert_eq!(e.fields[0].label, "r", "{name}");
+            assert_eq!(e.fields.len(), 2, "{name}");
+            assert_eq!(e.fields[0].label, "W", "{name}");
+            assert_eq!(e.fields[1].label, "H", "{name}");
             let o0 = obj_of(&s, 0);
             assert_eq!(
-                s.commit_transform_entry("60", "", 0),
+                s.commit_transform_entry("120", "120", 0),
                 EntryOutcome::Committed,
                 "{name}"
             );
@@ -2774,13 +2778,9 @@ fn c57a_double_click_on_a_resize_handle_keeps_the_dragged_handles_fixed_point() 
         }
         let at = found.unwrap_or_else(|| panic!("{name}: a corner resize handle exists"));
         dbl(&mut s, at, at, false, false);
+        assert_eq!(s.transform_entry().map(|e| e.kind), Some("size"), "{name}");
         assert_eq!(
-            s.transform_entry().map(|e| e.kind),
-            Some("radius"),
-            "{name}"
-        );
-        assert_eq!(
-            s.commit_transform_entry("60", "", 0),
+            s.commit_transform_entry("120", "120", 0),
             EntryOutcome::Committed,
             "{name}"
         );
@@ -3120,10 +3120,6 @@ fn x06_key_outcome_codes_for_the_new_hints() {
         "hint-select-first"
     );
     assert_eq!(KeyOutcome::Hint(KeyHint::PathOnly).code(), "hint-path-only");
-    assert_eq!(
-        KeyOutcome::Hint(KeyHint::SelectOne).code(),
-        "hint-select-one"
-    );
     assert_eq!(KeyOutcome::EntryOpened.code(), "entry");
 }
 

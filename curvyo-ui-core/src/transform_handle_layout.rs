@@ -367,10 +367,10 @@ const INNER_HIT_BAND: f64 = 6.0 / 16.0;
 const TIE_EPSILON_MM: f64 = 1e-9;
 
 /// The shrunken resize hit radius on a small box: a third of the box's
-/// smaller side, never below a quarter of the full radius (slice 5).
-fn resize_radius(box_: &OrientedBox, tolerances: &TransformHandleTolerances) -> f64 {
+/// smaller side `side_mm`, never below a quarter of the full radius (slice 5).
+fn resize_radius(side_mm: f64, tolerances: &TransformHandleTolerances) -> f64 {
     let full = tolerances.resize.as_mm();
-    (box_.width().min(box_.height()) / 3.0).clamp(full / 4.0, full)
+    (side_mm / 3.0).clamp(full / 4.0, full)
 }
 
 /// Whether `point` is strictly inside the box, and how deep.
@@ -405,7 +405,24 @@ pub fn hit_transform_handle(
     tolerances: &TransformHandleTolerances,
     include_move: bool,
 ) -> Option<EditHandle> {
-    let resize_radius = resize_radius(box_, tolerances);
+    let side_mm = box_.width().min(box_.height());
+    hit_transform_handle_for_side(handles, box_, point, tolerances, include_move, side_mm)
+}
+
+/// [`hit_transform_handle`] with the box's "shorter side" given: a group box
+/// that is flat in one axis uses its other extent as `s`
+/// (`specs/0019-multi-object-transform/` criterion 12), so the radii of its
+/// handles are those of a box of that size.
+#[must_use]
+pub fn hit_transform_handle_for_side(
+    handles: &[(EditHandle, Point)],
+    box_: &OrientedBox,
+    point: Point,
+    tolerances: &TransformHandleTolerances,
+    include_move: bool,
+    side_mm: f64,
+) -> Option<EditHandle> {
+    let resize_radius = resize_radius(side_mm, tolerances);
     let inside_depth = depth_inside(box_, point);
     // (distance, rank, handle): rank 0 parameter, 1 resize, 2 skew, 3 rotate.
     let mut best: Option<(f64, u8, EditHandle)> = None;
@@ -443,10 +460,7 @@ pub fn hit_transform_handle(
     let (_, center) = handles
         .iter()
         .find(|(handle, _)| *handle == EditHandle::Move)?;
-    let radius = tolerances
-        .center_hover
-        .as_mm()
-        .min(box_.width().min(box_.height()) / 4.0);
+    let radius = tolerances.center_hover.as_mm().min(side_mm / 4.0);
     (center.vector_to(point).length() <= radius).then_some(EditHandle::Move)
 }
 
