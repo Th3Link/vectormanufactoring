@@ -94,7 +94,7 @@ Tested with two document replicas A and B that merge in the test; no network is 
 ### After an undo
 
 22. Given I undo one or more steps and then make a new step, then my redo stack is emptied: Ctrl+Shift+Z says "Nothing to redo." The steps that were taken back stay in the global history, marked "Undone". They are not lost: `0042-history-branches` shows them as a branch and lets the maker return to them.
-23. **Selection.** Given an undo, then the selection becomes what it was before the step (ids that no longer exist are dropped); given a redo, what it was after the step. Test: select two squares, Union, Ctrl+Z: the two squares are selected; Ctrl+Shift+Z: the result is selected. Undo of Delete selects the restored objects. The tool does not change. In the Node tool the selected nodes are restored by anchor id, ids that are gone are dropped. The selection is kept with the stack entry in memory (view state, ADR 0009 §2), not in the document.
+23. **Selection.** Given an undo, then the selection becomes what it was before the step (ids that no longer exist are dropped); given a redo, what it was after the step. Test: select two squares, Union, Ctrl+Z: the two squares are selected; Ctrl+Shift+Z: the result is selected. Undo of Delete brings each object back with the **same id** (and the same anchor ids and z-order; ADR 0014 §11, injected tree Move, Question 17) and selects the restored objects. Test: draw, Delete, Ctrl+Z, Save, Open: the `document.json` object ids equal those before the Delete. The tool does not change. In the Node tool the selected nodes are restored by anchor id, ids that are gone are dropped. The selection is kept with the stack entry in memory (view state, ADR 0009 §2), not in the document.
 24. Given an undo or redo, then pan and zoom do not change. When none of the restored selection touches the visible canvas, the tail ", off screen." replaces the full stop of the notice, after the closing parenthesis: "Undid: Delete (2 rectangles), off screen." (no second pair of parentheses). (Question 8: panning to the objects instead.)
 
 ### Boundaries and limits
@@ -104,7 +104,10 @@ Tested with two document replicas A and B that merge in the test; no network is 
 27. Given quit or window close, the stacks are dropped; the global history stays in the file.
 28. Each stack holds at most 500 steps (a constant). The 501st step drops the oldest entry from the stack; it stays in the global history. Test: 501 steps, 500 undos work, the 501st gives "Nothing to undo."
 29. **Memory (starting value, the architect measures):** the undo data of 500 steps of the largest kind (a Boolean union of two paths of 2,000 anchors each) stays under 50 MB. If it does not, the architect lowers the step count of criterion 28, not this budget.
-30. **Time (starting values):** an undo or redo of a step touching up to 100 objects of 100 anchors each completes and is drawn within 100 ms; of 5,000 objects within 1 second (release build, desktop). The tests assert four times these figures.
+30. **Time (ADR 0014 §13; release build, desktop; the tests assert four times each figure; a wasm figure is measured in milestone 1 and recorded as a factor, not a separate budget).**
+    - (a) An undo or redo of a **small step**, at most 2,000 operations (read from the step's change lengths before the call; this covers every single-object edit and moves of a few hundred simple objects), completes and is drawn within 100 ms and shows **no** busy indicator.
+    - (b) A **larger step** (more than 2,000 operations) enters the long-operation state of `0016` §9 **before** the call (cursor `wait`, `aria-busy`, other keys ignored per criterion 6d, "Undo: working..." after 150 ms). It completes and is drawn within 250 ms for a step touching 100 paths of 100 anchors each, and within 1 second for 5,000 objects.
+    - (c) **First undo after Open.** The editor warms the history in an idle callback after the first paint. An undo pressed before that has finished uses the state of (b), whatever the size of the step.
 31. Given a file opened after a restart, then the global history lists its steps (criterion 37) and both stacks are empty.
 
 ### The global history: what is recorded
@@ -138,6 +141,7 @@ Tested with two document replicas A and B that merge in the test; no network is 
 47. Given the History tab in the Document scope and at least one step, then a control "Wipe history" is the last element (the footer). Given no step, then the control is not in the tree. Pressing it replaces the control in place by the line "Remove all N steps from this file? The drawing stays as it is. This cannot be undone." with the buttons "Cancel" (left) and "Wipe" (right), in the panel (no dialog, no popup, `0017`). Keyboard focus goes to Cancel. "Wipe" ignores presses for the first 400 ms, so a double-click on the old control cannot confirm. Escape, Cancel, a change of tab, a change of selection and a new step cancel the confirmation without writing anything. Nothing happens until "Wipe".
 48. Given "Wipe", then: the drawing is exactly as before (`document.json` byte-equal, object ids unchanged); both stacks are emptied; the history shows one row "History wiped" with author and time (the wipe writes the one root key `history_wiped`, ADR 0014 §7; it is the one operation that makes the row exist); steps made afterwards follow it. The object ids and the peer id are unchanged, so a step made after the wipe has the same author as before it. Test: build 200 steps, wipe, export the snapshot, open it in a new document: the history has one row, the objects are equal.
 49. Given a wipe and Save, then the saved `document.loro` holds no operation older than the wipe (the architect's mechanism, for instance a shallow snapshot; the observable test is the number of history rows after Open and the file size on a document with 500 steps, which is smaller). The wipe itself is not a step on any stack and cannot be undone.
+    - **Wipe epoch (ADR 0014 §9).** The wipe writes the root key `history_wiped` = the epoch (the encoded start of the kept history), the same on every replica that has the wipe. Given an exchange of updates (the `import_updates` seam), then the epochs are compared first: a replica of another epoch (for instance a copy that still holds pre-wipe steps) is refused with a clear error, and nothing of its updates is merged. An import that leaves updates `pending` is an error too. Test: wipe replica A, then offer B's pre-wipe updates to A: refused, A unchanged; A and B with equal epochs merge as before.
 50. **Shared documents.** Given a document that has been shared (it has a keyring, ADR 0004 §1), then "Wipe history" is not offered and the line "Wiping is not available for shared documents yet." takes its place. (Hard erase of a replicated history needs every peer and the admin rules of ADR 0010; Question 6.)
 51. Given a drag, an open chip or the Pen with an unfinished path, then "Wipe history" is ignored, like criterion 6.
 
@@ -158,7 +162,7 @@ Tested with two document replicas A and B that merge in the test; no network is 
 
 ### What the engine must guarantee (ADR 0014, Proposed; testable)
 
-These criteria pin the decisions of ADR 0014 that the maker or a tester can observe. They hold on the ADR's defaults (Questions 11 and 12 below); a different customer answer changes them.
+These criteria pin the decisions of ADR 0014 that the maker or a tester can observe. They hold on the ADR's defaults (Questions 11, 12 and 17 below); a different customer answer changes them.
 
 54. **A step is one commit with a header.** Given any gesture of the table, then its one commit carries the header `<label>;s=<seq>` in the commit message (ADR 0014 §2), and a step is all commits of one peer with the same header. A **continuation** commit repeats the header of the peer's last step and joins it; it is allowed only while the document version is still that step's last version, and refused (it becomes a new step) when anything was committed or merged since. Test: 11 continuation commits are one row and one stack entry; the same 11 with a merge between the 5th and the 6th are two steps. A commit message without `;` is a legacy label (criterion 36).
 55. **One stack machine.** Given a sequence of do, undo, redo and continuation events, then the undo stack, the redo stack, the status of every row ("Applied", "Undone", "On a branch" for `0042`) and the branches come from one pure transition function (ADR 0014 §6). The session feeds it its own actions; the History list feeds it the log. Test: a generated sequence of 1,000 events; after each event the live stacks equal the stacks and statuses derived from the log of the same sequence.
@@ -170,7 +174,7 @@ These criteria pin the decisions of ADR 0014 that the maker or a tester can obse
 
 ## Milestones (one branch, one PR)
 
-0. **Spike** `spike/loro-history-primitives` (ADR 0014 "Verification", S1 to S7), never merged. If S1 (restore a deleted node with its old id) fails, milestone 1 stops and the customer gets a new question before anything merges.
+0. **Spike** `spike/loro-history-primitives` (ADR 0014 "Verification", S1 to S7), never merged. Done: S1 (restore a deleted node with its old id) fails through the handler API and works through an injected tree Move (ADR 0014 §11); the customer decides in Question 17 whether that is the way.
 1. **Engine:** step header and step time, the `new_document` commit, the commit-path audit with one test per row of the table (criteria 10, 41, 57, 58), `batch` where a gesture has several commits, the restore engine, the stack machine, keys, gate, conflict rules, selection, limits, the removal of the "no undo" text (criteria 1 to 31, 41, 52, 54 to 58). The slice that is the old MVP slice 8; Ctrl+Z works end to end here. The architect reviews the branch diff here (document model, public API).
 2. **Step data:** ids, time, author, kinds, old files, persistence (32 to 38, 59, 60).
 3. **History tab:** the list, hover link, keyboard, scale (39 to 46). Needs `0043`.
@@ -182,7 +186,8 @@ Milestones 0 to 3 start on the defaults of ADR 0014 once the customer accepts it
 
 - ADR 0002 §9 and ADR 0009 §1 stay the accepted base: the operation log is the history, undo is a forward commit, peer-scoped. ADR 0014 §1 supersedes the sentence of ADR 0004 §2 that names Loro's undo manager as the mechanism: the engine is our own restore over versions, because the manager has no per-object veto (criteria 17 to 19).
 - Step boundaries are a header in the commit message (not Loro's change boundaries, which split and merge: criteria 13 and 14). The kind and the touched objects are derived from the step's operations (criterion 32).
-- Risks the architect measures: two checkouts per undo against criterion 30 (milestone 1; fallback a shadow fork), the nested containers of deleted objects (spike S6), old files with merged rows and no times (criterion 36).
+- Undo reads the step's before and after values with `diff` and the current values live, so it does not check out (ADR 0014 §1); checkouts are only for whole past states, behind a guard (§12). The budgets of criterion 30 are ADR 0014 §13.
+- Undo of Delete needs a pinned Loro version and a canary test (ADR 0014 §11, Question 17). Risks the architect measures in milestone 1: the budgets of criterion 30 with the restore writes included, the canary, the nested containers of deleted objects (spike S6), old files with merged rows and no times (criterion 36).
 - `docs/technical-debt.md` "Document files grow with edit history": the wipe is the first user-visible answer; the compaction story stays separate.
 
 ## Out of scope
@@ -210,9 +215,9 @@ Milestones 0 to 3 start on the defaults of ADR 0014 once the customer accepts it
 9. **Sending a file with history.** *A (default):* the History tab says the history is in the file. *B:* the Save As dialog offers "without history". Recommendation A for now; B belongs to export and sharing.
 10. **Shortcuts for destructive commands** (Boolean, Combine, Break apart, Object to path, Close path had none "until undo exists"). *A (default):* decide in the Boolean-shortcut follow-up, not here. *B:* give them Inkscape's keys now. Recommendation A.
 
-### The six questions of ADR 0014 (architect, `needs-customer`)
+### The seven questions of ADR 0014 (architect, `needs-customer`)
 
-ADR 0014 is `Proposed`; the defaults below are the architect's recommendations and apply when the customer does not answer. They are the same six questions in `0041` and `0042`.
+ADR 0014 is `Proposed`; the defaults below are the architect's recommendations and apply when the customer does not answer. They are the same seven questions in `0041` and `0042`.
 
 11. **History in the file (ADR 0014 Q1; Question 1 above).** *A (default):* keep it (it is there today), the History tab says so, a wipe is available. *B:* strip the history on every Save.
 12. **File-format footprint (ADR 0014 Q2).** *A (default):* no `format_version` bump; step headers in commit messages and three optional keys (`history_wiped`, `history_floor`, `clone_of`) that older builds ignore. *B:* bump the version at `0041`, so older builds refuse files that carry lineage keys.
@@ -220,6 +225,7 @@ ADR 0014 is `Proposed`; the defaults below are the architect's recommendations a
 14. **Object wipe (ADR 0014 Q4; `0041` Question 3).** *A (default):* it hides and cuts, the data stays in the file, the confirmation says so. *B:* no object wipe.
 15. **Authors (ADR 0014 Q5).** *A (default):* a random id per session, shown as "You" and "Earlier session". *B:* one random id per installation in every step, so "You" survives reopening, but every file you share carries the same identifier. *C:* the OS user name in the file.
 16. **Taking back someone else's step (ADR 0014 Q6; `0041` Question 1, `0042` criterion 15).** With Ctrl+U or go to version, never with Ctrl+Z (ADR 0009 option C). *A (default):* allowed, as a named step that Ctrl+Z takes back. *B:* own steps only. (No effect in this spec: Ctrl+Z is own steps only.)
+17. **Undo of Delete (ADR 0014 Q7; criterion 23).** *A (default, recommended):* the object comes back with the **same id** through an injected Loro tree Move (ADR 0014 §11); no file-format change; Loro stays pinned and a canary test guards every upgrade; soft delete stays the fallback and comes back to the customer only if a Loro upgrade we need breaks the canary. *B:* soft delete now: deleted objects move into a hidden trash inside the file; public Loro API only, but a `format_version` bump (older builds refuse new files) and deleted objects stay in the file until a wipe. *C:* the object comes back under a **new id**: no risk, but selections, clone lineage and the object's timeline break at every undone delete. Not recommended.
 
 ## UX notes
 
