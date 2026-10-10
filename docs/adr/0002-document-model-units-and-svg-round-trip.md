@@ -1,6 +1,6 @@
 # ADR 0002: Internal document model, units and SVG round-trip
 
-**Status:** Accepted (customer sign-off, 2026-10-02); §10 amended 2026-10-08 (gradients removed from the modelled SVG subset)
+**Status:** Accepted (customer sign-off, 2026-10-02); §10 amended 2026-10-08 (gradients removed from the modelled SVG subset); [ADR 0015](0015-node-references-and-ancestor-resolved-state.md) (Proposed 2026-10-10) would supersede the "no inheritance" sentence of §5
 
 Reconciled with [ADR 0004](0004-persistence-and-cross-machine-sync.md) (an open
 document is a Loro CRDT replica) and

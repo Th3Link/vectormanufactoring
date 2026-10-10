@@ -1,40 +1,180 @@
 # ADRs for Layers and objects panel
 
-Status: written by the product owner as a list of the ADRs touched and the points the architect must settle. The architect confirms or replaces it before the spec is Ready. Nothing below is a decision yet.
+Architect review, 2026-10-10. This replaces the product owner's draft. The spec needs **one new
+ADR, [0015](../../docs/adr/0015-node-references-and-ancestor-resolved-state.md)**, which is
+`needs-customer` and shared with `0049`. It is not an in-place amendment of ADR 0002 §5, for
+the reason given in 0015's preamble: 0002 is accepted, so changing it takes a new ADR. Layers
+need no other ADR: a layer is the group node of `0023` with one more register. No new crate, no
+new dependency, no trait, no generic.
 
-## Is a new ADR needed? Product owner's recommendation: an amendment of ADR 0002 §5, `needs-customer`
+## Depends on
 
-This feature adds a layer marker and four per-node registers (`name`, `visible`, `locked`, `opacity`) to every node, makes the ancestors' flags and opacity part of what a node means, and needs a `format_version` bump. `CLAUDE.md` §3 sends every document-model change to the customer.
-
-**Precedent and what is already decided.** Groups are decided and designed (`0023` `adrs.md`: a node whose meta map holds `group: true`, the customer said yes on 2026-10-10, no new ADR number). A layer is that node with one more register, `layer: true`, at the top level, so the structure needs nothing the customer has not accepted. The compound path (`0016`) went the same way.
-
-**What does not fit ADR 0002 §5 as written** is "no CSS cascade, no inheritance", whose reason is that a replicated document should have no shared parent register for concurrent edits to contend on. `visible`, `locked` and `opacity` on a layer or group are exactly such registers, read by every descendant; `0049` adds a clone that reads its style from its origin. Recommendation: **no new ADR number; one dated amendment in place to ADR 0002 §5** (as §10 was amended on 2026-10-08) that names the exceptions: flags and opacity resolve through the ancestors at read time (single last-writer-wins registers, never a style cascade, never copied into children), and a clone's style is a reference. It is `needs-customer`; the customer answers once for this spec and `0049`. Default if unanswered: yes. If the architect prefers a new ADR, it takes the next free number (0015) with the same content. If the customer says no, this spec drops criteria 18 to 28 (flags and opacity per node) and keeps names and the tree; layers would then have no flags, which defeats R-EDIT-009, so the product owner does not expect a no.
-
-## ADRs this feature depends on or extends
-
-- [ADR 0002](../../docs/adr/0002-document-model-units-and-svg-round-trip.md) §5 (tree, sibling order is z-order, reparenting is a tree move, resolved per-node style, no inheritance): extended. Ancestors' `visible`, `locked` and `opacity` are read at resolve time, which is inheritance in effect, though not of style; the new ADR must say this plainly. §8 (nodes assigned to layers, a layer carries a job assignment): this spec gives a layer a name and three flags; the job assignment is `0027`.
-- [ADR 0004](../../docs/adr/0004-persistence-and-cross-machine-sync.md) §9 (versioned format): a bump, because an older build would draw hidden nodes, ignore locks and opacity, and, worse, output a hidden node.
-- [ADR 0009](../../docs/adr/0009-concurrent-editing-semantics.md) §2 (ephemeral state), §3 (merge granularity): the active layer, expansion state and panel target are ephemeral; names and the three flags are last-writer-wins registers per node. See point 6 for the move-into-deleted-layer case.
-- [ADR 0001](../../docs/adr/0001-ui-framework-and-canvas-rendering.md): the renderer draws a per-paint alpha today; group opacity (Question 5, option B) would need an off-screen pass.
-- [ADR 0014](../../docs/adr/0014-history-undo-and-branches.md) §1, §2, §5, §11 (restore engine, step header, touched objects, revive a deleted node): every action of this spec is one step; Delete layer deletes a subtree and must be revived with all ids.
-- [ADR 0012](../../docs/adr/0012-pages-in-the-document-model.md) (Rejected): its note "layers will sit under a page if they are tree nodes" is moot; there is one top level.
-
-## Points for the architect
-
-1. **Layer representation.** Proposal: a layer is a group node (`0023`: meta map holds `group: true`, no `shape`) at the top level with one more boolean register `layer = true`. A marker on a deeper node is read as a plain group (criterion 47). The panel and the tools read "is a layer" from that marker only. `0023`'s `remove_emptied_groups` must **not** remove an emptied layer (a new layer is empty, and a maker empties a layer on purpose); this amends `0023` criterion 14 and its helper, and the test that lists the removers gets a layer case.
-2. **Per-node registers.** `name` (string, absent = none), `visible` (bool, absent = true), `locked` (bool, absent = false), `opacity` (number in [0, 1], absent = 1). Absent keys mean "as in a file from an earlier build", so old files open unchanged. `duplicate_objects` copies every meta key already, so a duplicated node keeps its name and flags; decide whether a copy should get the name "<name> copy" (not specified; default: the same name).
-3. **Effective flags in the read model.** Proposal: the object read resolves, per leaf, `effective_visible`, `effective_locked` and `effective_opacity` (product along the ancestor chain) in one pass, cached per document version (`object_cache.rs`). Every consumer (render, hit test, marquee, Ctrl+A, eyedropper, bounds, output) reads these and none walks ancestors itself. A test lists the consumers (criterion 19). Budget: criterion 50 says a toggle on a layer of 10,000 is one write and a redraw in 150 ms, so the resolve must not be O(n) per frame.
-4. **Output list.** Criterion 24 pins `Document::output_objects()` (or the architect's name): effective visible leaves in stacking order with effective opacity, clones resolved. `0024` and `0029` will use it. If the architect thinks a core function without a caller is YAGNI, criterion 24 moves into `0024` and `0029`; the decision "hidden is not output" stays here.
-5. **Selection invariant (criterion 14).** The selection in `ui-core` must never hold an effectively hidden or locked node, including after a remote change. Proposal: the session filters the selection against the effective flags after every document version change, in the same frame, before drawing. Locking a node a peer has selected is the peer's problem on their next read, not a conflict.
-6. **Concurrent move into a deleted layer.** A tree delete of a layer takes its subtree, including an object another peer moved in at the same moment (Question 10 of the spec). `0023` `adrs.md` already accepts this for groups (Loro semantics; ADR 0009 §1 accepts it and undo reports it). Default: the same for layers, recorded in `docs/technical-debt.md`. Can the log tell the case apart, so a repair step at merge could lift the object to the top level (like the orphan repair of `0049`)? If the architect finds it reliable, say so; sharing does not exist yet.
-7. **Hit test and Ctrl+A across layers.** The flat tree order (depth first) is the stacking order; layers are transparent for selection (criterion 42). `0023` `adrs.md` fixes two `document-core` functions that every reader uses (the children of a context, the leaf descendants of a node); this spec asks for the context-children function to treat "direct child of a layer" as a top-level object at the document level, and for the effective flags to be filtered there, so that `ui-core` selection and `hit_test_object.rs` write no walker of their own.
-8. **Panel model in the core.** Proposal: a pure `layer_rows(collapsed, first, count)` in `ui-core` or `document-core` (the architect chooses) returns the visible rows window with ids, depth, kind, name, flags, effective flags and opacity; the wasm facade passes only the window to the frontend (criteria 48, 52). Row count, `aria-posinset` and `aria-setsize` come from the same function, so the virtualised scrollbar is exact. No 10,000-row serialisation per frame.
-9. **Drag and move rules** (criteria 29 to 32) are one pure function that returns Allowed or a Refusal reason and the new parent and position, shared by the pointer drag, the Alt-arrow keys and the canvas keys; the document call is one commit using the tree move (`mov_after`/`mov` already in `path_topology.rs`, `replace.rs`, `objects.rs`). Depth limit 32 and the no-cycle rule are checked there.
-10. **Opacity composition.** Per paint multiply (criterion 27) is a change in `render-core` `artwork.rs` colour alpha only. Option B (group opacity) is a separate decision with a cost; give the cost in the ADR so the customer can choose.
-11. **`document.json` view.** It lists a flat array today; with groups and layers it needs the tree and the new registers. `0023` `adrs.md` does not fix its shape either; decide it once for groups and layers.
-12. **Format version.** Next free at merge (`specs/README.md`); expected 12 if `0023` takes 11 first. Golden file `layers_v<N>.curvyo`: a layer with a group, a hidden node, a locked node, opacities, names with markup, a loose object.
-13. **Build order.** Needs `0023` (group node, context), `0043` (the strip; amended to four tabs and a sticky Layers tab) and the customer's yes to the amendment. It does not need `0020`, but if `0020` has not merged the operation names of criterion 44 are added to its table by whichever of the two merges second. It collides with `0049` (document read model, Style and Layers panel files) and `0023` (selection context), so it runs alone among those. `0044`'s Ctrl+A and `0015`'s Fit to content are amended in this slice's PR.
+- [ADR 0015](../../docs/adr/0015-node-references-and-ancestor-resolved-state.md) §2, §4, §6
+  (Proposed): the node registers `name`, `visible`, `locked` and `opacity`, the effective values
+  resolved through the ancestors, tolerance of merge residue, and the single read pass.
+- [ADR 0002](../../docs/adr/0002-document-model-units-and-svg-round-trip.md):
+  - §5: sibling order is z-order, and reparenting is a tree move that keeps the `NodeId`.
+  - §8: nodes are assigned to layers. The job assignment of a layer is `0027`.
+- [`specs/0023-groups/adrs.md`](../0023-groups/adrs.md): the group node, the two tree functions
+  (children of a context, leaf descendants), `remove_emptied_groups` and the depth limit of 32.
+- [ADR 0009](../../docs/adr/0009-concurrent-editing-semantics.md):
+  - §2: the active layer, the expansion state, the panel target and the scroll position are
+    ephemeral.
+  - §3: each register is last writer wins.
+- [ADR 0014](../../docs/adr/0014-history-undo-and-branches.md) §1 and §11: every action is one
+  step, and Delete layer is revived by one injected move (decision 8).
+- [ADR 0004](../../docs/adr/0004-persistence-and-cross-machine-sync.md) §9: format bump.
+- [ADR 0001](../../docs/adr/0001-ui-framework-and-canvas-rendering.md): opacity is multiplied per
+  paint. The cost of compositing a group as a whole is in ADR 0015's Consequences.
 
 ## Feature-local decisions
 
-- 2026-10-10: Proposed by the product owner, not yet architect-confirmed: the tab placement (needs the ux-engineer too); layers optional at the top level with no sublayers; layers are never selected; hidden is not output; lock does not exempt a member from its container's transform; per-paint opacity; toggles are history steps; the register names `name`, `visible`, `locked`, `opacity`, `layer`.
+1. **2026-10-10: stored shape (format, protect this).**
+   - A layer is a `0023` group node (`group: true`) with one more register, `layer: true`, at the
+     top level of the objects tree.
+   - Any node may carry `name` (string), `visible` (bool), `locked` (bool) and `opacity` (`f64`
+     in 0..=1). An absent key reads as no name, visible, unlocked and 1, so files from earlier
+     builds open unchanged. The keys do not clash with existing ones (`fill_opacity` and
+     `stroke_opacity` are style; `id` and `kind` live in anchor maps).
+   - A name is cleaned when it is written: trimmed, cut to 128 characters, control characters
+     and bidi controls removed. A name read from a file is cleaned for display only, and the
+     file is left as it is (criterion 17).
+   - A file is damaged if a register has the wrong type, if `opacity` is not finite or lies
+     outside 0..=1, or if `layer` is set on a node that is not a group.
+   - A `layer` marker below the top level is read as a plain group (merge residue, ADR 0015 §4).
+2. **2026-10-10: `remove_emptied_groups` skips layers.** This amends `0023`'s decision and
+   criterion 14: a new layer is empty, and a maker empties a layer on purpose. The test that
+   lists the removers gets a layer case.
+3. **2026-10-10: the read becomes one pre-order pass of nodes.** The object cache of `0044`
+   (`object_cache.rs`, one read per document version) becomes one pre-order list of node reads.
+   Each node read holds:
+   - its id, parent and depth;
+   - its kind (layer, group or leaf with its `ObjectSnapshot`);
+   - its own registers;
+   - its effective visible, effective locked and effective opacity;
+   - the nearest ancestor that hides or locks it, which the inherited-state description of
+     criterion 22 needs.
+
+   The walk carries the ancestor values down, so it is O(n) with no per-node ancestor walk.
+   Hidden leaves are still resolved, because `0049` clones need hidden origins. The renderer and
+   the hit test skip them by flag. A layer toggle is one register write and one re-read. The
+   150 ms of criterion 50 is therefore the cost of re-reading 10,000 objects, the same as after
+   any other edit today. The slice measures it. If it fails, an incremental cache is a separate
+   decision and is not built ahead.
+4. **2026-10-10: consumers read the flags; none walks the tree.** Render, hit test, marquee,
+   lasso, Alt-click cycle, Ctrl+A, eyedropper, Fit to content, status measures, the Node tool and
+   the Pen's continue and connect all read the effective flags from the read. One test lists them
+   (criterion 19). `0023`'s "children of a context" function, called for the document top level,
+   returns the loose objects and the direct children of every layer in stacking order, without
+   hidden or locked nodes. This is the one place that makes layers transparent (criterion 42).
+   `ui-core` selection and `hit_test_object.rs` write no walker.
+5. **2026-10-10: the selection invariant (criterion 14).** After every change of the document
+   version (a local commit, an import or an undo), the session drops from the selection every node
+   that is effectively hidden or locked. It does this in the same pass that applies `0023`'s
+   context fallback, before the frame is drawn. The cost is O(selection) set lookups in the read.
+6. **2026-10-10: no `output_objects()` in this slice.** No exporter and no job generator exists
+   yet. A core function whose only callers are tests is the speculative API that `CLAUDE.md` §5
+   rules out. The decision "hidden is not output, locked is" is recorded in ADR 0015 §2 and here.
+   `0024` and `0029` build their output from the read's effective flags (clones resolved,
+   `0049`) and carry the end-to-end test. Flagged below for criterion 24.
+7. **2026-10-10: panel rows are a pure window over a cached flattening (criteria 48 to 52).**
+   - `layer_rows(read, collapsed, selection)` in `curvyo-ui-core` flattens the visible rows once
+     per document version and collapse change, and the session caches the result.
+   - `rows_window(first, count)` slices that cache in O(count). Only the window crosses the wasm
+     boundary.
+   - Each row carries:
+     - id, depth, kind, and the name or default name;
+     - own and effective flags, with the ancestor that causes an inherited state;
+     - opacity;
+     - "contains the selection";
+     - `aria-posinset` and `aria-setsize`.
+   - The total row count comes from the same cache, so the scrollbar is exact.
+8. **2026-10-10: moving and deleting nodes.**
+   - **Move rules.** One pure function in `curvyo-ui-core`, `plan_move(read, moved, target) ->
+     Result<MovePlan, MoveRefusal>`, serves the drag, the Alt+arrow keys and the canvas z-order
+     keys. It refuses:
+     - a move into the node itself or one of its descendants;
+     - a move into a locked container;
+     - a move of a locked node;
+     - a layer anywhere but the top level;
+     - a depth above 32.
+   - **The move command.** `Document::move_nodes(plan)` (label `move_nodes`) is one commit of
+     tree `mov` / `mov_after` / `mov_before`, which keeps ids, registers and clone links
+     (criterion 31). It checks the same rules again before the first write.
+   - **Delete layer** (label `delete_layer`) does three things in one commit:
+     - It calls `0049`'s `unlink_clones_of_removed` for the layer's subtree, once `0049` exists.
+     - It deletes the layer node itself in **one** tree delete. Loro keeps the subtree under the
+       deleted node, so the injected move of ADR 0014 §11 revives the layer with every
+       descendant and every id (criterion 45).
+     - It does **not** delete each descendant on its own. That would turn one undo into N
+       revives.
+9. **2026-10-10: opacity per paint (criterion 27, Question 5 A).**
+   - The render change is in `curvyo-render-core` `artwork.rs`: each paint's alpha is multiplied
+     by the effective opacity.
+   - The cost of option B is in ADR 0015's Consequences: one more render pass and texture per
+     faded container per frame.
+10. **2026-10-10: the tree form of `document.json` (decided once for groups and layers).**
+    `document.json` is the non-authoritative view of ADR 0004 §1.
+    - Each node is written as `{ "id", "kind": "layer" | "group" | <leaf fields as today>,
+      "name"?, "visible"?, "locked"?, "opacity"?, "children"? }`.
+    - Registers at their defaults are omitted.
+    - `0023` did not fix this form, so the first of `0023` and `0050` to merge writes it. `0023`
+      leaves out the registers.
+11. **2026-10-10: duplicate.** `copy_map` copies every key, so a copy keeps its name and flags
+    (the product owner's default: the same name).
+12. **2026-10-10: concurrency.**
+    - Each register is last writer wins.
+    - If one peer hides a layer while another moves an object into it, the object is hidden.
+    - If one peer locks a node that another peer has selected, the other peer's next read drops
+      the node from its selection.
+    - Two peers who move the same node: one move wins (Loro), and no cycle can form.
+    - **Question 10:** default A. B can be done reliably. The log identifies the case: the
+      node's last move targets a parent whose delete does not include that move in its version
+      vector. Lifting the node out needs the injected move of ADR 0014 §11, because a deleted
+      node cannot be moved through the handler API. It is deferred to the sharing story
+      (ADR 0015, Consequences), together with merged trees deeper than 32 levels.
+13. **2026-10-10: crate placement.**
+    - `curvyo-document-core`: the codec and validation, the registers, the read pass with
+      effective values, `move_nodes`, `new_layer`, `delete_layer`, the setters
+      (`set_node_visible`, `set_node_locked`, `set_node_opacity`, `rename_node`; each takes many
+      ids and makes one commit), and the format bump.
+    - `curvyo-ui-core`: `layer_rows`, `plan_move`, the selection filter and the transparent
+      context.
+    - `curvyo-render-core`: alpha.
+    - `curvyo-editor-wasm`: the row window, the commands and the key gate (Shift+Ctrl+L, Alt+arrows
+      and the Proposal keys of criterion 33).
+    - `frontend`: the tab.
+14. **2026-10-10: format version.**
+    - The next free number at merge: 12 if `0023` takes 11.
+    - An older build checks the container's `format_version` per file, so it refuses **every**
+      file saved by this build, with or without layers. A file from an earlier build opens
+      unchanged and is not rewritten on open.
+    - Golden files:
+      - `layers_v<N>.curvyo`: a layer holding a group, a hidden node, a locked node, opacities,
+        names with markup, and a loose object;
+      - one damaged file (opacity 1.5);
+      - one file with a `layer` marker inside a group, which reads as a plain group.
+
+## Shared files and order
+
+Built after `0023`, and after `0043` for the tab strip. It runs alone among `0023`, `0049` and
+`0050`, because all three touch the read pass, the selection context and the panel files. `0044`'s
+Ctrl+A and `0015`'s Fit to content are amended in this slice's PR. Whichever of `0020` and this
+spec merges second adds the operation names of criterion 44 to `0020`'s table.
+
+## Flagged for the product owner (defaults taken, no customer question)
+
+1. **Criterion 28 contradicts `0049` decisions 2 and 7.** It multiplies in the origin's own node
+   `opacity`. ADR 0015 §3 says a clone reads outline and style, and no node register. Remove
+   "times the origin's own `opacity`". The clone's alpha is then the origin's paint opacity times
+   the clone's own `opacity` times the opacities of the clone's ancestors.
+2. **Criterion 24.** Decision 6 builds no `output_objects()` now. The criterion should either be
+   tested through the read (the renderer's leaves are exactly the effectively visible ones, and
+   a locked leaf is among them) or move to `0024` and `0029`. Default: test it through the read.
+3. **Criterion 27, test sentence.** "and so is the stroke at its own 100 %, 25 %" does not parse.
+   It should read: "the stroke, at its own 100 %, is painted at 25 %".
+4. **Criterion 46, wording.** The earlier build refuses every file saved by this build, not only
+   files that use the new registers.
+5. **Criterion 47 and `0023` criterion 27.** "Deeper than 32 is damaged" stays for now. Under
+   sharing, two legal moves can merge into 33 levels. The sharing story relaxes the reader, which
+   needs no change to any file.

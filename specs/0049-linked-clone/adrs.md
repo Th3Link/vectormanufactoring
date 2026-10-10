@@ -1,36 +1,189 @@
 # ADRs for Linked clone
 
-Status: written by the product owner as a list of the ADRs touched and the points the architect must settle. The architect confirms or replaces it before the spec is Ready. Nothing below is a decision yet.
+Architect review 2026-10-10. This replaces the product owner's draft. The spec needs **one new
+ADR, [0015](../../docs/adr/0015-node-references-and-ancestor-resolved-state.md)**, which is
+`needs-customer` and shared with `0050`. It is not an in-place amendment of ADR 0002 §5: 0002 is
+accepted, and the index rule sends every change of an accepted decision to a new ADR (ADR 0014
+superseding one sentence of 0004 §2 is the precedent). The content is what the product owner
+proposed: one reference from a clone to its origin, which is not a cascade. No new crate, no new
+dependency, no trait, no generic.
 
-## Is a new ADR needed? Product owner's recommendation: an amendment of ADR 0002 §5, `needs-customer`
+## Depends on
 
-This feature adds a node kind to the document model (a clone with an origin id and a matrix), a `format_version` bump, and one exception to "no inheritance" (ADR 0002 §5): a clone reads its style from its origin. `CLAUDE.md` §3 sends every document-model change to the customer.
-
-**Precedent.** The compound path (`0016`) and the group (`0023`) were new node shapes too. The customer accepted each as a question in the spec (`0016` Question 1, `0023` Question 1) and the architect designed it in `adrs.md` with no new ADR number, because ADR 0002 §5 and §6 already allow the tree and the kinds. A clone node fits the same way.
-
-**What does not fit §5 as written** is the "no inheritance" sentence, which exists so that a replicated document has no shared parent register for concurrent edits to contend on. A clone's style read from its origin is one reference to one node (no cascade, no precedence), and `0050` makes visibility, lock and opacity resolve through the ancestors. Recommendation: **no new ADR number; a dated amendment in place to ADR 0002 §5**, as §10 was amended on 2026-10-08, that names these two exceptions and why they do not bring back contention (a style reference is read-only, the flags are single registers). It is `needs-customer`; the customer answers once for this spec and `0050` (the group question is already decided). If the architect judges the amendment too large for a note, a new ADR with the next free number (0015) is the alternative; the content is the same.
-
-## ADRs this feature depends on or extends
-
-- [ADR 0002](../../docs/adr/0002-document-model-units-and-svg-round-trip.md) §5 (tree, ids and sibling order from the CRDT, each node its own affine transform and fully resolved style, no inheritance): extended with a clone node. §6 (paths, primitives, "object to path" explicit): a primitive is converted as part of making a clone, by the same function. §9 (every edit is one commit with a label): the labels are `linked_clone`, `unlink_clone`, `remove_orphan_clones`. §10 (SVG): a clone is expanded in the export (Question 7 of the spec).
-- [ADR 0004](../../docs/adr/0004-persistence-and-cross-machine-sync.md) §9 (versioned format, refuse a newer file): a bump, because an older build would read a node without an outline as a damaged or empty path.
-- [ADR 0009](../../docs/adr/0009-concurrent-editing-semantics.md) §3 (merge granularity per field): the matrix must be one atomic register; orphans arise from concurrent delete and clone.
-- [ADR 0014](../../docs/adr/0014-history-undo-and-branches.md) §1 and §11 (restore engine, revive a deleted node): undo of a delete that unlinked clones must change the kind of existing nodes back.
-- [ADR 0003](../../docs/adr/0003-geometry-kernel-booleans-offsetting-vcarving.md): the kernel reads a clone's resolved outline; no change to the kernel.
-
-## Points for the architect
-
-1. **Storage.** Proposal: the clone node's meta map holds `shape = "clone"`, `clone_origin` (the origin's `NodeId` as the id string) and `clone_matrix` (one list value `[a, b, c, d, e, f]`, written whole, like `background_color` in 0040). Not `clone_of`: `0041` uses that key for a history copy. No anchors, no style keys, no `rotation`.
-2. **Resolved read.** Proposal: the document read resolves a clone into a path-shaped `ObjectSnapshot` (anchors and handles transformed, the origin's anchor ids reused, the origin's style) that carries `clone: Some { origin, matrix }`. Render, hit test, bounds, Booleans, exporters and the job generator then need no change (`document.json` is the one view that lists a clone as a clone, criterion 40), and a test pins "path read of a clone equals path read after Unlink" (criterion 41). Compare the audit table method of `0016`: list every place that assumes "an object has its own outline", and give each a test.
-3. **Resolve cost.** The object cache (`object_cache.rs`, one read per document version) is the place to resolve. Budget in criteria 43 and 44: 10,000 clones of a 100-node path read in 300 ms. If a per-version full resolve is too slow, a per-clone cache keyed by (origin version, matrix) is the fallback; say which.
-4. **One exception to "no inheritance".** The clone's style is read from the origin at resolve time (decision 2 of the spec). Confirm that this is not a cascade in the sense of ADR 0002 §5 (it is one reference to one node, no precedence rules), or propose a different shape.
-5. **Orphans and repair.** Clone with a missing, non-path or clone origin is an orphan; Open and merge run one repair commit that deletes them (precedent: ADR 0012's repair commit when an import leaves no page). Check: two peers both repairing is harmless (a tree delete of a deleted node); the repair is a normal step in the history list.
-6. **Bake on removal (criterion 31).** Every command that removes an origin must unlink its clones in the same commit. Proposal: one function in `document-core` that every remover (`delete_objects`, `replace_with_path`, Break apart, the Node tool's last-node delete) calls, so a new remover cannot forget it; a test lists all removers.
-7. **Undo of a bake (criterion 36).** The step changes the kind of a live node (clone to path, with anchors). The restore engine writes old values field by field; check that "kind change plus created anchors" restores, with the precedent of the 0019 / 0047 conversion in one commit.
-8. **Transform maths in `ui-core`.** The clone's gesture result (G·M, or G·M·G⁻¹ with its origin in the set, or unlink first when G is singular) is a pure function. Put it with the group transform of `0019`, not in the session.
-9. **Format version.** Next free at merge (`specs/README.md`). Golden file `clone_v<N>.curvyo`: one origin, two clones, one compound-path origin, one rectangle converted by making its clone.
-10. **Build order.** This spec does not need `0023` or `0050` to build (it needs only the ADR). It collides with `0050` in the document read model and the Style/Layers panel files, and with `0023` in the selection context, so it does not run beside either. Recommended order: `0023`, `0050`, then this one, so the rows of `0050` show the link glyph from the first day; the lead may reverse it.
+- [ADR 0015](../../docs/adr/0015-node-references-and-ancestor-resolved-state.md) §3 to §6
+  (Proposed): the clone reference, tolerance of merge residue, unlinking on removal, the orphan
+  repair and the single read pass. It supersedes the "no inheritance" sentence of ADR 0002 §5.
+- [ADR 0002](../../docs/adr/0002-document-model-units-and-svg-round-trip.md):
+  - §5: ids, and reparenting as a tree move. The link is by id, so moves never break it.
+  - §6: "object to path" is explicit; criterion 2 calls the existing conversion.
+  - §9: one commit per command, with the labels `linked_clone`, `unlink_clone` and
+    `remove_orphan_clones`.
+  - §10: SVG writes a clone as a path (Question 7, A).
+- [ADR 0009](../../docs/adr/0009-concurrent-editing-semantics.md) §3: last writer wins per
+  register. The matrix is one register.
+- [ADR 0014](../../docs/adr/0014-history-undo-and-branches.md) §1 and §11: undo restores a kind
+  change field by field and revives a deleted origin with its id (see decision 9).
+- [ADR 0004](../../docs/adr/0004-persistence-and-cross-machine-sync.md) §9: format bump, and a
+  newer file is refused.
+- [ADR 0003](../../docs/adr/0003-geometry-kernel-booleans-offsetting-vcarving.md): no change. The
+  kernel receives the resolved path.
 
 ## Feature-local decisions
 
-- 2026-10-10: Proposed by the product owner, not yet architect-confirmed: the names `clone_origin` and `clone_matrix`; no chains (flatten at creation); no style overrides; bake on removal; orphans removed by a repair commit; output expands.
+1. **2026-10-10: stored shape (format, protect this).** A clone is a leaf of the objects tree. Its
+   meta map holds:
+   - `shape = "clone"`;
+   - `clone_origin`: the origin's `NodeId` in the text form `0041` uses;
+   - `clone_matrix`: one `LoroValue::List` of six `f64`, `[a, b, c, d, e, f]`. It is written with
+     `insert` as a whole value and never with `insert_container`, so that a merge keeps one matrix
+     (criterion 13).
+
+   A clone has no anchors, `closed`, `extra_subpaths`, style keys or `rotation`. The keys do not
+   clash: `0041`'s `clone_of` is a history key.
+
+   Validation runs only when `shape == "clone"`. The file is damaged if `clone_origin` is missing
+   or not an id string, if `clone_matrix` is missing, is not six numbers, or has an entry that is
+   not finite or lies beyond ±1e7, or if the clone node has children. Other keys on a clone node
+   and `clone_*` keys on any other node are merge residue: they are ignored, not damaged
+   (ADR 0015 §4).
+2. **2026-10-10: the read is a new variant, not a path with an optional field.** The read is
+   `ObjectSnapshot::Clone(CloneSnapshot { id, origin, matrix, resolved: PathSnapshot })`.
+   `resolved` holds:
+   - the clone's `NodeId`;
+   - the origin's anchors transformed (each point `p → M·p`, each handle `v → L·v`), keeping the
+     origin's anchor ids;
+   - the origin's `closed` state and extra outlines;
+   - the origin's `Style`;
+   - `rotation` 0.
+
+   Readers that draw, hit, measure or feed the kernel reach `resolved` through the arm they
+   already have for paths.
+
+   Rejected: the product owner's `Path` with `clone: Option<…>`. Every writer that takes a path
+   snapshot back and writes anchors would then silently write anchors into a clone node:
+   `transform_objects` (`Planned::Path`), `resize_path`, `rotate_object`, node edits, Join and
+   Split. A new variant makes the compiler list every match site, which is the lesson of the
+   technical-debt entry "One-outline assumptions are found by audit, not by the compiler". The
+   writers get `Planned::Clone`, which writes only `clone_matrix`. Node edits, Join, Split,
+   segment bending, the Pen's continue and connect, and Object to path refuse a clone with the
+   refusal pattern of `0016` and `0023` (a code plus the offenders).
+3. **2026-10-10: resolving, and its cost (criteria 43 and 44).** Clones are resolved in the one
+   read pass that the object cache of `0044` already makes once per document version. Each origin
+   is read from Loro once into a map local to the pass, and every clone transforms that snapshot
+   in memory. There is no cross-version cache per clone: 10,000 clones read less from Loro than
+   10,000 copies do, and they hold the same memory (about 70 MB at 100 nodes each). Origins are
+   resolved whatever their effective flags, because a hidden origin still feeds its clones
+   (`0050` criterion 25). `Document::object(id)` on one clone reads its origin as well. If
+   criterion 43 fails, the next step is to share the origin's outline and transform it at
+   tessellation. That would be measured first, not built ahead.
+4. **2026-10-10: one matrix type and one rule for transforming a set.** `curvyo-document-core`
+   `units.rs` gets `Affine`, the first matrix type of the workspace: compose, `inverse() ->
+   Option` (`None` when |det| < 1e-9), and apply to a point and to a vector. One pure function,
+   `clone_matrix_after(m, g, origin_moves) -> Affine`, returns G·M, or G·M·G⁻¹ when the origin
+   is transformed in the same command. Two kinds of caller use it:
+   - `curvyo-ui-core`, for the gesture preview and its result (criteria 15 and 16);
+   - every `curvyo-document-core` writer that moves a set: `translate_objects`,
+     `transform_objects`, `Document::resize`, `fit_to_content`, and the group transform of
+     `0023`.
+
+   Reason: Fit to content moves origins and clones together without `ui-core`. A clone given
+   T·M there would also follow its origin's move by L·t and land in the wrong place. The
+   product owner's point 8 placed the rule in `ui-core` only, which would miss these writers.
+5. **2026-10-10: unlink, and unlink on removal (criteria 28 and 31).** Module `clones.rs` in
+   `curvyo-document-core`.
+   - `unlink_clones(ids, minted_anchor_ids)` (label `unlink_clone`) writes, under the same id and
+     tree position:
+     - the resolved anchors with fresh ids;
+     - `closed` and `extra_subpaths`;
+     - a copy of the origin's style;
+     - and it removes `shape`, `clone_origin` and `clone_matrix`.
+
+     This is the `Convert` case of `transform_objects` (`0047`) in another direction.
+   - One crate-private helper, `unlink_clones_of_removed(removed_roots)`, runs before the removal
+     in the same commit. It is called by every command that also calls `0023`'s
+     `remove_emptied_groups`: delete, last-node delete, `replace_with_path`, Break apart, Split,
+     Fracture, Flatten, and `0050`'s Delete layer. It looks for origins among **all descendants**
+     of each removed node, because a removed group or layer takes its origins with it. Clones
+     inside the removed subtree go with it and are not unlinked. One test lists the removers for
+     both helpers.
+6. **2026-10-10: the orphan repair (criteria 35 and 39).** `Document::remove_orphan_clones() ->
+   usize` (label `remove_orphan_clones`) deletes every clone whose origin is not a live,
+   non-clone path or compound path. It checks one hop, so a self-reference or a ring of 10,000
+   ends without a loop or recursion. It iterates in tree order and depends on nothing but the
+   state, so two peers that repair concurrently delete the same nodes; deleting a node that is
+   already deleted does nothing. The session calls it after Open and after `import_updates`, and
+   it is an ordinary history step. It deletes rather than unlinks (criterion 35 as written).
+   Today the only reachable orphans come from hostile or foreign files that have no origin at
+   all. Unlinking from the origin's tombstone after a merge is deferred to the sharing story
+   (ADR 0015, Consequences).
+7. **2026-10-10: merge cases.** These are the cases the tests should cover, in the
+   `acceptance_0005_peers.rs` style:
+   - *Peer A deletes the origin (and unlinks clone C), while peer B transforms C.* After the
+     merge, C is a path with A's outline, because only A wrote `shape`. B's matrix is lost, and
+     its key may survive on the path as ignored residue. If A then undoes, C becomes a clone
+     again. If B's matrix won the race on that key, it is kept, because the engine restores a
+     field only where the current value equals A's (ADR 0014 §1).
+   - *Peer A deletes the origin, while peer B makes a new clone of it.* The new clone is an
+     orphan and is removed by the repair (decision 6).
+   - *Two peers unlink the same clone.* The `anchors` key keeps one of the two containers. Both
+     have the same geometry and different anchor ids, and the replicas converge.
+   - *Two peers transform the same clone.* One whole matrix wins (criterion 13).
+   - *Peer A edits the origin, while peer B transforms the clone.* Both edits apply (criterion
+     13).
+8. **2026-10-10: duplicate.** `copy_map` already copies every key, so a duplicate of a clone is a
+   clone of the same origin (criterion 19), with no change needed. A duplicate of an origin is a
+   path that no clone refers to. The deep duplicate of `0023` on a group that holds both an
+   origin and its clone gives a copied clone that still refers to the **original** origin
+   (flagged, see below).
+9. **2026-10-10: undo (criterion 36).** No engine change if ADR 0014 §1 already treats an absent
+   key as a value: it deletes keys and containers that the step created and restores the
+   removed ones. The `0047` conversion is the same case. This slice adds two tests in the `0020`
+   style:
+   - undo of Unlink gives back a clone with the same origin and matrix, and no anchors key;
+   - undo of the Delete of an origin with two clones revives the origin with its id (§11) and
+     turns both clones back.
+
+   If the engine does not handle absent keys yet, the fix belongs to `0020`'s restore code, not
+   to this slice.
+10. **2026-10-10: crate placement.**
+    - `curvyo-document-core`: the codec (`shape_codec` gets the `clone` tag), validation,
+      `clones.rs`, `Affine`, the new read variant, `Planned::Clone`, the refusals, the
+      `document.json` entry (`"shape": "clone"`, `"origin"`, `"matrix"`) and the format bump.
+    - `curvyo-ui-core`: availability, the gesture result, the panel lines, and Select original /
+      Select clones as view state.
+    - `curvyo-render-core`: the new variant's arm only.
+    - `curvyo-editor-wasm`: the repair call after Open and after an import, and the commands.
+    - `frontend`: the buttons and notices.
+11. **2026-10-10: format version.** The next free number at merge: 13 if `0023` (11) and `0050`
+    (12) merge first. An older build checks the container's `format_version` per file, so it
+    refuses **every** file saved by this build, with or without clones. A file from an older
+    build opens unchanged. Golden files:
+    - `clone_v<N>.curvyo`: one origin, two clones, a compound-path origin, and a rectangle
+      converted by making its clone;
+    - one damaged file (a matrix of five entries);
+    - one file with an orphan.
+
+    The 100,000-clone and 10,000-ring cases are built in the tests and not committed.
+
+## Shared files and order
+
+Build after `0023` and `0050`, as the product owner recommends. All three touch the object read
+(`object_cache.rs` and the read pass). This spec and `0050` also share the panel files, and this
+spec and `0023` share the selection context. It runs alone among those three. The removers'
+helper is shared with `0023`'s `remove_emptied_groups`.
+
+## Flagged for the product owner (defaults taken, no customer question)
+
+1. **Criterion 35 vs. criterion 31.** After a merge, the repair deletes a clone that a peer made
+   while another peer deleted its origin. Criterion 31 promises that "nothing disappears". The
+   case cannot happen until sharing exists. Default: delete now, and unlink from the tombstone
+   in the sharing story. The PO may add that sentence to the out-of-scope list.
+2. **Group duplicate holding an origin and its clone.** Criterion 19 does not cover this.
+   Default: the copied clone follows the original origin, not the copied one. Inkscape's "relink
+   duplicated clones" would be a later option.
+3. **`0050` criterion 28 contradicts decisions 2 and 7 here.** It multiplies in the origin's own
+   node `opacity`, while decision 7 says the origin's node flags do not reach its clones.
+   ADR 0015 §3: a clone reads outline and style, and no node register. Criterion 28 should drop
+   "the origin's own `opacity`".
+4. **Criterion 37, wording.** "A file with a clone opened by an earlier build is refused" is true,
+   but too narrow: the earlier build refuses every file saved by this build.
